@@ -1,0 +1,53 @@
+use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::{
+    Create, DatabaseType, Kubernetes, Service, ServiceType, StatefulService,
+};
+
+pub struct EKS<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub version: &'a str,
+    pub services: Vec<Box<dyn Service>>,
+}
+
+impl<'a> Kubernetes for EKS<'a> {
+    fn new() -> EKS<'a> {
+        unimplemented!()
+    }
+
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn id(&self) -> &str {
+        self.id
+    }
+
+    fn version(&self) -> &str {
+        self.version
+    }
+
+    fn on_create(&self) {
+        unimplemented!()
+    }
+
+    fn on_upgrade(&self) {
+        unimplemented!()
+    }
+
+    fn on_downgrade(&self) {
+        unimplemented!()
+    }
+
+    fn on_delete(&self) {
+        unimplemented!()
+    }
+
+    fn services(&self) -> &Vec<Box<dyn Service>> {
+        &self.services
+    }
+
+    fn create_service(&self, service: Box<dyn StatefulService<Self>>) {
+        unimplemented!()
+    }
+}
