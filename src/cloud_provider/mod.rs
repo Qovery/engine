@@ -1,20 +1,17 @@
 pub mod aws;
 pub mod gcp;
 
-pub trait CloudProvider<'a, K>
-where
-    K: Kubernetes,
-{
+pub trait CloudProvider<'a> {
     fn name(&self) -> &'a str;
     fn region(&self) -> &'a str;
     fn is_valid(&self) -> bool;
     fn on_create(&self);
-    fn kubernetes(&self) -> &K;
+    fn kubernetes(&self) -> &'a dyn Kubernetes;
     fn services(&self) -> Vec<Box<dyn Service>>;
-    fn create_service(&self, service: Box<dyn StatefulService<K>>);
+    fn create_service(&self, service: Box<dyn StatefulService>);
 }
 
-pub trait StatefulService<K: Kubernetes>: Service + Create<K> {}
+pub trait StatefulService: Service + Create {}
 
 pub trait Service {
     fn service_type(&self) -> ServiceType;
@@ -29,47 +26,29 @@ pub enum EnvironmentType {
     Development,
 }
 
-pub trait Create<K>
-where
-    K: Kubernetes,
-{
-    fn on_create(&self, target: Box<dyn CloudProvider<K>>);
-    fn on_create_error(&self, target: Box<dyn CloudProvider<K>>);
+pub trait Create {
+    fn on_create(&self, target: Box<dyn CloudProvider>);
+    fn on_create_error(&self, target: Box<dyn CloudProvider>);
 }
 
-pub trait Delete<K>
-where
-    K: Kubernetes,
-{
-    fn on_delete(&self, target: Box<dyn CloudProvider<K>>);
+pub trait Delete {
+    fn on_delete(&self, target: Box<dyn CloudProvider>);
 }
 
-pub trait Snapshot<K>
-where
-    K: Kubernetes,
-{
-    fn on_snapshot(&self, target: Box<dyn CloudProvider<K>>);
+pub trait Snapshot {
+    fn on_snapshot(&self, target: Box<dyn CloudProvider>);
 }
 
-pub trait Clone<K>
-where
-    K: Kubernetes,
-{
-    fn on_clone(&self, target: Box<dyn CloudProvider<K>>);
+pub trait Clone {
+    fn on_clone(&self, target: Box<dyn CloudProvider>);
 }
 
-pub trait Upgrade<K>
-where
-    K: Kubernetes,
-{
-    fn on_upgrade(&self, target: Box<dyn CloudProvider<K>>);
+pub trait Upgrade {
+    fn on_upgrade(&self, target: Box<dyn CloudProvider>);
 }
 
-pub trait Downgrade<K>
-where
-    K: Kubernetes,
-{
-    fn on_downgrade(&self, target: Box<dyn CloudProvider<K>>);
+pub trait Downgrade {
+    fn on_downgrade(&self, target: Box<dyn CloudProvider>);
 }
 
 pub struct DatabaseOptions<'a> {
@@ -92,7 +71,6 @@ pub enum ServiceType<'a> {
 }
 
 pub trait Kubernetes {
-    fn new() -> Self;
     fn name(&self) -> &str;
     fn id(&self) -> &str;
     fn version(&self) -> &str;
@@ -102,9 +80,8 @@ pub trait Kubernetes {
     fn on_delete(&self);
     fn create_namespace(&self);
     fn services(&self) -> &Vec<Box<dyn Service>>;
-    fn create_service(&self, service: Box<dyn StatefulService<Self>>);
 }
 
-pub fn do_launch_workflow<'a, K: Kubernetes, T: CloudProvider<'a, K>>(cp: &T) {
+pub fn do_launch_workflow<'a, T: CloudProvider<'a>>(cp: &T) {
     cp.on_create();
 }

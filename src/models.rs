@@ -13,6 +13,12 @@ pub struct Environment {
     pub databases: Vec<Database>,
 }
 
+impl Environment {
+    pub fn is_valid(&self) -> bool {
+        true
+    }
+}
+
 pub struct Deployment {
     pub id: String,
     pub created_at: DateTime<Utc>,
@@ -29,7 +35,6 @@ pub struct CloudProvider {
     pub name: String,
     pub region: String,
 }
-
 pub struct Application {
     pub git_credentials: GitCredentials,
     pub storage: Vec<Storage>,
@@ -45,10 +50,5 @@ pub struct Route {}
 pub struct Database {
     pub snapshot: Snapshot,
 }
-pub struct Snapshot {}
 
-impl Environment {
-    pub fn is_valid(&self) -> bool {
-        true
-    }
-}
+pub struct Snapshot {}

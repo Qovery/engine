@@ -1,4 +1,4 @@
-mod docker_hub;
+pub mod docker_hub;
 
 pub trait Registry<'a> {
     fn is_valid(&self) -> bool;

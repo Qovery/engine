@@ -4,23 +4,15 @@ use crate::config::ConfigError::{
 };
 use crate::continuous_integration::ContinuousIntegration;
 use crate::models::Environment;
-use crate::registry::Registry;
 use crate::session::Session;
 
-pub struct Config<'a, K>
-where
-    K: Kubernetes,
-{
+pub struct Config<'a> {
     pub environment: Environment,
-    pub continuous_integration: Box<dyn ContinuousIntegration<'a, K>>,
-    pub registry: Box<dyn Registry<'a>>,
-    pub cloud_provider: Box<dyn CloudProvider<'a, K>>,
+    pub continuous_integration: Box<dyn ContinuousIntegration<'a>>,
+    pub cloud_provider: Box<dyn CloudProvider<'a>>,
 }
 
-impl<'a, K> Config<'a, K>
-where
-    K: Kubernetes,
-{
+impl<'a> Config<'a> {
     /// Read JSON and return a Config
     pub fn from_json(json: &str) -> Self {
         unimplemented!()
@@ -37,10 +29,6 @@ where
             ));
         }
 
-        if !self.registry.is_valid() {
-            return Err(RegistryError("there is an Registry provider error"));
-        }
-
         if !self.cloud_provider.is_valid() {
             return Err(CloudProviderError("there is an Cloud provider error"));
         }
@@ -49,9 +37,9 @@ where
     }
 
     /// check and init the connection to all the services
-    pub fn session(self) -> Result<Session<'a, K>, ConfigError<'a>> {
+    pub fn session(self) -> Result<Session<'a>, ConfigError<'a>> {
         match self.is_valid() {
-            Ok(_) => Ok(Session::<'a, K> { config: self }),
+            Ok(_) => Ok(Session::<'a> { config: self }),
             Err(err) => Err(err),
         }
     }

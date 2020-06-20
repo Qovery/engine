@@ -2,18 +2,12 @@ use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
 use crate::transaction::Transaction;
 
-pub struct Session<'a, K>
-where
-    K: Kubernetes,
-{
-    pub config: Config<'a, K>,
+pub struct Session<'a> {
+    pub config: Config<'a>,
 }
 
-impl<'a, K> Session<'a, K>
-where
-    K: Kubernetes,
-{
-    pub fn transaction(self) -> Transaction<'a, K> {
+impl<'a> Session<'a> {
+    pub fn transaction(self) -> Transaction<'a> {
         Transaction::new(self.config)
     }
 }

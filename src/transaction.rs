@@ -1,27 +1,19 @@
 use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
 
-pub struct Transaction<'a, K>
-where
-    K: Kubernetes,
-{
-    pub config: Config<'a, K>,
+pub struct Transaction<'a> {
+    pub config: Config<'a>,
     steps: Vec<Step>,
     build_listeners: Vec<Box<dyn ProgressListener>>,
-    push_listeners: Vec<Box<dyn ProgressListener>>,
     deploy_listeners: Vec<Box<dyn ProgressListener>>,
 }
 
-impl<'a, K> Transaction<'a, K>
-where
-    K: Kubernetes,
-{
-    pub fn new(config: Config<'a, K>) -> Self {
+impl<'a> Transaction<'a> {
+    pub fn new(config: Config<'a>) -> Self {
         Transaction {
             config,
             steps: vec![],
             build_listeners: vec![],
-            push_listeners: vec![],
             deploy_listeners: vec![],
         }
     }
@@ -32,14 +24,6 @@ where
 
     pub fn add_build_listener(&mut self, listener: Box<dyn ProgressListener>) {
         self.build_listeners.push(listener);
-    }
-
-    pub fn push(&mut self) {
-        self.steps.push(Step::Push);
-    }
-
-    pub fn add_push_listener(&mut self, listener: Box<dyn ProgressListener>) {
-        self.push_listeners.push(listener);
     }
 
     pub fn deploy(&mut self) {
@@ -55,9 +39,6 @@ where
             Step::Build => {
                 println!("build");
             }
-            Step::Push => {
-                println!("push");
-            }
             Step::Deploy => {
                 println!("deploy");
             }
@@ -67,7 +48,6 @@ where
 
 enum Step {
     Build,
-    Push,
     Deploy,
 }
 

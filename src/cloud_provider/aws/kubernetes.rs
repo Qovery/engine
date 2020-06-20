@@ -7,14 +7,9 @@ pub struct EKS<'a> {
     pub id: &'a str,
     pub name: &'a str,
     pub version: &'a str,
-    pub services: Vec<Box<dyn Service>>,
 }
 
 impl<'a> Kubernetes for EKS<'a> {
-    fn new() -> EKS<'a> {
-        unimplemented!()
-    }
-
     fn name(&self) -> &str {
         self.name
     }
@@ -48,10 +43,6 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn services(&self) -> &Vec<Box<dyn Service>> {
-        &self.services
-    }
-
-    fn create_service(&self, service: Box<dyn StatefulService<Self>>) {
         unimplemented!()
     }
 }

@@ -4,19 +4,13 @@ pub mod kubernetes;
 use crate::cloud_provider::aws::kubernetes::EKS;
 use crate::cloud_provider::{CloudProvider, Kubernetes, Service, StatefulService};
 
-pub struct AWS<'a, K>
-where
-    K: Kubernetes,
-{
+pub struct AWS<'a> {
     pub access_key_id: &'a str,
     pub secret_access_key: &'a str,
-    pub kubernetes: K,
+    pub kubernetes: &'a dyn Kubernetes,
 }
 
-impl<'a, K> CloudProvider<'a, K> for AWS<'a, K>
-where
-    K: Kubernetes,
-{
+impl<'a> CloudProvider<'a> for AWS<'a> {
     fn name(&self) -> &'a str {
         "aws"
     }
@@ -33,31 +27,16 @@ where
         println!("on_create AWS");
     }
 
-    fn kubernetes(&self) -> &K {
-        &self.kubernetes
+    fn kubernetes(&self) -> &'a dyn Kubernetes {
+        self.kubernetes
     }
 
     fn services(&self) -> Vec<Box<dyn Service>> {
         vec![]
     }
 
-    fn create_service(&self, service: Box<dyn StatefulService<K>>) {
+    fn create_service(&self, service: Box<dyn StatefulService>) {
         unimplemented!()
-    }
-}
-
-impl<'a, K> AWS<'a, K>
-where
-    K: Kubernetes,
-{
-    pub fn new(access_key_id: &'a str, secret_access_key: &'a str) -> Self {
-        let kubernetes = K::new();
-
-        AWS {
-            access_key_id,
-            secret_access_key,
-            kubernetes,
-        }
     }
 }
 
@@ -69,10 +48,12 @@ mod tests {
 
     #[test]
     fn aws() {
+        let eks = EKS::new();
+
         let aws = AWS {
             access_key_id: "",
             secret_access_key: "",
-            kubernetes: EKS::new(),
+            kubernetes: &eks,
         };
 
         aws.services().iter().for_each(|x| {

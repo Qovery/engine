@@ -32,18 +32,15 @@ impl<'a> Service for PostgreSQL<'a> {
     }
 }
 
-impl<'a, K> Create<K> for PostgreSQL<'a>
-where
-    K: Kubernetes,
-{
-    fn on_create(&self, target: Box<dyn CloudProvider<K>>) {
+impl<'a> Create for PostgreSQL<'a> {
+    fn on_create(&self, target: Box<dyn CloudProvider>) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}
         }
     }
 
-    fn on_create_error(&self, target: Box<dyn CloudProvider<K>>) {
+    fn on_create_error(&self, target: Box<dyn CloudProvider>) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}

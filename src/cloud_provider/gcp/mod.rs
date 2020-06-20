@@ -1,17 +1,11 @@
 use crate::cloud_provider::{CloudProvider, Kubernetes, Service, StatefulService};
 
-pub struct GCP<'a, K>
-where
-    K: Kubernetes,
-{
+pub struct GCP<'a> {
     p12_file_content: &'a str,
-    kubernetes: K,
+    kubernetes: &'a dyn Kubernetes,
 }
 
-impl<'a, K> CloudProvider<'a, K> for GCP<'a, K>
-where
-    K: Kubernetes,
-{
+impl<'a> CloudProvider<'a> for GCP<'a> {
     fn name(&self) -> &'a str {
         "gcp"
     }
@@ -28,23 +22,20 @@ where
         println!("on_create GCP");
     }
 
-    fn kubernetes(&self) -> &K {
-        &self.kubernetes
+    fn kubernetes(&self) -> &'a dyn Kubernetes {
+        self.kubernetes
     }
 
     fn services(&self) -> Vec<Box<dyn Service>> {
         vec![]
     }
 
-    fn create_service(&self, service: Box<dyn StatefulService<K>>) {
+    fn create_service(&self, service: Box<dyn StatefulService>) {
         unimplemented!()
     }
 }
 
-impl<'a, K> GCP<'a, K>
-where
-    K: Kubernetes,
-{
+impl<'a> GCP<'a> {
     pub fn new(p12_file_content: &'a str) -> Self {
         unimplemented!()
     }
