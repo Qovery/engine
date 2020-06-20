@@ -13,7 +13,7 @@ where
     K: Kubernetes,
 {
     fn name(&self) -> &'a str {
-        unimplemented!()
+        "gcp"
     }
 
     fn region(&self) -> &'a str {
@@ -21,7 +21,7 @@ where
     }
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        true
     }
 
     fn on_create(&self) {

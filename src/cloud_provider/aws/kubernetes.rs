@@ -43,6 +43,10 @@ impl<'a> Kubernetes for EKS<'a> {
         unimplemented!()
     }
 
+    fn create_namespace(&self) {
+        unimplemented!()
+    }
+
     fn services(&self) -> &Vec<Box<dyn Service>> {
         &self.services
     }

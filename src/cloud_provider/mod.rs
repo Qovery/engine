@@ -100,6 +100,7 @@ pub trait Kubernetes {
     fn on_upgrade(&self);
     fn on_downgrade(&self);
     fn on_delete(&self);
+    fn create_namespace(&self);
     fn services(&self) -> &Vec<Box<dyn Service>>;
     fn create_service(&self, service: Box<dyn StatefulService<Self>>);
 }

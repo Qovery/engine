@@ -13,9 +13,7 @@ impl<'a, K> Session<'a, K>
 where
     K: Kubernetes,
 {
-    pub fn transaction(self) -> Transaction<K> {
-        Transaction {
-            config: self.config,
-        }
+    pub fn transaction(self) -> Transaction<'a, K> {
+        Transaction::new(self.config)
     }
 }

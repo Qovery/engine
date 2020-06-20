@@ -17,11 +17,11 @@ mod tests {
     use crate::cloud_provider::do_launch_workflow;
     use crate::cloud_provider::gcp::GCP;
     use crate::config::{Config, ConfigError};
-    use crate::transaction::{ProgressCallback, ProgressInfo};
+    use crate::transaction::{ProgressInfo, ProgressListener};
 
     struct QoveryStatusSender;
 
-    impl ProgressCallback for QoveryStatusSender {
+    impl ProgressListener for QoveryStatusSender {
         fn on_progress(&self, info: &ProgressInfo) {
             unimplemented!()
         }
@@ -36,7 +36,7 @@ mod tests {
     }
 
     #[test]
-    fn test() {
+    fn test_deploy() {
         let config = Config::<EKS>::from_json("{}");
 
         let session = match config.session() {
@@ -44,22 +44,14 @@ mod tests {
             Err(err) => panic!(err),
         };
 
-        let tx = session.transaction();
+        let mut tx = session.transaction();
 
-        tx.build(Box::new(QoveryStatusSender {}));
+        tx.build();
         tx.push();
         tx.deploy();
 
+        tx.add_build_listener(Box::new(QoveryStatusSender {}));
+
         tx.commit();
-    }
-
-    #[test]
-    fn aws() {
-        let aws = AWS::<EKS>::new("", "");
-        let gcp = GCP::<EKS>::new("");
-
-        do_launch_workflow(&gcp);
-        do_launch_workflow(&aws);
-        do_launch_workflow(&gcp);
     }
 }
