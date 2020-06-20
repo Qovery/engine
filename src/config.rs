@@ -12,8 +12,8 @@ where
     K: Kubernetes,
 {
     pub environment: Environment,
-    pub continuous_integration: Box<dyn ContinuousIntegration>,
-    pub registry: Box<dyn Registry>,
+    pub continuous_integration: Box<dyn ContinuousIntegration<'a, K>>,
+    pub registry: Box<dyn Registry<'a>>,
     pub cloud_provider: Box<dyn CloudProvider<'a, K>>,
 }
 

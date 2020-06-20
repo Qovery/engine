@@ -1,12 +1,12 @@
+mod registry;
+
 use crate::cloud_provider::CloudProvider;
 use crate::continuous_integration::ContinuousIntegration;
-use crate::registry::Registry;
 
 mod cloud_provider;
 mod config;
 mod continuous_integration;
 mod models;
-mod registry;
 mod session;
 mod transaction;
 
