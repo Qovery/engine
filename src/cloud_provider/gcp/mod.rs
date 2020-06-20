@@ -2,7 +2,7 @@ use crate::cloud_provider::{CloudProvider, Kubernetes, Service, StatefulService}
 
 pub struct GCP<'a> {
     p12_file_content: &'a str,
-    kubernetes: &'a dyn Kubernetes,
+    kubernetes: Box<dyn Kubernetes>,
 }
 
 impl<'a> CloudProvider<'a> for GCP<'a> {
@@ -22,7 +22,7 @@ impl<'a> CloudProvider<'a> for GCP<'a> {
         println!("on_create GCP");
     }
 
-    fn kubernetes(&self) -> &'a dyn Kubernetes {
+    fn kubernetes(self) -> Box<dyn Kubernetes> {
         self.kubernetes
     }
 

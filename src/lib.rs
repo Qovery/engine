@@ -1,22 +1,22 @@
+use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::CloudProvider;
-use crate::continuous_integration::ContinuousIntegration;
 
+mod build_platform;
 mod cloud_provider;
 mod config;
-mod continuous_integration;
 mod models;
 mod session;
 mod transaction;
 
 #[cfg(test)]
 mod tests {
+    use crate::build_platform::local_docker::LocalDocker;
+    use crate::build_platform::registry::docker_hub::DockerHub;
     use crate::cloud_provider::aws::kubernetes::EKS;
     use crate::cloud_provider::aws::AWS;
     use crate::cloud_provider::do_launch_workflow;
     use crate::cloud_provider::gcp::GCP;
     use crate::config::{Config, ConfigError};
-    use crate::continuous_integration::local_docker::LocalDocker;
-    use crate::continuous_integration::registry::docker_hub::DockerHub;
     use crate::models::{Action, CloudProvider, Deployment, Environment};
     use crate::session::Session;
     use crate::transaction::{ProgressInfo, ProgressListener};
@@ -61,30 +61,28 @@ mod tests {
             databases: vec![],
         };
 
-        let registry = DockerHub {
+        let registry = Box::new(DockerHub {
             login: "toto",
             password: "password",
-        };
-
-        let continuous_integration = Box::new(LocalDocker {
-            registry: &registry,
         });
 
-        let kubernetes = EKS {
+        let build_platform = Box::new(LocalDocker { registry });
+
+        let kubernetes = Box::new(EKS {
             id: "",
             name: "",
             version: "",
-        };
+        });
 
         let cloud_provider = Box::new(AWS {
             access_key_id: "",
             secret_access_key: "",
-            kubernetes: &kubernetes,
+            kubernetes,
         });
 
         let config = Config {
             environment,
-            continuous_integration,
+            build_platform,
             cloud_provider,
         };
 

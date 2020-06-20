@@ -6,7 +6,7 @@ pub trait CloudProvider<'a> {
     fn region(&self) -> &'a str;
     fn is_valid(&self) -> bool;
     fn on_create(&self);
-    fn kubernetes(&self) -> &'a dyn Kubernetes;
+    fn kubernetes(self) -> Box<dyn Kubernetes>;
     fn services(&self) -> Vec<Box<dyn Service>>;
     fn create_service(&self, service: Box<dyn StatefulService>);
 }

@@ -1,19 +1,19 @@
+use crate::build_platform::registry::Registry;
+use crate::build_platform::{BuildError, BuildImage, BuildPlatform, BuildResult};
 use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
-use crate::continuous_integration::registry::Registry;
-use crate::continuous_integration::{BuildError, BuildImage, BuildResult, ContinuousIntegration};
 
 /// use Docker in local
 pub struct LocalDocker<'a> {
-    pub registry: &'a dyn Registry<'a>,
+    pub registry: Box<dyn Registry<'a>>,
 }
 
-impl<'a> ContinuousIntegration<'a> for LocalDocker<'a> {
+impl<'a> BuildPlatform<'a> for LocalDocker<'a> {
     fn is_valid(&self) -> bool {
         true
     }
 
-    fn registry(&self) -> &'a dyn Registry<'a> {
+    fn registry(self) -> Box<dyn Registry<'a>> {
         self.registry
     }
 

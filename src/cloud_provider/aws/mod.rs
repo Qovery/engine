@@ -7,7 +7,7 @@ use crate::cloud_provider::{CloudProvider, Kubernetes, Service, StatefulService}
 pub struct AWS<'a> {
     pub access_key_id: &'a str,
     pub secret_access_key: &'a str,
-    pub kubernetes: &'a dyn Kubernetes,
+    pub kubernetes: Box<dyn Kubernetes>,
 }
 
 impl<'a> CloudProvider<'a> for AWS<'a> {
@@ -27,7 +27,7 @@ impl<'a> CloudProvider<'a> for AWS<'a> {
         println!("on_create AWS");
     }
 
-    fn kubernetes(&self) -> &'a dyn Kubernetes {
+    fn kubernetes(self) -> Box<dyn Kubernetes> {
         self.kubernetes
     }
 
@@ -48,12 +48,16 @@ mod tests {
 
     #[test]
     fn aws() {
-        let eks = EKS::new();
+        let eks = Box::new(EKS {
+            id: "",
+            name: "",
+            version: "",
+        });
 
         let aws = AWS {
             access_key_id: "",
             secret_access_key: "",
-            kubernetes: &eks,
+            kubernetes: eks,
         };
 
         aws.services().iter().for_each(|x| {

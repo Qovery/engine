@@ -1,13 +1,13 @@
+use crate::build_platform::registry::Registry;
 use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
-use crate::continuous_integration::registry::Registry;
 
 pub mod local_docker;
 pub mod registry;
 
-pub trait ContinuousIntegration<'a> {
+pub trait BuildPlatform<'a> {
     fn is_valid(&self) -> bool;
-    fn registry(&self) -> &'a dyn Registry<'a>;
+    fn registry(self) -> Box<dyn Registry<'a>>;
     fn build(&self, image: BuildImage<'a>) -> Result<BuildResult<'a>, BuildError>;
 }
 

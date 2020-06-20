@@ -1,14 +1,14 @@
+use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::{CloudProvider, Kubernetes};
 use crate::config::ConfigError::{
-    CloudProviderError, ContinuousIntegrationError, EnvironmentError, RegistryError,
+    BuildPlatformError, CloudProviderError, EnvironmentError, RegistryError,
 };
-use crate::continuous_integration::ContinuousIntegration;
 use crate::models::Environment;
 use crate::session::Session;
 
 pub struct Config<'a> {
     pub environment: Environment,
-    pub continuous_integration: Box<dyn ContinuousIntegration<'a>>,
+    pub build_platform: Box<dyn BuildPlatform<'a>>,
     pub cloud_provider: Box<dyn CloudProvider<'a>>,
 }
 
@@ -23,8 +23,8 @@ impl<'a> Config<'a> {
             return Err(EnvironmentError("there is an Environment error"));
         }
 
-        if !self.continuous_integration.is_valid() {
-            return Err(ContinuousIntegrationError(
+        if !self.build_platform.is_valid() {
+            return Err(BuildPlatformError(
                 "there is an ContinuousIntegration provider error",
             ));
         }
@@ -49,18 +49,17 @@ type ErrorMessage<'a> = &'a str;
 
 pub enum ConfigError<'a> {
     EnvironmentError(ErrorMessage<'a>),
-    ContinuousIntegrationError(ErrorMessage<'a>),
+    BuildPlatformError(ErrorMessage<'a>),
     RegistryError(ErrorMessage<'a>),
     CloudProviderError(ErrorMessage<'a>),
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::EKS;
     use crate::config::Config;
 
     #[test]
     fn read_from_json() {
-        Config::<EKS>::from_json("");
+        Config::from_json("");
     }
 }

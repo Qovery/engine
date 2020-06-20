@@ -1,4 +1,4 @@
-use crate::continuous_integration::registry::{PushError, PushImage, PushResult, Registry};
+use crate::build_platform::registry::{PushError, PushImage, PushResult, Registry};
 
 pub struct DockerHub<'a> {
     pub login: &'a str,
