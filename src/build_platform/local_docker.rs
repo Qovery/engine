@@ -1,7 +1,7 @@
-use crate::build_platform::registry::{PushError, PushResult, Registry};
 use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image};
 use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
+use crate::container_registry::{ContainerRegistry, PushError, PushResult};
 use crate::{cmd, git};
 use std::fmt::Error;
 use std::path::Path;
@@ -9,17 +9,11 @@ use std::process::ExitStatus;
 use tempdir::TempDir;
 
 /// use Docker in local
-pub struct LocalDocker<'a> {
-    pub registry: Box<dyn Registry<'a>>,
-}
+pub struct LocalDocker {}
 
-impl<'a> BuildPlatform<'a> for LocalDocker<'a> {
+impl BuildPlatform for LocalDocker {
     fn is_valid(&self) -> bool {
         true
-    }
-
-    fn registry(self) -> Box<dyn Registry<'a>> {
-        self.registry
     }
 
     fn build(&self, build: Build) -> Result<BuildResult, BuildError> {
@@ -30,8 +24,6 @@ impl<'a> BuildPlatform<'a> for LocalDocker<'a> {
         let into_dir = tmp_dir.path();
         let dockerfile_dir = format!("{}/.", into_dir.to_str().unwrap());
 
-        println!("{}", dockerfile_dir.clone());
-
         git::clone(
             build.git_repository.url.as_str(),
             into_dir,
@@ -39,9 +31,18 @@ impl<'a> BuildPlatform<'a> for LocalDocker<'a> {
         );
 
         // docker build
-        let exit_status = cmd::exec("docker", vec!["build", dockerfile_dir.as_str()], |line| {
-            println!("{}", line.unwrap());
-        });
+        let exit_status = cmd::exec_with_output(
+            "docker",
+            vec![
+                "build",
+                "-t",
+                build.image.name_with_tag().as_str(),
+                dockerfile_dir.as_str(),
+            ],
+            |line| {
+                println!("{}", line.unwrap());
+            },
+        );
 
         match exit_status {
             Ok(status) => println!("cmd success: {}", status.success()),
@@ -49,9 +50,5 @@ impl<'a> BuildPlatform<'a> for LocalDocker<'a> {
         }
 
         Ok(BuildResult { build })
-    }
-
-    fn push(&self, image: Image) -> Result<PushResult<'a>, PushError> {
-        unimplemented!()
     }
 }

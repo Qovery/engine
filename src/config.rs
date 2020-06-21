@@ -1,14 +1,16 @@
 use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::{CloudProvider, Kubernetes};
 use crate::config::ConfigError::{
-    BuildPlatformError, CloudProviderError, EnvironmentError, RegistryError,
+    BuildPlatformError, CloudProviderError, ContainerRegistryError, EnvironmentError,
 };
+use crate::container_registry::ContainerRegistry;
 use crate::models::Environment;
 use crate::session::Session;
 
 pub struct Config<'a> {
     pub environment: Environment,
-    pub build_platform: Box<dyn BuildPlatform<'a>>,
+    pub build_platform: Box<dyn BuildPlatform>,
+    pub container_registry: Box<dyn ContainerRegistry>,
     pub cloud_provider: Box<dyn CloudProvider<'a>>,
 }
 
@@ -25,12 +27,18 @@ impl<'a> Config<'a> {
 
         if !self.build_platform.is_valid() {
             return Err(BuildPlatformError(
-                "there is an ContinuousIntegration provider error",
+                "there is a Continuous integration error",
+            ));
+        }
+
+        if !self.container_registry.is_valid() {
+            return Err(ContainerRegistryError(
+                "there is a Container Registry error",
             ));
         }
 
         if !self.cloud_provider.is_valid() {
-            return Err(CloudProviderError("there is an Cloud provider error"));
+            return Err(CloudProviderError("there is a Cloud provider error"));
         }
 
         Ok(())
@@ -50,7 +58,7 @@ type ErrorMessage<'a> = &'a str;
 pub enum ConfigError<'a> {
     EnvironmentError(ErrorMessage<'a>),
     BuildPlatformError(ErrorMessage<'a>),
-    RegistryError(ErrorMessage<'a>),
+    ContainerRegistryError(ErrorMessage<'a>),
     CloudProviderError(ErrorMessage<'a>),
 }
 

@@ -1,3 +1,5 @@
+mod container_registry;
+
 use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::CloudProvider;
 
@@ -13,12 +15,12 @@ mod transaction;
 #[cfg(test)]
 mod tests {
     use crate::build_platform::local_docker::LocalDocker;
-    use crate::build_platform::registry::docker_hub::DockerHub;
     use crate::cloud_provider::aws::kubernetes::EKS;
     use crate::cloud_provider::aws::AWS;
     use crate::cloud_provider::do_launch_workflow;
     use crate::cloud_provider::gcp::GCP;
     use crate::config::{Config, ConfigError};
+    use crate::container_registry::docker_hub::DockerHub;
     use crate::models::{
         Action, Application, CloudProvider, Deployment, Environment, GitCredentials,
     };
@@ -68,7 +70,7 @@ mod tests {
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "".to_string(),
+                    access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![],
@@ -77,12 +79,12 @@ mod tests {
             databases: vec![],
         };
 
-        let registry = Box::new(DockerHub {
-            login: "toto",
-            password: "password",
+        let container_registry = Box::new(DockerHub {
+            login: "qoveryrd",
+            password: "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24",
         });
 
-        let build_platform = Box::new(LocalDocker { registry });
+        let build_platform = Box::new(LocalDocker {});
 
         let kubernetes = Box::new(EKS {
             id: "",
@@ -99,6 +101,7 @@ mod tests {
         let config = Config {
             environment,
             build_platform,
+            container_registry,
             cloud_provider,
         };
 

@@ -1,16 +1,13 @@
-use crate::build_platform::registry::{PushError, PushResult, Registry};
 use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
+use crate::container_registry::{ContainerRegistry, PushError, PushResult};
 use crate::git::Credentials;
 
 pub mod local_docker;
-pub mod registry;
 
-pub trait BuildPlatform<'a> {
+pub trait BuildPlatform {
     fn is_valid(&self) -> bool;
-    fn registry(self) -> Box<dyn Registry<'a>>;
     fn build(&self, build: Build) -> Result<BuildResult, BuildError>;
-    fn push(&self, image: Image) -> Result<PushResult, PushError>;
 }
 
 pub struct Build {
@@ -28,6 +25,12 @@ pub struct Image {
     pub name: String,
     pub tag: String,
     pub commit_id: String,
+}
+
+impl Image {
+    pub fn name_with_tag(&self) -> String {
+        format!("{}:{}", self.name, self.tag)
+    }
 }
 
 pub struct BuildResult {
