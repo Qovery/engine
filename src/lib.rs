@@ -3,7 +3,9 @@ use crate::cloud_provider::CloudProvider;
 
 mod build_platform;
 mod cloud_provider;
+mod cmd;
 mod config;
+mod git;
 mod models;
 mod session;
 mod transaction;
@@ -17,7 +19,9 @@ mod tests {
     use crate::cloud_provider::do_launch_workflow;
     use crate::cloud_provider::gcp::GCP;
     use crate::config::{Config, ConfigError};
-    use crate::models::{Action, CloudProvider, Deployment, Environment};
+    use crate::models::{
+        Action, Application, CloudProvider, Deployment, Environment, GitCredentials,
+    };
     use crate::session::Session;
     use crate::transaction::{ProgressInfo, ProgressListener};
     use chrono::Utc;
@@ -56,7 +60,19 @@ mod tests {
                 name: "".to_string(),
                 region: "".to_string(),
             },
-            applications: vec![],
+            applications: vec![Application {
+                name: "simple-example-node-with-postgresql".to_string(),
+                git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
+                    .to_string(),
+                commit_id: "f400e2f199e6a7eb446690b6f2df1017dbbae518".to_string(),
+                action: Action::Create,
+                git_credentials: GitCredentials {
+                    login: "x-access-token".to_string(),
+                    access_token: "".to_string(),
+                    expired_at: Utc::now(),
+                },
+                storage: vec![],
+            }],
             routers: vec![],
             databases: vec![],
         };

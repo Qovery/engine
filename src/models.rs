@@ -24,6 +24,7 @@ pub struct Deployment {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Clone, Eq, PartialEq)]
 pub enum Action {
     Create,
     Pause,
@@ -35,18 +36,36 @@ pub struct CloudProvider {
     pub name: String,
     pub region: String,
 }
+
+#[derive(Clone)]
 pub struct Application {
+    pub name: String,
+    pub git_url: String,
+    pub commit_id: String,
+    pub action: Action,
     pub git_credentials: GitCredentials,
     pub storage: Vec<Storage>,
 }
-pub struct GitCredentials {}
+
+#[derive(Clone)]
+pub struct GitCredentials {
+    pub login: String,
+    pub access_token: String,
+    pub expired_at: DateTime<Utc>,
+}
+
+#[derive(Clone)]
 pub struct Storage {}
+
 pub struct Router {
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
 }
+
 pub struct CustomDomain {}
+
 pub struct Route {}
+
 pub struct Database {
     pub snapshot: Snapshot,
 }
