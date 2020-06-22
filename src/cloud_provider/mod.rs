@@ -1,10 +1,12 @@
+use crate::error::QResult;
+
 pub mod aws;
 pub mod gcp;
 
-pub trait CloudProvider<'a> {
-    fn name(&self) -> &'a str;
-    fn region(&self) -> &'a str;
-    fn is_valid(&self) -> bool;
+pub trait CloudProvider {
+    fn name(&self) -> CloudProviderName;
+    fn region(&self) -> String;
+    fn is_valid(&self) -> QResult<()>;
     fn on_create(&self);
     fn kubernetes(self) -> Box<dyn Kubernetes>;
     fn services(&self) -> Vec<Box<dyn Service>>;
@@ -19,6 +21,11 @@ pub trait Service {
     fn name(&self) -> &str;
     fn version(&self) -> &str;
     fn environment_type(&self) -> EnvironmentType;
+}
+
+pub enum CloudProviderName {
+    AWS,
+    GCP,
 }
 
 pub enum EnvironmentType {
@@ -72,7 +79,6 @@ pub enum ServiceType<'a> {
 
 pub trait Kubernetes {
     fn name(&self) -> &str;
-    fn id(&self) -> &str;
     fn version(&self) -> &str;
     fn on_create(&self);
     fn on_upgrade(&self);
@@ -82,6 +88,6 @@ pub trait Kubernetes {
     fn services(&self) -> &Vec<Box<dyn Service>>;
 }
 
-pub fn do_launch_workflow<'a, T: CloudProvider<'a>>(cp: &T) {
+pub fn do_launch_workflow<'a, T: CloudProvider>(cp: &T) {
     cp.on_create();
 }

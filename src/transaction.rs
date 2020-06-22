@@ -8,21 +8,29 @@ use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
 use crate::models::{Action, Application, Environment};
 
-pub struct Transaction<'a> {
-    pub config: Config<'a>,
+pub struct Transaction {
+    pub config: Config,
     steps: Vec<Step>,
     build_listeners: Vec<Box<dyn ProgressListener>>,
     deploy_listeners: Vec<Box<dyn ProgressListener>>,
 }
 
-impl<'a> Transaction<'a> {
-    pub fn new(config: Config<'a>) -> Self {
-        Transaction::<'a> {
+impl Transaction {
+    pub fn new(config: Config) -> Self {
+        Transaction {
             config,
             steps: vec![],
             build_listeners: vec![],
             deploy_listeners: vec![],
         }
+    }
+
+    pub fn init_infrastructure(&mut self) {
+        self.steps.push(Step::InitInfrastructure);
+    }
+
+    pub fn destroy_infrastructure(&mut self) {
+        self.steps.push(Step::DestroyInfrastructure);
     }
 
     pub fn build(&mut self) {
@@ -97,13 +105,21 @@ impl<'a> Transaction<'a> {
                 self.build_and_get_images_to_deploy();
             }
             Step::Deploy => {
-                println!("-- DEPLOY --");
+                println!("-- DEPLOY APPLICATIONS --");
+            }
+            Step::InitInfrastructure => {
+                println!("-- INIT INFRASTRUCTURE --");
+            }
+            Step::DestroyInfrastructure => {
+                println!("-- DESTROY INFRASTRUCTURE --");
             }
         })
     }
 }
 
 enum Step {
+    InitInfrastructure, // init and create all the necessary resources (Network, Kubernetes)
+    DestroyInfrastructure,
     Build,
     Deploy,
 }

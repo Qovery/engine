@@ -4,7 +4,6 @@ use crate::cloud_provider::{
 };
 
 pub struct EKS<'a> {
-    pub id: &'a str,
     pub name: &'a str,
     pub version: &'a str,
 }
@@ -12,10 +11,6 @@ pub struct EKS<'a> {
 impl<'a> Kubernetes for EKS<'a> {
     fn name(&self) -> &str {
         self.name
-    }
-
-    fn id(&self) -> &str {
-        self.id
     }
 
     fn version(&self) -> &str {

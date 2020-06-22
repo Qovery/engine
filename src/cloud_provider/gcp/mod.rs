@@ -1,21 +1,24 @@
-use crate::cloud_provider::{CloudProvider, Kubernetes, Service, StatefulService};
+use crate::cloud_provider::{
+    CloudProvider, CloudProviderName, Kubernetes, Service, StatefulService,
+};
+use crate::error::QResult;
 
 pub struct GCP<'a> {
     p12_file_content: &'a str,
     kubernetes: Box<dyn Kubernetes>,
 }
 
-impl<'a> CloudProvider<'a> for GCP<'a> {
-    fn name(&self) -> &'a str {
-        "gcp"
+impl<'a> CloudProvider for GCP<'a> {
+    fn name(&self) -> CloudProviderName {
+        CloudProviderName::GCP
     }
 
-    fn region(&self) -> &'a str {
+    fn region(&self) -> String {
         unimplemented!()
     }
 
-    fn is_valid(&self) -> bool {
-        true
+    fn is_valid(&self) -> QResult<()> {
+        Ok(())
     }
 
     fn on_create(&self) {

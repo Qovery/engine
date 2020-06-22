@@ -7,14 +7,14 @@ use crate::container_registry::ContainerRegistry;
 use crate::models::Environment;
 use crate::session::Session;
 
-pub struct Config<'a> {
+pub struct Config {
     pub environment: Environment,
     pub build_platform: Box<dyn BuildPlatform>,
     pub container_registry: Box<dyn ContainerRegistry>,
-    pub cloud_provider: Box<dyn CloudProvider<'a>>,
+    pub cloud_provider: Box<dyn CloudProvider>,
 }
 
-impl<'a> Config<'a> {
+impl<'a> Config {
     /// Read JSON and return a Config
     pub fn from_json(json: &str) -> Self {
         unimplemented!()
@@ -37,7 +37,7 @@ impl<'a> Config<'a> {
             ));
         }
 
-        if !self.cloud_provider.is_valid() {
+        if self.cloud_provider.is_valid().is_err() {
             return Err(CloudProviderError("there is a Cloud provider error"));
         }
 
@@ -45,9 +45,9 @@ impl<'a> Config<'a> {
     }
 
     /// check and init the connection to all the services
-    pub fn session(self) -> Result<Session<'a>, ConfigError<'a>> {
+    pub fn session(self) -> Result<Session, ConfigError<'a>> {
         match self.is_valid() {
-            Ok(_) => Ok(Session::<'a> { config: self }),
+            Ok(_) => Ok(Session { config: self }),
             Err(err) => Err(err),
         }
     }
@@ -55,6 +55,7 @@ impl<'a> Config<'a> {
 
 type ErrorMessage<'a> = &'a str;
 
+/// TODO change
 pub enum ConfigError<'a> {
     EnvironmentError(ErrorMessage<'a>),
     BuildPlatformError(ErrorMessage<'a>),
