@@ -2,11 +2,12 @@ use chrono::Utc;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::error::CloudProviderError;
 use qovery_engine::cloud_provider::gcp::GCP;
 use qovery_engine::cloud_provider::{do_launch_workflow, CloudProvider};
-use qovery_engine::config::{Config, ConfigError};
+use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
-use qovery_engine::error::{QError, QResult};
+use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
     Action, Application, CloudProvider as CP, Deployment, Environment, GitCredentials,
 };
@@ -85,15 +86,6 @@ fn main() {
         kubernetes,
     ));
 
-    match cloud_provider.is_valid() {
-        Ok(x) => {}
-        Err(err) => match err {
-            QError::Credentials => panic!("bad cloud provider credentials"),
-            QError::Error(err) => panic!("qerror: err"),
-            QError::Unknown => panic!("cloud provider unknown error"),
-        },
-    }
-
     let config = Config {
         environment,
         build_platform,
@@ -103,7 +95,16 @@ fn main() {
 
     let session = match config.session() {
         Ok(session) => session,
-        Err(err) => panic!(err),
+        Err(err) => match err {
+            ConfigurationError::Environment(e) => panic!(e),
+            ConfigurationError::BuildPlatform(e) => panic!(e),
+            ConfigurationError::ContainerRegistry(e) => panic!(e),
+            ConfigurationError::CloudProvider(e) => match e {
+                CloudProviderError::Credentials => panic!("bad cloud provider credentials"),
+                CloudProviderError::Error(err) => panic!("qerror: err"),
+                CloudProviderError::Unknown => panic!("cloud provider unknown error"),
+            },
+        },
     };
 
     let mut tx = session.transaction();

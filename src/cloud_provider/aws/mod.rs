@@ -1,11 +1,12 @@
-mod databases;
+pub mod databases;
 pub mod kubernetes;
 
 use crate::cloud_provider::aws::kubernetes::EKS;
+use crate::cloud_provider::error::CloudProviderError;
 use crate::cloud_provider::{
     CloudProvider, CloudProviderName, Kubernetes, Service, StatefulService,
 };
-use crate::error::{QError, QResult};
+use crate::error::ConfigurationError;
 use crate::runtime::async_run;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::{AwsCredentials, StaticProvider};
@@ -61,13 +62,13 @@ impl CloudProvider for AWS {
         self.region.name().to_string()
     }
 
-    fn is_valid(&self) -> QResult<()> {
+    fn is_valid(&self) -> Result<(), CloudProviderError> {
         let client = StsClient::new_with_client(self.client(), self.region.clone());
         let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(x) => Ok(()),
-            Err(err) => Err(QError::from(err)),
+            Err(err) => Err(CloudProviderError::from(err)),
         }
     }
 

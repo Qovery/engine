@@ -14,8 +14,8 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn is_valid(&self) -> bool {
-        true
+    pub fn is_valid(&self) -> Result<(), EnvironmentError> {
+        Ok(())
     }
 }
 
@@ -71,3 +71,6 @@ pub struct Database {
 }
 
 pub struct Snapshot {}
+
+#[derive(Debug)]
+pub enum EnvironmentError {}

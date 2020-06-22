@@ -1,3 +1,4 @@
+use crate::build_platform::error::BuildPlatformError;
 use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image};
 use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
@@ -12,8 +13,8 @@ use tempdir::TempDir;
 pub struct LocalDocker {}
 
 impl BuildPlatform for LocalDocker {
-    fn is_valid(&self) -> bool {
-        true
+    fn is_valid(&self) -> Result<(), BuildPlatformError> {
+        Ok(())
     }
 
     fn build(&self, build: Build) -> Result<BuildResult, BuildError> {

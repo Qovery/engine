@@ -1,7 +1,7 @@
+use crate::cloud_provider::error::CloudProviderError;
 use crate::cloud_provider::{
     CloudProvider, CloudProviderName, Kubernetes, Service, StatefulService,
 };
-use crate::error::QResult;
 
 pub struct GCP<'a> {
     p12_file_content: &'a str,
@@ -17,7 +17,7 @@ impl<'a> CloudProvider for GCP<'a> {
         unimplemented!()
     }
 
-    fn is_valid(&self) -> QResult<()> {
+    fn is_valid(&self) -> Result<(), CloudProviderError> {
         Ok(())
     }
 

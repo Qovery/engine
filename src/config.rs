@@ -1,9 +1,7 @@
 use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::{CloudProvider, Kubernetes};
-use crate::config::ConfigError::{
-    BuildPlatformError, CloudProviderError, ContainerRegistryError, EnvironmentError,
-};
 use crate::container_registry::ContainerRegistry;
+use crate::error::ConfigurationError;
 use crate::models::Environment;
 use crate::session::Session;
 
@@ -20,47 +18,45 @@ impl<'a> Config {
         unimplemented!()
     }
 
-    pub fn is_valid(&self) -> Result<(), ConfigError<'a>> {
-        if !self.environment.is_valid() {
-            return Err(EnvironmentError("there is an Environment error"));
+    pub fn is_valid(&self) -> Result<(), ConfigurationError> {
+        match self.environment.is_valid() {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(ConfigurationError::Environment(err));
+            }
         }
 
-        if !self.build_platform.is_valid() {
-            return Err(BuildPlatformError(
-                "there is a Continuous integration error",
-            ));
+        match self.build_platform.is_valid() {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(ConfigurationError::BuildPlatform(err));
+            }
         }
 
-        if !self.container_registry.is_valid() {
-            return Err(ContainerRegistryError(
-                "there is a Container Registry error",
-            ));
+        match self.container_registry.is_valid() {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(ConfigurationError::ContainerRegistry(err));
+            }
         }
 
-        if self.cloud_provider.is_valid().is_err() {
-            return Err(CloudProviderError("there is a Cloud provider error"));
+        match self.cloud_provider.is_valid() {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(ConfigurationError::CloudProvider(err));
+            }
         }
 
         Ok(())
     }
 
     /// check and init the connection to all the services
-    pub fn session(self) -> Result<Session, ConfigError<'a>> {
+    pub fn session(self) -> Result<Session, ConfigurationError> {
         match self.is_valid() {
             Ok(_) => Ok(Session { config: self }),
             Err(err) => Err(err),
         }
     }
-}
-
-type ErrorMessage<'a> = &'a str;
-
-/// TODO change
-pub enum ConfigError<'a> {
-    EnvironmentError(ErrorMessage<'a>),
-    BuildPlatformError(ErrorMessage<'a>),
-    ContainerRegistryError(ErrorMessage<'a>),
-    CloudProviderError(ErrorMessage<'a>),
 }
 
 #[cfg(test)]

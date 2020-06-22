@@ -1,5 +1,6 @@
 use crate::build_platform::Image;
 use crate::cmd;
+use crate::container_registry::error::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, PushError, PushResult};
 
 pub struct DockerHub<'a> {
@@ -8,8 +9,8 @@ pub struct DockerHub<'a> {
 }
 
 impl<'a> ContainerRegistry for DockerHub<'a> {
-    fn is_valid(&self) -> bool {
-        true
+    fn is_valid(&self) -> Result<(), ContainerRegistryError> {
+        Ok(())
     }
 
     fn push(&self, image: &Image) -> Result<PushResult, PushError> {

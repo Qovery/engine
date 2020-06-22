@@ -1,12 +1,13 @@
-use crate::error::QResult;
+use crate::cloud_provider::error::CloudProviderError;
 
 pub mod aws;
+pub mod error;
 pub mod gcp;
 
 pub trait CloudProvider {
     fn name(&self) -> CloudProviderName;
     fn region(&self) -> String;
-    fn is_valid(&self) -> QResult<()>;
+    fn is_valid(&self) -> Result<(), CloudProviderError>;
     fn on_create(&self);
     fn kubernetes(self) -> Box<dyn Kubernetes>;
     fn services(&self) -> Vec<Box<dyn Service>>;
