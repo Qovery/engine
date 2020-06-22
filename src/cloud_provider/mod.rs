@@ -1,4 +1,4 @@
-use crate::cloud_provider::error::CloudProviderError;
+use crate::cloud_provider::error::{CloudProviderError, KubernetesError};
 
 pub mod aws;
 pub mod error;
@@ -7,12 +7,10 @@ pub mod gcp;
 pub trait CloudProvider {
     fn name(&self) -> CloudProviderName;
     fn is_valid(&self) -> Result<(), CloudProviderError>;
-    fn kubernetes(self) -> Box<dyn Kubernetes>;
-    fn services(&self) -> Vec<Box<dyn Service>>;
-    fn create_service(&self, service: Box<dyn StatefulService>);
+    fn kubernetes_clusters(self) -> Vec<Box<dyn Kubernetes>>;
 }
 
-pub trait StatefulService: Service + Create {}
+pub trait StatefulService: Service + Create + Delete {}
 
 pub trait Service {
     fn service_type(&self) -> ServiceType;
@@ -39,6 +37,7 @@ pub trait Create {
 
 pub trait Delete {
     fn on_delete(&self, target: Box<dyn CloudProvider>);
+    fn on_delete_error(&self, target: Box<dyn CloudProvider>);
 }
 
 pub trait Snapshot {
@@ -80,10 +79,16 @@ pub trait Kubernetes {
     fn name(&self) -> &str;
     fn version(&self) -> &str;
     fn region(&self) -> &str;
+    fn is_valid(&self) -> Result<(), KubernetesError>;
     fn on_create(&self);
+    fn on_create_error(&self);
     fn on_upgrade(&self);
+    fn on_upgrade_error(&self);
     fn on_downgrade(&self);
+    fn on_downgrade_error(&self);
     fn on_delete(&self);
+    fn on_delete_error(&self);
     fn create_namespace(&self);
-    fn services(&self) -> &Vec<Box<dyn Service>>;
+    fn services(&self) -> Vec<Box<dyn Service>>;
+    fn create_service(&self, service: Box<dyn StatefulService>);
 }

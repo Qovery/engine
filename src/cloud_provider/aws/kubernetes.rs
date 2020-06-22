@@ -1,4 +1,5 @@
 use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{
     Create, DatabaseType, Kubernetes, Service, ServiceType, StatefulService,
 };
@@ -34,7 +35,15 @@ impl Kubernetes for EKS {
         self.region.name()
     }
 
+    fn is_valid(&self) -> Result<(), KubernetesError> {
+        unimplemented!()
+    }
+
     fn on_create(&self) {
+        unimplemented!()
+    }
+
+    fn on_create_error(&self) {
         unimplemented!()
     }
 
@@ -42,7 +51,15 @@ impl Kubernetes for EKS {
         unimplemented!()
     }
 
+    fn on_upgrade_error(&self) {
+        unimplemented!()
+    }
+
     fn on_downgrade(&self) {
+        unimplemented!()
+    }
+
+    fn on_downgrade_error(&self) {
         unimplemented!()
     }
 
@@ -50,11 +67,19 @@ impl Kubernetes for EKS {
         unimplemented!()
     }
 
+    fn on_delete_error(&self) {
+        unimplemented!()
+    }
+
     fn create_namespace(&self) {
         unimplemented!()
     }
 
-    fn services(&self) -> &Vec<Box<dyn Service>> {
+    fn services(&self) -> Vec<Box<dyn Service>> {
+        unimplemented!()
+    }
+
+    fn create_service(&self, service: Box<dyn StatefulService>) {
         unimplemented!()
     }
 }

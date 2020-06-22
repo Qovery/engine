@@ -12,14 +12,18 @@ use tempdir::TempDir;
 /// use Docker in local
 pub struct LocalDocker {}
 
+impl LocalDocker {
+    pub fn new() -> Self {
+        LocalDocker {}
+    }
+}
+
 impl BuildPlatform for LocalDocker {
     fn is_valid(&self) -> Result<(), BuildPlatformError> {
         Ok(())
     }
 
     fn build(&self, build: Build) -> Result<BuildResult, BuildError> {
-        println!("launch build with LocalDocker");
-
         // git clone
         let tmp_dir = TempDir::new(build.image.name.as_str()).unwrap();
         let into_dir = tmp_dir.path();

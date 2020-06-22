@@ -72,12 +72,9 @@ fn main() {
 
     let region = environment.cloud_provider.region.clone();
 
-    let kubernetes = Box::new(EKS::new("my-k8s-cluster", "1.16", region.as_str()));
-
     let cloud_provider = Box::new(AWS::new(
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
-        kubernetes,
     ));
 
     let config = Config {
@@ -100,6 +97,9 @@ fn main() {
     };
 
     let mut tx = session.transaction();
+
+    let eks = EKS::new("my-k8s-cluster", "1.16", region.as_str());
+    tx.create_kubernetes(&eks);
 
     match tx.build(&environment) {
         Ok(_) => {}

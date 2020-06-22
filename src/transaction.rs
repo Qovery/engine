@@ -2,6 +2,7 @@ use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 
 use crate::build_platform::{Build, GitRepository, Image};
+use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
@@ -25,12 +26,30 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn init_infrastructure(&mut self) {
-        self.steps.push(Step::InitInfrastructure);
+    pub fn create_kubernetes(
+        &mut self,
+        kubernetes: &'a dyn Kubernetes,
+    ) -> Result<(), KubernetesError> {
+        match kubernetes.is_valid() {
+            Ok(_) => {
+                self.steps.push(Step::CreateKubernetes(kubernetes));
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
     }
 
-    pub fn destroy_infrastructure(&mut self) {
-        self.steps.push(Step::DestroyInfrastructure);
+    pub fn delete_kubernetes(
+        &mut self,
+        kubernetes: &'a dyn Kubernetes,
+    ) -> Result<(), KubernetesError> {
+        match kubernetes.is_valid() {
+            Ok(_) => {
+                self.steps.push(Step::DeleteKubernetes(kubernetes));
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
     }
 
     pub fn build(&mut self, environment: &'a Environment) -> Result<(), EnvironmentError> {
@@ -111,25 +130,31 @@ impl<'a> Transaction<'a> {
         self.steps.iter().for_each(|step| match step {
             Step::Build(environment) => {
                 // build applications
-                println!("-- BUILD APPLICATIONS --");
                 self.build_and_get_images_to_deploy(environment);
+                // TODO check success or fallback
             }
             Step::Deploy(environment) => {
-                println!("-- DEPLOY APPLICATIONS --");
+                // deploy environment
+                // TODO check success or fallback
             }
-            Step::InitInfrastructure => {
-                println!("-- INIT INFRASTRUCTURE --");
+            Step::CreateKubernetes(kubernetes) => {
+                // create kubernetes
+                kubernetes.on_create();
+                // TODO check success or fallback
             }
-            Step::DestroyInfrastructure => {
-                println!("-- DESTROY INFRASTRUCTURE --");
+            Step::DeleteKubernetes(kubernetes) => {
+                // delete kubernetes
+                kubernetes.on_delete();
+                // TODO check success or fallback
             }
         })
     }
 }
 
 enum Step<'a> {
-    InitInfrastructure, // init and create all the necessary resources (Network, Kubernetes)
-    DestroyInfrastructure,
+    // init and create all the necessary resources (Network, Kubernetes)
+    CreateKubernetes(&'a dyn Kubernetes),
+    DeleteKubernetes(&'a dyn Kubernetes),
     Build(&'a Environment),
     Deploy(&'a Environment),
 }

@@ -1,6 +1,6 @@
 use crate::cloud_provider::{
-    CloudProvider, Create, DatabaseOptions, DatabaseType, EnvironmentType, Kubernetes, Service,
-    ServiceType,
+    CloudProvider, Create, DatabaseOptions, DatabaseType, Delete, EnvironmentType, Kubernetes,
+    Service, ServiceType,
 };
 
 pub struct PostgreSQL<'a> {
@@ -41,6 +41,22 @@ impl<'a> Create for PostgreSQL<'a> {
     }
 
     fn on_create_error(&self, target: Box<dyn CloudProvider>) {
+        match self.environment_type() {
+            EnvironmentType::Production => {}
+            EnvironmentType::Development => {}
+        }
+    }
+}
+
+impl<'a> Delete for PostgreSQL<'a> {
+    fn on_delete(&self, target: Box<dyn CloudProvider>) {
+        match self.environment_type() {
+            EnvironmentType::Production => {}
+            EnvironmentType::Development => {}
+        }
+    }
+
+    fn on_delete_error(&self, target: Box<dyn CloudProvider>) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}

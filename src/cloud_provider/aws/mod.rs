@@ -1,13 +1,5 @@
-pub mod databases;
-pub mod kubernetes;
+use std::str::FromStr;
 
-use crate::cloud_provider::aws::kubernetes::EKS;
-use crate::cloud_provider::error::CloudProviderError;
-use crate::cloud_provider::{
-    CloudProvider, CloudProviderName, Kubernetes, Service, StatefulService,
-};
-use crate::error::ConfigurationError;
-use crate::runtime::async_run;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::{AwsCredentials, StaticProvider};
 use rusoto_eks::{
@@ -15,24 +7,28 @@ use rusoto_eks::{
     ListClustersResponse,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
-use std::str::FromStr;
+
+use crate::cloud_provider::aws::kubernetes::EKS;
+use crate::cloud_provider::error::CloudProviderError;
+use crate::cloud_provider::{
+    CloudProvider, CloudProviderName, Create, Kubernetes, Service, StatefulService,
+};
+use crate::error::ConfigurationError;
+use crate::runtime::async_run;
+
+pub mod databases;
+pub mod kubernetes;
 
 pub struct AWS {
     access_key_id: String,
     secret_access_key: String,
-    kubernetes: Box<dyn Kubernetes>,
 }
 
 impl<'a> AWS {
-    pub fn new(
-        access_key_id: &'a str,
-        secret_access_key: &'a str,
-        kubernetes: Box<dyn Kubernetes>,
-    ) -> Self {
+    pub fn new(access_key_id: &'a str, secret_access_key: &'a str) -> Self {
         AWS {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
-            kubernetes,
         }
     }
 
@@ -65,16 +61,8 @@ impl CloudProvider for AWS {
         }
     }
 
-    fn kubernetes(self) -> Box<dyn Kubernetes> {
-        self.kubernetes
-    }
-
-    fn services(&self) -> Vec<Box<dyn Service>> {
+    fn kubernetes_clusters(self) -> Vec<Box<dyn Kubernetes>> {
         vec![]
-    }
-
-    fn create_service(&self, service: Box<dyn StatefulService>) {
-        unimplemented!()
     }
 }
 
@@ -86,10 +74,7 @@ mod tests {
 
     #[test]
     fn aws() {
-        let eks = Box::new(EKS {
-            name: "",
-            version: "",
-        });
+        let eks = Box::new(EKS::new("", "", ""));
 
         let aws = AWS::new("", "", eks);
         assert_eq!(aws.is_valid().is_ok(), false);

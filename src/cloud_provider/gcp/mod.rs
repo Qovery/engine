@@ -5,7 +5,6 @@ use crate::cloud_provider::{
 
 pub struct GCP {
     p12_file_content: String,
-    kubernetes: Box<dyn Kubernetes>,
 }
 
 impl CloudProvider for GCP {
@@ -17,16 +16,8 @@ impl CloudProvider for GCP {
         Ok(())
     }
 
-    fn kubernetes(self) -> Box<dyn Kubernetes> {
-        self.kubernetes
-    }
-
-    fn services(&self) -> Vec<Box<dyn Service>> {
+    fn kubernetes_clusters(self) -> Vec<Box<dyn Kubernetes>> {
         vec![]
-    }
-
-    fn create_service(&self, service: Box<dyn StatefulService>) {
-        unimplemented!()
     }
 }
 

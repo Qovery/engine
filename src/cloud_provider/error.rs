@@ -34,3 +34,6 @@ impl<E> From<RusotoError<E>> for CloudProviderError {
         }
     }
 }
+
+#[derive(Debug)]
+pub enum KubernetesError {}

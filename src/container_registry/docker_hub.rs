@@ -8,6 +8,12 @@ pub struct DockerHub<'a> {
     pub password: &'a str,
 }
 
+impl<'a> DockerHub<'a> {
+    pub fn new(login: &'a str, password: &'a str) -> Self {
+        DockerHub { login, password }
+    }
+}
+
 impl<'a> ContainerRegistry for DockerHub<'a> {
     fn is_valid(&self) -> Result<(), ContainerRegistryError> {
         Ok(())
