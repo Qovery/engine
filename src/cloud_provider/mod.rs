@@ -6,9 +6,7 @@ pub mod gcp;
 
 pub trait CloudProvider {
     fn name(&self) -> CloudProviderName;
-    fn region(&self) -> String;
     fn is_valid(&self) -> Result<(), CloudProviderError>;
-    fn on_create(&self);
     fn kubernetes(self) -> Box<dyn Kubernetes>;
     fn services(&self) -> Vec<Box<dyn Service>>;
     fn create_service(&self, service: Box<dyn StatefulService>);
@@ -81,14 +79,11 @@ pub enum ServiceType<'a> {
 pub trait Kubernetes {
     fn name(&self) -> &str;
     fn version(&self) -> &str;
+    fn region(&self) -> &str;
     fn on_create(&self);
     fn on_upgrade(&self);
     fn on_downgrade(&self);
     fn on_delete(&self);
     fn create_namespace(&self);
     fn services(&self) -> &Vec<Box<dyn Service>>;
-}
-
-pub fn do_launch_workflow<'a, T: CloudProvider>(cp: &T) {
-    cp.on_create();
 }

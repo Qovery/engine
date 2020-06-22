@@ -4,7 +4,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::error::CloudProviderError;
 use qovery_engine::cloud_provider::gcp::GCP;
-use qovery_engine::cloud_provider::{do_launch_workflow, CloudProvider};
+use qovery_engine::cloud_provider::CloudProvider;
 use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::error::ConfigurationError;
@@ -14,7 +14,6 @@ use qovery_engine::models::{
 use qovery_engine::session::Session;
 use qovery_engine::transaction::{ProgressInfo, ProgressListener};
 use rusoto_core::Region;
-use std::str::FromStr;
 
 struct QoveryStatusSender;
 
@@ -71,23 +70,17 @@ fn main() {
 
     let build_platform = Box::new(LocalDocker {});
 
-    let kubernetes = Box::new(EKS {
-        name: "my-k8s-cluster",
-        version: "1.16",
-    });
-
     let region = environment.cloud_provider.region.clone();
-    let region_str = region.as_str();
+
+    let kubernetes = Box::new(EKS::new("my-k8s-cluster", "1.16", region.as_str()));
 
     let cloud_provider = Box::new(AWS::new(
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
-        region_str,
         kubernetes,
     ));
 
     let config = Config {
-        environment,
         build_platform,
         container_registry,
         cloud_provider,
@@ -96,7 +89,6 @@ fn main() {
     let session = match config.session() {
         Ok(session) => session,
         Err(err) => match err {
-            ConfigurationError::Environment(e) => panic!(e),
             ConfigurationError::BuildPlatform(e) => panic!(e),
             ConfigurationError::ContainerRegistry(e) => panic!(e),
             ConfigurationError::CloudProvider(e) => match e {
@@ -109,8 +101,12 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    tx.build();
-    tx.deploy();
+    match tx.build(&environment) {
+        Ok(_) => {}
+        Err(err) => panic!("environment error"),
+    }
+
+    tx.deploy(&environment);
 
     tx.add_build_listener(Box::new(QoveryStatusSender {}));
 

@@ -20,7 +20,6 @@ use std::str::FromStr;
 pub struct AWS {
     access_key_id: String,
     secret_access_key: String,
-    region: Region,
     kubernetes: Box<dyn Kubernetes>,
 }
 
@@ -28,13 +27,11 @@ impl<'a> AWS {
     pub fn new(
         access_key_id: &'a str,
         secret_access_key: &'a str,
-        region: &'a str,
         kubernetes: Box<dyn Kubernetes>,
     ) -> Self {
         AWS {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
-            region: Region::from_str(region).unwrap(),
             kubernetes,
         }
     }
@@ -58,22 +55,14 @@ impl CloudProvider for AWS {
         CloudProviderName::AWS
     }
 
-    fn region(&self) -> String {
-        self.region.name().to_string()
-    }
-
     fn is_valid(&self) -> Result<(), CloudProviderError> {
-        let client = StsClient::new_with_client(self.client(), self.region.clone());
+        let client = StsClient::new_with_client(self.client(), Region::default());
         let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(x) => Ok(()),
             Err(err) => Err(CloudProviderError::from(err)),
         }
-    }
-
-    fn on_create(&self) {
-        println!("on_create AWS");
     }
 
     fn kubernetes(self) -> Box<dyn Kubernetes> {
@@ -102,7 +91,7 @@ mod tests {
             version: "",
         });
 
-        let aws = AWS::new("", "", "us-east-2", eks);
+        let aws = AWS::new("", "", eks);
         assert_eq!(aws.is_valid().is_ok(), false);
 
         aws.services().iter().for_each(|x| {

@@ -6,18 +6,18 @@ use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
-use crate::models::{Action, Application, Environment};
+use crate::models::{Action, Application, Environment, EnvironmentError};
 
-pub struct Transaction {
+pub struct Transaction<'a> {
     pub config: Config,
-    steps: Vec<Step>,
+    steps: Vec<Step<'a>>,
     build_listeners: Vec<Box<dyn ProgressListener>>,
     deploy_listeners: Vec<Box<dyn ProgressListener>>,
 }
 
-impl Transaction {
+impl<'a> Transaction<'a> {
     pub fn new(config: Config) -> Self {
-        Transaction {
+        Transaction::<'a> {
             config,
             steps: vec![],
             build_listeners: vec![],
@@ -33,26 +33,36 @@ impl Transaction {
         self.steps.push(Step::DestroyInfrastructure);
     }
 
-    pub fn build(&mut self) {
-        self.steps.push(Step::Build);
+    pub fn build(&mut self, environment: &'a Environment) -> Result<(), EnvironmentError> {
+        match environment.is_valid() {
+            Ok(_) => {
+                self.steps.push(Step::Build(environment));
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
     }
 
     pub fn add_build_listener(&mut self, listener: Box<dyn ProgressListener>) {
         self.build_listeners.push(listener);
     }
 
-    pub fn deploy(&mut self) {
-        self.steps.push(Step::Deploy);
+    pub fn deploy(&mut self, environment: &'a Environment) -> Result<(), EnvironmentError> {
+        match environment.is_valid() {
+            Ok(_) => {
+                self.steps.push(Step::Deploy(environment));
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
     }
 
     pub fn add_deploy_listener(&mut self, listener: Box<dyn ProgressListener>) {
         self.deploy_listeners.push(listener);
     }
 
-    fn build_and_get_images_to_deploy(&self) -> Vec<Image> {
-        let apps_to_build = self
-            .config
-            .environment
+    fn build_and_get_images_to_deploy(&self, environment: &Environment) -> Vec<Image> {
+        let apps_to_build = environment
             .applications
             .iter()
             .filter(|app| app.action == Action::Create);
@@ -99,12 +109,12 @@ impl Transaction {
         // TODO init cloud_provider and Kubernetes otherwise
 
         self.steps.iter().for_each(|step| match step {
-            Step::Build => {
+            Step::Build(environment) => {
                 // build applications
                 println!("-- BUILD APPLICATIONS --");
-                self.build_and_get_images_to_deploy();
+                self.build_and_get_images_to_deploy(environment);
             }
-            Step::Deploy => {
+            Step::Deploy(environment) => {
                 println!("-- DEPLOY APPLICATIONS --");
             }
             Step::InitInfrastructure => {
@@ -117,11 +127,11 @@ impl Transaction {
     }
 }
 
-enum Step {
+enum Step<'a> {
     InitInfrastructure, // init and create all the necessary resources (Network, Kubernetes)
     DestroyInfrastructure,
-    Build,
-    Deploy,
+    Build(&'a Environment),
+    Deploy(&'a Environment),
 }
 
 pub struct ProgressInfo {

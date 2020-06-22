@@ -3,26 +3,18 @@ use crate::cloud_provider::{
     CloudProvider, CloudProviderName, Kubernetes, Service, StatefulService,
 };
 
-pub struct GCP<'a> {
-    p12_file_content: &'a str,
+pub struct GCP {
+    p12_file_content: String,
     kubernetes: Box<dyn Kubernetes>,
 }
 
-impl<'a> CloudProvider for GCP<'a> {
+impl CloudProvider for GCP {
     fn name(&self) -> CloudProviderName {
         CloudProviderName::GCP
     }
 
-    fn region(&self) -> String {
-        unimplemented!()
-    }
-
     fn is_valid(&self) -> Result<(), CloudProviderError> {
         Ok(())
-    }
-
-    fn on_create(&self) {
-        println!("on_create GCP");
     }
 
     fn kubernetes(self) -> Box<dyn Kubernetes> {
@@ -38,8 +30,8 @@ impl<'a> CloudProvider for GCP<'a> {
     }
 }
 
-impl<'a> GCP<'a> {
-    pub fn new(p12_file_content: &'a str) -> Self {
+impl GCP {
+    pub fn new(p12_file_content: String) -> Self {
         unimplemented!()
     }
 }

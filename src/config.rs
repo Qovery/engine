@@ -6,7 +6,6 @@ use crate::models::Environment;
 use crate::session::Session;
 
 pub struct Config {
-    pub environment: Environment,
     pub build_platform: Box<dyn BuildPlatform>,
     pub container_registry: Box<dyn ContainerRegistry>,
     pub cloud_provider: Box<dyn CloudProvider>,
@@ -19,13 +18,6 @@ impl<'a> Config {
     }
 
     pub fn is_valid(&self) -> Result<(), ConfigurationError> {
-        match self.environment.is_valid() {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(ConfigurationError::Environment(err));
-            }
-        }
-
         match self.build_platform.is_valid() {
             Ok(_) => {}
             Err(err) => {

@@ -7,7 +7,7 @@ pub struct Session {
 }
 
 impl<'a> Session {
-    pub fn transaction(self) -> Transaction {
+    pub fn transaction(self) -> Transaction<'a> {
         Transaction::new(self.config)
     }
 }
