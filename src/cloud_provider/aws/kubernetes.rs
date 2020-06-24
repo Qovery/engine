@@ -40,6 +40,7 @@ impl Kubernetes for EKS {
     }
 
     fn on_create(&self) -> Result<(), KubernetesError> {
+        // TODO pierre
         Ok(())
     }
 
@@ -80,6 +81,10 @@ impl Kubernetes for EKS {
     }
 
     fn create_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError> {
+        unimplemented!()
+    }
+
+    fn delete_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 }

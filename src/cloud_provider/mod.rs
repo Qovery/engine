@@ -91,4 +91,5 @@ pub trait Kubernetes {
     fn create_namespace(&self) -> Result<(), KubernetesError>;
     fn services(&self) -> Result<Vec<Box<dyn Service>>, KubernetesError>;
     fn create_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError>;
+    fn delete_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError>;
 }

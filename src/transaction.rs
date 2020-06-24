@@ -200,13 +200,33 @@ impl<'a> Transaction<'a> {
             match step {
                 Step::CreateKubernetes(kubernetes) => {
                     // create kubernetes
-                    kubernetes.on_create();
-                    // TODO check success or rollback
+                    match kubernetes.on_create() {
+                        Err(err) => match self.rollback() {
+                            Ok(_) => {
+                                TransactionResult::Rollback(CommitError::CreateKubernetes(err))
+                            }
+                            Err(e) => TransactionResult::UnrecoverableError(
+                                CommitError::CreateKubernetes(err),
+                                e,
+                            ),
+                        },
+                        _ => TransactionResult::Ok,
+                    };
                 }
                 Step::DeleteKubernetes(kubernetes) => {
                     // delete kubernetes
-                    kubernetes.on_delete();
-                    // TODO check success or rollback
+                    match kubernetes.on_delete() {
+                        Err(err) => match self.rollback() {
+                            Ok(_) => {
+                                TransactionResult::Rollback(CommitError::DeleteKubernetes(err))
+                            }
+                            Err(e) => TransactionResult::UnrecoverableError(
+                                CommitError::DeleteKubernetes(err),
+                                e,
+                            ),
+                        },
+                        _ => TransactionResult::Ok,
+                    };
                 }
                 Step::Build(environment) => {
                     // build applications
@@ -238,7 +258,6 @@ impl<'a> Transaction<'a> {
                 }
                 Step::Deploy(environment) => {
                     // deploy environment
-                    // TODO check success or rollback
                     let transaction_results = match image_by_environment.remove(environment) {
                         Some(x) => x
                             .iter()
