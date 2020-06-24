@@ -57,7 +57,7 @@ fn main() {
 
     match tx.commit() {
         TransactionResult::Ok => {}
-        TransactionResult::Error(c) => {}
+        TransactionResult::Rollback(c) => {}
         TransactionResult::UnrecoverableError(c, r) => {}
     }
 }

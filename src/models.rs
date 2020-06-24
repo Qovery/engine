@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
     pub deployment: Deployment,
     pub owner_id: String,
@@ -19,12 +20,13 @@ impl Environment {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Deployment {
     pub id: String,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub enum Action {
     Create,
     Pause,
@@ -32,12 +34,13 @@ pub enum Action {
     Idle,
 }
 
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct CloudProvider {
     pub name: String,
     pub region: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     pub name: String,
     pub git_url: String,
@@ -47,30 +50,35 @@ pub struct Application {
     pub storage: Vec<Storage>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct GitCredentials {
     pub login: String,
     pub access_token: String,
     pub expired_at: DateTime<Utc>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Storage {}
 
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Router {
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
 }
 
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct CustomDomain {}
 
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Route {}
 
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Database {
     pub snapshot: Snapshot,
 }
 
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Snapshot {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentError {}

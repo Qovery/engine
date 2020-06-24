@@ -19,7 +19,7 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
         Ok(())
     }
 
-    fn push(&self, image: &Image) -> Result<PushResult, PushError> {
+    fn push(&self, image: Image) -> Result<PushResult, PushError> {
         let status = match cmd::exec(
             "docker",
             vec!["login", "-u", self.login, "-p", self.password],
@@ -58,10 +58,10 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
             return Err(PushError::ImagePushFailed);
         }
 
-        Ok(PushResult {})
+        Ok(PushResult { image })
     }
 
-    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
+    fn push_error(&self, image: Image) -> Result<PushResult, PushError> {
         unimplemented!()
     }
 }

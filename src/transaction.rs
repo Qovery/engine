@@ -9,6 +9,7 @@ use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
 use crate::models::{Action, Application, Environment, EnvironmentError};
 use crate::transaction::Step::CreateKubernetes;
+use std::collections::HashMap;
 
 pub struct Transaction<'a> {
     pub config: Config,
@@ -79,6 +80,20 @@ impl<'a> Transaction<'a> {
         }
     }
 
+    pub fn deploy_with_image(
+        &mut self,
+        environment: &'a Environment,
+        image: Image,
+    ) -> Result<(), EnvironmentError> {
+        match environment.is_valid() {
+            Ok(_) => {
+                self.steps.push(Step::DeployWithImage(environment, image));
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
+    }
+
     pub fn add_deploy_listener(&mut self, listener: Box<dyn ProgressListener>) {
         self.deploy_listeners.push(listener);
     }
@@ -117,7 +132,7 @@ impl<'a> Transaction<'a> {
     fn push_images(&self, images: Vec<Image>) -> Result<Vec<PushResult>, PushError> {
         let push_results: Vec<PushResult> = images
             .into_iter()
-            .map(|image| match self.config.container_registry.push(&image) {
+            .map(|image| match self.config.container_registry.push(image) {
                 Ok(x) => Ok(x),
                 Err(err) => return Err(err), // stop on error
             })
@@ -129,12 +144,6 @@ impl<'a> Transaction<'a> {
 
     pub fn rollback(&self) -> Result<(), RollbackError> {
         self.executed_steps.iter().for_each(|step| match step {
-            Step::Build(environment) => {
-                // revert build applications
-            }
-            Step::Deploy(environment) => {
-                // revert environment deployment
-            }
             Step::CreateKubernetes(kubernetes) => {
                 // revert kubernetes creation
                 kubernetes.on_create_error();
@@ -143,39 +152,30 @@ impl<'a> Transaction<'a> {
                 // revert kubernetes deletion
                 kubernetes.on_delete_error();
             }
+            Step::Build(environment) => {
+                // revert build applications
+            }
+            Step::Deploy(environment) => {
+                // revert environment deployment
+            }
+            Step::DeployWithImage(environment, image) => {
+                // revert environment deployment
+            }
         });
 
         Ok(())
     }
 
+    fn deploy_environment(environment: &Environment, image: &Image) {}
+
     pub fn commit(&mut self) -> TransactionResult {
+        let mut image_by_environment: HashMap<&'a Environment, Vec<Image>> = HashMap::new();
+
         for step in self.steps.iter() {
+            // execution loop
             self.executed_steps.push(step.clone());
 
             match step {
-                Step::Build(environment) => {
-                    // build applications
-                    let result = match self.build_applications(environment) {
-                        Ok(images) => match self.push_images(images) {
-                            Ok(_) => Ok(()),
-                            Err(err) => Err(CommitError::Deploy(err)),
-                        },
-                        Err(err) => Err(CommitError::Build(err)),
-                    };
-
-                    if result.is_err() {
-                        let commit_error = result.err().unwrap();
-
-                        return match self.rollback() {
-                            Ok(_) => TransactionResult::Error(commit_error),
-                            Err(err) => TransactionResult::UnrecoverableError(commit_error, err),
-                        };
-                    }
-                }
-                Step::Deploy(environment) => {
-                    // deploy environment
-                    // TODO check success or rollback
-                }
                 Step::CreateKubernetes(kubernetes) => {
                     // create kubernetes
                     kubernetes.on_create();
@@ -185,6 +185,41 @@ impl<'a> Transaction<'a> {
                     // delete kubernetes
                     kubernetes.on_delete();
                     // TODO check success or rollback
+                }
+                Step::Build(environment) => {
+                    // build applications
+                    let push_results = match self.build_applications(environment) {
+                        Ok(images) => match self.push_images(images) {
+                            Ok(r) => Ok(r),
+                            Err(err) => Err(CommitError::Deploy(err)),
+                        },
+                        Err(err) => Err(CommitError::Build(err)),
+                    };
+
+                    if push_results.is_err() {
+                        let commit_error = push_results.err().unwrap();
+
+                        return match self.rollback() {
+                            Ok(_) => TransactionResult::Rollback(commit_error),
+                            Err(err) => TransactionResult::UnrecoverableError(commit_error, err),
+                        };
+                    }
+
+                    let images: Vec<_> = push_results
+                        .ok()
+                        .unwrap()
+                        .into_iter()
+                        .map(|x| x.image)
+                        .collect();
+
+                    image_by_environment.insert(environment, images);
+                }
+                Step::Deploy(environment) => {
+                    // deploy environment
+                    // TODO check success or rollback
+                }
+                Step::DeployWithImage(environment, image) => {
+                    // deploy environment
                 }
             };
         }
@@ -199,6 +234,7 @@ enum Step<'a> {
     DeleteKubernetes(&'a dyn Kubernetes),
     Build(&'a Environment),
     Deploy(&'a Environment),
+    DeployWithImage(&'a Environment, Image),
 }
 
 impl<'a> Clone for Step<'a> {
@@ -208,6 +244,7 @@ impl<'a> Clone for Step<'a> {
             Step::DeleteKubernetes(x) => Step::DeleteKubernetes(*x),
             Step::Build(x) => Step::Build(*x),
             Step::Deploy(x) => Step::Deploy(*x),
+            Step::DeployWithImage(x, i) => Step::DeployWithImage(x, i.clone()),
         }
     }
 }
@@ -223,7 +260,7 @@ pub enum RollbackError {}
 
 pub enum TransactionResult {
     Ok,
-    Error(CommitError),
+    Rollback(CommitError),
     UnrecoverableError(CommitError, RollbackError),
 }
 
