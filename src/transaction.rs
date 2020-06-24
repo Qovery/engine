@@ -1,17 +1,19 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 
-use crate::build_platform::{Build, GitRepository, Image};
+use crate::build_platform::{Build, BuildError, GitRepository, Image};
 use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
 use crate::models::{Action, Application, Environment, EnvironmentError};
+use crate::transaction::Step::CreateKubernetes;
 
 pub struct Transaction<'a> {
     pub config: Config,
     steps: Vec<Step<'a>>,
+    executed_steps: Vec<Step<'a>>,
     build_listeners: Vec<Box<dyn ProgressListener>>,
     deploy_listeners: Vec<Box<dyn ProgressListener>>,
 }
@@ -21,6 +23,7 @@ impl<'a> Transaction<'a> {
         Transaction::<'a> {
             config,
             steps: vec![],
+            executed_steps: vec![],
             build_listeners: vec![],
             deploy_listeners: vec![],
         }
@@ -80,13 +83,13 @@ impl<'a> Transaction<'a> {
         self.deploy_listeners.push(listener);
     }
 
-    fn build_and_get_images_to_deploy(&self, environment: &Environment) -> Vec<Image> {
+    fn build_applications(&self, environment: &Environment) -> Result<Vec<Image>, BuildError> {
         let apps_to_build = environment
             .applications
             .iter()
             .filter(|app| app.action == Action::Create);
 
-        let images_built: Vec<_> = apps_to_build
+        let images: Vec<_> = apps_to_build
             .map(|app| {
                 self.config.build_platform.build(Build {
                     git_repository: GitRepository {
@@ -108,46 +111,85 @@ impl<'a> Transaction<'a> {
             .map(|r| r.ok().unwrap().build.image)
             .collect();
 
-        images_built
-            .iter()
-            .for_each(|image| match self.config.container_registry.push(image) {
-                Ok(_) => {}
-                Err(err) => match err {
-                    PushError::CredentialsError => panic!("registry: credentials errors"),
-                    PushError::ImageAlreadyExists => panic!("registry: image already exists"),
-                    PushError::ImagePushFailed => panic!("registry: image push failed"),
-                    PushError::ImageTagFailed => panic!("registry: image tag failed"),
-                },
-            });
-
-        images_built
+        Ok(images)
     }
 
-    pub fn commit(&self) {
-        // TODO check cloud_provider and Kubernetes is initialized
-        // TODO init cloud_provider and Kubernetes otherwise
+    fn push_images(&self, images: Vec<Image>) -> Result<Vec<PushResult>, PushError> {
+        let push_results: Vec<PushResult> = images
+            .into_iter()
+            .map(|image| match self.config.container_registry.push(&image) {
+                Ok(x) => Ok(x),
+                Err(err) => return Err(err), // stop on error
+            })
+            .map(|x| x.ok().unwrap())
+            .collect();
 
-        self.steps.iter().for_each(|step| match step {
+        Ok(push_results)
+    }
+
+    pub fn rollback(&self) -> Result<(), RollbackError> {
+        self.executed_steps.iter().for_each(|step| match step {
             Step::Build(environment) => {
-                // build applications
-                self.build_and_get_images_to_deploy(environment);
-                // TODO check success or fallback
+                // revert build applications
             }
             Step::Deploy(environment) => {
-                // deploy environment
-                // TODO check success or fallback
+                // revert environment deployment
             }
             Step::CreateKubernetes(kubernetes) => {
-                // create kubernetes
-                kubernetes.on_create();
-                // TODO check success or fallback
+                // revert kubernetes creation
+                kubernetes.on_create_error();
             }
             Step::DeleteKubernetes(kubernetes) => {
-                // delete kubernetes
-                kubernetes.on_delete();
-                // TODO check success or fallback
+                // revert kubernetes deletion
+                kubernetes.on_delete_error();
             }
-        })
+        });
+
+        Ok(())
+    }
+
+    pub fn commit(&mut self) -> TransactionResult {
+        for step in self.steps.iter() {
+            self.executed_steps.push(step.clone());
+
+            match step {
+                Step::Build(environment) => {
+                    // build applications
+                    let result = match self.build_applications(environment) {
+                        Ok(images) => match self.push_images(images) {
+                            Ok(_) => Ok(()),
+                            Err(err) => Err(CommitError::Deploy(err)),
+                        },
+                        Err(err) => Err(CommitError::Build(err)),
+                    };
+
+                    if result.is_err() {
+                        let commit_error = result.err().unwrap();
+
+                        return match self.rollback() {
+                            Ok(_) => TransactionResult::Error(commit_error),
+                            Err(err) => TransactionResult::UnrecoverableError(commit_error, err),
+                        };
+                    }
+                }
+                Step::Deploy(environment) => {
+                    // deploy environment
+                    // TODO check success or rollback
+                }
+                Step::CreateKubernetes(kubernetes) => {
+                    // create kubernetes
+                    kubernetes.on_create();
+                    // TODO check success or rollback
+                }
+                Step::DeleteKubernetes(kubernetes) => {
+                    // delete kubernetes
+                    kubernetes.on_delete();
+                    // TODO check success or rollback
+                }
+            };
+        }
+
+        TransactionResult::Ok
     }
 }
 
@@ -157,6 +199,32 @@ enum Step<'a> {
     DeleteKubernetes(&'a dyn Kubernetes),
     Build(&'a Environment),
     Deploy(&'a Environment),
+}
+
+impl<'a> Clone for Step<'a> {
+    fn clone(&self) -> Self {
+        match self {
+            Step::CreateKubernetes(x) => Step::CreateKubernetes(*x),
+            Step::DeleteKubernetes(x) => Step::DeleteKubernetes(*x),
+            Step::Build(x) => Step::Build(*x),
+            Step::Deploy(x) => Step::Deploy(*x),
+        }
+    }
+}
+
+pub enum CommitError {
+    CreateKubernetes(KubernetesError),
+    DeleteKubernetes(KubernetesError),
+    Build(BuildError),
+    Deploy(PushError),
+}
+
+pub enum RollbackError {}
+
+pub enum TransactionResult {
+    Ok,
+    Error(CommitError),
+    UnrecoverableError(CommitError, RollbackError),
 }
 
 pub struct ProgressInfo {

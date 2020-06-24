@@ -3,6 +3,7 @@ use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
 use crate::container_registry::{ContainerRegistry, PushError, PushResult};
 use crate::git::Credentials;
+use git2::Error;
 
 pub mod error;
 pub mod local_docker;
@@ -10,6 +11,7 @@ pub mod local_docker;
 pub trait BuildPlatform {
     fn is_valid(&self) -> Result<(), BuildPlatformError>;
     fn build(&self, build: Build) -> Result<BuildResult, BuildError>;
+    fn build_error(&self, build: Build) -> Result<BuildResult, BuildError>;
 }
 
 pub struct Build {
@@ -40,5 +42,6 @@ pub struct BuildResult {
 }
 
 pub enum BuildError {
-    ImageAlreadyExists,
+    Git(Error),
+    Error,
 }

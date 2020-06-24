@@ -60,4 +60,8 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
 
         Ok(PushResult {})
     }
+
+    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
+        unimplemented!()
+    }
 }

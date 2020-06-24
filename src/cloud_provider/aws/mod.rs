@@ -61,8 +61,8 @@ impl CloudProvider for AWS {
         }
     }
 
-    fn kubernetes_clusters(self) -> Vec<Box<dyn Kubernetes>> {
-        vec![]
+    fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError> {
+        Ok(vec![])
     }
 }
 
@@ -76,7 +76,7 @@ mod tests {
     fn aws() {
         let eks = Box::new(EKS::new("", "", ""));
 
-        let aws = AWS::new("", "", eks);
+        let aws = AWS::new("", "");
         assert_eq!(aws.is_valid().is_ok(), false);
 
         aws.services().iter().for_each(|x| {

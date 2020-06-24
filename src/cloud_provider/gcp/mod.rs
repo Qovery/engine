@@ -16,8 +16,8 @@ impl CloudProvider for GCP {
         Ok(())
     }
 
-    fn kubernetes_clusters(self) -> Vec<Box<dyn Kubernetes>> {
-        vec![]
+    fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError> {
+        Ok(vec![])
     }
 }
 

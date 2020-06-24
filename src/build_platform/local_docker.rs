@@ -4,6 +4,7 @@ use crate::cloud_provider::Kubernetes;
 use crate::config::Config;
 use crate::container_registry::{ContainerRegistry, PushError, PushResult};
 use crate::{cmd, git};
+use git2::Repository;
 use std::fmt::Error;
 use std::path::Path;
 use std::process::ExitStatus;
@@ -20,6 +21,7 @@ impl LocalDocker {
 
 impl BuildPlatform for LocalDocker {
     fn is_valid(&self) -> Result<(), BuildPlatformError> {
+        // TODO check docker binary
         Ok(())
     }
 
@@ -29,11 +31,16 @@ impl BuildPlatform for LocalDocker {
         let into_dir = tmp_dir.path();
         let dockerfile_dir = format!("{}/.", into_dir.to_str().unwrap());
 
-        git::clone(
+        let git_clone = git::clone(
             build.git_repository.url.as_str(),
             into_dir,
             &build.git_repository.credentials,
         );
+
+        match git_clone {
+            Ok(_) => {}
+            Err(err) => return Err(BuildError::Git(err)),
+        }
 
         // docker build
         let exit_status = cmd::exec_with_output(
@@ -51,9 +58,13 @@ impl BuildPlatform for LocalDocker {
 
         match exit_status {
             Ok(status) => println!("cmd success: {}", status.success()),
-            Err(_) => {}
+            Err(_) => return Err(BuildError::Error),
         }
 
         Ok(BuildResult { build })
+    }
+
+    fn build_error(&self, build: Build) -> Result<BuildResult, BuildError> {
+        unimplemented!()
     }
 }

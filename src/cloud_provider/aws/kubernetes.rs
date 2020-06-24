@@ -39,47 +39,47 @@ impl Kubernetes for EKS {
         unimplemented!()
     }
 
-    fn on_create(&self) {
+    fn on_create(&self) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn on_create_error(&self) {
+    fn on_create_error(&self) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn on_upgrade(&self) {
+    fn on_upgrade(&self) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn on_upgrade_error(&self) {
+    fn on_upgrade_error(&self) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn on_downgrade(&self) {
+    fn on_downgrade(&self) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn on_downgrade_error(&self) {
+    fn on_downgrade_error(&self) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn on_delete(&self) {
+    fn on_delete(&self) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn on_delete_error(&self) {
+    fn on_delete_error(&self) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn create_namespace(&self) {
+    fn create_namespace(&self) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn services(&self) -> Vec<Box<dyn Service>> {
+    fn services(&self) -> Result<Vec<Box<dyn Service>>, KubernetesError> {
         unimplemented!()
     }
 
-    fn create_service(&self, service: Box<dyn StatefulService>) {
+    fn create_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 }

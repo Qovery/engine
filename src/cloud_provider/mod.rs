@@ -7,7 +7,7 @@ pub mod gcp;
 pub trait CloudProvider {
     fn name(&self) -> CloudProviderName;
     fn is_valid(&self) -> Result<(), CloudProviderError>;
-    fn kubernetes_clusters(self) -> Vec<Box<dyn Kubernetes>>;
+    fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError>;
 }
 
 pub trait StatefulService: Service + Create + Delete {}
@@ -80,15 +80,15 @@ pub trait Kubernetes {
     fn version(&self) -> &str;
     fn region(&self) -> &str;
     fn is_valid(&self) -> Result<(), KubernetesError>;
-    fn on_create(&self);
-    fn on_create_error(&self);
-    fn on_upgrade(&self);
-    fn on_upgrade_error(&self);
-    fn on_downgrade(&self);
-    fn on_downgrade_error(&self);
-    fn on_delete(&self);
-    fn on_delete_error(&self);
-    fn create_namespace(&self);
-    fn services(&self) -> Vec<Box<dyn Service>>;
-    fn create_service(&self, service: Box<dyn StatefulService>);
+    fn on_create(&self) -> Result<(), KubernetesError>;
+    fn on_create_error(&self) -> Result<(), KubernetesError>;
+    fn on_upgrade(&self) -> Result<(), KubernetesError>;
+    fn on_upgrade_error(&self) -> Result<(), KubernetesError>;
+    fn on_downgrade(&self) -> Result<(), KubernetesError>;
+    fn on_downgrade_error(&self) -> Result<(), KubernetesError>;
+    fn on_delete(&self) -> Result<(), KubernetesError>;
+    fn on_delete_error(&self) -> Result<(), KubernetesError>;
+    fn create_namespace(&self) -> Result<(), KubernetesError>;
+    fn services(&self) -> Result<Vec<Box<dyn Service>>, KubernetesError>;
+    fn create_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError>;
 }

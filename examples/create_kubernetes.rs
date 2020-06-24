@@ -12,7 +12,7 @@ use qovery_engine::models::{
     Action, Application, CloudProvider as CP, Deployment, Environment, GitCredentials,
 };
 use qovery_engine::session::Session;
-use qovery_engine::transaction::{ProgressInfo, ProgressListener};
+use qovery_engine::transaction::{ProgressInfo, ProgressListener, TransactionResult};
 use rusoto_core::Region;
 
 fn main() {
@@ -55,5 +55,9 @@ fn main() {
     let eks_us_east_2 = EKS::new("my-us-east-2-k8s", "1.16", "us-east-2");
     tx.create_kubernetes(&eks_us_east_2);
 
-    tx.commit();
+    match tx.commit() {
+        TransactionResult::Ok => {}
+        TransactionResult::Error(c) => {}
+        TransactionResult::UnrecoverableError(c, r) => {}
+    }
 }
