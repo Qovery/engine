@@ -12,7 +12,7 @@ use qovery_engine::models::{
     Action, Application, CloudProvider as CP, Deployment, Environment, GitCredentials,
 };
 use qovery_engine::session::Session;
-use qovery_engine::transaction::{ProgressInfo, ProgressListener};
+use qovery_engine::transaction::{ProgressInfo, ProgressListener, TransactionResult};
 use rusoto_core::Region;
 
 struct QoveryStatusSender;
@@ -110,5 +110,9 @@ fn main() {
 
     tx.add_build_listener(Box::new(QoveryStatusSender {}));
 
-    tx.commit();
+    match tx.commit() {
+        TransactionResult::Ok => {}
+        TransactionResult::Rollback(c) => {}
+        TransactionResult::UnrecoverableError(c, r) => {}
+    };
 }

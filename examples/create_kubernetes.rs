@@ -59,5 +59,5 @@ fn main() {
         TransactionResult::Ok => {}
         TransactionResult::Rollback(c) => {}
         TransactionResult::UnrecoverableError(c, r) => {}
-    }
+    };
 }

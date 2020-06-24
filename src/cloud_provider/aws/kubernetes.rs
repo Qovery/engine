@@ -36,11 +36,11 @@ impl Kubernetes for EKS {
     }
 
     fn is_valid(&self) -> Result<(), KubernetesError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn on_create(&self) -> Result<(), KubernetesError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn on_create_error(&self) -> Result<(), KubernetesError> {
