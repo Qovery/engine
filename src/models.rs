@@ -42,6 +42,7 @@ pub struct CloudProvider {
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
+    pub id: String,
     pub name: String,
     pub git_url: String,
     pub commit_id: String,

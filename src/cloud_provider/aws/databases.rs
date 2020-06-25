@@ -1,3 +1,5 @@
+use crate::build_platform::Image;
+use crate::cloud_provider::error::ServiceError;
 use crate::cloud_provider::{
     CloudProvider, Create, DatabaseOptions, DatabaseType, Delete, EnvironmentType, Kubernetes,
     Service, ServiceType,
@@ -25,6 +27,14 @@ impl<'a> Service for PostgreSQL<'a> {
 
     fn version(&self) -> &str {
         self.version
+    }
+
+    fn is_valid(&self) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn image(&self) -> &Image {
+        unimplemented!()
     }
 
     fn environment_type(&self) -> EnvironmentType {

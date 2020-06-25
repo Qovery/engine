@@ -4,6 +4,7 @@ use git2::build::RepoBuilder;
 use git2::{Error, FetchOptions, Repository};
 
 /// TODO support SSH repository_url - we assume that the repository URL starts with HTTPS
+/// TODO support git submodules
 pub fn clone<P>(
     repository_url: &str,
     into_dir: P,

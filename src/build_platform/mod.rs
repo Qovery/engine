@@ -25,7 +25,7 @@ pub struct GitRepository {
     pub commit_id: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Image {
     pub name: String,
     pub tag: String,

@@ -47,6 +47,7 @@ fn main() {
             region: "us-east-2".to_string(),
         },
         applications: vec![Application {
+            id: "".to_string(),
             name: "simple-example-node-with-postgresql".to_string(),
             git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
                 .to_string(),
@@ -106,7 +107,7 @@ fn main() {
         Err(err) => panic!("environment error"),
     }
 
-    tx.deploy(&environment);
+    tx.deploy(&eks, &environment);
 
     tx.add_build_listener(Box::new(QoveryStatusSender {}));
 

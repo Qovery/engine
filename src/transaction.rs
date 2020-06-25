@@ -2,13 +2,15 @@ use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 
 use crate::build_platform::{Build, BuildError, GitRepository, Image};
-use crate::cloud_provider::error::{DeployError, KubernetesError};
-use crate::cloud_provider::Kubernetes;
+use crate::cloud_provider::application::Application;
+use crate::cloud_provider::error::{DeployError, KubernetesError, ServiceError};
+use crate::cloud_provider::{Kubernetes, Service};
 use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
-use crate::models::{Action, Application, Environment, EnvironmentError};
+use crate::models::{Action, Environment, EnvironmentError, GitCredentials};
 use crate::transaction::Step::CreateKubernetes;
+use chrono::Utc;
 use std::collections::HashMap;
 
 pub struct Transaction<'a> {
@@ -70,24 +72,29 @@ impl<'a> Transaction<'a> {
         self.build_listeners.push(listener);
     }
 
-    pub fn deploy(&mut self, environment: &'a Environment) -> Result<(), EnvironmentError> {
+    pub fn deploy(
+        &mut self,
+        kubernetes: &'a dyn Kubernetes,
+        environment: &'a Environment,
+    ) -> Result<(), EnvironmentError> {
         match environment.is_valid() {
             Ok(_) => {
-                self.steps.push(Step::Deploy(environment));
+                self.steps
+                    .push(Step::DeployEnvironment(kubernetes, environment));
                 Ok(())
             }
             Err(err) => Err(err),
         }
     }
 
-    pub fn deploy_with_image(
+    pub fn deploy_service(
         &mut self,
-        environment: &'a Environment,
-        image: Image,
-    ) -> Result<(), EnvironmentError> {
-        match environment.is_valid() {
+        kubernetes: &'a dyn Kubernetes,
+        service: &'a dyn Service,
+    ) -> Result<(), ServiceError> {
+        match service.is_valid() {
             Ok(_) => {
-                self.steps.push(Step::DeployWithImage(environment, image));
+                self.steps.push(Step::DeployService(kubernetes, service));
                 Ok(())
             }
             Err(err) => Err(err),
@@ -98,15 +105,18 @@ impl<'a> Transaction<'a> {
         self.deploy_listeners.push(listener);
     }
 
-    fn build_applications(&self, environment: &Environment) -> Result<Vec<Image>, BuildError> {
+    fn _build_applications(
+        &self,
+        environment: &Environment,
+    ) -> Result<Vec<Application>, BuildError> {
         let apps_to_build = environment
             .applications
             .iter()
-            .filter(|app| app.action == Action::Create);
+            .filter(|app| app.action == Action::Create); // TODO configurable?
 
-        let images: Vec<_> = apps_to_build
+        let applications: Vec<_> = apps_to_build
             .map(|app| {
-                self.config.build_platform.build(Build {
+                let result = self.config.build_platform.build(Build {
                     git_repository: GitRepository {
                         url: app.git_url.clone(),
                         credentials: Some(Credentials {
@@ -120,44 +130,57 @@ impl<'a> Transaction<'a> {
                         tag: app.commit_id.clone(),
                         commit_id: app.commit_id.clone(),
                     },
-                })
+                });
+
+                (app, result)
             })
-            .filter(|r| r.is_ok())
-            .map(|r| r.ok().unwrap().build.image)
+            .filter(|(_, r)| r.is_ok())
+            .map(|(a, r)| Application {
+                id: a.id.clone(),
+                name: a.name.clone(),
+                image: r.ok().unwrap().build.image,
+            })
             .collect();
 
-        Ok(images)
+        Ok(applications)
     }
 
-    fn push_images(&self, images: Vec<Image>) -> Result<Vec<PushResult>, PushError> {
-        let push_results: Vec<PushResult> = images
-            .into_iter()
-            .map(|image| match self.config.container_registry.push(image) {
-                Ok(x) => Ok(x),
-                Err(err) => return Err(err), // stop on error
-            })
+    fn _push_applications(
+        &self,
+        applications: &Vec<Application>,
+    ) -> Result<Vec<PushResult>, PushError> {
+        let push_results: Vec<PushResult> = applications
+            .iter()
+            .map(
+                |app| match self.config.container_registry.push(app.image.clone()) {
+                    Ok(x) => Ok(x),
+                    Err(err) => return Err(err), // stop on error
+                },
+            )
             .map(|x| x.ok().unwrap())
             .collect();
 
         Ok(push_results)
     }
 
-    fn deploy_environment(
+    fn _deploy_service(
         &self,
-        environment: &Environment,
-        image: &Image,
+        kubernetes: &'a dyn Kubernetes,
+        service: &'a dyn Service,
     ) -> Result<(), DeployError> {
         // TODO
+
+        //let x = kubernetes.create_service(&x);
 
         Ok(())
     }
 
-    fn deploy_environment_with_transaction_error(
+    fn _deploy_service_with_transaction_error(
         &self,
-        environment: &Environment,
-        image: &Image,
+        kubernetes: &'a dyn Kubernetes,
+        service: &'a dyn Service,
     ) -> TransactionResult {
-        match self.deploy_environment(environment, image) {
+        match self._deploy_service(kubernetes, service) {
             Err(err) => match self.rollback() {
                 Ok(_) => TransactionResult::Rollback(CommitError::Deploy(err)),
                 Err(e) => TransactionResult::UnrecoverableError(CommitError::Deploy(err), e),
@@ -179,10 +202,10 @@ impl<'a> Transaction<'a> {
             Step::Build(environment) => {
                 // revert build applications
             }
-            Step::Deploy(environment) => {
-                // revert environment deployment
+            Step::DeployService(kubernetes, service) => {
+                // TODO
             }
-            Step::DeployWithImage(environment, image) => {
+            Step::DeployEnvironment(kubernetes, environment) => {
                 // revert environment deployment
             }
         });
@@ -191,7 +214,8 @@ impl<'a> Transaction<'a> {
     }
 
     pub fn commit(&mut self) -> TransactionResult {
-        let mut image_by_environment: HashMap<&'a Environment, Vec<Image>> = HashMap::new();
+        let mut applications_by_environment: HashMap<&Environment, Vec<Application>> =
+            HashMap::new();
 
         for step in self.steps.iter() {
             // execution loop
@@ -230,16 +254,16 @@ impl<'a> Transaction<'a> {
                 }
                 Step::Build(environment) => {
                     // build applications
-                    let push_results = match self.build_applications(environment) {
-                        Ok(images) => match self.push_images(images) {
-                            Ok(r) => Ok(r),
+                    let apps_result = match self._build_applications(environment) {
+                        Ok(applications) => match self._push_applications(&applications) {
+                            Ok(_) => Ok(applications),
                             Err(err) => Err(CommitError::Push(err)),
                         },
                         Err(err) => Err(CommitError::Build(err)),
                     };
 
-                    if push_results.is_err() {
-                        let commit_error = push_results.err().unwrap();
+                    if apps_result.is_err() {
+                        let commit_error = apps_result.err().unwrap();
 
                         return match self.rollback() {
                             Ok(_) => TransactionResult::Rollback(commit_error),
@@ -247,22 +271,21 @@ impl<'a> Transaction<'a> {
                         };
                     }
 
-                    let images: Vec<_> = push_results
-                        .ok()
-                        .unwrap()
-                        .into_iter()
-                        .map(|x| x.image)
-                        .collect();
-
-                    image_by_environment.insert(environment, images);
+                    let applications = apps_result.ok().unwrap();
+                    applications_by_environment.insert(environment, applications);
                 }
-                Step::Deploy(environment) => {
+                Step::DeployService(kubernetes, service) => {
                     // deploy environment
-                    let transaction_results = match image_by_environment.remove(environment) {
-                        Some(x) => x
+                    self._deploy_service_with_transaction_error(*kubernetes, *service);
+                }
+                Step::DeployEnvironment(kubernetes, environment) => {
+                    // deploy environment
+                    let transaction_results = match applications_by_environment.remove(environment)
+                    {
+                        Some(apps) => apps
                             .iter()
-                            .map(|image| {
-                                self.deploy_environment_with_transaction_error(environment, image)
+                            .map(|app| {
+                                self._deploy_service_with_transaction_error(*kubernetes, app)
                             })
                             .collect::<Vec<_>>(),
                         None => vec![TransactionResult::Ok], // TODO return an error?
@@ -274,10 +297,6 @@ impl<'a> Transaction<'a> {
                             err => return err,
                         }
                     }
-                }
-                Step::DeployWithImage(environment, image) => {
-                    // deploy environment
-                    self.deploy_environment_with_transaction_error(environment, image);
                 }
             };
         }
@@ -291,18 +310,18 @@ enum Step<'a> {
     CreateKubernetes(&'a dyn Kubernetes),
     DeleteKubernetes(&'a dyn Kubernetes),
     Build(&'a Environment),
-    Deploy(&'a Environment),
-    DeployWithImage(&'a Environment, Image),
+    DeployService(&'a dyn Kubernetes, &'a dyn Service),
+    DeployEnvironment(&'a dyn Kubernetes, &'a Environment),
 }
 
 impl<'a> Clone for Step<'a> {
     fn clone(&self) -> Self {
         match self {
-            Step::CreateKubernetes(x) => Step::CreateKubernetes(*x),
-            Step::DeleteKubernetes(x) => Step::DeleteKubernetes(*x),
-            Step::Build(x) => Step::Build(*x),
-            Step::Deploy(x) => Step::Deploy(*x),
-            Step::DeployWithImage(x, i) => Step::DeployWithImage(x, i.clone()),
+            Step::CreateKubernetes(k) => Step::CreateKubernetes(*k),
+            Step::DeleteKubernetes(k) => Step::DeleteKubernetes(*k),
+            Step::Build(e) => Step::Build(*e),
+            Step::DeployService(k, s) => Step::DeployService(*k, *s),
+            Step::DeployEnvironment(k, e) => Step::DeployEnvironment(*k, *e),
         }
     }
 }

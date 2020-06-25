@@ -1,5 +1,7 @@
-use crate::cloud_provider::error::{CloudProviderError, KubernetesError};
+use crate::build_platform::Image;
+use crate::cloud_provider::error::{CloudProviderError, KubernetesError, ServiceError};
 
+pub mod application;
 pub mod aws;
 pub mod error;
 pub mod gcp;
@@ -12,11 +14,15 @@ pub trait CloudProvider {
 
 pub trait StatefulService: Service + Create + Delete {}
 
+pub trait StatelessService: Service + Create + Delete {}
+
 pub trait Service {
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn version(&self) -> &str;
+    fn is_valid(&self) -> Result<(), ServiceError>;
+    fn image(&self) -> &Image;
     fn environment_type(&self) -> EnvironmentType;
 }
 
@@ -90,6 +96,6 @@ pub trait Kubernetes {
     fn on_delete_error(&self) -> Result<(), KubernetesError>;
     fn create_namespace(&self) -> Result<(), KubernetesError>;
     fn services(&self) -> Result<Vec<Box<dyn Service>>, KubernetesError>;
-    fn create_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError>;
-    fn delete_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError>;
+    fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
+    fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
 }

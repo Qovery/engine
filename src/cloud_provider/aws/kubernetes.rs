@@ -80,11 +80,11 @@ impl Kubernetes for EKS {
         unimplemented!()
     }
 
-    fn create_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError> {
+    fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 
-    fn delete_service(&self, service: Box<dyn StatefulService>) -> Result<(), KubernetesError> {
+    fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
         unimplemented!()
     }
 }
