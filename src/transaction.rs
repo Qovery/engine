@@ -170,7 +170,7 @@ impl<'a> Transaction<'a> {
     ) -> Result<(), DeployError> {
         // TODO
 
-        //let x = kubernetes.create_service(&x);
+        kubernetes.create_service(service);
 
         Ok(())
     }
@@ -276,10 +276,37 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeployService(kubernetes, service) => {
                     // deploy environment
-                    self._deploy_service_with_transaction_error(*kubernetes, *service);
+                    match self._deploy_service_with_transaction_error(*kubernetes, *service) {
+                        TransactionResult::Ok => {}
+                        err => return err,
+                    }
                 }
                 Step::DeployEnvironment(kubernetes, environment) => {
-                    // deploy environment
+                    // deploy complete environment
+
+                    // deploy databases
+                    let databases_results = environment
+                        .databases
+                        .iter()
+                        .map(|db| db.to_service(self.config.cloud_provider.borrow()))
+                        .filter(|s| s.is_some()) // TODO raise an error if service = none?
+                        .map(|s| s.unwrap())
+                        .map(|service| {
+                            self._deploy_service_with_transaction_error(
+                                *kubernetes,
+                                service.borrow(),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+
+                    for t in databases_results.into_iter() {
+                        match t {
+                            TransactionResult::Ok => {}
+                            err => return err,
+                        }
+                    }
+
+                    // deploy applications
                     let transaction_results = match applications_by_environment.remove(environment)
                     {
                         Some(apps) => apps
@@ -288,7 +315,7 @@ impl<'a> Transaction<'a> {
                                 self._deploy_service_with_transaction_error(*kubernetes, app)
                             })
                             .collect::<Vec<_>>(),
-                        None => vec![TransactionResult::Ok], // TODO return an error?
+                        None => vec![], // TODO return an error?
                     };
 
                     for t in transaction_results.into_iter() {

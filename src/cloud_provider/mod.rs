@@ -12,9 +12,9 @@ pub trait CloudProvider {
     fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError>;
 }
 
-pub trait StatefulService: Service + Create + Delete {}
+pub trait StatefulService<'a>: Service + Create<'a> + Delete<'a> {}
 
-pub trait StatelessService: Service + Create + Delete {}
+pub trait StatelessService<'a>: Service + Create<'a> + Delete<'a> {}
 
 pub trait Service {
     fn service_type(&self) -> ServiceType;
@@ -36,44 +36,44 @@ pub enum EnvironmentType {
     Development,
 }
 
-pub trait Create {
-    fn on_create(&self, target: Box<dyn CloudProvider>);
-    fn on_create_error(&self, target: Box<dyn CloudProvider>);
+pub trait Create<'a> {
+    fn on_create(&self, target: &'a dyn CloudProvider);
+    fn on_create_error(&self, target: &'a dyn CloudProvider);
 }
 
-pub trait Delete {
-    fn on_delete(&self, target: Box<dyn CloudProvider>);
-    fn on_delete_error(&self, target: Box<dyn CloudProvider>);
+pub trait Delete<'a> {
+    fn on_delete(&self, target: &'a dyn CloudProvider);
+    fn on_delete_error(&self, target: &'a dyn CloudProvider);
 }
 
-pub trait Snapshot {
-    fn on_snapshot(&self, target: Box<dyn CloudProvider>);
+pub trait Snapshot<'a> {
+    fn on_snapshot(&self, target: &'a dyn CloudProvider);
 }
 
-pub trait Clone {
-    fn on_clone(&self, target: Box<dyn CloudProvider>);
+pub trait Clone<'a> {
+    fn on_clone(&self, target: &'a dyn CloudProvider);
 }
 
-pub trait Upgrade {
-    fn on_upgrade(&self, target: Box<dyn CloudProvider>);
+pub trait Upgrade<'a> {
+    fn on_upgrade(&self, target: &'a dyn CloudProvider);
 }
 
-pub trait Downgrade {
-    fn on_downgrade(&self, target: Box<dyn CloudProvider>);
+pub trait Downgrade<'a> {
+    fn on_downgrade(&self, target: &'a dyn CloudProvider);
 }
 
-pub struct DatabaseOptions<'a> {
-    login: &'a str,
-    password: &'a str,
-    host: &'a str,
-    port: u16,
+pub struct DatabaseOptions {
+    pub login: String,
+    pub password: String,
+    pub host: String,
+    pub port: u16,
     // TODO add others fields
 }
 
 pub enum DatabaseType<'a> {
-    PostgreSQL(&'a DatabaseOptions<'a>),
-    MongoDB(&'a DatabaseOptions<'a>),
-    MySQL(&'a DatabaseOptions<'a>),
+    PostgreSQL(&'a DatabaseOptions),
+    MongoDB(&'a DatabaseOptions),
+    MySQL(&'a DatabaseOptions),
 }
 
 pub enum ServiceType<'a> {

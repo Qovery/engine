@@ -1,3 +1,6 @@
+use crate::cloud_provider::aws::databases::PostgreSQL;
+use crate::cloud_provider::{CloudProvider as CP, CloudProviderName, DatabaseOptions};
+use crate::cloud_provider::{EnvironmentType, Service, StatefulService};
 use chrono::{DateTime, Utc};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -75,7 +78,43 @@ pub struct Route {}
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Database {
+    pub id: String,
+    // TODO serde rename property
+    pub _type: String,
+    pub version: String,
+    pub name: String,
+    pub fqdn_id: String,
+    pub fqdn: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub disk_size_in_mb: u32,
+    pub host_provider: String,
+    pub to_delete: bool,
+    pub status_url: String,
     pub snapshot: Snapshot,
+}
+
+impl Database {
+    pub fn to_service(&self, cloud_provider: &dyn CP) -> Option<Box<dyn Service>> {
+        match cloud_provider.name() {
+            CloudProviderName::AWS => match self._type.to_lowercase().as_str() {
+                "postgresql" => Some(Box::new(PostgreSQL {
+                    id: self.id.clone(),
+                    name: self.name.clone(),
+                    version: self.version.clone(),
+                    options: DatabaseOptions {
+                        login: self.username.clone(),
+                        password: self.password.clone(),
+                        host: self.fqdn.clone(),
+                        port: self.port.clone(),
+                    },
+                })),
+                _ => None,
+            },
+            CloudProviderName::GCP => None,
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]

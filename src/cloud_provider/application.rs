@@ -40,22 +40,22 @@ impl<'a> Service for Application {
     }
 }
 
-impl<'a> Create for Application {
-    fn on_create(&self, target: Box<dyn CloudProvider>) {
+impl<'a> Create<'a> for Application {
+    fn on_create(&self, target: &'a dyn CloudProvider) {
         unimplemented!()
     }
 
-    fn on_create_error(&self, target: Box<dyn CloudProvider>) {
+    fn on_create_error(&self, target: &'a dyn CloudProvider) {
         unimplemented!()
     }
 }
 
-impl<'a> Delete for Application {
-    fn on_delete(&self, target: Box<dyn CloudProvider>) {
+impl<'a> Delete<'a> for Application {
+    fn on_delete(&self, target: &'a dyn CloudProvider) {
         unimplemented!()
     }
 
-    fn on_delete_error(&self, target: Box<dyn CloudProvider>) {
+    fn on_delete_error(&self, target: &'a dyn CloudProvider) {
         unimplemented!()
     }
 }

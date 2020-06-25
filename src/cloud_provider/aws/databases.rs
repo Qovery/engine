@@ -5,28 +5,28 @@ use crate::cloud_provider::{
     Service, ServiceType,
 };
 
-pub struct PostgreSQL<'a> {
-    id: &'a str,
-    name: &'a str,
-    version: &'a str,
-    options: DatabaseOptions<'a>,
+pub struct PostgreSQL {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub options: DatabaseOptions,
 }
 
-impl<'a> Service for PostgreSQL<'a> {
+impl Service for PostgreSQL {
     fn service_type(&self) -> ServiceType {
         ServiceType::Database(DatabaseType::PostgreSQL(&self.options))
     }
 
     fn id(&self) -> &str {
-        self.id
+        self.id.as_str()
     }
 
     fn name(&self) -> &str {
-        self.name
+        self.name.as_str()
     }
 
     fn version(&self) -> &str {
-        self.version
+        self.version.as_str()
     }
 
     fn is_valid(&self) -> Result<(), ServiceError> {
@@ -42,15 +42,15 @@ impl<'a> Service for PostgreSQL<'a> {
     }
 }
 
-impl<'a> Create for PostgreSQL<'a> {
-    fn on_create(&self, target: Box<dyn CloudProvider>) {
+impl<'a> Create<'a> for PostgreSQL {
+    fn on_create(&self, target: &'a dyn CloudProvider) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}
         }
     }
 
-    fn on_create_error(&self, target: Box<dyn CloudProvider>) {
+    fn on_create_error(&self, target: &'a dyn CloudProvider) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}
@@ -58,15 +58,15 @@ impl<'a> Create for PostgreSQL<'a> {
     }
 }
 
-impl<'a> Delete for PostgreSQL<'a> {
-    fn on_delete(&self, target: Box<dyn CloudProvider>) {
+impl<'a> Delete<'a> for PostgreSQL {
+    fn on_delete(&self, target: &'a dyn CloudProvider) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}
         }
     }
 
-    fn on_delete_error(&self, target: Box<dyn CloudProvider>) {
+    fn on_delete_error(&self, target: &'a dyn CloudProvider) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}
