@@ -56,8 +56,8 @@ fn main() {
     tx.create_kubernetes(&eks_us_east_2);
 
     match tx.commit() {
-        TransactionResult::Ok => {}
-        TransactionResult::Rollback(c) => {}
-        TransactionResult::UnrecoverableError(c, r) => {}
+        TransactionResult::Ok => println!("execution: ok"),
+        TransactionResult::Rollback(c) => println!("execution: rollback"),
+        TransactionResult::UnrecoverableError(c, r) => println!("execution: unrecoverable error"),
     };
 }

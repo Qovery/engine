@@ -170,7 +170,10 @@ impl<'a> Transaction<'a> {
     ) -> Result<(), DeployError> {
         // TODO
 
-        kubernetes.create_service(service);
+        match kubernetes.create_service(service) {
+            Ok(_) => {}
+            Err(err) => return Err(DeployError::Error),
+        }
 
         Ok(())
     }
@@ -190,25 +193,33 @@ impl<'a> Transaction<'a> {
     }
 
     pub fn rollback(&self) -> Result<(), RollbackError> {
-        self.executed_steps.iter().for_each(|step| match step {
-            Step::CreateKubernetes(kubernetes) => {
-                // revert kubernetes creation
-                kubernetes.on_create_error();
+        for step in self.executed_steps.iter() {
+            match step {
+                Step::CreateKubernetes(kubernetes) => {
+                    // revert kubernetes creation
+                    match kubernetes.on_create_error() {
+                        Err(err) => return Err(RollbackError::Error),
+                        _ => {}
+                    };
+                }
+                Step::DeleteKubernetes(kubernetes) => {
+                    // revert kubernetes deletion
+                    match kubernetes.on_delete_error() {
+                        Err(err) => return Err(RollbackError::Error),
+                        _ => {}
+                    };
+                }
+                Step::Build(environment) => {
+                    // revert build applications
+                }
+                Step::DeployService(kubernetes, service) => {
+                    // TODO
+                }
+                Step::DeployEnvironment(kubernetes, environment) => {
+                    // revert environment deployment
+                }
             }
-            Step::DeleteKubernetes(kubernetes) => {
-                // revert kubernetes deletion
-                kubernetes.on_delete_error();
-            }
-            Step::Build(environment) => {
-                // revert build applications
-            }
-            Step::DeployService(kubernetes, service) => {
-                // TODO
-            }
-            Step::DeployEnvironment(kubernetes, environment) => {
-                // revert environment deployment
-            }
-        });
+        }
 
         Ok(())
     }
@@ -361,7 +372,9 @@ pub enum CommitError {
     Deploy(DeployError),
 }
 
-pub enum RollbackError {}
+pub enum RollbackError {
+    Error,
+}
 
 pub enum TransactionResult {
     Ok,
