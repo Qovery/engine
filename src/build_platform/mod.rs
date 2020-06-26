@@ -17,12 +17,23 @@ pub trait BuildPlatform {
 pub struct Build {
     pub git_repository: GitRepository,
     pub image: Image,
+    pub options: BuildOptions,
+}
+
+pub struct BuildOptions {
+    pub environment_variables: Vec<EnvironmentVariable>,
+}
+
+pub struct EnvironmentVariable {
+    pub key: String,
+    pub value: String,
 }
 
 pub struct GitRepository {
     pub url: String,
     pub credentials: Option<Credentials>,
     pub commit_id: Option<String>,
+    pub dockerfile_path: String,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]

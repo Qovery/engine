@@ -29,7 +29,6 @@ impl BuildPlatform for LocalDocker {
         // git clone
         let tmp_dir = TempDir::new(build.image.name.as_str()).unwrap();
         let into_dir = tmp_dir.path();
-        let dockerfile_dir = format!("{}/.", into_dir.to_str().unwrap());
 
         let git_clone = git::clone(
             build.git_repository.url.as_str(),
@@ -42,19 +41,43 @@ impl BuildPlatform for LocalDocker {
             Err(err) => return Err(BuildError::Git(err)),
         }
 
+        let dockerfile_dir = match build.git_repository.dockerfile_path.trim() {
+            "" | "." | "/" | "/." | "./" => format!("{}/.", into_dir.to_str().unwrap()),
+            dockerfile_root_path => {
+                format!("{}/{}/.", into_dir.to_str().unwrap(), dockerfile_root_path)
+            }
+        };
+
+        // TODO check that the Dockerfile exists
+
+        let env_var_args = &build
+            .options
+            .environment_variables
+            .iter()
+            .map(|ev| format!("'{}={}'", ev.key, ev.value))
+            .collect::<Vec<_>>();
+
+        let name_with_tag = build.image.name_with_tag();
+        let mut args = vec![
+            "build",
+            "-t",
+            name_with_tag.as_str(),
+            dockerfile_dir.as_str(),
+        ];
+
+        let final_args = if env_var_args.is_empty() {
+            args
+        } else {
+            let mut build_arg = vec!["--build-arg"];
+            build_arg.extend(env_var_args.iter().map(|x| x.as_str()).collect::<Vec<_>>());
+            args.extend(build_arg);
+            args
+        };
+
         // docker build
-        let exit_status = cmd::exec_with_output(
-            "docker",
-            vec![
-                "build",
-                "-t",
-                build.image.name_with_tag().as_str(),
-                dockerfile_dir.as_str(),
-            ],
-            |line| {
-                println!("{}", line.unwrap());
-            },
-        );
+        let exit_status = cmd::exec_with_output("docker", final_args, |line| {
+            println!("{}", line.unwrap());
+        });
 
         match exit_status {
             Ok(status) => println!("cmd success: {}", status.success()),

@@ -9,7 +9,8 @@ use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
-    Action, Application, CloudProvider as CP, Deployment, Environment, GitCredentials,
+    Action, Application, CloudProvider as CP, Deployment, Environment, EnvironmentVariable,
+    GitCredentials,
 };
 use qovery_engine::session::Session;
 use qovery_engine::transaction::{ProgressInfo, ProgressListener, TransactionResult};
@@ -59,6 +60,10 @@ fn main() {
                 expired_at: Utc::now(),
             },
             storage: vec![],
+            environment_variables: vec![EnvironmentVariable {
+                key: "KEY_TEST_1".to_string(),
+                value: "VAL_TEST_1".to_string(),
+            }],
         }],
         routers: vec![],
         databases: vec![],
@@ -69,7 +74,7 @@ fn main() {
         password: "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24",
     });
 
-    let build_platform = Box::new(LocalDocker {});
+    let build_platform = Box::new(LocalDocker::new());
 
     let region = environment.cloud_provider.region.clone();
 

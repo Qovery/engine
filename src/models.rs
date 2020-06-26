@@ -2,6 +2,8 @@ use crate::cloud_provider::aws::databases::PostgreSQL;
 use crate::cloud_provider::{CloudProvider as CP, CloudProviderName, DatabaseOptions};
 use crate::cloud_provider::{EnvironmentType, Service, StatefulService};
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
@@ -52,6 +54,13 @@ pub struct Application {
     pub action: Action,
     pub git_credentials: GitCredentials,
     pub storage: Vec<Storage>,
+    pub environment_variables: Vec<EnvironmentVariable>,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct EnvironmentVariable {
+    pub key: String,
+    pub value: String,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]

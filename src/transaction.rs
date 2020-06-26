@@ -1,7 +1,7 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 
-use crate::build_platform::{Build, BuildError, GitRepository, Image};
+use crate::build_platform::{Build, BuildError, BuildOptions, GitRepository, Image};
 use crate::cloud_provider::application::Application;
 use crate::cloud_provider::error::{DeployError, KubernetesError, ServiceError};
 use crate::cloud_provider::{Kubernetes, Service};
@@ -124,11 +124,15 @@ impl<'a> Transaction<'a> {
                             password: app.git_credentials.access_token.clone(),
                         }),
                         commit_id: Some(app.commit_id.clone()),
+                        dockerfile_path: ".".to_string(),
                     },
                     image: Image {
                         name: app.name.clone(),
                         tag: app.commit_id.clone(),
                         commit_id: app.commit_id.clone(),
+                    },
+                    options: BuildOptions {
+                        environment_variables: vec![],
                     },
                 });
 
@@ -213,10 +217,16 @@ impl<'a> Transaction<'a> {
                     // revert build applications
                 }
                 Step::DeployService(kubernetes, service) => {
-                    // TODO
+                    // TODO push the last version? and then delete if there is no valid version?
+                    match kubernetes.delete_service(*service) {
+                        Err(err) => return Err(RollbackError::Error),
+                        _ => {}
+                    };
                 }
                 Step::DeployEnvironment(kubernetes, environment) => {
                     // revert environment deployment
+                    // TODO revert applications and services with the last version,
+                    // TODO if there is no valid state then delete the applications?
                 }
             }
         }
