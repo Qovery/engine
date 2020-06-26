@@ -1,7 +1,9 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 
-use crate::build_platform::{Build, BuildError, BuildOptions, GitRepository, Image};
+use crate::build_platform::{
+    Build, BuildError, BuildOptions, EnvironmentVariable, GitRepository, Image,
+};
 use crate::cloud_provider::application::Application;
 use crate::cloud_provider::error::{DeployError, KubernetesError, ServiceError};
 use crate::cloud_provider::{Kubernetes, Service};
@@ -132,7 +134,14 @@ impl<'a> Transaction<'a> {
                         commit_id: app.commit_id.clone(),
                     },
                     options: BuildOptions {
-                        environment_variables: vec![],
+                        environment_variables: app
+                            .environment_variables
+                            .iter()
+                            .map(|ev| EnvironmentVariable {
+                                key: ev.key.clone(),
+                                value: ev.value.clone(),
+                            })
+                            .collect::<Vec<_>>(),
                     },
                 });
 
