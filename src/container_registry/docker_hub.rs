@@ -19,6 +19,22 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
         Ok(())
     }
 
+    fn on_create(&self) -> Result<(), ContainerRegistryError> {
+        Ok(())
+    }
+
+    fn on_create_error(&self) -> Result<(), ContainerRegistryError> {
+        Ok(())
+    }
+
+    fn on_delete(&self) -> Result<(), ContainerRegistryError> {
+        Ok(())
+    }
+
+    fn on_delete_error(&self) -> Result<(), ContainerRegistryError> {
+        Ok(())
+    }
+
     fn push(&self, image: Image) -> Result<PushResult, PushError> {
         let status = match cmd::exec(
             "docker",

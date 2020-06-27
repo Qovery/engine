@@ -2,15 +2,20 @@
 
 The Qovery Engine is an abstraction layer to deploy stateless and stateful applications on any Cloud providers.
 
+## Prerequisites
+### Binaries
+* docker
+* terraform
+
 ## Supported connectors
-### Build platforms
+### Build Platforms
 TODO
 
-### Registry
+### Container Registry
 TODO
 
-### Cloud providers
+### Cloud Providers
 TODO
 
 ## Example
-TODO
+see [examples](examples) directory

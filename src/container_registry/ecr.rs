@@ -9,6 +9,22 @@ impl ContainerRegistry for ECR {
         unimplemented!()
     }
 
+    fn on_create(&self) -> Result<(), ContainerRegistryError> {
+        unimplemented!()
+    }
+
+    fn on_create_error(&self) -> Result<(), ContainerRegistryError> {
+        unimplemented!()
+    }
+
+    fn on_delete(&self) -> Result<(), ContainerRegistryError> {
+        unimplemented!()
+    }
+
+    fn on_delete_error(&self) -> Result<(), ContainerRegistryError> {
+        unimplemented!()
+    }
+
     fn push(&self, image: Image) -> Result<PushResult, PushError> {
         unimplemented!()
     }
