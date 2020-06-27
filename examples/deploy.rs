@@ -83,11 +83,7 @@ fn main() {
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
     );
 
-    let config = Config {
-        build_platform: &build_platform,
-        container_registry: &container_registry,
-        cloud_provider: &cloud_provider,
-    };
+    let config = Config::new(&build_platform, &container_registry, &cloud_provider);
 
     let session = match config.session() {
         Ok(session) => session,

@@ -12,6 +12,20 @@ pub struct Config<'a> {
 }
 
 impl<'a> Config<'a> {
+    pub fn new(
+        build_platform: &dyn BuildPlatform,
+        container_registry: &dyn ContainerRegistry,
+        cloud_provider: &dyn CloudProvider,
+    ) -> Config<'a> {
+        Config {
+            build_platform: &build_platform,
+            container_registry: &container_registry,
+            cloud_provider: &cloud_provider,
+        }
+    }
+}
+
+impl<'a> Config<'a> {
     /// Read JSON and return a Config
     pub fn from_json(json: &str) -> Self {
         unimplemented!()
