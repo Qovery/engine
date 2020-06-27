@@ -16,7 +16,7 @@ use chrono::Utc;
 use std::collections::HashMap;
 
 pub struct Transaction<'a> {
-    pub config: Config,
+    pub config: Config<'a>,
     steps: Vec<Step<'a>>,
     executed_steps: Vec<Step<'a>>,
     build_listeners: Vec<Box<dyn ProgressListener>>,
@@ -24,7 +24,7 @@ pub struct Transaction<'a> {
 }
 
 impl<'a> Transaction<'a> {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config<'a>) -> Self {
         Transaction::<'a> {
             config,
             steps: vec![],

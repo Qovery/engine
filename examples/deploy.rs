@@ -69,24 +69,24 @@ fn main() {
         databases: vec![],
     };
 
-    let container_registry = Box::new(DockerHub {
+    let container_registry = DockerHub {
         login: "qoveryrd",
         password: "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24",
-    });
+    };
 
-    let build_platform = Box::new(LocalDocker::new());
+    let build_platform = LocalDocker::new();
 
     let region = environment.cloud_provider.region.clone();
 
-    let cloud_provider = Box::new(AWS::new(
+    let cloud_provider = AWS::new(
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
-    ));
+    );
 
     let config = Config {
-        build_platform,
-        container_registry,
-        cloud_provider,
+        build_platform: &build_platform,
+        container_registry: &container_registry,
+        cloud_provider: &cloud_provider,
     };
 
     let session = match config.session() {
@@ -104,7 +104,7 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    let eks = EKS::new("my-k8s-cluster", "1.16", region.as_str());
+    let eks = EKS::new("my-k8s-cluster", "1.16", region.as_str(), &cloud_provider);
     tx.create_kubernetes(&eks);
 
     match tx.build(&environment) {

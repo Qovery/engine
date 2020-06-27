@@ -85,6 +85,7 @@ pub trait Kubernetes {
     fn name(&self) -> &str;
     fn version(&self) -> &str;
     fn region(&self) -> &str;
+    fn cloud_provider(&self) -> &dyn CloudProvider;
     fn is_valid(&self) -> Result<(), KubernetesError>;
     fn on_create(&self) -> Result<(), KubernetesError>;
     fn on_create_error(&self) -> Result<(), KubernetesError>;

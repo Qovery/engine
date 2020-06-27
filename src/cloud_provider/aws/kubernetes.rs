@@ -1,28 +1,35 @@
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{
-    Create, DatabaseType, Kubernetes, Service, ServiceType, StatefulService,
+    CloudProvider, Create, DatabaseType, Kubernetes, Service, ServiceType, StatefulService,
 };
 use rusoto_core::Region;
 use std::str::FromStr;
 
-pub struct EKS {
-    pub name: String,
-    pub version: String,
-    pub region: Region,
+pub struct EKS<'a> {
+    name: String,
+    version: String,
+    region: Region,
+    cloud_provider: &'a dyn CloudProvider,
 }
 
-impl<'a> EKS {
-    pub fn new(name: &'a str, version: &'a str, region: &'a str) -> Self {
+impl<'a> EKS<'a> {
+    pub fn new(
+        name: &str,
+        version: &str,
+        region: &str,
+        cloud_provider: &'a dyn CloudProvider,
+    ) -> Self {
         EKS {
             name: name.to_string(),
             version: version.to_string(),
             region: Region::from_str(region).unwrap(),
+            cloud_provider,
         }
     }
 }
 
-impl Kubernetes for EKS {
+impl<'a> Kubernetes for EKS<'a> {
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -33,6 +40,10 @@ impl Kubernetes for EKS {
 
     fn region(&self) -> &str {
         self.region.name()
+    }
+
+    fn cloud_provider(&self) -> &dyn CloudProvider {
+        self.cloud_provider
     }
 
     fn is_valid(&self) -> Result<(), KubernetesError> {
@@ -87,4 +98,10 @@ impl Kubernetes for EKS {
     fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
         unimplemented!()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test() {}
 }

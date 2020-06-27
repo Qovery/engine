@@ -5,13 +5,13 @@ use crate::error::ConfigurationError;
 use crate::models::Environment;
 use crate::session::Session;
 
-pub struct Config {
-    pub build_platform: Box<dyn BuildPlatform>,
-    pub container_registry: Box<dyn ContainerRegistry>,
-    pub cloud_provider: Box<dyn CloudProvider>,
+pub struct Config<'a> {
+    pub build_platform: &'a dyn BuildPlatform,
+    pub container_registry: &'a dyn ContainerRegistry,
+    pub cloud_provider: &'a dyn CloudProvider,
 }
 
-impl<'a> Config {
+impl<'a> Config<'a> {
     /// Read JSON and return a Config
     pub fn from_json(json: &str) -> Self {
         unimplemented!()
@@ -43,9 +43,9 @@ impl<'a> Config {
     }
 
     /// check and init the connection to all the services
-    pub fn session(self) -> Result<Session, ConfigurationError> {
+    pub fn session(self) -> Result<Session<'a>, ConfigurationError> {
         match self.is_valid() {
-            Ok(_) => Ok(Session { config: self }),
+            Ok(_) => Ok(Session::<'a> { config: self }),
             Err(err) => Err(err),
         }
     }

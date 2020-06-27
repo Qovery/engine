@@ -16,22 +16,19 @@ use qovery_engine::transaction::{ProgressInfo, ProgressListener, TransactionResu
 use rusoto_core::Region;
 
 fn main() {
-    let container_registry = Box::new(DockerHub::new(
-        "qoveryrd",
-        "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24",
-    ));
+    let container_registry = DockerHub::new("qoveryrd", "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24");
 
-    let build_platform = Box::new(LocalDocker::new());
+    let build_platform = LocalDocker::new();
 
-    let cloud_provider = Box::new(AWS::new(
+    let cloud_provider = AWS::new(
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
-    ));
+    );
 
     let config = Config {
-        build_platform,
-        container_registry,
-        cloud_provider,
+        build_platform: &build_platform,
+        container_registry: &container_registry,
+        cloud_provider: &cloud_provider,
     };
 
     let session = match config.session() {
@@ -49,10 +46,10 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    let eks_eu_west_3 = EKS::new("my-eu-west-3-k8s", "1.16", "eu-west-3");
+    let eks_eu_west_3 = EKS::new("my-eu-west-3-k8s", "1.16", "eu-west-3", &cloud_provider);
     tx.create_kubernetes(&eks_eu_west_3);
 
-    let eks_us_east_2 = EKS::new("my-us-east-2-k8s", "1.16", "us-east-2");
+    let eks_us_east_2 = EKS::new("my-us-east-2-k8s", "1.16", "us-east-2", &cloud_provider);
     tx.create_kubernetes(&eks_us_east_2);
 
     match tx.commit() {

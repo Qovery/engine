@@ -24,8 +24,8 @@ pub struct AWS {
     secret_access_key: String,
 }
 
-impl<'a> AWS {
-    pub fn new(access_key_id: &'a str, secret_access_key: &'a str) -> Self {
+impl AWS {
+    pub fn new(access_key_id: &str, secret_access_key: &str) -> Self {
         AWS {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
@@ -74,9 +74,9 @@ mod tests {
 
     #[test]
     fn aws() {
-        let eks = Box::new(EKS::new("", "", ""));
-
         let aws = AWS::new("", "");
+        let eks = Box::new(EKS::new("", "", "", &aws));
+
         assert_eq!(aws.is_valid().is_ok(), false);
 
         aws.services().iter().for_each(|x| {
