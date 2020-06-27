@@ -13,14 +13,14 @@ pub struct Config<'a> {
 
 impl<'a> Config<'a> {
     pub fn new(
-        build_platform: &dyn BuildPlatform,
-        container_registry: &dyn ContainerRegistry,
-        cloud_provider: &dyn CloudProvider,
+        build_platform: &'a dyn BuildPlatform,
+        container_registry: &'a dyn ContainerRegistry,
+        cloud_provider: &'a dyn CloudProvider,
     ) -> Config<'a> {
         Config {
-            build_platform: &build_platform,
-            container_registry: &container_registry,
-            cloud_provider: &cloud_provider,
+            build_platform,
+            container_registry,
+            cloud_provider,
         }
     }
 }

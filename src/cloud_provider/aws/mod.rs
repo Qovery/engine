@@ -68,22 +68,6 @@ impl CloudProvider for AWS {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::EKS;
-    use crate::cloud_provider::aws::AWS;
-    use crate::cloud_provider::{CloudProvider, Kubernetes, ServiceType};
-
     #[test]
-    fn aws() {
-        let aws = AWS::new("", "");
-        let eks = Box::new(EKS::new("", "", "", &aws));
-
-        assert_eq!(aws.is_valid().is_ok(), false);
-
-        aws.services().iter().for_each(|x| {
-            match x.service_type() {
-                ServiceType::Application => {}
-                ServiceType::Database(db) => {}
-            };
-        });
-    }
+    fn aws() {}
 }

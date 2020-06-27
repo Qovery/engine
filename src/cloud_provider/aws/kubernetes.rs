@@ -102,6 +102,22 @@ impl<'a> Kubernetes for EKS<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::aws::kubernetes::EKS;
+    use crate::cloud_provider::aws::AWS;
+    use crate::cloud_provider::CloudProvider;
+
     #[test]
-    fn test() {}
+    fn test() {
+        let aws = AWS::new(
+            "AKIAZ4KMLSYJLRGNNFNI",
+            "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
+        );
+
+        match aws.is_valid() {
+            Err(err) => panic!("something goes wrong with the connection to AWS"),
+            _ => {}
+        }
+
+        let eks = EKS::new("test-cluster", "1.16", "eu-west-3", &aws);
+    }
 }
