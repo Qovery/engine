@@ -1,0 +1,82 @@
+{{- if .Values.cainjector.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cainjector.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: {{ include "cainjector.name" . }}
+    app.kubernetes.io/name: {{ include "cainjector.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: "cainjector"
+    helm.sh/chart: {{ include "cainjector.chart" . }}
+  {{- if .Values.cainjector.deploymentAnnotations }}
+  annotations:
+{{ toYaml .Values.cainjector.deploymentAnnotations | indent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.cainjector.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "cainjector.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: "cainjector"
+  {{- with .Values.cainjector.strategy }}
+  strategy:
+    {{- . | toYaml | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "cainjector.name" . }}
+        app.kubernetes.io/name: {{ include "cainjector.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/component: "cainjector"
+        helm.sh/chart: {{ include "cainjector.chart" . }}
+      annotations:
+      {{- if .Values.cainjector.podAnnotations }}
+{{ toYaml .Values.cainjector.podAnnotations | indent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "cainjector.fullname" . }}
+      {{- if .Values.global.priorityClassName }}
+      priorityClassName: {{ .Values.global.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.cainjector.securityContext}}
+      securityContext:
+{{ toYaml .Values.cainjector.securityContext | indent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.cainjector.image.repository }}:{{ default .Chart.AppVersion .Values.cainjector.image.tag }}"
+          imagePullPolicy: {{ .Values.cainjector.image.pullPolicy }}
+          args:
+          {{- if .Values.global.logLevel }}
+          - --v={{ .Values.global.logLevel }}
+          {{- end }}
+          - --leader-election-namespace={{ .Values.global.leaderElection.namespace }}
+          {{- if .Values.cainjector.extraArgs }}
+{{ toYaml .Values.cainjector.extraArgs | indent 10 }}
+          {{- end }}
+          env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          resources:
+{{ toYaml .Values.cainjector.resources | indent 12 }}
+    {{- with .Values.cainjector.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.cainjector.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.cainjector.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+{{- end -}}
