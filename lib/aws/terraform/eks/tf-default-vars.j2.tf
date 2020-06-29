@@ -28,8 +28,8 @@ variable "test_cluster" {
 variable "k8s_versions" {
   description = "Kubernetes version"
   default = {
-    "masters": "1.14",
-    "workers": "1.14",
+    "masters": "{{ eks_masters_version }}",
+    "workers": "{{ eks_workers_version }}",
   }
   type = map(string)
 }
@@ -42,7 +42,7 @@ variable "region_cluster_name" {
 
 variable "cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "tbd"
+  default     = "{{ eks_cluster_name }}"
   type        = string
 }
 
