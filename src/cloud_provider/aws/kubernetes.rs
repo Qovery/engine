@@ -51,9 +51,19 @@ impl<'a> EKS<'a> {
         let aws_vars_file_content = self.tera.render("tf-aws-vars.j2.tf", &context)?;
 
         let mut context = Context::new();
+        context.insert("aws_region", &self.region.name());
         context.insert("eks_masters_version", &self.version());
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cluster_name", &self.name());
+        context.insert(
+            "eks_region_cluster_name",
+            format!("{}-{}", self.name(), self.region()).as_str(),
+        );
+        // TODO export this
+        context.insert("eks_workers_instance_type", "t2.medium");
+        context.insert("eks_workers_min_size", "3");
+        context.insert("eks_workers_max_size", "3");
+        context.insert("eks_workers_desired_capacity", "3");
 
         let aws_default_vars_file_content = self.tera.render("tf-default-vars.j2.tf", &context)?;
 
@@ -89,7 +99,12 @@ impl<'a> EKS<'a> {
     fn terraform_exec(&self, temp_dir: &Path, terraform_action: &str) -> Result<(), CmdError> {
         match exec_with_output(
             "terraform",
-            vec![terraform_action, &temp_dir.to_str().unwrap()],
+            vec![
+                terraform_action,
+                "-auto-approve", // say YES!!! :)
+                "-no-color",     // I am using B&W screen - gimme money
+                &temp_dir.to_str().unwrap(),
+            ],
             |line| {
                 println!("{}", line.unwrap());
             },

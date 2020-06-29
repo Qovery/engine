@@ -7,7 +7,7 @@ variable "cloud_provider" {
 
 variable "region" {
   description = "AWS region to store terraform state and lock"
-  default     = "tbd"
+  default     = "{{ aws_region }}"
   type        = string
 }
 
@@ -36,7 +36,7 @@ variable "k8s_versions" {
 
 variable "region_cluster_name" {
   description = "Kubernetes cluster name with region"
-  default     = "tbd"
+  default     = "{{ eks_region_cluster_name }}"
   type        = string
 }
 
@@ -67,11 +67,10 @@ variable "k8s_cidr_subnet" {
 variable "k8s-workers" {
   description = "Kubernetes workers type"
   default = {
-    "instance-type": "tbd",
-    "ami": "tbd",
-    "min-size": "tbd",
-    "max-size": "tbd",
-    "desired-capacity": "tbd"
+    "instance-type": "{{ eks_workers_instance_type }}",
+    "min-size": "{{ eks_workers_min_size }}",
+    "max-size": "{{ eks_workers_max_size }}",
+    "desired-capacity": "{{ eks_workers_desired_capacity }}"
   }
   type = map(string)
 }

@@ -102,7 +102,7 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    let eks = EKS::new("my-k8s-cluster", "1.16", region.as_str(), &cloud_provider);
+    let eks = EKS::new("my-k8s-cluster", "1.14", region.as_str(), &cloud_provider);
     tx.create_kubernetes(&eks);
 
     match tx.build(&environment) {

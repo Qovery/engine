@@ -44,10 +44,10 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    let eks_eu_west_3 = EKS::new("my-eu-west-3-k8s", "1.16", "eu-west-3", &cloud_provider);
+    let eks_eu_west_3 = EKS::new("my-eu-west-3-k8s", "1.14", "eu-west-3", &cloud_provider);
     tx.create_kubernetes(&eks_eu_west_3);
 
-    let eks_us_east_2 = EKS::new("my-us-east-2-k8s", "1.16", "us-east-2", &cloud_provider);
+    let eks_us_east_2 = EKS::new("my-us-east-2-k8s", "1.14", "us-east-2", &cloud_provider);
     tx.create_kubernetes(&eks_us_east_2);
 
     match tx.commit() {
