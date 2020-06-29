@@ -19,3 +19,7 @@ TODO
 
 ## Example
 see [examples](examples) directory
+
+## Contribute
+
+To active the debugger add the `RUST_LOG=qovery_engine=debug` env var 

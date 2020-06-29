@@ -1,6 +1,8 @@
 use rusoto_core::RusotoError;
 
 use crate::cloud_provider::error::CloudProviderError::Error;
+use crate::cmd::CmdError;
+use std::process::ExitStatus;
 
 #[derive(Debug)]
 pub enum CloudProviderError {
@@ -37,13 +39,21 @@ impl<E> From<RusotoError<E>> for CloudProviderError {
 
 #[derive(Debug)]
 pub enum KubernetesError {
+    Cmd(CmdError),
+    Io(std::io::Error),
+    Create(ExitStatus),
     Error,
-    IoError(std::io::Error),
 }
 
 impl From<std::io::Error> for KubernetesError {
     fn from(error: std::io::Error) -> Self {
-        KubernetesError::IoError(error)
+        KubernetesError::Io(error)
+    }
+}
+
+impl From<CmdError> for KubernetesError {
+    fn from(error: CmdError) -> Self {
+        KubernetesError::Cmd(error)
     }
 }
 

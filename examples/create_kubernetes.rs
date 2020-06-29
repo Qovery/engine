@@ -16,6 +16,8 @@ use qovery_engine::transaction::{ProgressInfo, ProgressListener, TransactionResu
 use rusoto_core::Region;
 
 fn main() {
+    env_logger::init();
+
     let container_registry = DockerHub::new("qoveryrd", "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24");
 
     let build_platform = LocalDocker::new();

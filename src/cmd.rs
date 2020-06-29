@@ -15,14 +15,23 @@ where
         .unwrap()
 }
 
-pub fn exec<P>(binary: P, args: Vec<&str>) -> Result<ExitStatus, Error>
+pub fn exec<P>(binary: P, args: Vec<&str>) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
 {
-    get_child(binary, args).wait()
+    let exit_status = match get_child(binary, args).wait() {
+        Ok(x) => x,
+        Err(err) => return Err(CmdError::Io(err)),
+    };
+
+    if exit_status.success() {
+        return Ok(());
+    }
+
+    Err(CmdError::Exec(exit_status))
 }
 
-pub fn exec_with_output<P, F>(binary: P, args: Vec<&str>, output: F) -> Result<ExitStatus, Error>
+pub fn exec_with_output<P, F>(binary: P, args: Vec<&str>, output: F) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
     F: Fn(Result<String, Error>),
@@ -40,5 +49,20 @@ where
         output(line);
     }
 
-    child.wait()
+    let exit_status = match child.wait() {
+        Ok(x) => x,
+        Err(err) => return Err(CmdError::Io(err)),
+    };
+
+    if exit_status.success() {
+        return Ok(());
+    }
+
+    Err(CmdError::Exec(exit_status))
+}
+
+#[derive(Debug)]
+pub enum CmdError {
+    Exec(ExitStatus),
+    Io(Error),
 }

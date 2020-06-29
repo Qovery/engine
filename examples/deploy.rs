@@ -33,6 +33,8 @@ impl ProgressListener for QoveryStatusSender {
 }
 
 fn main() {
+    env_logger::init();
+
     let environment = Environment {
         deployment: Deployment {
             id: "".to_string(),

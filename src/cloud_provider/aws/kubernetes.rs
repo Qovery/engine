@@ -3,7 +3,7 @@ use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{
     CloudProvider, Create, DatabaseType, Kubernetes, Service, ServiceType, StatefulService,
 };
-use crate::cmd::exec_with_output;
+use crate::cmd::{exec_with_output, CmdError};
 use crate::fs::{copy_terraform_files, write_rendered_templates, RenderedTemplate};
 use rusoto_core::Region;
 use std::borrow::Borrow;
@@ -75,7 +75,7 @@ impl<'a> EKS<'a> {
                 return Err(Error::new(
                     ErrorKind::Other,
                     "something goes wrong while generating terraform templates",
-                ))
+                ));
             }
         };
 
@@ -83,6 +83,21 @@ impl<'a> EKS<'a> {
         copy_terraform_files(&Path::new("lib/aws/terraform/eks/."), dest_dir.as_ref())?;
 
         write_rendered_templates(&rendered_templates, dest_dir.as_ref())?;
+
+        Ok(())
+    }
+
+    fn terraform_exec(&self, temp_dir: &Path, terraform_action: &str) -> Result<(), CmdError> {
+        match exec_with_output(
+            "terraform",
+            vec![terraform_action, &temp_dir.to_str().unwrap()],
+            |line| {
+                println!("{}", line.unwrap());
+            },
+        ) {
+            Err(err) => return Err(err),
+            _ => {}
+        };
 
         Ok(())
     }
@@ -110,37 +125,39 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_create(&self) -> Result<(), KubernetesError> {
+        info!("EKS.on_create() called for {}", self.name());
         let temp_dir = TempDir::new(self.name())?;
 
         // generate terraform files
         self.generate_and_copy_terraform_files_into_dir(&temp_dir)?;
 
+        let on_error = |err: CmdError| {
+            match err {
+                CmdError::Io(err) => panic!(err),
+                CmdError::Exec(es) => return Err(KubernetesError::Create(es)),
+            };
+        };
+
         // terraform init
-        exec_with_output(
-            "terraform",
-            vec!["init", &temp_dir.path().to_str().unwrap()],
-            |line| {
-                println!("{}", line.unwrap());
-            },
-        )?;
+        info!("terraform init on EKS for {}", self.name());
+        match self.terraform_exec(&temp_dir.path(), "init") {
+            Err(err) => return on_error(err),
+            _ => {}
+        };
 
         // terraform plan
-        exec_with_output(
-            "terraform",
-            vec!["plan", &temp_dir.path().to_str().unwrap()],
-            |line| {
-                println!("{}", line.unwrap());
-            },
-        )?;
+        info!("terraform plan on EKS for {}", self.name());
+        match self.terraform_exec(&temp_dir.path(), "plan") {
+            Err(err) => return on_error(err),
+            _ => {}
+        };
 
         // terraform apply
-        exec_with_output(
-            "terraform",
-            vec!["apply", &temp_dir.path().to_str().unwrap()],
-            |line| {
-                println!("{}", line.unwrap());
-            },
-        )?;
+        info!("terraform apply on EKS for {}", self.name());
+        match self.terraform_exec(&temp_dir.path(), "apply") {
+            Err(err) => return on_error(err),
+            _ => {}
+        };
 
         // clean temp dir
         Ok(())

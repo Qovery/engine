@@ -1,5 +1,6 @@
 use crate::build_platform::Image;
 use crate::cmd;
+use crate::cmd::CmdError;
 use crate::container_registry::error::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, PushError, PushResult};
 
@@ -36,20 +37,19 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
     }
 
     fn push(&self, image: Image) -> Result<PushResult, PushError> {
-        let status = match cmd::exec(
+        match cmd::exec(
             "docker",
             vec!["login", "-u", self.login, "-p", self.password],
         ) {
-            Ok(status) => status,
-            Err(err) => panic!(err),
+            Err(err) => match err {
+                CmdError::Io(err) => panic!(err),
+                CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
+            },
+            _ => {}
         };
 
-        if !status.success() {
-            return Err(PushError::CredentialsError);
-        }
-
         let dest = format!("{}/{}", self.login, image.name_with_tag().as_str());
-        let status = match cmd::exec(
+        match cmd::exec(
             "docker",
             vec![
                 "tag",
@@ -57,22 +57,20 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
                 format!("{}/{}", self.login, dest.as_str()).as_str(),
             ],
         ) {
-            Ok(status) => status,
-            Err(err) => panic!(err),
+            Err(err) => match err {
+                CmdError::Io(err) => panic!(err),
+                CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
+            },
+            _ => {}
         };
 
-        if !status.success() {
-            return Err(PushError::ImageTagFailed);
-        }
-
-        let status = match cmd::exec("docker", vec!["push", dest.as_str()]) {
-            Ok(status) => status,
-            Err(err) => panic!(err),
+        match cmd::exec("docker", vec!["push", dest.as_str()]) {
+            Err(err) => match err {
+                CmdError::Io(err) => panic!(err),
+                CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
+            },
+            _ => {}
         };
-
-        if !status.success() {
-            return Err(PushError::ImagePushFailed);
-        }
 
         Ok(PushResult { image })
     }
