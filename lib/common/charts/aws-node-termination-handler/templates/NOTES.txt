@@ -1,0 +1,3 @@
+{{ .Release.Name }} has been installed or updated. To check the status of pods, run:
+
+kubectl get pods --namespace {{ .Values.namespace }}

@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "webhook.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: {{ include "webhook.name" . }}
+    app.kubernetes.io/name: {{ include "webhook.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: "webhook"
+    helm.sh/chart: {{ include "webhook.chart" . }}
+  {{- if .Values.webhook.deploymentAnnotations }}
+  annotations:
+{{ toYaml .Values.webhook.deploymentAnnotations | indent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.webhook.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "webhook.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: "webhook"
+  {{- with .Values.webhook.strategy }}
+  strategy:
+    {{- . | toYaml | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "webhook.name" . }}
+        app.kubernetes.io/name: {{ include "webhook.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/component: "webhook"
+        helm.sh/chart: {{ include "webhook.chart" . }}
+      annotations:
+      {{- if .Values.webhook.podAnnotations }}
+{{ toYaml .Values.webhook.podAnnotations | indent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "webhook.fullname" . }}
+      {{- if .Values.global.priorityClassName }}
+      priorityClassName: {{ .Values.global.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.webhook.securityContext}}
+      securityContext:
+{{ toYaml .Values.webhook.securityContext | indent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.webhook.image.repository }}:{{ default .Chart.AppVersion .Values.webhook.image.tag }}"
+          imagePullPolicy: {{ .Values.webhook.image.pullPolicy }}
+          args:
+          {{- if .Values.global.logLevel }}
+          - --v={{ .Values.global.logLevel }}
+          {{- end }}
+          - --secure-port={{ .Values.webhook.securePort }}
+          - --tls-cert-file=/certs/tls.crt
+          - --tls-private-key-file=/certs/tls.key
+        {{- if .Values.webhook.extraArgs }}
+{{ toYaml .Values.webhook.extraArgs | indent 10 }}
+        {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 6080
+              scheme: HTTP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 6080
+              scheme: HTTP
+          env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          resources:
+{{ toYaml .Values.webhook.resources | indent 12 }}
+          volumeMounts:
+          - name: certs
+            mountPath: /certs
+      volumes:
+      - name: certs
+        secret:
+          secretName: {{ include "webhook.servingCertificate" . }}
+    {{- with .Values.webhook.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.webhook.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.webhook.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

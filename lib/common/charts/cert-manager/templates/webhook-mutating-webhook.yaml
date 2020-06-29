@@ -1,0 +1,41 @@
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "webhook.fullname" . }}
+  labels:
+    app: {{ include "webhook.name" . }}
+    app.kubernetes.io/name: {{ include "webhook.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: "webhook"
+    helm.sh/chart: {{ include "webhook.chart" . }}
+  annotations:
+    cert-manager.io/inject-ca-from-secret: "{{ .Release.Namespace }}/{{ include "webhook.servingCertificate" . }}"
+webhooks:
+  - name: webhook.cert-manager.io
+    rules:
+      - apiGroups:
+          - "cert-manager.io"
+          - "acme.cert-manager.io"
+        apiVersions:
+          - v1alpha2
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - "*/*"
+    failurePolicy: Fail
+{{- if (semverCompare ">=1.12-0" .Capabilities.KubeVersion.GitVersion) }}
+    # Only include 'sideEffects' field in Kubernetes 1.12+
+    sideEffects: None
+{{- end }}
+    clientConfig:
+{{- if (semverCompare "<=1.12-0" .Capabilities.KubeVersion.GitVersion) }}
+      # Set caBundle to empty to avoid https://github.com/kubernetes/kubernetes/pull/70138
+      # in Kubernetes 1.12 and below.
+      caBundle: ""
+{{- end }}
+      service:
+        name: {{ .Values.webhook.serviceName }}
+        namespace: {{ .Release.Namespace | quote }}
+        path: /mutate

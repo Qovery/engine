@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ qovery_env.applications[application_index]['id'] }}-{{ qovery_env.environment_id }}
+  namespace: {{ qovery_env.project_id }}
+  labels:
+    ownerId: {{ qovery_env.owner_id }}
+    envId: {{ qovery_env.environment_id }}
+    appId: {{ qovery_env.applications[application_index]['id'] }}
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      ownerId: {{ qovery_env.owner_id }}
+      envId: {{ qovery_env.environment_id }}
+      appId: {{ qovery_env.applications[application_index]['id'] }}
+  template:
+    metadata:
+      labels:
+        ownerId: {{ qovery_env.owner_id }}
+        envId: {{ qovery_env.environment_id }}
+        appId: {{ qovery_env.applications[application_index]['id'] }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {}
+      containers:
+        - name: {{ qovery_env.get_image_name(application_index) }}-{{ qovery_env.environment_id }}
+          image: "{{ qovery_env.get_image_fullname(application_index) }}"
+          env:
+            {%- for key, value in qovery_env.applications[application_index]['environment_variables'].items() %}
+            - name: {{ key | environment_key_checker }}
+              value: {{ value | yaml_quote }}
+            {%- endfor %}
+            {%- if qovery_env.applications[application_index]['private_port'] %}
+          ports:
+            - containerPort: {{ qovery_env.applications[application_index]['private_port'] }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: {{ qovery_env.applications[application_index]['private_port'] }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ qovery_env.applications[application_index]['private_port'] }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            {%- endif %}
+          resources:
+            limits:
+              cpu: 125m
+              memory: 256Mi
+            requests:
+              cpu: 125m
+              memory: 256Mi
+          volumeMounts:
+{%- if qovery_env.applications[application_index]['storage'] %}
+{%- for disk in qovery_env.applications[application_index]['storage'] %}
+            - name: {{ disk['id'] }}
+              mountPath: {{ disk['mount_point'] }}
+{%- endfor %}
+{%- endif %}
+      volumes:
+{%- if qovery_env.applications[application_index]['storage'] %}
+{%- for disk in qovery_env.applications[application_index]['storage'] %}
+        - name: {{ disk['id'] }}
+          persistentVolumeClaim:
+            claimName: {{ disk['id'] }}
+{%- endfor %}
+{%- endif %}

@@ -1,0 +1,31 @@
+{%- if qovery_env.routers|length > 0 %}
+{%- for router in qovery_env.routers %}
+{%- if router.public_port and router.custom_domains %}
+{%- for domain in router.custom_domains %}
+{% if domain['target_domain'] %}
+{% set domain_name = domain['domain'] %}
+---
+apiVersion: cert-manager.io/v1alpha2
+kind: Issuer
+metadata:
+  name: {{ qovery_env.get_domain_id(domain_name) }}
+  namespace: {{ qovery_env.project_id }}
+  labels:
+    ownerId: {{ qovery_env.owner_id }}
+    fqdn: "{{ domain_name }}"
+    fqdnId: {{ qovery_env.get_domain_id(domain_name) }}
+spec:
+  acme:
+    server: {{ qovery_env.letsencrypt_url }}
+    email: tls@qovery.com
+    privateKeySecretRef:
+      name: {{ qovery_env.get_domain_id(domain_name) }}-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx-{{ qovery_env.project_id }}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
