@@ -4,7 +4,7 @@ use std::io::{Error, Write};
 use std::path::Path;
 use walkdir::WalkDir;
 
-pub fn copy_terraform_files(from: &Path, to: &Path) -> Result<(), Error> {
+pub fn copy_terraform_files(files_starts_with: &str, from: &Path, to: &Path) -> Result<(), Error> {
     let files = WalkDir::new(from)
         .follow_links(true)
         .into_iter()
@@ -13,7 +13,11 @@ pub fn copy_terraform_files(from: &Path, to: &Path) -> Result<(), Error> {
             // return only .tf files
             e.file_name()
                 .to_str()
-                .map(|s| s.ends_with(".j2.tf") == false && s.ends_with(".tf"))
+                .map(|s| {
+                    s.starts_with(files_starts_with)
+                        && s.ends_with(".j2.tf") == false
+                        && s.ends_with(".tf")
+                })
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();

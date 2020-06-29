@@ -26,10 +26,10 @@ pub struct EKS<'a> {
 
 impl<'a> EKS<'a> {
     pub fn new(name: &str, version: &str, region: &str, cloud_provider: &'a AWS) -> Self {
-        let tera = match Tera::new("lib/aws/terraform/**/*.j2.tf") {
+        let tera = match Tera::new("lib/aws/bootstrap/**/*.j2.tf") {
             Ok(t) => t,
             Err(e) => {
-                panic!("lib/aws/terraform/**/*.j2.tf parsing error - does the directory exists?")
+                panic!("lib/aws/bootstrap/**/*.j2.tf parsing error - does the directory exists?")
             }
         };
 
@@ -55,8 +55,7 @@ impl<'a> EKS<'a> {
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cluster_name", &self.name());
 
-        let aws_default_vars_file_content =
-            self.tera.render("eks/tf-default-vars.j2.tf", &context)?;
+        let aws_default_vars_file_content = self.tera.render("tf-default-vars.j2.tf", &context)?;
 
         Ok([
             RenderedTemplate::new("tf-aws-vars.tf", aws_vars_file_content),
@@ -80,7 +79,7 @@ impl<'a> EKS<'a> {
         };
 
         // copy all .tf files into our dest directory
-        copy_terraform_files(&Path::new("lib/aws/terraform/eks/."), dest_dir.as_ref())?;
+        copy_terraform_files("eks-", &Path::new("lib/aws/bootstrap/."), dest_dir.as_ref())?;
 
         write_rendered_templates(&rendered_templates, dest_dir.as_ref())?;
 
@@ -241,7 +240,7 @@ mod tests {
         let aws = aws();
         let eks = EKS::new("test-cluster", "1.14", "eu-west-3", &aws);
         assert_eq!(
-            eks.generate_and_copy_terraform_files_into_dir("/tmp/toto")
+            eks.generate_and_copy_terraform_files_into_dir("/tmp/coco")
                 .is_ok(),
             true
         );
