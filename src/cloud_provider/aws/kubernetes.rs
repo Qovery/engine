@@ -113,7 +113,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let temp_dir = TempDir::new(self.name())?;
 
         // generate terraform files
-        self.generate_and_copy_terraform_files_into_dir(temp_dir)?;
+        self.generate_and_copy_terraform_files_into_dir(&temp_dir)?;
 
         // terraform init
         exec_with_output(
