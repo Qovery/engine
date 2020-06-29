@@ -38,6 +38,13 @@ impl<E> From<RusotoError<E>> for CloudProviderError {
 #[derive(Debug)]
 pub enum KubernetesError {
     Error,
+    IoError(std::io::Error),
+}
+
+impl From<std::io::Error> for KubernetesError {
+    fn from(error: std::io::Error) -> Self {
+        KubernetesError::IoError(error)
+    }
 }
 
 #[derive(Debug)]

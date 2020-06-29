@@ -80,7 +80,7 @@ impl BuildPlatform for LocalDocker {
         });
 
         match exit_status {
-            Ok(status) => println!("cmd success: {}", status.success()),
+            Ok(_) => {}
             Err(_) => return Err(BuildError::Error),
         }
 

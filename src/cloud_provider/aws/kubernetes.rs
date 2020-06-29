@@ -3,6 +3,7 @@ use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{
     CloudProvider, Create, DatabaseType, Kubernetes, Service, ServiceType, StatefulService,
 };
+use crate::cmd::exec_with_output;
 use crate::fs::{copy_terraform_files, write_rendered_templates, RenderedTemplate};
 use rusoto_core::Region;
 use std::borrow::Borrow;
@@ -10,6 +11,7 @@ use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::str::FromStr;
+use tempdir::TempDir;
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
@@ -108,7 +110,39 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_create(&self) -> Result<(), KubernetesError> {
-        // TODO pierre
+        let temp_dir = TempDir::new(self.name())?;
+
+        // generate terraform files
+        self.generate_and_copy_terraform_files_into_dir(temp_dir)?;
+
+        // terraform init
+        exec_with_output(
+            "terraform",
+            vec!["init", &temp_dir.path().to_str().unwrap()],
+            |line| {
+                println!("{}", line.unwrap());
+            },
+        )?;
+
+        // terraform plan
+        exec_with_output(
+            "terraform",
+            vec!["plan", &temp_dir.path().to_str().unwrap()],
+            |line| {
+                println!("{}", line.unwrap());
+            },
+        )?;
+
+        // terraform apply
+        exec_with_output(
+            "terraform",
+            vec!["apply", &temp_dir.path().to_str().unwrap()],
+            |line| {
+                println!("{}", line.unwrap());
+            },
+        )?;
+
+        // clean temp dir
         Ok(())
     }
 
