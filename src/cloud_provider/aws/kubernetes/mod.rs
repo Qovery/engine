@@ -167,7 +167,7 @@ impl<'a> Kubernetes for EKS<'a> {
     fn on_create(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_create() called for {}", self.name());
         let temp_dir = TempDir::new(self.name())?;
-        let temp_dir_path_str = &temp_dir.path().to_str().unwrap();
+        let temp_dir_path_str = temp_dir.path().to_str().unwrap();
 
         // create S3 bucket
         create_bucket(
