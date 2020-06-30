@@ -1,5 +1,5 @@
 {% for eks_worker_node in eks_worker_nodes %}
-resource "aws_eks_node_group" "eks-cluster-workers" {
+resource "aws_eks_node_group" "eks-cluster-workers-{{ loop.index }}" {
   cluster_name    = aws_eks_cluster.eks_cluster.name
   version         = var.k8s_versions.workers
   node_group_name = var.region_cluster_name
