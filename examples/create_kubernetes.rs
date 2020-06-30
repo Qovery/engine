@@ -53,6 +53,7 @@ fn main() {
     ];
 
     let eks_eu_west_3 = EKS::new(
+        "123abc",
         "my-eu-west-3-k8s",
         "1.14",
         "eu-west-3",
@@ -62,6 +63,7 @@ fn main() {
     tx.create_kubernetes(&eks_eu_west_3);
 
     let eks_us_east_2 = EKS::new(
+        "456def",
         "my-us-east-2-k8s",
         "1.14",
         "us-east-2",

@@ -82,6 +82,7 @@ pub enum ServiceType<'a> {
 }
 
 pub trait Kubernetes {
+    fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn version(&self) -> &str;
     fn region(&self) -> &str;

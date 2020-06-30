@@ -4,8 +4,10 @@ use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{CloudProvider, Kubernetes, KubernetesNode, Service};
 use crate::cmd::{exec_with_output, CmdError};
 use crate::fs::{copy_terraform_files, write_rendered_templates, RenderedTemplate};
+use crate::s3::create_bucket;
 use itertools::Itertools;
 use rusoto_core::Region;
+use rusoto_s3::CreateBucketConfiguration;
 use serde::{Deserialize, Serialize};
 use std::io::{Error, ErrorKind};
 use std::path::Path;
@@ -17,6 +19,7 @@ use tera::{Context, Tera};
 pub mod node;
 
 pub struct EKS<'a> {
+    id: String,
     name: String,
     version: String,
     region: Region,
@@ -27,6 +30,7 @@ pub struct EKS<'a> {
 
 impl<'a> EKS<'a> {
     pub fn new(
+        id: &str,
         name: &str,
         version: &str,
         region: &str,
@@ -41,6 +45,7 @@ impl<'a> EKS<'a> {
         };
 
         EKS {
+            id: id.to_string(),
             name: name.to_string(),
             version: version.to_string(),
             region: Region::from_str(region).unwrap(),
@@ -121,19 +126,10 @@ impl<'a> EKS<'a> {
         Ok(())
     }
 
-    fn terraform_exec(&self, temp_dir: &Path, terraform_action: &str) -> Result<(), CmdError> {
-        match exec_with_output(
-            "terraform",
-            vec![
-                terraform_action,
-                "-auto-approve", // say YES!!! :)
-                "-no-color",     // I am using B&W screen - gimme money
-                &temp_dir.to_str().unwrap(),
-            ],
-            |line| {
-                println!("{}", line.unwrap());
-            },
-        ) {
+    fn terraform_exec(&self, args: Vec<&str>) -> Result<(), CmdError> {
+        match exec_with_output("terraform", args, |line| {
+            println!("{}", line.unwrap());
+        }) {
             Err(err) => return Err(err),
             _ => {}
         };
@@ -143,6 +139,10 @@ impl<'a> EKS<'a> {
 }
 
 impl<'a> Kubernetes for EKS<'a> {
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -160,12 +160,27 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn is_valid(&self) -> Result<(), KubernetesError> {
+        // TODO check that terraform binary is available
         Ok(())
     }
 
     fn on_create(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_create() called for {}", self.name());
         let temp_dir = TempDir::new(self.name())?;
+        let temp_dir_path_str = &temp_dir.path().to_str().unwrap();
+
+        // create S3 bucket
+        create_bucket(
+            self.cloud_provider.access_key_id.clone(),
+            self.cloud_provider.secret_access_key.clone(),
+            self.region.clone(),
+            |mut bc| {
+                // see https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html
+                bc.acl = Some("private".to_string());
+                bc.bucket = format!("{}-{}-qovery-terraform", self.region.name(), self.id());
+                bc
+            },
+        )?;
 
         // generate terraform files
         self.generate_and_copy_terraform_files_into_dir(&temp_dir)?;
@@ -179,21 +194,26 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // terraform init
         info!("terraform init on EKS for {}", self.name());
-        match self.terraform_exec(&temp_dir.path(), "init") {
+        match self.terraform_exec(vec!["init", "-no-color", temp_dir_path_str]) {
             Err(err) => return on_error(err),
             _ => {}
         };
 
         // terraform plan
         info!("terraform plan on EKS for {}", self.name());
-        match self.terraform_exec(&temp_dir.path(), "plan") {
+        match self.terraform_exec(vec!["plan", "-no-color", temp_dir_path_str]) {
             Err(err) => return on_error(err),
             _ => {}
         };
 
         // terraform apply
         info!("terraform apply on EKS for {}", self.name());
-        match self.terraform_exec(&temp_dir.path(), "apply") {
+        match self.terraform_exec(vec![
+            "apply",
+            "-auto-approve",
+            "-no-color",
+            temp_dir_path_str,
+        ]) {
             Err(err) => return on_error(err),
             _ => {}
         };
@@ -291,7 +311,7 @@ mod tests {
         let aws = aws();
         let nodes = nodes();
 
-        let eks = EKS::new("test-cluster", "1.14", "eu-west-3", &aws, &nodes);
+        let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, &nodes);
         assert_eq!(eks.generate_terraform_templates().is_ok(), true);
     }
 
@@ -300,7 +320,7 @@ mod tests {
         let aws = aws();
         let nodes = nodes();
 
-        let eks = EKS::new("test-cluster", "1.14", "eu-west-3", &aws, &nodes);
+        let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, &nodes);
         assert_eq!(
             eks.generate_and_copy_terraform_files_into_dir("/tmp/coco")
                 .is_ok(),

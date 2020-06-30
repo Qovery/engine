@@ -111,6 +111,7 @@ fn main() {
     ];
 
     let eks = EKS::new(
+        "123abc",
         "my-k8s-cluster",
         "1.14",
         region.as_str(),
