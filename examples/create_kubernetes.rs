@@ -1,5 +1,6 @@
 use chrono::Utc;
 use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::error::CloudProviderError;
@@ -44,10 +45,29 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    let eks_eu_west_3 = EKS::new("my-eu-west-3-k8s", "1.14", "eu-west-3", &cloud_provider);
+    let nodes = vec![
+        Node::new(2, 4),
+        Node::new(2, 4),
+        Node::new(2, 4),
+        Node::new(1, 2),
+    ];
+
+    let eks_eu_west_3 = EKS::new(
+        "my-eu-west-3-k8s",
+        "1.14",
+        "eu-west-3",
+        &cloud_provider,
+        &nodes,
+    );
     tx.create_kubernetes(&eks_eu_west_3);
 
-    let eks_us_east_2 = EKS::new("my-us-east-2-k8s", "1.14", "us-east-2", &cloud_provider);
+    let eks_us_east_2 = EKS::new(
+        "my-us-east-2-k8s",
+        "1.14",
+        "us-east-2",
+        &cloud_provider,
+        &nodes,
+    );
     tx.create_kubernetes(&eks_us_east_2);
 
     match tx.commit() {

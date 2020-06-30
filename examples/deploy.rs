@@ -1,5 +1,6 @@
 use chrono::Utc;
 use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::error::CloudProviderError;
@@ -102,7 +103,20 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    let eks = EKS::new("my-k8s-cluster", "1.14", region.as_str(), &cloud_provider);
+    let nodes = vec![
+        Node::new(2, 4),
+        Node::new(2, 4),
+        Node::new(2, 4),
+        Node::new(1, 2),
+    ];
+
+    let eks = EKS::new(
+        "my-k8s-cluster",
+        "1.14",
+        region.as_str(),
+        &cloud_provider,
+        &nodes,
+    );
     tx.create_kubernetes(&eks);
 
     match tx.build(&environment) {

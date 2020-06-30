@@ -1,13 +1,19 @@
 use crate::cloud_provider::KubernetesNode;
 
 pub struct Node {
-    pub instance_type: String,
+    total_cpu: u8,
+    total_memory_in_gib: u16,
 }
 
 impl Node {
-    pub fn new(instance_type: &str) -> Self {
+    /// Number of CPUs and total memory wanted - the right AWS EC2 instance type is found algorithmically
+    /// Eg. total_cpu = 1 and total_memory_in_gib = 2 means `t2.small` instance type
+    /// BUT total_cpu = 1 and total_memory_in_gib = 3 does not have an existing instance - so we will pick the upper closest,
+    /// which is `t2.medium` with 2 cpu and 4 GiB
+    pub fn new(total_cpu: u8, total_memory_in_gib: u16) -> Self {
         Node {
-            instance_type: instance_type.to_string(),
+            total_cpu,
+            total_memory_in_gib,
         }
     }
 }
@@ -17,11 +23,16 @@ impl KubernetesNode for Node {
         unimplemented!()
     }
 
-    fn total_memory_in_mib(&self) -> u32 {
+    fn total_memory_in_gib(&self) -> u16 {
         unimplemented!()
     }
 
     fn instance_type(&self) -> &str {
-        self.instance_type.as_str()
+        // FIXME: return the right instance type
+        if self.total_cpu == 1 {
+            "t2.small"
+        } else {
+            "t2.medium"
+        }
     }
 }

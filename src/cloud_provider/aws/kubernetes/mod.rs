@@ -279,18 +279,10 @@ mod tests {
 
     fn nodes() -> Vec<Node> {
         vec![
-            Node {
-                instance_type: "t2.medium".to_string(),
-            },
-            Node {
-                instance_type: "t2.medium".to_string(),
-            },
-            Node {
-                instance_type: "t2.medium".to_string(),
-            },
-            Node {
-                instance_type: "t2.small".to_string(),
-            },
+            Node::new(2, 4),
+            Node::new(2, 4),
+            Node::new(2, 4),
+            Node::new(1, 2),
         ]
     }
 
