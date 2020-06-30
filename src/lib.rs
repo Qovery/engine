@@ -11,5 +11,6 @@ pub mod fs;
 pub mod git;
 pub mod models;
 pub mod runtime;
+pub mod s3;
 pub mod session;
 pub mod transaction;

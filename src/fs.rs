@@ -22,9 +22,9 @@ pub fn copy_terraform_files(files_starts_with: &str, from: &Path, to: &Path) -> 
         })
         .collect::<Vec<_>>();
 
-    fs::create_dir_all(to);
+    let _ = fs::create_dir_all(to);
     for file in files {
-        fs::copy(
+        let _ = fs::copy(
             file.path(),
             format!(
                 "{}/{}",
@@ -41,7 +41,7 @@ pub fn write_rendered_templates(
     rendered_templates: &[RenderedTemplate],
     into: &Path,
 ) -> Result<(), Error> {
-    fs::create_dir_all(into);
+    let _ = fs::create_dir_all(into);
     for rt in rendered_templates {
         let mut f = File::create(format!("{}/{}", into.to_str().unwrap(), rt.file_name))?;
         f.write_all(rt.content.as_bytes())?;

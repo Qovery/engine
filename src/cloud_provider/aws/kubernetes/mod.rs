@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{
@@ -18,6 +19,8 @@ use tempdir::TempDir;
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
+
+pub mod node;
 
 pub struct EKS<'a> {
     name: String,
@@ -250,24 +253,6 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 }
 
-pub struct Node {
-    instance_type: String,
-}
-
-impl Node {
-    pub fn new(instance_type: &str) -> Self {
-        Node {
-            instance_type: instance_type.to_string(),
-        }
-    }
-}
-
-impl KubernetesNode for Node {
-    fn instance_type(&self) -> &str {
-        self.instance_type.as_str()
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 struct WorkerNodeData {
     instance_type: String,
@@ -278,7 +263,8 @@ struct WorkerNodeData {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::{Node, EKS};
+    use crate::cloud_provider::aws::kubernetes::node::Node;
+    use crate::cloud_provider::aws::kubernetes::EKS;
     use crate::cloud_provider::aws::AWS;
     use crate::cloud_provider::CloudProvider;
     use std::path::Path;
