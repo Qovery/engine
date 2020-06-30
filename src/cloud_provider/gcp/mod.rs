@@ -1,7 +1,5 @@
 use crate::cloud_provider::error::CloudProviderError;
-use crate::cloud_provider::{
-    CloudProvider, CloudProviderName, Kubernetes, Service, StatefulService,
-};
+use crate::cloud_provider::{CloudProvider, CloudProviderName, Kubernetes};
 
 pub struct GCP {
     p12_file_content: String,

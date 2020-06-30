@@ -1,24 +1,18 @@
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::error::KubernetesError;
-use crate::cloud_provider::{
-    CloudProvider, Create, DatabaseType, Kubernetes, KubernetesNode, Service, ServiceType,
-    StatefulService,
-};
+use crate::cloud_provider::{CloudProvider, Kubernetes, KubernetesNode, Service};
 use crate::cmd::{exec_with_output, CmdError};
 use crate::fs::{copy_terraform_files, write_rendered_templates, RenderedTemplate};
 use itertools::Itertools;
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
-use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::str::FromStr;
 use tempdir::TempDir;
 use tera::Error as TeraError;
 use tera::{Context, Tera};
-use walkdir::WalkDir;
 
 pub mod node;
 

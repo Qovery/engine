@@ -1,9 +1,8 @@
 use crate::cloud_provider::aws::databases::PostgreSQL;
+use crate::cloud_provider::Service;
 use crate::cloud_provider::{CloudProvider as CP, CloudProviderName, DatabaseOptions};
-use crate::cloud_provider::{EnvironmentType, Service, StatefulService};
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Environment {

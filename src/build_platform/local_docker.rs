@@ -1,13 +1,6 @@
 use crate::build_platform::error::BuildPlatformError;
-use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image};
-use crate::cloud_provider::Kubernetes;
-use crate::config::Config;
-use crate::container_registry::{ContainerRegistry, PushError, PushResult};
+use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult};
 use crate::{cmd, git};
-use git2::Repository;
-use std::fmt::Error;
-use std::path::Path;
-use std::process::ExitStatus;
 use tempdir::TempDir;
 
 /// use Docker in local

@@ -1,19 +1,9 @@
-use std::str::FromStr;
-
-use rusoto_core::{Client, HttpClient, Region, RusotoError};
-use rusoto_credential::{AwsCredentials, StaticProvider};
-use rusoto_eks::{
-    DescribeClusterRequest, Eks, EksClient, ListClustersError, ListClustersRequest,
-    ListClustersResponse,
-};
+use rusoto_core::{Client, HttpClient, Region};
+use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
-use crate::cloud_provider::aws::kubernetes::EKS;
 use crate::cloud_provider::error::CloudProviderError;
-use crate::cloud_provider::{
-    CloudProvider, CloudProviderName, Create, Kubernetes, Service, StatefulService,
-};
-use crate::error::ConfigurationError;
+use crate::cloud_provider::{CloudProvider, CloudProviderName, Kubernetes};
 use crate::runtime::async_run;
 
 pub mod databases;

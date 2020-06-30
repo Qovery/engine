@@ -1,6 +1,3 @@
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
-
 use crate::build_platform::{
     Build, BuildError, BuildOptions, EnvironmentVariable, GitRepository, Image,
 };
@@ -10,9 +7,8 @@ use crate::cloud_provider::{Kubernetes, Service};
 use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
-use crate::models::{Action, Environment, EnvironmentError, GitCredentials};
-use crate::transaction::Step::CreateKubernetes;
-use chrono::Utc;
+use crate::models::{Action, Environment, EnvironmentError};
+use std::borrow::Borrow;
 use std::collections::HashMap;
 
 pub struct Transaction<'a> {

@@ -1,7 +1,4 @@
 use crate::build_platform::error::BuildPlatformError;
-use crate::cloud_provider::Kubernetes;
-use crate::config::Config;
-use crate::container_registry::{ContainerRegistry, PushError, PushResult};
 use crate::git::Credentials;
 use git2::Error;
 

@@ -1,8 +1,7 @@
 use crate::build_platform::BuildPlatform;
-use crate::cloud_provider::{CloudProvider, Kubernetes};
+use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::error::ConfigurationError;
-use crate::models::Environment;
 use crate::session::Session;
 
 pub struct Config<'a> {
