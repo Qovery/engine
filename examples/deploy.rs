@@ -103,12 +103,7 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    let nodes = vec![
-        Node::new(2, 4),
-        Node::new(2, 4),
-        Node::new(2, 4),
-        Node::new(1, 2),
-    ];
+    let nodes: Vec<Node> = vec![];
 
     let eks = EKS::new(
         "123abc",
@@ -118,7 +113,6 @@ fn main() {
         &cloud_provider,
         &nodes,
     );
-    tx.create_kubernetes(&eks);
 
     match tx.build(&environment) {
         Ok(_) => {}
