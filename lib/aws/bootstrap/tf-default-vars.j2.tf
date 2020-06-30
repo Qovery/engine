@@ -64,17 +64,6 @@ variable "k8s_cidr_subnet" {
   type        = number
 }
 
-variable "k8s-workers" {
-  description = "Kubernetes workers type"
-  default = {
-    "instance-type": "{{ eks_workers_instance_type }}",
-    "min-size": "{{ eks_workers_min_size }}",
-    "max-size": "{{ eks_workers_max_size }}",
-    "desired-capacity": "{{ eks_workers_desired_capacity }}"
-  }
-  type = map(string)
-}
-
 # ECR
 
 variable "ecr_name" {

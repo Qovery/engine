@@ -1,11 +1,14 @@
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{
-    CloudProvider, Create, DatabaseType, Kubernetes, Service, ServiceType, StatefulService,
+    CloudProvider, Create, DatabaseType, Kubernetes, KubernetesNode, Service, ServiceType,
+    StatefulService,
 };
 use crate::cmd::{exec_with_output, CmdError};
 use crate::fs::{copy_terraform_files, write_rendered_templates, RenderedTemplate};
+use itertools::Itertools;
 use rusoto_core::Region;
+use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::fs;
 use std::io::{Error, ErrorKind};
@@ -21,11 +24,18 @@ pub struct EKS<'a> {
     version: String,
     region: Region,
     cloud_provider: &'a AWS,
+    nodes: &'a Vec<Node>,
     tera: Tera,
 }
 
 impl<'a> EKS<'a> {
-    pub fn new(name: &str, version: &str, region: &str, cloud_provider: &'a AWS) -> Self {
+    pub fn new(
+        name: &str,
+        version: &str,
+        region: &str,
+        cloud_provider: &'a AWS,
+        nodes: &'a Vec<Node>,
+    ) -> Self {
         let tera = match Tera::new("lib/aws/bootstrap/**/*.j2.tf") {
             Ok(t) => t,
             Err(e) => {
@@ -38,11 +48,12 @@ impl<'a> EKS<'a> {
             version: version.to_string(),
             region: Region::from_str(region).unwrap(),
             cloud_provider,
+            nodes,
             tera,
         }
     }
 
-    fn generate_terraform_templates(&self) -> Result<[RenderedTemplate; 2], TeraError> {
+    fn generate_terraform_templates(&self) -> Result<[RenderedTemplate; 3], TeraError> {
         let mut context = Context::new();
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
@@ -59,17 +70,34 @@ impl<'a> EKS<'a> {
             "eks_region_cluster_name",
             format!("{}-{}", self.name(), self.region()).as_str(),
         );
-        // TODO export this
-        context.insert("eks_workers_instance_type", "t2.medium");
-        context.insert("eks_workers_min_size", "3");
-        context.insert("eks_workers_max_size", "3");
-        context.insert("eks_workers_desired_capacity", "3");
 
         let aws_default_vars_file_content = self.tera.render("tf-default-vars.j2.tf", &context)?;
+
+        let worker_nodes = self
+            .nodes
+            .iter()
+            .group_by(|e| e.instance_type())
+            .into_iter()
+            .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
+            .map(|(instance_type, nodes)| WorkerNodeData {
+                instance_type: instance_type.to_string(),
+                desired_size: nodes.len().to_string(),
+                max_size: nodes.len().to_string(),
+                min_size: nodes.len().to_string(),
+            })
+            .collect::<Vec<WorkerNodeData>>();
+
+        let mut context = Context::new();
+        context.insert("eks_worker_nodes", &worker_nodes);
+
+        let eks_workers_nodes_content = self.tera.render("eks-workers-nodes.j2.tf", &context)?;
+
+        // TODO generate eks-workers-nodes.j2.tf
 
         Ok([
             RenderedTemplate::new("tf-aws-vars.tf", aws_vars_file_content),
             RenderedTemplate::new("tf-default-vars.tf", aws_default_vars_file_content),
+            RenderedTemplate::new("eks-workers-nodes.tf", eks_workers_nodes_content),
         ])
     }
 
@@ -222,9 +250,35 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 }
 
+pub struct Node {
+    instance_type: String,
+}
+
+impl Node {
+    pub fn new(instance_type: &str) -> Self {
+        Node {
+            instance_type: instance_type.to_string(),
+        }
+    }
+}
+
+impl KubernetesNode for Node {
+    fn instance_type(&self) -> &str {
+        self.instance_type.as_str()
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct WorkerNodeData {
+    instance_type: String,
+    desired_size: String,
+    max_size: String,
+    min_size: String,
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::EKS;
+    use crate::cloud_provider::aws::kubernetes::{Node, EKS};
     use crate::cloud_provider::aws::AWS;
     use crate::cloud_provider::CloudProvider;
     use std::path::Path;
@@ -243,17 +297,38 @@ mod tests {
         aws
     }
 
+    fn nodes() -> Vec<Node> {
+        vec![
+            Node {
+                instance_type: "t2.medium".to_string(),
+            },
+            Node {
+                instance_type: "t2.medium".to_string(),
+            },
+            Node {
+                instance_type: "t2.medium".to_string(),
+            },
+            Node {
+                instance_type: "t2.small".to_string(),
+            },
+        ]
+    }
+
     #[test]
     fn test_generate_terraform_files() {
         let aws = aws();
-        let eks = EKS::new("test-cluster", "1.14", "eu-west-3", &aws);
+        let nodes = nodes();
+
+        let eks = EKS::new("test-cluster", "1.14", "eu-west-3", &aws, &nodes);
         assert_eq!(eks.generate_terraform_templates().is_ok(), true);
     }
 
     #[test]
     fn test_write_terraform_files_into_dir() {
         let aws = aws();
-        let eks = EKS::new("test-cluster", "1.14", "eu-west-3", &aws);
+        let nodes = nodes();
+
+        let eks = EKS::new("test-cluster", "1.14", "eu-west-3", &aws, &nodes);
         assert_eq!(
             eks.generate_and_copy_terraform_files_into_dir("/tmp/coco")
                 .is_ok(),

@@ -100,3 +100,7 @@ pub trait Kubernetes {
     fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
     fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
 }
+
+pub trait KubernetesNode {
+    fn instance_type(&self) -> &str;
+}
