@@ -174,12 +174,7 @@ impl<'a> Kubernetes for EKS<'a> {
             self.cloud_provider.access_key_id.clone(),
             self.cloud_provider.secret_access_key.clone(),
             self.region.clone(),
-            |mut bc| {
-                // see https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html
-                bc.acl = Some("private".to_string());
-                bc.bucket = format!("{}-{}-qovery-terraform", self.region.name(), self.id());
-                bc
-            },
+            format!("{}-{}-qovery-terraform", self.region.name(), self.id()),
         )?;
 
         // generate terraform files

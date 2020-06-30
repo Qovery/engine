@@ -7,20 +7,19 @@ use rusoto_s3::{
 };
 use std::io::{Error, ErrorKind};
 
-pub fn create_bucket<F>(
+pub fn create_bucket(
     access_key_id: String,
     secret_access_key: String,
     region: Region,
-    bucket_configuration: F,
-) -> Result<(), Error>
-where
-    F: Fn(CreateBucketRequest) -> CreateBucketRequest,
-{
+    bucket_name: String,
+) -> Result<(), Error> {
     let credentials = StaticProvider::new(access_key_id, secret_access_key, None, None);
     let client = Client::new_with(credentials, HttpClient::new().unwrap());
     let s3_client = S3Client::new_with_client(client, region.clone());
 
-    let mut bc = bucket_configuration(CreateBucketRequest::default());
+    let mut bc = CreateBucketRequest::default();
+    bc.acl = Some("private".to_string());
+    bc.bucket = bucket_name;
     bc.create_bucket_configuration = Some(CreateBucketConfiguration {
         location_constraint: Some(region.name().to_string()),
     });
