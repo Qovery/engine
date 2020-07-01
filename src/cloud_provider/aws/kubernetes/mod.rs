@@ -3,7 +3,9 @@ use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{CloudProvider, Kubernetes, KubernetesNode, Service};
 use crate::cmd::{exec_with_output, CmdError};
-use crate::fs::{copy_terraform_files, write_rendered_templates, RenderedTemplate};
+use crate::fs::{
+    copy_terraform_files, workspace_directory, write_rendered_templates, RenderedTemplate,
+};
 use crate::s3::create_bucket;
 use itertools::Itertools;
 use rusoto_core::Region;
@@ -12,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::str::FromStr;
-use tempdir::TempDir;
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 
@@ -166,8 +167,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn on_create(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_create() called for {}", self.name());
-        let temp_dir = TempDir::new(self.name())?;
-        let temp_dir_path_str = temp_dir.path().to_str().unwrap();
+        let temp_dir = workspace_directory(format!("terraform/{}", self.name()));
+        let temp_dir_path_str = temp_dir.as_str();
 
         // create S3 bucket
         create_bucket(

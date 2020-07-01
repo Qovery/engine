@@ -1,5 +1,6 @@
+use chrono::Utc;
 use std::fs;
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io::{Error, Write};
 use std::path::Path;
 use walkdir::WalkDir;
@@ -59,4 +60,19 @@ impl<'a> RenderedTemplate<'a> {
     pub fn new(file_name: &'a str, content: String) -> Self {
         RenderedTemplate { file_name, content }
     }
+}
+
+pub fn workspace_directory<P>(dir_name: P) -> String
+where
+    P: AsRef<Path>,
+{
+    let dir = format!(
+        ".qovery-workspace/{}-{}",
+        dir_name.as_ref().to_str().unwrap(),
+        Utc::now().timestamp()
+    );
+
+    let _ = create_dir_all(&dir);
+
+    dir
 }

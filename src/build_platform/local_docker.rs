@@ -1,7 +1,7 @@
 use crate::build_platform::error::BuildPlatformError;
 use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult};
+use crate::fs::workspace_directory;
 use crate::{cmd, git};
-use tempdir::TempDir;
 
 /// use Docker in local
 pub struct LocalDocker {}
@@ -20,12 +20,11 @@ impl BuildPlatform for LocalDocker {
 
     fn build(&self, build: Build) -> Result<BuildResult, BuildError> {
         // git clone
-        let tmp_dir = TempDir::new(build.image.name.as_str()).unwrap();
-        let into_dir = tmp_dir.path();
+        let into_dir = workspace_directory(format!("repositories/{}", build.image.name.as_str()));
 
         let git_clone = git::clone(
             build.git_repository.url.as_str(),
-            into_dir,
+            &into_dir,
             &build.git_repository.credentials,
         );
 
@@ -35,10 +34,8 @@ impl BuildPlatform for LocalDocker {
         }
 
         let dockerfile_dir = match build.git_repository.dockerfile_path.trim() {
-            "" | "." | "/" | "/." | "./" => format!("{}/.", into_dir.to_str().unwrap()),
-            dockerfile_root_path => {
-                format!("{}/{}/.", into_dir.to_str().unwrap(), dockerfile_root_path)
-            }
+            "" | "." | "/" | "/." | "./" => format!("{}/.", into_dir.as_str()),
+            dockerfile_root_path => format!("{}/{}/.", into_dir.as_str(), dockerfile_root_path),
         };
 
         // TODO check that the Dockerfile exists
