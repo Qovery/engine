@@ -37,6 +37,7 @@ pub fn create_terraform_table(
 
     let r = async_run(ddb_client.create_table(cti));
 
+    // FIXME: return a custom DynamoDBError?
     match r {
         Err(err) => match err {
             RusotoError::Unknown(r) => {

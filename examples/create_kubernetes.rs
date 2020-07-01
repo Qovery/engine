@@ -8,6 +8,7 @@ use qovery_engine::cloud_provider::gcp::GCP;
 use qovery_engine::cloud_provider::CloudProvider;
 use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
+use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
     Action, Application, CloudProvider as CP, Deployment, Environment, GitCredentials,
@@ -19,7 +20,16 @@ use rusoto_core::Region;
 fn main() {
     env_logger::init();
 
-    let container_registry = DockerHub::new("qoveryrd", "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24");
+    // use DockerHub
+    //let container_registry = DockerHub::new("qoveryrd", "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24");
+
+    // use ECR
+    let container_registry = ECR::new(
+        "AKIAZ4KMLSYJLRGNNFNI",
+        "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
+        "us-east-2",
+        "",
+    );
 
     let build_platform = LocalDocker::new();
 

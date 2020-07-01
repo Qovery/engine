@@ -20,6 +20,7 @@ pub struct PushResult {
 }
 
 pub enum PushError {
+    RepositoryInitFailure,
     CredentialsError,
     ImageTagFailed,
     ImagePushFailed,

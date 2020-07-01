@@ -2,8 +2,8 @@ use crate::runtime::async_run;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, PutBucketVersioningError,
-    PutBucketVersioningRequest, S3Client, VersioningConfiguration, S3,
+    CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, PutBucketVersioningRequest,
+    S3Client, VersioningConfiguration, S3,
 };
 use std::io::{Error, ErrorKind};
 
@@ -61,6 +61,7 @@ pub fn create_bucket(
 
     let r = async_run(bucket_versioning_output);
 
+    // FIXME: return a custom S3Error?
     match r {
         Err(err) => match err {
             RusotoError::Unknown(r) => {

@@ -1,11 +1,15 @@
 use crate::build_platform::Image;
+use crate::cmd;
+use crate::cmd::CmdError;
 use crate::container_registry::error::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, PushError, PushResult};
 use crate::runtime::async_run;
+use crate::transaction::CommitError::Push;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    CreateRepositoryRequest, DescribeRepositoriesRequest, Ecr, EcrClient, ListImagesRequest,
+    CreateRepositoryRequest, DescribeRepositoriesRequest, Ecr, EcrClient,
+    GetAuthorizationTokenRequest, GetAuthorizationTokenResponse, ListImagesRequest,
     PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
@@ -138,7 +142,79 @@ impl ContainerRegistry for ECR {
     }
 
     fn push(&self, image: Image) -> Result<PushResult, PushError> {
-        unimplemented!()
+        let r = async_run(
+            self.ecr_client()
+                .get_authorization_token(GetAuthorizationTokenRequest::default()),
+        );
+
+        let (access_token, password, endpoint_url) = match r {
+            Ok(t) => match t.authorization_data {
+                Some(authorization_data) => {
+                    let ad = authorization_data.first().unwrap();
+                    let b64_token = ad.authorization_token.as_ref().unwrap();
+
+                    let decoded_token = base64::decode(b64_token).unwrap();
+                    let token = std::str::from_utf8(decoded_token.as_slice()).unwrap();
+
+                    let s_token: Vec<&str> = token.split(":").collect::<Vec<_>>();
+
+                    (
+                        s_token.first().unwrap().to_string(),
+                        s_token.get(1).unwrap().to_string(),
+                        ad.clone().proxy_endpoint.unwrap(),
+                    )
+                }
+                None => return Err(PushError::RepositoryInitFailure),
+            },
+            _ => return Err(PushError::RepositoryInitFailure),
+        };
+
+        let repository = match self.get_repository() {
+            Some(r) => r,
+            None => return Err(PushError::RepositoryInitFailure),
+        };
+
+        match cmd::exec(
+            "docker",
+            vec![
+                "login",
+                "-u",
+                access_token.as_str(),
+                "-p",
+                password.as_str(),
+                endpoint_url.as_str(),
+            ],
+        ) {
+            Err(err) => match err {
+                CmdError::Io(err) => panic!(err),
+                CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
+            },
+            _ => {}
+        };
+
+        let dest = format!(
+            "{}/{}",
+            repository.repository_uri.unwrap(),
+            image.name_with_tag().as_str()
+        );
+
+        match cmd::exec("docker", vec!["tag", dest.as_str(), self.name.as_str()]) {
+            Err(err) => match err {
+                CmdError::Io(err) => panic!(err),
+                CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
+            },
+            _ => {}
+        };
+
+        match cmd::exec("docker", vec!["push", dest.as_str()]) {
+            Err(err) => match err {
+                CmdError::Io(err) => panic!(err),
+                CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
+            },
+            _ => {}
+        };
+
+        Ok(PushResult { image })
     }
 
     fn push_error(&self, image: Image) -> Result<PushResult, PushError> {
@@ -148,6 +224,7 @@ impl ContainerRegistry for ECR {
 
 #[cfg(test)]
 mod tests {
+    use crate::build_platform::Image;
     use crate::container_registry::ecr::ECR;
     use crate::container_registry::error::ContainerRegistryError;
     use crate::container_registry::ContainerRegistry;
