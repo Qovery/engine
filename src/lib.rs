@@ -6,6 +6,7 @@ pub mod cloud_provider;
 pub mod cmd;
 pub mod config;
 pub mod container_registry;
+pub mod dynamo_db;
 pub mod error;
 pub mod fs;
 pub mod git;

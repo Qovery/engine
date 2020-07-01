@@ -6,7 +6,7 @@ use crate::cmd::{exec_with_output, CmdError};
 use crate::fs::{
     copy_terraform_files, workspace_directory, write_rendered_templates, RenderedTemplate,
 };
-use crate::s3::create_bucket;
+use crate::{dynamo_db, s3};
 use itertools::Itertools;
 use rusoto_core::Region;
 use rusoto_s3::CreateBucketConfiguration;
@@ -185,11 +185,19 @@ impl<'a> Kubernetes for EKS<'a> {
         let temp_dir_path_str = temp_dir.as_str();
 
         // create S3 bucket
-        create_bucket(
+        s3::create_bucket(
             self.cloud_provider.access_key_id.as_str(),
             self.cloud_provider.secret_access_key.as_str(),
             self.region.borrow(),
             self.bucket_name().as_str(),
+        )?;
+
+        // create dynamo db table
+        dynamo_db::create_terraform_table(
+            self.cloud_provider.access_key_id.as_str(),
+            self.cloud_provider.secret_access_key.as_str(),
+            self.region.borrow(),
+            self.bucket_name().as_str(), // bucket name and DynamoDB are the same
         )?;
 
         // generate terraform files
