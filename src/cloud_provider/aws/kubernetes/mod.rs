@@ -132,13 +132,16 @@ impl<'a> EKS<'a> {
             Err(err) => {
                 return Err(Error::new(
                     ErrorKind::Other,
-                    "something goes wrong while generating terraform templates",
+                    "something goes wrong while generating terraform templates {}",
                 ));
             }
         };
 
         // copy all .tf files into our dest directory
-        copy_terraform_files(&Path::new("lib/aws/bootstrap/."), dest_dir.as_ref())?;
+        copy_terraform_files(
+            &Path::new(self.template_directory.as_str()),
+            dest_dir.as_ref(),
+        )?;
 
         write_rendered_templates(&rendered_templates, dest_dir.as_ref())?;
 
