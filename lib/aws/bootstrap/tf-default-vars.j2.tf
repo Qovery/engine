@@ -36,7 +36,7 @@ variable "k8s_versions" {
 
 variable "region_cluster_name" {
   description = "Kubernetes cluster name with region"
-  default     = "{{ eks_region_cluster_name }}"
+  default     = "{{ region_cluster_id }}"
   type        = string
 }
 
@@ -64,19 +64,11 @@ variable "k8s_cidr_subnet" {
   type        = number
 }
 
-# ECR
-
-variable "ecr_name" {
-  description = "ECR name"
-  default = ""
-  type = string
-}
-
 # S3 bucket name
 
 variable "s3_bucket_kubeconfig" {
   description = "S3 bucket with kubeconfigs"
-  default = "{{ s3_bucket_kubeconfig }}"
+  default = "{{ region_cluster_id }}"
   type = string
 }
 
@@ -85,7 +77,7 @@ variable "s3_bucket_kubeconfig" {
 variable "ec2_ssh_default_key" {
   description = "Default SSH key"
   default = {
-    "key_name" = "qovery"
+    "key_name" = "{{ region_cluster_id }}-qovery"
     "public_key" = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCnsfaJtod3fuSnE2zqfw+I6l696ipy18utqXpQOTzw0lT4y+CQCyVrR3og54RGwERoOT7KnoneyWzJMEzC+58mXDqe7oM7HgVgYOlEwYuFPO7EZBGaDWFoKMMzgFgdVyEVkoKE/s/2ClOqLvBt7Qq+Z8yQWrxjlluHncXSE6aNoog+Ard2qQhhZOGzwS2uGarkNj11x7e5qQ6kZcwQz+1LSJzTHfn6yK8RhvTDwhmYBy6kYfG+IYacUqToeqkFOiTbdmhntFYRf7J+0N3tVt8s3VUoLAg3uD2ycEqRG48WybAj+VLJHLC31iBrqvNRQqPfubM2ss7Qhv96nOnqMhNh pmavro@deb-pmavro"
   }
   type = map(string)

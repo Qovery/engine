@@ -69,6 +69,8 @@ impl<'a> EKS<'a> {
     }
 
     fn generate_terraform_templates(&self) -> Result<Vec<RenderedTemplate>, TeraError> {
+        let region_cluster_id = format!("{}-{}-{}", self.region(), self.name(), self.id());
+
         let mut context = Context::new();
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
@@ -76,12 +78,9 @@ impl<'a> EKS<'a> {
         context.insert("eks_masters_version", &self.version());
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cluster_name", &self.name());
+        context.insert("region_cluster_id", region_cluster_id.as_str());
         context.insert("aws_terraform_backend_bucket", &self.bucket_name());
         context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
-        context.insert(
-            "eks_region_cluster_name",
-            format!("{}-{}", self.name(), self.region()).as_str(),
-        );
 
         let worker_nodes = self
             .nodes

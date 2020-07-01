@@ -1,6 +1,6 @@
 // S3 bucket to store kubeconfigs
 resource "aws_s3_bucket" "kubeconfigs_bucket" {
-  bucket = "${var.region_cluster_name}-{{ eks_cluster_id}}"
+  bucket = "{{ region_cluster_id }}"
   acl    = "private"
   region = var.region
   versioning {
