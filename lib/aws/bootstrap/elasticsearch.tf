@@ -1,88 +1,88 @@
-# Network
-
-resource "aws_subnet" "es-zone-a" {
-  count = var.es_nb_subnets_per_zone
-
-  availability_zone = data.aws_availability_zones.available.names[0]
-  cidr_block = "10.0.${count.index * 2 + 184}.0/${var.es_cidr_subnet}"
-  vpc_id = aws_vpc.eks.id
-  tags = map(
-    "Name", "${var.region_cluster_name}-es",
-    "ClusterName", var.cluster_name,
-    "RegionClusterName", var.region_cluster_name,
-    "Region", var.region,
-    "Service", "Elasticsearch"
-  )
-}
-
-resource "aws_subnet" "es-zone-b" {
-  count = var.es_nb_subnets_per_zone
-
-  availability_zone = data.aws_availability_zones.available.names[1]
-  cidr_block = "10.0.${count.index * 2 + 188}.0/${var.es_cidr_subnet}"
-  vpc_id = aws_vpc.eks.id
-  tags = map(
-    "Name", "${var.region_cluster_name}-es",
-    "ClusterName", var.cluster_name,
-    "RegionClusterName", var.region_cluster_name,
-    "Region", var.region,
-    "Service", "Elasticsearch"
-  )
-}
-
-resource "aws_subnet" "es-zone-c" {
-  count = var.es_nb_subnets_per_zone - 1
-
-  availability_zone = data.aws_availability_zones.available.names[2]
-  cidr_block = "10.0.${count.index * 2 + 192}.0/${var.es_cidr_subnet}"
-  vpc_id = aws_vpc.eks.id
-  tags = map(
-    "Name", "${var.region_cluster_name}-es",
-    "ClusterName", var.cluster_name,
-    "RegionClusterName", var.region_cluster_name,
-    "Region", var.region,
-    "Service", "Elasticsearch"
-  )
-}
-
-resource "aws_route_table_association" "es_cluster-zone-a" {
-  count = var.es_nb_subnets_per_zone
-
-  subnet_id      = aws_subnet.es-zone-a.*.id[count.index]
-  route_table_id = aws_route_table.eks_cluster.id
-}
-
-resource "aws_route_table_association" "es_cluster-zone-b" {
-  count = var.es_nb_subnets_per_zone
-
-  subnet_id      = aws_subnet.es-zone-b.*.id[count.index]
-  route_table_id = aws_route_table.eks_cluster.id
-}
-
-resource "aws_route_table_association" "es_cluster-zone-c" {
-  count = var.es_nb_subnets_per_zone - 1
-
-  subnet_id      = aws_subnet.es-zone-c.*.id[count.index]
-  route_table_id = aws_route_table.eks_cluster.id
-}
-
-resource "aws_security_group" "elasticsearch" {
-  name = "${var.region_cluster_name}-elasticsearch"
-  description = "Elasticsearch security group"
-  vpc_id = aws_vpc.eks.id
-
-  ingress {
-    from_port = 443
-    to_port = 443
-    protocol = "tcp"
-
-    cidr_blocks = [
-      aws_vpc.eks.cidr_block
-    ]
-  }
-}
-
-resource "aws_iam_service_linked_role" "elasticsearch" {
-  count = (var.region == "eu-west-3" && var.cluster_name == "kube001") ? 1 : 0
-  aws_service_name = "es.amazonaws.com"
-}
+//# Network
+//
+//resource "aws_subnet" "es-zone-a" {
+//  count = var.es_nb_subnets_per_zone
+//
+//  availability_zone = data.aws_availability_zones.available.names[0]
+//  cidr_block = "10.0.${count.index * 2 + 184}.0/${var.es_cidr_subnet}"
+//  vpc_id = aws_vpc.eks.id
+//  tags = map(
+//    "Name", "${var.region_cluster_name}-es",
+//    "ClusterName", var.cluster_name,
+//    "RegionClusterName", var.region_cluster_name,
+//    "Region", var.region,
+//    "Service", "Elasticsearch"
+//  )
+//}
+//
+//resource "aws_subnet" "es-zone-b" {
+//  count = var.es_nb_subnets_per_zone
+//
+//  availability_zone = data.aws_availability_zones.available.names[1]
+//  cidr_block = "10.0.${count.index * 2 + 188}.0/${var.es_cidr_subnet}"
+//  vpc_id = aws_vpc.eks.id
+//  tags = map(
+//    "Name", "${var.region_cluster_name}-es",
+//    "ClusterName", var.cluster_name,
+//    "RegionClusterName", var.region_cluster_name,
+//    "Region", var.region,
+//    "Service", "Elasticsearch"
+//  )
+//}
+//
+//resource "aws_subnet" "es-zone-c" {
+//  count = var.es_nb_subnets_per_zone - 1
+//
+//  availability_zone = data.aws_availability_zones.available.names[2]
+//  cidr_block = "10.0.${count.index * 2 + 192}.0/${var.es_cidr_subnet}"
+//  vpc_id = aws_vpc.eks.id
+//  tags = map(
+//    "Name", "${var.region_cluster_name}-es",
+//    "ClusterName", var.cluster_name,
+//    "RegionClusterName", var.region_cluster_name,
+//    "Region", var.region,
+//    "Service", "Elasticsearch"
+//  )
+//}
+//
+//resource "aws_route_table_association" "es_cluster-zone-a" {
+//  count = var.es_nb_subnets_per_zone
+//
+//  subnet_id      = aws_subnet.es-zone-a.*.id[count.index]
+//  route_table_id = aws_route_table.eks_cluster.id
+//}
+//
+//resource "aws_route_table_association" "es_cluster-zone-b" {
+//  count = var.es_nb_subnets_per_zone
+//
+//  subnet_id      = aws_subnet.es-zone-b.*.id[count.index]
+//  route_table_id = aws_route_table.eks_cluster.id
+//}
+//
+//resource "aws_route_table_association" "es_cluster-zone-c" {
+//  count = var.es_nb_subnets_per_zone - 1
+//
+//  subnet_id      = aws_subnet.es-zone-c.*.id[count.index]
+//  route_table_id = aws_route_table.eks_cluster.id
+//}
+//
+//resource "aws_security_group" "elasticsearch" {
+//  name = "${var.region_cluster_name}-elasticsearch"
+//  description = "Elasticsearch security group"
+//  vpc_id = aws_vpc.eks.id
+//
+//  ingress {
+//    from_port = 443
+//    to_port = 443
+//    protocol = "tcp"
+//
+//    cidr_blocks = [
+//      aws_vpc.eks.cidr_block
+//    ]
+//  }
+//}
+//
+//resource "aws_iam_service_linked_role" "elasticsearch" {
+//  count = (var.region == "eu-west-3" && var.cluster_name == "kube001") ? 1 : 0
+//  aws_service_name = "es.amazonaws.com"
+//}
