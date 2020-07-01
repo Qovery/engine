@@ -190,14 +190,32 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // terraform init
         info!("terraform init on EKS for {}", self.name());
-        match self.terraform_exec(vec!["init", "-no-color", temp_dir_path_str]) {
+        match self.terraform_exec(vec![
+            "init",
+            "-backend-config=backend.tf"
+            "-no-color",
+            temp_dir_path_str])
+        {
+            Err(err) => return on_error(err),
+            _ => {}
+        };
+
+        // terraform validate config
+        info!("terraform validate config on EKS for {}", self.name());
+        match self.terraform_exec(vec!["validate", temp_dir_path_str]) {
             Err(err) => return on_error(err),
             _ => {}
         };
 
         // terraform plan
         info!("terraform plan on EKS for {}", self.name());
-        match self.terraform_exec(vec!["plan", "-no-color", temp_dir_path_str]) {
+        match self.terraform_exec(vec![
+            "plan",
+            "-out",
+            "tf_plan",
+            "-no-color",
+            temp_dir_path_str,
+        ]) {
             Err(err) => return on_error(err),
             _ => {}
         };
@@ -206,6 +224,7 @@ impl<'a> Kubernetes for EKS<'a> {
         info!("terraform apply on EKS for {}", self.name());
         match self.terraform_exec(vec![
             "apply",
+            "tf_plan",
             "-auto-approve",
             "-no-color",
             temp_dir_path_str,
