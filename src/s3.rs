@@ -8,11 +8,15 @@ use rusoto_s3::{
 use std::io::{Error, ErrorKind};
 
 pub fn create_bucket(
-    access_key_id: String,
-    secret_access_key: String,
-    region: Region,
-    bucket_name: String,
+    access_key_id: &str,
+    secret_access_key: &str,
+    region: &Region,
+    bucket_name: &str,
 ) -> Result<(), Error> {
+    let access_key_id = access_key_id.to_string();
+    let secret_access_key = secret_access_key.to_string();
+    let bucket_name = bucket_name.to_string();
+
     let credentials = StaticProvider::new(access_key_id, secret_access_key, None, None);
     let client = Client::new_with(credentials, HttpClient::new().unwrap());
     let s3_client = S3Client::new_with_client(client, region.clone());

@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::io::Error;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -7,12 +8,38 @@ fn get_child<P>(binary: P, args: Vec<&str>) -> Child
 where
     P: AsRef<Path>,
 {
-    Command::new(binary.as_ref())
-        .args(&args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+    let s_binary = binary
+        .as_ref()
+        .to_str()
         .unwrap()
+        .split_whitespace()
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>();
+
+    let (current_dir, _binary) = if s_binary.len() == 1 {
+        (None, s_binary.first().unwrap().clone())
+    } else {
+        (
+            Some(s_binary.first().unwrap().clone()),
+            s_binary.get(1).unwrap().clone(),
+        )
+    };
+
+    match current_dir {
+        Some(cd) => Command::new(&_binary)
+            .args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .current_dir(cd)
+            .spawn()
+            .unwrap(),
+        None => Command::new(&_binary)
+            .args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    }
 }
 
 pub fn exec<P>(binary: P, args: Vec<&str>) -> Result<(), CmdError>

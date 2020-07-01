@@ -11,6 +11,7 @@ use itertools::Itertools;
 use rusoto_core::Region;
 use rusoto_s3::CreateBucketConfiguration;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::str::FromStr;
@@ -56,7 +57,11 @@ impl<'a> EKS<'a> {
         }
     }
 
-    fn generate_terraform_templates(&self) -> Result<[RenderedTemplate; 3], TeraError> {
+    fn bucket_name(&self) -> String {
+        format!("{}-{}-qovery-terraform", self.region.name(), self.id())
+    }
+
+    fn generate_terraform_templates(&self) -> Result<[RenderedTemplate; 4], TeraError> {
         let mut context = Context::new();
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
@@ -95,12 +100,21 @@ impl<'a> EKS<'a> {
 
         let eks_workers_nodes_content = self.tera.render("eks-workers-nodes.j2.tf", &context)?;
 
-        // TODO generate eks-workers-nodes.j2.tf
+        let mut context = Context::new();
+        context.insert("aws_access_key", &self.cloud_provider.access_key_id);
+        context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
+        context.insert("aws_region", &self.region.name());
+        context.insert("eks_cluster_name", &self.name());
+        context.insert("aws_terraform_backend_bucket", &self.bucket_name());
+        context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
+
+        let backend_file_content = self.tera.render("backend.j2.tf", &context)?;
 
         Ok([
             RenderedTemplate::new("tf-aws-vars.tf", aws_vars_file_content),
             RenderedTemplate::new("tf-default-vars.tf", aws_default_vars_file_content),
             RenderedTemplate::new("eks-workers-nodes.tf", eks_workers_nodes_content),
+            RenderedTemplate::new("backend.tf", backend_file_content),
         ])
     }
 
@@ -127,8 +141,8 @@ impl<'a> EKS<'a> {
         Ok(())
     }
 
-    fn terraform_exec(&self, args: Vec<&str>) -> Result<(), CmdError> {
-        match exec_with_output("terraform", args, |line| {
+    fn terraform_exec(&self, root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
+        match exec_with_output(format!("{} terraform", root_dir).as_str(), args, |line| {
             println!("{}", line.unwrap());
         }) {
             Err(err) => return Err(err),
@@ -172,10 +186,10 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // create S3 bucket
         create_bucket(
-            self.cloud_provider.access_key_id.clone(),
-            self.cloud_provider.secret_access_key.clone(),
-            self.region.clone(),
-            format!("{}-{}-qovery-terraform", self.region.name(), self.id()),
+            self.cloud_provider.access_key_id.as_str(),
+            self.cloud_provider.secret_access_key.as_str(),
+            self.region.borrow(),
+            self.bucket_name().as_str(),
         )?;
 
         // generate terraform files
@@ -190,45 +204,37 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // terraform init
         info!("terraform init on EKS for {}", self.name());
-        match self.terraform_exec(vec![
-            "init",
-            "-backend-config=backend.tf",
-            "-no-color",
+        match self.terraform_exec(
             temp_dir_path_str,
-        ]) {
+            vec!["init", "-backend-config=backend.tf", "-no-color"],
+        ) {
             Err(err) => return on_error(err),
             _ => {}
         };
 
         // terraform validate config
         info!("terraform validate config on EKS for {}", self.name());
-        match self.terraform_exec(vec!["validate", temp_dir_path_str]) {
+        match self.terraform_exec(temp_dir_path_str, vec!["validate"]) {
             Err(err) => return on_error(err),
             _ => {}
         };
 
         // terraform plan
         info!("terraform plan on EKS for {}", self.name());
-        match self.terraform_exec(vec![
-            "plan",
-            "-out",
-            "tf_plan",
-            "-no-color",
+        match self.terraform_exec(
             temp_dir_path_str,
-        ]) {
+            vec!["plan", "-out", "tf_plan", "-no-color"],
+        ) {
             Err(err) => return on_error(err),
             _ => {}
         };
 
         // terraform apply
         info!("terraform apply on EKS for {}", self.name());
-        match self.terraform_exec(vec![
-            "apply",
-            "tf_plan",
-            "-auto-approve",
-            "-no-color",
+        match self.terraform_exec(
             temp_dir_path_str,
-        ]) {
+            vec!["apply", "tf_plan", "-auto-approve", "-no-color"],
+        ) {
             Err(err) => return on_error(err),
             _ => {}
         };
