@@ -20,7 +20,7 @@ impl BuildPlatform for LocalDocker {
 
     fn build(&self, build: Build) -> Result<BuildResult, BuildError> {
         // git clone
-        let into_dir = workspace_directory(format!("repositories/{}", build.image.name.as_str()));
+        let into_dir = workspace_directory(format!("build/{}", build.image.name.as_str()));
 
         let git_clone = git::clone(
             build.git_repository.url.as_str(),

@@ -167,7 +167,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn on_create(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_create() called for {}", self.name());
-        let temp_dir = workspace_directory(format!("terraform/{}", self.name()));
+        let temp_dir = workspace_directory(format!("bootstrap/{}", self.name()));
         let temp_dir_path_str = temp_dir.as_str();
 
         // create S3 bucket
