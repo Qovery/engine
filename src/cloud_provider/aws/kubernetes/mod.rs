@@ -66,20 +66,15 @@ impl<'a> EKS<'a> {
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
         context.insert("aws_region", &self.region.name());
-
-        let aws_vars_file_content = self.tera.render("tf-aws-vars.j2.tf", &context)?;
-
-        let mut context = Context::new();
-        context.insert("aws_region", &self.region.name());
         context.insert("eks_masters_version", &self.version());
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cluster_name", &self.name());
+        context.insert("aws_terraform_backend_bucket", &self.bucket_name());
+        context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
         context.insert(
             "eks_region_cluster_name",
             format!("{}-{}", self.name(), self.region()).as_str(),
         );
-
-        let aws_default_vars_file_content = self.tera.render("tf-default-vars.j2.tf", &context)?;
 
         let worker_nodes = self
             .nodes
@@ -95,19 +90,11 @@ impl<'a> EKS<'a> {
             })
             .collect::<Vec<WorkerNodeData>>();
 
-        let mut context = Context::new();
         context.insert("eks_worker_nodes", &worker_nodes);
 
+        let aws_vars_file_content = self.tera.render("tf-aws-vars.j2.tf", &context)?;
+        let aws_default_vars_file_content = self.tera.render("tf-default-vars.j2.tf", &context)?;
         let eks_workers_nodes_content = self.tera.render("eks-workers-nodes.j2.tf", &context)?;
-
-        let mut context = Context::new();
-        context.insert("aws_access_key", &self.cloud_provider.access_key_id);
-        context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
-        context.insert("aws_region", &self.region.name());
-        context.insert("eks_cluster_name", &self.name());
-        context.insert("aws_terraform_backend_bucket", &self.bucket_name());
-        context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
-
         let backend_file_content = self.tera.render("backend.j2.tf", &context)?;
 
         Ok([
