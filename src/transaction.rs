@@ -158,16 +158,18 @@ impl<'a> Transaction<'a> {
         &self,
         applications: &Vec<Application>,
     ) -> Result<Vec<PushResult>, PushError> {
-        let push_results: Vec<PushResult> = applications
+        let results: Vec<_> = applications
             .iter()
-            .map(
-                |app| match self.config.container_registry.push(app.image.clone()) {
-                    Ok(x) => Ok(x),
-                    Err(err) => return Err(err), // stop on error
-                },
-            )
-            .map(|x| x.ok().unwrap())
+            .map(|app| self.config.container_registry.push(app.image.clone()))
             .collect();
+
+        let mut push_results: Vec<PushResult> = vec![];
+        for r in results.into_iter() {
+            match r {
+                Ok(push_result) => push_results.push(push_result),
+                Err(err) => return Err(err), // stop on error
+            }
+        }
 
         Ok(push_results)
     }

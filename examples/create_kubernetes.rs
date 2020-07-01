@@ -28,7 +28,6 @@ fn main() {
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
         "us-east-2",
-        "",
     );
 
     let build_platform = LocalDocker::new();

@@ -19,16 +19,14 @@ pub struct ECR {
     access_key_id: String,
     secret_access_key: String,
     region: Region,
-    name: String,
 }
 
 impl ECR {
-    pub fn new(access_key_id: &str, secret_access_key: &str, region: &str, name: &str) -> Self {
+    pub fn new(access_key_id: &str, secret_access_key: &str, region: &str) -> Self {
         ECR {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
             region: Region::from_str(region).unwrap(),
-            name: name.to_string(),
         }
     }
 
@@ -49,9 +47,9 @@ impl ECR {
         EcrClient::new_with_client(self.client(), self.region.clone())
     }
 
-    pub fn get_repository(&self) -> Option<Repository> {
+    pub fn get_repository(&self, image_name: &str) -> Option<Repository> {
         let mut drr = DescribeRepositoriesRequest::default();
-        drr.repository_names = Some(vec![self.name.clone()]);
+        drr.repository_names = Some(vec![image_name.to_string()]);
 
         let r = async_run(self.ecr_client().describe_repositories(drr));
 
@@ -64,31 +62,21 @@ impl ECR {
             },
         }
     }
-}
 
-impl ContainerRegistry for ECR {
-    fn is_valid(&self) -> Result<(), ContainerRegistryError> {
-        let client = StsClient::new_with_client(self.client(), Region::default());
-        let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
-
-        match s {
-            Ok(x) => Ok(()),
-            Err(err) => Err(ContainerRegistryError::from(err)),
-        }
-    }
-
-    fn on_create(&self) -> Result<(), ContainerRegistryError> {
-        info!("ECR.on_create() called for {}", self.name);
-
+    pub fn get_or_create_repository(
+        &self,
+        image: &Image,
+    ) -> Result<Repository, ContainerRegistryError> {
         // check if the repository already exists
-        if self.get_repository().is_some() {
-            info!("ECR repository {} already exists", self.name);
-            return Ok(());
+        let repository = self.get_repository(image.name.as_str());
+        if repository.is_some() {
+            info!("ECR repository {} already exists", image.name.as_str());
+            return Ok(repository.unwrap());
         }
 
-        info!("ECR create repository {}", self.name);
+        info!("ECR create repository {}", image.name.as_str());
         let mut crr = CreateRepositoryRequest::default();
-        crr.repository_name = self.name.clone();
+        crr.repository_name = image.name.clone();
 
         let r = async_run(self.ecr_client().create_repository(crr));
         match r {
@@ -97,7 +85,7 @@ impl ContainerRegistry for ECR {
         }
 
         let mut plp = PutLifecyclePolicyRequest::default();
-        plp.repository_name = self.name.clone();
+        plp.repository_name = image.name.clone();
 
         let ecr_policy = r#"
         {
@@ -125,8 +113,25 @@ impl ContainerRegistry for ECR {
 
         match r {
             Err(err) => Err(ContainerRegistryError::from(err)),
-            _ => Ok(()),
+            _ => Ok(self.get_repository(image.name.as_str()).unwrap()),
         }
+    }
+}
+
+impl ContainerRegistry for ECR {
+    fn is_valid(&self) -> Result<(), ContainerRegistryError> {
+        let client = StsClient::new_with_client(self.client(), Region::default());
+        let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
+
+        match s {
+            Ok(x) => Ok(()),
+            Err(err) => Err(ContainerRegistryError::from(err)),
+        }
+    }
+
+    fn on_create(&self) -> Result<(), ContainerRegistryError> {
+        info!("ECR.on_create() called");
+        Ok(())
     }
 
     fn on_create_error(&self) -> Result<(), ContainerRegistryError> {
@@ -169,9 +174,9 @@ impl ContainerRegistry for ECR {
             _ => return Err(PushError::RepositoryInitFailure),
         };
 
-        let repository = match self.get_repository() {
-            Some(r) => r,
-            None => return Err(PushError::RepositoryInitFailure),
+        let repository = match self.get_or_create_repository(&image) {
+            Ok(r) => r,
+            _ => return Err(PushError::RepositoryInitFailure),
         };
 
         match cmd::exec(
@@ -193,12 +198,17 @@ impl ContainerRegistry for ECR {
         };
 
         let dest = format!(
-            "{}/{}",
+            "{}:{}",
             repository.repository_uri.unwrap(),
-            image.name_with_tag().as_str()
+            image.tag.as_str()
         );
 
-        match cmd::exec("docker", vec!["tag", dest.as_str(), self.name.as_str()]) {
+        // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
+        // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
+        match cmd::exec(
+            "docker",
+            vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
+        ) {
             Err(err) => match err {
                 CmdError::Io(err) => panic!(err),
                 CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
@@ -206,6 +216,7 @@ impl ContainerRegistry for ECR {
             _ => {}
         };
 
+        // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
         match cmd::exec("docker", vec!["push", dest.as_str()]) {
             Err(err) => match err {
                 CmdError::Io(err) => panic!(err),
@@ -231,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_is_not_valid() {
-        let ecr = ECR::new("fake", "fake", "us-east-2", "test-repo-name");
+        let ecr = ECR::new("fake", "fake", "us-east-2");
         assert_eq!(ecr.is_valid().is_err(), true);
         assert_eq!(
             ecr.is_valid().err().unwrap(),
@@ -245,21 +256,8 @@ mod tests {
             "AKIAZ4KMLSYJLRGNNFNI",
             "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
             "us-east-2",
-            "test-repo-name",
         );
 
         assert_eq!(ecr.is_valid().is_ok(), true);
-    }
-
-    #[test]
-    fn test_create_repository() {
-        let ecr = ECR::new(
-            "AKIAZ4KMLSYJLRGNNFNI",
-            "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
-            "us-east-2",
-            "test-repo-name",
-        );
-
-        assert_eq!(ecr.on_create().is_ok(), true);
     }
 }
