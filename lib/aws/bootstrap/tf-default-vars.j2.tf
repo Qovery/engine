@@ -72,6 +72,25 @@ variable "ecr_name" {
   type = string
 }
 
+# S3 bucket name
+
+variable "s3_bucket_kubeconfig" {
+  description = "S3 bucket with kubeconfigs"
+  default = "{{ s3_bucket_kubeconfig }}"
+  type = string
+}
+
+# EC2 SSH default SSH key
+
+variable "ec2_ssh_default_key" {
+  description = "Default SSH key"
+  default = {
+    "key_name" = "qovery"
+    "public_key" = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCnsfaJtod3fuSnE2zqfw+I6l696ipy18utqXpQOTzw0lT4y+CQCyVrR3og54RGwERoOT7KnoneyWzJMEzC+58mXDqe7oM7HgVgYOlEwYuFPO7EZBGaDWFoKMMzgFgdVyEVkoKE/s/2ClOqLvBt7Qq+Z8yQWrxjlluHncXSE6aNoog+Ard2qQhhZOGzwS2uGarkNj11x7e5qQ6kZcwQz+1LSJzTHfn6yK8RhvTDwhmYBy6kYfG+IYacUqToeqkFOiTbdmhntFYRf7J+0N3tVt8s3VUoLAg3uD2ycEqRG48WybAj+VLJHLC31iBrqvNRQqPfubM2ss7Qhv96nOnqMhNh pmavro@deb-pmavro"
+  }
+  type = map(string)
+}
+
 # RDS
 
 variable "rds_nb_subnets_per_zone" {
@@ -84,17 +103,4 @@ variable "rds_cidr_subnet" {
   description = "RDS CIDR (x.x.x.x/CIDR)"
   default     = 23
   type        = number
-}
-
-# Redis
-variable "redis_version" {
-  description = "Redis for Qovery"
-  default = "5.0.6"
-  type = string
-}
-
-variable "redis_parameters" {
-  description = "Redis additional parameters"
-  default = []
-  type = list(map(any))
 }

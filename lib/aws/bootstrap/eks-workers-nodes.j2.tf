@@ -21,6 +21,7 @@ resource "aws_eks_node_group" "eks-cluster-workers-{{ loop.index }}" {
   }
 
   remote_access {
+    ec2_ssh_key = var.ec2_ssh_default_key.key_name
     source_security_group_ids = [aws_security_group.eks_cluster_workers.id]
   }
 
