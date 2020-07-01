@@ -51,13 +51,13 @@ pub fn write_rendered_templates(
     Ok(())
 }
 
-pub struct RenderedTemplate<'a> {
-    pub file_name: &'a str,
+pub struct RenderedTemplate {
+    pub file_name: String,
     pub content: String,
 }
 
-impl<'a> RenderedTemplate<'a> {
-    pub fn new(file_name: &'a str, content: String) -> Self {
+impl RenderedTemplate {
+    pub fn new(file_name: String, content: String) -> Self {
         RenderedTemplate { file_name, content }
     }
 }

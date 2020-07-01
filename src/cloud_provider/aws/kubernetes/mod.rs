@@ -17,6 +17,7 @@ use std::path::Path;
 use std::str::FromStr;
 use tera::Error as TeraError;
 use tera::{Context, Tera};
+use walkdir::WalkDir;
 
 pub mod node;
 
@@ -28,6 +29,7 @@ pub struct EKS<'a> {
     cloud_provider: &'a AWS,
     nodes: &'a Vec<Node>,
     tera: Tera,
+    template_directory: String,
 }
 
 impl<'a> EKS<'a> {
@@ -39,11 +41,15 @@ impl<'a> EKS<'a> {
         cloud_provider: &'a AWS,
         nodes: &'a Vec<Node>,
     ) -> Self {
-        let tera = match Tera::new("lib/aws/bootstrap/**/*.j2.tf") {
+        let template_directory = "lib/aws/bootstrap".to_string();
+        let tera_template_string = format!("{}/**/*.j2.tf", template_directory);
+
+        let tera = match Tera::new(tera_template_string.as_str()) {
             Ok(t) => t,
-            Err(e) => {
-                panic!("lib/aws/bootstrap/**/*.j2.tf parsing error - does the directory exists?")
-            }
+            Err(e) => panic!(
+                "{} parsing error - does the directory exists?",
+                template_directory
+            ),
         };
 
         EKS {
@@ -54,6 +60,7 @@ impl<'a> EKS<'a> {
             cloud_provider,
             nodes,
             tera,
+            template_directory,
         }
     }
 
@@ -61,7 +68,7 @@ impl<'a> EKS<'a> {
         format!("{}-{}-qovery-terraform", self.region.name(), self.id())
     }
 
-    fn generate_terraform_templates(&self) -> Result<[RenderedTemplate; 4], TeraError> {
+    fn generate_terraform_templates(&self) -> Result<Vec<RenderedTemplate>, TeraError> {
         let mut context = Context::new();
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
@@ -92,17 +99,27 @@ impl<'a> EKS<'a> {
 
         context.insert("eks_worker_nodes", &worker_nodes);
 
-        let aws_vars_file_content = self.tera.render("tf-aws-vars.j2.tf", &context)?;
-        let aws_default_vars_file_content = self.tera.render("tf-default-vars.j2.tf", &context)?;
-        let eks_workers_nodes_content = self.tera.render("eks-workers-nodes.j2.tf", &context)?;
-        let backend_file_content = self.tera.render("backend.j2.tf", &context)?;
+        let file_entries = WalkDir::new(self.template_directory.as_str())
+            .follow_links(true)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_str()
+                    .map(|s| s.ends_with(".j2.tf"))
+                    .unwrap_or(false)
+            })
+            .collect::<Vec<_>>();
 
-        Ok([
-            RenderedTemplate::new("tf-aws-vars.tf", aws_vars_file_content),
-            RenderedTemplate::new("tf-default-vars.tf", aws_default_vars_file_content),
-            RenderedTemplate::new("eks-workers-nodes.tf", eks_workers_nodes_content),
-            RenderedTemplate::new("backend.tf", backend_file_content),
-        ])
+        let mut results: Vec<RenderedTemplate> = vec![];
+        for entry in file_entries.into_iter() {
+            let j2_file_name = entry.file_name().to_str().unwrap();
+            let tf_file_name = j2_file_name.replace(".j2.tf", ".tf");
+            let content = self.tera.render(j2_file_name, &context)?;
+            results.push(RenderedTemplate::new(tf_file_name, content));
+        }
+
+        Ok(results)
     }
 
     fn generate_and_copy_terraform_files_into_dir<P: AsRef<Path>>(
