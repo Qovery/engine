@@ -192,10 +192,10 @@ impl<'a> Kubernetes for EKS<'a> {
         info!("terraform init on EKS for {}", self.name());
         match self.terraform_exec(vec![
             "init",
-            "-backend-config=backend.tf"
+            "-backend-config=backend.tf",
             "-no-color",
-            temp_dir_path_str])
-        {
+            temp_dir_path_str,
+        ]) {
             Err(err) => return on_error(err),
             _ => {}
         };
