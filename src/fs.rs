@@ -1,8 +1,8 @@
-use chrono::Utc;
 use std::fs;
 use std::fs::{create_dir_all, File};
 use std::io::{Error, Write};
 use std::path::Path;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use walkdir::WalkDir;
 
 pub fn copy_terraform_files(files_starts_with: &str, from: &Path, to: &Path) -> Result<(), Error> {
@@ -69,7 +69,10 @@ where
     let dir = format!(
         ".qovery-workspace/{}-{}",
         dir_name.as_ref().to_str().unwrap(),
-        Utc::now().timestamp()
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(0))
+            .as_millis()
     );
 
     let _ = create_dir_all(&dir);
