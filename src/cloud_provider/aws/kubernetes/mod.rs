@@ -241,7 +241,7 @@ impl<'a> Kubernetes for EKS<'a> {
         info!("terraform apply on EKS for {}", self.name());
         match self.terraform_exec(
             temp_dir_path_str,
-            vec!["apply", "tf_plan", "-auto-approve", "-no-color"],
+            vec!["apply", "-auto-approve", "-no-color", "tf_plan"],
         ) {
             Err(err) => return on_error(err),
             _ => {}
