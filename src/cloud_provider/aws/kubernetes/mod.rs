@@ -138,7 +138,7 @@ impl<'a> EKS<'a> {
         };
 
         // copy all .tf files into our dest directory
-        copy_terraform_files("eks-", &Path::new("lib/aws/bootstrap/."), dest_dir.as_ref())?;
+        copy_terraform_files(&Path::new("lib/aws/bootstrap/."), dest_dir.as_ref())?;
 
         write_rendered_templates(&rendered_templates, dest_dir.as_ref())?;
 
