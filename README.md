@@ -18,7 +18,7 @@ TODO
 TODO
 
 ## Example
-see [examples](examples) directory
+see [examples](qovery-engine/examples) directory
 
 ## Contribute
 

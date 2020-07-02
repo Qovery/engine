@@ -1,5 +1,5 @@
 /target
-Cargo.lock
+qovery-engine/Cargo.lock
 *.iml
 .idea
 .qovery-workspace
