@@ -26,6 +26,7 @@ where
     };
 
     // FIXME: refactor this? (not urgent AT ALL)
+    // TODO: add environment variables
     match current_dir {
         Some(cd) => Command::new(&_binary)
             .args(&args)
