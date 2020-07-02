@@ -71,15 +71,15 @@ fn main() {
     );
     tx.create_kubernetes(&eks_eu_west_3);
 
-    let eks_us_east_2 = EKS::new(
-        "456def",
-        "my-us-east-2-k8s",
-        "1.14",
-        "us-east-2",
-        &cloud_provider,
-        &nodes,
-    );
-    tx.create_kubernetes(&eks_us_east_2);
+    // let eks_us_east_2 = EKS::new(
+    //     "456def",
+    //     "my-us-east-2-k8s",
+    //     "1.14",
+    //     "us-east-2",
+    //     &cloud_provider,
+    //     &nodes,
+    // );
+    // tx.create_kubernetes(&eks_us_east_2);
 
     match tx.commit() {
         TransactionResult::Ok => println!("execution: ok"),
