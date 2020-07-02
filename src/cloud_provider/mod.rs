@@ -96,7 +96,6 @@ pub trait Kubernetes {
     fn on_downgrade_error(&self) -> Result<(), KubernetesError>;
     fn on_delete(&self) -> Result<(), KubernetesError>;
     fn on_delete_error(&self) -> Result<(), KubernetesError>;
-    fn create_namespace(&self) -> Result<(), KubernetesError>;
     fn services(&self) -> Result<Vec<Box<dyn Service>>, KubernetesError>;
     fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
     fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
