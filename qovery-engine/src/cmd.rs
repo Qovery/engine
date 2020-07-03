@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
-fn get_child<P>(binary: P, args: Vec<&str>) -> Child
+fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
 where
     P: AsRef<Path>,
 {
@@ -25,30 +25,50 @@ where
         )
     };
 
-    // FIXME: refactor this? (not urgent AT ALL)
-    // TODO: add environment variables
-    match current_dir {
-        Some(cd) => Command::new(&_binary)
-            .args(&args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .current_dir(cd)
-            .spawn()
-            .unwrap(),
-        None => Command::new(&_binary)
-            .args(&args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap(),
+    let mut cmd = Command::new(&_binary);
+
+    cmd.args(&args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if current_dir.is_some() {
+        cmd.current_dir(current_dir.unwrap());
     }
+
+    if envs.is_some() {
+        envs.unwrap().into_iter().for_each(|(k, v)| {
+            cmd.env(k, v);
+        });
+    }
+
+    cmd
 }
 
 pub fn exec<P>(binary: P, args: Vec<&str>) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
 {
-    let exit_status = match get_child(binary, args).wait() {
+    let exit_status = match command(binary, args, None).spawn().unwrap().wait() {
+        Ok(x) => x,
+        Err(err) => return Err(CmdError::Io(err)),
+    };
+
+    if exit_status.success() {
+        return Ok(());
+    }
+
+    Err(CmdError::Exec(exit_status))
+}
+
+pub fn exec_with_envs<P>(
+    binary: P,
+    args: Vec<&str>,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), CmdError>
+where
+    P: AsRef<Path>,
+{
+    let exit_status = match command(binary, args, Some(envs)).spawn().unwrap().wait() {
         Ok(x) => x,
         Err(err) => return Err(CmdError::Io(err)),
     };
@@ -65,7 +85,7 @@ where
     P: AsRef<Path>,
     F: Fn(Result<String, Error>),
 {
-    let mut child = get_child(binary, args);
+    let mut child = command(binary, args, None).spawn().unwrap();
 
     let stdout_reader = BufReader::new(child.stdout.as_mut().unwrap());
     let stderr_reader = BufReader::new(child.stderr.as_mut().unwrap());
