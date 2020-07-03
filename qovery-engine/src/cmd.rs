@@ -80,7 +80,10 @@ where
     Err(CmdError::Exec(exit_status))
 }
 
-fn _with_output(mut child: Child, output: F) -> Child {
+fn _with_output<F>(mut child: Child, output: F) -> Child
+where
+    F: Fn(Result<String, Error>),
+{
     let stdout_reader = BufReader::new(child.stdout.as_mut().unwrap());
     let stderr_reader = BufReader::new(child.stderr.as_mut().unwrap());
 
