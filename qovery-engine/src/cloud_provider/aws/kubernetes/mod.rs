@@ -2,7 +2,7 @@ use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{CloudProvider, Kubernetes, KubernetesNode, Service};
-use crate::cmd::{exec_with_output, CmdError};
+use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::{
     copy_bootstrap_files, workspace_directory, write_rendered_templates, RenderedTemplate,
 };
@@ -148,9 +148,14 @@ impl<'a> EKS<'a> {
     }
 
     fn terraform_exec(&self, root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
-        match exec_with_output(format!("{} terraform", root_dir).as_str(), args, |line| {
-            println!("{}", line.unwrap());
-        }) {
+        match exec_with_envs_and_output(
+            format!("{} terraform", root_dir).as_str(),
+            args,
+            vec![("TF_PLUGIN_CACHE_DIR", "~/.terraform.d/plugin-cache")],
+            |line| {
+                println!("{}", line.unwrap());
+            },
+        ) {
             Err(err) => return Err(err),
             _ => {}
         };

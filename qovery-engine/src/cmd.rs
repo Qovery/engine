@@ -80,13 +80,7 @@ where
     Err(CmdError::Exec(exit_status))
 }
 
-pub fn exec_with_output<P, F>(binary: P, args: Vec<&str>, output: F) -> Result<(), CmdError>
-where
-    P: AsRef<Path>,
-    F: Fn(Result<String, Error>),
-{
-    let mut child = command(binary, args, None).spawn().unwrap();
-
+fn _with_output(mut child: Child, output: F) -> Child {
     let stdout_reader = BufReader::new(child.stdout.as_mut().unwrap());
     let stderr_reader = BufReader::new(child.stderr.as_mut().unwrap());
 
@@ -97,6 +91,40 @@ where
     for line in stderr_reader.lines() {
         output(line);
     }
+
+    child
+}
+
+pub fn exec_with_output<P, F>(binary: P, args: Vec<&str>, output: F) -> Result<(), CmdError>
+where
+    P: AsRef<Path>,
+    F: Fn(Result<String, Error>),
+{
+    let mut child = _with_output(command(binary, args, None).spawn().unwrap(), output);
+
+    let exit_status = match child.wait() {
+        Ok(x) => x,
+        Err(err) => return Err(CmdError::Io(err)),
+    };
+
+    if exit_status.success() {
+        return Ok(());
+    }
+
+    Err(CmdError::Exec(exit_status))
+}
+
+pub fn exec_with_envs_and_output<P, F>(
+    binary: P,
+    args: Vec<&str>,
+    envs: Vec<(&str, &str)>,
+    output: F,
+) -> Result<(), CmdError>
+where
+    P: AsRef<Path>,
+    F: Fn(Result<String, Error>),
+{
+    let mut child = _with_output(command(binary, args, Some(envs)).spawn().unwrap(), output);
 
     let exit_status = match child.wait() {
         Ok(x) => x,
