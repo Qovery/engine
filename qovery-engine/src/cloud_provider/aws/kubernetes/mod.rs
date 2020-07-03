@@ -4,7 +4,7 @@ use crate::cloud_provider::error::KubernetesError;
 use crate::cloud_provider::{CloudProvider, Kubernetes, KubernetesNode, Service};
 use crate::cmd::{exec_with_output, CmdError};
 use crate::fs::{
-    copy_terraform_files, workspace_directory, write_rendered_templates, RenderedTemplate,
+    copy_bootstrap_files, workspace_directory, write_rendered_templates, RenderedTemplate,
 };
 use crate::{dynamo_db, s3};
 use itertools::Itertools;
@@ -68,7 +68,7 @@ impl<'a> EKS<'a> {
         format!("{}-{}-qovery-terraform", self.region.name(), self.id())
     }
 
-    fn generate_terraform_templates(&self) -> Result<Vec<RenderedTemplate>, TeraError> {
+    fn generate_j2_templates(&self) -> Result<Vec<RenderedTemplate>, TeraError> {
         let region_cluster_id = format!("{}-{}-{}", self.region(), self.name(), self.id());
 
         let mut context = Context::new();
@@ -105,7 +105,7 @@ impl<'a> EKS<'a> {
             .filter(|e| {
                 e.file_name()
                     .to_str()
-                    .map(|s| s.ends_with(".j2.tf"))
+                    .map(|s| s.contains(".j2."))
                     .unwrap_or(false)
             })
             .collect::<Vec<_>>();
@@ -113,31 +113,31 @@ impl<'a> EKS<'a> {
         let mut results: Vec<RenderedTemplate> = vec![];
         for entry in file_entries.into_iter() {
             let j2_file_name = entry.file_name().to_str().unwrap();
-            let tf_file_name = j2_file_name.replace(".j2.tf", ".tf");
+            let file_name = j2_file_name.replace(".j2", "");
             let content = self.tera.render(j2_file_name, &context)?;
-            results.push(RenderedTemplate::new(tf_file_name, content));
+            results.push(RenderedTemplate::new(file_name, content));
         }
 
         Ok(results)
     }
 
-    fn generate_and_copy_terraform_files_into_dir<P: AsRef<Path>>(
+    fn generate_and_copy_bootstrap_files_into_dir<P: AsRef<Path>>(
         &self,
         dest_dir: P,
     ) -> Result<(), Error> {
-        // generate terraform templates
-        let rendered_templates = match self.generate_terraform_templates() {
+        // generate j2 templates
+        let rendered_templates = match self.generate_j2_templates() {
             Ok(rt) => rt,
             Err(err) => {
                 return Err(Error::new(
                     ErrorKind::Other,
-                    "something goes wrong while generating terraform templates {}",
+                    "something goes wrong while generating j2 templates {}",
                 ));
             }
         };
 
-        // copy all .tf files into our dest directory
-        copy_terraform_files(
+        // copy all .tf and .yaml files into our dest directory
+        copy_bootstrap_files(
             &Path::new(self.template_directory.as_str()),
             dest_dir.as_ref(),
         )?;
@@ -207,7 +207,7 @@ impl<'a> Kubernetes for EKS<'a> {
         )?;
 
         // generate terraform files
-        self.generate_and_copy_terraform_files_into_dir(&temp_dir)?;
+        self.generate_and_copy_bootstrap_files_into_dir(&temp_dir)?;
 
         let on_error = |err: CmdError| {
             match err {
@@ -352,7 +352,7 @@ mod tests {
         let nodes = nodes();
 
         let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, &nodes);
-        assert_eq!(eks.generate_terraform_templates().is_ok(), true);
+        assert_eq!(eks.generate_j2_templates().is_ok(), true);
     }
 
     #[test]
@@ -362,7 +362,7 @@ mod tests {
 
         let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, &nodes);
         assert_eq!(
-            eks.generate_and_copy_terraform_files_into_dir("/tmp/coco")
+            eks.generate_and_copy_bootstrap_files_into_dir("/tmp/xxx")
                 .is_ok(),
             true
         );
