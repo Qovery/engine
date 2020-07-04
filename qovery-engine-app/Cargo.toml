@@ -1,0 +1,17 @@
+[package]
+name = "qovery-engine-app"
+version = "0.1.0"
+authors = ["Romaric Philogene <evoxmusic@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+qovery-engine = { path = "../qovery-engine" }
+nats = "0.6.0"
+spmc = "0.3.0"
+uuid = { version = "0.8", features = ["v4"] }
+
+# logger
+env_logger = "0.7.1"
+log = "0.4.8"
