@@ -1,8 +1,10 @@
+use crossbeam_channel::{unbounded, Receiver, Sender};
+use evmap::{ReadHandle, WriteHandle};
 use spmc::RecvError;
 use std::collections::HashMap;
 use std::iter::Map;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, SendError, Sender};
+use std::mem::ManuallyDrop;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
@@ -11,31 +13,49 @@ use uuid::Uuid;
 type Message = Result<InternalTask, Error>;
 
 pub struct TaskManager {
-    sender: spmc::Sender<InternalTask>,
-    receiver: spmc::Receiver<InternalTask>,
-    receiver_by_task_id: HashMap<Uuid, Receiver<Message>>,
+    sender: Sender<InternalTask>,
+    receiver: Receiver<InternalTask>,
+    status_by_task_id_r: ReadHandle<Uuid, Status>,
+    status_by_task_id_w: Arc<Mutex<WriteHandle<Uuid, Status>>>,
     running: bool,
 }
 
 impl TaskManager {
-    fn new() -> Self {
-        let (sender, receiver) = spmc::channel::<InternalTask>();
+    pub fn new() -> Self {
+        let (sender, receiver) = unbounded::<InternalTask>();
+        let (status_by_task_id_r, mut status_by_task_id_w) = evmap::new::<Uuid, Status>();
+        let status_by_task_id_w = Arc::new(Mutex::new(status_by_task_id_w));
+
         TaskManager {
             sender,
             receiver,
-            receiver_by_task_id: HashMap::new(),
+            status_by_task_id_r,
+            status_by_task_id_w,
             running: false,
         }
     }
 
-    fn add_task(&mut self, task: Box<dyn Task>) {
+    pub fn add_task(&mut self, task: Box<dyn Task>) {
+        self.status_by_task_id_w
+            .lock()
+            .unwrap()
+            .insert(task.id().clone(), Status::Waiting)
+            .refresh();
+
         let _ = self.sender.send(InternalTask {
             task,
             status: Status::Waiting,
         });
     }
 
-    fn run(&mut self) -> Result<Receiver<Message>, Error> {
+    pub fn get_task_status(&self, id: &Uuid) -> Option<Status> {
+        match self.status_by_task_id_r.get_one(id) {
+            Some(status) => Some(status.as_ref().clone()),
+            _ => None,
+        }
+    }
+
+    pub fn run(&mut self) -> Result<Receiver<Message>, Error> {
         if self.running {
             return Err(Error::AlreadyRunning);
         }
@@ -43,8 +63,26 @@ impl TaskManager {
         // only one run allowed
         self.running = true;
 
-        let (tx, rx) = mpsc::channel::<Message>();
+        let (tx, rx) = unbounded::<Message>();
         let self_receiver = self.receiver.clone();
+
+        let receiver = rx.clone();
+        let w = self.status_by_task_id_w.clone();
+
+        thread::spawn(move || loop {
+            match receiver.recv() {
+                Ok(msg) => {
+                    let msg = msg.unwrap();
+                    // update task status
+                    w.lock()
+                        .unwrap()
+                        .empty(msg.task.id().clone())
+                        .insert(msg.task.id().clone(), msg.status)
+                        .refresh();
+                }
+                Err(err) => {} // FIXME: handle this?
+            }
+        });
 
         let _ = thread::spawn(move || loop {
             let internal_task = self_receiver.recv().unwrap();
@@ -90,7 +128,6 @@ impl Task for SimpleTask {
         let _ = sender.send(Ok(it));
 
         sleep(Duration::from_secs(1));
-
         let it = self.clone().get_internal_task(Status::Done);
         let _ = sender.send(Ok(it));
     }
@@ -101,18 +138,18 @@ struct InternalTask {
     status: Status,
 }
 
-impl InternalTask {
-    fn set_status(&mut self, status: Status) {
-        self.status = status;
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Status {
     Waiting,
     Running,
     Failed,
     Done,
+}
+
+impl evmap::ShallowCopy for Status {
+    unsafe fn shallow_copy(&self) -> ManuallyDrop<Self> {
+        ManuallyDrop::new(*self)
+    }
 }
 
 #[derive(Debug)]
@@ -129,10 +166,12 @@ impl From<RecvError> for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::task_manager::{SimpleTask, TaskManager};
+    use crate::task_manager::{SimpleTask, Status, Task, TaskManager};
+    use std::str::FromStr;
     use std::thread;
     use std::thread::sleep;
     use std::time::Duration;
+    use uuid::Uuid;
 
     #[test]
     fn test() {
@@ -146,9 +185,14 @@ mod tests {
             }
         });
 
-        loop {
-            tm.add_task(Box::new(SimpleTask::new()));
-            sleep(Duration::from_secs(1));
-        }
+        let st = Box::new(SimpleTask::new());
+        let task_id_string = st.id.to_string();
+
+        tm.add_task(st);
+        sleep(Duration::from_secs(3));
+
+        let task_id_uuid = Uuid::from_str(task_id_string.as_str()).unwrap();
+        let last_status = tm.get_task_status(&task_id_uuid).unwrap();
+        assert_eq!(last_status, Status::Done)
     }
 }

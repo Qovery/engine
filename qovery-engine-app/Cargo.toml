@@ -10,6 +10,8 @@ edition = "2018"
 qovery-engine = { path = "../qovery-engine" }
 nats = "0.6.0"
 spmc = "0.3.0"
+crossbeam-channel = "0.4.2"
+evmap = "11.0.0-alpha.1"
 uuid = { version = "0.8", features = ["v4"] }
 
 # logger
