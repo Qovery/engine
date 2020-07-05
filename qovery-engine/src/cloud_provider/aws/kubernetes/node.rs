@@ -1,4 +1,4 @@
-use crate::cloud_provider::KubernetesNode;
+use crate::cloud_provider::kubernetes::KubernetesNode;
 
 pub struct Node {
     total_cpu: u8,
@@ -13,7 +13,7 @@ impl Node {
     /// which is `t2.medium` with 2 cpu and 4 GiB
     /// ```
     /// use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
-    /// use qovery_engine::cloud_provider::KubernetesNode;
+    /// use qovery_engine::cloud_provider::kubernetes::KubernetesNode;
     ///
     /// let node = Node::new(2, 4);
     /// assert_eq!(node.instance_type(), "t2.medium")
@@ -65,7 +65,7 @@ impl KubernetesNode for Node {
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::aws::kubernetes::node::Node;
-    use crate::cloud_provider::KubernetesNode;
+    use crate::cloud_provider::kubernetes::KubernetesNode;
 
     #[test]
     fn test_instance_types() {

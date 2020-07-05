@@ -2,7 +2,7 @@ use crate::build_platform::Image;
 use crate::cmd;
 use crate::cmd::CmdError;
 use crate::container_registry::error::ContainerRegistryError;
-use crate::container_registry::{ContainerRegistry, PushError, PushResult};
+use crate::container_registry::{ContainerRegistry, Kind, PushError, PushResult};
 use crate::runtime::async_run;
 use crate::transaction::CommitError::Push;
 use rusoto_core::{Client, HttpClient, Region};
@@ -16,14 +16,16 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use std::str::FromStr;
 
 pub struct ECR {
+    name: String,
     access_key_id: String,
     secret_access_key: String,
     region: Region,
 }
 
 impl ECR {
-    pub fn new(access_key_id: &str, secret_access_key: &str, region: &str) -> Self {
+    pub fn new(name: &str, access_key_id: &str, secret_access_key: &str, region: &str) -> Self {
         ECR {
+            name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
             region: Region::from_str(region).unwrap(),
@@ -119,6 +121,14 @@ impl ECR {
 }
 
 impl ContainerRegistry for ECR {
+    fn kind(&self) -> Kind {
+        Kind::ECR
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
     fn is_valid(&self) -> Result<(), ContainerRegistryError> {
         let client = StsClient::new_with_client(self.client(), Region::default());
         let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
@@ -242,7 +252,7 @@ mod tests {
 
     #[test]
     fn test_is_not_valid() {
-        let ecr = ECR::new("fake", "fake", "us-east-2");
+        let ecr = ECR::new("my-ecr", "fake", "fake", "us-east-2");
         assert_eq!(ecr.is_valid().is_err(), true);
         assert_eq!(
             ecr.is_valid().err().unwrap(),
@@ -253,6 +263,7 @@ mod tests {
     #[test]
     fn test_is_valid() {
         let ecr = ECR::new(
+            "my-ecr",
             "AKIAZ4KMLSYJLRGNNFNI",
             "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
             "us-east-2",

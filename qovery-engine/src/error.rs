@@ -1,5 +1,5 @@
 use crate::build_platform::error::BuildPlatformError;
-use crate::cloud_provider::error::CloudProviderError;
+use crate::cloud_provider::CloudProviderError;
 use crate::container_registry::error::ContainerRegistryError;
 
 #[derive(Debug)]

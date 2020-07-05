@@ -2,7 +2,7 @@ use crate::build_platform::Image;
 use crate::cmd;
 use crate::cmd::CmdError;
 use crate::container_registry::error::ContainerRegistryError;
-use crate::container_registry::{ContainerRegistry, PushError, PushResult};
+use crate::container_registry::{ContainerRegistry, Kind, PushError, PushResult};
 
 pub struct DockerHub<'a> {
     pub login: &'a str,
@@ -16,6 +16,14 @@ impl<'a> DockerHub<'a> {
 }
 
 impl<'a> ContainerRegistry for DockerHub<'a> {
+    fn kind(&self) -> Kind {
+        Kind::DockerHub
+    }
+
+    fn name(&self) -> &str {
+        "local:docker"
+    }
+
     fn is_valid(&self) -> Result<(), ContainerRegistryError> {
         Ok(())
     }

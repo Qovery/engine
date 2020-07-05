@@ -6,6 +6,8 @@ pub mod ecr;
 pub mod error;
 
 pub trait ContainerRegistry {
+    fn kind(&self) -> Kind;
+    fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), ContainerRegistryError>;
     fn on_create(&self) -> Result<(), ContainerRegistryError>;
     fn on_create_error(&self) -> Result<(), ContainerRegistryError>;
@@ -25,4 +27,9 @@ pub enum PushError {
     ImageTagFailed,
     ImagePushFailed,
     ImageAlreadyExists,
+}
+
+pub enum Kind {
+    DockerHub,
+    ECR,
 }

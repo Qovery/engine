@@ -1,9 +1,9 @@
 use crate::build_platform::Image;
-use crate::cloud_provider::error::ServiceError;
-use crate::cloud_provider::{
-    CloudProvider, Create, DatabaseOptions, DatabaseType, Delete, EnvironmentType, Service,
+use crate::cloud_provider::service::{
+    Create, DatabaseOptions, DatabaseType, Delete, EnvironmentType, Service, ServiceError,
     ServiceType,
 };
+use crate::cloud_provider::CloudProvider;
 
 pub struct PostgreSQL {
     pub id: String,

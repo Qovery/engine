@@ -1,5 +1,5 @@
-mod models;
 mod task_manager;
+mod tasks;
 
 use std::io::Error;
 use std::thread::sleep;

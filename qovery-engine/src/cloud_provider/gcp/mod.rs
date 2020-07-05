@@ -1,13 +1,18 @@
-use crate::cloud_provider::error::CloudProviderError;
-use crate::cloud_provider::{CloudProvider, CloudProviderName, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
 
 pub struct GCP {
+    name: String,
     p12_file_content: String,
 }
 
 impl CloudProvider for GCP {
-    fn name(&self) -> CloudProviderName {
-        CloudProviderName::GCP
+    fn kind(&self) -> Kind {
+        Kind::GCP
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
     }
 
     fn is_valid(&self) -> Result<(), CloudProviderError> {
@@ -20,7 +25,10 @@ impl CloudProvider for GCP {
 }
 
 impl GCP {
-    pub fn new(p12_file_content: String) -> Self {
-        unimplemented!()
+    pub fn new(name: &str, p12_file_content: &str) -> Self {
+        GCP {
+            name: name.to_string(),
+            p12_file_content: p12_file_content.to_string(),
+        }
     }
 }

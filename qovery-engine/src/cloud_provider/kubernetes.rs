@@ -1,0 +1,55 @@
+use crate::cloud_provider::service::Service;
+use crate::cloud_provider::CloudProvider;
+use crate::cmd::CmdError;
+use std::process::ExitStatus;
+
+pub trait Kubernetes {
+    fn kind(&self) -> Kind;
+    fn id(&self) -> &str;
+    fn name(&self) -> &str;
+    fn version(&self) -> &str;
+    fn region(&self) -> &str;
+    fn cloud_provider(&self) -> &dyn CloudProvider;
+    fn is_valid(&self) -> Result<(), KubernetesError>;
+    fn on_create(&self) -> Result<(), KubernetesError>;
+    fn on_create_error(&self) -> Result<(), KubernetesError>;
+    fn on_upgrade(&self) -> Result<(), KubernetesError>;
+    fn on_upgrade_error(&self) -> Result<(), KubernetesError>;
+    fn on_downgrade(&self) -> Result<(), KubernetesError>;
+    fn on_downgrade_error(&self) -> Result<(), KubernetesError>;
+    fn on_delete(&self) -> Result<(), KubernetesError>;
+    fn on_delete_error(&self) -> Result<(), KubernetesError>;
+    fn services(&self) -> Result<Vec<Box<dyn Service>>, KubernetesError>;
+    fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
+    fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
+}
+
+pub trait KubernetesNode {
+    fn total_cpu(&self) -> u8;
+    fn total_memory_in_gib(&self) -> u16;
+    fn instance_type(&self) -> &str;
+}
+
+pub enum Kind {
+    EKS,
+}
+
+#[derive(Debug)]
+pub enum KubernetesError {
+    Cmd(CmdError),
+    Io(std::io::Error),
+    Create(ExitStatus),
+    Error,
+}
+
+impl From<std::io::Error> for KubernetesError {
+    fn from(error: std::io::Error) -> Self {
+        KubernetesError::Io(error)
+    }
+}
+
+impl From<CmdError> for KubernetesError {
+    fn from(error: CmdError) -> Self {
+        KubernetesError::Cmd(error)
+    }
+}

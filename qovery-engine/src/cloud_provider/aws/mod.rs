@@ -2,21 +2,23 @@ use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
-use crate::cloud_provider::error::CloudProviderError;
-use crate::cloud_provider::{CloudProvider, CloudProviderName, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
 use crate::runtime::async_run;
 
 pub mod databases;
 pub mod kubernetes;
 
 pub struct AWS {
+    name: String,
     access_key_id: String,
     secret_access_key: String,
 }
 
 impl AWS {
-    pub fn new(access_key_id: &str, secret_access_key: &str) -> Self {
+    pub fn new(name: &str, access_key_id: &str, secret_access_key: &str) -> Self {
         AWS {
+            name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
         }
@@ -37,8 +39,12 @@ impl AWS {
 }
 
 impl CloudProvider for AWS {
-    fn name(&self) -> CloudProviderName {
-        CloudProviderName::AWS
+    fn kind(&self) -> Kind {
+        Kind::AWS
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
     }
 
     fn is_valid(&self) -> Result<(), CloudProviderError> {

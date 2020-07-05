@@ -10,7 +10,7 @@ use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
 use uuid::Uuid;
 
-type Message = Result<InternalTask, Error>;
+pub type Message = Result<InternalTask, Error>;
 
 pub struct TaskManager {
     sender: Sender<InternalTask>,
@@ -98,44 +98,9 @@ pub trait Task: Send {
     fn run(self: Box<Self>, sender: Sender<Message>);
 }
 
-#[derive(Clone)]
-pub struct SimpleTask {
-    id: Uuid,
-}
-
-impl SimpleTask {
-    fn new() -> Self {
-        SimpleTask { id: Uuid::new_v4() }
-    }
-
-    fn get_internal_task(self: Box<Self>, status: Status) -> InternalTask {
-        InternalTask { task: self, status }
-    }
-}
-
-impl Task for SimpleTask {
-    fn id(&self) -> &Uuid {
-        &self.id
-    }
-
-    fn run(self: Box<Self>, sender: Sender<Message>) {
-        let it = self.clone().get_internal_task(Status::Running);
-        let _ = sender.send(Ok(it));
-
-        sleep(Duration::from_secs(1));
-
-        let it = self.clone().get_internal_task(Status::Running);
-        let _ = sender.send(Ok(it));
-
-        sleep(Duration::from_secs(1));
-        let it = self.clone().get_internal_task(Status::Done);
-        let _ = sender.send(Ok(it));
-    }
-}
-
-struct InternalTask {
-    task: Box<dyn Task>,
-    status: Status,
+pub struct InternalTask {
+    pub task: Box<dyn Task>,
+    pub status: Status,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]

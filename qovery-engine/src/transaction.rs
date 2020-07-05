@@ -1,15 +1,17 @@
+use std::borrow::Borrow;
+use std::collections::HashMap;
+
 use crate::build_platform::{
     Build, BuildError, BuildOptions, EnvironmentVariable, GitRepository, Image,
 };
 use crate::cloud_provider::application::Application;
-use crate::cloud_provider::error::{DeployError, KubernetesError, ServiceError};
-use crate::cloud_provider::{Kubernetes, Service};
+use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesError};
+use crate::cloud_provider::service::{Service, ServiceError};
+use crate::cloud_provider::DeployError;
 use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
 use crate::models::{Action, Environment, EnvironmentError};
-use std::borrow::Borrow;
-use std::collections::HashMap;
 
 pub struct Transaction<'a> {
     pub config: Config<'a>,

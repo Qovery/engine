@@ -1,6 +1,7 @@
 use crate::cloud_provider::aws::databases::PostgreSQL;
-use crate::cloud_provider::Service;
-use crate::cloud_provider::{CloudProvider as CP, CloudProviderName, DatabaseOptions};
+use crate::cloud_provider::service::{DatabaseOptions, Service};
+use crate::cloud_provider::CloudProvider as CP;
+use crate::cloud_provider::Kind as CPKind;
 use chrono::{DateTime, Utc};
 use std::hash::Hash;
 
@@ -105,8 +106,8 @@ pub struct Database {
 
 impl Database {
     pub fn to_service(&self, cloud_provider: &dyn CP) -> Option<Box<dyn Service>> {
-        match cloud_provider.name() {
-            CloudProviderName::AWS => match self._type.to_lowercase().as_str() {
+        match cloud_provider.kind() {
+            CPKind::AWS => match self._type.to_lowercase().as_str() {
                 "postgresql" => Some(Box::new(PostgreSQL {
                     id: self.id.clone(),
                     name: self.name.clone(),
@@ -120,7 +121,7 @@ impl Database {
                 })),
                 _ => None,
             },
-            CloudProviderName::GCP => None,
+            CPKind::GCP => None,
         }
     }
 }

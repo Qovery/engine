@@ -1,23 +1,26 @@
+use std::borrow::Borrow;
+use std::io::{Error, ErrorKind};
+use std::path::Path;
+use std::str::FromStr;
+
+use itertools::Itertools;
+use rusoto_core::Region;
+use rusoto_s3::CreateBucketConfiguration;
+use serde::{Deserialize, Serialize};
+use tera::Error as TeraError;
+use tera::{Context, Tera};
+use walkdir::WalkDir;
+
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
-use crate::cloud_provider::error::KubernetesError;
-use crate::cloud_provider::{CloudProvider, Kubernetes, KubernetesNode, Service};
+use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
+use crate::cloud_provider::service::Service;
+use crate::cloud_provider::CloudProvider;
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::{
     copy_bootstrap_files, workspace_directory, write_rendered_templates, RenderedTemplate,
 };
 use crate::{dynamo_db, s3};
-use itertools::Itertools;
-use rusoto_core::Region;
-use rusoto_s3::CreateBucketConfiguration;
-use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
-use std::io::{Error, ErrorKind};
-use std::path::Path;
-use std::str::FromStr;
-use tera::Error as TeraError;
-use tera::{Context, Tera};
-use walkdir::WalkDir;
 
 pub mod node;
 
@@ -165,6 +168,10 @@ impl<'a> EKS<'a> {
 }
 
 impl<'a> Kubernetes for EKS<'a> {
+    fn kind(&self) -> Kind {
+        Kind::EKS
+    }
+
     fn id(&self) -> &str {
         self.id.as_str()
     }
@@ -322,11 +329,12 @@ struct WorkerNodeData {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use crate::cloud_provider::aws::kubernetes::node::Node;
     use crate::cloud_provider::aws::kubernetes::EKS;
     use crate::cloud_provider::aws::AWS;
     use crate::cloud_provider::CloudProvider;
-    use std::path::Path;
 
     fn aws() -> AWS {
         let aws = AWS::new(

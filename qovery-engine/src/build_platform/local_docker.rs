@@ -1,5 +1,5 @@
 use crate::build_platform::error::BuildPlatformError;
-use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult};
+use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Kind};
 use crate::fs::workspace_directory;
 use crate::{cmd, git};
 
@@ -13,6 +13,14 @@ impl LocalDocker {
 }
 
 impl BuildPlatform for LocalDocker {
+    fn kind(&self) -> Kind {
+        Kind::LocalDocker
+    }
+
+    fn name(&self) -> &str {
+        "local:docker"
+    }
+
     fn is_valid(&self) -> Result<(), BuildPlatformError> {
         // TODO check docker binary
         Ok(())

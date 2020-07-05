@@ -6,6 +6,8 @@ pub mod error;
 pub mod local_docker;
 
 pub trait BuildPlatform {
+    fn kind(&self) -> Kind;
+    fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), BuildPlatformError>;
     fn build(&self, build: Build) -> Result<BuildResult, BuildError>;
     fn build_error(&self, build: Build) -> Result<BuildResult, BuildError>;
@@ -53,4 +55,8 @@ pub struct BuildResult {
 pub enum BuildError {
     Git(Error),
     Error,
+}
+
+pub enum Kind {
+    LocalDocker,
 }

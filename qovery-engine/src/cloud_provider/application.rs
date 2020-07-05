@@ -1,6 +1,8 @@
 use crate::build_platform::Image;
-use crate::cloud_provider::error::ServiceError;
-use crate::cloud_provider::{CloudProvider, Create, Delete, EnvironmentType, Service, ServiceType};
+use crate::cloud_provider::service::{
+    Create, Delete, EnvironmentType, Service, ServiceError, ServiceType,
+};
+use crate::cloud_provider::CloudProvider;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {

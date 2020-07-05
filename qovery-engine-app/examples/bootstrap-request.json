@@ -1,0 +1,41 @@
+{
+  "kind": "CreateCluster",
+  "created_at": "timestamp",
+  "action": "create",
+  "payload": {
+    "build_platform": {
+      "kind": "local:docker",
+      "options": {}
+    },
+    "container_registry": {
+      "kind": "ECR",
+      "options": {
+        "access_key_id": "string",
+        "secret_access_key": "string",
+        "region": "string"
+      }
+    },
+    "cloud_provider": {
+      "kind": "AWS",
+      "options": {
+        "access_key_id": "string",
+        "secret_access_key": "string",
+        "region": "string"
+      },
+      "kubernetes": {
+        "id": "string",
+        "name": "string",
+        "version": "string",
+        "region": "string",
+        "nodes": [
+          {
+            "cpu": 1,
+            "memory_in_gib": 2
+          }
+        ]
+      }
+    },
+    "environment": {
+    }
+  }
+}
