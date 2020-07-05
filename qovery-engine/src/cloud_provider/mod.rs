@@ -10,6 +10,7 @@ pub mod service;
 
 pub trait CloudProvider {
     fn kind(&self) -> Kind;
+    fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), CloudProviderError>;
     fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError>;

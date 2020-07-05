@@ -1,10 +1,5 @@
-use crate::build_platform::Image;
-use crate::cmd;
-use crate::cmd::CmdError;
-use crate::container_registry::error::ContainerRegistryError;
-use crate::container_registry::{ContainerRegistry, Kind, PushError, PushResult};
-use crate::runtime::async_run;
-use crate::transaction::CommitError::Push;
+use std::str::FromStr;
+
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
@@ -13,9 +8,18 @@ use rusoto_ecr::{
     PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
-use std::str::FromStr;
+
+use crate::build_platform::Image;
+use crate::cmd;
+use crate::cmd::CmdError;
+use crate::container_registry::{
+    ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
+};
+use crate::runtime::async_run;
+use crate::transaction::CommitError::Push;
 
 pub struct ECR {
+    id: String,
     name: String,
     access_key_id: String,
     secret_access_key: String,
@@ -23,8 +27,15 @@ pub struct ECR {
 }
 
 impl ECR {
-    pub fn new(name: &str, access_key_id: &str, secret_access_key: &str, region: &str) -> Self {
+    pub fn new(
+        id: &str,
+        name: &str,
+        access_key_id: &str,
+        secret_access_key: &str,
+        region: &str,
+    ) -> Self {
         ECR {
+            id: id.to_string(),
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
@@ -123,6 +134,10 @@ impl ECR {
 impl ContainerRegistry for ECR {
     fn kind(&self) -> Kind {
         Kind::ECR
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
     }
 
     fn name(&self) -> &str {
@@ -247,12 +262,11 @@ impl ContainerRegistry for ECR {
 mod tests {
     use crate::build_platform::Image;
     use crate::container_registry::ecr::ECR;
-    use crate::container_registry::error::ContainerRegistryError;
-    use crate::container_registry::ContainerRegistry;
+    use crate::container_registry::{ContainerRegistry, ContainerRegistryError};
 
     #[test]
     fn test_is_not_valid() {
-        let ecr = ECR::new("my-ecr", "fake", "fake", "us-east-2");
+        let ecr = ECR::new("123-abc", "my-ecr", "fake", "fake", "us-east-2");
         assert_eq!(ecr.is_valid().is_err(), true);
         assert_eq!(
             ecr.is_valid().err().unwrap(),
@@ -263,6 +277,7 @@ mod tests {
     #[test]
     fn test_is_valid() {
         let ecr = ECR::new(
+            "123-abc",
             "my-ecr",
             "AKIAZ4KMLSYJLRGNNFNI",
             "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",

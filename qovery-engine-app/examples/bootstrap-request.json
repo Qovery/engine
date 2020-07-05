@@ -4,11 +4,15 @@
   "action": "create",
   "payload": {
     "build_platform": {
-      "kind": "local:docker",
+      "kind": "LocalDocker",
+      "id": "string",
+      "name": "string",
       "options": {}
     },
     "container_registry": {
       "kind": "ECR",
+      "id": "string",
+      "name": "string",
       "options": {
         "access_key_id": "string",
         "secret_access_key": "string",
@@ -17,12 +21,15 @@
     },
     "cloud_provider": {
       "kind": "AWS",
+      "id": "string",
+      "name": "string",
       "options": {
         "access_key_id": "string",
         "secret_access_key": "string",
         "region": "string"
       },
       "kubernetes": {
+        "kind": "EKS",
         "id": "string",
         "name": "string",
         "version": "string",

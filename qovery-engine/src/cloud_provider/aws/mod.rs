@@ -10,14 +10,16 @@ pub mod databases;
 pub mod kubernetes;
 
 pub struct AWS {
+    id: String,
     name: String,
     access_key_id: String,
     secret_access_key: String,
 }
 
 impl AWS {
-    pub fn new(name: &str, access_key_id: &str, secret_access_key: &str) -> Self {
+    pub fn new(id: &str, name: &str, access_key_id: &str, secret_access_key: &str) -> Self {
         AWS {
+            id: id.to_string(),
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
@@ -41,6 +43,10 @@ impl AWS {
 impl CloudProvider for AWS {
     fn kind(&self) -> Kind {
         Kind::AWS
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
     }
 
     fn name(&self) -> &str {

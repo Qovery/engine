@@ -3,9 +3,8 @@ use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::error::CloudProviderError;
 use qovery_engine::cloud_provider::gcp::GCP;
-use qovery_engine::cloud_provider::CloudProvider;
+use qovery_engine::cloud_provider::{CloudProvider, CloudProviderError};
 use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
@@ -25,14 +24,18 @@ fn main() {
 
     // use ECR
     let container_registry = ECR::new(
+        "123-abc",
+        "my-default-ecr",
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
         "us-east-2",
     );
 
-    let build_platform = LocalDocker::new();
+    let build_platform = LocalDocker::new("123456", "my-local-docker");
 
     let cloud_provider = AWS::new(
+        "123-abc",
+        "my-default-aws",
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
     );

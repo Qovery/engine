@@ -4,11 +4,17 @@ use crate::fs::workspace_directory;
 use crate::{cmd, git};
 
 /// use Docker in local
-pub struct LocalDocker {}
+pub struct LocalDocker {
+    id: String,
+    name: String,
+}
 
 impl LocalDocker {
-    pub fn new() -> Self {
-        LocalDocker {}
+    pub fn new(id: &str, name: &str) -> Self {
+        LocalDocker {
+            id: id.to_string(),
+            name: name.to_string(),
+        }
     }
 }
 
@@ -17,8 +23,12 @@ impl BuildPlatform for LocalDocker {
         Kind::LocalDocker
     }
 
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
     fn name(&self) -> &str {
-        "local:docker"
+        self.name.as_str()
     }
 
     fn is_valid(&self) -> Result<(), BuildPlatformError> {

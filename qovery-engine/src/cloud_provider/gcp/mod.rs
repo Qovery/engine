@@ -2,6 +2,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
 
 pub struct GCP {
+    id: String,
     name: String,
     p12_file_content: String,
 }
@@ -9,6 +10,10 @@ pub struct GCP {
 impl CloudProvider for GCP {
     fn kind(&self) -> Kind {
         Kind::GCP
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
     }
 
     fn name(&self) -> &str {
@@ -25,8 +30,9 @@ impl CloudProvider for GCP {
 }
 
 impl GCP {
-    pub fn new(name: &str, p12_file_content: &str) -> Self {
+    pub fn new(id: &str, name: &str, p12_file_content: &str) -> Self {
         GCP {
+            id: id.to_string(),
             name: name.to_string(),
             p12_file_content: p12_file_content.to_string(),
         }

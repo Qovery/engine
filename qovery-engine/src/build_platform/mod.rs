@@ -7,6 +7,7 @@ pub mod local_docker;
 
 pub trait BuildPlatform {
     fn kind(&self) -> Kind;
+    fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), BuildPlatformError>;
     fn build(&self, build: Build) -> Result<BuildResult, BuildError>;
