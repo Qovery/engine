@@ -1,6 +1,7 @@
 use rusoto_core::RusotoError;
 
 use crate::build_platform::Image;
+use serde::{Deserialize, Serialize};
 
 pub mod docker_hub;
 pub mod ecr;
@@ -30,6 +31,7 @@ pub enum PushError {
     ImageAlreadyExists,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
     DockerHub,
     ECR,

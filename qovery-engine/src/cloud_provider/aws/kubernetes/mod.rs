@@ -338,6 +338,7 @@ mod tests {
 
     fn aws() -> AWS {
         let aws = AWS::new(
+            "123-abc",
             "my-default-aws",
             "AKIAZ4KMLSYJLRGNNFNI",
             "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",

@@ -1,6 +1,7 @@
 use crate::build_platform::error::BuildPlatformError;
 use crate::git::Credentials;
 use git2::Error;
+use serde::{Deserialize, Serialize};
 
 pub mod error;
 pub mod local_docker;
@@ -58,6 +59,7 @@ pub enum BuildError {
     Error,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
     LocalDocker,
 }

@@ -131,7 +131,8 @@ impl From<RecvError> for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::task_manager::{SimpleTask, Status, Task, TaskManager};
+    use crate::task_manager::{Status, Task, TaskManager};
+    use crate::tasks::CreateInfrastructureTask;
     use std::str::FromStr;
     use std::thread;
     use std::thread::sleep;
@@ -150,8 +151,8 @@ mod tests {
             }
         });
 
-        let st = Box::new(SimpleTask::new());
-        let task_id_string = st.id.to_string();
+        let st = Box::new(CreateInfrastructureTask::new());
+        let task_id_string = st.id().to_string();
 
         tm.add_task(st);
         sleep(Duration::from_secs(3));

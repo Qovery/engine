@@ -1,6 +1,7 @@
 use crate::cloud_provider::service::Service;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::CmdError;
+use serde::{Deserialize, Serialize};
 use std::process::ExitStatus;
 
 pub trait Kubernetes {
@@ -30,6 +31,7 @@ pub trait KubernetesNode {
     fn instance_type(&self) -> &str;
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
     EKS,
 }

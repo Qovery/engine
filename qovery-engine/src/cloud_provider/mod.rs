@@ -1,6 +1,7 @@
 use crate::build_platform::Image;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use rusoto_core::RusotoError;
+use serde::{Deserialize, Serialize};
 
 pub mod application;
 pub mod aws;
@@ -54,6 +55,7 @@ pub enum DeployError {
     Error,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
     AWS,
     GCP,

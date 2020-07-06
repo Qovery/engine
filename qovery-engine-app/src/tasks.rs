@@ -1,15 +1,21 @@
-use crate::task_manager::{InternalTask, Message, Status, Task};
 use crossbeam_channel::Sender;
 use uuid::Uuid;
 
+use crate::models::Request;
+use crate::task_manager::{InternalTask, Message, Status, Task};
+
 #[derive(Clone)]
-pub struct SimpleTask {
+pub struct CreateInfrastructureTask {
     id: Uuid,
+    request: Request,
 }
 
-impl SimpleTask {
-    fn new() -> Self {
-        SimpleTask { id: Uuid::new_v4() }
+impl CreateInfrastructureTask {
+    pub fn new(request: Request) -> Self {
+        CreateInfrastructureTask {
+            id: Uuid::new_v4(),
+            request,
+        }
     }
 
     fn get_internal_task(self: Box<Self>, status: Status) -> InternalTask {
@@ -17,16 +23,13 @@ impl SimpleTask {
     }
 }
 
-impl Task for SimpleTask {
+impl Task for CreateInfrastructureTask {
     fn id(&self) -> &Uuid {
         &self.id
     }
 
     fn run(self: Box<Self>, sender: Sender<Message>) {
         // TODO
-        let it = self.clone().get_internal_task(Status::Running);
-        let _ = sender.send(Ok(it));
-
         let it = self.clone().get_internal_task(Status::Running);
         let _ = sender.send(Ok(it));
 
