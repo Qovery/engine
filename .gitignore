@@ -4,3 +4,4 @@ qovery-engine/Cargo.lock
 .idea
 .qovery-workspace
 .terraform/
+NOTES.txt
