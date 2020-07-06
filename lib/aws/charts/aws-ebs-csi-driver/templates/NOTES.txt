@@ -1,3 +1,0 @@
-To verify that aws-ebs-csi-driver has started, run:
-
-    kubectl get pod -n kube-system -l "app.kubernetes.io/name={{ include "aws-ebs-csi-driver.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"

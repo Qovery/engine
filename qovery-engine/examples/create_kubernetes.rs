@@ -15,6 +15,7 @@ use qovery_engine::models::{
 use qovery_engine::session::Session;
 use qovery_engine::transaction::{ProgressInfo, ProgressListener, TransactionResult};
 use rusoto_core::Region;
+use std::env;
 
 fn main() {
     env_logger::init();
@@ -57,12 +58,7 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    let nodes = vec![
-        Node::new(2, 4),
-        Node::new(2, 4),
-        Node::new(2, 4),
-        Node::new(1, 2),
-    ];
+    let nodes = vec![Node::new(4, 32), Node::new(4, 32), Node::new(4, 32)];
 
     let eks_eu_west_3 = EKS::new(
         "123abc",
