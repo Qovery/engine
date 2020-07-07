@@ -1,13 +1,15 @@
+use std::borrow::Borrow;
+
 use crossbeam_channel::Sender;
 use uuid::Uuid;
 
-use crate::models::Request;
-use crate::task_manager::{InternalTask, Message, Status, Task};
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::config::Config;
 use qovery_engine::error::ConfigurationError;
-use std::borrow::Borrow;
+
+use crate::models::Request;
+use crate::task_manager::{InternalTask, Message, Status, Task};
 
 #[derive(Clone)]
 pub struct CreateInfrastructureTask {

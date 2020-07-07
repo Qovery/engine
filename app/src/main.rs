@@ -1,20 +1,18 @@
-mod models;
-mod task_manager;
-mod tasks;
-
 #[macro_use]
 extern crate serde;
 
-use crate::models::{Request, Response};
-use crate::task_manager::{Task, TaskManager};
-use crate::tasks::CreateInfrastructureTask;
-use crossbeam_channel::unbounded;
 use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{Error, Read};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
+
+use crossbeam_channel::unbounded;
+
+use qovery_engine_task_manager::models::{Request, Response};
+use qovery_engine_task_manager::task_manager::{Task, TaskManager};
+use qovery_engine_task_manager::tasks::CreateInfrastructureTask;
 
 fn subject<'a>(mode: &'a Mode, subject: &'a str) -> String {
     match mode {
@@ -35,7 +33,7 @@ enum Mode<'a> {
     Cloud(Customer<'a>, CloudProvider<'a>, Region<'a>),
 }
 
-fn main() -> Result<(), Error> {
+pub fn main() -> Result<(), Error> {
     let name = "qovery-engine-app";
     let mode = Mode::Cloud("a1cd1w2xkw", "aws", "us-east-2");
 
@@ -76,8 +74,7 @@ fn main() -> Result<(), Error> {
     });
 
     // TODO remove - for testing purpose
-    let mut create_cluster_file =
-        File::open("qovery-engine-app/tests/assets/create-infrastructure.json").unwrap();
+    let mut create_cluster_file = File::open("app/assets/create-infrastructure.json").unwrap();
 
     let mut buff = String::new();
     create_cluster_file.read_to_string(&mut buff).unwrap();

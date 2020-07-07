@@ -1,6 +1,3 @@
-use crossbeam_channel::{unbounded, Receiver, Sender};
-use evmap::{ReadHandle, WriteHandle};
-use spmc::RecvError;
 use std::collections::HashMap;
 use std::iter::Map;
 use std::mem::ManuallyDrop;
@@ -8,6 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
+
+use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
+use evmap::{ReadHandle, WriteHandle};
 use uuid::Uuid;
 
 pub type Message = Result<InternalTask, Error>;
@@ -132,34 +132,6 @@ impl From<RecvError> for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::task_manager::{Status, Task, TaskManager};
-    use crate::tasks::CreateInfrastructureTask;
-    use std::str::FromStr;
-    use std::thread;
-    use std::thread::sleep;
-    use std::time::Duration;
-    use uuid::Uuid;
-
     #[test]
-    fn test() {
-        let mut tm = TaskManager::new();
-        let rx = tm.run().unwrap();
-
-        thread::spawn(move || loop {
-            match rx.recv() {
-                Ok(msg) => println!("{}", msg.unwrap().task.id()),
-                Err(err) => println!("{:?}", err),
-            }
-        });
-
-        let st = Box::new(CreateInfrastructureTask::new());
-        let task_id_string = st.id().to_string();
-
-        tm.add_task(st);
-        sleep(Duration::from_secs(3));
-
-        let task_id_uuid = Uuid::from_str(task_id_string.as_str()).unwrap();
-        let last_status = tm.get_task_status(&task_id_uuid).unwrap();
-        assert_eq!(last_status, Status::Done)
-    }
+    fn test() {}
 }

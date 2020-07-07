@@ -1,5 +1,5 @@
 [package]
-name = "qovery-engine-app"
+name = "qovery-engine-task-manager"
 version = "0.1.0"
 authors = ["Romaric Philogene <evoxmusic@gmail.com>"]
 edition = "2018"
@@ -8,15 +8,9 @@ edition = "2018"
 
 [dependencies]
 qovery-engine = { path = "../qovery-engine" }
-nats = "0.6.0"
-spmc = "0.3.0"
 crossbeam-channel = "0.4.2"
 evmap = "11.0.0-alpha.1"
 uuid = { version = "0.8", features = ["v4"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = "0.4.11"
-
-# logger
-env_logger = "0.7.1"
-log = "0.4.8"
