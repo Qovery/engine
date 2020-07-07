@@ -158,7 +158,7 @@ impl<'a> EKS<'a> {
         match exec_with_envs_and_output(
             format!("{} terraform", root_dir).as_str(),
             args,
-            vec![("TF_PLUGIN_CACHE_DIR", "~/.terraform.d/plugin-cache")],
+            vec![("TF_PLUGIN_CACHE_DIR", "$HOME/.terraform.d/plugin-cache")],
             |line| {
                 println!("{}", line.unwrap());
             },
