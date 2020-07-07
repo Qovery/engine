@@ -6,6 +6,7 @@ use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
 
+use crate::models::Request;
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use evmap::{ReadHandle, WriteHandle};
 use uuid::Uuid;

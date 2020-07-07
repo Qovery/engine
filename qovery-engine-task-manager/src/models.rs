@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -5,8 +7,10 @@ use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::gcp::GCP;
+use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
+use qovery_engine::models::Environment;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -15,6 +19,7 @@ pub struct Request {
     pub build_platform: BuildPlatform,
     pub cloud_provider: CloudProvider,
     pub container_registry: ContainerRegistry,
+    pub environment: Environment,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::cloud_provider::aws::databases::PostgreSQL;
 use crate::cloud_provider::service::{DatabaseOptions, Service};
 use crate::cloud_provider::CloudProvider as CP;
@@ -5,7 +7,7 @@ use crate::cloud_provider::Kind as CPKind;
 use chrono::{DateTime, Utc};
 use std::hash::Hash;
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
     pub deployment: Deployment,
     pub owner_id: String,
@@ -25,13 +27,13 @@ impl Environment {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Deployment {
     pub id: String,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum Action {
     Create,
     Pause,
@@ -39,13 +41,13 @@ pub enum Action {
     Idle,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct CloudProvider {
     pub name: String,
     pub region: String,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     pub id: String,
     pub name: String,
@@ -57,35 +59,35 @@ pub struct Application {
     pub environment_variables: Vec<EnvironmentVariable>,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct GitCredentials {
     pub login: String,
     pub access_token: String,
     pub expired_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Storage {}
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Router {
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct CustomDomain {}
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Route {}
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Database {
     pub id: String,
     // TODO serde rename property
@@ -126,8 +128,8 @@ impl Database {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Snapshot {}
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentError {}

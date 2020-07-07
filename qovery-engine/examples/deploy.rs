@@ -96,7 +96,22 @@ fn main() {
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
     );
 
-    let config = Config::new(&build_platform, &container_registry, &cloud_provider);
+    let nodes: Vec<Node> = vec![];
+
+    let eks = EKS::new(
+        "123abc",
+        "my-k8s-cluster",
+        "1.14",
+        region.as_str(),
+        &cloud_provider,
+        nodes,
+    );
+
+    let config = Config::new(
+        Box::new(build_platform),
+        Box::new(container_registry),
+        Box::new(cloud_provider),
+    );
 
     let session = match config.session() {
         Ok(session) => session,
@@ -112,17 +127,6 @@ fn main() {
     };
 
     let mut tx = session.transaction();
-
-    let nodes: Vec<Node> = vec![];
-
-    let eks = EKS::new(
-        "123abc",
-        "my-k8s-cluster",
-        "1.14",
-        region.as_str(),
-        &cloud_provider,
-        nodes,
-    );
 
     match tx.build(&environment) {
         Ok(_) => {}

@@ -12,7 +12,7 @@ use crossbeam_channel::unbounded;
 use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::{Request, Response};
 use qovery_engine_task_manager::task_manager::{Task, TaskManager};
-use qovery_engine_task_manager::tasks::CreateInfrastructureTask;
+use qovery_engine_task_manager::tasks::InfrastructureTask;
 
 #[test]
 fn create_infrastructure() -> Result<(), Error> {
@@ -46,7 +46,7 @@ fn create_infrastructure() -> Result<(), Error> {
         debug!("{}", msg);
         match serde_json::from_slice::<Request>(msg.data.as_slice()) {
             Ok(req) => {
-                tx_task.send(Box::new(CreateInfrastructureTask::new(req)));
+                tx_task.send(Box::new(InfrastructureTask::new(req)));
                 msg.respond(Response::new(None).as_json_string());
             }
             Err(err) => {
