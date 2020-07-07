@@ -10,6 +10,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "app"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "env_logger",
+ "log",
+ "nats",
+ "qovery-engine",
+ "qovery-engine-shared",
+ "qovery-engine-task-manager",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "arc-swap"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1409,19 +1425,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "qovery-engine-app"
+name = "qovery-engine-shared"
+version = "0.1.0"
+
+[[package]]
+name = "qovery-engine-task-manager"
 version = "0.1.0"
 dependencies = [
  "chrono",
  "crossbeam-channel",
- "env_logger",
  "evmap",
  "log",
- "nats",
  "qovery-engine",
  "serde",
  "serde_json",
- "spmc",
  "uuid",
 ]
 
@@ -2067,12 +2084,6 @@ dependencies = [
  "redox_syscall",
  "winapi 0.3.9",
 ]
-
-[[package]]
-name = "spmc"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02a8428da277a8e3a15271d79943e80ccc2ef254e78813a166a08d65e4c3ece5"
 
 [[package]]
 name = "standback"

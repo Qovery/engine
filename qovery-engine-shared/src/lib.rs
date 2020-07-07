@@ -8,11 +8,11 @@ pub fn subject<'a>(mode: &'a Mode, subject: &'a str) -> String {
     }
 }
 
-pub type CloudProvider<'a> = &'a str;
-pub type Region<'a> = &'a str;
-pub type Customer<'a> = &'a str;
+pub type CloudProvider = String;
+pub type Region = String;
+pub type Customer = String;
 
-pub enum Mode<'a> {
+pub enum Mode {
     Local,
-    Cloud(Customer<'a>, CloudProvider<'a>, Region<'a>),
+    Cloud(Customer, CloudProvider, Region),
 }

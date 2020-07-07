@@ -6,9 +6,9 @@ extern crate serde;
 use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{Error, Read};
-use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
+use std::{env, thread};
 
 use crossbeam_channel::{unbounded, Sender};
 use nats::Connection;
@@ -65,11 +65,29 @@ fn listen_for_events(
 pub fn main() -> Result<(), Error> {
     env_logger::init();
 
-    // TODO use CLI
-    let mode = Mode::Cloud("a1cd1w2xkw", "aws", "us-east-2");
-    let nats_server = "localhost:4222";
+    let customer = env::var("CUSTOMER");
+    let cloud_provider = env::var("CLOUD_PROVIDER");
+    let region = env::var("REGION");
+    let nats_server = env::var("NATS_SERVER").expect("NATS_SERVER is mandatory");
 
-    let name = match mode {
+    let mode = if customer.is_ok() && cloud_provider.is_ok() && region.is_ok() {
+        let c = customer.unwrap();
+        let cp = cloud_provider.unwrap();
+        let r = region.unwrap();
+
+        info!("starting in cloud mode");
+        info!("customer: {}", c.as_str());
+        info!("cloud provider: {}", cp.as_str());
+        info!("region: {}", r.as_str());
+        Mode::Cloud(c, cp, r)
+    } else {
+        info!("starting in local mode");
+        Mode::Local
+    };
+
+    info!("nats server: {}", nats_server.as_str());
+
+    let name = match &mode {
         Mode::Local => "qovery-engine-app.local".to_string(),
         Mode::Cloud(customer, cloud_provider, region) => format!(
             "qovery-engine-app.{}.{}.{}",
@@ -79,7 +97,7 @@ pub fn main() -> Result<(), Error> {
 
     let nc = nats::Options::new()
         .with_name(name.as_str())
-        .connect(nats_server)?;
+        .connect(nats_server.as_str())?;
 
     let (tx_task, rx_task) = unbounded::<Box<dyn Task>>();
     thread::spawn(move || {
