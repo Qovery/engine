@@ -9,18 +9,13 @@
 //  values = [file("chart_values/cert-manager.yaml")]
 //
 //  set {
-//    name = "image.tag"
-//    value = "0.14.3"
+//    name = "version"
+//    value = "0.15.2"
 //  }
 //
 //  set {
-//    name = "webhook.imag.tag"
-//    value = "0.14.3"
-//  }
-//
-//  set {
-//    name = "cainjector.image.tag"
-//    value = "0.14.3"
+//    name = "installCRDs"
+//    value = "true"
 //  }
 //
 //  depends_on = [aws_eks_cluster.eks_cluster]
