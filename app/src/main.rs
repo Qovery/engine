@@ -1,3 +1,5 @@
+mod tasks;
+
 #[macro_use]
 extern crate serde;
 
@@ -10,9 +12,9 @@ use std::time::Duration;
 
 use crossbeam_channel::unbounded;
 
+use crate::tasks::CreateInfrastructureTask;
 use qovery_engine_task_manager::models::{Request, Response};
 use qovery_engine_task_manager::task_manager::{Task, TaskManager};
-use qovery_engine_task_manager::tasks::CreateInfrastructureTask;
 
 fn subject<'a>(mode: &'a Mode, subject: &'a str) -> String {
     match mode {

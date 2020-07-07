@@ -23,7 +23,7 @@ pub struct TaskManager {
 impl TaskManager {
     pub fn new() -> Self {
         let (sender, receiver) = unbounded::<InternalTask>();
-        let (status_by_task_id_r, mut status_by_task_id_w) = evmap::new::<Uuid, Status>();
+        let (status_by_task_id_r, status_by_task_id_w) = evmap::new::<Uuid, Status>();
         let status_by_task_id_w = Arc::new(Mutex::new(status_by_task_id_w));
 
         TaskManager {
