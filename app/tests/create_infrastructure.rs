@@ -1,8 +1,5 @@
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate serde;
-
 use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{Error, Read};
@@ -17,7 +14,8 @@ use qovery_engine_task_manager::models::{Request, Response};
 use qovery_engine_task_manager::task_manager::{Task, TaskManager};
 use qovery_engine_task_manager::tasks::CreateInfrastructureTask;
 
-pub fn main() -> Result<(), Error> {
+#[test]
+fn create_infrastructure() -> Result<(), Error> {
     env_logger::init();
 
     let name = "qovery-engine-app";
@@ -59,11 +57,13 @@ pub fn main() -> Result<(), Error> {
         Ok(())
     });
 
-    let (tx_quit, rx_quit) = unbounded::<bool>();
+    let mut create_cluster_file = File::open("tests/assets/create-infrastructure.json").unwrap();
 
-    info!("server started and listening for incoming requests");
-    let _ = rx_quit.recv();
-    // if released then quit
+    let mut buff = String::new();
+    create_cluster_file.read_to_string(&mut buff).unwrap();
 
-    Ok(())
+    loop {
+        nc.request(create_infrastructure_subject.as_str(), buff.as_bytes());
+        sleep(Duration::from_secs(30));
+    }
 }

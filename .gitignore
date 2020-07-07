@@ -3,5 +3,6 @@ qovery-engine/Cargo.lock
 *.iml
 .idea
 .qovery-workspace
+app/.qovery-workspace
 .terraform/
 NOTES.txt

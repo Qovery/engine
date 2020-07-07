@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "qovery-engine",
+    "qovery-engine-shared",
     "qovery-engine-task-manager",
     "app",
 ]

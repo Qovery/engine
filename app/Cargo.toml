@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 qovery-engine = { path = "../qovery-engine" }
+qovery-engine-shared = { path = "../qovery-engine-shared" }
 qovery-engine-task-manager = { path = "../qovery-engine-task-manager" }
 crossbeam-channel = "0.4.2"
 nats = "0.6.0"

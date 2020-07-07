@@ -160,7 +160,7 @@ impl<'a> EKS<'a> {
             args,
             vec![("TF_PLUGIN_CACHE_DIR", "$HOME/.terraform.d/plugin-cache")],
             |line| {
-                println!("{}", line.unwrap());
+                info!("{}", line.unwrap());
             },
         ) {
             Err(err) => return Err(err),
