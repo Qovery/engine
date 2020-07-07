@@ -1,8 +1,8 @@
 apiVersion: v1
 name: aws-node-termination-handler
 description: A Helm chart for the AWS Node Termination Handler
-version: 0.7.5
-appVersion: 1.4.0
+version: 0.8.0
+appVersion: 1.5.0
 home: https://github.com/aws/eks-charts
 icon: https://raw.githubusercontent.com/aws/eks-charts/master/docs/logo/aws.png
 sources:

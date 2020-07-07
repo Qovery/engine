@@ -6,7 +6,17 @@ resource "helm_release" "prometheus-operator" {
   atomic = true
   max_history = 50
 
-  values = ["chart_values/prometheus_operator.yaml"]
+  values = [file("chart_values/prometheus_operator.yaml")]
+
+  set {
+    name = "nameOverride"
+    value = "prometheus-operator"
+  }
+
+  set {
+    name = "fullnameOverride"
+    value = "prometheus-operator"
+  }
 
   depends_on = [aws_eks_cluster.eks_cluster]
 }

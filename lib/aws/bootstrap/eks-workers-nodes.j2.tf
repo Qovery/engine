@@ -25,8 +25,10 @@ resource "aws_eks_node_group" "eks-cluster-workers-{{ loop.index }}" {
     source_security_group_ids = [aws_security_group.eks_cluster_workers.id]
   }
 
-  lifecycle {
-    create_before_destroy = true
+  timeouts {
+    create = "60m"
+    delete = "60m"
+    update = "60m"
   }
 
   # Ensure that IAM Role permissions are created before and deleted after EKS Node Group handling.

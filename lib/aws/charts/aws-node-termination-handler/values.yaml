@@ -4,7 +4,7 @@
 
 image:
   repository: amazon/aws-node-termination-handler
-  tag: v1.4.0
+  tag: v1.5.0
   pullPolicy: IfNotPresent
   pullSecrets: []
 
@@ -32,6 +32,8 @@ enableSpotInterruptionDraining: ""
 
 ## enableScheduledEventDraining [EXPERIMENTAL] If true, drain nodes before the maintenance window starts for an EC2 instance scheduled event
 enableScheduledEventDraining: ""
+
+taintNode: false
 
 ## dryRun tells node-termination-handler to only log calls to kubernetes control plane
 dryRun: false
@@ -76,7 +78,10 @@ nodeSelector: {}
 nodeSelectorTermsOs: ""
 nodeSelectorTermsArch: ""
 
-tolerations: 
+enablePrometheusServer: false
+prometheusServerPort: "9092"
+
+tolerations:
   - operator: "Exists"
 
 affinity: {}
