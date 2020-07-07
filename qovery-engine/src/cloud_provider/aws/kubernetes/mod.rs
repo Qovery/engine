@@ -45,7 +45,7 @@ impl<'a> EKS<'a> {
         nodes: Vec<Node>,
     ) -> Self {
         let template_directory = "lib/aws/bootstrap".to_string();
-        let tera_template_string = format!("{}/**/*.j2.tf", template_directory);
+        let tera_template_string = format!("{}/**/*.j2.*", template_directory);
 
         let tera = match Tera::new(tera_template_string.as_str()) {
             Ok(t) => t,
@@ -101,7 +101,7 @@ impl<'a> EKS<'a> {
 
         context.insert("eks_worker_nodes", &worker_nodes);
 
-        let file_entries = WalkDir::new(self.template_directory.as_str())
+        let files = WalkDir::new(self.template_directory.as_str())
             .follow_links(true)
             .into_iter()
             .filter_map(|e| e.ok())
@@ -114,10 +114,14 @@ impl<'a> EKS<'a> {
             .collect::<Vec<_>>();
 
         let mut results: Vec<RenderedTemplate> = vec![];
-        for entry in file_entries.into_iter() {
-            let j2_file_name = entry.file_name().to_str().unwrap();
+        for file in files.into_iter() {
+            let path_str = file.path().to_str().unwrap();
+            let j2_path = path_str.replace(self.template_directory.as_str(), "");
+
+            let j2_file_name = file.file_name().to_str().unwrap();
             let file_name = j2_file_name.replace(".j2", "");
-            let content = self.tera.render(j2_file_name, &context)?;
+
+            let content = self.tera.render(&j2_path[1..], &context)?;
             results.push(RenderedTemplate::new(file_name, content));
         }
 
