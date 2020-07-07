@@ -1,4 +1,5 @@
 use crate::cloud_provider::kubernetes::KubernetesNode;
+use std::any::Any;
 
 pub struct Node {
     total_cpu: u8,
@@ -59,6 +60,10 @@ impl KubernetesNode for Node {
 
         let (_, _, instance_type) = self.instance_types_table.last().unwrap();
         return instance_type;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

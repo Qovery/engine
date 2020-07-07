@@ -121,7 +121,7 @@ fn main() {
         "1.14",
         region.as_str(),
         &cloud_provider,
-        &nodes,
+        nodes,
     );
 
     match tx.build(&environment) {

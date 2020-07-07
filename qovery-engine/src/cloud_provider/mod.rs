@@ -2,6 +2,7 @@ use crate::build_platform::Image;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use rusoto_core::RusotoError;
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 
 pub mod application;
 pub mod aws;
@@ -15,6 +16,7 @@ pub trait CloudProvider {
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), CloudProviderError>;
     fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError>;
+    fn as_any(&self) -> &dyn Any;
 }
 
 #[derive(Debug)]

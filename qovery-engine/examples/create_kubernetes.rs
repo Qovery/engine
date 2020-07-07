@@ -70,7 +70,7 @@ fn main() {
         "1.14",
         "eu-west-3",
         &cloud_provider,
-        &nodes,
+        nodes,
     );
     tx.create_kubernetes(&eks_eu_west_3);
 

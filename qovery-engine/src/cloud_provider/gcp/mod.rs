@@ -1,5 +1,6 @@
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
+use std::any::Any;
 
 pub struct GCP {
     id: String,
@@ -26,6 +27,10 @@ impl CloudProvider for GCP {
 
     fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError> {
         Ok(vec![])
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

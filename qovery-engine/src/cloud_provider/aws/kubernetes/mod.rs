@@ -30,7 +30,7 @@ pub struct EKS<'a> {
     version: String,
     region: Region,
     cloud_provider: &'a AWS,
-    nodes: &'a Vec<Node>,
+    nodes: Vec<Node>,
     tera: Tera,
     template_directory: String,
 }
@@ -42,7 +42,7 @@ impl<'a> EKS<'a> {
         version: &str,
         region: &str,
         cloud_provider: &'a AWS,
-        nodes: &'a Vec<Node>,
+        nodes: Vec<Node>,
     ) -> Self {
         let template_directory = "lib/aws/bootstrap".to_string();
         let tera_template_string = format!("{}/**/*.j2.tf", template_directory);
@@ -366,7 +366,7 @@ mod tests {
         let aws = aws();
         let nodes = nodes();
 
-        let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, &nodes);
+        let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, nodes);
         assert_eq!(eks.generate_j2_templates().is_ok(), true);
     }
 
@@ -375,7 +375,7 @@ mod tests {
         let aws = aws();
         let nodes = nodes();
 
-        let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, &nodes);
+        let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, nodes);
         assert_eq!(
             eks.generate_and_copy_bootstrap_files_into_dir("/tmp/xxx")
                 .is_ok(),

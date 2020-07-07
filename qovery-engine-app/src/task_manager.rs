@@ -95,7 +95,8 @@ impl TaskManager {
 
 pub trait Task: Send {
     fn id(&self) -> &Uuid;
-    fn run(self: Box<Self>, sender: Sender<Message>);
+    fn update_status(&self, sender: &Sender<Message>, status: Status);
+    fn run(&self, sender: Sender<Message>);
 }
 
 pub struct InternalTask {

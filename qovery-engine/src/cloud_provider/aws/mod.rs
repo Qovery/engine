@@ -5,6 +5,7 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
 use crate::runtime::async_run;
+use std::any::Any;
 
 pub mod databases;
 pub mod kubernetes;
@@ -65,6 +66,10 @@ impl CloudProvider for AWS {
 
     fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError> {
         Ok(vec![])
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
