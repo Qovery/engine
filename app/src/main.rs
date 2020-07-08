@@ -5,7 +5,7 @@ extern crate serde;
 
 use std::borrow::Borrow;
 use std::fs::File;
-use std::io::{Error, Read};
+use std::io::{Error, Read, Write};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, thread};
@@ -19,6 +19,7 @@ use qovery_engine_task_manager::task_manager::{Task, TaskManager};
 use qovery_engine_task_manager::tasks::{ApplicationTask, InfrastructureTask};
 
 use crate::TaskSelector::{Application, Infrastructure};
+use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
 
 enum TaskSelector {
     Infrastructure(&'static str),
@@ -31,7 +32,7 @@ fn listen_for_events(
     mode: &Mode,
     tx: Sender<Box<dyn Task>>,
 ) -> Result<(), Error> {
-    let subject_str = subject(
+    let subject_name = subject(
         mode,
         match task_selector {
             TaskSelector::Infrastructure(s) => s,
@@ -39,7 +40,8 @@ fn listen_for_events(
         },
     );
 
-    let sub = nc.queue_subscribe(subject_str.as_str(), subject_str.as_str())?;
+    let sub = nc.queue_subscribe(subject_name.as_str(), subject_name.as_str())?;
+    info!("subscribe to {}", subject_name.as_str());
 
     sub.with_handler(move |msg| {
         debug!("{}", msg);
@@ -85,7 +87,7 @@ pub fn main() -> Result<(), Error> {
         Mode::Local
     };
 
-    info!("nats server: {}", nats_server.as_str());
+    info!("NATS server: {}", nats_server.as_str());
 
     let name = match &mode {
         Mode::Local => "qovery-engine-app.local".to_string(),
@@ -95,9 +97,27 @@ pub fn main() -> Result<(), Error> {
         ),
     };
 
+    info!("NATS client name: {}", name.as_str());
+
+    let mut f = File::open("certs/ca.pem").unwrap();
+    let mut f_content = String::new();
+    f.read_to_string(&mut f_content);
+
+    let tls_connector = TlsConnector::builder()
+        //.add_root_certificate(nats::tls::Certificate::from_pem(f_content.as_bytes()).unwrap())
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true)
+        .build()
+        .unwrap();
+
+    info!("connect to the NATS server...");
+
     let nc = nats::Options::new()
         .with_name(name.as_str())
+        //.tls_connector(tls_connector) // FIXME
         .connect(nats_server.as_str())?;
+
+    info!("connection to the NATS server established");
 
     let (tx_task, rx_task) = unbounded::<Box<dyn Task>>();
     thread::spawn(move || {
