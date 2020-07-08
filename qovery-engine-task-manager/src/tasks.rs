@@ -6,6 +6,7 @@ use uuid::Uuid;
 use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::config::Config;
 use qovery_engine::error::ConfigurationError;
+use qovery_engine::transaction::TransactionResult;
 
 use crate::models::{Action, Request};
 use crate::task_manager::{InternalTask, Message, Status, Task};
@@ -39,8 +40,8 @@ impl Task for InfrastructureTask {
     }
 
     fn run(&self, sender: Sender<Message>) {
-        info!("infrastructure task started");
-        self.update_status(&sender, Status::Running);
+        info!("infrastructure task {} started", self.id.to_string());
+        self.update_status(&sender, Status::Running(None));
 
         let build_platform = self.request.build_platform.as_engine_build_platform();
         let cloud_provider = self.request.cloud_provider.as_engine_cloud_provider();
@@ -60,7 +61,7 @@ impl Task for InfrastructureTask {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed);
+                self.update_status(&sender, Status::Failed(None));
                 None
             }
         };
@@ -88,10 +89,22 @@ impl Task for InfrastructureTask {
             Action::Delete => tx.delete_kubernetes(kubernetes.borrow()),
         };
 
-        tx.commit();
+        // TODO implement on_progress callback and send status update in real time
 
-        self.update_status(&sender, Status::Done);
-        info!("infrastructure task finished");
+        match tx.commit() {
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(commit_err) => {
+                // FIXME return error message
+                self.update_status(&sender, Status::Failed(None));
+            }
+            TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
+                // FIXME return error message
+                self.update_status(&sender, Status::Failed(None));
+            }
+        }
+
+        self.update_status(&sender, Status::Done(None));
+        info!("infrastructure task {} finished", self.id.to_string());
     }
 }
 
@@ -124,8 +137,8 @@ impl Task for EnvironmentTask {
     }
 
     fn run(&self, sender: Sender<Message>) {
-        info!("application task started");
-        self.update_status(&sender, Status::Running);
+        info!("environment task {} started", self.id.to_string());
+        self.update_status(&sender, Status::Running(None));
 
         let build_platform = self.request.build_platform.as_engine_build_platform();
         let cloud_provider = self.request.cloud_provider.as_engine_cloud_provider();
@@ -145,7 +158,7 @@ impl Task for EnvironmentTask {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed);
+                self.update_status(&sender, Status::Failed(None));
                 None
             }
         };
@@ -175,9 +188,21 @@ impl Task for EnvironmentTask {
             Action::Delete => unimplemented!(),
         };
 
-        tx.commit();
+        // TODO implement on_progress callback and send status update in real time
 
-        self.update_status(&sender, Status::Done);
-        info!("application task finished");
+        match tx.commit() {
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(commit_err) => {
+                // FIXME return error message
+                self.update_status(&sender, Status::Failed(None));
+            }
+            TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
+                // FIXME return error message
+                self.update_status(&sender, Status::Failed(None));
+            }
+        }
+
+        self.update_status(&sender, Status::Done(None));
+        info!("environment task {} finished", self.id.to_string());
     }
 }

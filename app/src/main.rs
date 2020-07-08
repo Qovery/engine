@@ -20,10 +20,21 @@ use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::TaskSelector::{Environment, Infrastructure};
 use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
+use std::path::Path;
 
 enum TaskSelector {
     Infrastructure(&'static str),
     Environment(&'static str),
+}
+
+fn subject_name(mode: &Mode, task_selector: &TaskSelector) -> String {
+    subject(
+        mode,
+        match task_selector {
+            TaskSelector::Infrastructure(s) => s,
+            TaskSelector::Environment(s) => s,
+        },
+    )
 }
 
 fn listen_for_events(
@@ -32,14 +43,7 @@ fn listen_for_events(
     mode: &Mode,
     tx: Sender<Box<dyn Task>>,
 ) -> Result<(), Error> {
-    let subject_name = subject(
-        mode,
-        match task_selector {
-            TaskSelector::Infrastructure(s) => s,
-            TaskSelector::Environment(s) => s,
-        },
-    );
-
+    let subject_name = subject_name(mode, &task_selector);
     let sub = nc.queue_subscribe(subject_name.as_str(), subject_name.as_str())?;
     info!("subscribe to {}", subject_name.as_str());
 
@@ -76,6 +80,11 @@ pub fn main() -> Result<(), Error> {
     let cloud_provider = env::var("CLOUD_PROVIDER");
     let region = env::var("REGION");
     let nats_server = env::var("NATS_SERVER").expect("NATS_SERVER is mandatory");
+
+    info!(
+        "running from current directory: {}",
+        env::current_dir().unwrap().to_str().unwrap()
+    );
 
     let mode = if customer.is_ok() && cloud_provider.is_ok() && region.is_ok() {
         let c = customer.unwrap();
@@ -124,10 +133,21 @@ pub fn main() -> Result<(), Error> {
 
     info!("connection to the NATS server established");
 
+    let nc_1 = nc.clone();
+
     let (tx_task, rx_task) = unbounded::<Box<dyn Task>>();
     thread::spawn(move || {
         let mut task_manager = TaskManager::new();
-        task_manager.run();
+        let _ = task_manager.run();
+
+        thread::spawn(move || loop {
+            // TODO send back the message to a topic: E.g core.task.status
+            // json: {"status": "Failed", "message": "blablabla", "id": "abc", "created_at": "<datetime>"}
+
+            //let msg = rx_task_status.recv().unwrap();
+            //let subject_name = subject_name(&mode, Infrastructure(""));
+            //nc_1.request(subject_name.as_str(), msg.unwrap())
+        });
 
         loop {
             let task = rx_task.recv().unwrap();

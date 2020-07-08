@@ -106,11 +106,7 @@ fn main() {
         nodes,
     );
 
-    let config = Config::new(
-        Box::new(build_platform),
-        Box::new(container_registry),
-        Box::new(cloud_provider),
-    );
+    let config = Config::new(&build_platform, &container_registry, &cloud_provider);
 
     let session = match config.session() {
         Ok(session) => session,

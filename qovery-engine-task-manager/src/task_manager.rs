@@ -40,12 +40,12 @@ impl TaskManager {
         self.status_by_task_id_w
             .lock()
             .unwrap()
-            .insert(task.id().clone(), Status::Waiting)
+            .insert(task.id().clone(), Status::Waiting(None))
             .refresh();
 
         let _ = self.sender.send(InternalTask {
             task,
-            status: Status::Waiting,
+            status: Status::Waiting(None),
         });
     }
 
@@ -88,6 +88,12 @@ impl TaskManager {
         let _ = thread::spawn(move || loop {
             let internal_task = self_receiver.recv().unwrap();
             internal_task.task.run(tx.clone());
+
+            if self_receiver.is_empty() {
+                info!("no remaining task to run - waiting for a new one...");
+            } else {
+                info!("it remains {} tasks to run", self_receiver.len());
+            }
         });
 
         Ok(rx)
@@ -105,17 +111,19 @@ pub struct InternalTask {
     pub status: Status,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Status {
-    Waiting,
-    Running,
-    Failed,
-    Done,
+    Waiting(Option<String>),
+    Running(Option<String>),
+    Warning(Option<String>),
+    Error(Option<String>),
+    Failed(Option<String>),
+    Done(Option<String>),
 }
 
 impl evmap::ShallowCopy for Status {
     unsafe fn shallow_copy(&self) -> ManuallyDrop<Self> {
-        ManuallyDrop::new(*self)
+        ManuallyDrop::new(self.clone())
     }
 }
 

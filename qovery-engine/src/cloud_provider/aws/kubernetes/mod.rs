@@ -274,8 +274,9 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_create_error(&self) -> Result<(), KubernetesError> {
-        info!("EKS.on_create_error() called for {}", self.name());
-        unimplemented!()
+        warn!("EKS.on_create_error() called for {}", self.name());
+        // FIXME
+        Err(KubernetesError::Error)
     }
 
     fn on_upgrade(&self) -> Result<(), KubernetesError> {
@@ -284,7 +285,7 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_upgrade_error(&self) -> Result<(), KubernetesError> {
-        info!("EKS.on_upgrade_error() called for {}", self.name());
+        warn!("EKS.on_upgrade_error() called for {}", self.name());
         unimplemented!()
     }
 
@@ -294,7 +295,7 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_downgrade_error(&self) -> Result<(), KubernetesError> {
-        info!("EKS.on_downgrade_error() called for {}", self.name());
+        warn!("EKS.on_downgrade_error() called for {}", self.name());
         unimplemented!()
     }
 
@@ -304,7 +305,7 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_delete_error(&self) -> Result<(), KubernetesError> {
-        info!("EKS.on_delete_error() called for {}", self.name());
+        warn!("EKS.on_delete_error() called for {}", self.name());
         unimplemented!()
     }
 
