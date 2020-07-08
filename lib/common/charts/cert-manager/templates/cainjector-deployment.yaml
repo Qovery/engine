@@ -35,12 +35,12 @@ spec:
         app.kubernetes.io/managed-by: {{ .Release.Service }}
         app.kubernetes.io/component: "cainjector"
         helm.sh/chart: {{ include "cainjector.chart" . }}
-      annotations:
       {{- if .Values.cainjector.podAnnotations }}
+      annotations:
 {{ toYaml .Values.cainjector.podAnnotations | indent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "cainjector.fullname" . }}
+      serviceAccountName: {{ template "cainjector.serviceAccountName" . }}
       {{- if .Values.global.priorityClassName }}
       priorityClassName: {{ .Values.global.priorityClassName | quote }}
       {{- end }}

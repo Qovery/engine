@@ -1,3 +1,6 @@
+# Default values for cert-manager.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
 global:
   ## Reference to one or more secrets to be used when pulling images
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
@@ -19,9 +22,11 @@ global:
 
   leaderElection:
     # Override the namespace used to store the ConfigMap for leader election
-    namespace: "cert-manager"
+    namespace: "kube-system"
 
-replicaCount: 2
+installCRDs: false
+
+replicaCount: 1
 
 strategy: {}
   # type: RollingUpdate
@@ -29,10 +34,15 @@ strategy: {}
   #   maxSurge: 0
 #   maxUnavailable: 1
 
+# Comma separated list of feature gates that should be enabled on the
+# controller pod.
+featureGates: ""
 
 image:
   repository: quay.io/jetstack/cert-manager-controller
-  tag: ""
+  # Override the image tag to deploy by setting this variable.
+  # If no value is set, the chart's appVersion will be used.
+  # tag: canary
   pullPolicy: IfNotPresent
 
 # Override the namespace used to store DNS provider credentials etc. for ClusterIssuer
@@ -45,8 +55,9 @@ serviceAccount:
   create: true
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name:
-  annotations: {}
+  # name: ""
+  # Optional additional annotations to add to the controller's ServiceAccount
+  # annotations: {}
 
 # Optional additional arguments
 extraArgs: []
@@ -54,7 +65,7 @@ extraArgs: []
   # supporting resources required for each ClusterIssuer (default is kube-system)
   # - --cluster-resource-namespace=kube-system
   # When this flag is enabled, secrets will be automatically removed when the certificate resource is deleted
-#- --enable-certificate-owner-ref=true
+# - --enable-certificate-owner-ref=true
 
 extraEnv: []
 # - name: SOME_VAR
@@ -80,25 +91,38 @@ securityContext: {}
 #   runAsUser: 1000
 #   runAsNonRoot: true
 
+# Container Security Context to be set on the controller component container
+# ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+containerSecurityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+# runAsNonRoot: true
+
+
 volumes: []
 
 volumeMounts: []
 
-deploymentAnnotations: {}
+# Optional additional annotations to add to the controller Deployment
+# deploymentAnnotations: {}
 
-podAnnotations: {}
+# Optional additional annotations to add to the controller Pods
+# podAnnotations: {}
 
 podLabels: {}
+
 # Optional DNS settings, useful if you have a public and private DNS zone for
 # the same domain on Route 53. What follows is an example of ensuring
 # cert-manager can access an ingress or DNS TXT records at all times.
 # NOTE: This requires Kubernetes 1.10 or `CustomPodDNS` feature gate enabled for
 # the cluster to work.
-podDnsPolicy: "None"
-podDnsConfig:
-  nameservers:
-    - "1.1.1.1"
-    - "8.8.8.8"
+# podDnsPolicy: "None"
+# podDnsConfig:
+#   nameservers:
+#     - "1.1.1.1"
+#     - "8.8.8.8"
 
 nodeSelector: {}
 
@@ -107,12 +131,11 @@ ingressShim: {}
   # defaultIssuerKind: ""
 # defaultIssuerGroup: ""
 
-
 prometheus:
   enabled: true
   servicemonitor:
-    enabled: true
-    prometheusInstance: prometheus
+    enabled: false
+    prometheusInstance: default
     targetPort: 9402
     path: /metrics
     interval: 60s
@@ -149,15 +172,6 @@ tolerations: []
 webhook:
   replicaCount: 1
 
-  # The name of the webhook service is fixed in the values.yaml and not based
-  # on the name of the Helm release because the CRD manifests, which are not
-  # managed by Helm, need to hardcode the name of the service for their
-  # conversion webhook configuration.
-  # If you change this value, you must also manually update the
-  # `spec.conversion.webhookClientConfig.service.name` field on all
-  # cert-manager CRD resources as well.
-  serviceName: cert-manager-webhook
-
   strategy: {}
     # type: RollingUpdate
     # rollingUpdate:
@@ -166,9 +180,20 @@ webhook:
 
   securityContext: {}
 
-  deploymentAnnotations: {}
+  # Container Security Context to be set on the webhook component container
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  containerSecurityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
 
-  podAnnotations: {}
+  # Optional additional annotations to add to the webhook Deployment
+  # deploymentAnnotations: {}
+
+  # Optional additional annotations to add to the webhook Pods
+  # podAnnotations: {}
 
   # Optional additional arguments for webhook
   extraArgs: []
@@ -188,15 +213,17 @@ webhook:
     repository: quay.io/jetstack/cert-manager-webhook
     # Override the image tag to deploy by setting this variable.
     # If no value is set, the chart's appVersion will be used.
-    tag: ""
+    # tag: canary
     pullPolicy: IfNotPresent
 
-  # If true, the apiserver's cabundle will be automatically injected into the
-  # webhook's ValidatingWebhookConfiguration resource by the CA injector.
-  # in future this will default to false, as the apiserver can use the loopback
-  # configuration caBundle to talk to itself in kubernetes 1.11+
-  # see https://github.com/kubernetes/kubernetes/pull/62649
-  injectAPIServerCA: true
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    # name: ""
+    # Optional additional annotations to add to the controller's ServiceAccount
+    # annotations: {}
 
   # The port that the webhook should listen on for requests.
   # In GKE private clusters, by default kubernetes apiservers are allowed to
@@ -217,9 +244,21 @@ cainjector:
 
   securityContext: {}
 
-  deploymentAnnotations: {}
+  # Container Security Context to be set on the cainjector component container
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  containerSecurityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
 
-  podAnnotations: {}
+
+  # Optional additional annotations to add to the cainjector Deployment
+  # deploymentAnnotations: {}
+
+  # Optional additional annotations to add to the cainjector Pods
+  # podAnnotations: {}
 
   # Optional additional arguments for cainjector
   extraArgs: []
@@ -239,5 +278,14 @@ cainjector:
     repository: quay.io/jetstack/cert-manager-cainjector
     # Override the image tag to deploy by setting this variable.
     # If no value is set, the chart's appVersion will be used.
-    tag: ""
+    # tag: canary
     pullPolicy: IfNotPresent
+
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    # name: ""
+    # Optional additional annotations to add to the controller's ServiceAccount
+    # annotations: {}
