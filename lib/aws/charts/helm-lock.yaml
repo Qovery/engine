@@ -1,0 +1,14 @@
+charts:
+  - name: aws-limits-exporter
+    repo_name:
+    version:
+  - name: aws-node-termination-handler
+    repo_name: aws
+    version: 0.8.0
+  - name: aws-calico
+    repo_name: aws
+    version: 0.2.3
+
+repos:
+  - name: aws
+    url: https://aws.github.io/eks-charts
