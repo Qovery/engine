@@ -16,14 +16,14 @@ use nats::Connection;
 use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::{Request, Response};
 use qovery_engine_task_manager::task_manager::{Task, TaskManager};
-use qovery_engine_task_manager::tasks::{ApplicationTask, InfrastructureTask};
+use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
-use crate::TaskSelector::{Application, Infrastructure};
+use crate::TaskSelector::{Environment, Infrastructure};
 use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
 
 enum TaskSelector {
     Infrastructure(&'static str),
-    Application(&'static str),
+    Environment(&'static str),
 }
 
 fn listen_for_events(
@@ -36,7 +36,7 @@ fn listen_for_events(
         mode,
         match task_selector {
             TaskSelector::Infrastructure(s) => s,
-            TaskSelector::Application(s) => s,
+            TaskSelector::Environment(s) => s,
         },
     );
 
@@ -49,11 +49,16 @@ fn listen_for_events(
             Ok(req) => {
                 tx.send(match task_selector {
                     TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(req)),
-                    TaskSelector::Application(_) => Box::new(ApplicationTask::new(req)),
+                    TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(req)),
                 });
                 msg.respond(Response::new(None).as_json_string());
             }
             Err(err) => {
+                error!(
+                    "receiving request but JSON decoding error occurred: {:?}",
+                    err
+                );
+                error!("{}", msg);
                 msg.respond(Response::new(Some(err.to_string())).as_json_string());
             }
         };
@@ -99,9 +104,9 @@ pub fn main() -> Result<(), Error> {
 
     info!("NATS client name: {}", name.as_str());
 
-    let mut f = File::open("certs/ca.pem").unwrap();
-    let mut f_content = String::new();
-    f.read_to_string(&mut f_content);
+    //let mut f = File::open("certs/ca.pem").unwrap();
+    //let mut f_content = String::new();
+    //f.read_to_string(&mut f_content);
 
     let tls_connector = TlsConnector::builder()
         //.add_root_certificate(nats::tls::Certificate::from_pem(f_content.as_bytes()).unwrap())
@@ -137,7 +142,7 @@ pub fn main() -> Result<(), Error> {
         tx_task.clone(),
     )?;
 
-    listen_for_events(Application("application"), &nc, &mode, tx_task.clone())?;
+    listen_for_events(Environment("environment"), &nc, &mode, tx_task.clone())?;
 
     let (tx_quit, rx_quit) = unbounded::<bool>();
 

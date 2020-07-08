@@ -1,11 +1,12 @@
+use std::hash::Hash;
+
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::aws::databases::PostgreSQL;
 use crate::cloud_provider::service::{DatabaseOptions, Service};
 use crate::cloud_provider::CloudProvider as CP;
 use crate::cloud_provider::Kind as CPKind;
-use chrono::{DateTime, Utc};
-use std::hash::Hash;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
@@ -13,7 +14,6 @@ pub struct Environment {
     pub owner_id: String,
     pub project_id: String,
     pub environment_id: String,
-    pub environment_type: String,
     pub action: Action,
     pub cloud_provider: CloudProvider,
     pub applications: Vec<Application>,
@@ -89,11 +89,11 @@ pub struct Route {}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Database {
+    pub kind: String,
+    pub action: Action,
     pub id: String,
-    // TODO serde rename property
-    pub _type: String,
-    pub version: String,
     pub name: String,
+    pub version: String,
     pub fqdn_id: String,
     pub fqdn: String,
     pub port: u16,
@@ -101,15 +101,14 @@ pub struct Database {
     pub password: String,
     pub disk_size_in_mb: u32,
     pub host_provider: String,
-    pub to_delete: bool,
     pub status_url: String,
-    pub snapshot: Snapshot,
+    pub snapshot: Option<Snapshot>,
 }
 
 impl Database {
     pub fn to_service(&self, cloud_provider: &dyn CP) -> Option<Box<dyn Service>> {
         match cloud_provider.kind() {
-            CPKind::AWS => match self._type.to_lowercase().as_str() {
+            CPKind::AWS => match self.kind.to_lowercase().as_str() {
                 "postgresql" => Some(Box::new(PostgreSQL {
                     id: self.id.clone(),
                     name: self.name.clone(),

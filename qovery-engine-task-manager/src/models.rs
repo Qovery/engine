@@ -19,7 +19,7 @@ pub struct Request {
     pub build_platform: BuildPlatform,
     pub cloud_provider: CloudProvider,
     pub container_registry: ContainerRegistry,
-    pub environment: Environment,
+    pub environment: Option<Environment>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

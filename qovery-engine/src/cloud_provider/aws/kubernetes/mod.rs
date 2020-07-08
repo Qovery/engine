@@ -202,7 +202,7 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_create(&self) -> Result<(), KubernetesError> {
-        debug!("EKS.on_create() called for {}", self.name());
+        info!("EKS.on_create() called for {}", self.name());
         let temp_dir = workspace_directory(format!("bootstrap/{}", self.name()));
         let temp_dir_path_str = temp_dir.as_str();
 
@@ -233,7 +233,7 @@ impl<'a> Kubernetes for EKS<'a> {
         };
 
         // terraform init
-        debug!("terraform init on EKS for {}", self.name());
+        info!("terraform init on EKS for {}", self.name());
         match self.terraform_exec(
             temp_dir_path_str,
             vec!["init", "-backend-config=backend.tf", "-no-color"],
@@ -243,14 +243,14 @@ impl<'a> Kubernetes for EKS<'a> {
         };
 
         // terraform validate config
-        debug!("terraform validate config on EKS for {}", self.name());
+        info!("terraform validate config on EKS for {}", self.name());
         match self.terraform_exec(temp_dir_path_str, vec!["validate"]) {
             Err(err) => return on_error(err),
             _ => {}
         };
 
         // terraform plan
-        debug!("terraform plan on EKS for {}", self.name());
+        info!("terraform plan on EKS for {}", self.name());
         match self.terraform_exec(
             temp_dir_path_str,
             vec!["plan", "-out", "tf_plan", "-no-color"],
@@ -260,7 +260,7 @@ impl<'a> Kubernetes for EKS<'a> {
         };
 
         // terraform apply
-        debug!("terraform apply on EKS for {}", self.name());
+        info!("terraform apply on EKS for {}", self.name());
         match self.terraform_exec(
             temp_dir_path_str,
             vec!["apply", "-auto-approve", "-no-color", "tf_plan"],
@@ -274,37 +274,37 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_create_error(&self) -> Result<(), KubernetesError> {
-        debug!("EKS.on_create_error() called for {}", self.name());
+        info!("EKS.on_create_error() called for {}", self.name());
         unimplemented!()
     }
 
     fn on_upgrade(&self) -> Result<(), KubernetesError> {
-        debug!("EKS.on_upgrade() called for {}", self.name());
+        info!("EKS.on_upgrade() called for {}", self.name());
         unimplemented!()
     }
 
     fn on_upgrade_error(&self) -> Result<(), KubernetesError> {
-        debug!("EKS.on_upgrade_error() called for {}", self.name());
+        info!("EKS.on_upgrade_error() called for {}", self.name());
         unimplemented!()
     }
 
     fn on_downgrade(&self) -> Result<(), KubernetesError> {
-        debug!("EKS.on_downgrade() called for {}", self.name());
+        info!("EKS.on_downgrade() called for {}", self.name());
         unimplemented!()
     }
 
     fn on_downgrade_error(&self) -> Result<(), KubernetesError> {
-        debug!("EKS.on_downgrade_error() called for {}", self.name());
+        info!("EKS.on_downgrade_error() called for {}", self.name());
         unimplemented!()
     }
 
     fn on_delete(&self) -> Result<(), KubernetesError> {
-        debug!("EKS.on_delete() called for {}", self.name());
+        info!("EKS.on_delete() called for {}", self.name());
         unimplemented!()
     }
 
     fn on_delete_error(&self) -> Result<(), KubernetesError> {
-        debug!("EKS.on_delete_error() called for {}", self.name());
+        info!("EKS.on_delete_error() called for {}", self.name());
         unimplemented!()
     }
 
@@ -313,12 +313,12 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
-        debug!("EKS.create_service() called for {}", self.name());
+        info!("EKS.create_service() called for {}", self.name());
         unimplemented!()
     }
 
     fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
-        debug!("EKS.delete_service() called for {}", self.name());
+        info!("EKS.delete_service() called for {}", self.name());
         unimplemented!()
     }
 }

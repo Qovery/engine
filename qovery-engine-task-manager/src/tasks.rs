@@ -96,21 +96,21 @@ impl Task for InfrastructureTask {
 }
 
 #[derive(Clone)]
-pub struct ApplicationTask {
+pub struct EnvironmentTask {
     id: Uuid,
     request: Request,
 }
 
-impl ApplicationTask {
+impl EnvironmentTask {
     pub fn new(request: Request) -> Self {
-        ApplicationTask {
+        EnvironmentTask {
             id: Uuid::new_v4(),
             request,
         }
     }
 }
 
-impl Task for ApplicationTask {
+impl Task for EnvironmentTask {
     fn id(&self) -> &Uuid {
         &self.id
     }
@@ -168,8 +168,10 @@ impl Task for ApplicationTask {
             .kubernetes
             .as_engine_kubernetes(cloud_provider.borrow(), nodes.borrow());
 
+        let environment = self.request.environment.as_ref().unwrap();
+
         match self.request.action {
-            Action::Create => tx.deploy(kubernetes.borrow(), self.request.environment.borrow()),
+            Action::Create => tx.deploy(kubernetes.borrow(), environment),
             Action::Delete => unimplemented!(),
         };
 

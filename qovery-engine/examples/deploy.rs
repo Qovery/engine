@@ -45,7 +45,6 @@ fn main() {
         owner_id: "".to_string(),
         project_id: "".to_string(),
         environment_id: "".to_string(),
-        environment_type: "".to_string(),
         action: Action::Create,
         cloud_provider: CP {
             name: "aws".to_string(),
