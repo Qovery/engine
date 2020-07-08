@@ -10,7 +10,7 @@ metadata:
     app.kubernetes.io/component: "webhook"
     helm.sh/chart: {{ include "webhook.chart" . }}
   annotations:
-    cert-manager.io/inject-ca-from-secret: "{{ .Release.Namespace }}/{{ include "webhook.servingCertificate" . }}"
+    cert-manager.io/inject-ca-from-secret: "{{ .Release.Namespace }}/{{ template "webhook.fullname" . }}-ca"
 webhooks:
   - name: webhook.cert-manager.io
     namespaceSelector:
@@ -29,6 +29,7 @@ webhooks:
           - "acme.cert-manager.io"
         apiVersions:
           - v1alpha2
+          - v1alpha3
         operations:
           - CREATE
           - UPDATE
@@ -46,6 +47,6 @@ webhooks:
       caBundle: ""
 {{- end }}
       service:
-        name: {{ .Values.webhook.serviceName }}
+        name: {{ template "webhook.fullname" . }}
         namespace: {{ .Release.Namespace | quote }}
-        path: /mutate
+        path: /validate

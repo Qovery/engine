@@ -20,10 +20,10 @@ This is performed in a separate step to allow you to easily uninstall and reinst
 
 ```bash
 # Kubernetes 1.15+
-$ kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.14.2/cert-manager.crds.yaml
+$ kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.15.2/cert-manager.crds.yaml
 
 # Kubernetes <1.15
-$ kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.14.2/cert-manager-legacy.crds.yaml
+$ kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.15.2/cert-manager-legacy.crds.yaml
 ```
 
 > **Note**: If you're using a Kubernetes version below `v1.15` you will need to install the legacy version of the custom resource definitions.
@@ -73,10 +73,10 @@ delete the previously installed CustomResourceDefinition resources:
 
 ```console
 # Kubernetes 1.15+
-$ kubectl delete -f https://github.com/jetstack/cert-manager/releases/download/v0.14.2/cert-manager.crds.yaml
+$ kubectl delete -f https://github.com/jetstack/cert-manager/releases/download/v0.15.2/cert-manager.crds.yaml
 
 # Kubernetes <1.15
-$ kubectl delete -f https://github.com/jetstack/cert-manager/releases/download/v0.14.2/cert-manager-legacy.crds.yaml
+$ kubectl delete -f https://github.com/jetstack/cert-manager/releases/download/v0.15.2/cert-manager-legacy.crds.yaml
 ```
 
 ## Configuration
@@ -91,11 +91,13 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `global.podSecurityPolicy.enabled` | If `true`, create and use PodSecurityPolicy (includes sub-charts) | `false` |
 | `global.podSecurityPolicy.useAppArmor` | If `true`, use Apparmor seccomp profile in PSP | `true` |
 | `global.leaderElection.namespace` | Override the namespace used to store the ConfigMap for leader election | `kube-system` |
+| `installCRDs` | If true, CRD resources will be installed as part of the Helm chart. If enabled, when uninstalling CRD resources will be deleted causing all installed custom resources to be DELETED | `false` |
 | `image.repository` | Image repository | `quay.io/jetstack/cert-manager-controller` |
-| `image.tag` | Image tag | `v0.14.2` |
+| `image.tag` | Image tag | `v0.15.2` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `replicaCount`  | Number of cert-manager replicas  | `1` |
 | `clusterResourceNamespace` | Override the namespace used to store DNS provider credentials etc. for ClusterIssuer resources | Same namespace as cert-manager pod |
+| `featureGates` | Comma-separated list of feature gates to enable on the controller pod | `` |
 | `extraArgs` | Optional flags for cert-manager | `[]` |
 | `extraEnv` | Optional environment variables for cert-manager | `[]` |
 | `serviceAccount.create` | If `true`, create a new service account | `true` |
@@ -129,18 +131,19 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `https_proxy` | Value of the `HTTPS_PROXY` environment variable in the cert-manager pod | |
 | `no_proxy` | Value of the `NO_PROXY` environment variable in the cert-manager pod | |
 | `webhook.replicaCount` | Number of cert-manager webhook replicas | `1` |
-| `webhook.serviceName` | The name of the Service resource deployed for the webhook pod | `cert-manager-webhook` |
 | `webhook.podAnnotations` | Annotations to add to the webhook pods | `{}` |
 | `webhook.deploymentAnnotations` | Annotations to add to the webhook deployment | `{}` |
 | `webhook.extraArgs` | Optional flags for cert-manager webhook component | `[]` |
+| `webhook.serviceAccount.create` | If `true`, create a new service account for the webhook component | `true` |
+| `webhook.serviceAccount.name` | Service account for the webhook component to be used. If not set and `webhook.serviceAccount.create` is `true`, a name is generated using the fullname template |  |
+| `webhook.serviceAccount.annotations` | Annotations to add to the service account for the webhook component |  |
 | `webhook.resources` | CPU/memory resource requests/limits for the webhook pods | `{}` |
 | `webhook.nodeSelector` | Node labels for webhook pod assignment | `{}` |
 | `webhook.affinity` | Node affinity for webhook pod assignment | `{}` |
 | `webhook.tolerations` | Node tolerations for webhook pod assignment | `[]` |
 | `webhook.image.repository` | Webhook image repository | `quay.io/jetstack/cert-manager-webhook` |
-| `webhook.image.tag` | Webhook image tag | `v0.14.2` |
+| `webhook.image.tag` | Webhook image tag | `v0.15.2` |
 | `webhook.image.pullPolicy` | Webhook image pull policy | `IfNotPresent` |
-| `webhook.injectAPIServerCA` | if true, the apiserver's CABundle will be automatically injected into the ValidatingWebhookConfiguration resource | `true` |
 | `webhook.securePort` | The port that the webhook should listen on for requests. | `10250` |
 | `webhook.securityContext` | Security context for webhook pod assignment | `{}` |
 | `cainjector.enabled` | Toggles whether the cainjector component should be installed (required for the webhook component to work) | `true` |
@@ -148,12 +151,15 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `cainjector.podAnnotations` | Annotations to add to the cainjector pods | `{}` |
 | `cainjector.deploymentAnnotations` | Annotations to add to the cainjector deployment | `{}` |
 | `cainjector.extraArgs` | Optional flags for cert-manager cainjector component | `[]` |
+| `cainjector.serviceAccount.create` | If `true`, create a new service account for the cainjector component | `true` |
+| `cainjector.serviceAccount.name` | Service account for the cainjector component to be used. If not set and `cainjector.serviceAccount.create` is `true`, a name is generated using the fullname template |  |
+| `cainjector.serviceAccount.annotations` | Annotations to add to the service account for the cainjector component |  |
 | `cainjector.resources` | CPU/memory resource requests/limits for the cainjector pods | `{}` |
 | `cainjector.nodeSelector` | Node labels for cainjector pod assignment | `{}` |
 | `cainjector.affinity` | Node affinity for cainjector pod assignment | `{}` |
 | `cainjector.tolerations` | Node tolerations for cainjector pod assignment | `[]` |
 | `cainjector.image.repository` | cainjector image repository | `quay.io/jetstack/cert-manager-cainjector` |
-| `cainjector.image.tag` | cainjector image tag | `v0.14.2` |
+| `cainjector.image.tag` | cainjector image tag | `v0.15.2` |
 | `cainjector.image.pullPolicy` | cainjector image pull policy | `IfNotPresent` |
 | `cainjector.securityContext` | Security context for cainjector pod assignment | `{}` |
 
@@ -164,7 +170,7 @@ Alternatively, a YAML file that specifies the values for the above parameters ca
 ```console
 $ helm install --name my-release -f values.yaml .
 ```
-> **Tip**: You can use the default [values.yaml](values.yaml)
+> **Tip**: You can use the default [values.yaml](https://github.com/jetstack/cert-manager/blob/master/deploy/charts/cert-manager/values.yaml)
 
 ## Contributing
 

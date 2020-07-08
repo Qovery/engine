@@ -63,7 +63,7 @@ fn main() {
     let eks_eu_west_3 = EKS::new(
         "123abc",
         "my-eu-west-3-k8s",
-        "1.14",
+        "1.16",
         "eu-west-3",
         &cloud_provider,
         nodes,

@@ -34,12 +34,12 @@ spec:
         app.kubernetes.io/managed-by: {{ .Release.Service }}
         app.kubernetes.io/component: "webhook"
         helm.sh/chart: {{ include "webhook.chart" . }}
-      annotations:
       {{- if .Values.webhook.podAnnotations }}
+      annotations:
 {{ toYaml .Values.webhook.podAnnotations | indent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "webhook.fullname" . }}
+      serviceAccountName: {{ template "webhook.serviceAccountName" . }}
       {{- if .Values.global.priorityClassName }}
       priorityClassName: {{ .Values.global.priorityClassName | quote }}
       {{- end }}
@@ -56,21 +56,29 @@ spec:
           - --v={{ .Values.global.logLevel }}
           {{- end }}
           - --secure-port={{ .Values.webhook.securePort }}
-          - --tls-cert-file=/certs/tls.crt
-          - --tls-private-key-file=/certs/tls.key
+          - --dynamic-serving-ca-secret-namespace={{ .Release.Namespace }}
+          - --dynamic-serving-ca-secret-name={{ template "webhook.fullname" . }}-ca
+          - --dynamic-serving-dns-names={{ template "webhook.fullname" . }},{{ template "webhook.fullname" . }}.{{ .Release.Namespace }},{{ template "webhook.fullname" . }}.{{ .Release.Namespace }}.svc
         {{- if .Values.webhook.extraArgs }}
 {{ toYaml .Values.webhook.extraArgs | indent 10 }}
         {{- end }}
+          ports:
+          - name: https
+            containerPort: {{ .Values.webhook.securePort }}
           livenessProbe:
             httpGet:
               path: /livez
               port: 6080
               scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /healthz
               port: 6080
               scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 5
           env:
           - name: POD_NAMESPACE
             valueFrom:
@@ -78,13 +86,6 @@ spec:
                 fieldPath: metadata.namespace
           resources:
 {{ toYaml .Values.webhook.resources | indent 12 }}
-          volumeMounts:
-          - name: certs
-            mountPath: /certs
-      volumes:
-      - name: certs
-        secret:
-          secretName: {{ include "webhook.servingCertificate" . }}
     {{- with .Values.webhook.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
@@ -97,3 +98,4 @@ spec:
       tolerations:
 {{ toYaml . | indent 8 }}
     {{- end }}
+
