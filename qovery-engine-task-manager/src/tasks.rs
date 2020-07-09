@@ -62,6 +62,7 @@ impl Task for InfrastructureTask {
         };
 
         if session.is_none() {
+            self.update_status(&sender, Status::Failed { message: None });
             return;
         }
 
@@ -87,7 +88,9 @@ impl Task for InfrastructureTask {
         // TODO implement on_progress callback and send status update in real time
 
         match tx.commit() {
-            TransactionResult::Ok => {}
+            TransactionResult::Ok => {
+                self.update_status(&sender, Status::Done { message: None });
+            }
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
                 self.update_status(&sender, Status::Failed { message: None });
@@ -98,7 +101,6 @@ impl Task for InfrastructureTask {
             }
         }
 
-        self.update_status(&sender, Status::Done { message: None });
         info!("infrastructure task {} finished", self.id());
     }
 }
@@ -155,6 +157,7 @@ impl Task for EnvironmentTask {
         };
 
         if session.is_none() {
+            self.update_status(&sender, Status::Failed { message: None });
             return;
         }
 
@@ -182,7 +185,9 @@ impl Task for EnvironmentTask {
         // TODO implement on_progress callback and send status update in real time
 
         match tx.commit() {
-            TransactionResult::Ok => {}
+            TransactionResult::Ok => {
+                self.update_status(&sender, Status::Done { message: None });
+            }
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
                 self.update_status(&sender, Status::Failed { message: None });
@@ -193,7 +198,6 @@ impl Task for EnvironmentTask {
             }
         }
 
-        self.update_status(&sender, Status::Done { message: None });
         info!("environment task {} finished", self.id());
     }
 }
