@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::iter::Map;
 use std::mem::ManuallyDrop;
@@ -9,22 +10,22 @@ use std::time::Duration;
 use crate::models::Request;
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use evmap::{ReadHandle, WriteHandle};
-use uuid::Uuid;
 
+pub type Id = String;
 pub type Message = Result<InternalTask, Error>;
 
 pub struct TaskManager {
     sender: Sender<InternalTask>,
     receiver: Receiver<InternalTask>,
-    status_by_task_id_r: ReadHandle<Uuid, Status>,
-    status_by_task_id_w: Arc<Mutex<WriteHandle<Uuid, Status>>>,
+    status_by_task_id_r: ReadHandle<Id, Status>,
+    status_by_task_id_w: Arc<Mutex<WriteHandle<Id, Status>>>,
     running: bool,
 }
 
 impl TaskManager {
     pub fn new() -> Self {
         let (sender, receiver) = unbounded::<InternalTask>();
-        let (status_by_task_id_r, status_by_task_id_w) = evmap::new::<Uuid, Status>();
+        let (status_by_task_id_r, status_by_task_id_w) = evmap::new::<Id, Status>();
         let status_by_task_id_w = Arc::new(Mutex::new(status_by_task_id_w));
 
         TaskManager {
@@ -40,16 +41,16 @@ impl TaskManager {
         self.status_by_task_id_w
             .lock()
             .unwrap()
-            .insert(task.id().clone(), Status::Waiting(None))
+            .insert(task.id().to_string(), Status::Waiting { message: None })
             .refresh();
 
         let _ = self.sender.send(InternalTask {
             task,
-            status: Status::Waiting(None),
+            status: Status::Waiting { message: None },
         });
     }
 
-    pub fn get_task_status(&self, id: &Uuid) -> Option<Status> {
+    pub fn get_task_status(&self, id: &Id) -> Option<Status> {
         match self.status_by_task_id_r.get_one(id) {
             Some(status) => Some(status.as_ref().clone()),
             _ => None,
@@ -77,8 +78,8 @@ impl TaskManager {
                     // update task status
                     w.lock()
                         .unwrap()
-                        .empty(msg.task.id().clone())
-                        .insert(msg.task.id().clone(), msg.status)
+                        .empty(msg.task.id().to_string())
+                        .insert(msg.task.id().to_string(), msg.status)
                         .refresh();
                 }
                 Err(err) => {} // FIXME: handle this?
@@ -101,7 +102,7 @@ impl TaskManager {
 }
 
 pub trait Task: Send {
-    fn id(&self) -> &Uuid;
+    fn id(&self) -> &str;
     fn update_status(&self, sender: &Sender<Message>, status: Status);
     fn run(&self, sender: Sender<Message>);
 }
@@ -111,14 +112,15 @@ pub struct InternalTask {
     pub status: Status,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[serde(tag = "kind")]
 pub enum Status {
-    Waiting(Option<String>),
-    Running(Option<String>),
-    Warning(Option<String>),
-    Error(Option<String>),
-    Failed(Option<String>),
-    Done(Option<String>),
+    Waiting { message: Option<String> },
+    Running { message: Option<String> },
+    Warning { message: Option<String> },
+    Error { message: Option<String> },
+    Failed { message: Option<String> },
+    Done { message: Option<String> },
 }
 
 impl evmap::ShallowCopy for Status {

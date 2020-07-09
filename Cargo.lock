@@ -13,6 +13,7 @@ dependencies = [
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "crossbeam-channel",
  "env_logger",
  "log",
@@ -1439,7 +1440,6 @@ dependencies = [
  "qovery-engine",
  "serde",
  "serde_json",
- "uuid",
 ]
 
 [[package]]

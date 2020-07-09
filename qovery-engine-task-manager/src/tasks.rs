@@ -1,7 +1,6 @@
 use std::borrow::Borrow;
 
 use crossbeam_channel::Sender;
-use uuid::Uuid;
 
 use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::config::Config;
@@ -13,22 +12,18 @@ use crate::task_manager::{InternalTask, Message, Status, Task};
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
-    id: Uuid,
     request: Request,
 }
 
 impl InfrastructureTask {
     pub fn new(request: Request) -> Self {
-        InfrastructureTask {
-            id: Uuid::new_v4(),
-            request,
-        }
+        InfrastructureTask { request }
     }
 }
 
 impl Task for InfrastructureTask {
-    fn id(&self) -> &Uuid {
-        &self.id
+    fn id(&self) -> &str {
+        self.request.id.as_str()
     }
 
     fn update_status(&self, sender: &Sender<Message>, status: Status) {
@@ -40,8 +35,8 @@ impl Task for InfrastructureTask {
     }
 
     fn run(&self, sender: Sender<Message>) {
-        info!("infrastructure task {} started", self.id.to_string());
-        self.update_status(&sender, Status::Running(None));
+        info!("infrastructure task {} started", self.id());
+        self.update_status(&sender, Status::Running { message: None });
 
         let build_platform = self.request.build_platform.as_engine_build_platform();
         let cloud_provider = self.request.cloud_provider.as_engine_cloud_provider();
@@ -61,7 +56,7 @@ impl Task for InfrastructureTask {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed(None));
+                self.update_status(&sender, Status::Failed { message: None });
                 None
             }
         };
@@ -95,37 +90,33 @@ impl Task for InfrastructureTask {
             TransactionResult::Ok => {}
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed(None));
+                self.update_status(&sender, Status::Failed { message: None });
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed(None));
+                self.update_status(&sender, Status::Failed { message: None });
             }
         }
 
-        self.update_status(&sender, Status::Done(None));
-        info!("infrastructure task {} finished", self.id.to_string());
+        self.update_status(&sender, Status::Done { message: None });
+        info!("infrastructure task {} finished", self.id());
     }
 }
 
 #[derive(Clone)]
 pub struct EnvironmentTask {
-    id: Uuid,
     request: Request,
 }
 
 impl EnvironmentTask {
     pub fn new(request: Request) -> Self {
-        EnvironmentTask {
-            id: Uuid::new_v4(),
-            request,
-        }
+        EnvironmentTask { request }
     }
 }
 
 impl Task for EnvironmentTask {
-    fn id(&self) -> &Uuid {
-        &self.id
+    fn id(&self) -> &str {
+        self.request.id.as_str()
     }
 
     fn update_status(&self, sender: &Sender<Message>, status: Status) {
@@ -137,8 +128,8 @@ impl Task for EnvironmentTask {
     }
 
     fn run(&self, sender: Sender<Message>) {
-        info!("environment task {} started", self.id.to_string());
-        self.update_status(&sender, Status::Running(None));
+        info!("environment task {} started", self.id());
+        self.update_status(&sender, Status::Running { message: None });
 
         let build_platform = self.request.build_platform.as_engine_build_platform();
         let cloud_provider = self.request.cloud_provider.as_engine_cloud_provider();
@@ -158,7 +149,7 @@ impl Task for EnvironmentTask {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed(None));
+                self.update_status(&sender, Status::Failed { message: None });
                 None
             }
         };
@@ -194,15 +185,15 @@ impl Task for EnvironmentTask {
             TransactionResult::Ok => {}
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed(None));
+                self.update_status(&sender, Status::Failed { message: None });
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed(None));
+                self.update_status(&sender, Status::Failed { message: None });
             }
         }
 
-        self.update_status(&sender, Status::Done(None));
-        info!("environment task {} finished", self.id.to_string());
+        self.update_status(&sender, Status::Done { message: None });
+        info!("environment task {} finished", self.id());
     }
 }

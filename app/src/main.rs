@@ -3,6 +3,7 @@ extern crate log;
 #[macro_use]
 extern crate serde;
 
+use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{Error, Read, Write};
@@ -15,16 +16,34 @@ use nats::Connection;
 
 use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::{Request, Response};
-use qovery_engine_task_manager::task_manager::{Task, TaskManager};
+use qovery_engine_task_manager::task_manager::{InternalTask, Status, Task, TaskManager};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::TaskSelector::{Environment, Infrastructure};
+use chrono::{DateTime, Utc};
 use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
 use std::path::Path;
 
 enum TaskSelector {
     Infrastructure(&'static str),
     Environment(&'static str),
+}
+
+#[derive(Serialize, Deserialize)]
+struct StatusResponse {
+    id: String,
+    created_at: DateTime<Utc>,
+    status: Status,
+}
+
+impl StatusResponse {
+    fn new(id: String, status: Status) -> Self {
+        StatusResponse {
+            id,
+            created_at: Utc::now(),
+            status,
+        }
+    }
 }
 
 fn subject_name(mode: &Mode, task_selector: &TaskSelector) -> String {
@@ -138,15 +157,33 @@ pub fn main() -> Result<(), Error> {
     let (tx_task, rx_task) = unbounded::<Box<dyn Task>>();
     thread::spawn(move || {
         let mut task_manager = TaskManager::new();
-        let _ = task_manager.run();
+        let rx_status = task_manager.run();
 
-        thread::spawn(move || loop {
-            // TODO send back the message to a topic: E.g core.task.status
-            // json: {"status": "Failed", "message": "blablabla", "id": "abc", "created_at": "<datetime>"}
+        thread::spawn(move || {
+            let rx_status = rx_status.unwrap();
+            let nc = nc_1;
 
-            //let msg = rx_task_status.recv().unwrap();
-            //let subject_name = subject_name(&mode, Infrastructure(""));
-            //nc_1.request(subject_name.as_str(), msg.unwrap())
+            loop {
+                // send back the message to a topic: E.g core.task.status
+                // json: {"status": {"kind": "Failed", "message": "blablabla"}, "id": "abc", "created_at": "<datetime>"}
+                match rx_status.recv().unwrap() {
+                    Ok(internal_task) => {
+                        let sr = StatusResponse::new(
+                            internal_task.task.id().to_string(),
+                            internal_task.status,
+                        );
+
+                        let json = serde_json::to_string(&sr);
+                        let _ = nc.request_timeout(
+                            "core.task.status",
+                            json.unwrap().as_bytes(),
+                            Duration::from_secs(60),
+                        );
+                        // FIXME handle timeout?
+                    }
+                    Err(err) => {}
+                };
+            }
         });
 
         loop {

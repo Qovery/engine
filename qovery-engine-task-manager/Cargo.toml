@@ -10,7 +10,6 @@ edition = "2018"
 qovery-engine = { path = "../qovery-engine" }
 crossbeam-channel = "0.4.2"
 evmap = "11.0.0-alpha.1"
-uuid = { version = "0.8", features = ["v4"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = "0.4.11"
