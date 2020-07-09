@@ -17,8 +17,7 @@ pub struct Transaction<'a> {
     pub config: Config<'a>,
     steps: Vec<Step<'a>>,
     executed_steps: Vec<Step<'a>>,
-    build_listeners: Vec<Box<dyn ProgressListener>>,
-    deploy_listeners: Vec<Box<dyn ProgressListener>>,
+    listeners: Vec<&'a dyn ProgressListener>,
 }
 
 impl<'a> Transaction<'a> {
@@ -27,8 +26,7 @@ impl<'a> Transaction<'a> {
             config,
             steps: vec![],
             executed_steps: vec![],
-            build_listeners: vec![],
-            deploy_listeners: vec![],
+            listeners: vec![],
         }
     }
 
@@ -68,8 +66,8 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn add_build_listener(&mut self, listener: Box<dyn ProgressListener>) {
-        self.build_listeners.push(listener);
+    pub fn add_listener(&mut self, listener: &'a dyn ProgressListener) {
+        self.listeners.push(listener);
     }
 
     pub fn deploy(
@@ -99,10 +97,6 @@ impl<'a> Transaction<'a> {
             }
             Err(err) => Err(err),
         }
-    }
-
-    pub fn add_deploy_listener(&mut self, listener: Box<dyn ProgressListener>) {
-        self.deploy_listeners.push(listener);
     }
 
     fn _build_applications(
@@ -407,7 +401,7 @@ pub struct ProgressInfo {
 }
 
 pub trait ProgressListener {
-    fn on_progress(&self, info: &ProgressInfo);
-    fn on_complete(&self, info: &ProgressInfo);
-    fn on_error(&self, info: &ProgressInfo);
+    fn on_progress(&self, info: ProgressInfo);
+    fn on_complete(&self, info: ProgressInfo);
+    fn on_error(&self, info: ProgressInfo);
 }

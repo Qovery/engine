@@ -21,15 +21,15 @@ use qovery_engine::transaction::{ProgressInfo, ProgressListener, TransactionResu
 struct QoveryStatusSender;
 
 impl ProgressListener for QoveryStatusSender {
-    fn on_progress(&self, info: &ProgressInfo) {
+    fn on_progress(&self, info: ProgressInfo) {
         unimplemented!()
     }
 
-    fn on_complete(&self, info: &ProgressInfo) {
+    fn on_complete(&self, info: ProgressInfo) {
         unimplemented!()
     }
 
-    fn on_error(&self, info: &ProgressInfo) {
+    fn on_error(&self, info: ProgressInfo) {
         unimplemented!()
     }
 }
@@ -130,7 +130,8 @@ fn main() {
 
     tx.deploy(&eks, &environment);
 
-    tx.add_build_listener(Box::new(QoveryStatusSender {}));
+    let listener = QoveryStatusSender {};
+    tx.add_listener(&listener);
 
     match tx.commit() {
         TransactionResult::Ok => println!("execution: ok"),
