@@ -46,6 +46,12 @@ variable "cluster_name" {
   type        = string
 }
 
+variable "cluster_id" {
+  description = "Qovery cluster ID"
+  default = "{{ region_cluster_id }}"
+  type = string
+}
+
 variable "k8s_access_cidr_blocks" {
   description = "Kubernetes cluster name"
   default     = ["185.162.179.5/32", "78.192.247.93/32"]
@@ -95,4 +101,39 @@ variable "rds_cidr_subnet" {
   description = "RDS CIDR (x.x.x.x/CIDR)"
   default     = 23
   type        = number
+}
+
+# Elasticsearch
+
+variable "es_nodes_number" {
+  description = "Number of Elasticsearch nodes"
+  default = 3
+  type = number
+}
+
+variable "es_volume_size" {
+  description = "Disk size per node"
+  default = 50
+  type = number
+}
+
+variable "es_nb_subnets_per_zone" {
+  description = "Elasticsearch number of desired subnets (3 zones used)"
+  default     = 2
+  type        = number
+}
+
+variable "es_cidr_subnet" {
+  description = "Elasticsearch CIDR (x.x.x.x/CIDR)"
+  default     = 23
+  type        = number
+}
+
+variable "es-logs-curator" {
+  description = "Curator config"
+  default = {
+    "cron": "0 0 * * *"
+    "days_to_keep": "7"
+  }
+  type = map(string)
 }

@@ -16,6 +16,9 @@ charts:
   - name: prometheus-operator
     repo_name: stable/prometheus-operator
     version: 8.15.12
+  - name: curator
+    repo_name: stable/elasticsearch-curator
+    version: 2.1.5
 
 repos:
   - name: jetstack

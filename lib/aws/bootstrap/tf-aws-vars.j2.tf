@@ -10,6 +10,10 @@ provider "local" {
   version = "~> 1.4"
 }
 
+provider "external" {
+  version = "~> 1.2"
+}
+
 provider "helm" {
   version = "~> 1.2"
   kubernetes {
