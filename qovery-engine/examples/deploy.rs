@@ -12,44 +12,19 @@ use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
-    Action, Application, CloudProvider as CP, Deployment, Environment, EnvironmentVariable,
-    GitCredentials,
+    Action, Application, Environment, EnvironmentVariable, GitCredentials,
 };
 use qovery_engine::session::Session;
-use qovery_engine::transaction::{ProgressInfo, ProgressListener, TransactionResult};
-
-struct QoveryStatusSender;
-
-impl ProgressListener for QoveryStatusSender {
-    fn on_progress(&self, info: ProgressInfo) {
-        unimplemented!()
-    }
-
-    fn on_complete(&self, info: ProgressInfo) {
-        unimplemented!()
-    }
-
-    fn on_error(&self, info: ProgressInfo) {
-        unimplemented!()
-    }
-}
+use qovery_engine::transaction::TransactionResult;
 
 fn main() {
     env_logger::init();
 
     let environment = Environment {
-        deployment: Deployment {
-            id: "".to_string(),
-            created_at: Utc::now(),
-        },
         owner_id: "".to_string(),
         project_id: "".to_string(),
         environment_id: "".to_string(),
         action: Action::Create,
-        cloud_provider: CP {
-            name: "aws".to_string(),
-            region: "us-east-2".to_string(),
-        },
         applications: vec![Application {
             id: "".to_string(),
             name: "simple-example-node-with-postgresql".to_string(),
@@ -86,8 +61,6 @@ fn main() {
 
     let build_platform = LocalDocker::new("123456", "my-local-docker");
 
-    let region = environment.cloud_provider.region.clone();
-
     let cloud_provider = AWS::new(
         "123-abc",
         "my-default-aws",
@@ -101,7 +74,7 @@ fn main() {
         "123abc",
         "my-k8s-cluster",
         "1.14",
-        region.as_str(),
+        "us-east-2",
         &cloud_provider,
         nodes,
     );
@@ -129,9 +102,6 @@ fn main() {
     }
 
     tx.deploy(&eks, &environment);
-
-    let listener = QoveryStatusSender {};
-    tx.add_listener(&listener);
 
     match tx.commit() {
         TransactionResult::Ok => println!("execution: ok"),

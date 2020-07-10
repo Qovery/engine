@@ -1,12 +1,17 @@
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
 use crate::build_platform::error::BuildPlatformError;
 use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Kind};
 use crate::fs::workspace_directory;
+use crate::models::{Listeners, ProgressInfo, ProgressListener};
 use crate::{cmd, git};
 
 /// use Docker in local
 pub struct LocalDocker {
     id: String,
     name: String,
+    listeners: Listeners,
 }
 
 impl LocalDocker {
@@ -14,6 +19,7 @@ impl LocalDocker {
         LocalDocker {
             id: id.to_string(),
             name: name.to_string(),
+            listeners: vec![],
         }
     }
 }
@@ -36,7 +42,13 @@ impl BuildPlatform for LocalDocker {
         Ok(())
     }
 
+    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+        self.listeners.push(listener);
+    }
+
     fn build(&self, build: Build) -> Result<BuildResult, BuildError> {
+        info!("LocalDocker.build() called for {}", self.name());
+
         // git clone
         let into_dir = workspace_directory(format!("build/{}", build.image.name.as_str()));
 
@@ -84,7 +96,7 @@ impl BuildPlatform for LocalDocker {
 
         // docker build
         let exit_status = cmd::exec_with_output("docker", final_args, |line| {
-            println!("{}", line.unwrap());
+            info!("{}", line.unwrap());
         });
 
         match exit_status {
@@ -96,6 +108,16 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn build_error(&self, build: Build) -> Result<BuildResult, BuildError> {
-        unimplemented!()
+        warn!("LocalDocker.build_error() called for {}", self.name());
+
+        self.listeners.iter().for_each(|l| {
+            l.on_error(ProgressInfo {
+                percent: 100,
+                message: "something wrong".to_string(),
+            })
+        });
+
+        // FIXME
+        Err(BuildError::Error)
     }
 }

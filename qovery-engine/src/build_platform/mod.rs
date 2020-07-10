@@ -1,7 +1,10 @@
-use crate::build_platform::error::BuildPlatformError;
-use crate::git::Credentials;
 use git2::Error;
 use serde::{Deserialize, Serialize};
+
+use crate::build_platform::error::BuildPlatformError;
+use crate::git::Credentials;
+use crate::models::{Listeners, ProgressListener};
+use std::rc::Rc;
 
 pub mod error;
 pub mod local_docker;
@@ -11,6 +14,7 @@ pub trait BuildPlatform {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), BuildPlatformError>;
+    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>);
     fn build(&self, build: Build) -> Result<BuildResult, BuildError>;
     fn build_error(&self, build: Build) -> Result<BuildResult, BuildError>;
 }

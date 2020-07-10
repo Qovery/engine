@@ -1,4 +1,5 @@
 use std::hash::Hash;
+use std::rc::Rc;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -10,12 +11,10 @@ use crate::cloud_provider::Kind as CPKind;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
-    pub deployment: Deployment,
     pub owner_id: String,
     pub project_id: String,
     pub environment_id: String,
     pub action: Action,
-    pub cloud_provider: CloudProvider,
     pub applications: Vec<Application>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
@@ -28,23 +27,11 @@ impl Environment {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct Deployment {
-    pub id: String,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum Action {
     Create,
     Pause,
     Delete,
     Idle,
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct CloudProvider {
-    pub name: String,
-    pub region: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -132,3 +119,16 @@ pub struct Snapshot {}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentError {}
+
+pub struct ProgressInfo {
+    pub percent: u8,
+    pub message: String,
+}
+
+pub trait ProgressListener {
+    fn on_progress(&self, info: ProgressInfo);
+    fn on_complete(&self, info: ProgressInfo);
+    fn on_error(&self, info: ProgressInfo);
+}
+
+pub type Listeners = Vec<Rc<Box<dyn ProgressListener>>>;

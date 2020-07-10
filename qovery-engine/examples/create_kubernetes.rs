@@ -1,4 +1,8 @@
+use std::env;
+
 use chrono::Utc;
+use rusoto_core::Region;
+
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
@@ -9,13 +13,9 @@ use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::error::ConfigurationError;
-use qovery_engine::models::{
-    Action, Application, CloudProvider as CP, Deployment, Environment, GitCredentials,
-};
+use qovery_engine::models::{Action, Application, Environment, GitCredentials};
 use qovery_engine::session::Session;
-use qovery_engine::transaction::{ProgressInfo, ProgressListener, TransactionResult};
-use rusoto_core::Region;
-use std::env;
+use qovery_engine::transaction::TransactionResult;
 
 fn main() {
     env_logger::init();

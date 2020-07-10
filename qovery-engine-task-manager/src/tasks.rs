@@ -9,6 +9,8 @@ use qovery_engine::transaction::TransactionResult;
 
 use crate::models::{Action, Request};
 use crate::task_manager::{InternalTask, Message, Status, Task};
+use qovery_engine::models::{ProgressInfo, ProgressListener};
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -38,7 +40,14 @@ impl Task for InfrastructureTask {
         info!("infrastructure task {} started", self.id());
         self.update_status(&sender, Status::Running { message: None });
 
-        let build_platform = self.request.build_platform.as_engine_build_platform();
+        let my_progress_listener: Rc<Box<dyn ProgressListener>> =
+            Rc::new(Box::new(MyProgressListener {
+                sender: sender.clone(),
+            }));
+
+        let mut build_platform = self.request.build_platform.as_engine_build_platform();
+        build_platform.add_listener(my_progress_listener.clone());
+
         let cloud_provider = self.request.cloud_provider.as_engine_cloud_provider();
         let container_registry = self
             .request
@@ -133,7 +142,14 @@ impl Task for EnvironmentTask {
         info!("environment task {} started", self.id());
         self.update_status(&sender, Status::Running { message: None });
 
-        let build_platform = self.request.build_platform.as_engine_build_platform();
+        let my_progress_listener: Rc<Box<dyn ProgressListener>> =
+            Rc::new(Box::new(MyProgressListener {
+                sender: sender.clone(),
+            }));
+
+        let mut build_platform = self.request.build_platform.as_engine_build_platform();
+        build_platform.add_listener(my_progress_listener.clone());
+
         let cloud_provider = self.request.cloud_provider.as_engine_cloud_provider();
         let container_registry = self
             .request
@@ -178,7 +194,10 @@ impl Task for EnvironmentTask {
         let environment = self.request.environment.as_ref().unwrap();
 
         match self.request.action {
-            Action::Create => tx.deploy(kubernetes.borrow(), environment),
+            Action::Create => {
+                tx.build(environment);
+                tx.deploy(kubernetes.borrow(), environment);
+            }
             Action::Delete => unimplemented!(),
         };
 
@@ -199,5 +218,23 @@ impl Task for EnvironmentTask {
         }
 
         info!("environment task {} finished", self.id());
+    }
+}
+
+struct MyProgressListener {
+    sender: Sender<Message>,
+}
+
+impl ProgressListener for MyProgressListener {
+    fn on_progress(&self, info: ProgressInfo) {
+        // TODO
+    }
+
+    fn on_complete(&self, info: ProgressInfo) {
+        // TODO
+    }
+
+    fn on_error(&self, info: ProgressInfo) {
+        // TODO
     }
 }

@@ -17,7 +17,6 @@ pub struct Transaction<'a> {
     pub config: Config<'a>,
     steps: Vec<Step<'a>>,
     executed_steps: Vec<Step<'a>>,
-    listeners: Vec<&'a dyn ProgressListener>,
 }
 
 impl<'a> Transaction<'a> {
@@ -26,7 +25,6 @@ impl<'a> Transaction<'a> {
             config,
             steps: vec![],
             executed_steps: vec![],
-            listeners: vec![],
         }
     }
 
@@ -64,10 +62,6 @@ impl<'a> Transaction<'a> {
             }
             Err(err) => Err(err),
         }
-    }
-
-    pub fn add_listener(&mut self, listener: &'a dyn ProgressListener) {
-        self.listeners.push(listener);
     }
 
     pub fn deploy(
@@ -393,15 +387,4 @@ pub enum TransactionResult {
     Ok,
     Rollback(CommitError),
     UnrecoverableError(CommitError, RollbackError),
-}
-
-pub struct ProgressInfo {
-    percent: u8,
-    message: String,
-}
-
-pub trait ProgressListener {
-    fn on_progress(&self, info: ProgressInfo);
-    fn on_complete(&self, info: ProgressInfo);
-    fn on_error(&self, info: ProgressInfo);
 }
