@@ -88,15 +88,25 @@ impl BuildPlatform for LocalDocker {
         let final_args = if env_var_args.is_empty() {
             args
         } else {
-            let mut build_arg = vec!["--build-arg"];
-            build_arg.extend(env_var_args.iter().map(|x| x.as_str()).collect::<Vec<_>>());
-            args.extend(build_arg);
+            let mut build_args = vec![];
+            env_var_args.iter().for_each(|x| {
+                build_args.push("--build-arg");
+                build_args.push(x.as_str());
+            });
+
+            args.extend(build_args);
             args
         };
 
         // docker build
         let exit_status = cmd::exec_with_output("docker", final_args, |line| {
-            info!("{}", line.unwrap());
+            let line_string = line.unwrap();
+            let line_str = line_string.as_str();
+            info!("{}", line_str);
+
+            self.listeners
+                .iter()
+                .for_each(|l| l.on_progress(ProgressInfo::new("build", 50, line_str)));
         });
 
         match exit_status {
@@ -104,18 +114,19 @@ impl BuildPlatform for LocalDocker {
             Err(_) => return Err(BuildError::Error),
         }
 
+        self.listeners
+            .iter()
+            .for_each(|l| l.on_complete(ProgressInfo::new("build", 100, "build done")));
+
         Ok(BuildResult { build })
     }
 
     fn build_error(&self, build: Build) -> Result<BuildResult, BuildError> {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
-        self.listeners.iter().for_each(|l| {
-            l.on_error(ProgressInfo {
-                percent: 100,
-                message: "something wrong".to_string(),
-            })
-        });
+        self.listeners
+            .iter()
+            .for_each(|l| l.on_error(ProgressInfo::new("build", 100, "something goes wrong")));
 
         // FIXME
         Err(BuildError::Error)

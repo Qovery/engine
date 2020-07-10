@@ -21,6 +21,7 @@ use crate::fs::{
     copy_bootstrap_files, workspace_directory, write_rendered_templates, RenderedTemplate,
 };
 use crate::{dynamo_db, s3};
+use dirs::home_dir;
 
 pub mod node;
 
@@ -155,10 +156,14 @@ impl<'a> EKS<'a> {
     }
 
     fn terraform_exec(&self, root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
+        let home_dir = home_dir().unwrap();
+        let tf_plugin_cache_dir =
+            format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
+
         match exec_with_envs_and_output(
             format!("{} terraform", root_dir).as_str(),
             args,
-            vec![("TF_PLUGIN_CACHE_DIR", "$HOME/.terraform.d/plugin-cache")],
+            vec![("TF_PLUGIN_CACHE_DIR", tf_plugin_cache_dir.as_str())],
             |line| {
                 info!("{}", line.unwrap());
             },
@@ -315,7 +320,9 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
         info!("EKS.create_service() called for {}", self.name());
-        unimplemented!()
+
+        // FIXME
+        Err(KubernetesError::Error)
     }
 
     fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {

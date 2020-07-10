@@ -121,8 +121,19 @@ pub struct Snapshot {}
 pub enum EnvironmentError {}
 
 pub struct ProgressInfo {
+    pub step_name: String,
     pub percent: u8,
     pub message: String,
+}
+
+impl ProgressInfo {
+    pub fn new(step_name: &str, percent: u8, message: &str) -> Self {
+        ProgressInfo {
+            step_name: step_name.to_string(),
+            percent,
+            message: message.to_string(),
+        }
+    }
 }
 
 pub trait ProgressListener {

@@ -42,6 +42,7 @@ impl Task for InfrastructureTask {
 
         let my_progress_listener: Rc<Box<dyn ProgressListener>> =
             Rc::new(Box::new(MyProgressListener {
+                task: self.clone(),
                 sender: sender.clone(),
             }));
 
@@ -144,6 +145,7 @@ impl Task for EnvironmentTask {
 
         let my_progress_listener: Rc<Box<dyn ProgressListener>> =
             Rc::new(Box::new(MyProgressListener {
+                task: self.clone(),
                 sender: sender.clone(),
             }));
 
@@ -221,13 +223,27 @@ impl Task for EnvironmentTask {
     }
 }
 
-struct MyProgressListener {
+struct MyProgressListener<T>
+where
+    T: Task + Clone + 'static,
+{
+    task: T,
     sender: Sender<Message>,
 }
 
-impl ProgressListener for MyProgressListener {
+impl<T> ProgressListener for MyProgressListener<T>
+where
+    T: Task + Clone + 'static,
+{
     fn on_progress(&self, info: ProgressInfo) {
-        // TODO
+        let it = InternalTask {
+            task: Box::new(self.task.clone()),
+            status: Status::Running {
+                message: Some(info.message),
+            },
+        };
+
+        self.sender.send(Ok(it));
     }
 
     fn on_complete(&self, info: ProgressInfo) {
