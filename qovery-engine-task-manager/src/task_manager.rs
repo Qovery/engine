@@ -129,16 +129,18 @@ impl TaskManager {
                     internal_task.task.run(tx.clone());
 
                     if self_it_receiver.is_empty() && self_end_task_receiver.try_recv().is_ok() {
-                        info!("no remaining task to run - close task manager");
+                        info!("no remaining task to run - shutdown task manager");
                         self_task_terminated_sender.send(true);
-                    } else if self_it_receiver.is_empty() {
-                        info!("no remaining task to run - waiting for a new one...");
-                    } else {
+                    } else if self_it_receiver.len() > 0 {
                         info!("it remains {} tasks to run", self_it_receiver.len());
                     }
                 }
                 Err(err) => {
                     sleep(Duration::from_secs(1));
+                    if self_end_task_receiver.try_recv().is_ok() {
+                        info!("shutdown task manager");
+                        self_task_terminated_sender.send(true);
+                    }
                 }
             };
         });
