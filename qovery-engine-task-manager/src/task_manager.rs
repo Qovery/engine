@@ -15,8 +15,12 @@ pub type Id = String;
 pub type Message = Result<InternalTask, Error>;
 
 pub struct TaskManager {
-    sender: Sender<InternalTask>,
-    receiver: Receiver<InternalTask>,
+    it_sender: Sender<InternalTask>,
+    it_receiver: Receiver<InternalTask>,
+    end_task_sig_sender: Sender<bool>,
+    end_task_sig_receiver: Receiver<bool>,
+    task_terminated_sender: Sender<bool>,
+    task_terminated_receiver: Receiver<bool>,
     status_by_task_id_r: ReadHandle<Id, Status>,
     status_by_task_id_w: Arc<Mutex<WriteHandle<Id, Status>>>,
     running: bool,
@@ -24,13 +28,19 @@ pub struct TaskManager {
 
 impl TaskManager {
     pub fn new() -> Self {
-        let (sender, receiver) = unbounded::<InternalTask>();
+        let (it_sender, it_receiver) = unbounded::<InternalTask>();
+        let (end_task_sig_sender, end_task_sig_receiver) = unbounded::<bool>();
+        let (task_terminated_sender, task_terminated_receiver) = unbounded::<bool>();
         let (status_by_task_id_r, status_by_task_id_w) = evmap::new::<Id, Status>();
         let status_by_task_id_w = Arc::new(Mutex::new(status_by_task_id_w));
 
         TaskManager {
-            sender,
-            receiver,
+            it_sender,
+            it_receiver,
+            end_task_sig_sender,
+            end_task_sig_receiver,
+            task_terminated_sender,
+            task_terminated_receiver,
             status_by_task_id_r,
             status_by_task_id_w,
             running: false,
@@ -38,16 +48,36 @@ impl TaskManager {
     }
 
     pub fn add_task(&mut self, task: Box<dyn Task>) {
+        let _ = match self.end_task_sig_receiver.try_recv() {
+            Ok(x) => {
+                if x {
+                    // stop accepting new task
+                    return;
+                } else {
+                    ()
+                }
+            }
+            Err(_) => (),
+        };
+
         self.status_by_task_id_w
             .lock()
             .unwrap()
             .insert(task.id().to_string(), Status::Waiting { message: None })
             .refresh();
 
-        let _ = self.sender.send(InternalTask {
+        let _ = self.it_sender.send(InternalTask {
             task,
             status: Status::Waiting { message: None },
         });
+    }
+
+    pub fn remaining_tasks_to_run(&self) -> usize {
+        self.it_receiver.len()
+    }
+
+    pub fn is_terminated(&self) -> Receiver<bool> {
+        self.task_terminated_receiver.clone()
     }
 
     pub fn get_task_status(&self, id: &Id) -> Option<Status> {
@@ -55,6 +85,11 @@ impl TaskManager {
             Some(status) => Some(status.as_ref().clone()),
             _ => None,
         }
+    }
+
+    /// gracefully end the remaining tasks but stop accepting new ones
+    pub fn stop(&self) {
+        self.end_task_sig_sender.send(true);
     }
 
     pub fn run(&mut self) -> Result<Receiver<Message>, Error> {
@@ -66,7 +101,9 @@ impl TaskManager {
         self.running = true;
 
         let (tx, rx) = unbounded::<Message>();
-        let self_receiver = self.receiver.clone();
+        let self_it_receiver = self.it_receiver.clone();
+        let self_end_task_receiver = self.end_task_sig_receiver.clone();
+        let self_task_terminated_sender = self.task_terminated_sender.clone();
 
         let receiver = rx.clone();
         let w = self.status_by_task_id_w.clone();
@@ -87,14 +124,23 @@ impl TaskManager {
         });
 
         let _ = thread::spawn(move || loop {
-            let internal_task = self_receiver.recv().unwrap();
-            internal_task.task.run(tx.clone());
+            let _ = match self_it_receiver.try_recv() {
+                Ok(internal_task) => {
+                    internal_task.task.run(tx.clone());
 
-            if self_receiver.is_empty() {
-                info!("no remaining task to run - waiting for a new one...");
-            } else {
-                info!("it remains {} tasks to run", self_receiver.len());
-            }
+                    if self_it_receiver.is_empty() && self_end_task_receiver.try_recv().is_ok() {
+                        info!("no remaining task to run - close task manager");
+                        self_task_terminated_sender.send(true);
+                    } else if self_it_receiver.is_empty() {
+                        info!("no remaining task to run - waiting for a new one...");
+                    } else {
+                        info!("it remains {} tasks to run", self_it_receiver.len());
+                    }
+                }
+                Err(err) => {
+                    sleep(Duration::from_secs(1));
+                }
+            };
         });
 
         Ok(rx)

@@ -12,7 +12,7 @@ use std::time::Duration;
 use std::{env, thread};
 
 use crossbeam_channel::{unbounded, Sender};
-use nats::Connection;
+use nats::{Connection, Subscription};
 
 use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::{Request, Response};
@@ -23,6 +23,7 @@ use crate::TaskSelector::{Environment, Infrastructure};
 use chrono::{DateTime, Utc};
 use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 enum TaskSelector {
     Infrastructure(&'static str),
@@ -61,12 +62,12 @@ fn listen_for_events(
     nc: &Connection,
     mode: &Mode,
     tx: Sender<Box<dyn Task>>,
-) -> Result<(), Error> {
+) -> Result<Subscription, Error> {
     let subject_name = subject_name(mode, &task_selector);
     let sub = nc.queue_subscribe(subject_name.as_str(), subject_name.as_str())?;
     info!("subscribe to {}", subject_name.as_str());
 
-    sub.with_handler(move |msg| {
+    let _ = sub.clone().with_handler(move |msg| {
         debug!("{}", msg);
         match serde_json::from_slice::<Request>(msg.data.as_slice()) {
             Ok(req) => {
@@ -89,7 +90,7 @@ fn listen_for_events(
         Ok(())
     });
 
-    Ok(())
+    Ok(sub)
 }
 
 pub fn main() -> Result<(), Error> {
@@ -155,9 +156,13 @@ pub fn main() -> Result<(), Error> {
     let nc_1 = nc.clone();
 
     let (tx_task, rx_task) = unbounded::<Box<dyn Task>>();
+    let (tx_quit, rx_quit) = unbounded::<bool>();
+
+    let task_manager = Arc::new(Mutex::new(TaskManager::new()));
+    let t1_task_manager = task_manager.clone();
+
     thread::spawn(move || {
-        let mut task_manager = TaskManager::new();
-        let rx_status = task_manager.run();
+        let rx_status = t1_task_manager.lock().unwrap().run();
 
         thread::spawn(move || {
             let rx_status = rx_status.unwrap();
@@ -186,26 +191,50 @@ pub fn main() -> Result<(), Error> {
             }
         });
 
+        let task_manager_is_terminated_rx = t1_task_manager.lock().unwrap().is_terminated();
+
+        thread::spawn(move || {
+            // waiting for sig term to quit gracefully by waiting that there is no remaining tasks to execute.
+            let _ = task_manager_is_terminated_rx.recv();
+            tx_quit.send(true);
+        });
+
         loop {
             let task = rx_task.recv().unwrap();
-            task_manager.add_task(task);
+            t1_task_manager.lock().unwrap().add_task(task);
         }
     });
 
-    listen_for_events(
+    let infrastructure_sub = listen_for_events(
         Infrastructure("infrastructure"),
         &nc,
         &mode,
         tx_task.clone(),
     )?;
 
-    listen_for_events(Environment("environment"), &nc, &mode, tx_task.clone())?;
+    let environment_sub =
+        listen_for_events(Environment("environment"), &nc, &mode, tx_task.clone())?;
 
-    let (tx_quit, rx_quit) = unbounded::<bool>();
+    let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
+
+    thread::spawn(move || {
+        let _ = sig_term_rx.recv();
+        warn!("Termination signal received - graceful termination in progress...");
+        // unsubscribe listeners
+        task_manager.lock().unwrap().stop();
+        infrastructure_sub.unsubscribe();
+        environment_sub.unsubscribe();
+    });
+
+    ctrlc::set_handler(move || {
+        sig_term_tx.send(true);
+    })
+    .expect("Error setting Ctrl-C handler");
 
     info!("server started and listening for incoming requests");
     let _ = rx_quit.recv();
     // if released then quit
 
+    warn!("end of execution");
     Ok(())
 }
