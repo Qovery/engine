@@ -221,9 +221,9 @@ pub fn main() -> Result<(), Error> {
         let _ = sig_term_rx.recv();
         warn!("Termination signal received - graceful termination in progress...");
         // unsubscribe listeners
-        task_manager.lock().unwrap().stop();
         infrastructure_sub.unsubscribe();
         environment_sub.unsubscribe();
+        task_manager.lock().unwrap().stop();
     });
 
     ctrlc::set_handler(move || {
