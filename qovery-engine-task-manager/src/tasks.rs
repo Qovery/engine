@@ -231,26 +231,43 @@ where
     sender: Sender<Message>,
 }
 
+impl<T> MyProgressListener<T>
+where
+    T: Task + Clone + 'static,
+{
+    fn get_internal_task(&self, status: Status) -> InternalTask {
+        InternalTask {
+            task: Box::new(self.task.clone()),
+            status,
+        }
+    }
+}
+
 impl<T> ProgressListener for MyProgressListener<T>
 where
     T: Task + Clone + 'static,
 {
     fn on_progress(&self, info: ProgressInfo) {
-        let it = InternalTask {
-            task: Box::new(self.task.clone()),
-            status: Status::Running {
-                message: Some(info.message),
-            },
-        };
+        let it = self.get_internal_task(Status::Running {
+            message: Some(info.message),
+        });
 
-        self.sender.send(Ok(it));
+        let it = self.sender.send(Ok(it));
     }
 
     fn on_complete(&self, info: ProgressInfo) {
-        // TODO
+        let it = self.get_internal_task(Status::Done {
+            message: Some(info.message),
+        });
+
+        let it = self.sender.send(Ok(it));
     }
 
     fn on_error(&self, info: ProgressInfo) {
-        // TODO
+        let it = self.get_internal_task(Status::Error {
+            message: Some(info.message),
+        });
+
+        let it = self.sender.send(Ok(it));
     }
 }

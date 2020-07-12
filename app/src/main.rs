@@ -229,7 +229,7 @@ pub fn main() -> Result<(), Error> {
     ctrlc::set_handler(move || {
         sig_term_tx.send(true);
     })
-    .expect("Error setting Ctrl-C handler");
+    .expect("Error setting Ctrl-C (Sig. Term) handler");
 
     info!("server started and listening for incoming requests");
     let _ = rx_quit.recv();

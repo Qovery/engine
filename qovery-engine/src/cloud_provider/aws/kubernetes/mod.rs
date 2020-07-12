@@ -320,7 +320,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
         info!("EKS.create_service() called for {}", self.name());
-        unimplemented!()
+        Err(KubernetesError::Error)
     }
 
     fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
