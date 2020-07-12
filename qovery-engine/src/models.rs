@@ -24,6 +24,13 @@ impl Environment {
     pub fn is_valid(&self) -> Result<(), EnvironmentError> {
         Ok(())
     }
+
+    pub fn as_qovery_engine_environment(&self) -> crate::cloud_provider::environment::Environment {
+        crate::cloud_provider::environment::Environment::new(
+            self.environment_id.as_str(),
+            self.project_id.as_str(),
+        )
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

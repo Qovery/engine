@@ -3,6 +3,7 @@ use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::str::FromStr;
 
+use dirs::home_dir;
 use itertools::Itertools;
 use rusoto_core::Region;
 use rusoto_s3::CreateBucketConfiguration;
@@ -13,6 +14,7 @@ use walkdir::WalkDir;
 
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
 use crate::cloud_provider::service::Service;
 use crate::cloud_provider::CloudProvider;
@@ -21,7 +23,6 @@ use crate::fs::{
     copy_bootstrap_files, workspace_directory, write_rendered_templates, RenderedTemplate,
 };
 use crate::{dynamo_db, s3};
-use dirs::home_dir;
 
 pub mod node;
 
@@ -72,7 +73,7 @@ impl<'a> EKS<'a> {
         format!("{}-{}-qovery-terraform", self.region.name(), self.id())
     }
 
-    fn generate_j2_templates(&self) -> Result<Vec<RenderedTemplate>, TeraError> {
+    fn generate_j2_templates(&self, root_dir: &str) -> Result<Vec<RenderedTemplate>, TeraError> {
         let region_cluster_id = format!("{}-{}-{}", self.region(), self.name(), self.id());
 
         let mut context = Context::new();
@@ -102,7 +103,7 @@ impl<'a> EKS<'a> {
 
         context.insert("eks_worker_nodes", &worker_nodes);
 
-        let files = WalkDir::new(self.template_directory.as_str())
+        let files = WalkDir::new(root_dir)
             .follow_links(true)
             .into_iter()
             .filter_map(|e| e.ok())
@@ -117,7 +118,7 @@ impl<'a> EKS<'a> {
         let mut results: Vec<RenderedTemplate> = vec![];
         for file in files.into_iter() {
             let path_str = file.path().to_str().unwrap();
-            let j2_path = path_str.replace(self.template_directory.as_str(), "");
+            let j2_path = path_str.replace(root_dir, "");
 
             let j2_file_name = file.file_name().to_str().unwrap();
             let file_name = j2_file_name.replace(".j2", "");
@@ -134,7 +135,8 @@ impl<'a> EKS<'a> {
         dest_dir: P,
     ) -> Result<(), Error> {
         // generate j2 templates
-        let rendered_templates = match self.generate_j2_templates() {
+        let rendered_templates = match self.generate_j2_templates(self.template_directory.as_str())
+        {
             Ok(rt) => rt,
             Err(err) => {
                 return Err(Error::new(
@@ -314,17 +316,14 @@ impl<'a> Kubernetes for EKS<'a> {
         unimplemented!()
     }
 
-    fn services(&self) -> Result<Vec<Box<dyn Service>>, KubernetesError> {
+    fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
+        // TODO create the namespace
+        // TODO install the required services (custom domains, agents..) into the namespace (if necessary)
         unimplemented!()
     }
 
-    fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
-        info!("EKS.create_service() called for {}", self.name());
-        Err(KubernetesError::Error)
-    }
-
-    fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError> {
-        info!("EKS.delete_service() called for {}", self.name());
+    fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
+        // TODO delete the namespace - do services are all deleted?
         unimplemented!()
     }
 }
@@ -377,7 +376,7 @@ mod tests {
         let nodes = nodes();
 
         let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, nodes);
-        assert_eq!(eks.generate_j2_templates().is_ok(), true);
+        assert_eq!(eks.generate_j2_templates("lib/aws/bootstrap").is_ok(), true);
     }
 
     #[test]

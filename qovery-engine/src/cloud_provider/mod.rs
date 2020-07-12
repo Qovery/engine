@@ -6,6 +6,7 @@ use std::any::Any;
 
 pub mod application;
 pub mod aws;
+pub mod environment;
 pub mod gcp;
 pub mod kubernetes;
 pub mod service;

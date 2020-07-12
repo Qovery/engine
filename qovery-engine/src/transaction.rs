@@ -54,17 +54,20 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn build(&mut self, environment: &'a Environment) -> Result<(), EnvironmentError> {
+    pub fn build_environment(
+        &mut self,
+        environment: &'a Environment,
+    ) -> Result<(), EnvironmentError> {
         match environment.is_valid() {
             Ok(_) => {
-                self.steps.push(Step::Build(environment));
+                self.steps.push(Step::BuildEnvironment(environment));
                 Ok(())
             }
             Err(err) => Err(err),
         }
     }
 
-    pub fn deploy(
+    pub fn deploy_environment(
         &mut self,
         kubernetes: &'a dyn Kubernetes,
         environment: &'a Environment,
@@ -73,20 +76,6 @@ impl<'a> Transaction<'a> {
             Ok(_) => {
                 self.steps
                     .push(Step::DeployEnvironment(kubernetes, environment));
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
-    }
-
-    pub fn deploy_service(
-        &mut self,
-        kubernetes: &'a dyn Kubernetes,
-        service: &'a dyn Service,
-    ) -> Result<(), ServiceError> {
-        match service.is_valid() {
-            Ok(_) => {
-                self.steps.push(Step::DeployService(kubernetes, service));
                 Ok(())
             }
             Err(err) => Err(err),
@@ -164,35 +153,6 @@ impl<'a> Transaction<'a> {
         Ok(push_results)
     }
 
-    fn _deploy_service(
-        &self,
-        kubernetes: &'a dyn Kubernetes,
-        service: &'a dyn Service,
-    ) -> Result<(), DeployError> {
-        // TODO
-
-        match kubernetes.create_service(service) {
-            Ok(_) => {}
-            Err(err) => return Err(DeployError::Error),
-        }
-
-        Ok(())
-    }
-
-    fn _deploy_service_with_transaction_error(
-        &self,
-        kubernetes: &'a dyn Kubernetes,
-        service: &'a dyn Service,
-    ) -> TransactionResult {
-        match self._deploy_service(kubernetes, service) {
-            Err(err) => match self.rollback() {
-                Ok(_) => TransactionResult::Rollback(CommitError::Deploy(err)),
-                Err(e) => TransactionResult::UnrecoverableError(CommitError::Deploy(err), e),
-            },
-            _ => TransactionResult::Ok,
-        }
-    }
-
     pub fn rollback(&self) -> Result<(), RollbackError> {
         for step in self.executed_steps.iter() {
             match step {
@@ -210,15 +170,8 @@ impl<'a> Transaction<'a> {
                         _ => {}
                     };
                 }
-                Step::Build(environment) => {
+                Step::BuildEnvironment(environment) => {
                     // revert build applications
-                }
-                Step::DeployService(kubernetes, service) => {
-                    // TODO push the last version? and then delete if there is no valid version?
-                    match kubernetes.delete_service(*service) {
-                        Err(err) => return Err(RollbackError::Error),
-                        _ => {}
-                    };
                 }
                 Step::DeployEnvironment(kubernetes, environment) => {
                     // revert environment deployment
@@ -270,7 +223,7 @@ impl<'a> Transaction<'a> {
                         _ => TransactionResult::Ok,
                     };
                 }
-                Step::Build(environment) => {
+                Step::BuildEnvironment(environment) => {
                     // build applications
                     let apps_result = match self._build_applications(environment) {
                         Ok(applications) => match self._push_applications(&applications) {
@@ -292,56 +245,16 @@ impl<'a> Transaction<'a> {
                     let applications = apps_result.ok().unwrap();
                     applications_by_environment.insert(environment, applications);
                 }
-                Step::DeployService(kubernetes, service) => {
-                    // deploy environment
-                    match self._deploy_service_with_transaction_error(*kubernetes, *service) {
-                        TransactionResult::Ok => {}
-                        err => return err,
-                    }
-                }
                 Step::DeployEnvironment(kubernetes, environment) => {
                     // deploy complete environment
 
-                    // deploy databases
-                    let databases_results = environment
-                        .databases
-                        .iter()
-                        .map(|db| db.to_service(self.config.cloud_provider.borrow()))
-                        .filter(|s| s.is_some()) // TODO raise an error if service = none?
-                        .map(|s| s.unwrap())
-                        .map(|service| {
-                            self._deploy_service_with_transaction_error(
-                                *kubernetes,
-                                service.borrow(),
-                            )
-                        })
-                        .collect::<Vec<_>>();
-
-                    for t in databases_results.into_iter() {
-                        match t {
-                            TransactionResult::Ok => {}
-                            err => return err,
+                    let qe_environment = environment.as_qovery_engine_environment();
+                    let _ = match kubernetes.deploy_environment(&qe_environment) {
+                        Ok(_) => {}
+                        Err(err) => {
+                            return TransactionResult::Rollback(CommitError::CreateKubernetes(err));
                         }
-                    }
-
-                    // deploy applications
-                    let transaction_results = match applications_by_environment.remove(environment)
-                    {
-                        Some(apps) => apps
-                            .iter()
-                            .map(|app| {
-                                self._deploy_service_with_transaction_error(*kubernetes, app)
-                            })
-                            .collect::<Vec<_>>(),
-                        None => vec![], // TODO return an error?
                     };
-
-                    for t in transaction_results.into_iter() {
-                        match t {
-                            TransactionResult::Ok => {}
-                            err => return err,
-                        }
-                    }
                 }
             };
         }
@@ -354,8 +267,7 @@ enum Step<'a> {
     // init and create all the necessary resources (Network, Kubernetes)
     CreateKubernetes(&'a dyn Kubernetes),
     DeleteKubernetes(&'a dyn Kubernetes),
-    Build(&'a Environment),
-    DeployService(&'a dyn Kubernetes, &'a dyn Service),
+    BuildEnvironment(&'a Environment),
     DeployEnvironment(&'a dyn Kubernetes, &'a Environment),
 }
 
@@ -364,8 +276,7 @@ impl<'a> Clone for Step<'a> {
         match self {
             Step::CreateKubernetes(k) => Step::CreateKubernetes(*k),
             Step::DeleteKubernetes(k) => Step::DeleteKubernetes(*k),
-            Step::Build(e) => Step::Build(*e),
-            Step::DeployService(k, s) => Step::DeployService(*k, *s),
+            Step::BuildEnvironment(e) => Step::BuildEnvironment(*e),
             Step::DeployEnvironment(k, e) => Step::DeployEnvironment(*k, *e),
         }
     }

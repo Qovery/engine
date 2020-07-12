@@ -1,3 +1,4 @@
+use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::Service;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::CmdError;
@@ -21,9 +22,8 @@ pub trait Kubernetes {
     fn on_downgrade_error(&self) -> Result<(), KubernetesError>;
     fn on_delete(&self) -> Result<(), KubernetesError>;
     fn on_delete_error(&self) -> Result<(), KubernetesError>;
-    fn services(&self) -> Result<Vec<Box<dyn Service>>, KubernetesError>;
-    fn create_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
-    fn delete_service(&self, service: &dyn Service) -> Result<(), KubernetesError>;
+    fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
+    fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
 }
 
 pub trait KubernetesNode {

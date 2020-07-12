@@ -96,12 +96,12 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    match tx.build(&environment) {
+    match tx.build_environment(&environment) {
         Ok(_) => {}
         Err(err) => panic!("environment error"),
     }
 
-    tx.deploy(&eks, &environment);
+    tx.deploy_environment(&eks, &environment);
 
     match tx.commit() {
         TransactionResult::Ok => println!("execution: ok"),
