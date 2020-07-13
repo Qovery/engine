@@ -24,6 +24,11 @@ provider "helm" {
       api_version = "client.authentication.k8s.io/v1alpha1"
       command = "aws-iam-authenticator"
       args = ["token", "-i", var.region_cluster_name]
+      env = {
+        AWS_ACCESS_KEY_ID = "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY = "{{ aws_secret_key }}"
+        AWS_DEFAULT_REGION = "{{ aws_region }}"
+      }
     }
   }
 }
