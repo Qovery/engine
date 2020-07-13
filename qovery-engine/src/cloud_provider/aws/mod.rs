@@ -2,6 +2,10 @@ use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
+pub mod application;
+pub mod databases;
+pub mod router;
+
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
 use crate::runtime::async_run;

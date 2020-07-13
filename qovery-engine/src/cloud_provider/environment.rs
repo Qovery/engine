@@ -1,10 +1,10 @@
-use crate::cloud_provider::application::Application;
 use crate::cloud_provider::service::{
     Backup, Create, Delete, Downgrade, Service, StatefulService, StatelessService, Upgrade,
 };
 use std::borrow::Borrow;
 
 pub struct Environment {
+    pub kind: Kind,
     pub id: String,
     pub project_id: String,
     pub stateless_services: Vec<Box<dyn StatelessService>>,
@@ -13,7 +13,9 @@ pub struct Environment {
 
 impl Environment {
     pub fn new(id: &str, project_id: &str) -> Self {
+        // FIXME TODO
         Environment {
+            kind: Kind::Development,
             id: id.to_string(),
             project_id: project_id.to_string(),
             stateless_services: vec![],
@@ -24,4 +26,9 @@ impl Environment {
     pub fn namespace(&self) -> &str {
         self.project_id.as_str()
     }
+}
+
+pub enum Kind {
+    Production,
+    Development,
 }

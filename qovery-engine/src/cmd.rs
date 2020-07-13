@@ -1,3 +1,4 @@
+use dirs::home_dir;
 use std::borrow::Borrow;
 use std::io::Error;
 use std::io::{BufRead, BufReader};
@@ -139,6 +140,36 @@ where
     }
 
     Err(CmdError::Exec(exit_status))
+}
+
+pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
+    let home_dir = home_dir().unwrap();
+    let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
+
+    match exec_with_envs_and_output(
+        format!("{} terraform", root_dir).as_str(),
+        args,
+        vec![("TF_PLUGIN_CACHE_DIR", tf_plugin_cache_dir.as_str())],
+        |line| {
+            info!("{}", line.unwrap());
+        },
+    ) {
+        Err(err) => return Err(err),
+        _ => {}
+    };
+
+    Ok(())
+}
+
+pub fn helm_exec(root_dir: &str, args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CmdError> {
+    match exec_with_envs_and_output(format!("{} helm", root_dir).as_str(), args, envs, |line| {
+        info!("{}", line.unwrap());
+    }) {
+        Err(err) => return Err(err),
+        _ => {}
+    };
+
+    Ok(())
 }
 
 #[derive(Debug)]

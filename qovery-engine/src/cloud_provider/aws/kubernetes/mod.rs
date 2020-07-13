@@ -17,12 +17,12 @@ use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
 use crate::cloud_provider::service::Service;
-use crate::cloud_provider::CloudProvider;
+use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::{
-    copy_bootstrap_files, workspace_directory, write_rendered_templates, RenderedTemplate,
+    copy_non_template_files, workspace_directory, write_rendered_templates, RenderedTemplate,
 };
-use crate::{dynamo_db, s3};
+use crate::{cmd, dynamo_db, fs, s3};
 
 pub mod node;
 
@@ -33,7 +33,6 @@ pub struct EKS<'a> {
     region: Region,
     cloud_provider: &'a AWS,
     nodes: Vec<Node>,
-    tera: Tera,
     template_directory: String,
 }
 
@@ -47,15 +46,6 @@ impl<'a> EKS<'a> {
         nodes: Vec<Node>,
     ) -> Self {
         let template_directory = "lib/aws/bootstrap".to_string();
-        let tera_template_string = format!("{}/**/*.j2.*", template_directory);
-
-        let tera = match Tera::new(tera_template_string.as_str()) {
-            Ok(t) => t,
-            Err(e) => panic!(
-                "{} parsing error - does the directory exists?",
-                template_directory
-            ),
-        };
 
         EKS {
             id: id.to_string(),
@@ -64,7 +54,6 @@ impl<'a> EKS<'a> {
             region: Region::from_str(region).unwrap(),
             cloud_provider,
             nodes,
-            tera,
             template_directory,
         }
     }
@@ -73,7 +62,7 @@ impl<'a> EKS<'a> {
         format!("{}-{}-qovery-terraform", self.region.name(), self.id())
     }
 
-    fn generate_j2_templates(&self, root_dir: &str) -> Result<Vec<RenderedTemplate>, TeraError> {
+    fn context(&self) -> Context {
         let region_cluster_id = format!("{}-{}-{}", self.region(), self.name(), self.id());
 
         let mut context = Context::new();
@@ -103,78 +92,7 @@ impl<'a> EKS<'a> {
 
         context.insert("eks_worker_nodes", &worker_nodes);
 
-        let files = WalkDir::new(root_dir)
-            .follow_links(true)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.file_name()
-                    .to_str()
-                    .map(|s| s.contains(".j2."))
-                    .unwrap_or(false)
-            })
-            .collect::<Vec<_>>();
-
-        let mut results: Vec<RenderedTemplate> = vec![];
-        for file in files.into_iter() {
-            let path_str = file.path().to_str().unwrap();
-            let j2_path = path_str.replace(root_dir, "");
-
-            let j2_file_name = file.file_name().to_str().unwrap();
-            let file_name = j2_file_name.replace(".j2", "");
-
-            let content = self.tera.render(&j2_path[1..], &context)?;
-            results.push(RenderedTemplate::new(file_name, content));
-        }
-
-        Ok(results)
-    }
-
-    fn generate_and_copy_bootstrap_files_into_dir<P: AsRef<Path>>(
-        &self,
-        dest_dir: P,
-    ) -> Result<(), Error> {
-        // generate j2 templates
-        let rendered_templates = match self.generate_j2_templates(self.template_directory.as_str())
-        {
-            Ok(rt) => rt,
-            Err(err) => {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    "something goes wrong while generating j2 templates {}",
-                ));
-            }
-        };
-
-        // copy all .tf and .yaml files into our dest directory
-        copy_bootstrap_files(
-            &Path::new(self.template_directory.as_str()),
-            dest_dir.as_ref(),
-        )?;
-
-        write_rendered_templates(&rendered_templates, dest_dir.as_ref())?;
-
-        Ok(())
-    }
-
-    fn terraform_exec(&self, root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
-        let home_dir = home_dir().unwrap();
-        let tf_plugin_cache_dir =
-            format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
-
-        match exec_with_envs_and_output(
-            format!("{} terraform", root_dir).as_str(),
-            args,
-            vec![("TF_PLUGIN_CACHE_DIR", tf_plugin_cache_dir.as_str())],
-            |line| {
-                info!("{}", line.unwrap());
-            },
-        ) {
-            Err(err) => return Err(err),
-            _ => {}
-        };
-
-        Ok(())
+        context
     }
 }
 
@@ -229,8 +147,13 @@ impl<'a> Kubernetes for EKS<'a> {
             self.bucket_name().as_str(), // bucket name and DynamoDB are the same
         )?;
 
-        // generate terraform files
-        self.generate_and_copy_bootstrap_files_into_dir(&temp_dir)?;
+        // generate terraform files and copy them into temp dir
+        let context = self.context();
+        let _ = crate::fs::generate_and_copy_j2_files_into_dir(
+            self.template_directory.as_str(),
+            &temp_dir,
+            &context,
+        )?;
 
         let on_error = |err: CmdError| {
             match err {
@@ -241,7 +164,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // terraform init
         info!("terraform init on EKS for {}", self.name());
-        match self.terraform_exec(
+        match cmd::terraform_exec(
             temp_dir_path_str,
             vec!["init", "-backend-config=backend.tf", "-no-color"],
         ) {
@@ -251,14 +174,14 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // terraform validate config
         info!("terraform validate config on EKS for {}", self.name());
-        match self.terraform_exec(temp_dir_path_str, vec!["validate"]) {
+        match cmd::terraform_exec(temp_dir_path_str, vec!["validate"]) {
             Err(err) => return on_error(err),
             _ => {}
         };
 
         // terraform plan
         info!("terraform plan on EKS for {}", self.name());
-        match self.terraform_exec(
+        match cmd::terraform_exec(
             temp_dir_path_str,
             vec!["plan", "-out", "tf_plan", "-no-color"],
         ) {
@@ -268,7 +191,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // terraform apply
         info!("terraform apply on EKS for {}", self.name());
-        match self.terraform_exec(
+        match cmd::terraform_exec(
             temp_dir_path_str,
             vec!["apply", "-auto-approve", "-no-color", "tf_plan"],
         ) {
@@ -317,26 +240,38 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
+        info!("EKS.deploy_environment() called for {}", self.name());
         // TODO create the namespace
 
         // TODO install the required services (custom domains, agents..) into the namespace (if necessary)
 
+        let stateful_deployment_target = match environment.kind {
+            crate::cloud_provider::environment::Kind::Production => {
+                DeploymentTarget::ManagedServices(self.cloud_provider())
+            }
+            crate::cloud_provider::environment::Kind::Development => {
+                DeploymentTarget::SelfHosted(self)
+            }
+        };
+
         // create all stateful services
         for env in &environment.stateful_services {
-            env.on_create(self.cloud_provider()); // TODO handle err
+            env.on_create(&stateful_deployment_target); // TODO handle err
         }
 
         // create all stateless services
+        let stateless_deployment_target = DeploymentTarget::SelfHosted(self);
         for env in &environment.stateless_services {
-            env.on_create(self.cloud_provider().borrow()); // TODO handle err
+            env.on_create(&stateless_deployment_target); // TODO handle err
         }
 
         // TODO wait for pods
         // TODO check custom domain working
-        unimplemented!()
+        Ok(())
     }
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
+        warn!("EKS.delete_environment() called for {}", self.name());
         // TODO delete the namespace - do services are all deleted?
         unimplemented!()
     }
@@ -390,19 +325,6 @@ mod tests {
         let nodes = nodes();
 
         let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, nodes);
-        assert_eq!(eks.generate_j2_templates("lib/aws/bootstrap").is_ok(), true);
-    }
-
-    #[test]
-    fn test_write_terraform_files_into_dir() {
-        let aws = aws();
-        let nodes = nodes();
-
-        let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, nodes);
-        assert_eq!(
-            eks.generate_and_copy_bootstrap_files_into_dir("/tmp/xxx")
-                .is_ok(),
-            true
-        );
+        assert_eq!(eks.context("lib/aws/bootstrap").is_ok(), true);
     }
 }

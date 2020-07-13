@@ -4,13 +4,10 @@ use rusoto_core::RusotoError;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-pub mod application;
 pub mod aws;
-pub mod databases;
 pub mod environment;
 pub mod gcp;
 pub mod kubernetes;
-pub mod router;
 pub mod service;
 
 pub trait CloudProvider {
@@ -63,4 +60,9 @@ pub enum DeployError {
 pub enum Kind {
     AWS,
     GCP,
+}
+
+pub enum DeploymentTarget<'a> {
+    ManagedServices(&'a dyn CloudProvider),
+    SelfHosted(&'a dyn Kubernetes),
 }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::build_platform::{
     Build, BuildError, BuildOptions, EnvironmentVariable, GitRepository, Image,
 };
-use crate::cloud_provider::application::Application;
+use crate::cloud_provider::aws::application::Application;
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesError};
 use crate::cloud_provider::service::{Service, ServiceError};
 use crate::cloud_provider::DeployError;
