@@ -127,6 +127,12 @@ data:
 {{- if .Values.backend.es.tls_ca }}
         tls.ca_file /secure/es-tls-ca.crt
 {{- end }}
+{{- if .Values.backend.es.aws_auth }}
+        AWS_Auth {{ .Values.backend.es.aws_auth }}
+{{- end }}
+{{- if .Values.backend.es.aws_region }}
+        AWS_Region {{ .Values.backend.es.aws_region }}
+{{- end }}
 {{- end }}
 {{ else if eq .Values.backend.type "splunk" }}
     [OUTPUT]

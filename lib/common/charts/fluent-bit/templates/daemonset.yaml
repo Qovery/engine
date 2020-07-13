@@ -46,6 +46,30 @@ spec:
       dnsPolicy: {{ .Values.dnsPolicy }}
       serviceAccountName: {{ template "fluent-bit.serviceAccountName" . }}
       containers:
+     {{- if .Values.awsEsProxy }}
+      - name: aws-es-proxy
+        image: abutaha/aws-es-proxy:0.9
+        args:
+          - -endpoint
+          - "https://{{ .Values.awsEsProxy.host }}"
+          - -listen
+          - "0.0.0.0:{{ .Values.awsEsProxy.port }}"
+        ports:
+          - name: proxy-es-port
+            containerPort: {{ .Values.awsEsProxy.port }}
+            protocol: TCP
+        env:
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: aws-es-proxy-secret
+                key: accessKey
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: aws-es-proxy-secret
+                key: secretKey
+      {{- end }}
       - name: fluent-bit
         image: "{{ .Values.image.fluent_bit.repository }}:{{ .Values.image.fluent_bit.tag }}"
         imagePullPolicy: "{{ .Values.image.pullPolicy }}"

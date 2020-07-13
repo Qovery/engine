@@ -15,6 +15,12 @@ testFramework:
 nameOverride: ""
 fullnameOverride: ""
 
+awsEsProxy:
+  host:
+  port: 9200
+  accessKey:
+  secretKey:
+
 # When enabled, exposes json and prometheus metrics on {{ .Release.Name }}-metrics service
 metrics:
   enabled: false
@@ -123,11 +129,7 @@ parsers:
   ##
   json: []
 
-env:
-  - name: AWS_ACCESS_KEY_ID
-    value: "{{ .Values.AWS_ACCESS_KEY_ID }}"
-  - name: AWS_SECRET_ACCESS_KEY
-    value: "{{ .Values.AWS_SECRET_ACCESS_KEY }}"
+env: []
 
 ## Annotations to add to the DaemonSet's Pods
 podAnnotations: {}
