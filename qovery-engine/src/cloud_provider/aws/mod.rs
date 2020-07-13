@@ -7,7 +7,6 @@ use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
 use crate::runtime::async_run;
 use std::any::Any;
 
-pub mod databases;
 pub mod kubernetes;
 
 pub struct AWS {
@@ -62,10 +61,6 @@ impl CloudProvider for AWS {
             Ok(x) => Ok(()),
             Err(err) => Err(CloudProviderError::from(err)),
         }
-    }
-
-    fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError> {
-        Ok(vec![])
     }
 
     fn as_any(&self) -> &dyn Any {

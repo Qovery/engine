@@ -4,7 +4,7 @@ use std::rc::Rc;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::cloud_provider::aws::databases::PostgreSQL;
+use crate::cloud_provider::databases::PostgreSQL;
 use crate::cloud_provider::service::{DatabaseOptions, Service};
 use crate::cloud_provider::CloudProvider as CP;
 use crate::cloud_provider::Kind as CPKind;
@@ -71,6 +71,8 @@ pub struct Storage {}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Router {
+    pub id: String,
+    pub name: String,
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
 }

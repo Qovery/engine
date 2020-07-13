@@ -6,9 +6,11 @@ use std::any::Any;
 
 pub mod application;
 pub mod aws;
+pub mod databases;
 pub mod environment;
 pub mod gcp;
 pub mod kubernetes;
+pub mod router;
 pub mod service;
 
 pub trait CloudProvider {
@@ -16,7 +18,6 @@ pub trait CloudProvider {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), CloudProviderError>;
-    fn kubernetes_clusters(self) -> Result<Vec<Box<dyn Kubernetes>>, CloudProviderError>;
     fn as_any(&self) -> &dyn Any;
 }
 

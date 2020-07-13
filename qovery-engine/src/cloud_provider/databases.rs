@@ -33,24 +33,20 @@ impl Service for PostgreSQL {
         unimplemented!()
     }
 
-    fn image(&self) -> &Image {
-        unimplemented!()
-    }
-
     fn environment_type(&self) -> EnvironmentType {
         unimplemented!()
     }
 }
 
-impl<'a> Create<'a> for PostgreSQL {
-    fn on_create(&self, target: &'a dyn CloudProvider) {
+impl Create for PostgreSQL {
+    fn on_create(&self, target: &dyn CloudProvider) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}
         }
     }
 
-    fn on_create_error(&self, target: &'a dyn CloudProvider) {
+    fn on_create_error(&self, target: &dyn CloudProvider) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}
@@ -58,15 +54,15 @@ impl<'a> Create<'a> for PostgreSQL {
     }
 }
 
-impl<'a> Delete<'a> for PostgreSQL {
-    fn on_delete(&self, target: &'a dyn CloudProvider) {
+impl Delete for PostgreSQL {
+    fn on_delete(&self, target: &dyn CloudProvider) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}
         }
     }
 
-    fn on_delete_error(&self, target: &'a dyn CloudProvider) {
+    fn on_delete_error(&self, target: &dyn CloudProvider) {
         match self.environment_type() {
             EnvironmentType::Production => {}
             EnvironmentType::Development => {}

@@ -1,9 +1,12 @@
 use crate::build_platform::Image;
 use crate::cloud_provider::CloudProvider;
 
-pub trait StatefulService<'a>: Service + Create<'a> + Delete<'a> {}
+pub trait StatelessService: Service + Create + Delete {}
 
-pub trait StatelessService<'a>: Service + Create<'a> + Delete<'a> {}
+pub trait StatefulService:
+    Service + Create + Delete + Backup + Clone + Upgrade + Downgrade
+{
+}
 
 pub trait Service {
     fn service_type(&self) -> ServiceType;
@@ -11,7 +14,6 @@ pub trait Service {
     fn name(&self) -> &str;
     fn version(&self) -> &str;
     fn is_valid(&self) -> Result<(), ServiceError>;
-    fn image(&self) -> &Image;
     fn environment_type(&self) -> EnvironmentType;
 }
 
@@ -20,30 +22,36 @@ pub enum EnvironmentType {
     Development,
 }
 
-pub trait Create<'a> {
-    fn on_create(&self, target: &'a dyn CloudProvider);
-    fn on_create_error(&self, target: &'a dyn CloudProvider);
+pub trait Create {
+    fn on_create(&self, target: &dyn CloudProvider);
+    fn on_create_error(&self, target: &dyn CloudProvider);
 }
 
-pub trait Delete<'a> {
-    fn on_delete(&self, target: &'a dyn CloudProvider);
-    fn on_delete_error(&self, target: &'a dyn CloudProvider);
+pub trait Delete {
+    fn on_delete(&self, target: &dyn CloudProvider);
+    fn on_delete_error(&self, target: &dyn CloudProvider);
 }
 
-pub trait Snapshot<'a> {
-    fn on_snapshot(&self, target: &'a dyn CloudProvider);
+pub trait Backup {
+    fn on_backup(&self, target: &dyn CloudProvider);
+    fn on_backup_error(&self, target: &dyn CloudProvider);
+    fn on_restore(&self, target: &dyn CloudProvider);
+    fn on_restore_error(&self, target: &dyn CloudProvider);
 }
 
-pub trait Clone<'a> {
-    fn on_clone(&self, target: &'a dyn CloudProvider);
+pub trait Clone {
+    fn on_clone(&self, target: &dyn CloudProvider);
+    fn on_clone_error(&self, target: &dyn CloudProvider);
 }
 
-pub trait Upgrade<'a> {
-    fn on_upgrade(&self, target: &'a dyn CloudProvider);
+pub trait Upgrade {
+    fn on_upgrade(&self, target: &dyn CloudProvider);
+    fn on_upgrade_error(&self, target: &dyn CloudProvider);
 }
 
-pub trait Downgrade<'a> {
-    fn on_downgrade(&self, target: &'a dyn CloudProvider);
+pub trait Downgrade {
+    fn on_downgrade(&self, target: &dyn CloudProvider);
+    fn on_downgrade_error(&self, target: &dyn CloudProvider);
 }
 
 pub struct DatabaseOptions {
@@ -63,6 +71,7 @@ pub enum DatabaseType<'a> {
 pub enum ServiceType<'a> {
     Application,
     Database(DatabaseType<'a>),
+    Router,
 }
 
 #[derive(Debug)]

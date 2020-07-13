@@ -4,16 +4,16 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::CloudProvider;
 
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub struct Application {
+pub struct Router {
     pub id: String,
     pub name: String,
-    pub image: Image,
+    pub custom_domains: Vec<CustomDomain>,
+    pub routes: Vec<Route>,
 }
 
-impl Service for Application {
+impl<'a> Service for Router {
     fn service_type(&self) -> ServiceType {
-        ServiceType::Application
+        ServiceType::Router
     }
 
     fn id(&self) -> &str {
@@ -25,7 +25,7 @@ impl Service for Application {
     }
 
     fn version(&self) -> &str {
-        self.image.commit_id.as_str()
+        unimplemented!()
     }
 
     fn is_valid(&self) -> Result<(), ServiceError> {
@@ -37,8 +37,10 @@ impl Service for Application {
     }
 }
 
-impl Create for Application {
+impl Create for Router {
     fn on_create(&self, target: &dyn CloudProvider) {
+        // TODO custom domains? create an NGINX ingress
+        // TODO render helm common config and apply
         unimplemented!()
     }
 
@@ -47,7 +49,7 @@ impl Create for Application {
     }
 }
 
-impl Delete for Application {
+impl Delete for Router {
     fn on_delete(&self, target: &dyn CloudProvider) {
         unimplemented!()
     }
@@ -56,3 +58,7 @@ impl Delete for Application {
         unimplemented!()
     }
 }
+
+pub struct CustomDomain {}
+
+pub struct Route {}

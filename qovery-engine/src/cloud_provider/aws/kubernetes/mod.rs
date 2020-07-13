@@ -318,7 +318,21 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         // TODO create the namespace
+
         // TODO install the required services (custom domains, agents..) into the namespace (if necessary)
+
+        // create all stateful services
+        for env in &environment.stateful_services {
+            env.on_create(self.cloud_provider()); // TODO handle err
+        }
+
+        // create all stateless services
+        for env in &environment.stateless_services {
+            env.on_create(self.cloud_provider().borrow()); // TODO handle err
+        }
+
+        // TODO wait for pods
+        // TODO check custom domain working
         unimplemented!()
     }
 

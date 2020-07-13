@@ -1,9 +1,14 @@
-use crate::cloud_provider::service::Service;
+use crate::cloud_provider::application::Application;
+use crate::cloud_provider::service::{
+    Backup, Create, Delete, Downgrade, Service, StatefulService, StatelessService, Upgrade,
+};
+use std::borrow::Borrow;
 
 pub struct Environment {
     pub id: String,
     pub project_id: String,
-    pub services: Vec<Box<dyn Service>>,
+    pub stateless_services: Vec<Box<dyn StatelessService>>,
+    pub stateful_services: Vec<Box<dyn StatefulService>>,
 }
 
 impl Environment {
@@ -11,7 +16,8 @@ impl Environment {
         Environment {
             id: id.to_string(),
             project_id: project_id.to_string(),
-            services: vec![],
+            stateless_services: vec![],
+            stateful_services: vec![],
         }
     }
 
