@@ -1,7 +1,8 @@
 resource "helm_release" "elasticsearch-curator" {
   name = "elasticsearch-curator"
   chart = "../../../lib/common/charts/elasticsearch-curator"
-  namespace = "prometheus"
+  namespace = "logging"
+  create_namespace = "true"
   atomic = true
   max_history = 50
 
