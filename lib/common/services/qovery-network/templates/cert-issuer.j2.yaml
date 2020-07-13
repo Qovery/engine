@@ -8,22 +8,22 @@
 apiVersion: cert-manager.io/v1alpha2
 kind: Issuer
 metadata:
-  name: {{ qovery_env.get_domain_id(domain_name) }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ get_domain_id(domain_name) }}
+  namespace: {{ project_id }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
+    ownerId: {{ owner_id }}
     fqdn: "{{ domain_name }}"
-    fqdnId: {{ qovery_env.get_domain_id(domain_name) }}
+    fqdnId: {{ get_domain_id(domain_name) }}
 spec:
   acme:
-    server: {{ qovery_env.letsencrypt_url }}
+    server: {{ letsencrypt_url }}
     email: tls@qovery.com
     privateKeySecretRef:
-      name: {{ qovery_env.get_domain_id(domain_name) }}-key
+      name: {{ get_domain_id(domain_name) }}-key
     solvers:
       - http01:
           ingress:
-            class: nginx-{{ qovery_env.project_id }}
+            class: nginx-{{ project_id }}
 {%- endif %}
 {%- endfor %}
 {%- endif %}

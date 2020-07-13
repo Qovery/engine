@@ -2,37 +2,37 @@
 
 variable "cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "{{ qovery_env.cluster_name }}"
+  default     = "{{ cluster_name }}"
   type        = string
 }
 
 variable "region" {
   description = "AWS region to store terraform state and lock"
-  default     = "{{ qovery_env.region }}"
+  default     = "{{ region }}"
   type        = string
 }
 
 variable "region_cluster_name" {
   description = "AWS region to store terraform state and lock"
-  default     = "{{ qovery_env.region }}-{{ qovery_env.cluster_name }}"
+  default     = "{{ region }}-{{ cluster_name }}"
   type        = string
 }
 
 variable "q_project_id" {
   description = "Qovery project ID"
-  default     = "{{ qovery_env.project_id }}"
+  default     = "{{ project_id }}"
   type        = string
 }
 
 variable "q_customer_id" {
   description = "Qovery customer ID"
-  default     = "{{ qovery_env.owner_id }}"
+  default     = "{{ owner_id }}"
   type        = string
 }
 
 variable "q_environment_id" {
   description = "Qovery client environment"
-  default     = "{{ qovery_env.environment_id }}"
+  default     = "{{ environment_id }}"
   type        = string
 }
 

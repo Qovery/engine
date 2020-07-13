@@ -318,13 +318,4 @@ mod tests {
             Node::new(1, 2),
         ]
     }
-
-    #[test]
-    fn test_generate_terraform_files() {
-        let aws = aws();
-        let nodes = nodes();
-
-        let eks = EKS::new("123abc", "test-cluster", "1.14", "eu-west-3", &aws, nodes);
-        assert_eq!(eks.context("lib/aws/bootstrap").is_ok(), true);
-    }
 }

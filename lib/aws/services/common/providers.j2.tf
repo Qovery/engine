@@ -1,6 +1,6 @@
 provider "aws" {
   profile    = "default"
-  region     = "{{ qovery_env.region }}"
+  region     = "{{ region }}"
   version    = "~> 2.63"
 }
 

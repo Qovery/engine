@@ -67,11 +67,11 @@ controller:
 
   ## Election ID to use for status update
   ##
-  electionID: ingress-controller-leader-{{ qovery_env.project_id }}
+  electionID: ingress-controller-leader-{{ project_id }}
 
   ## Name of the ingress class to route through this controller
   ##
-  ingressClass: nginx-{{ qovery_env.project_id }}
+  ingressClass: nginx-{{ project_id }}
 
   # labels to add to the pod container metadata
   podLabels: {}
@@ -96,7 +96,7 @@ controller:
   ##
   scope:
     enabled: trueenfin.
-    namespace: "{{ qovery_env.project_id }}"   # defaults to .Release.Namespace
+    namespace: "{{ project_id }}"   # defaults to .Release.Namespace
 
   ## Allows customization of the configmap / nginx-configmap namespace
   ##

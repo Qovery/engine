@@ -8,30 +8,30 @@
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: {{ router.name }}-{{ qovery_env.environment_id }}-{{ qovery_env.get_domain_id(domain_name) }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ router.name }}-{{ environment_id }}-{{ get_domain_id(domain_name) }}
+  namespace: {{ project_id }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
+    ownerId: {{ owner_id }}
     routerId: {{ router.name }}
-    envId: {{ qovery_env.environment_id }}
+    envId: {{ environment_id }}
     fqdn: "{{ domain_name }}"
-    fqdnId: {{ qovery_env.get_domain_id(domain_name) }}
+    fqdnId: {{ get_domain_id(domain_name) }}
   annotations:
     ingress.kubernetes.io/ssl-redirect: "true"
     kubernetes.io/tls-acme: "true"
-    cert-manager.io/issuer: "{{ qovery_env.get_domain_id(domain_name) }}"
-    kubernetes.io/ingress.class: "nginx-{{ qovery_env.project_id }}"
+    cert-manager.io/issuer: "{{ get_domain_id(domain_name) }}"
+    kubernetes.io/ingress.class: "nginx-{{ project_id }}"
     external-dns.alpha.kubernetes.io/hostname: {{ domain['target_domain'] }}
     external-dns.alpha.kubernetes.io/ttl: "300"
 {%- if not pre_validation %}
-    external-dns.alpha.kubernetes.io/target: "{{ qovery_env.get_ingress_fqdn(qovery_env.project_id) }}"
+    external-dns.alpha.kubernetes.io/target: "{{ get_ingress_fqdn(qovery_env.project_id) }}"
 {%- endif %}
 spec:
   tls:
     - hosts:
         - {{ domain_name }}
         - {{ domain['target_domain'] }}
-      secretName: le-{{ qovery_env.get_domain_id(domain_name) }}-custom-cert
+      secretName: le-{{ get_domain_id(domain_name) }}-custom-cert
   rules:
     - host: "{{ domain['target_domain'] }}"
       http:
@@ -40,7 +40,7 @@ spec:
         {% set application = qovery_env.get_application_by_name(route['application_name']) %}
           - path: {{ route['path'] }}
             backend:
-              serviceName: "{{ application['id'] }}-{{ qovery_env.environment_id }}"
+              serviceName: "{{ application['id'] }}-{{ environment_id }}"
               servicePort: {{ application['private_port'] }}
         {%- endfor %}
     - host: "{{ domain_name }}"
@@ -50,7 +50,7 @@ spec:
         {% set application = qovery_env.get_application_by_name(route['application_name']) %}
           - path: {{ route['path'] }}
             backend:
-              serviceName: "{{ application['id'] }}-{{ qovery_env.environment_id }}"
+              serviceName: "{{ application['id'] }}-{{ environment_id }}"
               servicePort: {{ application['private_port'] }}
         {%- endfor %}
 {%- endif %}

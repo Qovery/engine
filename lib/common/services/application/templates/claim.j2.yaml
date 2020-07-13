@@ -6,11 +6,11 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ disk['id'] }}
-  namespace: {{ qovery_env.project_id }}
+  namespace: {{ project_id }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    appId: {{ applications[application_index]['id'] }}
     diskId: {{ disk['id'] }}
     diskType: {{ disk['type'] }}
 spec:
@@ -29,11 +29,11 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ disk['id'] }}
-  namespace: {{ qovery_env.project_id }}
+  namespace: {{ project_id }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    appId: {{ applications[application_index]['id'] }}
     diskId: {{ disk['id'] }}
     diskType: {{ disk['type'] }}
 spec:

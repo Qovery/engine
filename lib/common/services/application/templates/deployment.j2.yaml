@@ -1,34 +1,34 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ qovery_env.applications[application_index]['id'] }}-{{ qovery_env.environment_id }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ applications[application_index]['id'] }}-{{ environment_id }}
+  namespace: {{ project_id }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    appId: {{ applications[application_index]['id'] }}
 spec:
   replicas: 1
   strategy:
     type: RollingUpdate
   selector:
     matchLabels:
-      ownerId: {{ qovery_env.owner_id }}
-      envId: {{ qovery_env.environment_id }}
-      appId: {{ qovery_env.applications[application_index]['id'] }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+      appId: {{ applications[application_index]['id'] }}
   template:
     metadata:
       labels:
-        ownerId: {{ qovery_env.owner_id }}
-        envId: {{ qovery_env.environment_id }}
-        appId: {{ qovery_env.applications[application_index]['id'] }}
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ applications[application_index]['id'] }}
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
       securityContext: {}
       containers:
-        - name: {{ qovery_env.get_image_name(application_index) }}-{{ qovery_env.environment_id }}
-          image: "{{ qovery_env.get_image_fullname(application_index) }}"
+        - name: {{ get_image_name(application_index) }}-{{ environment_id }}
+          image: "{{ get_image_fullname(application_index) }}"
           env:
             {%- for key, value in qovery_env.applications[application_index]['environment_variables'].items() %}
             - name: {{ key | environment_key_checker }}
@@ -36,16 +36,16 @@ spec:
             {%- endfor %}
             {%- if qovery_env.applications[application_index]['private_port'] %}
           ports:
-            - containerPort: {{ qovery_env.applications[application_index]['private_port'] }}
+            - containerPort: {{ applications[application_index]['private_port'] }}
               protocol: TCP
           readinessProbe:
             tcpSocket:
-              port: {{ qovery_env.applications[application_index]['private_port'] }}
+              port: {{ applications[application_index]['private_port'] }}
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
-              port: {{ qovery_env.applications[application_index]['private_port'] }}
+              port: {{ applications[application_index]['private_port'] }}
             initialDelaySeconds: 15
             periodSeconds: 20
             {%- endif %}

@@ -2,20 +2,20 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ qovery_env.applications[application_index]['id'] }}-{{ qovery_env.environment_id }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ applications[application_index]['id'] }}-{{ environment_id }}
+  namespace: {{ project_id }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
-    envId: {{ qovery_env.environment_id }}
+    ownerId: {{ owner_id }}
+    appId: {{ applications[application_index]['id'] }}
+    envId: {{ environment_id }}
 spec:
   type: ClusterIP
   ports:
     - protocol: TCP
-      port: {{ qovery_env.applications[application_index]['private_port'] }}
-      targetPort: {{ qovery_env.applications[application_index]['private_port'] }}
+      port: {{ applications[application_index]['private_port'] }}
+      targetPort: {{ applications[application_index]['private_port'] }}
   selector:
-    ownerId: {{ qovery_env.owner_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
-    envId: {{ qovery_env.environment_id }}
+    ownerId: {{ owner_id }}
+    appId: {{ applications[application_index]['id'] }}
+    envId: {{ environment_id }}
 {% endif %}

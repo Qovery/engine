@@ -8,23 +8,23 @@
 apiVersion: cert-manager.io/v1alpha2
 kind: Certificate
 metadata:
-  name: {{ qovery_env.get_domain_id(domain_name) }}-cert
-  namespace: {{ qovery_env.project_id }}
+  name: {{ get_domain_id(domain_name) }}-cert
+  namespace: {{ project_id }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
+    ownerId: {{ owner_id }}
     fqdn: "{{ domain_name }}"
-    fqdnId: {{ qovery_env.get_domain_id(domain_name) }}
+    fqdnId: {{ get_domain_id(domain_name) }}
 spec:
-  secretName: le-{{ qovery_env.get_domain_id(domain_name) }}-cert
+  secretName: le-{{ get_domain_id(domain_name) }}-cert
   issuerRef:
-    name: {{ qovery_env.get_domain_id(domain_name) }}
+    name: {{ get_domain_id(domain_name) }}
     kind: Issuer
   dnsNames:
     - {{ domain_name }}
   acme:
     config:
       - http01:
-          ingressClass: nginx-{{ qovery_env.project_id }}
+          ingressClass: nginx-{{ project_id }}
         domains:
           - {{ domain_name }}
 {%- endif %}

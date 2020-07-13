@@ -37,7 +37,8 @@ impl Create for Router {
     fn on_create(&self, _: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("EKS.router.on_create() called for {}", self.name());
         if !self.custom_domains.is_empty() {
-            // TODO custom domains? create an NGINX ingress
+            // custom domains? create an NGINX ingress
+            info!("setup NGINX ingress for custom domains");
             let into_dir = crate::fs::workspace_directory("charts/nginx-ingress");
 
             let _ = crate::fs::copy_chart_directory(
@@ -47,6 +48,8 @@ impl Create for Router {
             )?;
 
             let context = Context::new();
+            // TODO add context variables
+
             let _ = crate::fs::generate_and_copy_j2_files_into_dir(
                 "lib/aws/charts/nginx-ingress",
                 into_dir.as_str(),

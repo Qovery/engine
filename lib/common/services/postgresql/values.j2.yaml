@@ -3,8 +3,8 @@
 ## Current available global Docker image parameters: imageRegistry and imagePullSecrets
 ##
 
-nameOverride: {{ qovery_env.databases[database_index]['id'] }}-{{ qovery_env.environment_id }}
-fullnameOverride: {{ qovery_env.databases[database_index]['id'] }}-{{ qovery_env.environment_id }}
+nameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
+fullnameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
 
 global:
   postgresql: {}
@@ -19,7 +19,7 @@ global:
 image:
   registry: docker.io
   repository: bitnami/postgresql
-  tag:  "{{ qovery_env.databases[database_index]['version'] }}"
+  tag:  "{{ databases[database_index]['version'] }}"
   pullPolicy: IfNotPresent
   ## Set to true if you would like to see extra information on logs
   ## It turns BASH and NAMI debugging in minideb
@@ -93,16 +93,16 @@ replication:
 
 ## PostgreSQL admin password (used when `postgresqlUsername` is not `postgres`)
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-user-on-first-run (see note!)
-postgresqlPostgresPassword: {{ qovery_env.databases[database_index]['password'] }}
+postgresqlPostgresPassword: {{ databases[database_index]['password'] }}
 
 ## PostgreSQL user (has superuser privileges if username is `postgres`)
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#setting-the-root-password-on-first-run
-postgresqlUsername: {{ qovery_env.databases[database_index]['username'] }}
+postgresqlUsername: {{ databases[database_index]['username'] }}
 
 ## PostgreSQL password
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#setting-the-root-password-on-first-run
 ##
-postgresqlPassword: {{ qovery_env.databases[database_index]['password'] }}
+postgresqlPassword: {{ databases[database_index]['password'] }}
 
 ## PostgreSQL password using existing secret
 ## existingSecret: secret
@@ -114,7 +114,7 @@ postgresqlPassword: {{ qovery_env.databases[database_index]['password'] }}
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-on-first-run
 ##
 # postgresqlDatabase:
-postgresqlDatabase: {{ qovery_env.databases[database_index]['name'] }}
+postgresqlDatabase: {{ databases[database_index]['name'] }}
 
 ## PostgreSQL data dir
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md
@@ -186,7 +186,7 @@ extraEnv: []
 
 ## Specify the PostgreSQL username and password to execute the initdb scripts
 initdbUser: postgres
-initdbPassword: {{ qovery_env.databases[database_index]['password'] }}
+initdbPassword: {{ databases[database_index]['password'] }}
 
 ## ConfigMap with scripts to be run at first boot
 ## NOTE: This will override initdbScripts
@@ -267,11 +267,11 @@ persistence:
   storageClass: "aws-ebs-gp2-0"
   accessModes:
     - ReadWriteOnce
-  size: {{ qovery_env.databases[database_index]['disk_size_in_mb'] }}Mi
+  size: {{ databases[database_index]['disk_size_in_mb'] }}Mi
   annotations:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    databaseId: {{ qovery_env.databases[database_index]['name'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    databaseId: {{ databases[database_index]['name'] }}
 
 ## updateStrategy for PostgreSQL StatefulSet and its slaves StatefulSets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
@@ -291,9 +291,9 @@ master:
   affinity: {}
   tolerations: []
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    databaseId: {{ qovery_env.databases[database_index]['name'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    databaseId: {{ databases[database_index]['name'] }}
   annotations: {}
   podLabels: {}
   podAnnotations: {}
@@ -323,7 +323,7 @@ master:
   # nodePort:
   # clusterIP:
   service_nlb:
-    fqdn: "{{ qovery_env.databases[database_index]['fqdn'] }}"
+    fqdn: "{{ databases[database_index]['fqdn'] }}"
 
 ##
 ## PostgreSQL Slave parameters

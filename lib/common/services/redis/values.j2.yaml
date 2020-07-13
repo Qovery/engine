@@ -34,12 +34,12 @@ image:
 ## String to partially override redis.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: {{ qovery_env.databases[database_index]['id'] }}-{{ qovery_env.environment_id }}
+nameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
 
 ## String to fully override redis.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: {{ qovery_env.databases[database_index]['id'] }}-{{ qovery_env.environment_id }}
+fullnameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
 
 ## Cluster settings
 cluster:
@@ -202,7 +202,7 @@ usePassword: true
 ## Defaults to a random 10-character alphanumeric string if not set and usePassword is true
 ## ref: https://github.com/bitnami/bitnami-docker-redis#setting-the-server-password-on-first-run
 ##
-password: {{ qovery_env.databases[database_index]['password'] }}
+password: {{ databases[database_index]['password'] }}
 ## Use existing secret (ignores previous password)
 # existingSecret:
 ## Password key to be retrieved from Redis secret
@@ -220,7 +220,7 @@ persistence:
   existingClaim:
 
 # Redis port
-redisPort: {{ qovery_env.databases[database_index]['port'] }}
+redisPort: {{ databases[database_index]['port'] }}
 
 ##
 ## Redis Master parameters
@@ -256,9 +256,9 @@ master:
   ## Redis Master additional pod labels and annotations
   ## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
   podLabels:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    databaseId: {{ qovery_env.databases[database_index]['name'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    databaseId: {{ databases[database_index]['name'] }}
   podAnnotations: {}
 
   ## Redis Master resource requests and limits
@@ -326,7 +326,7 @@ master:
   service:
     ##  Redis Master Service type
     type: LoadBalancer
-    port: {{ qovery_env.databases[database_index]['port'] }}
+    port: {{ databases[database_index]['port'] }}
 
     ## Specify the nodePort value for the LoadBalancer and NodePort service types.
     ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
@@ -339,13 +339,13 @@ master:
     ##
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-      external-dns.alpha.kubernetes.io/hostname: "{{ qovery_env.databases[database_index]['fqdn'] }}"
+      external-dns.alpha.kubernetes.io/hostname: "{{ databases[database_index]['fqdn'] }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
 
     labels:
-      ownerId: {{ qovery_env.owner_id }}
-      envId: {{ qovery_env.environment_id }}
-      databaseId: {{ qovery_env.databases[database_index]['name'] }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+      databaseId: {{ databases[database_index]['name'] }}
 
     # loadBalancerIP:
     # loadBalancerSourceRanges: ["10.0.0.0/8"]
@@ -372,16 +372,16 @@ master:
     storageClass: "aws-ebs-gp2-0"
     accessModes:
       - ReadWriteOnce
-    size: {{ qovery_env.databases[database_index]['disk_size_in_mb'] }}Mi
+    size: {{ databases[database_index]['disk_size_in_mb'] }}Mi
     ## Persistent Volume selectors
     ## https://kubernetes.io/docs/concepts/storage/persistent-volumes/#selector
     matchLabels: {}
     matchExpressions: {}
 
     annotations:
-      ownerId: {{ qovery_env.owner_id }}
-      envId: {{ qovery_env.environment_id }}
-      databaseId: {{ qovery_env.databases[database_index]['name'] }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+      databaseId: {{ databases[database_index]['name'] }}
 
 
   ## Update strategy, can be set to RollingUpdate or onDelete by default.

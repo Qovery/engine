@@ -15,7 +15,7 @@ image:
   debug: false
   registry: docker.io
   repository: bitnami/mysql
-  tag: "{{ qovery_env.databases[database_index]['version'] }}"
+  tag: "{{ databases[database_index]['version'] }}"
 
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
@@ -32,21 +32,21 @@ image:
 ## String to partially override mysql.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: {{ qovery_env.databases[database_index]['id'] }}-{{ qovery_env.environment_id }}
+nameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
 
 ## String to fully override mysql.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: {{ qovery_env.databases[database_index]['id'] }}-{{ qovery_env.environment_id }}
+fullnameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
 
 ## Cluster domain
 ##
 clusterDomain: cluster.local
 
 labels:
-  ownerId: {{ qovery_env.owner_id }}
-  envId: {{ qovery_env.environment_id }}
-  databaseId: {{ qovery_env.databases[database_index]['name'] }}
+  ownerId: {{ owner_id }}
+  envId: {{ environment_id }}
+  databaseId: {{ databases[database_index]['name'] }}
 
 ## Init containers parameters:
 ## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
@@ -89,7 +89,7 @@ root:
   ## MySQL admin password
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#setting-the-root-password-on-first-run
   ##
-  password: {{ qovery_env.databases[database_index]['password'] }}
+  password: {{ databases[database_index]['password'] }}
   ## Option to force users to specify a password. That is required for 'helm upgrade' to work properly.
   ## If it is not force, a random password will be generated.
   ##
@@ -105,12 +105,12 @@ db:
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#creating-a-database-user-on-first-run
   ## Note that this user should be different from the MySQL replication user (replication.user)
   ##
-  user: {{ qovery_env.databases[database_index]['username'] }}
-  password: {{ qovery_env.databases[database_index]['password'] }}
+  user: {{ databases[database_index]['username'] }}
+  password: {{ databases[database_index]['password'] }}
   ## Database to create
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#creating-a-database-on-first-run
   ##
-  name: {{ qovery_env.databases[database_index]['name'] }}
+  name: {{ databases[database_index]['name'] }}
   ## Option to force users to specify a password. That is required for 'helm upgrade' to work properly.
   ## If it is not force, a random password will be generated.
   ##
@@ -314,9 +314,9 @@ master:
     ## PVC annotations
     ##
     annotations:
-      ownerId: {{ qovery_env.owner_id }}
-      envId: {{ qovery_env.environment_id }}
-      databaseId: {{ qovery_env.databases[database_index]['name'] }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+      databaseId: {{ databases[database_index]['name'] }}
 
     ## Persistent Volume Access Mode
     ##
@@ -324,7 +324,7 @@ master:
       - ReadWriteOnce
     ## Persistent Volume size
     ##
-    size: {{ qovery_env.databases[database_index]['disk_size_in_mb'] }}Mi
+    size: {{ databases[database_index]['disk_size_in_mb'] }}Mi
     ## Use an existing PVC
     ##
     # existingClaim:
@@ -517,7 +517,7 @@ service:
   ##
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-    external-dns.alpha.kubernetes.io/hostname: "{{ qovery_env.databases[database_index]['fqdn'] }}"
+    external-dns.alpha.kubernetes.io/hostname: "{{ databases[database_index]['fqdn'] }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
 
   ## loadBalancerIP for the PrestaShop Service (optional, cloud specific)
