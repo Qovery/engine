@@ -1,4 +1,5 @@
 use crate::build_platform::Image;
+use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use rusoto_core::RusotoError;
 use serde::{Deserialize, Serialize};
@@ -63,6 +64,6 @@ pub enum Kind {
 }
 
 pub enum DeploymentTarget<'a> {
-    ManagedServices(&'a dyn CloudProvider),
-    SelfHosted(&'a dyn Kubernetes),
+    ManagedServices(&'a dyn CloudProvider, &'a Environment),
+    SelfHosted(&'a dyn Kubernetes, &'a Environment),
 }

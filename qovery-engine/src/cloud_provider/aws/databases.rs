@@ -38,8 +38,8 @@ impl Create for PostgreSQL {
         info!("AWS.PostgreSQL.on_create() called for {}", self.name());
 
         match target {
-            DeploymentTarget::ManagedServices(x) => {}
-            DeploymentTarget::SelfHosted(x) => {}
+            DeploymentTarget::ManagedServices(x, env) => {}
+            DeploymentTarget::SelfHosted(x, env) => {}
         }
 
         Ok(())

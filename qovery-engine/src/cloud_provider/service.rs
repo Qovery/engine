@@ -1,5 +1,6 @@
 use crate::build_platform::Image;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cmd::CmdError;
 use std::io::Error;
 
 pub trait StatelessService: Service + Create + Delete {}
@@ -71,11 +72,18 @@ pub enum ServiceType<'a> {
 
 #[derive(Debug)]
 pub enum ServiceError {
+    Cmd(CmdError),
     Error(Error),
 }
 
 impl From<std::io::Error> for ServiceError {
     fn from(err: Error) -> Self {
         ServiceError::Error(err)
+    }
+}
+
+impl From<CmdError> for ServiceError {
+    fn from(err: CmdError) -> Self {
+        ServiceError::Cmd(err)
     }
 }

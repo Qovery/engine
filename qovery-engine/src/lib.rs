@@ -5,6 +5,7 @@ pub mod build_platform;
 pub mod cloud_provider;
 pub mod cmd;
 pub mod config;
+pub mod constants;
 pub mod container_registry;
 pub mod dynamo_db;
 pub mod error;

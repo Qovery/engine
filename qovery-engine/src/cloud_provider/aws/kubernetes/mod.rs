@@ -247,10 +247,10 @@ impl<'a> Kubernetes for EKS<'a> {
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(self.cloud_provider())
+                DeploymentTarget::ManagedServices(self.cloud_provider(), environment)
             }
             crate::cloud_provider::environment::Kind::Development => {
-                DeploymentTarget::SelfHosted(self)
+                DeploymentTarget::SelfHosted(self, environment)
             }
         };
 
@@ -260,7 +260,7 @@ impl<'a> Kubernetes for EKS<'a> {
         }
 
         // create all stateless services
-        let stateless_deployment_target = DeploymentTarget::SelfHosted(self);
+        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         for env in &environment.stateless_services {
             env.on_create(&stateless_deployment_target); // TODO handle err
         }
