@@ -13,7 +13,7 @@ variable "region" {
 
 variable "vpc_cidr_block" {
   description = "VPC CIDR block"
-  default = "10.0.0.0/16"
+  default = "{{ vpc_cidr_block }}"
   type = string
 }
 
@@ -56,18 +56,6 @@ variable "k8s_access_cidr_blocks" {
   description = "Kubernetes cluster name"
   default     = ["185.162.179.5/32", "78.192.247.93/32"]
   type        = list(string)
-}
-
-variable "k8s_nb_subnets_per_zone" {
-  description = "Kubernetes workers, number of desired subnets (3 zones used)"
-  default     = 21
-  type        = number
-}
-
-variable "k8s_cidr_subnet" {
-  description = "Kubernetes workers CIDR (x.x.x.x/CIDR)"
-  default     = 23
-  type        = number
 }
 
 # S3 bucket name
