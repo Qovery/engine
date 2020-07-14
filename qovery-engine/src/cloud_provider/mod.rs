@@ -1,5 +1,4 @@
 use crate::build_platform::Image;
-use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use rusoto_core::RusotoError;
 use serde::{Deserialize, Serialize};
@@ -63,11 +62,7 @@ pub enum Kind {
     GCP,
 }
 
-pub enum DeploymentTarget<'a, C, K>
-where
-    C: CloudProvider,
-    K: Kubernetes<C>,
-{
-    ManagedServices(&'a C, &'a Environment<C, K>),
-    SelfHosted(&'a K, &'a Environment<C, K>),
+pub enum DeploymentTarget<'a> {
+    ManagedServices(&'a dyn CloudProvider),
+    SelfHosted(&'a dyn Kubernetes),
 }

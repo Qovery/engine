@@ -1,6 +1,4 @@
 use crate::build_platform::Image;
-use crate::cloud_provider::aws::kubernetes::EKS;
-use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::service::{
     Create, DatabaseOptions, DatabaseType, Delete, Service, ServiceError, ServiceType,
 };
@@ -35,19 +33,19 @@ impl Service for PostgreSQL {
     }
 }
 
-impl<'a> Create<AWS, EKS<'a>> for PostgreSQL {
-    fn on_create(&self, target: &DeploymentTarget<AWS, EKS<'a>>) -> Result<(), ServiceError> {
+impl Create for PostgreSQL {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.PostgreSQL.on_create() called for {}", self.name());
 
         match target {
-            DeploymentTarget::ManagedServices(c, env) => {}
-            DeploymentTarget::SelfHosted(k, env) => {}
+            DeploymentTarget::ManagedServices(x) => {}
+            DeploymentTarget::SelfHosted(x) => {}
         }
 
         Ok(())
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget<AWS, EKS<'a>>) -> Result<(), ServiceError> {
+    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!(
             "AWS.PostgreSQL.on_create_error() called for {}",
             self.name()
@@ -57,14 +55,14 @@ impl<'a> Create<AWS, EKS<'a>> for PostgreSQL {
     }
 }
 
-impl<'a> Delete<AWS, EKS<'a>> for PostgreSQL {
-    fn on_delete(&self, target: &DeploymentTarget<AWS, EKS<'a>>) -> Result<(), ServiceError> {
+impl Delete for PostgreSQL {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.PostgreSQL.on_delete() called for {}", self.name());
 
         Ok(())
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget<AWS, EKS<'a>>) -> Result<(), ServiceError> {
+    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!(
             "AWS.PostgreSQL.on_create_error() called for {}",
             self.name()

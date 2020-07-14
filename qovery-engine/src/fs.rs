@@ -48,11 +48,8 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
     Ok(())
 }
 
-pub fn copy_non_template_files<P>(from: P, to: P) -> Result<(), Error>
-where
-    P: AsRef<Path>,
-{
-    copy_files(from.as_ref(), to.as_ref(), true)
+pub fn copy_non_template_files(from: &Path, to: &Path) -> Result<(), Error> {
+    copy_files(from, to, true)
 }
 
 pub fn generate_j2_template_files<P>(
@@ -145,6 +142,28 @@ where
     write_rendered_templates(&rendered_templates, to_dir.as_ref())?;
 
     Ok(())
+}
+
+pub fn copy_chart_directory<P>(
+    primary_chart_root_dir: P,
+    secondary_chart_root_dir: P,
+    to: P,
+) -> Result<(), Error>
+where
+    P: AsRef<Path>,
+{
+    let root_dir = if primary_chart_root_dir.as_ref().exists() {
+        primary_chart_root_dir
+    } else if secondary_chart_root_dir.as_ref().exists() {
+        secondary_chart_root_dir
+    } else {
+        return Err(Error::new(
+            ErrorKind::NotFound,
+            "no chart directories found",
+        ));
+    };
+
+    copy_files(root_dir.as_ref(), to.as_ref(), true)
 }
 
 pub fn write_rendered_templates(

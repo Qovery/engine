@@ -96,7 +96,7 @@ impl<'a> EKS<'a> {
     }
 }
 
-impl<'a> Kubernetes<AWS> for EKS<'a> {
+impl<'a> Kubernetes for EKS<'a> {
     fn kind(&self) -> Kind {
         Kind::EKS
     }
@@ -117,7 +117,7 @@ impl<'a> Kubernetes<AWS> for EKS<'a> {
         self.region.name()
     }
 
-    fn cloud_provider(&self) -> &AWS {
+    fn cloud_provider(&self) -> &dyn CloudProvider {
         self.cloud_provider
     }
 
@@ -239,10 +239,7 @@ impl<'a> Kubernetes<AWS> for EKS<'a> {
         unimplemented!()
     }
 
-    fn deploy_environment(
-        &self,
-        environment: &Environment<AWS, EKS<'a>>,
-    ) -> Result<(), KubernetesError> {
+    fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         info!("EKS.deploy_environment() called for {}", self.name());
         // TODO create the namespace
 
@@ -250,10 +247,10 @@ impl<'a> Kubernetes<AWS> for EKS<'a> {
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(self.cloud_provider(), environment)
+                DeploymentTarget::ManagedServices(self.cloud_provider())
             }
             crate::cloud_provider::environment::Kind::Development => {
-                DeploymentTarget::SelfHosted(self, environment)
+                DeploymentTarget::SelfHosted(self)
             }
         };
 
@@ -263,7 +260,7 @@ impl<'a> Kubernetes<AWS> for EKS<'a> {
         }
 
         // create all stateless services
-        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
+        let stateless_deployment_target = DeploymentTarget::SelfHosted(self);
         for env in &environment.stateless_services {
             env.on_create(&stateless_deployment_target); // TODO handle err
         }
@@ -273,10 +270,7 @@ impl<'a> Kubernetes<AWS> for EKS<'a> {
         Ok(())
     }
 
-    fn delete_environment(
-        &self,
-        environment: &Environment<AWS, EKS<'a>>,
-    ) -> Result<(), KubernetesError> {
+    fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         warn!("EKS.delete_environment() called for {}", self.name());
         // TODO delete the namespace - do services are all deleted?
         unimplemented!()

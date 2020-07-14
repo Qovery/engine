@@ -1,4 +1,3 @@
-use crate::constants::TF_PLUGIN_CACHE_DIR;
 use dirs::home_dir;
 use std::borrow::Borrow;
 use std::io::Error;
@@ -150,7 +149,7 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     match exec_with_envs_and_output(
         format!("{} terraform", root_dir).as_str(),
         args,
-        vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
+        vec![("TF_PLUGIN_CACHE_DIR", tf_plugin_cache_dir.as_str())],
         |line| {
             info!("{}", line.unwrap());
         },
@@ -162,37 +161,8 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     Ok(())
 }
 
-pub fn helm_exec_with_named_args<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    chart_root_dir: P,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CmdError>
-where
-    P: AsRef<Path>,
-{
-    helm_exec(
-        vec![
-            "upgrade",
-            "--kubeconfig",
-            kubernetes_config.as_ref().to_str().unwrap(),
-            "--create-namespace",
-            "--install",
-            "--history-max",
-            "50",
-            "--wait",
-            "-n",
-            namespace,
-            release_name,
-            chart_root_dir.as_ref().to_str().unwrap(),
-        ],
-        envs,
-    )
-}
-
-pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CmdError> {
-    match exec_with_envs_and_output("helm", args, envs, |line| {
+pub fn helm_exec(root_dir: &str, args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CmdError> {
+    match exec_with_envs_and_output(format!("{} helm", root_dir).as_str(), args, envs, |line| {
         info!("{}", line.unwrap());
     }) {
         Err(err) => return Err(err),
@@ -206,10 +176,4 @@ pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CmdErro
 pub enum CmdError {
     Exec(ExitStatus),
     Io(Error),
-}
-
-impl From<std::io::Error> for CmdError {
-    fn from(err: Error) -> Self {
-        CmdError::Io(err)
-    }
 }
