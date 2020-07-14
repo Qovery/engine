@@ -7,31 +7,41 @@ use crate::build_platform::{
 use crate::cloud_provider::aws::application::Application;
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesError};
 use crate::cloud_provider::service::{Service, ServiceError};
-use crate::cloud_provider::DeployError;
+use crate::cloud_provider::{CloudProvider, DeployError};
 use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
 use crate::models::{Action, Environment, EnvironmentError};
+use serde::export::PhantomData;
 
-pub struct Transaction<'a> {
+pub struct Transaction<'a, C, K>
+where
+    C: CloudProvider,
+    K: Kubernetes<C>,
+    Self: Sized,
+{
     pub config: Config<'a>,
-    steps: Vec<Step<'a>>,
-    executed_steps: Vec<Step<'a>>,
+    steps: Vec<Step<'a, C, K>>,
+    executed_steps: Vec<Step<'a, C, K>>,
+    phantom: PhantomData<C>,
 }
 
-impl<'a> Transaction<'a> {
+impl<'a, C, K> Transaction<'a, C, K>
+where
+    C: CloudProvider,
+    K: Kubernetes<C>,
+    Self: Sized,
+{
     pub fn new(config: Config<'a>) -> Self {
-        Transaction::<'a> {
+        Transaction::<'a, C, K> {
             config,
             steps: vec![],
             executed_steps: vec![],
+            phantom: PhantomData,
         }
     }
 
-    pub fn create_kubernetes(
-        &mut self,
-        kubernetes: &'a dyn Kubernetes,
-    ) -> Result<(), KubernetesError> {
+    pub fn create_kubernetes(&mut self, kubernetes: &'a K) -> Result<(), KubernetesError> {
         match kubernetes.is_valid() {
             Ok(_) => {
                 self.steps.push(Step::CreateKubernetes(kubernetes));
@@ -41,10 +51,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn delete_kubernetes(
-        &mut self,
-        kubernetes: &'a dyn Kubernetes,
-    ) -> Result<(), KubernetesError> {
+    pub fn delete_kubernetes(&mut self, kubernetes: &'a K) -> Result<(), KubernetesError> {
         match kubernetes.is_valid() {
             Ok(_) => {
                 self.steps.push(Step::DeleteKubernetes(kubernetes));
@@ -69,7 +76,7 @@ impl<'a> Transaction<'a> {
 
     pub fn deploy_environment(
         &mut self,
-        kubernetes: &'a dyn Kubernetes,
+        kubernetes: &'a K,
         environment: &'a Environment,
     ) -> Result<(), EnvironmentError> {
         match environment.is_valid() {
@@ -178,6 +185,7 @@ impl<'a> Transaction<'a> {
                     // TODO revert applications and services with the last version,
                     // TODO if there is no valid state then delete the applications?
                 }
+                Step::Phantom(_) => {}
             }
         }
 
@@ -256,6 +264,7 @@ impl<'a> Transaction<'a> {
                         }
                     };
                 }
+                Step::Phantom(_) => {}
             };
         }
 
@@ -263,21 +272,31 @@ impl<'a> Transaction<'a> {
     }
 }
 
-enum Step<'a> {
+enum Step<'a, C, K>
+where
+    C: CloudProvider,
+    K: Kubernetes<C>,
+{
     // init and create all the necessary resources (Network, Kubernetes)
-    CreateKubernetes(&'a dyn Kubernetes),
-    DeleteKubernetes(&'a dyn Kubernetes),
+    CreateKubernetes(&'a K),
+    DeleteKubernetes(&'a K),
     BuildEnvironment(&'a Environment),
-    DeployEnvironment(&'a dyn Kubernetes, &'a Environment),
+    DeployEnvironment(&'a K, &'a Environment),
+    Phantom(PhantomData<C>),
 }
 
-impl<'a> Clone for Step<'a> {
+impl<'a, C, K> Clone for Step<'a, C, K>
+where
+    C: CloudProvider,
+    K: Kubernetes<C>,
+{
     fn clone(&self) -> Self {
         match self {
             Step::CreateKubernetes(k) => Step::CreateKubernetes(*k),
             Step::DeleteKubernetes(k) => Step::DeleteKubernetes(*k),
             Step::BuildEnvironment(e) => Step::BuildEnvironment(*e),
             Step::DeployEnvironment(k, e) => Step::DeployEnvironment(*k, *e),
+            Step::Phantom(_) => Step::Phantom(PhantomData),
         }
     }
 }

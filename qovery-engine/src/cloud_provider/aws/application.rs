@@ -1,4 +1,6 @@
 use crate::build_platform::Image;
+use crate::cloud_provider::aws::kubernetes::EKS;
+use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::service::{Create, Delete, Service, ServiceError, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 
@@ -31,14 +33,14 @@ impl Service for Application {
     }
 }
 
-impl Create for Application {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+impl<'a> Create<AWS, EKS<'a>> for Application {
+    fn on_create(&self, target: &DeploymentTarget<AWS, EKS<'a>>) -> Result<(), ServiceError> {
         info!("EKS.application.on_create() called for {}", self.name());
 
         unimplemented!()
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_create_error(&self, target: &DeploymentTarget<AWS, EKS<'a>>) -> Result<(), ServiceError> {
         warn!(
             "EKS.application.on_create_error() called for {}",
             self.name()
@@ -47,13 +49,13 @@ impl Create for Application {
     }
 }
 
-impl Delete for Application {
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+impl<'a> Delete<AWS, EKS<'a>> for Application {
+    fn on_delete(&self, target: &DeploymentTarget<AWS, EKS<'a>>) -> Result<(), ServiceError> {
         info!("EKS.application.on_delete() called for {}", self.name());
         unimplemented!()
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_delete_error(&self, target: &DeploymentTarget<AWS, EKS<'a>>) -> Result<(), ServiceError> {
         warn!(
             "EKS.application.on_delete_error() called for {}",
             self.name()

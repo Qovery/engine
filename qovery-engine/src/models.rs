@@ -5,9 +5,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::aws::databases::PostgreSQL;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{DatabaseOptions, Service};
-use crate::cloud_provider::CloudProvider as CP;
 use crate::cloud_provider::Kind as CPKind;
+use crate::cloud_provider::{CloudProvider as CP, CloudProvider};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
@@ -25,7 +26,13 @@ impl Environment {
         Ok(())
     }
 
-    pub fn as_qovery_engine_environment(&self) -> crate::cloud_provider::environment::Environment {
+    pub fn as_qovery_engine_environment<C, K>(
+        &self,
+    ) -> crate::cloud_provider::environment::Environment<C, K>
+    where
+        C: CloudProvider,
+        K: Kubernetes<C>,
+    {
         crate::cloud_provider::environment::Environment::new(
             self.environment_id.as_str(),
             self.project_id.as_str(),

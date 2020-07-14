@@ -6,13 +6,17 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::process::ExitStatus;
 
-pub trait Kubernetes {
+pub trait Kubernetes<C>
+where
+    C: CloudProvider,
+    Self: Sized,
+{
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn version(&self) -> &str;
     fn region(&self) -> &str;
-    fn cloud_provider(&self) -> &dyn CloudProvider;
+    fn cloud_provider(&self) -> &C;
     fn is_valid(&self) -> Result<(), KubernetesError>;
     fn on_create(&self) -> Result<(), KubernetesError>;
     fn on_create_error(&self) -> Result<(), KubernetesError>;
@@ -22,8 +26,10 @@ pub trait Kubernetes {
     fn on_downgrade_error(&self) -> Result<(), KubernetesError>;
     fn on_delete(&self) -> Result<(), KubernetesError>;
     fn on_delete_error(&self) -> Result<(), KubernetesError>;
-    fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
-    fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
+    fn deploy_environment(&self, environment: &Environment<C, Self>)
+        -> Result<(), KubernetesError>;
+    fn delete_environment(&self, environment: &Environment<C, Self>)
+        -> Result<(), KubernetesError>;
 }
 
 pub trait KubernetesNode {
