@@ -2,10 +2,13 @@ use crate::runtime::async_run;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, PutBucketVersioningRequest,
-    S3Client, VersioningConfiguration, S3,
+    CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, GetObjectError,
+    GetObjectRequest, PutBucketVersioningRequest, S3Client, VersioningConfiguration, S3,
 };
-use std::io::{Error, ErrorKind};
+use std::fs;
+use std::fs::File;
+use std::io::{Error, ErrorKind, Read, Write};
+use std::path::Path;
 
 pub fn create_bucket(
     access_key_id: &str,
@@ -77,4 +80,93 @@ pub fn create_bucket(
         },
         Ok(x) => Ok(()),
     }
+}
+
+pub type FileContent = String;
+
+pub fn get_object(
+    access_key_id: &str,
+    secret_access_key: &str,
+    region: &Region,
+    bucket_name: &str,
+    object_key: &str,
+) -> Result<FileContent, Error> {
+    let credentials = StaticProvider::new(
+        access_key_id.to_string(),
+        secret_access_key.to_string(),
+        None,
+        None,
+    );
+    let client = Client::new_with(credentials, HttpClient::new().unwrap());
+    let s3_client = S3Client::new_with_client(client, region.clone());
+
+    let mut or = GetObjectRequest::default();
+    or.bucket = bucket_name.to_string();
+    or.key = object_key.to_string();
+
+    let get_object_output = s3_client.get_object(or);
+    let r = async_run(get_object_output);
+
+    match r {
+        Ok(x) => {
+            let mut s = String::new();
+            x.body.unwrap().into_blocking_read().read_to_string(&mut s);
+            Ok(s)
+        }
+        Err(err) => match err {
+            RusotoError::Service(s) => match s {
+                GetObjectError::NoSuchKey(x) => {
+                    info!("no such key: {}", x.as_str());
+                    return Err(Error::new(
+                        ErrorKind::NotFound,
+                        format!("no such key: {}", x.as_str()),
+                    ));
+                }
+            },
+            RusotoError::Unknown(r) => {
+                error!("{}", r.body_as_str());
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    format!(
+                        "something goes wrong while getting object {} in the S3 bucket {}",
+                        object_key, bucket_name
+                    ),
+                ));
+            }
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    format!(
+                        "something goes wrong while getting object {} in the S3 bucket {}",
+                        object_key, bucket_name
+                    ),
+                ))
+            }
+        },
+    }
+}
+
+pub fn get_kubernetes_config_file<P>(
+    access_key_id: &str,
+    secret_access_key: &str,
+    region: &Region,
+    kubernetes_config_bucket_name: &str,
+    kubernetes_config_object_key: &str,
+    file_path: P,
+) -> Result<File, Error>
+where
+    P: AsRef<Path>,
+{
+    let file_content = crate::s3::get_object(
+        access_key_id,
+        secret_access_key,
+        region,
+        kubernetes_config_bucket_name,
+        kubernetes_config_object_key,
+    )?;
+
+    let mut kubernetes_config_file = File::create(file_path.as_ref())?;
+    let _ = kubernetes_config_file.write(file_content.as_bytes())?;
+
+    Ok(kubernetes_config_file)
 }

@@ -1,14 +1,49 @@
+use tera::Context;
+
 use crate::build_platform::Image;
 use crate::cloud_provider::service::{Create, Delete, Service, ServiceError, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use tera::Context;
+use rusoto_core::Region;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+use std::str::FromStr;
 
 pub struct Router {
-    pub id: String,
-    pub name: String,
-    pub custom_domains: Vec<CustomDomain>,
-    pub routes: Vec<Route>,
+    id: String,
+    name: String,
+    access_key_id: String,
+    secret_access_key: String,
+    region: Region,
+    custom_domains: Vec<CustomDomain>,
+    routes: Vec<Route>,
+}
+
+impl Router {
+    pub fn new(
+        id: &str,
+        name: &str,
+        access_key_id: &str,
+        secret_access_key: &str,
+        region: &str,
+        custom_domains: Vec<CustomDomain>,
+        routes: Vec<Route>,
+    ) -> Self {
+        Router {
+            id: id.to_string(),
+            name: name.to_string(),
+            access_key_id: access_key_id.to_string(),
+            secret_access_key: secret_access_key.to_string(),
+            region: Region::from_str(region).unwrap(),
+            custom_domains,
+            routes,
+        }
+    }
+
+    fn helm_release_name(&self) -> String {
+        format!("router-{}", self.id())
+    }
 }
 
 impl<'a> Service for Router {
@@ -31,12 +66,6 @@ impl<'a> Service for Router {
     fn is_valid(&self) -> Result<(), ServiceError> {
         // FIXME
         Ok(())
-    }
-}
-
-impl Router {
-    fn helm_release_name(&self) -> String {
-        format!("router-{}", self.id())
     }
 }
 
@@ -85,10 +114,26 @@ impl Create for Router {
 
         // TODO check the rendered files?
         let helm_release_name = self.helm_release_name();
-        let helm_envs = vec![(AWS_ACCESS_KEY_ID, ""), (AWS_SECRET_ACCESS_KEY, "")];
+        let helm_envs = vec![
+            (AWS_ACCESS_KEY_ID, self.access_key_id.as_str()),
+            (AWS_SECRET_ACCESS_KEY, self.secret_access_key.as_str()),
+        ];
+
+        let kubernetes_config_bucket_name = ""; // FIXME
+        let kubernetes_config_object_key = ""; // FIXME
+        let kubernetes_config_file_path = format!("{}/kubernetes_config", temp_dir.as_str());
+
+        let _ = crate::s3::get_kubernetes_config_file(
+            self.access_key_id.as_str(),
+            self.secret_access_key.as_str(),
+            &self.region,
+            kubernetes_config_bucket_name,
+            kubernetes_config_object_key,
+            kubernetes_config_file_path.as_str(),
+        )?;
 
         let _ = crate::cmd::helm_exec_with_named_args(
-            temp_dir.as_str(),
+            kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
             temp_dir.as_str(),
