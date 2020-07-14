@@ -67,10 +67,29 @@ where
 
     let tera = match Tera::new(tera_template_string.as_str()) {
         Ok(t) => t,
-        Err(e) => panic!(
-            "{} parsing error - does the directory exists?", // FIXME: return error instead of panic
-            root_dir_str
-        ),
+        Err(e) => match e.kind {
+            tera::ErrorKind::TemplateNotFound(x) => panic!("template not found: {}", x),
+            tera::ErrorKind::Msg(x) => panic!("tera error: {}", x),
+            tera::ErrorKind::CircularExtend {
+                tpl,
+                inheritance_chain,
+            } => panic!(
+                "circular extend - template: {}, inheritance chain: {:?}",
+                tpl, inheritance_chain
+            ),
+            tera::ErrorKind::MissingParent { current, parent } => {
+                panic!("missing parent - current: {}, parent: {}", current, parent)
+            }
+            tera::ErrorKind::FilterNotFound(x) => panic!("filter not found: {}", x),
+            tera::ErrorKind::TestNotFound(x) => panic!("test not found: {}", x),
+            tera::ErrorKind::InvalidMacroDefinition(x) => panic!("invalid macro definition: {}", x),
+            tera::ErrorKind::FunctionNotFound(x) => panic!("function not found: {}", x),
+            tera::ErrorKind::Json(x) => panic!("json error: {:?}", x),
+            tera::ErrorKind::CallFunction(x) => panic!("call function: {}", x),
+            tera::ErrorKind::CallFilter(x) => panic!("call filter: {}", x),
+            tera::ErrorKind::CallTest(x) => panic!("call test: {}", x),
+            tera::ErrorKind::__Nonexhaustive => panic!("non exhaustive error"),
+        },
     };
 
     let files = WalkDir::new(root_dir_str)
