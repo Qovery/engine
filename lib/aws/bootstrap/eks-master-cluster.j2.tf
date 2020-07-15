@@ -18,9 +18,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   vpc_config {
     security_group_ids = [aws_security_group.eks_cluster.id]
-    subnet_ids = flatten(["10.0.0.0", "10.0.42.0", "10.0.86.0"])
-    //subnet_ids = flatten({{ eks_zone_a_subnet_blocks }})
-    //subnet_ids         = flatten([data.aws_subnet_ids.eks_subnet_ids.*.id])
+    subnet_ids = flatten([aws_subnet.eks-zone-a.*.id, aws_subnet.eks-zone-b.*.id,aws_subnet.eks-zone-c.*.id])
   }
 
   depends_on = [
