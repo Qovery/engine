@@ -109,12 +109,7 @@ impl Create for Router {
             info!("setup NGINX ingress for custom domains");
             let into_dir = crate::fs::workspace_directory("charts/routers/nginx-ingress");
 
-            let _ = crate::fs::copy_non_template_files(
-                "lib/common/charts/nginx-ingress",
-                into_dir.as_str(),
-            )?;
-
-            let _ = crate::fs::generate_and_copy_j2_files_into_dir(
+            let _ = crate::fs::generate_and_copy_all_files_into_dir(
                 "lib/common/charts/nginx-ingress",
                 into_dir.as_str(),
                 &context,
@@ -125,12 +120,7 @@ impl Create for Router {
 
         let workspace_dir = self.workspace_directory();
 
-        let _ = crate::fs::copy_non_template_files(
-            "lib/aws/charts/q-ingress-tls",
-            workspace_dir.as_str(),
-        )?;
-
-        let _ = crate::fs::generate_and_copy_j2_files_into_dir(
+        let _ = crate::fs::generate_and_copy_all_files_into_dir(
             "lib/aws/charts/q-ingress-tls",
             workspace_dir.as_str(),
             &context,

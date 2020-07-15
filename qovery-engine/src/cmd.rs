@@ -1,10 +1,12 @@
-use crate::constants::TF_PLUGIN_CACHE_DIR;
-use dirs::home_dir;
 use std::borrow::Borrow;
 use std::io::Error;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
+
+use dirs::home_dir;
+
+use crate::constants::TF_PLUGIN_CACHE_DIR;
 
 fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
 where
@@ -141,6 +143,38 @@ where
     }
 
     Err(CmdError::Exec(exit_status))
+}
+
+pub fn terraform_exec_with_init_validate_plan_apply(
+    root_dir: &str,
+    first_time_init_terraform: bool,
+) -> Result<(), CmdError> {
+    // terraform init
+    let init_args = if first_time_init_terraform {
+        info!("exec: terraform init -backend-config=backend.tf -no-color");
+        vec!["init", "-backend-config=backend.tf", "-no-color"]
+    } else {
+        info!("exec: terraform init -no-color");
+        vec!["init", "-no-color"]
+    };
+
+    terraform_exec(root_dir, init_args)?;
+
+    // terraform validate config
+    info!("exec: terraform validate");
+    terraform_exec(root_dir, vec!["validate"])?;
+
+    // terraform plan
+    info!("exec: terraform plan -out tf_plan -no-color");
+    terraform_exec(root_dir, vec!["plan", "-out", "tf_plan", "-no-color"])?;
+
+    // terraform apply
+    terraform_exec(
+        root_dir,
+        vec!["apply", "-auto-approve", "-no-color", "tf_plan"],
+    )?;
+
+    Ok(())
 }
 
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {

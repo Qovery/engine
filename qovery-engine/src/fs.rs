@@ -120,7 +120,7 @@ where
     Ok(results)
 }
 
-pub fn generate_and_copy_j2_files_into_dir<P>(
+pub fn generate_and_copy_all_files_into_dir<P>(
     from_dir: P,
     to_dir: P,
     context: &Context,

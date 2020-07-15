@@ -97,10 +97,7 @@ impl Create for PostgreSQL {
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
-                info!(
-                    "deploy PostgreSQL on AWS managed services for {}",
-                    self.name()
-                );
+                info!("deploy PostgreSQL on AWS RDS for {}", self.name());
                 let aws = kubernetes
                     .cloud_provider()
                     .as_any()
@@ -112,6 +109,19 @@ impl Create for PostgreSQL {
                     aws.secret_access_key.as_str(),
                     kubernetes.region(),
                 )?;
+
+                let _ = crate::fs::generate_and_copy_all_files_into_dir(
+                    "lib/aws/services/postgresql",
+                    workspace_dir.as_str(),
+                    &context,
+                )?;
+
+                crate::cmd::terraform_exec_with_init_validate_plan_apply(
+                    workspace_dir.as_str(),
+                    false,
+                )?;
+
+                // TODO check deployment error with helm
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 // use helm
@@ -128,12 +138,7 @@ impl Create for PostgreSQL {
                     kubernetes.region(),
                 )?;
 
-                let _ = crate::fs::copy_non_template_files(
-                    "lib/common/services/postgresql",
-                    workspace_dir.as_str(),
-                )?;
-
-                let _ = crate::fs::generate_and_copy_j2_files_into_dir(
+                let _ = crate::fs::generate_and_copy_all_files_into_dir(
                     "lib/common/services/postgresql",
                     workspace_dir.as_str(),
                     &context,
