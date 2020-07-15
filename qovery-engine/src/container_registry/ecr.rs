@@ -16,7 +16,7 @@ use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
 use crate::runtime::async_run;
-use crate::transaction::CommitError::Push;
+use crate::transaction::CommitError::PushImage;
 
 pub struct ECR {
     id: String,

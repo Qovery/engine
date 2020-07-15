@@ -2,6 +2,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::Service;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::CmdError;
+use crate::transaction::CommitError;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::process::ExitStatus;

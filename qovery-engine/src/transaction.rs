@@ -12,6 +12,7 @@ use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
 use crate::models::{Action, Environment, EnvironmentError};
+use crate::transaction::CommitError::NotValidService;
 
 pub struct Transaction<'a> {
     pub config: Config<'a>,
@@ -228,9 +229,9 @@ impl<'a> Transaction<'a> {
                     let apps_result = match self._build_applications(environment) {
                         Ok(applications) => match self._push_applications(&applications) {
                             Ok(_) => Ok(applications),
-                            Err(err) => Err(CommitError::Push(err)),
+                            Err(err) => Err(CommitError::PushImage(err)),
                         },
-                        Err(err) => Err(CommitError::Build(err)),
+                        Err(err) => Err(CommitError::BuildImage(err)),
                     };
 
                     if apps_result.is_err() {
@@ -249,10 +250,29 @@ impl<'a> Transaction<'a> {
                     // deploy complete environment
 
                     let qe_environment = environment.as_qovery_engine_environment();
+                    for service in qe_environment.stateful_services.iter() {
+                        match service.is_valid() {
+                            Err(service_error) => {
+                                return match self.rollback() {
+                                    Ok(_) => TransactionResult::Rollback(
+                                        CommitError::NotValidService(service_error),
+                                    ),
+                                    Err(err) => TransactionResult::UnrecoverableError(
+                                        CommitError::NotValidService(service_error),
+                                        err,
+                                    ),
+                                }
+                            }
+                            _ => {}
+                        };
+                    }
+
                     let _ = match kubernetes.deploy_environment(&qe_environment) {
                         Ok(_) => {}
                         Err(err) => {
-                            return TransactionResult::Rollback(CommitError::CreateKubernetes(err));
+                            return TransactionResult::Rollback(CommitError::DeployEnvironment(
+                                err,
+                            ));
                         }
                     };
                 }
@@ -285,9 +305,11 @@ impl<'a> Clone for Step<'a> {
 pub enum CommitError {
     CreateKubernetes(KubernetesError),
     DeleteKubernetes(KubernetesError),
-    Build(BuildError),
-    Push(PushError),
-    Deploy(DeployError),
+    DeployEnvironment(KubernetesError),
+    NotValidService(ServiceError),
+    BuildImage(BuildError),
+    PushImage(PushError),
+    DeployImage(DeployError),
 }
 
 pub enum RollbackError {

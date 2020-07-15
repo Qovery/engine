@@ -81,7 +81,8 @@ impl Service for PostgreSQL {
     }
 
     fn is_valid(&self) -> Result<(), ServiceError> {
-        unimplemented!()
+        // FIXME
+        Ok(())
     }
 }
 
