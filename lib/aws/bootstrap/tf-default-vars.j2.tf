@@ -25,6 +25,30 @@ variable "test_cluster" {
 
 # Kubernetes
 
+variable "eks-subnets-zone-a" {
+  description = "EKS subnets Zone A"
+  default = {{ eks_zone_a_subnet_blocks }}
+  type = list(string)
+}
+
+variable "eks-subnets-zone-b" {
+  description = "EKS subnets Zone B"
+  default = {{ eks_zone_b_subnet_blocks }}
+  type = list(string)
+}
+
+variable "eks-subnets-zone-c" {
+  description = "EKS subnets Zone C"
+  default = {{ eks_zone_c_subnet_blocks }}
+  type = list(string)
+}
+
+variable "eks_cidr_subnet" {
+  description = "EKS CIDR (x.x.x.x/CIDR)"
+  default     = {{ eks_cidr_subnet }}
+  type        = number
+}
+
 variable "k8s_versions" {
   description = "Kubernetes version"
   default = {

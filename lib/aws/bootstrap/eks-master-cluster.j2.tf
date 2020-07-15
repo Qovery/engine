@@ -1,13 +1,3 @@
-data "aws_subnet_ids" "eks_subnet_ids" {
-  vpc_id = aws_vpc.eks.id
-  tags = aws_vpc.eks.tags
-  depends_on = [
-    aws_subnet.eks-zone-a-{{ eks_zone_a_subnet_blocks|length }},
-    aws_subnet.eks-zone-b-{{ eks_zone_a_subnet_blocks|length }},
-    aws_subnet.eks-zone-c-{{ eks_zone_a_subnet_blocks|length }},
-  ]
-}
-
 resource "aws_cloudwatch_log_group" "eks_cluster_logs" {
   name              = "/aws/eks/${var.region_cluster_name}/cluster"
   retention_in_days = 7
@@ -28,7 +18,9 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   vpc_config {
     security_group_ids = [aws_security_group.eks_cluster.id]
-    subnet_ids         = flatten([data.aws_subnet_ids.eks_subnet_ids.*.id])
+    subnet_ids = flatten(["10.0.0.0", "10.0.42.0", "10.0.86.0"])
+    //subnet_ids = flatten({{ eks_zone_a_subnet_blocks }})
+    //subnet_ids         = flatten([data.aws_subnet_ids.eks_subnet_ids.*.id])
   }
 
   depends_on = [

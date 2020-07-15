@@ -16,6 +16,17 @@ resource "aws_vpc" "eks" {
   )
 }
 
+resource "aws_subnet" "eks-zone-a" {
+  count = length(var.eks-subnets-zone-a)
+
+  availability_zone = data.aws_availability_zones.available.names[0]
+  //cidr_block = "10.0.${count.index * 2}.0/${var.k8s_cidr_subnet}"
+  cidr_block = "${var.eks-subnets-zone-a[count.index]}/${var.eks_cidr_subnet}"
+  vpc_id = aws_vpc.eks.id
+  map_public_ip_on_launch = true
+  tags = aws_vpc.eks.tags
+}
+
 {% for subnet in eks_zone_a_subnet_blocks %}
 resource "aws_subnet" "eks-zone-a-{{ loop.index }}" {
   availability_zone = data.aws_availability_zones.available.names[0]

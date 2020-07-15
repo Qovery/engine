@@ -65,6 +65,7 @@ impl<'a> EKS<'a> {
     fn context(&self) -> Context {
         let region_cluster_id = format!("{}-{}-{}", self.region(), self.name(), self.id());
         let vpc_cidr_block = "10.0.0.0/16";
+        let eks_cidr_subnet = "23";
         let eks_zone_a_subnet_blocks = [
             "10.0.0.0/23",
             "10.0.2.0/23",
@@ -140,6 +141,7 @@ impl<'a> EKS<'a> {
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
         context.insert("aws_region", &self.region.name());
         context.insert("vpc_cidr_block", &vpc_cidr_block);
+        context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("eks_zone_a_subnet_blocks", &eks_zone_a_subnet_blocks);
         context.insert("eks_zone_b_subnet_blocks", &eks_zone_b_subnet_blocks);
         context.insert("eks_zone_c_subnet_blocks", &eks_zone_c_subnet_blocks);
