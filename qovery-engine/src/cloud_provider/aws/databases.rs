@@ -96,21 +96,9 @@ impl Create for PostgreSQL {
         let workspace_dir = self.workspace_directory();
 
         match target {
-            DeploymentTarget::ManagedServices(kubernetes, environment) => {
+            DeploymentTarget::ManagedServices(_, _) => {
                 // use terraform
                 info!("deploy PostgreSQL on AWS RDS for {}", self.name());
-                let aws = kubernetes
-                    .cloud_provider()
-                    .as_any()
-                    .downcast_ref::<AWS>()
-                    .unwrap();
-
-                let kubernetes_config_file_path = self.kubernetes_config_path(
-                    aws.access_key_id.as_str(),
-                    aws.secret_access_key.as_str(),
-                    kubernetes.region(),
-                )?;
-
                 let _ = crate::fs::generate_and_copy_all_files_into_dir(
                     "lib/aws/services/postgresql",
                     workspace_dir.as_str(),
