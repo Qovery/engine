@@ -64,6 +64,6 @@ pub enum Kind {
 }
 
 pub enum DeploymentTarget<'a> {
-    ManagedServices(&'a dyn CloudProvider, &'a Environment),
+    ManagedServices(&'a dyn Kubernetes, &'a Environment),
     SelfHosted(&'a dyn Kubernetes, &'a Environment),
 }

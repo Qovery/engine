@@ -247,7 +247,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(self.cloud_provider(), environment)
+                DeploymentTarget::ManagedServices(self, environment)
             }
             crate::cloud_provider::environment::Kind::Development => {
                 DeploymentTarget::SelfHosted(self, environment)

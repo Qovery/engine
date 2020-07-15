@@ -16,8 +16,8 @@ pub mod kubernetes;
 pub struct AWS {
     id: String,
     name: String,
-    access_key_id: String,
-    secret_access_key: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
 }
 
 impl AWS {

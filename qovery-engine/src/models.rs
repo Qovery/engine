@@ -1,10 +1,14 @@
 use std::hash::Hash;
 use std::rc::Rc;
+use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
+use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::aws::databases::PostgreSQL;
+use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{DatabaseOptions, Service};
 use crate::cloud_provider::CloudProvider as CP;
 use crate::cloud_provider::Kind as CPKind;
@@ -85,7 +89,7 @@ pub struct Route {}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Database {
-    pub kind: String,
+    pub kind: DatabaseKind,
     pub action: Action,
     pub id: String,
     pub name: String,
@@ -102,25 +106,32 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn to_service(&self, cloud_provider: &dyn CP) -> Option<Box<dyn Service>> {
-        match cloud_provider.kind() {
-            CPKind::AWS => match self.kind.to_lowercase().as_str() {
-                "postgresql" => Some(Box::new(PostgreSQL {
-                    id: self.id.clone(),
-                    name: self.name.clone(),
-                    version: self.version.clone(),
-                    options: DatabaseOptions {
+    pub fn to_service(&self, kubernetes: &dyn Kubernetes) -> Option<Box<dyn Service>> {
+        match kubernetes.cloud_provider().kind() {
+            CPKind::AWS => match self.kind {
+                DatabaseKind::PostgreSQL => Some(Box::new(PostgreSQL::new(
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    DatabaseOptions {
                         login: self.username.clone(),
                         password: self.password.clone(),
                         host: self.fqdn.clone(),
                         port: self.port.clone(),
                     },
-                })),
+                ))),
                 _ => None,
             },
             CPKind::GCP => None,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub enum DatabaseKind {
+    PostgreSQL,
+    MySQL,
+    MongoDB,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

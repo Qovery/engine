@@ -6,7 +6,7 @@ use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use rusoto_core::Region;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Error, Write};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -44,6 +44,30 @@ impl Router {
     fn helm_release_name(&self) -> String {
         format!("router-{}", self.id())
     }
+
+    fn workspace_directory(&self) -> String {
+        crate::fs::workspace_directory(format!("charts/routers/{}", self.id()))
+    }
+
+    fn kubernetes_config_path(&self) -> Result<String, Error> {
+        let kubernetes_config_bucket_name = ""; // FIXME
+        let kubernetes_config_object_key = ""; // FIXME
+
+        let workspace_directory = self.workspace_directory();
+        let kubernetes_config_file_path =
+            format!("{}/kubernetes_config", workspace_directory.as_str());
+
+        let _ = crate::s3::get_kubernetes_config_file(
+            self.access_key_id.as_str(),
+            self.secret_access_key.as_str(),
+            &self.region,
+            kubernetes_config_bucket_name,
+            kubernetes_config_object_key,
+            kubernetes_config_file_path.as_str(),
+        )?;
+
+        Ok(kubernetes_config_file_path)
+    }
 }
 
 impl<'a> Service for Router {
@@ -73,8 +97,8 @@ impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("EKS.router.on_create() called for {}", self.name());
         let environment = match target {
-            DeploymentTarget::ManagedServices(c, env) => *env,
-            DeploymentTarget::SelfHosted(k, env) => *env,
+            DeploymentTarget::ManagedServices(_, env) => *env,
+            DeploymentTarget::SelfHosted(_, env) => *env,
         };
 
         let context = Context::new();
@@ -83,7 +107,7 @@ impl Create for Router {
         if !self.custom_domains.is_empty() {
             // custom domains? create an NGINX ingress
             info!("setup NGINX ingress for custom domains");
-            let into_dir = crate::fs::workspace_directory("charts/router/nginx-ingress");
+            let into_dir = crate::fs::workspace_directory("charts/routers/nginx-ingress");
 
             let _ = crate::fs::copy_non_template_files(
                 "lib/common/charts/nginx-ingress",
@@ -99,19 +123,20 @@ impl Create for Router {
             // TODO check the rendered files?
         }
 
-        let temp_dir = crate::fs::workspace_directory("charts/router/q-ingress-tls");
+        let workspace_dir = self.workspace_directory();
 
-        let _ =
-            crate::fs::copy_non_template_files("lib/aws/charts/q-ingress-tls", temp_dir.as_str())?;
+        let _ = crate::fs::copy_non_template_files(
+            "lib/aws/charts/q-ingress-tls",
+            workspace_dir.as_str(),
+        )?;
 
         let _ = crate::fs::generate_and_copy_j2_files_into_dir(
             "lib/aws/charts/q-ingress-tls",
-            temp_dir.as_str(),
+            workspace_dir.as_str(),
             &context,
         )?;
 
         // render
-
         // TODO check the rendered files?
         let helm_release_name = self.helm_release_name();
         let helm_envs = vec![
@@ -119,28 +144,18 @@ impl Create for Router {
             (AWS_SECRET_ACCESS_KEY, self.secret_access_key.as_str()),
         ];
 
-        let kubernetes_config_bucket_name = ""; // FIXME
-        let kubernetes_config_object_key = ""; // FIXME
-        let kubernetes_config_file_path = format!("{}/kubernetes_config", temp_dir.as_str());
-
-        let _ = crate::s3::get_kubernetes_config_file(
-            self.access_key_id.as_str(),
-            self.secret_access_key.as_str(),
-            &self.region,
-            kubernetes_config_bucket_name,
-            kubernetes_config_object_key,
-            kubernetes_config_file_path.as_str(),
-        )?;
+        let kubernetes_config_file_path = self.kubernetes_config_path()?;
 
         let _ = crate::cmd::helm_exec_with_named_args(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
-            temp_dir.as_str(),
+            workspace_dir.as_str(),
             helm_envs,
         )?;
 
         // TODO render helm common config and apply
+        // TODO check deployment error with helm
         Ok(())
     }
 

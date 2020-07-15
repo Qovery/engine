@@ -107,6 +107,14 @@ pub fn get_object(
     let get_object_output = s3_client.get_object(or);
     let r = async_run(get_object_output);
 
+    let _err = Error::new(
+        ErrorKind::Other,
+        format!(
+            "something goes wrong while getting object {} in the S3 bucket {}",
+            object_key, bucket_name
+        ),
+    );
+
     match r {
         Ok(x) => {
             let mut s = String::new();
@@ -125,23 +133,9 @@ pub fn get_object(
             },
             RusotoError::Unknown(r) => {
                 error!("{}", r.body_as_str());
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    format!(
-                        "something goes wrong while getting object {} in the S3 bucket {}",
-                        object_key, bucket_name
-                    ),
-                ));
+                return Err(_err);
             }
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    format!(
-                        "something goes wrong while getting object {} in the S3 bucket {}",
-                        object_key, bucket_name
-                    ),
-                ))
-            }
+            _ => return Err(_err),
         },
     }
 }
@@ -157,6 +151,12 @@ pub fn get_kubernetes_config_file<P>(
 where
     P: AsRef<Path>,
 {
+    // return the file if it already exists
+    let _ = match File::open(file_path.as_ref()) {
+        Ok(f) => return Ok(f),
+        Err(_) => {}
+    };
+
     let file_content = crate::s3::get_object(
         access_key_id,
         secret_access_key,
