@@ -3,6 +3,8 @@ extern crate log;
 #[macro_use]
 extern crate serde;
 
+mod constants;
+
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::fs::File;
@@ -19,6 +21,7 @@ use qovery_engine_task_manager::models::{Request, Response};
 use qovery_engine_task_manager::task_manager::{InternalTask, Status, Task, TaskManager};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
+use crate::constants::ASCII_BANNER;
 use crate::TaskSelector::{Environment, Infrastructure};
 use chrono::{DateTime, Utc};
 use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
@@ -94,6 +97,7 @@ fn listen_for_events(
 }
 
 pub fn main() -> Result<(), Error> {
+    println!("{}", ASCII_BANNER);
     env_logger::init();
 
     let customer = env::var("CUSTOMER");
