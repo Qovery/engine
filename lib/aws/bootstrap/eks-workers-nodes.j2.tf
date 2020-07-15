@@ -1,18 +1,10 @@
-data "aws_subnet_ids" "eks-subnet-ids" {
-  vpc_id = aws_vpc.eks.id
-  filter {
-    name = "tag:Name"
-    values = ["${var.region_cluster_name}-workers"]
-  }
-}
-
 {% for eks_worker_node in eks_worker_nodes %}
 resource "aws_eks_node_group" "eks-cluster-workers-{{ loop.index }}" {
   cluster_name    = aws_eks_cluster.eks_cluster.name
   version         = var.k8s_versions.workers
   node_group_name = "{{ region_cluster_id }}-{{ loop.index }}"
   node_role_arn   = aws_iam_role.eks_workers.arn
-  subnet_ids      = flatten([data.aws_subnet_ids.eks-subnet-ids.id])
+  subnet_ids      = flatten([aws_subnet.eks-zone-a.*.id, aws_subnet.eks-zone-b.*.id, aws_subnet.eks-zone-c.*.id])
   instance_types  = ["{{ eks_worker_node.instance_type }}"]
   ami_type        = "AL2_x86_64"
 

@@ -1,5 +1,3 @@
-# This data source is included for ease of sample architecture deployment
-# and can be swapped out as necessary.
 data "aws_availability_zones" "available" {}
 
 resource "aws_vpc" "eks" {
@@ -20,42 +18,31 @@ resource "aws_subnet" "eks-zone-a" {
   count = length(var.eks-subnets-zone-a)
 
   availability_zone = data.aws_availability_zones.available.names[0]
-  //cidr_block = "10.0.${count.index * 2}.0/${var.k8s_cidr_subnet}"
-  cidr_block = "${var.eks-subnets-zone-a[count.index]}/${var.eks_cidr_subnet}"
+  cidr_block = var.eks-subnets-zone-a[count.index]
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
   tags = aws_vpc.eks.tags
 }
 
-{% for subnet in eks_zone_a_subnet_blocks %}
-resource "aws_subnet" "eks-zone-a-{{ loop.index }}" {
-  availability_zone = data.aws_availability_zones.available.names[0]
-  cidr_block = "{{ subnet }}"
-  vpc_id = aws_vpc.eks.id
-  map_public_ip_on_launch = true
-  tags = aws_vpc.eks.tags
-}
-{% endfor %}
+resource "aws_subnet" "eks-zone-b" {
+  count = length(var.eks-subnets-zone-b)
 
-{% for subnet in eks_zone_b_subnet_blocks %}
-resource "aws_subnet" "eks-zone-b-{{ loop.index }}" {
   availability_zone = data.aws_availability_zones.available.names[1]
-  cidr_block = "{{ subnet }}"
+  cidr_block = var.eks-subnets-zone-b[count.index]
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
   tags = aws_vpc.eks.tags
 }
-{% endfor %}
 
-{% for subnet in eks_zone_c_subnet_blocks %}
-resource "aws_subnet" "eks-zone-c-{{ loop.index }}" {
+resource "aws_subnet" "eks-zone-c" {
+  count = length(var.eks-subnets-zone-c)
+
   availability_zone = data.aws_availability_zones.available.names[2]
-  cidr_block = "{{ subnet }}"
+  cidr_block = var.eks-subnets-zone-c[count.index]
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
   tags = aws_vpc.eks.tags
 }
-{% endfor %}
 
 resource "aws_internet_gateway" "eks_cluster" {
   vpc_id = aws_vpc.eks.id
@@ -76,23 +63,23 @@ resource "aws_route_table" "eks_cluster" {
   }
 }
 
-{% for subnet in eks_zone_a_subnet_blocks %}
-resource "aws_route_table_association" "eks-cluster-zone-a-{{ loop.index }}" {
-  subnet_id = aws_subnet.eks-zone-a-{{ loop.index }}.id
-  route_table_id = aws_route_table.eks_cluster.id
-}
-{% endfor %}
+resource "aws_route_table_association" "eks_cluster-zone-a" {
+  count = length(var.eks-subnets-zone-a)
 
-{% for subnet in eks_zone_b_subnet_blocks %}
-resource "aws_route_table_association" "eks-cluster-zone-b-{{ loop.index }}" {
-  subnet_id = aws_subnet.eks-zone-b-{{ loop.index }}.id
+  subnet_id = aws_subnet.eks-zone-a.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
-{% endfor %}
 
-{% for subnet in eks_zone_c_subnet_blocks %}
-resource "aws_route_table_association" "eks-cluster-zone-c-{{ loop.index }}" {
-  subnet_id = aws_subnet.eks-zone-c-{{ loop.index }}.id
+resource "aws_route_table_association" "eks_cluster-zone-b" {
+  count = length(var.eks-subnets-zone-b)
+
+  subnet_id = aws_subnet.eks-zone-b.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
-{% endfor %}
+
+resource "aws_route_table_association" "eks_cluster-zone-c" {
+  count = length(var.eks-subnets-zone-c)
+
+  subnet_id = aws_subnet.eks-zone-c.*.id[count.index]
+  route_table_id = aws_route_table.eks_cluster.id
+}
