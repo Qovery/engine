@@ -66,6 +66,7 @@ impl<'a> EKS<'a> {
         let region_cluster_id = format!("{}-{}-{}", self.region(), self.name(), self.id());
         let vpc_cidr_block = "10.0.0.0/16";
         let eks_cidr_subnet = "23";
+
         let eks_zone_a_subnet_blocks = [
             "10.0.0.0/23",
             "10.0.2.0/23",
@@ -88,7 +89,11 @@ impl<'a> EKS<'a> {
             "10.0.36.0/23",
             "10.0.38.0/23",
             "10.0.40.0/23",
-        ];
+        ]
+        .iter()
+        .map(|ip| format!("\"{}\"", ip))
+        .collect::<Vec<_>>();
+
         let eks_zone_b_subnet_blocks = [
             "10.0.42.0/23",
             "10.0.44.0/23",
@@ -111,7 +116,11 @@ impl<'a> EKS<'a> {
             "10.0.80.0/23",
             "10.0.82.0/23",
             "10.0.84.0/23",
-        ];
+        ]
+        .iter()
+        .map(|ip| format!("\"{}\"", ip))
+        .collect::<Vec<_>>();
+
         let eks_zone_c_subnet_blocks = [
             "10.0.86.0/23",
             "10.0.88.0/23",
@@ -134,7 +143,10 @@ impl<'a> EKS<'a> {
             "10.0.122.0/23",
             "10.0.124.0/23",
             "10.0.126.0/23",
-        ];
+        ]
+        .iter()
+        .map(|ip| format!("\"{}\"", ip))
+        .collect::<Vec<_>>();
 
         let mut context = Context::new();
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
@@ -225,55 +237,13 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // generate terraform files and copy them into temp dir
         let context = self.context();
-        let _ = crate::fs::generate_and_copy_j2_files_into_dir(
+        let _ = crate::fs::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),
             &temp_dir,
             &context,
         )?;
 
-        let on_error = |err: CmdError| {
-            match err {
-                CmdError::Io(err) => panic!(err),
-                CmdError::Exec(es) => return Err(KubernetesError::Create(es)),
-            };
-        };
-
-        // terraform init
-        info!("terraform init on EKS for {}", self.name());
-        match cmd::terraform_exec(
-            temp_dir_path_str,
-            vec!["init", "-backend-config=backend.tf", "-no-color"],
-        ) {
-            Err(err) => return on_error(err),
-            _ => {}
-        };
-
-        // terraform validate config
-        info!("terraform validate config on EKS for {}", self.name());
-        match cmd::terraform_exec(temp_dir_path_str, vec!["validate"]) {
-            Err(err) => return on_error(err),
-            _ => {}
-        };
-
-        // terraform plan
-        info!("terraform plan on EKS for {}", self.name());
-        match cmd::terraform_exec(
-            temp_dir_path_str,
-            vec!["plan", "-out", "tf_plan", "-no-color"],
-        ) {
-            Err(err) => return on_error(err),
-            _ => {}
-        };
-
-        // terraform apply
-        info!("terraform apply on EKS for {}", self.name());
-        match cmd::terraform_exec(
-            temp_dir_path_str,
-            vec!["apply", "-auto-approve", "-no-color", "tf_plan"],
-        ) {
-            Err(err) => return on_error(err),
-            _ => {}
-        };
+        crate::cmd::terraform_exec_with_init_validate_plan_apply(temp_dir_path_str, true)?;
 
         // clean temp dir
         Ok(())
