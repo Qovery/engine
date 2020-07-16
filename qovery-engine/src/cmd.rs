@@ -297,7 +297,7 @@ where
     Ok(())
 }
 
-pub fn does_command_exists<S>(binary: S) -> bool
+pub fn does_binary_exist<S>(binary: S) -> bool
 where
     S: AsRef<OsStr>,
 {

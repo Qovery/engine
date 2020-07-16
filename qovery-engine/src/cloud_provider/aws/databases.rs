@@ -88,7 +88,7 @@ impl Service for PostgreSQL {
         let binaries = ["helm", "terraform"];
 
         for binary in binaries.iter() {
-            if !crate::cmd::does_command_exists(binary) {
+            if !crate::cmd::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
                 return Err(ServiceError::Unexpected(err));
             }
