@@ -160,7 +160,7 @@ impl<'a> EKS<'a> {
         context.insert("eks_masters_version", &self.version());
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cluster_name", &self.name());
-        context.insert("region_cluster_id", region_cluster_id.as_str());
+        context.insert("eks_cluster_id", region_cluster_id.as_str());
         context.insert("aws_terraform_backend_bucket", &self.bucket_name());
         context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
 

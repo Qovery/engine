@@ -20,13 +20,8 @@ resource "aws_subnet" "rds-zone-a" {
   availability_zone = data.aws_availability_zones.available.names[0]
   cidr_block        = "10.0.${count.index * 2 + 214}.0/${var.rds_cidr_subnet}"
   vpc_id            = aws_vpc.eks.id
-  tags = map(
-    "Name", "${var.region_cluster_name}-rds",
-    "ClusterName", var.cluster_name,
-    "RegionClusterName", var.region_cluster_name,
-    "Region", var.region,
-    "Service", "RDS"
-  )
+
+  tags = aws_db_subnet_group.rds.tags
 }
 
 resource "aws_subnet" "rds-zone-b" {
@@ -35,13 +30,8 @@ resource "aws_subnet" "rds-zone-b" {
   availability_zone = data.aws_availability_zones.available.names[1]
   cidr_block        = "10.0.${count.index * 2 + 228}.0/${var.rds_cidr_subnet}"
   vpc_id            = aws_vpc.eks.id
-  tags = map(
-    "Name", "${var.region_cluster_name}-rds",
-    "ClusterName", var.cluster_name,
-    "RegionClusterName", var.region_cluster_name,
-    "Region", var.region,
-    "Service", "RDS"
-  )
+
+  tags = aws_db_subnet_group.rds.tags
 }
 
 resource "aws_subnet" "rds-zone-c" {
@@ -50,13 +40,8 @@ resource "aws_subnet" "rds-zone-c" {
   availability_zone = data.aws_availability_zones.available.names[2]
   cidr_block        = "10.0.${count.index * 2 + 242}.0/${var.rds_cidr_subnet}"
   vpc_id            = aws_vpc.eks.id
-  tags = map(
-    "Name", "${var.region_cluster_name}-rds",
-    "ClusterName", var.cluster_name,
-    "RegionClusterName", var.region_cluster_name,
-    "Region", var.region,
-    "Service", "RDS"
-  )
+
+  tags = aws_db_subnet_group.rds.tags
 }
 
 resource "aws_route_table_association" "rds_cluster-zone-a" {
@@ -81,26 +66,31 @@ resource "aws_route_table_association" "rds_cluster-zone-c" {
 }
 
 resource "aws_db_subnet_group" "rds" {
-  description = "RDS linked to ${var.region_cluster_name}"
+  description = "RDS linked to ${var.eks_cluster_id}"
   name = aws_vpc.eks.id
   subnet_ids = flatten([aws_subnet.rds-zone-a.*.id, aws_subnet.rds-zone-b.*.id, aws_subnet.rds-zone-c.*.id])
-  tags = {
-    ClusterName = var.cluster_name
-    RegionClusterName = var.region_cluster_name
-    Region = var.region
-    Service = "RDS"
-  }
+
+  tags = merge(
+    aws_eks_cluster.eks_cluster.tags,
+    {
+      "Service" = "RDS"
+    }
+  )
 }
 
 # IAM
 resource "aws_iam_role" "rds_enhanced_monitoring" {
-  name        = "${var.region_cluster_name}-rds-enhanced-monitoring"
+  name        = "${var.eks_cluster_id}-rds-enhanced-monitoring"
   assume_role_policy = data.aws_iam_policy_document.rds_enhanced_monitoring.json
+
+  tags = aws_db_subnet_group.rds.tags
 }
 
 resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
   role       = aws_iam_role.rds_enhanced_monitoring.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+
+  tags = aws_db_subnet_group.rds.tags
 }
 
 # Todo: create a bastion to avoid this

@@ -11,13 +11,8 @@ resource "aws_subnet" "es-zone-a" {
   availability_zone = data.aws_availability_zones.available.names[0]
   cidr_block = "10.0.${count.index * 2 + 184}.0/${var.es_cidr_subnet}"
   vpc_id = aws_vpc.eks.id
-  tags = map(
-    "Name", "${var.region_cluster_name}-es",
-    "ClusterName", var.cluster_name,
-    "RegionClusterName", var.region_cluster_name,
-    "Region", var.region,
-    "Service", "Elasticsearch"
-  )
+
+  tags = aws_security_group.elasticsearch.tags
 }
 
 resource "aws_subnet" "es-zone-b" {
@@ -26,13 +21,8 @@ resource "aws_subnet" "es-zone-b" {
   availability_zone = data.aws_availability_zones.available.names[1]
   cidr_block = "10.0.${count.index * 2 + 188}.0/${var.es_cidr_subnet}"
   vpc_id = aws_vpc.eks.id
-  tags = map(
-    "Name", "${var.region_cluster_name}-es",
-    "ClusterName", var.cluster_name,
-    "RegionClusterName", var.region_cluster_name,
-    "Region", var.region,
-    "Service", "Elasticsearch"
-  )
+
+  tags = aws_security_group.elasticsearch.tags
 }
 
 resource "aws_subnet" "es-zone-c" {
@@ -41,13 +31,8 @@ resource "aws_subnet" "es-zone-c" {
   availability_zone = data.aws_availability_zones.available.names[2]
   cidr_block = "10.0.${count.index * 2 + 192}.0/${var.es_cidr_subnet}"
   vpc_id = aws_vpc.eks.id
-  tags = map(
-    "Name", "${var.region_cluster_name}-es",
-    "ClusterName", var.cluster_name,
-    "RegionClusterName", var.region_cluster_name,
-    "Region", var.region,
-    "Service", "Elasticsearch"
-  )
+
+  tags = aws_security_group.elasticsearch.tags
 }
 
 resource "aws_route_table_association" "es_cluster-zone-a" {
@@ -72,7 +57,7 @@ resource "aws_route_table_association" "es_cluster-zone-c" {
 }
 
 resource "aws_security_group" "elasticsearch" {
-  name = "elasticsearch-${var.region_cluster_name}"
+  name = "${var.eks_cluster_id}-elasticsearch"
   description = "Elasticsearch security group"
   vpc_id = aws_vpc.eks.id
 
@@ -85,4 +70,11 @@ resource "aws_security_group" "elasticsearch" {
       aws_vpc.eks.cidr_block
     ]
   }
+
+  tags = merge(
+    aws_eks_cluster.eks_cluster.tags,
+    {
+      "Service" = "Elasticsearch"
+    }
+  )
 }

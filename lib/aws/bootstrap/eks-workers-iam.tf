@@ -1,5 +1,7 @@
 resource "aws_iam_role" "eks_workers" {
-  name = "${var.region_cluster_name}-workers"
+  name = "${var.eks_cluster_id}-workers"
+
+  tags = aws_eks_cluster.eks_cluster.tags
 
   assume_role_policy = <<POLICY
 {
@@ -33,6 +35,8 @@ resource "aws_iam_role_policy_attachment" "node-AmazonEC2ContainerRegistryReadOn
 }
 
 resource "aws_iam_instance_profile" "workers" {
-  name = "${var.region_cluster_name}-workers"
+  name = "${var.eks_cluster_id}-workers"
   role = aws_iam_role.eks_workers.name
+
+  tags = aws_eks_cluster.eks_cluster.tags
 }

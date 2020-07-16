@@ -25,19 +25,19 @@ variable "test_cluster" {
 
 # Kubernetes
 
-variable "eks-subnets-zone-a" {
+variable "eks_subnets_zone_a" {
   description = "EKS subnets Zone A"
   default = {{ eks_zone_a_subnet_blocks }}
   type = list(string)
 }
 
-variable "eks-subnets-zone-b" {
+variable "eks_subnets_zone_b" {
   description = "EKS subnets Zone B"
   default = {{ eks_zone_b_subnet_blocks }}
   type = list(string)
 }
 
-variable "eks-subnets-zone-c" {
+variable "eks_subnets_zone_c" {
   description = "EKS subnets Zone C"
   default = {{ eks_zone_c_subnet_blocks }}
   type = list(string)
@@ -49,7 +49,7 @@ variable "eks_cidr_subnet" {
   type        = number
 }
 
-variable "k8s_versions" {
+variable "eks_k8s_versions" {
   description = "Kubernetes version"
   default = {
     "masters": "{{ eks_masters_version }}",
@@ -58,25 +58,19 @@ variable "k8s_versions" {
   type = map(string)
 }
 
-variable "region_cluster_name" {
+variable "eks_cluster_id" {
   description = "Kubernetes cluster name with region"
-  default     = "{{ region_cluster_id }}"
+  default     = "{{ eks_cluster_id }}"
   type        = string
 }
 
-variable "cluster_name" {
+variable "eks_cluster_name" {
   description = "Kubernetes cluster name"
   default     = "{{ eks_cluster_name }}"
   type        = string
 }
 
-variable "cluster_id" {
-  description = "Qovery cluster ID"
-  default = "{{ region_cluster_id }}"
-  type = string
-}
-
-variable "k8s_access_cidr_blocks" {
+variable "eks_access_cidr_blocks" {
   description = "Kubernetes cluster name"
   default     = ["185.162.179.5/32", "78.192.247.93/32"]
   type        = list(string)
@@ -86,7 +80,7 @@ variable "k8s_access_cidr_blocks" {
 
 variable "s3_bucket_kubeconfig" {
   description = "S3 bucket with kubeconfigs"
-  default = "{{ region_cluster_id }}"
+  default = "{{ eks_cluster_id }}"
   type = string
 }
 
@@ -95,7 +89,7 @@ variable "s3_bucket_kubeconfig" {
 variable "ec2_ssh_default_key" {
   description = "Default SSH key"
   default = {
-    "key_name" = "{{ region_cluster_id }}-qovery"
+    "key_name" = "{{ eks_cluster_id }}-qovery"
     "public_key" = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCnsfaJtod3fuSnE2zqfw+I6l696ipy18utqXpQOTzw0lT4y+CQCyVrR3og54RGwERoOT7KnoneyWzJMEzC+58mXDqe7oM7HgVgYOlEwYuFPO7EZBGaDWFoKMMzgFgdVyEVkoKE/s/2ClOqLvBt7Qq+Z8yQWrxjlluHncXSE6aNoog+Ard2qQhhZOGzwS2uGarkNj11x7e5qQ6kZcwQz+1LSJzTHfn6yK8RhvTDwhmYBy6kYfG+IYacUqToeqkFOiTbdmhntFYRf7J+0N3tVt8s3VUoLAg3uD2ycEqRG48WybAj+VLJHLC31iBrqvNRQqPfubM2ss7Qhv96nOnqMhNh pmavro@deb-pmavro"
   }
   type = map(string)
@@ -116,6 +110,12 @@ variable "rds_cidr_subnet" {
 }
 
 # Elasticsearch
+
+variable "es_q_logs_domain_name" {
+  description = "ES domain name"
+  default = "q-logs"
+  type = string
+}
 
 variable "es_nodes_number" {
   description = "Number of Elasticsearch nodes"
@@ -141,7 +141,7 @@ variable "es_cidr_subnet" {
   type        = number
 }
 
-variable "es-logs-curator" {
+variable "es_logs_curator" {
   description = "Curator config"
   default = {
     "cron": "0 0 * * *"

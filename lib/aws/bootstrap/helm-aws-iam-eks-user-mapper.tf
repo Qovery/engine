@@ -1,14 +1,20 @@
 resource "aws_iam_user" "iam-eks-user-mapper" {
-  name = "aws-iam-eks-user-mapper-${var.region_cluster_name}"
+  name = "${var.eks_cluster_id}-aws-iam-eks-user-mapper"
+
+  tags = aws_eks_cluster.eks_cluster.tags
 }
 
 resource "aws_iam_access_key" "iam-eks-user-mapper" {
   user    = aws_iam_user.iam-eks-user-mapper.name
+
+  tags = aws_eks_cluster.eks_cluster.tags
 }
 
 resource "aws_iam_user_policy" "iam-eks-user-mapper" {
   name = aws_iam_user.iam-eks-user-mapper.name
   user = aws_iam_user.iam-eks-user-mapper.name
+
+  tags = aws_eks_cluster.eks_cluster.tags
 
   policy = <<EOF
 {
