@@ -338,7 +338,12 @@ pub fn does_binary_exist<S>(binary: S) -> bool
 where
     S: AsRef<OsStr>,
 {
-    match Command::new(binary).spawn() {
+    match Command::new(binary)
+        .stdout(Stdio::null())
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
         Ok(_) => true,
         _ => false,
     }
