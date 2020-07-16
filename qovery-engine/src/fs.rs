@@ -106,7 +106,6 @@ where
     // generate j2 templates
     let rendered_templates = match generate_j2_template_files(from_dir, context) {
         Ok(rt) => rt,
-        // TODO replace panic by well handled errors
         Err(e) => {
             let error_msg = match e.kind {
                 tera::ErrorKind::TemplateNotFound(x) => format!("template not found: {}", x),

@@ -1,12 +1,26 @@
+use tera::Context;
+
 use crate::build_platform::Image;
+use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::service::{Create, Delete, Service, ServiceError, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     pub id: String,
     pub name: String,
     pub image: Image,
+}
+
+impl Application {
+    fn helm_release_name(&self) -> String {
+        format!("application-{}-{}", self.name(), self.id())
+    }
+
+    fn workspace_directory(&self) -> String {
+        crate::fs::workspace_directory(format!("applications/{}-{}", self.name(), self.id()))
+    }
 }
 
 impl Service for Application {
@@ -27,25 +41,73 @@ impl Service for Application {
     }
 
     fn is_valid(&self) -> Result<(), ServiceError> {
+        // TODO check image availability
         Ok(())
     }
 }
 
 impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        info!("EKS.application.on_create() called for {}", self.name());
-
-        let environment = match target {
-            DeploymentTarget::ManagedServices(_, environment) => environment,
-            DeploymentTarget::SelfHosted(_, environment) => environment,
+        info!("AWS.application.on_create() called for {}", self.name());
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
+
+        let aws = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<AWS>()
+            .unwrap();
+
+        let context = Context::new();
+        // TODO add context variables
+
+        let workspace_dir = self.workspace_directory();
+
+        let _ = crate::fs::generate_and_copy_all_files_into_dir(
+            "lib/aws/charts/q-application",
+            workspace_dir.as_str(),
+            &context,
+        )?;
+
+        // render
+        // TODO check the rendered files?
+        let helm_release_name = self.helm_release_name();
+        let helm_envs = vec![
+            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
+        ];
+
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            workspace_dir.as_str(),
+            environment.owner_id.as_str(),
+            kubernetes.id(),
+            aws.access_key_id.as_str(),
+            aws.secret_access_key.as_str(),
+            kubernetes.region(),
+        )?;
+
+        // do exec helm upgrade and return the last deployment status
+        let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name.as_str(),
+            workspace_dir.as_str(),
+            helm_envs,
+        )?;
+
+        // check deployment status
+        if !helm_history_row.is_successfully_deployed() {
+            return Err(ServiceError::DeploymentFailed);
+        }
 
         Ok(())
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!(
-            "EKS.application.on_create_error() called for {}",
+            "AWS.application.on_create_error() called for {}",
             self.name()
         );
 
@@ -56,7 +118,7 @@ impl Create for Application {
 
 impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        info!("EKS.application.on_delete() called for {}", self.name());
+        info!("AWS.application.on_delete() called for {}", self.name());
 
         // FIXME
         Ok(())
@@ -64,7 +126,7 @@ impl Delete for Application {
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!(
-            "EKS.application.on_delete_error() called for {}",
+            "AWS.application.on_delete_error() called for {}",
             self.name()
         );
 

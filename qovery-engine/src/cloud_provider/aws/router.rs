@@ -3,10 +3,10 @@ use std::io::{Error, Write};
 use std::path::Path;
 use std::str::FromStr;
 
-use rusoto_core::Region;
 use tera::Context;
 
 use crate::build_platform::Image;
+use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::service::{Create, Delete, Service, ServiceError, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
@@ -14,9 +14,6 @@ use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 pub struct Router {
     id: String,
     name: String,
-    access_key_id: String,
-    secret_access_key: String,
-    region: Region,
     custom_domains: Vec<CustomDomain>,
     routes: Vec<Route>,
 }
@@ -25,18 +22,12 @@ impl Router {
     pub fn new(
         id: &str,
         name: &str,
-        access_key_id: &str,
-        secret_access_key: &str,
-        region: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
     ) -> Self {
         Router {
             id: id.to_string(),
             name: name.to_string(),
-            access_key_id: access_key_id.to_string(),
-            secret_access_key: secret_access_key.to_string(),
-            region: Region::from_str(region).unwrap(),
             custom_domains,
             routes,
         }
@@ -48,26 +39,6 @@ impl Router {
 
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(format!("charts/routers/{}", self.id()))
-    }
-
-    fn kubernetes_config_path(&self) -> Result<String, Error> {
-        let kubernetes_config_bucket_name = ""; // FIXME
-        let kubernetes_config_object_key = ""; // FIXME
-
-        let workspace_directory = self.workspace_directory();
-        let kubernetes_config_file_path =
-            format!("{}/kubernetes_config", workspace_directory.as_str());
-
-        let _ = crate::s3::get_kubernetes_config_file(
-            self.access_key_id.as_str(),
-            self.secret_access_key.as_str(),
-            &self.region,
-            kubernetes_config_bucket_name,
-            kubernetes_config_object_key,
-            kubernetes_config_file_path.as_str(),
-        )?;
-
-        Ok(kubernetes_config_file_path)
     }
 }
 
@@ -96,11 +67,17 @@ impl<'a> Service for Router {
 
 impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        info!("EKS.router.on_create() called for {}", self.name());
-        let environment = match target {
-            DeploymentTarget::ManagedServices(_, env) => *env,
-            DeploymentTarget::SelfHosted(_, env) => *env,
+        info!("AWS.router.on_create() called for {}", self.name());
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
+
+        let aws = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<AWS>()
+            .unwrap();
 
         let context = Context::new();
         // TODO add context variables
@@ -131,11 +108,18 @@ impl Create for Router {
         // TODO check the rendered files?
         let helm_release_name = self.helm_release_name();
         let helm_envs = vec![
-            (AWS_ACCESS_KEY_ID, self.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, self.secret_access_key.as_str()),
+            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let kubernetes_config_file_path = self.kubernetes_config_path()?;
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            workspace_dir.as_str(),
+            environment.owner_id.as_str(),
+            kubernetes.id(),
+            aws.access_key_id.as_str(),
+            aws.secret_access_key.as_str(),
+            kubernetes.region(),
+        )?;
 
         // do exec helm upgrade and return the last deployment status
         let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
@@ -155,19 +139,19 @@ impl Create for Router {
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        warn!("EKS.router.on_create_error() called for {}", self.name());
+        warn!("AWS.router.on_create_error() called for {}", self.name());
         unimplemented!()
     }
 }
 
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        info!("EKS.router.on_delete() called for {}", self.name());
+        info!("AWS.router.on_delete() called for {}", self.name());
         unimplemented!()
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        warn!("EKS.router.on_delete_error() called for {}", self.name());
+        warn!("AWS.router.on_delete_error() called for {}", self.name());
         unimplemented!()
     }
 }
