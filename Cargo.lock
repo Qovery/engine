@@ -1454,6 +1454,7 @@ dependencies = [
  "rusoto_s3",
  "rusoto_sts",
  "serde",
+ "serde_json",
  "tera",
  "tokio",
  "walkdir",

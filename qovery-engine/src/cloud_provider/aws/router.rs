@@ -136,7 +136,7 @@ impl Create for Router {
 
         let kubernetes_config_file_path = self.kubernetes_config_path()?;
 
-        let _ = crate::cmd::helm_exec_with_named_args(
+        let _ = crate::cmd::helm_exec_upgrade(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),

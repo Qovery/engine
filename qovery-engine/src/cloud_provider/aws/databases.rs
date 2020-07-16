@@ -110,7 +110,7 @@ impl Create for PostgreSQL {
                     false,
                 )?;
 
-                // TODO check deployment error with helm
+                // TODO check terraform deployment?
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 // use helm
@@ -133,23 +133,45 @@ impl Create for PostgreSQL {
                     &context,
                 )?;
 
-                // render
-                // TODO check the rendered files?
+                // render templates
                 let helm_release_name = self.helm_release_name();
                 let helm_envs = vec![
                     (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
                     (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
                 ];
 
-                let _ = crate::cmd::helm_exec_with_named_args(
+                // do exec helm upgrade
+                let _ = crate::cmd::helm_exec_upgrade(
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     helm_release_name.as_str(),
                     workspace_dir.as_str(),
+                    helm_envs.clone(),
+                )?;
+
+                // list helm history
+                let helm_history_rows = crate::cmd::helm_exec_history(
+                    kubernetes_config_file_path.as_str(),
+                    environment.namespace(),
+                    helm_release_name.as_str(),
                     helm_envs,
                 )?;
 
-                // TODO check deployment error with helm
+                // take the last deployment from helm history
+                let helm_history_row = match helm_history_rows.first() {
+                    Some(helm_history_row) => helm_history_row,
+                    None => {
+                        // should never happened
+                        return Err(ServiceError::Unexpected(
+                            "helm history is empty - what's wrong?",
+                        ));
+                    }
+                };
+
+                // check deployment status
+                if !helm_history_row.is_successfully_deployed() {
+                    return Err(ServiceError::DeploymentFailed);
+                }
             }
         }
 

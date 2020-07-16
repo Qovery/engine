@@ -72,13 +72,15 @@ pub enum ServiceType<'a> {
 
 #[derive(Debug)]
 pub enum ServiceError {
+    DeploymentFailed,
     Cmd(CmdError),
-    Error(Error),
+    Io(Error),
+    Unexpected(&'static str),
 }
 
 impl From<std::io::Error> for ServiceError {
     fn from(err: Error) -> Self {
-        ServiceError::Error(err)
+        ServiceError::Io(err)
     }
 }
 

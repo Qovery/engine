@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::io::Error;
 use std::io::{BufRead, BufReader};
@@ -84,9 +85,9 @@ where
     Err(CmdError::Exec(exit_status))
 }
 
-fn _with_output<F>(mut child: Child, output: F) -> Child
+fn _with_output<F>(mut child: Child, mut output: F) -> Child
 where
-    F: Fn(Result<String, Error>),
+    F: FnMut(Result<String, Error>),
 {
     let stdout_reader = BufReader::new(child.stdout.as_mut().unwrap());
     let stderr_reader = BufReader::new(child.stderr.as_mut().unwrap());
@@ -102,10 +103,10 @@ where
     child
 }
 
-pub fn exec_with_output<P, F>(binary: P, args: Vec<&str>, output: F) -> Result<(), CmdError>
+pub fn exec_with_output<P, F>(binary: P, args: Vec<&str>, mut output: F) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
-    F: Fn(Result<String, Error>),
+    F: FnMut(Result<String, Error>),
 {
     let mut child = _with_output(command(binary, args, None).spawn().unwrap(), output);
 
@@ -125,11 +126,11 @@ pub fn exec_with_envs_and_output<P, F>(
     binary: P,
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-    output: F,
+    mut output: F,
 ) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
-    F: Fn(Result<String, Error>),
+    F: FnMut(Result<String, Error>),
 {
     let mut child = _with_output(command(binary, args, Some(envs)).spawn().unwrap(), output);
 
@@ -196,7 +197,7 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     Ok(())
 }
 
-pub fn helm_exec_with_named_args<P>(
+pub fn helm_exec_upgrade<P>(
     kubernetes_config: P,
     namespace: &str,
     release_name: &str,
@@ -225,10 +226,69 @@ where
     )
 }
 
+pub fn helm_exec_history<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    release_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Vec<HelmHistoryRow>, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut output_json_string = String::new();
+    let _ = helm_exec_with_output(
+        vec![
+            "history",
+            "--kubeconfig",
+            kubernetes_config.as_ref().to_str().unwrap(),
+            "-n",
+            namespace,
+            "-o",
+            "json",
+            release_name,
+        ],
+        envs,
+        |out| match out {
+            Ok(line) => output_json_string = line,
+            _ => {}
+        },
+    )?;
+
+    let mut results = match serde_json::from_str::<Vec<HelmHistoryRow>>(output_json_string.as_str())
+    {
+        Ok(x) => x,
+        Err(err) => {
+            error!("{}", err.to_string());
+            return Err(CmdError::Io(Error::new(
+                std::io::ErrorKind::InvalidData,
+                err.to_string(),
+            )));
+        }
+    };
+
+    // unsort results by revision number
+    let _ = results.sort_by_key(|x| x.revision);
+    // there is no performance penalty to do it in 2 operations instead of one, but who really cares anyway
+    let _ = results.reverse();
+
+    Ok(results)
+}
+
 pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CmdError> {
-    match exec_with_envs_and_output("helm", args, envs, |line| {
+    helm_exec_with_output(args, envs, |line| {
         info!("{}", line.unwrap());
-    }) {
+    })
+}
+
+pub fn helm_exec_with_output<F>(
+    args: Vec<&str>,
+    envs: Vec<(&str, &str)>,
+    mut output: F,
+) -> Result<(), CmdError>
+where
+    F: FnMut(Result<String, Error>),
+{
+    match exec_with_envs_and_output("helm", args, envs, output) {
         Err(err) => return Err(err),
         _ => {}
     };
@@ -245,5 +305,19 @@ pub enum CmdError {
 impl From<std::io::Error> for CmdError {
     fn from(err: Error) -> Self {
         CmdError::Io(err)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct HelmHistoryRow {
+    pub revision: u16,
+    pub status: String,
+    pub chart: String,
+    pub app_version: String,
+}
+
+impl HelmHistoryRow {
+    pub fn is_successfully_deployed(&self) -> bool {
+        self.status == "deployed"
     }
 }

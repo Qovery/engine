@@ -37,6 +37,7 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
     }
 
     fn is_valid(&self) -> Result<(), ContainerRegistryError> {
+        // FIXME check docker binary availability
         Ok(())
     }
 
