@@ -65,32 +65,7 @@ where
     let root_dir_str = root_dir.as_ref().to_str().unwrap();
     let tera_template_string = format!("{}/**/*.j2.*", root_dir_str);
 
-    let tera = match Tera::new(tera_template_string.as_str()) {
-        Ok(t) => t,
-        Err(e) => match e.kind {
-            tera::ErrorKind::TemplateNotFound(x) => panic!("template not found: {}", x),
-            tera::ErrorKind::Msg(x) => panic!("tera error: {}", x),
-            tera::ErrorKind::CircularExtend {
-                tpl,
-                inheritance_chain,
-            } => panic!(
-                "circular extend - template: {}, inheritance chain: {:?}",
-                tpl, inheritance_chain
-            ),
-            tera::ErrorKind::MissingParent { current, parent } => {
-                panic!("missing parent - current: {}, parent: {}", current, parent)
-            }
-            tera::ErrorKind::FilterNotFound(x) => panic!("filter not found: {}", x),
-            tera::ErrorKind::TestNotFound(x) => panic!("test not found: {}", x),
-            tera::ErrorKind::InvalidMacroDefinition(x) => panic!("invalid macro definition: {}", x),
-            tera::ErrorKind::FunctionNotFound(x) => panic!("function not found: {}", x),
-            tera::ErrorKind::Json(x) => panic!("json error: {:?}", x),
-            tera::ErrorKind::CallFunction(x) => panic!("call function: {}", x),
-            tera::ErrorKind::CallFilter(x) => panic!("call filter: {}", x),
-            tera::ErrorKind::CallTest(x) => panic!("call test: {}", x),
-            tera::ErrorKind::__Nonexhaustive => panic!("non exhaustive error"),
-        },
-    };
+    let tera = Tera::new(tera_template_string.as_str())?;
 
     let files = WalkDir::new(root_dir_str)
         .follow_links(true)
@@ -131,12 +106,30 @@ where
     // generate j2 templates
     let rendered_templates = match generate_j2_template_files(from_dir, context) {
         Ok(rt) => rt,
-        Err(err) => {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "something goes wrong while generating j2 templates {}",
-            ));
-        }
+        // TODO replace panic by well handled errors
+        Err(e) => match e.kind {
+            tera::ErrorKind::TemplateNotFound(x) => panic!("template not found: {}", x),
+            tera::ErrorKind::Msg(x) => panic!("tera error: {}", x),
+            tera::ErrorKind::CircularExtend {
+                tpl,
+                inheritance_chain,
+            } => panic!(
+                "circular extend - template: {}, inheritance chain: {:?}",
+                tpl, inheritance_chain
+            ),
+            tera::ErrorKind::MissingParent { current, parent } => {
+                panic!("missing parent - current: {}, parent: {}", current, parent)
+            }
+            tera::ErrorKind::FilterNotFound(x) => panic!("filter not found: {}", x),
+            tera::ErrorKind::TestNotFound(x) => panic!("test not found: {}", x),
+            tera::ErrorKind::InvalidMacroDefinition(x) => panic!("invalid macro definition: {}", x),
+            tera::ErrorKind::FunctionNotFound(x) => panic!("function not found: {}", x),
+            tera::ErrorKind::Json(x) => panic!("json error: {:?}", x),
+            tera::ErrorKind::CallFunction(x) => panic!("call function: {}", x),
+            tera::ErrorKind::CallFilter(x) => panic!("call filter: {}", x),
+            tera::ErrorKind::CallTest(x) => panic!("call test: {}", x),
+            tera::ErrorKind::__Nonexhaustive => panic!("non exhaustive error"),
+        },
     };
 
     // copy all .tf and .yaml files into our dest directory
