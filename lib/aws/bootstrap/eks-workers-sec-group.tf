@@ -14,12 +14,12 @@ resource "aws_security_group" "eks_cluster_workers" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = map(
-    "Name", "eks-workers",
-    "kubernetes.io/cluster/${var.eks_cluster_id}", "owned",
-    "ClusterId", var.eks_cluster_id
-    "ClusterName", var.eks_cluster_name,
-    "Region", var.region,
+  tags = merge(
+    local.tags_eks,
+    {
+      Name = "eks-workers",
+      "kubernetes.io/cluster/${var.eks_cluster_id}" = "owned",
+    }
   )
 }
 

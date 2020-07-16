@@ -5,7 +5,7 @@
 resource "aws_iam_role" "eks_cluster" {
   name = "${var.eks_cluster_id}-eks"
 
-  tags = aws_eks_cluster.eks_cluster.tags
+  tags = local.tags_eks
 
   assume_role_policy = <<POLICY
 {

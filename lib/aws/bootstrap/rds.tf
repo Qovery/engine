@@ -13,6 +13,15 @@ data "aws_iam_policy_document" "rds_enhanced_monitoring" {
   }
 }
 
+locals {
+  tags_rds = merge(
+    aws_eks_cluster.eks_cluster.tags,
+    {
+      "Service" = "RDS"
+    }
+  )
+}
+
 # Network
 resource "aws_subnet" "rds-zone-a" {
   count = var.rds_nb_subnets_per_zone
@@ -21,7 +30,7 @@ resource "aws_subnet" "rds-zone-a" {
   cidr_block        = "10.0.${count.index * 2 + 214}.0/${var.rds_cidr_subnet}"
   vpc_id            = aws_vpc.eks.id
 
-  tags = aws_db_subnet_group.rds.tags
+  tags = local.tags_rds
 }
 
 resource "aws_subnet" "rds-zone-b" {
@@ -31,7 +40,7 @@ resource "aws_subnet" "rds-zone-b" {
   cidr_block        = "10.0.${count.index * 2 + 228}.0/${var.rds_cidr_subnet}"
   vpc_id            = aws_vpc.eks.id
 
-  tags = aws_db_subnet_group.rds.tags
+  tags = local.tags_rds
 }
 
 resource "aws_subnet" "rds-zone-c" {
@@ -41,7 +50,7 @@ resource "aws_subnet" "rds-zone-c" {
   cidr_block        = "10.0.${count.index * 2 + 242}.0/${var.rds_cidr_subnet}"
   vpc_id            = aws_vpc.eks.id
 
-  tags = aws_db_subnet_group.rds.tags
+  tags = local.tags_rds
 }
 
 resource "aws_route_table_association" "rds_cluster-zone-a" {
@@ -70,12 +79,7 @@ resource "aws_db_subnet_group" "rds" {
   name = aws_vpc.eks.id
   subnet_ids = flatten([aws_subnet.rds-zone-a.*.id, aws_subnet.rds-zone-b.*.id, aws_subnet.rds-zone-c.*.id])
 
-  tags = merge(
-    aws_eks_cluster.eks_cluster.tags,
-    {
-      "Service" = "RDS"
-    }
-  )
+  tags = local.tags_rds
 }
 
 # IAM
@@ -83,14 +87,12 @@ resource "aws_iam_role" "rds_enhanced_monitoring" {
   name        = "${var.eks_cluster_id}-rds-enhanced-monitoring"
   assume_role_policy = data.aws_iam_policy_document.rds_enhanced_monitoring.json
 
-  tags = aws_db_subnet_group.rds.tags
+  tags = local.tags_rds
 }
 
 resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
   role       = aws_iam_role.rds_enhanced_monitoring.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-
-  tags = aws_db_subnet_group.rds.tags
 }
 
 # Todo: create a bastion to avoid this

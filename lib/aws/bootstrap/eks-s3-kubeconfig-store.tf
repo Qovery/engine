@@ -5,5 +5,5 @@ resource "aws_s3_bucket_object" "upload-kubeconfig" {
   server_side_encryption = "AES256"
   depends_on = [local_file.kubeconfig, aws_s3_bucket.kubeconfigs_bucket]
 
-  tags = aws_eks_cluster.eks_cluster.tags
+  tags = local.tags_eks
 }

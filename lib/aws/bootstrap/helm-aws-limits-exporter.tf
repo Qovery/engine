@@ -1,20 +1,16 @@
 resource "aws_iam_user" "iam-aws-limits-exporter" {
   name = "${var.eks_cluster_id}-aws-limits-exporter"
 
-  tags = aws_eks_cluster.eks_cluster.tags
+  tags = local.tags_eks
 }
 
 resource "aws_iam_access_key" "iam-aws-limits-exporter" {
   user    = aws_iam_user.iam-aws-limits-exporter.name
-
-  tags = aws_eks_cluster.eks_cluster.tags
 }
 
 resource "aws_iam_user_policy" "iam-aws-limits-exporter" {
   name = aws_iam_user.iam-aws-limits-exporter.name
   user = aws_iam_user.iam-aws-limits-exporter.name
-
-  tags = aws_eks_cluster.eks_cluster.tags
 
   policy = <<EOF
 {

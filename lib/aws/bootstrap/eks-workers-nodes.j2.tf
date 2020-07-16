@@ -1,6 +1,6 @@
 {% for eks_worker_node in eks_worker_nodes %}
 resource "aws_eks_node_group" "eks-cluster-workers-{{ loop.index }}" {
-  eks_cluster_name = aws_eks_cluster.eks_cluster.name
+  cluster_name     = aws_eks_cluster.eks_cluster.name
   version          = var.eks_k8s_versions.workers
   node_group_name  = "${var.eks_cluster_id}-{{ loop.index }}"
   node_role_arn    = aws_iam_role.eks_workers.arn
@@ -9,7 +9,7 @@ resource "aws_eks_node_group" "eks-cluster-workers-{{ loop.index }}" {
   ami_type         = "AL2_x86_64"
 
 
-  tags = aws_eks_cluster.eks_cluster.tags
+  tags = local.tags_eks
 
   scaling_config {
     desired_size = "{{ eks_worker_node.desired_size }}"

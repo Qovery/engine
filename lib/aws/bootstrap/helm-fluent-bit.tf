@@ -1,13 +1,9 @@
 resource "aws_iam_user" "fluent-bit" {
   name = "${var.eks_cluster_id}-fluent-bit"
-
-  tags = aws_eks_cluster.eks_cluster.tags
 }
 
 resource "aws_iam_access_key" "fluent-bit" {
   user    = aws_iam_user.fluent-bit.name
-
-  tags = aws_eks_cluster.eks_cluster.tags
 }
 
 resource "helm_release" "fluent-bit" {

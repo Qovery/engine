@@ -10,7 +10,7 @@ resource "aws_security_group" "eks_cluster" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = aws_eks_cluster.eks_cluster.tags
+  tags = local.tags_eks
 }
 
 # OPTIONAL: Allow inbound traffic from your local workstation external IP

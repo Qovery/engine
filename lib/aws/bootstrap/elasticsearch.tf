@@ -3,6 +3,15 @@ data "external" "create-es-role" {
   program = ["./helper.sh", "create_es_role_for_aws_service", "AWSServiceRoleForAmazonElasticsearchService", "es.amazonaws.com"]
 }
 
+locals {
+  tags_elasticsearch = merge(
+    local.tags_eks,
+    {
+      "Service" = "Elasticsearch"
+    }
+  )
+}
+
 # Network
 
 resource "aws_subnet" "es-zone-a" {
@@ -12,7 +21,7 @@ resource "aws_subnet" "es-zone-a" {
   cidr_block = "10.0.${count.index * 2 + 184}.0/${var.es_cidr_subnet}"
   vpc_id = aws_vpc.eks.id
 
-  tags = aws_security_group.elasticsearch.tags
+  tags = local.tags_elasticsearch
 }
 
 resource "aws_subnet" "es-zone-b" {
@@ -22,7 +31,7 @@ resource "aws_subnet" "es-zone-b" {
   cidr_block = "10.0.${count.index * 2 + 188}.0/${var.es_cidr_subnet}"
   vpc_id = aws_vpc.eks.id
 
-  tags = aws_security_group.elasticsearch.tags
+  tags = local.tags_elasticsearch
 }
 
 resource "aws_subnet" "es-zone-c" {
@@ -32,7 +41,7 @@ resource "aws_subnet" "es-zone-c" {
   cidr_block = "10.0.${count.index * 2 + 192}.0/${var.es_cidr_subnet}"
   vpc_id = aws_vpc.eks.id
 
-  tags = aws_security_group.elasticsearch.tags
+  tags = local.tags_elasticsearch
 }
 
 resource "aws_route_table_association" "es_cluster-zone-a" {
@@ -71,10 +80,5 @@ resource "aws_security_group" "elasticsearch" {
     ]
   }
 
-  tags = merge(
-    aws_eks_cluster.eks_cluster.tags,
-    {
-      "Service" = "Elasticsearch"
-    }
-  )
+  tags = local.tags_elasticsearch
 }

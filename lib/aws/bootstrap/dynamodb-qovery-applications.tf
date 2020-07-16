@@ -7,5 +7,5 @@ resource "aws_dynamodb_table" "qovery-applications" {
     type = "S"
   }
 
-  tags = aws_eks_cluster.eks_cluster.tags
+  tags = local.tags_eks
 }

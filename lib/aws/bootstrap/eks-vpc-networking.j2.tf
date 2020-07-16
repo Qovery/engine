@@ -1,17 +1,21 @@
 data "aws_availability_zones" "available" {}
 
+locals {
+  tags_eks_vpc = merge(
+    local.tags_eks,
+    {
+      Name = "eks-workers",
+      "kubernetes.io/cluster/${var.eks_cluster_id}" = "shared",
+      "kubernetes.io/role/elb" = 1,
+    }
+  )
+}
+
 resource "aws_vpc" "eks" {
   cidr_block = var.vpc_cidr_block
   enable_dns_hostnames = true
 
-  tags = map(
-    "Name", "eks-workers",
-    "kubernetes.io/cluster/${var.eks_cluster_id}", "shared",
-    "kubernetes.io/role/elb", 1,
-    "ClusterId", var.eks_cluster_id
-    "ClusterName", var.eks_cluster_name,
-    "Region", var.region,
-  )
+  tags = local.tags_eks_vpc
 }
 
 resource "aws_subnet" "eks-zone-a" {
@@ -22,7 +26,7 @@ resource "aws_subnet" "eks-zone-a" {
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
 
-  tags = aws_vpc.eks.tags
+  tags = local.tags_eks_vpc
 }
 
 resource "aws_subnet" "eks-zone-b" {
@@ -33,7 +37,7 @@ resource "aws_subnet" "eks-zone-b" {
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
 
-  tags = aws_vpc.eks.tags
+  tags = local.tags_eks_vpc
 }
 
 resource "aws_subnet" "eks-zone-c" {
@@ -44,13 +48,13 @@ resource "aws_subnet" "eks-zone-c" {
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
 
-  tags = aws_vpc.eks.tags
+  tags = local.tags_eks_vpc
 }
 
 resource "aws_internet_gateway" "eks_cluster" {
   vpc_id = aws_vpc.eks.id
 
-  tags = aws_eks_cluster.eks_cluster.tags
+  tags = local.tags_eks_vpc
 }
 
 resource "aws_route_table" "eks_cluster" {
@@ -61,7 +65,7 @@ resource "aws_route_table" "eks_cluster" {
     gateway_id = aws_internet_gateway.eks_cluster.id
   }
 
-  tags = aws_eks_cluster.eks_cluster.tags
+  tags = local.tags_eks_vpc
 }
 
 resource "aws_route_table_association" "eks_cluster-zone-a" {

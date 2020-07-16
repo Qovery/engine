@@ -8,7 +8,7 @@ resource "aws_s3_bucket" "kubeconfigs_bucket" {
   }
 
   tags = merge(
-    aws_eks_cluster.eks_cluster.tags,
+    local.tags_eks,
     {
       "Name" = "Kubernetes kubeconfig"
     }
@@ -25,7 +25,7 @@ resource "aws_s3_bucket" "qovery-applications" {
   }
 
   tags = merge(
-    aws_eks_cluster.eks_cluster.tags,
+    local.tags_eks,
     {
       "Name" = "Qovery terraform customers"
     }

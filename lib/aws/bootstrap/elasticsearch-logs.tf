@@ -50,7 +50,7 @@ CONFIG
   }
 
   tags = merge(
-    aws_security_group.elasticsearch.tags
+    local.tags_eks,
     {
       "EsDomain" = var.es_q_logs_domain_name
     }
