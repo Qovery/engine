@@ -15,7 +15,7 @@ use qovery_engine_task_manager::tasks::InfrastructureTask;
 fn send_nats_request(json_file_path: &str, subject: &str) -> Result<(), Error> {
     let nc = nats::Options::new()
         .with_name("test-client")
-        .connect("localhost:4222")?;
+        .connect("panic.qovery.com:4242")?;
 
     let mut create_cluster_file = File::open(json_file_path).unwrap();
 

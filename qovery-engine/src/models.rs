@@ -33,6 +33,7 @@ impl Environment {
         crate::cloud_provider::environment::Environment::new(
             self.environment_id.as_str(),
             self.project_id.as_str(),
+            self.owner_id.as_str(),
         )
     }
 }

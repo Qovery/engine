@@ -75,7 +75,7 @@ pub enum ServiceError {
     DeploymentFailed,
     Cmd(CmdError),
     Io(Error),
-    Unexpected(&'static str),
+    Unexpected(String),
 }
 
 impl From<std::io::Error> for ServiceError {

@@ -1,2 +1,4 @@
 #[derive(Debug)]
-pub enum BuildPlatformError {}
+pub enum BuildPlatformError {
+    Unexpected(String),
+}

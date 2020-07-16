@@ -38,7 +38,12 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn is_valid(&self) -> Result<(), BuildPlatformError> {
-        // TODO check docker binary
+        if !crate::cmd::does_command_exists("docker") {
+            return Err(BuildPlatformError::Unexpected(
+                "docker binary not found".to_string(),
+            ));
+        }
+
         Ok(())
     }
 

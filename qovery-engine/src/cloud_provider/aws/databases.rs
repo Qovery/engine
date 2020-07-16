@@ -1,3 +1,9 @@
+use std::io::Error;
+use std::str::FromStr;
+
+use rusoto_core::Region;
+use tera::Context;
+
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::service::{
@@ -5,10 +11,6 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use rusoto_core::Region;
-use std::io::Error;
-use std::str::FromStr;
-use tera::Context;
 
 pub struct PostgreSQL {
     id: String,
@@ -37,12 +39,14 @@ impl PostgreSQL {
 
     fn kubernetes_config_path(
         &self,
+        owner_id: &str,
+        kubernetes_cluster_id: &str,
         access_key_id: &str,
         secret_access_key: &str,
         region: &str,
     ) -> Result<String, Error> {
-        let kubernetes_config_bucket_name = ""; // FIXME
-        let kubernetes_config_object_key = ""; // FIXME
+        let kubernetes_config_bucket_name = format!("kubeconfigs-{}", owner_id); // FIXME
+        let kubernetes_config_object_key = format!("{}-{}", region, kubernetes_cluster_id); // FIXME
 
         let workspace_directory = self.workspace_directory();
         let kubernetes_config_file_path =
@@ -54,8 +58,8 @@ impl PostgreSQL {
             access_key_id,
             secret_access_key,
             &_region,
-            kubernetes_config_bucket_name,
-            kubernetes_config_object_key,
+            kubernetes_config_bucket_name.as_str(),
+            kubernetes_config_object_key.as_str(),
             kubernetes_config_file_path.as_str(),
         )?;
 
@@ -81,7 +85,17 @@ impl Service for PostgreSQL {
     }
 
     fn is_valid(&self) -> Result<(), ServiceError> {
-        // FIXME
+        let binaries = ["helm", "terraform"];
+
+        for binary in binaries.iter() {
+            if !crate::cmd::does_command_exists(binary) {
+                let err = format!("{} binary not found", binary);
+                return Err(ServiceError::Unexpected(err));
+            }
+        }
+
+        // TODO check lib directories available
+
         Ok(())
     }
 }
@@ -122,6 +136,8 @@ impl Create for PostgreSQL {
                     .unwrap();
 
                 let kubernetes_config_file_path = self.kubernetes_config_path(
+                    environment.owner_id.as_str(),
+                    kubernetes.id(),
                     aws.access_key_id.as_str(),
                     aws.secret_access_key.as_str(),
                     kubernetes.region(),
@@ -163,7 +179,7 @@ impl Create for PostgreSQL {
                     None => {
                         // should never happened
                         return Err(ServiceError::Unexpected(
-                            "helm history is empty - what's wrong?",
+                            "helm history is empty - what's wrong?".to_string(),
                         ));
                     }
                 };

@@ -8,6 +8,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use dirs::home_dir;
 
 use crate::constants::TF_PLUGIN_CACHE_DIR;
+use std::ffi::OsStr;
 
 fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
 where
@@ -294,6 +295,16 @@ where
     };
 
     Ok(())
+}
+
+pub fn does_command_exists<S>(binary: S) -> bool
+where
+    S: AsRef<OsStr>,
+{
+    match Command::new(binary).spawn() {
+        Ok(_) => true,
+        _ => false,
+    }
 }
 
 #[derive(Debug)]
