@@ -107,29 +107,36 @@ where
     let rendered_templates = match generate_j2_template_files(from_dir, context) {
         Ok(rt) => rt,
         // TODO replace panic by well handled errors
-        Err(e) => match e.kind {
-            tera::ErrorKind::TemplateNotFound(x) => panic!("template not found: {}", x),
-            tera::ErrorKind::Msg(x) => panic!("tera error: {}", x),
-            tera::ErrorKind::CircularExtend {
-                tpl,
-                inheritance_chain,
-            } => panic!(
-                "circular extend - template: {}, inheritance chain: {:?}",
-                tpl, inheritance_chain
-            ),
-            tera::ErrorKind::MissingParent { current, parent } => {
-                panic!("missing parent - current: {}, parent: {}", current, parent)
-            }
-            tera::ErrorKind::FilterNotFound(x) => panic!("filter not found: {}", x),
-            tera::ErrorKind::TestNotFound(x) => panic!("test not found: {}", x),
-            tera::ErrorKind::InvalidMacroDefinition(x) => panic!("invalid macro definition: {}", x),
-            tera::ErrorKind::FunctionNotFound(x) => panic!("function not found: {}", x),
-            tera::ErrorKind::Json(x) => panic!("json error: {:?}", x),
-            tera::ErrorKind::CallFunction(x) => panic!("call function: {}", x),
-            tera::ErrorKind::CallFilter(x) => panic!("call filter: {}", x),
-            tera::ErrorKind::CallTest(x) => panic!("call test: {}", x),
-            tera::ErrorKind::__Nonexhaustive => panic!("non exhaustive error"),
-        },
+        Err(e) => {
+            let error_msg = match e.kind {
+                tera::ErrorKind::TemplateNotFound(x) => format!("template not found: {}", x),
+                tera::ErrorKind::Msg(x) => format!("tera error: {}", x),
+                tera::ErrorKind::CircularExtend {
+                    tpl,
+                    inheritance_chain,
+                } => format!(
+                    "circular extend - template: {}, inheritance chain: {:?}",
+                    tpl, inheritance_chain
+                ),
+                tera::ErrorKind::MissingParent { current, parent } => {
+                    format!("missing parent - current: {}, parent: {}", current, parent)
+                }
+                tera::ErrorKind::FilterNotFound(x) => format!("filter not found: {}", x),
+                tera::ErrorKind::TestNotFound(x) => format!("test not found: {}", x),
+                tera::ErrorKind::InvalidMacroDefinition(x) => {
+                    format!("invalid macro definition: {}", x)
+                }
+                tera::ErrorKind::FunctionNotFound(x) => format!("function not found: {}", x),
+                tera::ErrorKind::Json(x) => format!("json error: {:?}", x),
+                tera::ErrorKind::CallFunction(x) => format!("call function: {}", x),
+                tera::ErrorKind::CallFilter(x) => format!("call filter: {}", x),
+                tera::ErrorKind::CallTest(x) => format!("call test: {}", x),
+                tera::ErrorKind::__Nonexhaustive => format!("non exhaustive error"),
+            };
+
+            error!("{}", error_msg.as_str());
+            return Err(Error::new(ErrorKind::InvalidData, error_msg));
+        }
     };
 
     // copy all .tf and .yaml files into our dest directory
