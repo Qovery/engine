@@ -198,6 +198,43 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     Ok(())
 }
 
+pub fn helm_exec_with_upgrade_history<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    release_name: &str,
+    chart_root_dir: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<HelmHistoryRow, CmdError>
+where
+    P: AsRef<Path>,
+{
+    // do exec helm upgrade
+    let _ = helm_exec_upgrade(
+        kubernetes_config.as_ref(),
+        namespace,
+        release_name,
+        chart_root_dir.as_ref(),
+        envs.clone(),
+    )?;
+
+    // list helm history
+    let helm_history_rows =
+        helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+
+    // take the last deployment from helm history
+    let helm_history_row = match helm_history_rows.first() {
+        Some(helm_history_row) => helm_history_row,
+        None => {
+            // should never happened
+            return Err(CmdError::Unexpected(
+                "helm history is empty - what's wrong?".to_string(),
+            ));
+        }
+    };
+
+    Ok(helm_history_row.clone())
+}
+
 pub fn helm_exec_upgrade<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -311,6 +348,7 @@ where
 pub enum CmdError {
     Exec(ExitStatus),
     Io(Error),
+    Unexpected(String),
 }
 
 impl From<std::io::Error> for CmdError {

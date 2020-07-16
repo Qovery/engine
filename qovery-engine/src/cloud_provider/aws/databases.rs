@@ -156,33 +156,14 @@ impl Create for PostgreSQL {
                     (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
                 ];
 
-                // do exec helm upgrade
-                let _ = crate::cmd::helm_exec_upgrade(
+                // do exec helm upgrade and return the last deployment status
+                let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     helm_release_name.as_str(),
                     workspace_dir.as_str(),
-                    helm_envs.clone(),
-                )?;
-
-                // list helm history
-                let helm_history_rows = crate::cmd::helm_exec_history(
-                    kubernetes_config_file_path.as_str(),
-                    environment.namespace(),
-                    helm_release_name.as_str(),
                     helm_envs,
                 )?;
-
-                // take the last deployment from helm history
-                let helm_history_row = match helm_history_rows.first() {
-                    Some(helm_history_row) => helm_history_row,
-                    None => {
-                        // should never happened
-                        return Err(ServiceError::Unexpected(
-                            "helm history is empty - what's wrong?".to_string(),
-                        ));
-                    }
-                };
 
                 // check deployment status
                 if !helm_history_row.is_successfully_deployed() {

@@ -63,8 +63,9 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
             vec!["login", "-u", self.login, "-p", self.password],
         ) {
             Err(err) => match err {
-                CmdError::Io(err) => panic!(err),
                 CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
             },
             _ => {}
         };
@@ -79,16 +80,18 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Io(err) => panic!(err),
                 CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
             },
             _ => {}
         };
 
         match cmd::exec("docker", vec!["push", dest.as_str()]) {
             Err(err) => match err {
-                CmdError::Io(err) => panic!(err),
                 CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
             },
             _ => {}
         };

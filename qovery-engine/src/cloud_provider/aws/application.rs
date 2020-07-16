@@ -27,7 +27,7 @@ impl Service for Application {
     }
 
     fn is_valid(&self) -> Result<(), ServiceError> {
-        unimplemented!()
+        Ok(())
     }
 }
 
@@ -35,7 +35,12 @@ impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("EKS.application.on_create() called for {}", self.name());
 
-        unimplemented!()
+        let environment = match target {
+            DeploymentTarget::ManagedServices(_, environment) => environment,
+            DeploymentTarget::SelfHosted(_, environment) => environment,
+        };
+
+        Ok(())
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
@@ -43,14 +48,18 @@ impl Create for Application {
             "EKS.application.on_create_error() called for {}",
             self.name()
         );
-        unimplemented!()
+
+        // FIXME
+        Ok(())
     }
 }
 
 impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("EKS.application.on_delete() called for {}", self.name());
-        unimplemented!()
+
+        // FIXME
+        Ok(())
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
@@ -58,6 +67,8 @@ impl Delete for Application {
             "EKS.application.on_delete_error() called for {}",
             self.name()
         );
-        unimplemented!()
+
+        // FIXME
+        Ok(())
     }
 }

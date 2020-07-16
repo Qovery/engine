@@ -1,14 +1,15 @@
+use std::fs::File;
+use std::io::{Error, Write};
+use std::path::Path;
+use std::str::FromStr;
+
+use rusoto_core::Region;
 use tera::Context;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::service::{Create, Delete, Service, ServiceError, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use rusoto_core::Region;
-use std::fs::File;
-use std::io::{Error, Write};
-use std::path::Path;
-use std::str::FromStr;
 
 pub struct Router {
     id: String,
@@ -136,7 +137,8 @@ impl Create for Router {
 
         let kubernetes_config_file_path = self.kubernetes_config_path()?;
 
-        let _ = crate::cmd::helm_exec_upgrade(
+        // do exec helm upgrade and return the last deployment status
+        let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
@@ -144,8 +146,11 @@ impl Create for Router {
             helm_envs,
         )?;
 
-        // TODO render helm common config and apply
-        // TODO check deployment error with helm
+        // check deployment status
+        if !helm_history_row.is_successfully_deployed() {
+            return Err(ServiceError::DeploymentFailed);
+        }
+
         Ok(())
     }
 

@@ -216,8 +216,9 @@ impl ContainerRegistry for ECR {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Io(err) => panic!(err),
                 CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
             },
             _ => {}
         };
@@ -235,8 +236,9 @@ impl ContainerRegistry for ECR {
             vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
         ) {
             Err(err) => match err {
-                CmdError::Io(err) => panic!(err),
                 CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
             },
             _ => {}
         };
@@ -244,8 +246,9 @@ impl ContainerRegistry for ECR {
         // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
         match cmd::exec("docker", vec!["push", dest.as_str()]) {
             Err(err) => match err {
-                CmdError::Io(err) => panic!(err),
                 CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
             },
             _ => {}
         };
