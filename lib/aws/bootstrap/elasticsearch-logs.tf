@@ -1,5 +1,5 @@
-resource "aws_elasticsearch_domain" "qovery-k8s-logs" {
-  domain_name           = "qlogs"
+resource "aws_elasticsearch_domain" "qovery_eks_logs" {
+  domain_name           = var.es_q_logs_domain_name
   elasticsearch_version = "7.4"
 
   cluster_config {
@@ -31,7 +31,7 @@ resource "aws_elasticsearch_domain" "qovery-k8s-logs" {
         "AWS": "*"
       },
       "Action": "es:*",
-      "Resource": "arn:aws:es:${var.region}:283389881690:domain/qlogs-${var.region_cluster_name}/*"
+      "Resource": "arn:aws:es:${var.region}:283389881690:domain/qlogs-${var.eks_cluster_id}/*"
     },
     {
       "Effect": "Allow",
@@ -39,7 +39,7 @@ resource "aws_elasticsearch_domain" "qovery-k8s-logs" {
         "AWS": "arn:aws:iam::283389881690:user/fluentbit-forward2es"
       },
       "Action": "es:*",
-      "Resource": "arn:aws:es:${var.region}:283389881690:domain/qlogs-${var.region_cluster_name}/*"
+      "Resource": "arn:aws:es:${var.region}:283389881690:domain/qlogs-${var.eks_cluster_id}/*"
     }
   ]
 }
@@ -49,13 +49,15 @@ CONFIG
     automated_snapshot_start_hour = 3
   }
 
-  tags = {
-    cluster_name = var.cluster_name
-    region = var.region
-    domain = "qlogs-${var.cluster_id}"
-  }
+  tags = merge(
+    aws_security_group.elasticsearch.tags
+    {
+      "EsDomain" = var.es_q_logs_domain_name
+    }
+  )
 
   depends_on = [
-    data.external.create-es-role
+    data.external.create-es-role,
+    aws_security_group.elasticsearch
   ]
 }

@@ -20,7 +20,7 @@ resource "helm_release" "elasticsearch-curator" {
 
   set {
     name = "es_endpoint"
-    value = aws_elasticsearch_domain.qovery-k8s-logs.endpoint
+    value = aws_elasticsearch_domain.qovery_eks_logs.endpoint
   }
 
   set {
@@ -50,6 +50,6 @@ resource "helm_release" "elasticsearch-curator" {
 
   depends_on = [
     aws_eks_cluster.eks_cluster,
-    aws_elasticsearch_domain.qovery-k8s-logs
+    aws_elasticsearch_domain.qovery_eks_logs
   ]
 }

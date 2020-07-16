@@ -3,7 +3,7 @@
 ##############################
 
 resource "aws_security_group" "eks_cluster_workers" {
-  name        = "${var.region_cluster_name}-workers"
+  name        = "${var.eks_cluster_id}-eks-workers"
   description = "Security group for all nodes in the cluster"
   vpc_id      = aws_vpc.eks.id
 
@@ -15,12 +15,12 @@ resource "aws_security_group" "eks_cluster_workers" {
   }
 
   tags = map(
-     "Name", "${aws_eks_cluster.eks_cluster.name}-workers",
-     "ClusterName", var.cluster_name,
-     "Region", var.region,
-     "RegionClusterName", var.region_cluster_name,
-     "kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.name}", "owned",
-    )
+    "Name", "eks-workers",
+    "kubernetes.io/cluster/${var.eks_cluster_id}", "owned",
+    "ClusterId", var.eks_cluster_id
+    "ClusterName", var.eks_cluster_name,
+    "Region", var.region,
+  )
 }
 
 resource "aws_security_group_rule" "node-ingress-self" {

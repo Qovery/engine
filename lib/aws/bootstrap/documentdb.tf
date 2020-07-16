@@ -7,9 +7,9 @@
 //  cidr_block = "10.0.${count.index * 2 + 196}.0/${var.ddb_cidr_subnet}"
 //  vpc_id = aws_vpc.eks.id
 //  tags = map(
-//    "Name", "${var.region_cluster_name}-ddb",
-//    "ClusterName", var.cluster_name,
-//    "RegionClusterName", var.region_cluster_name,
+//    "Name", "${var.eks_cluster_id}-ddb",
+//    "ClusterName", var.eks_cluster_name,
+//    "RegionClusterName", var.eks_cluster_id,
 //    "Region", var.region,
 //    "Service", "DocumentDB"
 //  )
@@ -22,9 +22,9 @@
 //  cidr_block = "10.0.${count.index * 2 + 202}.0/${var.ddb_cidr_subnet}"
 //  vpc_id = aws_vpc.eks.id
 //  tags = map(
-//    "Name", "${var.region_cluster_name}-ddb",
-//    "ClusterName", var.cluster_name,
-//    "RegionClusterName", var.region_cluster_name,
+//    "Name", "${var.eks_cluster_id}-ddb",
+//    "ClusterName", var.eks_cluster_name,
+//    "RegionClusterName", var.eks_cluster_id,
 //    "Region", var.region,
 //    "Service", "DocumentDB"
 //  )
@@ -37,9 +37,9 @@
 //  cidr_block = "10.0.${count.index * 2 + 208}.0/${var.ddb_cidr_subnet}"
 //  vpc_id = aws_vpc.eks.id
 //  tags = map(
-//    "Name", "${var.region_cluster_name}-ddb",
-//    "ClusterName", var.cluster_name,
-//    "RegionClusterName", var.region_cluster_name,
+//    "Name", "${var.eks_cluster_id}-ddb",
+//    "ClusterName", var.eks_cluster_name,
+//    "RegionClusterName", var.eks_cluster_id,
 //    "Region", var.region,
 //    "Service", "DocumentDB"
 //  )
@@ -67,12 +67,12 @@
 //}
 //
 //resource "aws_docdb_subnet_group" "ddb" {
-//  description = "DocumentDB linked to ${var.region_cluster_name}"
+//  description = "DocumentDB linked to ${var.eks_cluster_id}"
 //  name = "${aws_vpc.eks.id}-ddb"
 //  subnet_ids = flatten([aws_subnet.ddb-zone-a.*.id, aws_subnet.ddb-zone-b.*.id, aws_subnet.ddb-zone-c.*.id])
 //  tags = {
-//    ClusterName = var.cluster_name
-//    RegionClusterName = var.region_cluster_name
+//    ClusterName = var.eks_cluster_name
+//    RegionClusterName = var.eks_cluster_id
 //    Region = var.region
 //    Service = "DocumentDB"
 //  }

@@ -1,9 +1,13 @@
 resource "aws_iam_user" "fluent-bit" {
-  name = "fluent-bit-${var.region_cluster_name}"
+  name = "${var.eks_cluster_id}-fluent-bit"
+
+  tags = aws_eks_cluster.eks_cluster.tags
 }
 
 resource "aws_iam_access_key" "fluent-bit" {
   user    = aws_iam_user.fluent-bit.name
+
+  tags = aws_eks_cluster.eks_cluster.tags
 }
 
 resource "helm_release" "fluent-bit" {
@@ -30,7 +34,7 @@ resource "helm_release" "fluent-bit" {
 
   set {
     name = "awsEsProxy.host"
-    value = aws_elasticsearch_domain.qovery-k8s-logs.endpoint
+    value = aws_elasticsearch_domain.qovery_eks_logs.endpoint
   }
 
   set {
