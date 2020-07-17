@@ -65,7 +65,11 @@ impl<'a> EKS<'a> {
     fn context(&self) -> Context {
         let region_cluster_id = format!("{}-{}-{}", self.region(), self.name(), self.id());
         let vpc_cidr_block = "10.0.0.0/16";
+        let eks_cloudwatch_log_group = format! {"/aws/eks/{}/cluster", self.id};
         let eks_cidr_subnet = "23";
+        let rds_cidr_subnet = "23";
+        let documentdb_cidr_subnet = "23";
+        let elasticsearch_cidr_subnet = "23";
 
         let eks_zone_a_subnet_blocks = [
             "10.0.0.0/23",
@@ -148,21 +152,123 @@ impl<'a> EKS<'a> {
         .map(|ip| format!("\"{}\"", ip))
         .collect::<Vec<_>>();
 
+        let rds_zone_a_subnet_blocks = [
+            "10.0.214.0/23",
+            "10.0.216.0/23",
+            "10.0.218.0/23",
+            "10.0.220.0/23",
+            "10.0.222.0/23",
+            "10.0.224.0/23",
+        ]
+        .iter()
+        .map(|ip| format!("\"{}\"", ip))
+        .collect::<Vec<_>>();
+
+        let rds_zone_b_subnet_blocks = [
+            "10.0.226.0/23",
+            "10.0.228.0/23",
+            "10.0.230.0/23",
+            "10.0.232.0/23",
+            "10.0.234.0/23",
+            "10.0.236.0/23",
+        ]
+        .iter()
+        .map(|ip| format!("\"{}\"", ip))
+        .collect::<Vec<_>>();
+
+        let rds_zone_c_subnet_blocks = [
+            "10.0.238.0/23",
+            "10.0.240.0/23",
+            "10.0.242.0/23",
+            "10.0.244.0/23",
+            "10.0.246.0/23",
+            "10.0.248.0/23",
+        ]
+        .iter()
+        .map(|ip| format!("\"{}\"", ip))
+        .collect::<Vec<_>>();
+
+        let documentdb_zone_a_subnet_blocks = ["10.0.196.0/23", "10.0.198.0/23", "10.0.200.0/23"]
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let documentdb_zone_b_subnet_blocks = ["10.0.202.0/23", "10.0.204.0/23", "10.0.206.0/23"]
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let documentdb_zone_c_subnet_blocks = ["10.0.208.0/23", "10.0.210.0/23", "10.0.212.0/23"]
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let elasticsearch_zone_a_subnet_blocks = ["10.0.184.0/23", "10.0.186.0/23"]
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let elasticsearch_zone_b_subnet_blocks = ["10.0.188.0/23", "10.0.190.0/23"]
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let elasticsearch_zone_c_subnet_blocks = ["10.0.192.0/23", "10.0.194.0/23"]
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
         let mut context = Context::new();
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
         context.insert("aws_region", &self.region.name());
+        context.insert("aws_terraform_backend_bucket", &self.bucket_name());
+        context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
+
         context.insert("vpc_cidr_block", &vpc_cidr_block);
+
         context.insert("eks_cidr_subnet", &eks_cidr_subnet);
+        context.insert("eks_cluster_name", &self.name());
+        context.insert("eks_cluster_id", region_cluster_id.as_str());
         context.insert("eks_zone_a_subnet_blocks", &eks_zone_a_subnet_blocks);
         context.insert("eks_zone_b_subnet_blocks", &eks_zone_b_subnet_blocks);
         context.insert("eks_zone_c_subnet_blocks", &eks_zone_c_subnet_blocks);
         context.insert("eks_masters_version", &self.version());
         context.insert("eks_workers_version", &self.version());
-        context.insert("eks_cluster_name", &self.name());
-        context.insert("eks_cluster_id", region_cluster_id.as_str());
-        context.insert("aws_terraform_backend_bucket", &self.bucket_name());
-        context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
+        context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
+
+        context.insert("rds_cidr_subnet", &rds_cidr_subnet);
+        context.insert("rds_zone_a_subnet_blocks", &rds_zone_a_subnet_blocks);
+        context.insert("rds_zone_b_subnet_blocks", &rds_zone_b_subnet_blocks);
+        context.insert("rds_zone_c_subnet_blocks", &rds_zone_c_subnet_blocks);
+
+        context.insert("documentdb_cidr_subnet", &documentdb_cidr_subnet);
+        context.insert(
+            "documentdb_zone_a_subnet_blocks",
+            &documentdb_zone_a_subnet_blocks,
+        );
+        context.insert(
+            "documentdb_zone_b_subnet_blocks",
+            &documentdb_zone_b_subnet_blocks,
+        );
+        context.insert(
+            "documentdb_zone_c_subnet_blocks",
+            &documentdb_zone_c_subnet_blocks,
+        );
+
+        context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet);
+        context.insert(
+            "elasticsearch_zone_a_subnet_blocks",
+            &elasticsearch_zone_a_subnet_blocks,
+        );
+        context.insert(
+            "elasticsearch_zone_b_subnet_blocks",
+            &elasticsearch_zone_b_subnet_blocks,
+        );
+        context.insert(
+            "elasticsearch_zone_c_subnet_blocks",
+            &elasticsearch_zone_c_subnet_blocks,
+        );
 
         let worker_nodes = self
             .nodes

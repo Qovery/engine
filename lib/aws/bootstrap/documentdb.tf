@@ -1,92 +1,82 @@
-//# Network
-//
-//resource "aws_subnet" "ddb-zone-a" {
-//  count = var.ddb_nb_subnets_per_zone
-//
-//  availability_zone = data.aws_availability_zones.available.names[0]
-//  cidr_block = "10.0.${count.index * 2 + 196}.0/${var.ddb_cidr_subnet}"
-//  vpc_id = aws_vpc.eks.id
-//  tags = map(
-//    "Name", "${var.eks_cluster_id}-ddb",
-//    "ClusterName", var.eks_cluster_name,
-//    "RegionClusterName", var.eks_cluster_id,
-//    "Region", var.region,
-//    "Service", "DocumentDB"
-//  )
-//}
-//
-//resource "aws_subnet" "ddb-zone-b" {
-//  count = var.ddb_nb_subnets_per_zone
-//
-//  availability_zone = data.aws_availability_zones.available.names[1]
-//  cidr_block = "10.0.${count.index * 2 + 202}.0/${var.ddb_cidr_subnet}"
-//  vpc_id = aws_vpc.eks.id
-//  tags = map(
-//    "Name", "${var.eks_cluster_id}-ddb",
-//    "ClusterName", var.eks_cluster_name,
-//    "RegionClusterName", var.eks_cluster_id,
-//    "Region", var.region,
-//    "Service", "DocumentDB"
-//  )
-//}
-//
-//resource "aws_subnet" "ddb-zone-c" {
-//  count = var.ddb_nb_subnets_per_zone
-//
-//  availability_zone = data.aws_availability_zones.available.names[2]
-//  cidr_block = "10.0.${count.index * 2 + 208}.0/${var.ddb_cidr_subnet}"
-//  vpc_id = aws_vpc.eks.id
-//  tags = map(
-//    "Name", "${var.eks_cluster_id}-ddb",
-//    "ClusterName", var.eks_cluster_name,
-//    "RegionClusterName", var.eks_cluster_id,
-//    "Region", var.region,
-//    "Service", "DocumentDB"
-//  )
-//}
-//
-//resource "aws_route_table_association" "ddb_cluster-zone-a" {
-//  count = var.ddb_nb_subnets_per_zone
-//
-//  subnet_id      = aws_subnet.ddb-zone-a.*.id[count.index]
-//  route_table_id = aws_route_table.eks_cluster.id
-//}
-//
-//resource "aws_route_table_association" "ddb_cluster-zone-b" {
-//  count = var.ddb_nb_subnets_per_zone
-//
-//  subnet_id      = aws_subnet.ddb-zone-b.*.id[count.index]
-//  route_table_id = aws_route_table.eks_cluster.id
-//}
-//
-//resource "aws_route_table_association" "ddb_cluster-zone-c" {
-//  count = var.ddb_nb_subnets_per_zone - 1
-//
-//  subnet_id      = aws_subnet.ddb-zone-c.*.id[count.index]
-//  route_table_id = aws_route_table.eks_cluster.id
-//}
-//
-//resource "aws_docdb_subnet_group" "ddb" {
-//  description = "DocumentDB linked to ${var.eks_cluster_id}"
-//  name = "${aws_vpc.eks.id}-ddb"
-//  subnet_ids = flatten([aws_subnet.ddb-zone-a.*.id, aws_subnet.ddb-zone-b.*.id, aws_subnet.ddb-zone-c.*.id])
-//  tags = {
-//    ClusterName = var.eks_cluster_name
-//    RegionClusterName = var.eks_cluster_id
-//    Region = var.region
-//    Service = "DocumentDB"
-//  }
-//}
-//
-//# Todo: create a bastion to avoid this
-//
-//resource "aws_security_group_rule" "documentdb_remote_access" {
-//  count = var.test_cluster == "false" ? 1 : 0
-//  cidr_blocks       = ["0.0.0.0/0"]
-//  description       = "Allow DocumentDB incoming access from anywhere"
-//  from_port         = 27017
-//  protocol          = "tcp"
-//  security_group_id = aws_security_group.eks_cluster_workers.id
-//  to_port           = 27017
-//  type              = "ingress"
-//}
+locals {
+  tags_documentdb = merge(
+  aws_eks_cluster.eks_cluster.tags,
+  {
+    "Service" = "DocumentDB"
+  }
+  )
+}
+
+# Network
+
+resource "aws_subnet" "documentdb_zone_a" {
+  count = length(var.documentdb_subnets_zone_a)
+
+  availability_zone = data.aws_availability_zones.available.names[0]
+  cidr_block = var.documentdb_subnets_zone_a[count.index]
+  vpc_id = aws_vpc.eks.id
+
+  tags = local.tags_documentdb
+}
+
+resource "aws_subnet" "documentdb_zone_b" {
+  count = length(var.documentdb_subnets_zone_b)
+
+  availability_zone = data.aws_availability_zones.available.names[1]
+  cidr_block = var.documentdb_subnets_zone_b[count.index]
+  vpc_id = aws_vpc.eks.id
+
+  tags = local.tags_documentdb
+}
+
+resource "aws_subnet" "documentdb_zone_c" {
+  count = length(var.documentdb_subnets_zone_c)
+
+  availability_zone = data.aws_availability_zones.available.names[2]
+  cidr_block = var.documentdb_subnets_zone_c[count.index]
+  vpc_id = aws_vpc.eks.id
+
+  tags = local.tags_documentdb
+}
+
+resource "aws_route_table_association" "documentdb_cluster_zone_a" {
+  count = length(var.documentdb_subnets_zone_a)
+
+  subnet_id      = aws_subnet.documentdb_zone_a.*.id[count.index]
+  route_table_id = aws_route_table.eks_cluster.id
+}
+
+resource "aws_route_table_association" "documentdb_cluster_zone_b" {
+  count = length(var.documentdb_subnets_zone_b)
+
+  subnet_id      = aws_subnet.documentdb_zone_b.*.id[count.index]
+  route_table_id = aws_route_table.eks_cluster.id
+}
+
+resource "aws_route_table_association" "documentdb_cluster_zone_c" {
+  count = length(var.documentdb_subnets_zone_c)
+
+  subnet_id      = aws_subnet.documentdb_zone_c.*.id[count.index]
+  route_table_id = aws_route_table.eks_cluster.id
+}
+
+resource "aws_docdb_subnet_group" "documentdb" {
+  description = "DocumentDB linked to ${var.eks_cluster_id}"
+  name = "${aws_vpc.eks.id}-documentdb"
+  subnet_ids = flatten([aws_subnet.documentdb_zone_a.*.id, aws_subnet.documentdb_zone_b.*.id, aws_subnet.documentdb_zone_c.*.id])
+
+  tags = local.tags_documentdb
+}
+
+# Todo: create a bastion to avoid this
+
+resource "aws_security_group_rule" "documentdb_remote_access" {
+  count = var.test_cluster == "false" ? 1 : 0
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "Allow DocumentDB incoming access from anywhere"
+  from_port         = 27017
+  protocol          = "tcp"
+  security_group_id = aws_security_group.eks_cluster_workers.id
+  to_port           = 27017
+  type              = "ingress"
+}

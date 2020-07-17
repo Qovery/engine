@@ -6,8 +6,8 @@ locals {
   }
 }
 
-resource "aws_cloudwatch_log_group" "eks_cluster_logs" {
-  name = "/aws/eks/${var.eks_cluster_id}/cluster"
+resource "aws_cloudwatch_log_group" "eks_cloudwatch_log_group" {
+  name = var.eks_cloudwatch_log_group
   retention_in_days = 7
 
   tags = local.tags_eks
@@ -30,6 +30,6 @@ resource "aws_eks_cluster" "eks_cluster" {
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster-AmazonEKSClusterPolicy,
     aws_iam_role_policy_attachment.eks_cluster-AmazonEKSServicePolicy,
-    aws_cloudwatch_log_group.eks_cluster_logs,
+    aws_cloudwatch_log_group.eks_cloudwatch_log_group,
   ]
 }

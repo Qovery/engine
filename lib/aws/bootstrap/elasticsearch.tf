@@ -1,6 +1,6 @@
 # Because it needs to be uniq across all clusters and Terraform doesn't brings solution to this, I'm using this hack
-data "external" "create-es-role" {
-  program = ["./helper.sh", "create_es_role_for_aws_service", "AWSServiceRoleForAmazonElasticsearchService", "es.amazonaws.com"]
+data "external" "create-elasticsearch-role" {
+  program = ["./helper.sh", "create_elasticsearch_role_for_aws_service", "AWSServiceRoleForAmazonElasticsearchService", "es.amazonaws.com"]
 }
 
 locals {
@@ -14,54 +14,54 @@ locals {
 
 # Network
 
-resource "aws_subnet" "es-zone-a" {
-  count = var.es_nb_subnets_per_zone
+resource "aws_subnet" "elasticsearch-zone-a" {
+  count = length(var.elasticsearch_subnets_zone_a)
 
   availability_zone = data.aws_availability_zones.available.names[0]
-  cidr_block = "10.0.${count.index * 2 + 184}.0/${var.es_cidr_subnet}"
+  cidr_block = var.elasticsearch_subnets_zone_a[count.index]
   vpc_id = aws_vpc.eks.id
 
   tags = local.tags_elasticsearch
 }
 
-resource "aws_subnet" "es-zone-b" {
-  count = var.es_nb_subnets_per_zone
+resource "aws_subnet" "elasticsearch-zone-b" {
+  count = length(var.elasticsearch_subnets_zone_b)
 
   availability_zone = data.aws_availability_zones.available.names[1]
-  cidr_block = "10.0.${count.index * 2 + 188}.0/${var.es_cidr_subnet}"
+  cidr_block = var.elasticsearch_subnets_zone_b[count.index]
   vpc_id = aws_vpc.eks.id
 
   tags = local.tags_elasticsearch
 }
 
-resource "aws_subnet" "es-zone-c" {
-  count = var.es_nb_subnets_per_zone - 1
+resource "aws_subnet" "elasticsearch-zone-c" {
+  count = length(var.elasticsearch_subnets_zone_c)
 
   availability_zone = data.aws_availability_zones.available.names[2]
-  cidr_block = "10.0.${count.index * 2 + 192}.0/${var.es_cidr_subnet}"
+  cidr_block = var.elasticsearch_subnets_zone_c[count.index]
   vpc_id = aws_vpc.eks.id
 
   tags = local.tags_elasticsearch
 }
 
-resource "aws_route_table_association" "es_cluster-zone-a" {
-  count = var.es_nb_subnets_per_zone
+resource "aws_route_table_association" "elasticsearch_cluster-zone-a" {
+  count = length(var.elasticsearch_subnets_zone_a)
 
-  subnet_id      = aws_subnet.es-zone-a.*.id[count.index]
+  subnet_id      = aws_subnet.elasticsearch-zone-a.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
-resource "aws_route_table_association" "es_cluster-zone-b" {
-  count = var.es_nb_subnets_per_zone
+resource "aws_route_table_association" "elasticsearch_cluster-zone-b" {
+  count = length(var.elasticsearch_subnets_zone_b)
 
-  subnet_id      = aws_subnet.es-zone-b.*.id[count.index]
+  subnet_id      = aws_subnet.elasticsearch-zone-b.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
-resource "aws_route_table_association" "es_cluster-zone-c" {
-  count = var.es_nb_subnets_per_zone - 1
+resource "aws_route_table_association" "elasticsearch_cluster-zone-c" {
+  count = length(var.elasticsearch_subnets_zone_c)
 
-  subnet_id      = aws_subnet.es-zone-c.*.id[count.index]
+  subnet_id      = aws_subnet.elasticsearch-zone-c.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 

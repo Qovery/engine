@@ -24,7 +24,7 @@ function check_args() {
   fi
 }
 
-function create_es_role_for_aws_service() { ## Create ES linked role for a service. Args: role_name, service_name
+function create_elasticsearch_role_for_aws_service() { ## Create ES linked role for a service. Args: role_name, service_name
   # Because this is uniq and should never be deleted once spawned (because it can break other ES clusters), I'm using
   # dirty trick to ensure it won't never be deleted. Try to use suffix if the service support it instead of this.
   role_name=$1
@@ -52,9 +52,9 @@ function create_ecr_repository() { ## Create ECR repository. Args: repo_name
 }
 
 case $1 in
-  create_es_role_for_aws_service)
+  create_elasticsearch_role_for_aws_service)
     check_args 2
-    create_es_role_for_aws_service "$2" "$3"
+    create_elasticsearch_role_for_aws_service "$2" "$3"
   ;;
   create_ecr_repository)
     check_args 1

@@ -76,6 +76,12 @@ variable "eks_access_cidr_blocks" {
   type        = list(string)
 }
 
+variable "eks_cloudwatch_log_group" {
+  description = "AWS cloudwatch log group for EKS"
+  default = "{{ eks_cloudwatch_log_group }}"
+  type = string
+}
+
 # S3 bucket name
 
 variable "s3_bucket_kubeconfig" {
@@ -97,51 +103,101 @@ variable "ec2_ssh_default_key" {
 
 # RDS
 
-variable "rds_nb_subnets_per_zone" {
-  description = "RDS number of desired subnets (3 zones used)"
-  default     = 7
-  type        = number
+variable "rds_subnets_zone_a" {
+  description = "RDS subnets Zone A"
+  default = {{ rds_zone_a_subnet_blocks }}
+  type = list(string)
+}
+
+variable "rds_subnets_zone_b" {
+  description = "RDS subnets Zone B"
+  default = {{ rds_zone_b_subnet_blocks }}
+  type = list(string)
+}
+
+variable "rds_subnets_zone_c" {
+  description = "RDS subnets Zone C"
+  default = {{ rds_zone_c_subnet_blocks }}
+  type = list(string)
 }
 
 variable "rds_cidr_subnet" {
   description = "RDS CIDR (x.x.x.x/CIDR)"
-  default     = 23
+  default     = {{ rds_cidr_subnet }}
+  type        = number
+}
+
+# DocumentDB
+
+variable "documentdb_subnets_zone_a" {
+  description = "DocumentDB subnets Zone A"
+  default = {{ documentdb_zone_a_subnet_blocks }}
+  type = list(string)
+}
+
+variable "documentdb_subnets_zone_b" {
+  description = "DocumentDB subnets Zone B"
+  default = {{ documentdb_zone_b_subnet_blocks }}
+  type = list(string)
+}
+
+variable "documentdb_subnets_zone_c" {
+  description = "DocumentDB subnets Zone C"
+  default = {{ documentdb_zone_c_subnet_blocks }}
+  type = list(string)
+}
+
+variable "documentdb_cidr_subnet" {
+  description = "DocumentDB CIDR (x.x.x.x/CIDR)"
+  default     = {{ documentdb_cidr_subnet }}
   type        = number
 }
 
 # Elasticsearch
 
-variable "es_q_logs_domain_name" {
+variable "elasticsearch_q_logs_domain_name" {
   description = "ES domain name"
   default = "q-logs"
   type = string
 }
 
-variable "es_nodes_number" {
+variable "elasticsearch_node_number" {
   description = "Number of Elasticsearch nodes"
   default = 3
   type = number
 }
 
-variable "es_volume_size" {
+variable "elasticsearch_volume_size" {
   description = "Disk size per node"
   default = 50
   type = number
 }
 
-variable "es_nb_subnets_per_zone" {
-  description = "Elasticsearch number of desired subnets (3 zones used)"
-  default     = 2
-  type        = number
+variable "elasticsearch_subnets_zone_a" {
+  description = "Elasticsearch subnets Zone A"
+  default = {{ elasticsearch_zone_a_subnet_blocks }}
+  type = list(string)
 }
 
-variable "es_cidr_subnet" {
+variable "elasticsearch_subnets_zone_b" {
+  description = "Elasticsearch subnets Zone B"
+  default = {{ elasticsearch_zone_b_subnet_blocks }}
+  type = list(string)
+}
+
+variable "elasticsearch_subnets_zone_c" {
+  description = "Elasticsearch subnets Zone C"
+  default = {{ elasticsearch_zone_c_subnet_blocks }}
+  type = list(string)
+}
+
+variable "elasticsearch_cidr_subnet" {
   description = "Elasticsearch CIDR (x.x.x.x/CIDR)"
-  default     = 23
+  default     = {{ elasticsearch_cidr_subnet }}
   type        = number
 }
 
-variable "es_logs_curator" {
+variable "elasticsearch_logs_curator" {
   description = "Curator config"
   default = {
     "cron": "0 0 * * *"

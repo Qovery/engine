@@ -24,51 +24,51 @@ locals {
 
 # Network
 resource "aws_subnet" "rds-zone-a" {
-  count = var.rds_nb_subnets_per_zone
+  count = length(var.rds_subnets_zone_a)
 
   availability_zone = data.aws_availability_zones.available.names[0]
-  cidr_block        = "10.0.${count.index * 2 + 214}.0/${var.rds_cidr_subnet}"
+  cidr_block        = var.rds_subnets_zone_a[count.index]
   vpc_id            = aws_vpc.eks.id
 
   tags = local.tags_rds
 }
 
 resource "aws_subnet" "rds-zone-b" {
-  count = var.rds_nb_subnets_per_zone
+  count = length(var.rds_subnets_zone_b)
 
   availability_zone = data.aws_availability_zones.available.names[1]
-  cidr_block        = "10.0.${count.index * 2 + 228}.0/${var.rds_cidr_subnet}"
+  cidr_block        = var.rds_subnets_zone_b[count.index]
   vpc_id            = aws_vpc.eks.id
 
   tags = local.tags_rds
 }
 
 resource "aws_subnet" "rds-zone-c" {
-  count = var.rds_nb_subnets_per_zone - 1
+  count = length(var.rds_subnets_zone_c)
 
   availability_zone = data.aws_availability_zones.available.names[2]
-  cidr_block        = "10.0.${count.index * 2 + 242}.0/${var.rds_cidr_subnet}"
+  cidr_block        = var.rds_subnets_zone_c[count.index]
   vpc_id            = aws_vpc.eks.id
 
   tags = local.tags_rds
 }
 
 resource "aws_route_table_association" "rds_cluster-zone-a" {
-  count = var.rds_nb_subnets_per_zone
+  count = length(var.rds_subnets_zone_a)
 
   subnet_id      = aws_subnet.rds-zone-a.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
 resource "aws_route_table_association" "rds_cluster-zone-b" {
-  count = var.rds_nb_subnets_per_zone
+  count = length(var.rds_subnets_zone_b)
 
   subnet_id      = aws_subnet.rds-zone-b.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
 resource "aws_route_table_association" "rds_cluster-zone-c" {
-  count = var.rds_nb_subnets_per_zone - 1
+  count = length(var.rds_subnets_zone_c)
 
   subnet_id      = aws_subnet.rds-zone-c.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
