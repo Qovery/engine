@@ -4,6 +4,7 @@ use crate::cmd::CmdError;
 use std::io::Error;
 
 pub trait Service {
+    fn execution_id(&self) -> &str;
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
     fn name(&self) -> &str;

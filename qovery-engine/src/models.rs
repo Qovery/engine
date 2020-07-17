@@ -17,6 +17,7 @@ use crate::cloud_provider::{CloudProvider as CP, CloudProvider};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
+    pub execution_id: String,
     pub owner_id: String,
     pub project_id: String,
     pub environment_id: String,
@@ -42,6 +43,7 @@ impl Environment {
             .iter()
             .map(|x| {
                 x.to_stateless_service(
+                    self.execution_id.as_str(),
                     built_applications
                         .iter()
                         .find(|y| x.id.as_str() == y.id())
@@ -57,7 +59,7 @@ impl Environment {
         let routers = self
             .routers
             .iter()
-            .map(|x| x.to_stateless_service(cloud_provider))
+            .map(|x| x.to_stateless_service(self.execution_id.as_str(), cloud_provider))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -68,7 +70,7 @@ impl Environment {
         let databases = self
             .databases
             .iter()
-            .map(|x| x.to_stateful_service(cloud_provider))
+            .map(|x| x.to_stateful_service(self.execution_id.as_str(), cloud_provider))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -94,30 +96,54 @@ pub enum Action {
     Create,
     Pause,
     Delete,
-    Idle,
+    Nothing,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     pub id: String,
     pub name: String,
-    pub git_url: String,
-    pub commit_id: String,
     pub action: Action,
+    pub git_url: String,
     pub git_credentials: GitCredentials,
+    pub branch: String,
+    pub commit_id: String,
+    pub dockerfile_path: String,
+    pub private_port: u16,
     pub storage: Vec<Storage>,
     pub environment_variables: Vec<EnvironmentVariable>,
 }
 
 impl Application {
+    pub fn to_application(
+        &self,
+        execution_id: &str,
+        image: &Image,
+        cloud_provider: &dyn CloudProvider,
+    ) -> Option<Box<dyn crate::cloud_provider::service::Application>> {
+        match cloud_provider.kind() {
+            CPKind::AWS => Some(Box::new(
+                crate::cloud_provider::aws::application::Application::new(
+                    execution_id,
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    image.clone(),
+                ),
+            )),
+            CPKind::GCP => None,
+        }
+    }
+
     pub fn to_stateless_service(
         &self,
+        execution_id: &str,
         image: &Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
         match cloud_provider.kind() {
             CPKind::AWS => Some(Box::new(
                 crate::cloud_provider::aws::application::Application::new(
+                    execution_id,
                     self.id.as_str(),
                     self.name.as_str(),
                     image.clone(),
@@ -148,6 +174,7 @@ pub struct Storage {}
 pub struct Router {
     pub id: String,
     pub name: String,
+    pub public_port: u16,
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
 }
@@ -155,23 +182,28 @@ pub struct Router {
 impl Router {
     pub fn to_stateless_service(
         &self,
+        execution_id: &str,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
         match cloud_provider.kind() {
             CPKind::AWS => {
                 let router: Box<dyn StatelessService> =
                     Box::new(crate::cloud_provider::aws::router::Router::new(
+                        execution_id,
                         self.id.as_str(),
                         self.name.as_str(),
-                        // TODO
                         self.custom_domains
                             .iter()
-                            .map(|x| crate::cloud_provider::aws::router::CustomDomain {})
+                            .map(|x| crate::cloud_provider::aws::router::CustomDomain {
+                                domain: x.domain.clone(),
+                            })
                             .collect::<Vec<_>>(),
-                        // TODO
                         self.routes
                             .iter()
-                            .map(|x| crate::cloud_provider::aws::router::Route {})
+                            .map(|x| crate::cloud_provider::aws::router::Route {
+                                path: x.path.clone(),
+                                application_id: x.application_id.clone(),
+                            })
                             .collect::<Vec<_>>(),
                     ));
                 Some(router)
@@ -182,10 +214,15 @@ impl Router {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct CustomDomain {}
+pub struct CustomDomain {
+    pub domain: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct Route {}
+pub struct Route {
+    pub path: String,
+    pub application_id: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Database {
@@ -206,12 +243,14 @@ pub struct Database {
 impl Database {
     pub fn to_stateful_service(
         &self,
+        execution_id: &str,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatefulService>> {
         match cloud_provider.kind() {
             CPKind::AWS => match self.kind {
                 DatabaseKind::PostgreSQL => {
                     let db: Box<dyn StatefulService> = Box::new(PostgreSQL::new(
+                        execution_id,
                         self.id.as_str(),
                         self.name.as_str(),
                         self.version.as_str(),

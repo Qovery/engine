@@ -10,14 +10,16 @@ use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
+    pub execution_id: String,
     pub id: String,
     pub name: String,
     pub image: Image,
 }
 
 impl Application {
-    pub fn new(id: &str, name: &str, image: Image) -> Self {
+    pub fn new(execution_id: &str, id: &str, name: &str, image: Image) -> Self {
         Application {
+            execution_id: execution_id.to_string(),
             id: id.to_string(),
             name: name.to_string(),
             image,
@@ -29,7 +31,10 @@ impl Application {
     }
 
     fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(format!("applications/{}-{}", self.name(), self.id()))
+        crate::fs::workspace_directory(
+            self.execution_id(),
+            format!("applications/{}-{}", self.name(), self.id()),
+        )
     }
 }
 
@@ -42,6 +47,10 @@ impl crate::cloud_provider::service::Application for Application {
 impl StatelessService for Application {}
 
 impl Service for Application {
+    fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
     fn service_type(&self) -> ServiceType {
         ServiceType::Application
     }

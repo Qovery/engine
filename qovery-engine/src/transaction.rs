@@ -126,19 +126,11 @@ impl<'a> Transaction<'a> {
             })
             .filter(|(_, r)| r.is_ok())
             .map(|(a, r)| {
-                match self.config.cloud_provider.kind() {
-                    crate::cloud_provider::Kind::AWS => {
-                        let app: Box<dyn Application> =
-                            Box::new(crate::cloud_provider::aws::application::Application::new(
-                                a.id.as_str(),
-                                a.name.as_str(),
-                                r.ok().unwrap().build.image,
-                            ));
-
-                        Some(app)
-                    }
-                    crate::cloud_provider::Kind::GCP => None, // FIXME
-                }
+                a.to_application(
+                    environment.execution_id.as_str(),
+                    &r.ok().unwrap().build.image,
+                    self.config.cloud_provider,
+                )
             })
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())

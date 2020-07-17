@@ -19,6 +19,7 @@ use crate::runtime::async_run;
 use crate::transaction::CommitError::PushImage;
 
 pub struct ECR {
+    execution_id: String,
     id: String,
     name: String,
     access_key_id: String,
@@ -28,6 +29,7 @@ pub struct ECR {
 
 impl ECR {
     pub fn new(
+        execution_id: &str,
         id: &str,
         name: &str,
         access_key_id: &str,
@@ -35,6 +37,7 @@ impl ECR {
         region: &str,
     ) -> Self {
         ECR {
+            execution_id: execution_id.to_string(),
             id: id.to_string(),
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
@@ -132,6 +135,10 @@ impl ECR {
 }
 
 impl ContainerRegistry for ECR {
+    fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
     fn kind(&self) -> Kind {
         Kind::ECR
     }
@@ -269,7 +276,7 @@ mod tests {
 
     #[test]
     fn test_is_not_valid() {
-        let ecr = ECR::new("123-abc", "my-ecr", "fake", "fake", "us-east-2");
+        let ecr = ECR::new("xxx", "123-abc", "my-ecr", "fake", "fake", "us-east-2");
         assert_eq!(ecr.is_valid().is_err(), true);
         assert_eq!(
             ecr.is_valid().err().unwrap(),
@@ -280,6 +287,7 @@ mod tests {
     #[test]
     fn test_is_valid() {
         let ecr = ECR::new(
+            "xxx",
             "123-abc",
             "my-ecr",
             "AKIAZ4KMLSYJLRGNNFNI",

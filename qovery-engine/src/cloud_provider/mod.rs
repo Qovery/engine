@@ -12,6 +12,7 @@ pub mod kubernetes;
 pub mod service;
 
 pub trait CloudProvider {
+    fn execution_id(&self) -> &str;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;

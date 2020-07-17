@@ -20,11 +20,14 @@ use qovery_engine::transaction::TransactionResult;
 fn main() {
     env_logger::init();
 
+    let execution_id = Utc::now().to_rfc3339();
+
     // use DockerHub
     //let container_registry = DockerHub::new("qoveryrd", "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24");
 
     // use ECR
     let container_registry = ECR::new(
+        execution_id.as_str(),
         "123-abc",
         "my-default-ecr",
         "AKIAZ4KMLSYJLRGNNFNI",
@@ -32,9 +35,10 @@ fn main() {
         "us-east-2",
     );
 
-    let build_platform = LocalDocker::new("123456", "my-local-docker");
+    let build_platform = LocalDocker::new(execution_id.as_str(), "123456", "my-local-docker");
 
     let cloud_provider = AWS::new(
+        execution_id.as_str(),
         "123-abc",
         "my-default-aws",
         "AKIAZ4KMLSYJLRGNNFNI",
@@ -61,6 +65,7 @@ fn main() {
     let nodes = vec![Node::new(4, 32), Node::new(4, 32), Node::new(4, 32)];
 
     let eks_eu_west_3 = EKS::new(
+        execution_id.as_str(),
         "123abc",
         "my-eu-west-3-k8s",
         "1.16",

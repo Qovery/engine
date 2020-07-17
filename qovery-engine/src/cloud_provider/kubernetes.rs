@@ -8,6 +8,7 @@ use std::any::Any;
 use std::process::ExitStatus;
 
 pub trait Kubernetes {
+    fn execution_id(&self) -> &str;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;

@@ -14,6 +14,7 @@ use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 
 pub struct Router {
+    execution_id: String,
     id: String,
     name: String,
     custom_domains: Vec<CustomDomain>,
@@ -22,12 +23,14 @@ pub struct Router {
 
 impl Router {
     pub fn new(
+        execution_id: &str,
         id: &str,
         name: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
     ) -> Self {
         Router {
+            execution_id: execution_id.to_string(),
             id: id.to_string(),
             name: name.to_string(),
             custom_domains,
@@ -40,11 +43,15 @@ impl Router {
     }
 
     fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(format!("charts/routers/{}", self.id()))
+        crate::fs::workspace_directory(self.execution_id(), format!("charts/routers/{}", self.id()))
     }
 }
 
 impl<'a> Service for Router {
+    fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
     fn service_type(&self) -> ServiceType {
         ServiceType::Router
     }
@@ -81,13 +88,14 @@ impl Create for Router {
             .downcast_ref::<AWS>()
             .unwrap();
 
-        let context = Context::new();
-        // TODO add context variables
+        let mut context = Context::new();
 
         if !self.custom_domains.is_empty() {
             // custom domains? create an NGINX ingress
             info!("setup NGINX ingress for custom domains");
-            let into_dir = crate::fs::workspace_directory("charts/routers/nginx-ingress");
+
+            let into_dir =
+                crate::fs::workspace_directory(self.execution_id(), "charts/routers/nginx-ingress");
 
             let _ = crate::fs::generate_and_copy_all_files_into_dir(
                 "lib/common/charts/nginx-ingress",
@@ -160,6 +168,11 @@ impl Delete for Router {
 
 impl StatelessService for Router {}
 
-pub struct CustomDomain {}
+pub struct CustomDomain {
+    pub domain: String,
+}
 
-pub struct Route {}
+pub struct Route {
+    pub path: String,
+    pub application_id: String,
+}

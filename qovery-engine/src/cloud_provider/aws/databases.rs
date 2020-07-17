@@ -15,6 +15,7 @@ use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Snapshot;
 
 pub struct PostgreSQL {
+    execution_id: String,
     id: String,
     name: String,
     version: String,
@@ -22,8 +23,15 @@ pub struct PostgreSQL {
 }
 
 impl PostgreSQL {
-    pub fn new(id: &str, name: &str, version: &str, options: DatabaseOptions) -> Self {
+    pub fn new(
+        execution_id: &str,
+        id: &str,
+        name: &str,
+        version: &str,
+        options: DatabaseOptions,
+    ) -> Self {
         PostgreSQL {
+            execution_id: execution_id.to_string(),
             id: id.to_string(),
             name: name.to_string(),
             version: version.to_string(),
@@ -36,13 +44,20 @@ impl PostgreSQL {
     }
 
     fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(format!("databases/postgresql-{}", self.id()))
+        crate::fs::workspace_directory(
+            self.execution_id(),
+            format!("databases/postgresql-{}", self.id()),
+        )
     }
 }
 
 impl StatefulService for PostgreSQL {}
 
 impl Service for PostgreSQL {
+    fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
     fn service_type(&self) -> ServiceType {
         ServiceType::Database(DatabaseType::PostgreSQL(&self.options))
     }

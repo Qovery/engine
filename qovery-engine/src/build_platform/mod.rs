@@ -10,6 +10,7 @@ pub mod error;
 pub mod local_docker;
 
 pub trait BuildPlatform {
+    fn execution_id(&self) -> &str;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;

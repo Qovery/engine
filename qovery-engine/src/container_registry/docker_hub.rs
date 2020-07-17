@@ -5,35 +5,41 @@ use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
 
-pub struct DockerHub<'a> {
-    id: &'a str,
-    name: &'a str,
-    login: &'a str,
-    password: &'a str,
+pub struct DockerHub {
+    execution_id: String,
+    id: String,
+    name: String,
+    login: String,
+    password: String,
 }
 
-impl<'a> DockerHub<'a> {
-    pub fn new(id: &'a str, name: &'a str, login: &'a str, password: &'a str) -> Self {
+impl DockerHub {
+    pub fn new(execution_id: &str, id: &str, name: &str, login: &str, password: &str) -> Self {
         DockerHub {
-            id,
-            name,
-            login,
-            password,
+            execution_id: execution_id.to_string(),
+            id: id.to_string(),
+            name: name.to_string(),
+            login: login.to_string(),
+            password: password.to_string(),
         }
     }
 }
 
-impl<'a> ContainerRegistry for DockerHub<'a> {
+impl ContainerRegistry for DockerHub {
+    fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
     fn kind(&self) -> Kind {
         Kind::DockerHub
     }
 
     fn id(&self) -> &str {
-        self.id
+        self.id.as_str()
     }
 
     fn name(&self) -> &str {
-        self.name
+        self.name.as_str()
     }
 
     fn is_valid(&self) -> Result<(), ContainerRegistryError> {
@@ -60,7 +66,13 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
     fn push(&self, image: Image) -> Result<PushResult, PushError> {
         match cmd::exec(
             "docker",
-            vec!["login", "-u", self.login, "-p", self.password],
+            vec![
+                "login",
+                "-u",
+                self.login.as_str(),
+                "-p",
+                self.password.as_str(),
+            ],
         ) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
@@ -70,13 +82,13 @@ impl<'a> ContainerRegistry for DockerHub<'a> {
             _ => {}
         };
 
-        let dest = format!("{}/{}", self.login, image.name_with_tag().as_str());
+        let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
         match cmd::exec(
             "docker",
             vec![
                 "tag",
                 dest.as_str(),
-                format!("{}/{}", self.login, dest.as_str()).as_str(),
+                format!("{}/{}", self.login.as_str(), dest.as_str()).as_str(),
             ],
         ) {
             Err(err) => match err {

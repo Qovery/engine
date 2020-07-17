@@ -170,12 +170,14 @@ impl RenderedTemplate {
     }
 }
 
-pub fn workspace_directory<P>(dir_name: P) -> String
+pub fn workspace_directory<S, P>(execution_id: S, dir_name: P) -> String
 where
+    S: AsRef<Path>,
     P: AsRef<Path>,
 {
     let dir = format!(
-        ".qovery-workspace/{}-{}",
+        ".qovery-workspace/{}/{}-{}",
+        execution_id.as_ref().to_str().unwrap(),
         dir_name.as_ref().to_str().unwrap(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)

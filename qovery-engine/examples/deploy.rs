@@ -21,7 +21,10 @@ use qovery_engine::transaction::TransactionResult;
 fn main() {
     env_logger::init();
 
+    let execution_id = Utc::now().to_rfc3339();
+
     let environment = Environment {
+        execution_id: execution_id.clone(),
         owner_id: "123456basuiug".to_string(),
         project_id: "adoiwajd45ad4w".to_string(),
         environment_id: "odiajwio6468a468".to_string(),
@@ -33,6 +36,7 @@ fn main() {
             git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
                 .to_string(),
             commit_id: "f400e2f199e6a7eb446690b6f2df1017dbbae518".to_string(),
+            dockerfile_path: "Dockerfile".to_string(),
             action: Action::Create,
             git_credentials: GitCredentials {
                 login: "x-access-token".to_string(),
@@ -44,19 +48,33 @@ fn main() {
                 key: "KEY_TEST_1".to_string(),
                 value: "VAL_TEST_1".to_string(),
             }],
+            branch: "master".to_string(),
+            private_port: 8080,
         }],
         routers: vec![
             Router {
                 id: "ofejoiafj5464".to_string(),
                 name: "main".to_string(),
-                custom_domains: vec![CustomDomain {}],
-                routes: vec![Route {}],
+                public_port: 443,
+                custom_domains: vec![CustomDomain {
+                    domain: "toto.qovery.io".to_string(),
+                }],
+                routes: vec![Route {
+                    path: "/*".to_string(),
+                    application_id: "simple-example-node-with-postgresql".to_string(),
+                }],
             },
             Router {
                 id: "adawhdiua545545".to_string(),
                 name: "second-router".to_string(),
-                custom_domains: vec![CustomDomain {}],
-                routes: vec![Route {}],
+                public_port: 443,
+                custom_domains: vec![CustomDomain {
+                    domain: "coco.qovery.io".to_string(),
+                }],
+                routes: vec![Route {
+                    path: "/coco/*".to_string(),
+                    application_id: "simple-example-node-with-postgresql".to_string(),
+                }],
             },
         ],
         databases: vec![Database {
@@ -80,6 +98,7 @@ fn main() {
 
     // use ECR
     let container_registry = ECR::new(
+        execution_id.as_str(),
         "123-abc",
         "my-default-ecr",
         "AKIAZ4KMLSYJLRGNNFNI",
@@ -87,9 +106,10 @@ fn main() {
         "us-east-2",
     );
 
-    let build_platform = LocalDocker::new("123456", "my-local-docker");
+    let build_platform = LocalDocker::new(execution_id.as_str(), "123456", "my-local-docker");
 
     let cloud_provider = AWS::new(
+        execution_id.as_str(),
         "123-abc",
         "my-default-aws",
         "AKIAZ4KMLSYJLRGNNFNI",
@@ -99,6 +119,7 @@ fn main() {
     let nodes: Vec<Node> = vec![];
 
     let eks = EKS::new(
+        execution_id.as_str(),
         "123abc",
         "my-k8s-cluster",
         "1.14",

@@ -27,6 +27,7 @@ use crate::{cmd, dynamo_db, fs, s3};
 pub mod node;
 
 pub struct EKS<'a> {
+    execution_id: String,
     id: String,
     name: String,
     version: String,
@@ -38,6 +39,7 @@ pub struct EKS<'a> {
 
 impl<'a> EKS<'a> {
     pub fn new(
+        execution_id: &str,
         id: &str,
         name: &str,
         version: &str,
@@ -48,6 +50,7 @@ impl<'a> EKS<'a> {
         let template_directory = "lib/aws/bootstrap".to_string();
 
         EKS {
+            execution_id: execution_id.to_string(),
             id: id.to_string(),
             name: name.to_string(),
             version: version.to_string(),
@@ -185,6 +188,10 @@ impl<'a> EKS<'a> {
 }
 
 impl<'a> Kubernetes for EKS<'a> {
+    fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
     fn kind(&self) -> Kind {
         Kind::EKS
     }
@@ -216,7 +223,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn on_create(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_create() called for {}", self.name());
-        let temp_dir = workspace_directory(format!("bootstrap/{}", self.name()));
+        let temp_dir =
+            workspace_directory(self.execution_id(), format!("bootstrap/{}", self.name()));
         let temp_dir_path_str = temp_dir.as_str();
 
         // create S3 bucket

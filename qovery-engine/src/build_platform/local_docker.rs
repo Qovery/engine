@@ -9,14 +9,16 @@ use crate::{cmd, git};
 
 /// use Docker in local
 pub struct LocalDocker {
+    execution_id: String,
     id: String,
     name: String,
     listeners: Listeners,
 }
 
 impl LocalDocker {
-    pub fn new(id: &str, name: &str) -> Self {
+    pub fn new(execution_id: &str, id: &str, name: &str) -> Self {
         LocalDocker {
+            execution_id: execution_id.to_string(),
             id: id.to_string(),
             name: name.to_string(),
             listeners: vec![],
@@ -25,6 +27,10 @@ impl LocalDocker {
 }
 
 impl BuildPlatform for LocalDocker {
+    fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
     fn kind(&self) -> Kind {
         Kind::LocalDocker
     }
@@ -55,7 +61,10 @@ impl BuildPlatform for LocalDocker {
         info!("LocalDocker.build() called for {}", self.name());
 
         // git clone
-        let into_dir = workspace_directory(format!("build/{}", build.image.name.as_str()));
+        let into_dir = workspace_directory(
+            self.execution_id(),
+            format!("build/{}", build.image.name.as_str()),
+        );
 
         let git_clone = git::clone(
             build.git_repository.url.as_str(),
