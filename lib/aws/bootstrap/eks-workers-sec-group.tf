@@ -3,7 +3,7 @@
 ##############################
 
 resource "aws_security_group" "eks_cluster_workers" {
-  name        = "${var.eks_cluster_id}-eks-workers"
+  name        = "eks-workers-${var.eks_cluster_id}"
   description = "Security group for all nodes in the cluster"
   vpc_id      = aws_vpc.eks.id
 

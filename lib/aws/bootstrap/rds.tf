@@ -84,7 +84,7 @@ resource "aws_db_subnet_group" "rds" {
 
 # IAM
 resource "aws_iam_role" "rds_enhanced_monitoring" {
-  name        = "${var.eks_cluster_id}-rds-enhanced-monitoring"
+  name        = "rds-enhanced-monitoring-${var.eks_cluster_id}"
   assume_role_policy = data.aws_iam_policy_document.rds_enhanced_monitoring.json
 
   tags = local.tags_rds

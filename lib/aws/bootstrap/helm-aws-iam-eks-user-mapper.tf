@@ -1,5 +1,5 @@
 resource "aws_iam_user" "iam_eks_user_mapper" {
-  name = "${var.eks_cluster_id}-aws-iam-eks-user-mapper"
+  name = "aws-iam-eks-user-mapper-${var.eks_cluster_id}"
 
   tags = local.tags_eks
 }

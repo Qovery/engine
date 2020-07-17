@@ -1,5 +1,5 @@
 resource "aws_security_group" "eks_cluster" {
-  name        = "${var.eks_cluster_id}-eks"
+  name        = "eks-${var.eks_cluster_id}"
   description = "Cluster communication with worker nodes"
   vpc_id      = aws_vpc.eks.id
 
