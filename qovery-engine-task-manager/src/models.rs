@@ -40,10 +40,11 @@ pub struct BuildPlatform {
 impl BuildPlatform {
     pub fn as_engine_build_platform(
         &self,
+        request_id: &str,
     ) -> Box<dyn qovery_engine::build_platform::BuildPlatform> {
         Box::new(match self.kind {
             qovery_engine::build_platform::Kind::LocalDocker => {
-                LocalDocker::new(self.id.as_str(), self.name.as_str())
+                LocalDocker::new(request_id, self.id.as_str(), self.name.as_str())
             }
         })
     }
@@ -61,11 +62,13 @@ pub struct CloudProvider {
 impl CloudProvider {
     pub fn as_engine_cloud_provider(
         &self,
+        request_id: &str,
     ) -> Box<dyn qovery_engine::cloud_provider::CloudProvider> {
         match self.kind {
             qovery_engine::cloud_provider::Kind::AWS => {
                 // FIXME
                 Box::new(AWS::new(
+                    request_id,
                     self.id.as_str(),
                     self.name.as_str(),
                     self.options.access_key_id.as_ref().unwrap().as_str(),
@@ -74,7 +77,12 @@ impl CloudProvider {
             }
             qovery_engine::cloud_provider::Kind::GCP => {
                 // FIXME
-                Box::new(GCP::new(self.id.as_str(), self.name.as_str(), ""))
+                Box::new(GCP::new(
+                    request_id,
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    "",
+                ))
             }
         }
     }
@@ -93,11 +101,13 @@ pub struct Kubernetes {
 impl Kubernetes {
     pub fn as_engine_kubernetes<'a>(
         &self,
+        request_id: &str,
         cloud_provider: &'a Box<dyn qovery_engine::cloud_provider::CloudProvider>,
         nodes: &Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>>,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a> {
         match self.kind {
             qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(EKS::new(
+                request_id,
                 self.id.as_str(),
                 self.name.as_str(),
                 self.version.as_str(),
@@ -159,15 +169,18 @@ pub struct ContainerRegistry {
 impl ContainerRegistry {
     pub fn as_engine_container_registry<'a>(
         &'a self,
+        request_id: &str,
     ) -> Box<dyn qovery_engine::container_registry::ContainerRegistry + 'a> {
         match self.kind {
             qovery_engine::container_registry::Kind::DockerHub => Box::new(DockerHub::new(
+                request_id,
                 self.id.as_str(),
                 self.name.as_str(),
                 self.options.login.as_ref().unwrap().as_str(),
                 self.options.password.as_ref().unwrap().as_str(),
             )),
             qovery_engine::container_registry::Kind::ECR => Box::new(ECR::new(
+                request_id,
                 self.id.as_str(),
                 self.name.as_str(),
                 self.options.access_key_id.as_ref().unwrap().as_str(),

@@ -46,14 +46,20 @@ impl Task for InfrastructureTask {
                 sender: sender.clone(),
             }));
 
-        let mut build_platform = self.request.build_platform.as_engine_build_platform();
+        let mut build_platform = self
+            .request
+            .build_platform
+            .as_engine_build_platform(self.id());
         build_platform.add_listener(my_progress_listener.clone());
 
-        let cloud_provider = self.request.cloud_provider.as_engine_cloud_provider();
+        let cloud_provider = self
+            .request
+            .cloud_provider
+            .as_engine_cloud_provider(self.id());
         let container_registry = self
             .request
             .container_registry
-            .as_engine_container_registry();
+            .as_engine_container_registry(self.id());
 
         let config = Config::new(
             build_platform.borrow(),
@@ -84,11 +90,11 @@ impl Task for InfrastructureTask {
             .kubernetes
             .as_engine_kubernetes_nodes();
 
-        let kubernetes = self
-            .request
-            .cloud_provider
-            .kubernetes
-            .as_engine_kubernetes(cloud_provider.borrow(), nodes.borrow());
+        let kubernetes = self.request.cloud_provider.kubernetes.as_engine_kubernetes(
+            self.id(),
+            cloud_provider.borrow(),
+            nodes.borrow(),
+        );
 
         match self.request.action {
             Action::Create => tx.create_kubernetes(kubernetes.borrow()),
@@ -149,14 +155,20 @@ impl Task for EnvironmentTask {
                 sender: sender.clone(),
             }));
 
-        let mut build_platform = self.request.build_platform.as_engine_build_platform();
+        let mut build_platform = self
+            .request
+            .build_platform
+            .as_engine_build_platform(self.id());
         build_platform.add_listener(my_progress_listener.clone());
 
-        let cloud_provider = self.request.cloud_provider.as_engine_cloud_provider();
+        let cloud_provider = self
+            .request
+            .cloud_provider
+            .as_engine_cloud_provider(self.id());
         let container_registry = self
             .request
             .container_registry
-            .as_engine_container_registry();
+            .as_engine_container_registry(self.id());
 
         let config = Config::new(
             build_platform.borrow(),
@@ -187,11 +199,11 @@ impl Task for EnvironmentTask {
             .kubernetes
             .as_engine_kubernetes_nodes();
 
-        let kubernetes = self
-            .request
-            .cloud_provider
-            .kubernetes
-            .as_engine_kubernetes(cloud_provider.borrow(), nodes.borrow());
+        let kubernetes = self.request.cloud_provider.kubernetes.as_engine_kubernetes(
+            self.id(),
+            cloud_provider.borrow(),
+            nodes.borrow(),
+        );
 
         let environment = self.request.environment.as_ref().unwrap();
 
