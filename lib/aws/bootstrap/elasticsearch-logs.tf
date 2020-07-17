@@ -8,7 +8,7 @@ resource "aws_elasticsearch_domain" "qovery_eks_logs" {
   }
 
   vpc_options {
-    subnet_ids = [aws_subnet.elasticsearch-zone-a.*.id[0]]
+    subnet_ids = [aws_subnet.elasticsearch_zone_a.*.id[0]]
     security_group_ids = [ aws_security_group.elasticsearch.id ]
   }
 
@@ -57,7 +57,7 @@ CONFIG
   )
 
   depends_on = [
-    data.external.create-elasticsearch-role,
+    data.external.create_elasticsearch_role,
     aws_security_group.elasticsearch
   ]
 }

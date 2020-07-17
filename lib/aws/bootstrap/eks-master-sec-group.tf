@@ -16,7 +16,7 @@ resource "aws_security_group" "eks_cluster" {
 # OPTIONAL: Allow inbound traffic from your local workstation external IP
 #           to the Kubernetes. You will need to replace A.B.C.D below with
 #           your real IP. Services like icanhazip.com can help you find this.
-resource "aws_security_group_rule" "cluster-ingress-workstation-https" {
+resource "aws_security_group_rule" "cluster_ingress_workstation_https" {
   cidr_blocks       = var.eks_access_cidr_blocks
   description       = "Allow workstation to communicate with the cluster API Server"
   from_port         = 443

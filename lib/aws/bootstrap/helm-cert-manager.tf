@@ -1,4 +1,4 @@
-resource "helm_release" "cert-manager" {
+resource "helm_release" "cert_manager" {
   name = "cert-manager"
   chart = "../../../lib/common/charts/cert-manager"
   namespace = "cert-manager"
@@ -45,6 +45,6 @@ resource "helm_release" "cert-manager" {
 
   depends_on = [
     aws_eks_cluster.eks_cluster,
-    helm_release.prometheus-operator
+    helm_release.prometheus_operator
   ]
 }

@@ -22,14 +22,14 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   vpc_config {
     security_group_ids = [aws_security_group.eks_cluster.id]
-    subnet_ids = flatten([aws_subnet.eks-zone-a.*.id, aws_subnet.eks-zone-b.*.id,aws_subnet.eks-zone-c.*.id])
+    subnet_ids = flatten([aws_subnet.eks_zone_a.*.id, aws_subnet.eks_zone_b.*.id,aws_subnet.eks_zone_c.*.id])
   }
 
   tags = local.tags_eks
 
   depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster-AmazonEKSClusterPolicy,
-    aws_iam_role_policy_attachment.eks_cluster-AmazonEKSServicePolicy,
+    aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy,
+    aws_iam_role_policy_attachment.eks_cluster_AmazonEKSServicePolicy,
     aws_cloudwatch_log_group.eks_cloudwatch_log_group,
   ]
 }

@@ -1,16 +1,16 @@
-resource "aws_iam_user" "iam-aws-limits-exporter" {
+resource "aws_iam_user" "iam_aws_limits_exporter" {
   name = "${var.eks_cluster_id}-aws-limits-exporter"
 
   tags = local.tags_eks
 }
 
-resource "aws_iam_access_key" "iam-aws-limits-exporter" {
-  user    = aws_iam_user.iam-aws-limits-exporter.name
+resource "aws_iam_access_key" "iam_aws_limits_exporter" {
+  user    = aws_iam_user.iam_aws_limits_exporter.name
 }
 
-resource "aws_iam_user_policy" "iam-aws-limits-exporter" {
-  name = aws_iam_user.iam-aws-limits-exporter.name
-  user = aws_iam_user.iam-aws-limits-exporter.name
+resource "aws_iam_user_policy" "iam_aws_limits_exporter" {
+  name = aws_iam_user.iam_aws_limits_exporter.name
+  user = aws_iam_user.iam_aws_limits_exporter.name
 
   policy = <<EOF
 {
@@ -30,7 +30,7 @@ resource "aws_iam_user_policy" "iam-aws-limits-exporter" {
 EOF
 }
 
-resource "helm_release" "aws-limits-exporter" {
+resource "helm_release" "iam_aws_limits_exporter" {
   name = "aws-limits-exporter"
   chart = "../../../lib/aws/charts/aws-limits-exporter"
   namespace = "prometheus"
@@ -40,16 +40,16 @@ resource "helm_release" "aws-limits-exporter" {
 
   set {
     name = "awsCredentials.awsAccessKey"
-    value = aws_iam_access_key.iam-aws-limits-exporter.id
+    value = aws_iam_access_key.iam_aws_limits_exporter.id
   }
 
   set {
     name = "awsCredentials.awsSecretKey"
-    value = aws_iam_access_key.iam-aws-limits-exporter.secret
+    value = aws_iam_access_key.iam_aws_limits_exporter.secret
   }
 
   depends_on = [
     aws_eks_cluster.eks_cluster,
-    helm_release.prometheus-operator
+    helm_release.prometheus_operator
   ]
 }

@@ -1,4 +1,4 @@
-resource "helm_release" "prometheus-operator" {
+resource "helm_release" "prometheus_operator" {
   name = "prometheus-operator"
   chart = "../../../lib/common/charts/prometheus-operator"
   namespace = "prometheus"

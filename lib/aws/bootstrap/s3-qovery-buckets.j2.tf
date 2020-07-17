@@ -17,7 +17,7 @@ resource "aws_s3_bucket" "kubeconfigs_bucket" {
 
 // S3 bucket to store application statefiles
 resource "aws_s3_bucket" "qovery-applications" {
-  bucket = aws_dynamodb_table.qovery-applications.name
+  bucket = aws_dynamodb_table.qovery_applications.name
   acl    = "private"
   region = var.region
   versioning {

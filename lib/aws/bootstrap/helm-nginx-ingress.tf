@@ -25,7 +25,7 @@ resource "aws_iam_role_policy" "eks_cluster_ingress_loadbalancer_creation" {
 POLICY
 }
 
-resource "helm_release" "nginx-ingress" {
+resource "helm_release" "nginx_ingress" {
   name = "nginx-ingress"
   chart = "../../../lib/common/charts/nginx-ingress"
   namespace = "nginx-ingress"
@@ -40,6 +40,6 @@ resource "helm_release" "nginx-ingress" {
   depends_on = [
     aws_iam_role_policy.eks_cluster_ingress_loadbalancer_creation,
     aws_eks_cluster.eks_cluster,
-    helm_release.prometheus-operator
+    helm_release.prometheus_operator
   ]
 }

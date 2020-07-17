@@ -1,16 +1,16 @@
-resource "aws_iam_user" "iam-eks-user-mapper" {
+resource "aws_iam_user" "iam_eks_user_mapper" {
   name = "${var.eks_cluster_id}-aws-iam-eks-user-mapper"
 
   tags = local.tags_eks
 }
 
-resource "aws_iam_access_key" "iam-eks-user-mapper" {
-  user    = aws_iam_user.iam-eks-user-mapper.name
+resource "aws_iam_access_key" "iam_eks_user_mapper" {
+  user    = aws_iam_user.iam_eks_user_mapper.name
 }
 
-resource "aws_iam_user_policy" "iam-eks-user-mapper" {
-  name = aws_iam_user.iam-eks-user-mapper.name
-  user = aws_iam_user.iam-eks-user-mapper.name
+resource "aws_iam_user_policy" "iam_eks_user_mapper" {
+  name = aws_iam_user.iam_eks_user_mapper.name
+  user = aws_iam_user.iam_eks_user_mapper.name
 
   policy = <<EOF
 {
@@ -33,7 +33,7 @@ resource "aws_iam_user_policy" "iam-eks-user-mapper" {
 EOF
 }
 
-resource "helm_release" "iam-eks-user-mapper" {
+resource "helm_release" "iam_eks_user_mapper" {
   name = "iam-eks-user-mapper"
   chart = "../../../lib/aws/charts/iam-eks-user-mapper"
   namespace = "kube-system"
@@ -42,12 +42,12 @@ resource "helm_release" "iam-eks-user-mapper" {
 
   set {
     name = "aws.accessKey"
-    value = aws_iam_access_key.iam-eks-user-mapper.id
+    value = aws_iam_access_key.iam_eks_user_mapper.id
   }
 
   set {
     name = "aws.secretKey"
-    value = aws_iam_access_key.iam-eks-user-mapper.secret
+    value = aws_iam_access_key.iam_eks_user_mapper.secret
   }
 
   set {

@@ -1,4 +1,4 @@
-resource "aws_s3_bucket_object" "upload-kubeconfig" {
+resource "aws_s3_bucket_object" "upload_kubeconfig" {
   bucket = var.s3_bucket_kubeconfig
   key = "${var.eks_cluster_id}.yaml"
   source = local_file.kubeconfig.filename

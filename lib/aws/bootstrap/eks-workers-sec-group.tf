@@ -23,7 +23,7 @@ resource "aws_security_group" "eks_cluster_workers" {
   )
 }
 
-resource "aws_security_group_rule" "node-ingress-self" {
+resource "aws_security_group_rule" "node_ingress_self" {
   description              = "Allow workers to communicate with each other"
   from_port                = 0
   protocol                 = "-1"
@@ -33,7 +33,7 @@ resource "aws_security_group_rule" "node-ingress-self" {
   type                     = "ingress"
 }
 
-resource "aws_security_group_rule" "node-ingress-cluster" {
+resource "aws_security_group_rule" "node_ingress_cluster" {
   description              = "Allow worker Kubelets and pods to receive communication from the cluster control plane"
   from_port                = 1025
   protocol                 = "tcp"
@@ -57,7 +57,7 @@ resource "aws_security_group_rule" "ssh_access_to_workers" {
 # Worker Node Access to EKS Master Cluster #
 ############################################
 
-resource "aws_security_group_rule" "cluster-ingress-node-https" {
+resource "aws_security_group_rule" "cluster_ingress_node_https" {
   description              = "Allow pods to communicate with the cluster API Server"
   from_port                = 443
   protocol                 = "tcp"

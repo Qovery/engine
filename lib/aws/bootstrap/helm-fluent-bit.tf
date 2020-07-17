@@ -1,12 +1,12 @@
-resource "aws_iam_user" "fluent-bit" {
+resource "aws_iam_user" "fluent_bit" {
   name = "${var.eks_cluster_id}-fluent-bit"
 }
 
-resource "aws_iam_access_key" "fluent-bit" {
-  user    = aws_iam_user.fluent-bit.name
+resource "aws_iam_access_key" "fluent_bit" {
+  user    = aws_iam_user.fluent_bit.name
 }
 
-resource "helm_release" "fluent-bit" {
+resource "helm_release" "fluent_bit" {
   name = "fluent-bit"
   chart = "../../../lib/common/charts/fluent-bit"
   namespace = "logging"
@@ -40,12 +40,12 @@ resource "helm_release" "fluent-bit" {
 
   set {
     name = "awsEsProxy.accessKey"
-    value = aws_iam_access_key.fluent-bit.id
+    value = aws_iam_access_key.fluent_bit.id
   }
 
   set {
     name = "awsEsProxy.secretKey"
-    value = aws_iam_access_key.fluent-bit.secret
+    value = aws_iam_access_key.fluent_bit.secret
   }
 
   set {
@@ -115,5 +115,5 @@ resource "helm_release" "fluent-bit" {
 //    value = aws_iam_access_key.fluent-bit.secret
 //  }
 
-  depends_on = [aws_eks_cluster.eks_cluster, helm_release.prometheus-operator]
+  depends_on = [aws_eks_cluster.eks_cluster, helm_release.prometheus_operator]
 }

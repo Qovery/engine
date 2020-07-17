@@ -1,4 +1,4 @@
-resource "helm_release" "aws-node-term-handler" {
+resource "helm_release" "aws_node_term_handler" {
   name = "aws-node-term-handler"
   chart = "../../../lib/aws/charts/aws-node-termination-handler"
   namespace = "kube-system"

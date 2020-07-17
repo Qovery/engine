@@ -1,5 +1,5 @@
 # Because it needs to be uniq across all clusters and Terraform doesn't brings solution to this, I'm using this hack
-data "external" "create-elasticsearch-role" {
+data "external" "create_elasticsearch_role" {
   program = ["./helper.sh", "create_elasticsearch_role_for_aws_service", "AWSServiceRoleForAmazonElasticsearchService", "es.amazonaws.com"]
 }
 
@@ -14,7 +14,7 @@ locals {
 
 # Network
 
-resource "aws_subnet" "elasticsearch-zone-a" {
+resource "aws_subnet" "elasticsearch_zone_a" {
   count = length(var.elasticsearch_subnets_zone_a)
 
   availability_zone = data.aws_availability_zones.available.names[0]
@@ -24,7 +24,7 @@ resource "aws_subnet" "elasticsearch-zone-a" {
   tags = local.tags_elasticsearch
 }
 
-resource "aws_subnet" "elasticsearch-zone-b" {
+resource "aws_subnet" "elasticsearch_zone_b" {
   count = length(var.elasticsearch_subnets_zone_b)
 
   availability_zone = data.aws_availability_zones.available.names[1]
@@ -34,7 +34,7 @@ resource "aws_subnet" "elasticsearch-zone-b" {
   tags = local.tags_elasticsearch
 }
 
-resource "aws_subnet" "elasticsearch-zone-c" {
+resource "aws_subnet" "elasticsearch_zone_c" {
   count = length(var.elasticsearch_subnets_zone_c)
 
   availability_zone = data.aws_availability_zones.available.names[2]
@@ -44,24 +44,24 @@ resource "aws_subnet" "elasticsearch-zone-c" {
   tags = local.tags_elasticsearch
 }
 
-resource "aws_route_table_association" "elasticsearch_cluster-zone-a" {
+resource "aws_route_table_association" "elasticsearch_cluster_zone_a" {
   count = length(var.elasticsearch_subnets_zone_a)
 
-  subnet_id      = aws_subnet.elasticsearch-zone-a.*.id[count.index]
+  subnet_id      = aws_subnet.elasticsearch_zone_a.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
-resource "aws_route_table_association" "elasticsearch_cluster-zone-b" {
+resource "aws_route_table_association" "elasticsearch_cluster_zone_b" {
   count = length(var.elasticsearch_subnets_zone_b)
 
-  subnet_id      = aws_subnet.elasticsearch-zone-b.*.id[count.index]
+  subnet_id      = aws_subnet.elasticsearch_zone_b.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
-resource "aws_route_table_association" "elasticsearch_cluster-zone-c" {
+resource "aws_route_table_association" "elasticsearch_cluster_zone_c" {
   count = length(var.elasticsearch_subnets_zone_c)
 
-  subnet_id      = aws_subnet.elasticsearch-zone-c.*.id[count.index]
+  subnet_id      = aws_subnet.elasticsearch_zone_c.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 

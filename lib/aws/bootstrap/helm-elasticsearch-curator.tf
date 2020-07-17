@@ -1,4 +1,4 @@
-resource "helm_release" "elasticsearch-curator" {
+resource "helm_release" "elasticsearch_curator" {
   name = "elasticsearch-curator"
   chart = "../../../lib/common/charts/elasticsearch-curator"
   namespace = "logging"

@@ -23,7 +23,7 @@ locals {
 }
 
 # Network
-resource "aws_subnet" "rds-zone-a" {
+resource "aws_subnet" "rds_zone_a" {
   count = length(var.rds_subnets_zone_a)
 
   availability_zone = data.aws_availability_zones.available.names[0]
@@ -33,7 +33,7 @@ resource "aws_subnet" "rds-zone-a" {
   tags = local.tags_rds
 }
 
-resource "aws_subnet" "rds-zone-b" {
+resource "aws_subnet" "rds_zone_b" {
   count = length(var.rds_subnets_zone_b)
 
   availability_zone = data.aws_availability_zones.available.names[1]
@@ -43,7 +43,7 @@ resource "aws_subnet" "rds-zone-b" {
   tags = local.tags_rds
 }
 
-resource "aws_subnet" "rds-zone-c" {
+resource "aws_subnet" "rds_zone_c" {
   count = length(var.rds_subnets_zone_c)
 
   availability_zone = data.aws_availability_zones.available.names[2]
@@ -53,31 +53,31 @@ resource "aws_subnet" "rds-zone-c" {
   tags = local.tags_rds
 }
 
-resource "aws_route_table_association" "rds_cluster-zone-a" {
+resource "aws_route_table_association" "rds_cluster_zone_a" {
   count = length(var.rds_subnets_zone_a)
 
-  subnet_id      = aws_subnet.rds-zone-a.*.id[count.index]
+  subnet_id      = aws_subnet.rds_zone_a.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
-resource "aws_route_table_association" "rds_cluster-zone-b" {
+resource "aws_route_table_association" "rds_cluster_zone_b" {
   count = length(var.rds_subnets_zone_b)
 
-  subnet_id      = aws_subnet.rds-zone-b.*.id[count.index]
+  subnet_id      = aws_subnet.rds_zone_b.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
-resource "aws_route_table_association" "rds_cluster-zone-c" {
+resource "aws_route_table_association" "rds_cluster_zone_c" {
   count = length(var.rds_subnets_zone_c)
 
-  subnet_id      = aws_subnet.rds-zone-c.*.id[count.index]
+  subnet_id      = aws_subnet.rds_zone_c.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
 resource "aws_db_subnet_group" "rds" {
   description = "RDS linked to ${var.eks_cluster_id}"
   name = aws_vpc.eks.id
-  subnet_ids = flatten([aws_subnet.rds-zone-a.*.id, aws_subnet.rds-zone-b.*.id, aws_subnet.rds-zone-c.*.id])
+  subnet_ids = flatten([aws_subnet.rds_zone_a.*.id, aws_subnet.rds_zone_b.*.id, aws_subnet.rds_zone_c.*.id])
 
   tags = local.tags_rds
 }

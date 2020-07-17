@@ -7,5 +7,5 @@ resource "helm_release" "grafana" {
 
   values = [file("chart_values/grafana.yaml")]
 
-  depends_on = [aws_eks_cluster.eks_cluster, helm_release.prometheus-operator]
+  depends_on = [aws_eks_cluster.eks_cluster, helm_release.prometheus_operator]
 }

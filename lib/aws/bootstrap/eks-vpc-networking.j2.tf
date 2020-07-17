@@ -18,7 +18,7 @@ resource "aws_vpc" "eks" {
   tags = local.tags_eks_vpc
 }
 
-resource "aws_subnet" "eks-zone-a" {
+resource "aws_subnet" "eks_zone_a" {
   count = length(var.eks_subnets_zone_a)
 
   availability_zone = data.aws_availability_zones.available.names[0]
@@ -29,7 +29,7 @@ resource "aws_subnet" "eks-zone-a" {
   tags = local.tags_eks_vpc
 }
 
-resource "aws_subnet" "eks-zone-b" {
+resource "aws_subnet" "eks_zone_b" {
   count = length(var.eks_subnets_zone_b)
 
   availability_zone = data.aws_availability_zones.available.names[1]
@@ -40,7 +40,7 @@ resource "aws_subnet" "eks-zone-b" {
   tags = local.tags_eks_vpc
 }
 
-resource "aws_subnet" "eks-zone-c" {
+resource "aws_subnet" "eks_zone_c" {
   count = length(var.eks_subnets_zone_c)
 
   availability_zone = data.aws_availability_zones.available.names[2]
@@ -68,23 +68,23 @@ resource "aws_route_table" "eks_cluster" {
   tags = local.tags_eks_vpc
 }
 
-resource "aws_route_table_association" "eks_cluster-zone-a" {
+resource "aws_route_table_association" "eks_cluster_zone_a" {
   count = length(var.eks_subnets_zone_a)
 
-  subnet_id = aws_subnet.eks-zone-a.*.id[count.index]
+  subnet_id = aws_subnet.eks_zone_a.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
-resource "aws_route_table_association" "eks_cluster-zone-b" {
+resource "aws_route_table_association" "eks_cluster_zone_b" {
   count = length(var.eks_subnets_zone_b)
 
-  subnet_id = aws_subnet.eks-zone-b.*.id[count.index]
+  subnet_id = aws_subnet.eks_zone_b.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }
 
-resource "aws_route_table_association" "eks_cluster-zone-c" {
+resource "aws_route_table_association" "eks_cluster_zone_c" {
   count = length(var.eks_subnets_zone_c)
 
-  subnet_id = aws_subnet.eks-zone-c.*.id[count.index]
+  subnet_id = aws_subnet.eks_zone_c.*.id[count.index]
   route_table_id = aws_route_table.eks_cluster.id
 }

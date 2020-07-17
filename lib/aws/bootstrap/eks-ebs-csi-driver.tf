@@ -1,5 +1,5 @@
 resource "aws_iam_policy" "eks_workers_ebs_csi" {
-  name = "Amazon_EBS_CSI_Driver-${var.eks_cluster_id}"
+  name = "Amazon-EBS-CSI-Driver-${var.eks_cluster_id}"
   description = "Policy for AWS CSI driver"
 
   policy = <<POLICY
@@ -30,7 +30,7 @@ resource "aws_iam_policy" "eks_workers_ebs_csi" {
 POLICY
 }
 
-resource "aws_iam_role_policy_attachment" "workers-csi" {
+resource "aws_iam_role_policy_attachment" "workers_csi" {
   policy_arn = aws_iam_policy.eks_workers_ebs_csi.arn
   role       = aws_iam_role.eks_workers.name
 }
