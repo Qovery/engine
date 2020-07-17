@@ -25,6 +25,7 @@ fn main() {
         project_id: "".to_string(),
         environment_id: "".to_string(),
         action: Action::Create,
+        is_production: false,
         applications: vec![Application {
             id: "".to_string(),
             name: "simple-example-node-with-postgresql".to_string(),
