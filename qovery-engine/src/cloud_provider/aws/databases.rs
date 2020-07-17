@@ -7,10 +7,12 @@ use tera::Context;
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::service::{
-    Create, DatabaseOptions, DatabaseType, Delete, Service, ServiceError, ServiceType,
+    Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Service, ServiceError,
+    ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::models::Snapshot;
 
 pub struct PostgreSQL {
     id: String,
@@ -37,6 +39,8 @@ impl PostgreSQL {
         crate::fs::workspace_directory(format!("databases/postgresql-{}", self.id()))
     }
 }
+
+impl StatefulService for PostgreSQL {}
 
 impl Service for PostgreSQL {
     fn service_type(&self) -> ServiceType {
@@ -171,5 +175,53 @@ impl Delete for PostgreSQL {
         );
 
         Ok(())
+    }
+}
+
+impl crate::cloud_provider::service::Clone for PostgreSQL {
+    fn on_clone(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_clone_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+}
+
+impl Upgrade for PostgreSQL {
+    fn on_upgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_upgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+}
+
+impl Downgrade for PostgreSQL {
+    fn on_downgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+}
+
+impl Backup for PostgreSQL {
+    fn on_backup(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_backup_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_restore(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_restore_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
     }
 }

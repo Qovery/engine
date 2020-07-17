@@ -6,12 +6,14 @@ use chrono::{DateTime, Utc};
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 
+use crate::build_platform::Image;
 use crate::cloud_provider::aws::databases::PostgreSQL;
 use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::{DatabaseOptions, Service};
-use crate::cloud_provider::CloudProvider as CP;
+use crate::cloud_provider::service::{DatabaseOptions, Service, StatefulService, StatelessService};
 use crate::cloud_provider::Kind as CPKind;
+use crate::cloud_provider::{CloudProvider as CP, CloudProvider};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
@@ -19,6 +21,7 @@ pub struct Environment {
     pub project_id: String,
     pub environment_id: String,
     pub action: Action,
+    pub is_production: bool,
     pub applications: Vec<Application>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
@@ -29,11 +32,59 @@ impl Environment {
         Ok(())
     }
 
-    pub fn as_qovery_engine_environment(&self) -> crate::cloud_provider::environment::Environment {
+    pub fn to_qe_environment(
+        &self,
+        built_applications: &Vec<Box<dyn crate::cloud_provider::service::Application>>,
+        cloud_provider: &dyn CloudProvider,
+    ) -> crate::cloud_provider::environment::Environment {
+        let applications = self
+            .applications
+            .iter()
+            .map(|x| {
+                x.to_stateless_service(
+                    built_applications
+                        .iter()
+                        .find(|y| x.id.as_str() == y.id())
+                        .unwrap()
+                        .image(), // FIXME not safe
+                    cloud_provider,
+                )
+            })
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+
+        let routers = self
+            .routers
+            .iter()
+            .map(|x| x.to_stateless_service(cloud_provider))
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+
+        let mut stateless_services = routers;
+        stateless_services.extend(applications);
+
+        let databases = self
+            .databases
+            .iter()
+            .map(|x| x.to_stateful_service(cloud_provider))
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+
+        let stateful_services = databases;
+
         crate::cloud_provider::environment::Environment::new(
+            match self.is_production {
+                true => Kind::Production,
+                false => Kind::Development,
+            },
             self.environment_id.as_str(),
             self.project_id.as_str(),
             self.owner_id.as_str(),
+            stateless_services,
+            stateful_services,
         )
     }
 }
@@ -58,6 +109,25 @@ pub struct Application {
     pub environment_variables: Vec<EnvironmentVariable>,
 }
 
+impl Application {
+    pub fn to_stateless_service(
+        &self,
+        image: &Image,
+        cloud_provider: &dyn CloudProvider,
+    ) -> Option<Box<dyn StatelessService>> {
+        match cloud_provider.kind() {
+            CPKind::AWS => Some(Box::new(
+                crate::cloud_provider::aws::application::Application::new(
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    image.clone(),
+                ),
+            )),
+            CPKind::GCP => None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
     pub key: String,
@@ -80,6 +150,18 @@ pub struct Router {
     pub name: String,
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
+}
+
+impl Router {
+    pub fn to_stateless_service(
+        &self,
+        cloud_provider: &dyn CloudProvider,
+    ) -> Option<Box<dyn StatelessService>> {
+        match cloud_provider.kind() {
+            CPKind::AWS => None,
+            CPKind::GCP => None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -107,20 +189,27 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn to_service(&self, kubernetes: &dyn Kubernetes) -> Option<Box<dyn Service>> {
-        match kubernetes.cloud_provider().kind() {
+    pub fn to_stateful_service(
+        &self,
+        cloud_provider: &dyn CloudProvider,
+    ) -> Option<Box<dyn StatefulService>> {
+        match cloud_provider.kind() {
             CPKind::AWS => match self.kind {
-                DatabaseKind::PostgreSQL => Some(Box::new(PostgreSQL::new(
-                    self.id.as_str(),
-                    self.name.as_str(),
-                    self.version.as_str(),
-                    DatabaseOptions {
-                        login: self.username.clone(),
-                        password: self.password.clone(),
-                        host: self.fqdn.clone(),
-                        port: self.port.clone(),
-                    },
-                ))),
+                DatabaseKind::PostgreSQL => {
+                    let db: Box<dyn StatefulService> = Box::new(PostgreSQL::new(
+                        self.id.as_str(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        DatabaseOptions {
+                            login: self.username.clone(),
+                            password: self.password.clone(),
+                            host: self.fqdn.clone(),
+                            port: self.port.clone(),
+                        },
+                    ));
+
+                    Some(db)
+                }
                 _ => None,
             },
             CPKind::GCP => None,

@@ -2,7 +2,9 @@ use tera::Context;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
-use crate::cloud_provider::service::{Create, Delete, Service, ServiceError, ServiceType};
+use crate::cloud_provider::service::{
+    Create, Delete, Service, ServiceError, ServiceType, StatefulService, StatelessService,
+};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 
@@ -14,6 +16,14 @@ pub struct Application {
 }
 
 impl Application {
+    pub fn new(id: &str, name: &str, image: Image) -> Self {
+        Application {
+            id: id.to_string(),
+            name: name.to_string(),
+            image,
+        }
+    }
+
     fn helm_release_name(&self) -> String {
         format!("application-{}-{}", self.name(), self.id())
     }
@@ -22,6 +32,14 @@ impl Application {
         crate::fs::workspace_directory(format!("applications/{}-{}", self.name(), self.id()))
     }
 }
+
+impl crate::cloud_provider::service::Application for Application {
+    fn image(&self) -> &Image {
+        &self.image
+    }
+}
+
+impl StatelessService for Application {}
 
 impl Service for Application {
     fn service_type(&self) -> ServiceType {

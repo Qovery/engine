@@ -13,15 +13,22 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn new(id: &str, project_id: &str, owner_id: &str) -> Self {
+    pub fn new(
+        kind: Kind,
+        id: &str,
+        project_id: &str,
+        owner_id: &str,
+        stateless_services: Vec<Box<dyn StatelessService>>,
+        stateful_services: Vec<Box<dyn StatefulService>>,
+    ) -> Self {
         // FIXME TODO
         Environment {
-            kind: Kind::Development,
+            kind,
             id: id.to_string(),
             project_id: project_id.to_string(),
             owner_id: owner_id.to_string(),
-            stateless_services: vec![],
-            stateful_services: vec![],
+            stateless_services,
+            stateful_services,
         }
     }
 

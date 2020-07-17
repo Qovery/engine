@@ -4,15 +4,16 @@ use std::collections::HashMap;
 use crate::build_platform::{
     Build, BuildError, BuildOptions, EnvironmentVariable, GitRepository, Image,
 };
-use crate::cloud_provider::aws::application::Application;
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesError};
-use crate::cloud_provider::service::{Service, ServiceError};
+use crate::cloud_provider::service::Application;
+use crate::cloud_provider::service::{Service, ServiceError, StatefulService, StatelessService};
 use crate::cloud_provider::DeployError;
 use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
 use crate::models::{Action, Environment, EnvironmentError};
 use crate::transaction::CommitError::NotValidService;
+use itertools::Itertools;
 
 pub struct Transaction<'a> {
     pub config: Config<'a>,
@@ -86,13 +87,13 @@ impl<'a> Transaction<'a> {
     fn _build_applications(
         &self,
         environment: &Environment,
-    ) -> Result<Vec<Application>, BuildError> {
+    ) -> Result<Vec<Box<dyn Application>>, BuildError> {
         let apps_to_build = environment
             .applications
             .iter()
             .filter(|app| app.action == Action::Create); // TODO configurable?
 
-        let applications: Vec<_> = apps_to_build
+        let applications: Vec<Box<dyn Application>> = apps_to_build
             .map(|app| {
                 let result = self.config.build_platform.build(Build {
                     git_repository: GitRepository {
@@ -124,11 +125,23 @@ impl<'a> Transaction<'a> {
                 (app, result)
             })
             .filter(|(_, r)| r.is_ok())
-            .map(|(a, r)| Application {
-                id: a.id.clone(),
-                name: a.name.clone(),
-                image: r.ok().unwrap().build.image,
+            .map(|(a, r)| {
+                match self.config.cloud_provider.kind() {
+                    crate::cloud_provider::Kind::AWS => {
+                        let app: Box<dyn Application> =
+                            Box::new(crate::cloud_provider::aws::application::Application::new(
+                                a.id.as_str(),
+                                a.name.as_str(),
+                                r.ok().unwrap().build.image,
+                            ));
+
+                        Some(app)
+                    }
+                    crate::cloud_provider::Kind::GCP => None, // FIXME
+                }
             })
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
             .collect();
 
         Ok(applications)
@@ -136,11 +149,11 @@ impl<'a> Transaction<'a> {
 
     fn _push_applications(
         &self,
-        applications: &Vec<Application>,
+        applications: &Vec<Box<dyn Application>>,
     ) -> Result<Vec<PushResult>, PushError> {
         let results: Vec<_> = applications
             .iter()
-            .map(|app| self.config.container_registry.push(app.image.clone()))
+            .map(|app| self.config.container_registry.push(app.image().clone()))
             .collect();
 
         let mut push_results: Vec<PushResult> = vec![];
@@ -186,7 +199,7 @@ impl<'a> Transaction<'a> {
     }
 
     pub fn commit(&mut self) -> TransactionResult {
-        let mut applications_by_environment: HashMap<&Environment, Vec<Application>> =
+        let mut applications_by_environment: HashMap<&Environment, Vec<Box<dyn Application>>> =
             HashMap::new();
 
         for step in self.steps.iter() {
@@ -248,8 +261,11 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeployEnvironment(kubernetes, environment) => {
                     // deploy complete environment
+                    let built_applications = applications_by_environment.get(environment).unwrap(); // FIXME unsafe?
 
-                    let qe_environment = environment.as_qovery_engine_environment();
+                    let qe_environment = environment
+                        .to_qe_environment(built_applications, kubernetes.cloud_provider());
+
                     for service in qe_environment.stateful_services.iter() {
                         match service.is_valid() {
                             Err(service_error) => {

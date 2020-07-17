@@ -3,6 +3,14 @@ use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use std::io::Error;
 
+pub trait Service {
+    fn service_type(&self) -> ServiceType;
+    fn id(&self) -> &str;
+    fn name(&self) -> &str;
+    fn version(&self) -> &str;
+    fn is_valid(&self) -> Result<(), ServiceError>;
+}
+
 pub trait StatelessService: Service + Create + Delete {}
 
 pub trait StatefulService:
@@ -10,12 +18,8 @@ pub trait StatefulService:
 {
 }
 
-pub trait Service {
-    fn service_type(&self) -> ServiceType;
-    fn id(&self) -> &str;
-    fn name(&self) -> &str;
-    fn version(&self) -> &str;
-    fn is_valid(&self) -> Result<(), ServiceError>;
+pub trait Application: StatelessService {
+    fn image(&self) -> &Image;
 }
 
 pub trait Create {
