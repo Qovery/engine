@@ -12,7 +12,8 @@ use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
-    Action, Application, Environment, EnvironmentVariable, GitCredentials,
+    Action, Application, CustomDomain, Database, DatabaseKind, Environment, EnvironmentVariable,
+    GitCredentials, Route, Router, Storage,
 };
 use qovery_engine::session::Session;
 use qovery_engine::transaction::TransactionResult;
@@ -21,13 +22,13 @@ fn main() {
     env_logger::init();
 
     let environment = Environment {
-        owner_id: "".to_string(),
-        project_id: "".to_string(),
-        environment_id: "".to_string(),
+        owner_id: "123456basuiug".to_string(),
+        project_id: "adoiwajd45ad4w".to_string(),
+        environment_id: "odiajwio6468a468".to_string(),
         action: Action::Create,
         is_production: false,
         applications: vec![Application {
-            id: "".to_string(),
+            id: "owiahdiu877".to_string(),
             name: "simple-example-node-with-postgresql".to_string(),
             git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
                 .to_string(),
@@ -38,14 +39,40 @@ fn main() {
                 access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
                 expired_at: Utc::now(),
             },
-            storage: vec![],
+            storage: vec![Storage {}, Storage {}],
             environment_variables: vec![EnvironmentVariable {
                 key: "KEY_TEST_1".to_string(),
                 value: "VAL_TEST_1".to_string(),
             }],
         }],
-        routers: vec![],
-        databases: vec![],
+        routers: vec![
+            Router {
+                id: "ofejoiafj5464".to_string(),
+                name: "main".to_string(),
+                custom_domains: vec![CustomDomain {}],
+                routes: vec![Route {}],
+            },
+            Router {
+                id: "adawhdiua545545".to_string(),
+                name: "second-router".to_string(),
+                custom_domains: vec![CustomDomain {}],
+                routes: vec![Route {}],
+            },
+        ],
+        databases: vec![Database {
+            kind: DatabaseKind::PostgreSQL,
+            action: Action::Create,
+            id: "waoidja468787454".to_string(),
+            name: "my-psql".to_string(),
+            version: "11.5".to_string(),
+            fqdn_id: "no-fqdn-test".to_string(),
+            fqdn: "no-fqdn-test.qovery.io".to_string(),
+            port: 5432,
+            username: "superuser".to_string(),
+            password: "BdcDconI2k8AVN6z".to_string(),
+            disk_size_in_gib: 10,
+            snapshot: None,
+        }],
     };
 
     // use DockerHub

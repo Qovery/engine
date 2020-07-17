@@ -7,7 +7,9 @@ use tera::Context;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
-use crate::cloud_provider::service::{Create, Delete, Service, ServiceError, ServiceType};
+use crate::cloud_provider::service::{
+    Create, Delete, Service, ServiceError, ServiceType, StatelessService,
+};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 
@@ -155,6 +157,8 @@ impl Delete for Router {
         unimplemented!()
     }
 }
+
+impl StatelessService for Router {}
 
 pub struct CustomDomain {}
 

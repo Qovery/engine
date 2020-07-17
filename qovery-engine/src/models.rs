@@ -158,7 +158,24 @@ impl Router {
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
         match cloud_provider.kind() {
-            CPKind::AWS => None,
+            CPKind::AWS => {
+                let router: Box<dyn StatelessService> =
+                    Box::new(crate::cloud_provider::aws::router::Router::new(
+                        self.id.as_str(),
+                        self.name.as_str(),
+                        // TODO
+                        self.custom_domains
+                            .iter()
+                            .map(|x| crate::cloud_provider::aws::router::CustomDomain {})
+                            .collect::<Vec<_>>(),
+                        // TODO
+                        self.routes
+                            .iter()
+                            .map(|x| crate::cloud_provider::aws::router::Route {})
+                            .collect::<Vec<_>>(),
+                    ));
+                Some(router)
+            }
             CPKind::GCP => None,
         }
     }
@@ -182,9 +199,7 @@ pub struct Database {
     pub port: u16,
     pub username: String,
     pub password: String,
-    pub disk_size_in_mb: u32,
-    pub host_provider: String,
-    pub status_url: String,
+    pub disk_size_in_gib: u32,
     pub snapshot: Option<Snapshot>,
 }
 
