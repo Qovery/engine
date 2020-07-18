@@ -2,7 +2,7 @@
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: {{ router_name }}-{{ environment_id }}
+  name: {{ router_name }}
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}

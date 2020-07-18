@@ -147,7 +147,18 @@ impl<'a> Service for Router {
     }
 
     fn is_valid(&self) -> Result<(), ServiceError> {
+        let binaries = ["helm", "terraform", "aws-iam-authenticator", "kubectl"];
+
+        for binary in binaries.iter() {
+            if !crate::cmd::does_binary_exist(binary) {
+                let err = format!("{} binary not found", binary);
+                return Err(ServiceError::Unexpected(err));
+            }
+        }
+
         // TODO check fields are filled and there is at least one route
+        // TODO check lib directories available
+
         Ok(())
     }
 }
@@ -168,32 +179,8 @@ impl Create for Router {
 
         let context = self.context(environment);
 
-        if !self.custom_domains.is_empty() {
-            // custom domains? create an NGINX ingress
-            info!("setup NGINX ingress for custom domains");
-
-            let into_dir =
-                crate::fs::workspace_directory(self.execution_id(), "charts/routers/nginx-ingress");
-
-            let _ = crate::template::generate_and_copy_all_files_into_dir(
-                "lib/common/charts/nginx-ingress",
-                into_dir.as_str(),
-                &context,
-            )?;
-
-            // TODO check the rendered files?
-        }
-
         let workspace_dir = self.workspace_directory();
 
-        let _ = crate::template::generate_and_copy_all_files_into_dir(
-            "lib/aws/charts/q-ingress-tls",
-            workspace_dir.as_str(),
-            &context,
-        )?;
-
-        // render
-        // TODO check the rendered files?
         let helm_release_name = self.helm_release_name();
         let helm_envs = vec![
             (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
@@ -207,6 +194,42 @@ impl Create for Router {
             aws.access_key_id.as_str(),
             aws.secret_access_key.as_str(),
             kubernetes.region(),
+        )?;
+
+        if !self.custom_domains.is_empty() {
+            // custom domains? create an NGINX ingress
+            info!("setup NGINX ingress for custom domains");
+
+            let into_dir =
+                crate::fs::workspace_directory(self.execution_id(), "charts/routers/nginx-ingress");
+
+            // copy nginx-ingress files, there is no templates so do not generate anything and
+            // simply copy/paste files into our working dir
+            let _ = crate::template::copy_non_template_files(
+                "lib/common/charts/nginx-ingress",
+                into_dir.as_str(),
+            )?;
+
+            // TODO exec helm to apply
+            // do exec helm upgrade and return the last deployment status
+            let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                helm_release_name.as_str(), // FIXME change helm release name?
+                into_dir.as_str(),
+                helm_envs.clone(),
+            )?;
+
+            // check deployment status
+            if !helm_history_row.is_successfully_deployed() {
+                return Err(ServiceError::DeploymentFailed);
+            }
+        }
+
+        let _ = crate::template::generate_and_copy_all_files_into_dir(
+            "lib/aws/charts/q-ingress-tls",
+            workspace_dir.as_str(),
+            &context,
         )?;
 
         // do exec helm upgrade and return the last deployment status

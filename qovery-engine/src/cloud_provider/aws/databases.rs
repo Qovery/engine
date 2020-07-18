@@ -78,7 +78,7 @@ impl Service for PostgreSQL {
     }
 
     fn is_valid(&self) -> Result<(), ServiceError> {
-        let binaries = ["helm", "terraform"];
+        let binaries = ["helm", "terraform", "aws-iam-authenticator"];
 
         for binary in binaries.iter() {
             if !crate::cmd::does_binary_exist(binary) {

@@ -7,7 +7,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 
 use dirs::home_dir;
 
-use crate::constants::TF_PLUGIN_CACHE_DIR;
+use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use std::ffi::OsStr;
 
 fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
@@ -334,6 +334,22 @@ where
     Ok(())
 }
 
+pub fn kubectl_exec_with_output<F>(
+    args: Vec<&str>,
+    envs: Vec<(&str, &str)>,
+    mut output: F,
+) -> Result<(), CmdError>
+where
+    F: FnMut(Result<String, Error>),
+{
+    match exec_with_envs_and_output("kubectl", args, envs, output) {
+        Err(err) => return Err(err),
+        _ => {}
+    };
+
+    Ok(())
+}
+
 pub fn does_binary_exist<S>(binary: S) -> bool
 where
     S: AsRef<OsStr>,
@@ -347,6 +363,80 @@ where
         Ok(_) => true,
         _ => false,
     }
+}
+
+pub fn kubectl_exec_get_external_ingress_hostname<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<String>, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let mut output_json_string = String::new();
+    let _ = kubectl_exec_with_output(
+        vec![
+            "get",
+            "svc",
+            "-o",
+            "json",
+            "-n",
+            namespace,
+            "--selector",
+            selector,
+        ],
+        _envs,
+        |out| match out {
+            Ok(line) => output_json_string = line,
+            _ => {}
+        },
+    )?;
+
+    let mut result = match serde_json::from_str::<KubernetesList<KubernetesService>>(
+        output_json_string.as_str(),
+    ) {
+        Ok(x) => x,
+        Err(err) => {
+            error!("{}", err.to_string());
+            return Err(CmdError::Io(Error::new(
+                std::io::ErrorKind::InvalidData,
+                err.to_string(),
+            )));
+        }
+    };
+
+    if result.items.is_empty()
+        || result
+            .items
+            .first()
+            .unwrap()
+            .status
+            .load_balancer
+            .ingress
+            .is_empty()
+    {
+        return Ok(None);
+    }
+
+    // FIXME unsafe unwrap here?
+    Ok(Some(
+        result
+            .items
+            .first()
+            .unwrap()
+            .status
+            .load_balancer
+            .ingress
+            .first()
+            .unwrap()
+            .hostname
+            .clone(),
+    ))
 }
 
 #[derive(Debug)]
@@ -374,4 +464,30 @@ impl HelmHistoryRow {
     pub fn is_successfully_deployed(&self) -> bool {
         self.status == "deployed"
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesList<T> {
+    pub items: Vec<T>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct KubernetesService {
+    pub status: KubernetesServiceStatus,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct KubernetesServiceStatus {
+    pub load_balancer: KubernetesServiceStatusLoadBalancer,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct KubernetesServiceStatusLoadBalancer {
+    pub ingress: Vec<KubernetesServiceStatusLoadBalancerIngress>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct KubernetesServiceStatusLoadBalancerIngress {
+    pub hostname: String,
 }

@@ -3,7 +3,7 @@
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: {{ router_name }}-{{ environment_id }}-{{ custom_domain.domain_hash }}
+  name: {{ router_name }}-{{ custom_domain.domain_hash }}
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
