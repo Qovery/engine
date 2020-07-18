@@ -1,8 +1,4 @@
-{%- if qovery_env.routers|length > 0 %}
-{%- for router in qovery_env.routers %}
-{%- if router.public_port and router.custom_domains %}
 {%- for domain in router.custom_domains %}
-{% if domain['target_domain'] %}
 {% set domain_name = domain['domain'] %}
 ---
 apiVersion: cert-manager.io/v1alpha2
@@ -27,8 +23,4 @@ spec:
           ingressClass: nginx-{{ qovery_env.project_id }}
         domains:
           - {{ domain_name }}
-{%- endif %}
 {%- endfor %}
-{%- endif %}
-{%- endfor %}
-{%- endif %}

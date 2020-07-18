@@ -12,7 +12,6 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::models::Snapshot;
 
 pub struct PostgreSQL {
     execution_id: String,
@@ -103,7 +102,7 @@ impl Create for PostgreSQL {
             DeploymentTarget::ManagedServices(_, _) => {
                 // use terraform
                 info!("deploy PostgreSQL on AWS RDS for {}", self.name());
-                let _ = crate::fs::generate_and_copy_all_files_into_dir(
+                let _ = crate::template::generate_and_copy_all_files_into_dir(
                     "lib/aws/services/postgresql",
                     workspace_dir.as_str(),
                     &context,
@@ -134,7 +133,7 @@ impl Create for PostgreSQL {
                     kubernetes.region(),
                 )?;
 
-                let _ = crate::fs::generate_and_copy_all_files_into_dir(
+                let _ = crate::template::generate_and_copy_all_files_into_dir(
                     "lib/common/services/postgresql",
                     workspace_dir.as_str(),
                     &context,

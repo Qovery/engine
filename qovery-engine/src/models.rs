@@ -26,6 +26,7 @@ pub struct Environment {
     pub applications: Vec<Application>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
+    pub clone_from_environment_id: Option<String>,
 }
 
 impl Environment {
@@ -168,12 +169,20 @@ pub struct GitCredentials {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct Storage {}
+pub struct Storage {
+    pub id: String,
+    pub name: String,
+    pub storage_type: String,
+    pub size_in_gib: u16,
+    pub mount_point: String,
+    pub snapshot_retention_in_days: u16,
+}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Router {
     pub id: String,
     pub name: String,
+    pub default_domain: String,
     pub public_port: u16,
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
@@ -192,10 +201,12 @@ impl Router {
                         execution_id,
                         self.id.as_str(),
                         self.name.as_str(),
+                        self.default_domain.as_str(),
                         self.custom_domains
                             .iter()
                             .map(|x| crate::cloud_provider::aws::router::CustomDomain {
                                 domain: x.domain.clone(),
+                                target_domain: x.target_domain.clone(),
                             })
                             .collect::<Vec<_>>(),
                         self.routes
@@ -216,6 +227,7 @@ impl Router {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct CustomDomain {
     pub domain: String,
+    pub target_domain: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -237,7 +249,6 @@ pub struct Database {
     pub username: String,
     pub password: String,
     pub disk_size_in_gib: u32,
-    pub snapshot: Option<Snapshot>,
 }
 
 impl Database {
@@ -277,9 +288,6 @@ pub enum DatabaseKind {
     MySQL,
     MongoDB,
 }
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct Snapshot {}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentError {}

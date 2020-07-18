@@ -1,5 +1,3 @@
-{%- if qovery_env.routers|length > 0 %}
-{%- for router in qovery_env.routers %}
 {%- if router.public_port and router.custom_domains %}
 {%- for domain in router.custom_domains %}
 {% if domain['target_domain'] %}
@@ -24,8 +22,6 @@ spec:
       - http01:
           ingress:
             class: nginx-{{ qovery_env.project_id }}
-{%- endif %}
-{%- endfor %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}

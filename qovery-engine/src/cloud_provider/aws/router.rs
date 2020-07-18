@@ -17,6 +17,7 @@ pub struct Router {
     execution_id: String,
     id: String,
     name: String,
+    default_domain: String,
     custom_domains: Vec<CustomDomain>,
     routes: Vec<Route>,
 }
@@ -26,6 +27,7 @@ impl Router {
         execution_id: &str,
         id: &str,
         name: &str,
+        default_domain: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
     ) -> Self {
@@ -33,6 +35,7 @@ impl Router {
             execution_id: execution_id.to_string(),
             id: id.to_string(),
             name: name.to_string(),
+            default_domain: default_domain.to_string(),
             custom_domains,
             routes,
         }
@@ -69,7 +72,6 @@ impl<'a> Service for Router {
     }
 
     fn is_valid(&self) -> Result<(), ServiceError> {
-        // FIXME
         Ok(())
     }
 }
@@ -89,6 +91,9 @@ impl Create for Router {
             .unwrap();
 
         let mut context = Context::new();
+        // TODO set the template vars for the router
+        // TODO lib/aws/charts/q-ingress-tls/**
+        context.insert("domain", "");
 
         if !self.custom_domains.is_empty() {
             // custom domains? create an NGINX ingress
@@ -97,7 +102,7 @@ impl Create for Router {
             let into_dir =
                 crate::fs::workspace_directory(self.execution_id(), "charts/routers/nginx-ingress");
 
-            let _ = crate::fs::generate_and_copy_all_files_into_dir(
+            let _ = crate::template::generate_and_copy_all_files_into_dir(
                 "lib/common/charts/nginx-ingress",
                 into_dir.as_str(),
                 &context,
@@ -108,7 +113,7 @@ impl Create for Router {
 
         let workspace_dir = self.workspace_directory();
 
-        let _ = crate::fs::generate_and_copy_all_files_into_dir(
+        let _ = crate::template::generate_and_copy_all_files_into_dir(
             "lib/aws/charts/q-ingress-tls",
             workspace_dir.as_str(),
             &context,
@@ -170,6 +175,7 @@ impl StatelessService for Router {}
 
 pub struct CustomDomain {
     pub domain: String,
+    pub target_domain: String,
 }
 
 pub struct Route {

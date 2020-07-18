@@ -43,7 +43,14 @@ fn main() {
                 access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
                 expired_at: Utc::now(),
             },
-            storage: vec![Storage {}, Storage {}],
+            storage: vec![Storage {
+                id: "adawd5wa4d65aw4".to_string(),
+                name: "photos".to_string(),
+                storage_type: "ssd".to_string(),
+                size_in_gib: 10,
+                mount_point: "/mnt/photos".to_string(),
+                snapshot_retention_in_days: 30,
+            }],
             environment_variables: vec![EnvironmentVariable {
                 key: "KEY_TEST_1".to_string(),
                 value: "VAL_TEST_1".to_string(),
@@ -55,9 +62,11 @@ fn main() {
             Router {
                 id: "ofejoiafj5464".to_string(),
                 name: "main".to_string(),
+                default_domain: "toto-default.qovery.io".to_string(),
                 public_port: 443,
                 custom_domains: vec![CustomDomain {
-                    domain: "toto.qovery.io".to_string(),
+                    domain: "toto.custom.io".to_string(),
+                    target_domain: "toto.qovery.io".to_string(),
                 }],
                 routes: vec![Route {
                     path: "/*".to_string(),
@@ -67,9 +76,11 @@ fn main() {
             Router {
                 id: "adawhdiua545545".to_string(),
                 name: "second-router".to_string(),
+                default_domain: "coco-default.qovery.io".to_string(),
                 public_port: 443,
                 custom_domains: vec![CustomDomain {
-                    domain: "coco.qovery.io".to_string(),
+                    domain: "coco.custom.io".to_string(),
+                    target_domain: "coco.qovery.io".to_string(),
                 }],
                 routes: vec![Route {
                     path: "/coco/*".to_string(),
@@ -89,8 +100,8 @@ fn main() {
             username: "superuser".to_string(),
             password: "BdcDconI2k8AVN6z".to_string(),
             disk_size_in_gib: 10,
-            snapshot: None,
         }],
+        clone_from_environment_id: None,
     };
 
     // use DockerHub

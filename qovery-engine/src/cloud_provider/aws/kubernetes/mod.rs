@@ -19,9 +19,7 @@ use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, Kuber
 use crate::cloud_provider::service::Service;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
-use crate::fs::{
-    copy_non_template_files, workspace_directory, write_rendered_templates, RenderedTemplate,
-};
+use crate::fs::workspace_directory;
 use crate::{cmd, dynamo_db, fs, s3};
 
 pub mod node;
@@ -228,7 +226,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let temp_dir_path_str = temp_dir.as_str();
 
         // create S3 bucket
-        s3::create_bucket(
+        let _ = s3::create_bucket(
             self.cloud_provider.access_key_id.as_str(),
             self.cloud_provider.secret_access_key.as_str(),
             self.region.borrow(),
@@ -236,7 +234,7 @@ impl<'a> Kubernetes for EKS<'a> {
         )?;
 
         // create dynamo db table
-        dynamo_db::create_terraform_table(
+        let _ = dynamo_db::create_terraform_table(
             self.cloud_provider.access_key_id.as_str(),
             self.cloud_provider.secret_access_key.as_str(),
             self.region.borrow(),
@@ -245,7 +243,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // generate terraform files and copy them into temp dir
         let context = self.context();
-        let _ = crate::fs::generate_and_copy_all_files_into_dir(
+        let _ = crate::template::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),
             &temp_dir,
             &context,
@@ -253,7 +251,6 @@ impl<'a> Kubernetes for EKS<'a> {
 
         crate::cmd::terraform_exec_with_init_validate_plan_apply(temp_dir_path_str, true)?;
 
-        // clean temp dir
         Ok(())
     }
 
@@ -350,6 +347,7 @@ mod tests {
 
     fn aws() -> AWS {
         let aws = AWS::new(
+            "xxx",
             "123-abc",
             "my-default-aws",
             "AKIAZ4KMLSYJLRGNNFNI",

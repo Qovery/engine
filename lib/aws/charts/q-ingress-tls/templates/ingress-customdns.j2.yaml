@@ -1,8 +1,5 @@
-{%- if qovery_env.routers|length > 0 %}
-{%- for router in qovery_env.routers %}
 {%- if router.public_port and router.custom_domains and router['routes'] %}
 {%- for domain in router.custom_domains %}
-{% if domain['target_domain'] %}
 {% set domain_name = domain['domain'] %}
 ---
 apiVersion: networking.k8s.io/v1beta1
@@ -53,8 +50,5 @@ spec:
               serviceName: "{{ application['id'] }}-{{ qovery_env.environment_id }}"
               servicePort: {{ application['private_port'] }}
         {%- endfor %}
-{%- endif %}
-{%- endfor %}
-{%- endif %}
 {%- endfor %}
 {%- endif %}

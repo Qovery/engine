@@ -92,7 +92,7 @@ impl Create for Application {
 
         let workspace_dir = self.workspace_directory();
 
-        let _ = crate::fs::generate_and_copy_all_files_into_dir(
+        let _ = crate::template::generate_and_copy_all_files_into_dir(
             "lib/aws/charts/q-application",
             workspace_dir.as_str(),
             &context,
