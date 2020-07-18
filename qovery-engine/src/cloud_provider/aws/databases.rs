@@ -73,6 +73,10 @@ impl Service for PostgreSQL {
         self.version.as_str()
     }
 
+    fn private_port(&self) -> u16 {
+        self.options.port
+    }
+
     fn is_valid(&self) -> Result<(), ServiceError> {
         let binaries = ["helm", "terraform"];
 

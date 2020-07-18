@@ -4,6 +4,7 @@ use crate::cloud_provider::service::{
 use std::borrow::Borrow;
 
 pub struct Environment {
+    namespace: String,
     pub kind: Kind,
     pub id: String,
     pub project_id: String,
@@ -21,8 +22,8 @@ impl Environment {
         stateless_services: Vec<Box<dyn StatelessService>>,
         stateful_services: Vec<Box<dyn StatefulService>>,
     ) -> Self {
-        // FIXME TODO
         Environment {
+            namespace: format!("{}-{}", project_id, id),
             kind,
             id: id.to_string(),
             project_id: project_id.to_string(),
@@ -33,7 +34,7 @@ impl Environment {
     }
 
     pub fn namespace(&self) -> &str {
-        self.project_id.as_str()
+        self.namespace.as_str()
     }
 }
 

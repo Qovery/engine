@@ -1,24 +1,22 @@
-{%- if router.public_port and router.custom_domains and router['routes'] %}
-{%- for domain in router.custom_domains %}
-{% set domain_name = domain['domain'] %}
+{%- for custom_domain in custom_domains %}
 ---
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: {{ router.name }}-{{ qovery_env.environment_id }}-{{ qovery_env.get_domain_id(domain_name) }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ router_name }}-{{ environment_id }}-{{ custom_domain.domain_hash }}
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    routerId: {{ router.name }}
-    envId: {{ qovery_env.environment_id }}
-    fqdn: "{{ domain_name }}"
-    fqdnId: {{ qovery_env.get_domain_id(domain_name) }}
+    ownerId: {{ owner_id }}
+    routerId: {{ router_name }}
+    envId: {{ environment_id }}
+    fqdn: "{{ custom_domain.domain }}"
+    fqdnId: {{ custom_domain.domain_hash }}
   annotations:
     ingress.kubernetes.io/ssl-redirect: "true"
     kubernetes.io/tls-acme: "true"
-    cert-manager.io/issuer: "{{ qovery_env.get_domain_id(domain_name) }}"
-    kubernetes.io/ingress.class: "nginx-{{ qovery_env.project_id }}"
-    external-dns.alpha.kubernetes.io/hostname: {{ domain['target_domain'] }}
+    cert-manager.io/issuer: "{{ custom_domain.domain_hash }}"
+    kubernetes.io/ingress.class: "nginx-{{ project_id }}"
+    external-dns.alpha.kubernetes.io/hostname: {{ custom_domain.target_domain }}
     external-dns.alpha.kubernetes.io/ttl: "300"
 {%- if not pre_validation %}
     external-dns.alpha.kubernetes.io/target: "{{ qovery_env.get_ingress_fqdn(qovery_env.project_id) }}"
@@ -26,29 +24,26 @@ metadata:
 spec:
   tls:
     - hosts:
-        - {{ domain_name }}
-        - {{ domain['target_domain'] }}
-      secretName: le-{{ qovery_env.get_domain_id(domain_name) }}-custom-cert
+        - {{ custom_domain.domain }}
+        - {{ custom_domain.target_domain }}
+      secretName: le-{{ custom_domain.domain_hash }}-custom-cert
   rules:
-    - host: "{{ domain['target_domain'] }}"
+    - host: "{{ custom_domain.target_domain }}"
       http:
         paths:
-        {%- for route in router['routes'] %}
-        {% set application = qovery_env.get_application_by_name(route['application_name']) %}
-          - path: {{ route['path'] }}
+        {%- for route in routes %}
+          - path: {{ route.path }}
             backend:
-              serviceName: "{{ application['id'] }}-{{ qovery_env.environment_id }}"
-              servicePort: {{ application['private_port'] }}
+              serviceName: "{{ route.application_name }}"
+              servicePort: {{ route.application_port }}
         {%- endfor %}
-    - host: "{{ domain_name }}"
+    - host: "{{ custom_domain.domain }}"
       http:
         paths:
-        {%- for route in router['routes'] %}
-        {% set application = qovery_env.get_application_by_name(route['application_name']) %}
-          - path: {{ route['path'] }}
+        {%- for route in routes %}
+          - path: {{ route.path }}
             backend:
-              serviceName: "{{ application['id'] }}-{{ qovery_env.environment_id }}"
-              servicePort: {{ application['private_port'] }}
+              serviceName: "{{ route.application_name }}"
+              servicePort: {{ route.application_port }}
         {%- endfor %}
 {%- endfor %}
-{%- endif %}

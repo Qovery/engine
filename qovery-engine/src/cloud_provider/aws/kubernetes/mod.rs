@@ -171,13 +171,13 @@ impl<'a> EKS<'a> {
             .group_by(|e| e.instance_type())
             .into_iter()
             .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
-            .map(|(instance_type, nodes)| WorkerNodeData {
+            .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
                 instance_type: instance_type.to_string(),
                 desired_size: nodes.len().to_string(),
                 max_size: nodes.len().to_string(),
                 min_size: nodes.len().to_string(),
             })
-            .collect::<Vec<WorkerNodeData>>();
+            .collect::<Vec<WorkerNodeDataTemplate>>();
 
         context.insert("eks_worker_nodes", &worker_nodes);
 
@@ -292,9 +292,6 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         info!("EKS.deploy_environment() called for {}", self.name());
-        // TODO create the namespace
-
-        // TODO install the required services (custom domains, agents..) into the namespace (if necessary)
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
@@ -305,15 +302,39 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         };
 
-        // create all stateful services
-        for env in &environment.stateful_services {
-            env.on_create(&stateful_deployment_target); // TODO handle err
+        // create all stateful services (database)
+        for stateful_service in &environment.stateful_services {
+            match stateful_service.on_create(&stateful_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with service {} , id: {} => {:?}",
+                        stateful_service.name(),
+                        stateful_service.id(),
+                        err
+                    );
+                    return Err(KubernetesError::Service(err));
+                }
+                _ => {}
+            }
         }
 
-        // create all stateless services
+        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
-        for env in &environment.stateless_services {
-            env.on_create(&stateless_deployment_target); // TODO handle err
+        // create all stateless services (router, application...)
+        for stateless_service in &environment.stateless_services {
+            match stateless_service.on_create(&stateless_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with service {} , id: {} => {:?}",
+                        stateless_service.name(),
+                        stateless_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Service(err));
+                }
+                _ => {}
+            }
         }
 
         // TODO wait for pods
@@ -329,7 +350,7 @@ impl<'a> Kubernetes for EKS<'a> {
 }
 
 #[derive(Serialize, Deserialize)]
-struct WorkerNodeData {
+struct WorkerNodeDataTemplate {
     instance_type: String,
     desired_size: String,
     max_size: String,

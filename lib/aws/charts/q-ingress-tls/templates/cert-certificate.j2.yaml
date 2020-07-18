@@ -1,26 +1,25 @@
-{%- for domain in router.custom_domains %}
-{% set domain_name = domain['domain'] %}
+{%- for custom_domain in custom_domains %}
 ---
 apiVersion: cert-manager.io/v1alpha2
 kind: Certificate
 metadata:
-  name: {{ qovery_env.get_domain_id(domain_name) }}-cert
-  namespace: {{ qovery_env.project_id }}
+  name: {{ custom_domain.domain_hash }}-cert
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    fqdn: "{{ domain_name }}"
-    fqdnId: {{ qovery_env.get_domain_id(domain_name) }}
+    ownerId: {{ owner_id }}
+    fqdn: "{{ custom_domain.domain }}"
+    fqdnId: {{ custom_domain.domain_hash }}
 spec:
-  secretName: le-{{ qovery_env.get_domain_id(domain_name) }}-cert
+  secretName: le-{{ custom_domain.domain_hash }}-cert
   issuerRef:
-    name: {{ qovery_env.get_domain_id(domain_name) }}
+    name: {{ custom_domain.domain_hash }}
     kind: Issuer
   dnsNames:
     - {{ domain_name }}
   acme:
     config:
       - http01:
-          ingressClass: nginx-{{ qovery_env.project_id }}
+          ingressClass: nginx-{{ project_id }}
         domains:
-          - {{ domain_name }}
+          - {{ custom_domain.domain }}
 {%- endfor %}

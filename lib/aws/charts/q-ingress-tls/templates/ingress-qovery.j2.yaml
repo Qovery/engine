@@ -1,37 +1,34 @@
-{%- if router.public_port and router['routes'] and router['default_domain'] %}
 ---
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: {{ router.name }}-{{ qovery_env.environment_id }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ router_name }}-{{ environment_id }}
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    routerId: {{ router.name }}
-    envId: {{ qovery_env.environment_id }}
-    fqdn: "{{ router['default_domain'] }}"
+    ownerId: {{ owner_id }}
+    routerId: {{ router_name }}
+    envId: {{ environment_id }}
+    fqdn: "{{ router_default_domain }}"
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: {{ router['default_domain'] }}
+    external-dns.alpha.kubernetes.io/hostname: {{ router_default_domain }}
     external-dns.alpha.kubernetes.io/ttl: "300"
     external-dns.alpha.kubernetes.io/target: "{{ qovery_env.get_ingress_fqdn('nginx-ingress') }}"
     kubernetes.io/tls-acme: "true"
-    cert-manager.io/cluster-issuer: letsencrypt-qovery
+    cert-manager.io/cluster-issuer: {{ metadata_annotations_cert_manager_cluster_issuer }}
     kubernetes.io/ingress.class: "nginx-qovery"
     ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   tls:
     - hosts:
-        - {{ router['default_domain'] }}
-      secretName: le-{{ qovery_env.get_domain_id(router['default_domain']) }}-qovery-cert
+        - {{ router_default_domain }}
+      secretName: le-{{ router_default_domain_hash }}-qovery-cert
   rules:
-    - host: "{{ router['default_domain'] }}"
+    - host: "{{ router_default_domain }}"
       http:
         paths:
-        {%- for route in router['routes'] %}
-        {% set application = qovery_env.get_application_by_name(route['application_name']) %}
-          - path: {{ route['path'] }}
+        {%- for route in routes %}
+          - path: {{ route.path }}
             backend:
-              serviceName: "{{ application['id'] }}-{{ qovery_env.environment_id }}"
-              servicePort: {{ application['private_port'] }}
+              serviceName: "{{ route.application_name }}"
+              servicePort: {{ route.application_port }}
         {%- endfor %}
-{%- endif %}

@@ -65,6 +65,8 @@ pub enum Kind {
 }
 
 pub enum DeploymentTarget<'a> {
+    // ManagedService = Managed by the Cloud Provider (eg. RDS, DynamoDB...)
     ManagedServices(&'a dyn Kubernetes, &'a Environment),
+    // SelfHosted = Kubernetes or anything else that implies management on our side
     SelfHosted(&'a dyn Kubernetes, &'a Environment),
 }

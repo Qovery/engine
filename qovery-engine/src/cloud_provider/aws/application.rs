@@ -67,6 +67,10 @@ impl Service for Application {
         self.image.commit_id.as_str()
     }
 
+    fn private_port(&self) -> u16 {
+        8080 // TODO it's customizable by the user
+    }
+
     fn is_valid(&self) -> Result<(), ServiceError> {
         // TODO check image availability
         Ok(())

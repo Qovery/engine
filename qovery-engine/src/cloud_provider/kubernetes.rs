@@ -1,5 +1,5 @@
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::service::Service;
+use crate::cloud_provider::service::{Service, ServiceError};
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::CmdError;
 use crate::transaction::CommitError;
@@ -45,6 +45,7 @@ pub enum KubernetesError {
     Cmd(CmdError),
     Io(std::io::Error),
     Create(ExitStatus),
+    Service(ServiceError),
     Error,
 }
 

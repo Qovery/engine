@@ -9,6 +9,7 @@ pub trait Service {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn version(&self) -> &str;
+    fn private_port(&self) -> u16;
     fn is_valid(&self) -> Result<(), ServiceError>;
 }
 
@@ -55,6 +56,7 @@ pub trait Downgrade {
     fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
+#[derive(Eq, PartialEq)]
 pub struct DatabaseOptions {
     pub login: String,
     pub password: String,
@@ -63,12 +65,14 @@ pub struct DatabaseOptions {
     // TODO add others fields
 }
 
+#[derive(Eq, PartialEq)]
 pub enum DatabaseType<'a> {
     PostgreSQL(&'a DatabaseOptions),
     MongoDB(&'a DatabaseOptions),
     MySQL(&'a DatabaseOptions),
 }
 
+#[derive(Eq, PartialEq)]
 pub enum ServiceType<'a> {
     Application,
     Database(DatabaseType<'a>),

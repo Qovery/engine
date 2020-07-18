@@ -1,27 +1,22 @@
-{%- if router.public_port and router.custom_domains %}
-{%- for domain in router.custom_domains %}
-{% if domain['target_domain'] %}
-{% set domain_name = domain['domain'] %}
+{%- for custom_domain in custom_domains %}
 ---
 apiVersion: cert-manager.io/v1alpha2
 kind: Issuer
 metadata:
-  name: {{ qovery_env.get_domain_id(domain_name) }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ custom_domain.domain_hash }}
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    fqdn: "{{ domain_name }}"
-    fqdnId: {{ qovery_env.get_domain_id(domain_name) }}
+    ownerId: {{ owner_id }}
+    fqdn: "{{ custom_domain.domain }}"
+    fqdnId: {{ custom_domain.domain_hash }}
 spec:
   acme:
-    server: {{ qovery_env.letsencrypt_url }}
-    email: tls@qovery.com
+    server: {{ spec_acme_server }}
+    email: {{ spec_acme_email }}
     privateKeySecretRef:
-      name: {{ qovery_env.get_domain_id(domain_name) }}-key
+      name: {{ custom_domain.domain_hash }}-key
     solvers:
       - http01:
           ingress:
-            class: nginx-{{ qovery_env.project_id }}
-{%- endif %}
+            class: nginx-{{ project_id }}
 {%- endfor %}
-{%- endif %}

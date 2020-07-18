@@ -7,11 +7,14 @@ use tera::Context;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::{
     Create, Delete, Service, ServiceError, ServiceType, StatelessService,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use itertools::enumerate;
+use serde::{Deserialize, Serialize};
 
 pub struct Router {
     execution_id: String,
@@ -48,6 +51,74 @@ impl Router {
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(self.execution_id(), format!("charts/routers/{}", self.id()))
     }
+
+    fn context(&self, environment: &Environment) -> Context {
+        let mut context = Context::new();
+
+        let applications = environment
+            .stateless_services
+            .iter()
+            .filter(|x| x.service_type() == ServiceType::Application)
+            .collect::<Vec<_>>();
+
+        let custom_domain_data_templates = self
+            .custom_domains
+            .iter()
+            .map(|cd| {
+                let domain_hash = crate::crypto::to_sha1_truncate_16(cd.domain.as_str());
+                CustomDomainDataTemplate {
+                    domain: cd.domain.clone(),
+                    domain_hash,
+                    target_domain: cd.target_domain.clone(),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let route_data_templates = self
+            .routes
+            .iter()
+            .map(|r| {
+                // FIXME unsafe to unwrap here?
+                let application = applications
+                    .iter()
+                    .find(|app| app.id() == r.application_id.as_str())
+                    .unwrap();
+
+                RouteDataTemplate {
+                    path: r.path.clone(),
+                    application_name: application.name().to_string(),
+                    application_port: application.private_port(),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let router_default_domain_hash =
+            crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
+
+        context.insert("owner_id", environment.owner_id.as_str());
+        context.insert("project_id", environment.project_id.as_str());
+        context.insert("environment_id", environment.id.as_str());
+        context.insert("router_name", self.name());
+        context.insert("router_default_domain", self.default_domain.as_str());
+        context.insert(
+            "router_default_domain_hash",
+            router_default_domain_hash.as_str(),
+        );
+        context.insert("namespace", environment.namespace());
+        context.insert("custom_domains", &custom_domain_data_templates);
+        context.insert("routes", &route_data_templates);
+        context.insert("spec_acme_email", "tls@qovery.com");
+        context.insert(
+            "metadata_annotations_cert_manager_cluster_issuer",
+            "letsencrypt-qovery",
+        );
+        context.insert(
+            "spec_acme_server",
+            "https://acme-v02.api.letsencrypt.org/directory",
+        );
+
+        context
+    }
 }
 
 impl<'a> Service for Router {
@@ -71,7 +142,12 @@ impl<'a> Service for Router {
         "1.0"
     }
 
+    fn private_port(&self) -> u16 {
+        0
+    }
+
     fn is_valid(&self) -> Result<(), ServiceError> {
+        // TODO check fields are filled and there is at least one route
         Ok(())
     }
 }
@@ -90,10 +166,7 @@ impl Create for Router {
             .downcast_ref::<AWS>()
             .unwrap();
 
-        let mut context = Context::new();
-        // TODO set the template vars for the router
-        // TODO lib/aws/charts/q-ingress-tls/**
-        context.insert("domain", "");
+        let context = self.context(environment);
 
         if !self.custom_domains.is_empty() {
             // custom domains? create an NGINX ingress
@@ -178,7 +251,21 @@ pub struct CustomDomain {
     pub target_domain: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct CustomDomainDataTemplate {
+    pub domain: String,
+    pub domain_hash: String,
+    pub target_domain: String,
+}
+
 pub struct Route {
     pub path: String,
     pub application_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RouteDataTemplate {
+    pub path: String,
+    pub application_name: String,
+    pub application_port: u16,
 }
