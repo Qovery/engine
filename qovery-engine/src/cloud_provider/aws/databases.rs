@@ -6,6 +6,8 @@ use tera::Context;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
     Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Service, ServiceError,
     ServiceType, StatefulService, Upgrade,
@@ -77,19 +79,17 @@ impl Service for PostgreSQL {
         self.options.port
     }
 
-    fn is_valid(&self) -> Result<(), ServiceError> {
-        let binaries = ["helm", "terraform", "aws-iam-authenticator"];
+    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
+        let mut context = Service::context(self, kubernetes, environment);
 
-        for binary in binaries.iter() {
-            if !crate::cmd::does_binary_exist(binary) {
-                let err = format!("{} binary not found", binary);
-                return Err(ServiceError::Unexpected(err));
-            }
-        }
+        context.insert("database_login", self.options.login.as_str());
+        context.insert("database_password", self.options.password.as_str());
+        context.insert("database_port", &self.private_port());
+        context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
+        context.insert("database_instance_type", "db.t2.micro"); // TODO customizable
+        context.insert("database_disk_type", "gp2"); // TODO customizable
 
-        // TODO check lib directories available
-
-        Ok(())
+        context
     }
 }
 
@@ -97,15 +97,15 @@ impl Create for PostgreSQL {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.PostgreSQL.on_create() called for {}", self.name());
 
-        let context = Context::new();
-        // TODO
-
         let workspace_dir = self.workspace_directory();
 
         match target {
-            DeploymentTarget::ManagedServices(_, _) => {
+            DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy PostgreSQL on AWS RDS for {}", self.name());
+
+                let context = self.context(*kubernetes, *environment);
+
                 let _ = crate::template::generate_and_copy_all_files_into_dir(
                     "lib/aws/services/postgresql",
                     workspace_dir.as_str(),
@@ -116,12 +116,13 @@ impl Create for PostgreSQL {
                     workspace_dir.as_str(),
                     false,
                 )?;
-
-                // TODO check terraform deployment?
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 // use helm
                 info!("deploy PostgreSQL on Kubernetes for {}", self.name());
+
+                let context = self.context(*kubernetes, *environment);
+
                 let aws = kubernetes
                     .cloud_provider()
                     .as_any()

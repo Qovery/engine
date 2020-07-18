@@ -70,22 +70,6 @@ impl Service for Application {
     fn private_port(&self) -> u16 {
         8080 // TODO it's customizable by the user
     }
-
-    fn is_valid(&self) -> Result<(), ServiceError> {
-        let binaries = ["helm", "terraform", "aws-iam-authenticator"];
-
-        for binary in binaries.iter() {
-            if !crate::cmd::does_binary_exist(binary) {
-                let err = format!("{} binary not found", binary);
-                return Err(ServiceError::Unexpected(err));
-            }
-        }
-
-        // TODO check image availability
-        // TODO check lib directories available
-
-        Ok(())
-    }
 }
 
 impl Create for Application {

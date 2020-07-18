@@ -8,6 +8,7 @@ use tera::Context;
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
     Create, Delete, Service, ServiceError, ServiceType, StatelessService,
 };
@@ -51,9 +52,35 @@ impl Router {
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(self.execution_id(), format!("charts/routers/{}", self.id()))
     }
+}
 
-    fn context(&self, environment: &Environment) -> Context {
-        let mut context = Context::new();
+impl<'a> Service for Router {
+    fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
+    fn service_type(&self) -> ServiceType {
+        ServiceType::Router
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        "1.0"
+    }
+
+    fn private_port(&self) -> u16 {
+        0
+    }
+
+    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
+        let mut context = Service::context(self, kubernetes, environment);
 
         let applications = environment
             .stateless_services
@@ -95,16 +122,11 @@ impl Router {
         let router_default_domain_hash =
             crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
-        context.insert("owner_id", environment.owner_id.as_str());
-        context.insert("project_id", environment.project_id.as_str());
-        context.insert("environment_id", environment.id.as_str());
-        context.insert("router_name", self.name());
         context.insert("router_default_domain", self.default_domain.as_str());
         context.insert(
             "router_default_domain_hash",
             router_default_domain_hash.as_str(),
         );
-        context.insert("namespace", environment.namespace());
         context.insert("custom_domains", &custom_domain_data_templates);
         context.insert("routes", &route_data_templates);
         context.insert("spec_acme_email", "tls@qovery.com");
@@ -118,48 +140,6 @@ impl Router {
         );
 
         context
-    }
-}
-
-impl<'a> Service for Router {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
-    }
-
-    fn service_type(&self) -> ServiceType {
-        ServiceType::Router
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        "1.0"
-    }
-
-    fn private_port(&self) -> u16 {
-        0
-    }
-
-    fn is_valid(&self) -> Result<(), ServiceError> {
-        let binaries = ["helm", "terraform", "aws-iam-authenticator", "kubectl"];
-
-        for binary in binaries.iter() {
-            if !crate::cmd::does_binary_exist(binary) {
-                let err = format!("{} binary not found", binary);
-                return Err(ServiceError::Unexpected(err));
-            }
-        }
-
-        // TODO check fields are filled and there is at least one route
-        // TODO check lib directories available
-
-        Ok(())
     }
 }
 
@@ -177,7 +157,7 @@ impl Create for Router {
             .downcast_ref::<AWS>()
             .unwrap();
 
-        let context = self.context(environment);
+        let context = self.context(kubernetes, environment);
 
         let workspace_dir = self.workspace_directory();
 

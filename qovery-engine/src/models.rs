@@ -269,7 +269,8 @@ impl Database {
                             login: self.username.clone(),
                             password: self.password.clone(),
                             host: self.fqdn.clone(),
-                            port: self.port.clone(),
+                            port: self.port,
+                            disk_size_in_gib: self.disk_size_in_gib,
                         },
                     ));
 

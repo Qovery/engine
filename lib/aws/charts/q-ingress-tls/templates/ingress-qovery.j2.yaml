@@ -2,11 +2,11 @@
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: {{ router_name }}
+  name: {{ name }}
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
-    routerId: {{ router_name }}
+    routerId: {{ name }}
     envId: {{ environment_id }}
     fqdn: "{{ router_default_domain }}"
   annotations:

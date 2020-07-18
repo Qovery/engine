@@ -1,7 +1,10 @@
 use crate::build_platform::Image;
+use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use std::io::Error;
+use tera::Context;
 
 pub trait Service {
     fn execution_id(&self) -> &str;
@@ -10,7 +13,41 @@ pub trait Service {
     fn name(&self) -> &str;
     fn version(&self) -> &str;
     fn private_port(&self) -> u16;
-    fn is_valid(&self) -> Result<(), ServiceError>;
+
+    fn is_valid(&self) -> Result<(), ServiceError> {
+        let binaries = ["kubectl", "helm", "terraform", "aws-iam-authenticator"];
+
+        for binary in binaries.iter() {
+            if !crate::cmd::does_binary_exist(binary) {
+                let err = format!("{} binary not found", binary);
+                return Err(ServiceError::Unexpected(err));
+            }
+        }
+
+        // TODO check lib directories available
+
+        Ok(())
+    }
+
+    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
+        let mut context = Context::new();
+
+        context.insert("owner_id", environment.owner_id.as_str());
+        context.insert("project_id", environment.project_id.as_str());
+        context.insert("environment_id", environment.id.as_str());
+        context.insert("region", kubernetes.region());
+        context.insert("name", self.name());
+        context.insert("namespace", environment.namespace());
+        context.insert("cluster_name", kubernetes.name());
+        context.insert("private_port", &self.private_port());
+        context.insert("version", self.version());
+        // TODO check: is it possible to set the `name` as an `id` if the namespace is per environment?
+        context.insert("fqdn_id", self.name());
+        // TODO change
+        context.insert("fqdn", self.name());
+
+        context
+    }
 }
 
 pub trait StatelessService: Service + Create + Delete {}
@@ -62,6 +99,7 @@ pub struct DatabaseOptions {
     pub password: String,
     pub host: String,
     pub port: u16,
+    pub disk_size_in_gib: u32,
     // TODO add others fields
 }
 

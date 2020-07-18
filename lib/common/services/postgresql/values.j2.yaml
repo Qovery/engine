@@ -93,16 +93,16 @@ replication:
 
 ## PostgreSQL admin password (used when `postgresqlUsername` is not `postgres`)
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-user-on-first-run (see note!)
-postgresqlPostgresPassword: {{ databases[database_index]['password'] }}
+postgresqlPostgresPassword: {{ database_password }}
 
 ## PostgreSQL user (has superuser privileges if username is `postgres`)
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#setting-the-root-password-on-first-run
-postgresqlUsername: {{ databases[database_index]['username'] }}
+postgresqlUsername: {{ database_login }}
 
 ## PostgreSQL password
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#setting-the-root-password-on-first-run
 ##
-postgresqlPassword: {{ databases[database_index]['password'] }}
+postgresqlPassword: {{ database_password }}
 
 ## PostgreSQL password using existing secret
 ## existingSecret: secret
@@ -114,7 +114,7 @@ postgresqlPassword: {{ databases[database_index]['password'] }}
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-on-first-run
 ##
 # postgresqlDatabase:
-postgresqlDatabase: {{ databases[database_index]['name'] }}
+postgresqlDatabase: {{ name }}
 
 ## PostgreSQL data dir
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md
@@ -186,7 +186,7 @@ extraEnv: []
 
 ## Specify the PostgreSQL username and password to execute the initdb scripts
 initdbUser: postgres
-initdbPassword: {{ databases[database_index]['password'] }}
+initdbPassword: {{ database_password }}
 
 ## ConfigMap with scripts to be run at first boot
 ## NOTE: This will override initdbScripts
@@ -264,14 +264,14 @@ persistence:
   ##
   subPath: ""
 
-  storageClass: "aws-ebs-gp2-0"
+  storageClass: "aws-ebs-gp2-0" # TODO customizable?
   accessModes:
     - ReadWriteOnce
-  size: {{ databases[database_index]['disk_size_in_mb'] }}Mi
+  size: {{ database_disk_size_in_gib }}Gi
   annotations:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
-    databaseId: {{ databases[database_index]['name'] }}
+    databaseId: {{ name }}
 
 ## updateStrategy for PostgreSQL StatefulSet and its slaves StatefulSets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
@@ -293,7 +293,7 @@ master:
   labels:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
-    databaseId: {{ databases[database_index]['name'] }}
+    databaseId: {{ name }}
   annotations: {}
   podLabels: {}
   podAnnotations: {}
@@ -323,7 +323,7 @@ master:
   # nodePort:
   # clusterIP:
   service_nlb:
-    fqdn: "{{ databases[database_index]['fqdn'] }}"
+    fqdn: "{{ fqdn }}"
 
 ##
 ## PostgreSQL Slave parameters
@@ -380,7 +380,7 @@ slave:
 ##
 resources:
   requests:
-    memory: 256Mi
+    memory: 256Mi # TODO customizable?
     cpu: 250m
 
 ## Add annotations to all the deployed resources
