@@ -444,7 +444,8 @@ pub fn kubectl_exec_is_application_ready_with_retry<P>(
 where
     P: AsRef<Path>,
 {
-    let result = retry::retry(Exponential::from_millis(5000).take(5), || {
+    // TODO check this
+    let result = retry::retry(Exponential::from_millis(1000).take(5), || {
         let r = crate::cmd::kubectl_exec_is_application_ready(
             kubernetes_config.as_ref(),
             namespace,

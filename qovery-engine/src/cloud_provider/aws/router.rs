@@ -13,6 +13,7 @@ use crate::cloud_provider::service::{
     Create, Delete, Service, ServiceError, ServiceType, StatelessService,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cmd::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use itertools::enumerate;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,13 @@ impl Router {
 
     fn helm_release_name(&self) -> String {
         format!("router-{}", self.id())
+    }
+
+    fn helm_envs<'a>(&self, aws: &'a AWS) -> [(&'a str, &'a str); 2] {
+        [
+            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
+        ]
     }
 
     fn workspace_directory(&self) -> String {
@@ -119,6 +127,44 @@ impl<'a> Service for Router {
             })
             .collect::<Vec<_>>();
 
+        let workspace_dir = self.workspace_directory();
+        let aws = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<AWS>()
+            .unwrap();
+
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            workspace_dir.as_str(),
+            environment.owner_id.as_str(),
+            kubernetes.id(),
+            aws.access_key_id.as_str(),
+            aws.secret_access_key.as_str(),
+            kubernetes.region(),
+        );
+
+        if kubernetes_config_file_path.is_ok() {
+            // it should never occurred.. but in case of..
+            match crate::cmd::kubectl_exec_get_external_ingress_hostname(
+                kubernetes_config_file_path.unwrap().as_str(),
+                environment.namespace(),
+                "app=nginx-ingress,component=controller",
+                self.helm_envs(aws).to_vec(),
+            ) {
+                Ok(external_ingress_hostname) => match external_ingress_hostname {
+                    Some(hostname) => {
+                        context.insert("external_ingress_hostname", hostname.as_str())
+                    }
+                    None => {
+                        warn!("unable to get external_ingress_hostname - what's wrong? This should never occurred");
+                    }
+                },
+                _ => {
+                    warn!("can't fetch kubernetes config file - what's wrong? This should never occurred");
+                }
+            }
+        }
+
         let router_default_domain_hash =
             crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
@@ -157,15 +203,8 @@ impl Create for Router {
             .downcast_ref::<AWS>()
             .unwrap();
 
-        let context = self.context(kubernetes, environment);
-
         let workspace_dir = self.workspace_directory();
-
         let helm_release_name = self.helm_release_name();
-        let helm_envs = vec![
-            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-        ];
 
         let kubernetes_config_file_path = common::kubernetes_config_path(
             workspace_dir.as_str(),
@@ -197,7 +236,7 @@ impl Create for Router {
                 environment.namespace(),
                 helm_release_name.as_str(), // FIXME change helm release name?
                 into_dir.as_str(),
-                helm_envs.clone(),
+                self.helm_envs(aws).to_vec(),
             )?;
 
             // check deployment status
@@ -205,6 +244,10 @@ impl Create for Router {
                 return Err(ServiceError::DeploymentFailed);
             }
         }
+
+        // respect order - getting the context here and not before is mandatory
+        // the nginx-ingress must be available to get the external dns target if necessary
+        let context = self.context(kubernetes, environment);
 
         let _ = crate::template::generate_and_copy_all_files_into_dir(
             "lib/aws/charts/q-ingress-tls",
@@ -218,7 +261,7 @@ impl Create for Router {
             environment.namespace(),
             helm_release_name.as_str(),
             workspace_dir.as_str(),
-            helm_envs,
+            self.helm_envs(aws).to_vec(),
         )?;
 
         // check deployment status

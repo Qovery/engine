@@ -1,4 +1,5 @@
 {%- for custom_domain in custom_domains %}
+{% if custom_domain.target_domain %}
 ---
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
@@ -18,9 +19,7 @@ metadata:
     kubernetes.io/ingress.class: "nginx-{{ project_id }}"
     external-dns.alpha.kubernetes.io/hostname: {{ custom_domain.target_domain }}
     external-dns.alpha.kubernetes.io/ttl: "300"
-{%- if not pre_validation %}
-    external-dns.alpha.kubernetes.io/target: "{{ qovery_env.get_ingress_fqdn(qovery_env.project_id) }}"
-{%- endif %}
+    external-dns.alpha.kubernetes.io/target: "{{ external_ingress_hostname }}"
 spec:
   tls:
     - hosts:
@@ -47,3 +46,4 @@ spec:
               servicePort: {{ route.application_port }}
         {%- endfor %}
 {%- endfor %}
+{%- endif %}
