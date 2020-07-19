@@ -1,13 +1,12 @@
-use std::borrow::Borrow;
-use std::io::{Error, ErrorKind};
-use std::path::Path;
-use std::str::FromStr;
-
 use dirs::home_dir;
 use itertools::Itertools;
 use rusoto_core::Region;
 use rusoto_s3::CreateBucketConfiguration;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
+use std::io::{Error, ErrorKind};
+use std::path::Path;
+use std::str::FromStr;
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
@@ -304,6 +303,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // create all stateful services (database)
         for stateful_service in &environment.stateful_services {
+            // TODO add multi threading to improve deployment performance - but consider to respect the deployment order
             match stateful_service.on_create(&stateful_deployment_target) {
                 Err(err) => {
                     error!(
@@ -322,6 +322,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         // create all stateless services (router, application...)
         for stateless_service in &environment.stateless_services {
+            // TODO add multi threading to improve deployment performance - but consider to respect the deployment order
             match stateless_service.on_create(&stateless_deployment_target) {
                 Err(err) => {
                     error!(
@@ -337,7 +338,6 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
-        // TODO wait for pods
         // TODO check custom domain working
         Ok(())
     }

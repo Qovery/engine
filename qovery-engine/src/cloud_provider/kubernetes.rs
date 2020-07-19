@@ -1,6 +1,6 @@
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::{Service, ServiceError};
-use crate::cloud_provider::CloudProvider;
+use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use crate::transaction::CommitError;
 use serde::{Deserialize, Serialize};

@@ -6,7 +6,11 @@ use crate::cloud_provider::service::{
     Create, Delete, Service, ServiceError, ServiceType, StatefulService, StatelessService,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cmd::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use chrono::Duration;
+use retry::delay::{jitter, Exponential};
+use retry::OperationResult;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
@@ -126,6 +130,17 @@ impl Create for Application {
         // check deployment status
         if !helm_history_row.is_successfully_deployed() {
             return Err(ServiceError::DeploymentFailed);
+        }
+
+        // check app status
+        match crate::cmd::kubectl_exec_is_application_ready_with_retry(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            self.name(),
+            vec![],
+        ) {
+            Ok(Some(true)) => {}
+            _ => return Err(ServiceError::DeploymentFailed),
         }
 
         Ok(())

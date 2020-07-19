@@ -1452,6 +1452,7 @@ dependencies = [
  "git2",
  "itertools",
  "log",
+ "retry",
  "rusoto_core",
  "rusoto_credential",
  "rusoto_dynamodb",
@@ -1720,6 +1721,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
 dependencies = [
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "retry"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "789e7aad247a37b785401b4d82bbad03212bb516fe7c0c2cc42f37bccb00b9b2"
+dependencies = [
+ "rand 0.7.3",
 ]
 
 [[package]]

@@ -8,6 +8,8 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use dirs::home_dir;
 
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
+use retry::delay::Exponential;
+use retry::OperationResult;
 use std::ffi::OsStr;
 
 fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
@@ -381,13 +383,7 @@ where
     let mut output_json_string = String::new();
     let _ = kubectl_exec_with_output(
         vec![
-            "get",
-            "svc",
-            "-o",
-            "json",
-            "-n",
-            namespace,
-            "--selector",
+            "get", "svc", "-o", "json", "-n", namespace, "-l", // selector
             selector,
         ],
         _envs,
@@ -397,7 +393,7 @@ where
         },
     )?;
 
-    let mut result = match serde_json::from_str::<KubernetesList<KubernetesService>>(
+    let result = match serde_json::from_str::<KubernetesList<KubernetesService>>(
         output_json_string.as_str(),
     ) {
         Ok(x) => x,
@@ -439,6 +435,111 @@ where
     ))
 }
 
+pub fn kubectl_exec_is_application_ready_with_retry<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    application_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<bool>, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let result = retry::retry(Exponential::from_millis(5000).take(5), || {
+        let r = crate::cmd::kubectl_exec_is_application_ready(
+            kubernetes_config.as_ref(),
+            namespace,
+            application_name,
+            envs.clone(),
+        );
+
+        match r {
+            Ok(is_ready) => match is_ready {
+                Some(true) => OperationResult::Ok(true),
+                _ => OperationResult::Retry("application not ready yet".to_string()),
+            },
+            Err(err) => OperationResult::Err(format!("command error: {:?}", err)),
+        }
+    });
+
+    match result {
+        Err(err) => match err {
+            retry::Error::Operation {
+                error,
+                total_delay,
+                tries,
+            } => Ok(Some(false)),
+            retry::Error::Internal(err) => Err(CmdError::Unexpected(err)),
+        },
+        Ok(_) => Ok(Some(true)),
+    }
+}
+
+pub fn kubectl_exec_is_application_ready<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    application_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<bool>, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let selector = format!("app={}", application_name);
+
+    let mut output_json_string = String::new();
+    let _ = kubectl_exec_with_output(
+        vec![
+            "get",
+            "pod",
+            "-o",
+            "json",
+            "-n",
+            namespace,
+            "-l", // selector
+            selector.as_str(),
+        ],
+        _envs,
+        |out| match out {
+            Ok(line) => output_json_string = line,
+            _ => {}
+        },
+    )?;
+
+    let result =
+        match serde_json::from_str::<KubernetesList<KubernetesPod>>(output_json_string.as_str()) {
+            Ok(x) => x,
+            Err(err) => {
+                error!("{}", err.to_string());
+                return Err(CmdError::Io(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    err.to_string(),
+                )));
+            }
+        };
+
+    if result.items.is_empty()
+        || result
+            .items
+            .first()
+            .unwrap()
+            .status
+            .container_statuses
+            .is_empty()
+    {
+        return Ok(None);
+    }
+
+    let first_item = result.items.first().unwrap();
+    let container_statuses = &first_item.status.container_statuses;
+
+    let is_ready = container_statuses.iter().find(|cs| !cs.ready).is_none();
+
+    Ok(Some(is_ready))
+}
+
 #[derive(Debug)]
 pub enum CmdError {
     Exec(ExitStatus),
@@ -468,26 +569,41 @@ impl HelmHistoryRow {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
-pub struct KubernetesList<T> {
+struct KubernetesList<T> {
     pub items: Vec<T>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct KubernetesService {
+struct KubernetesService {
     pub status: KubernetesServiceStatus,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct KubernetesServiceStatus {
+struct KubernetesServiceStatus {
     pub load_balancer: KubernetesServiceStatusLoadBalancer,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct KubernetesServiceStatusLoadBalancer {
+struct KubernetesServiceStatusLoadBalancer {
     pub ingress: Vec<KubernetesServiceStatusLoadBalancerIngress>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct KubernetesServiceStatusLoadBalancerIngress {
+struct KubernetesServiceStatusLoadBalancerIngress {
     pub hostname: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+struct KubernetesPod {
+    pub status: KubernetesPodStatus,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+struct KubernetesPodStatus {
+    pub container_statuses: Vec<KubernetesPodContainerStatus>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+struct KubernetesPodContainerStatus {
+    pub ready: bool,
 }

@@ -164,6 +164,17 @@ impl Create for PostgreSQL {
                 if !helm_history_row.is_successfully_deployed() {
                     return Err(ServiceError::DeploymentFailed);
                 }
+
+                // check app status
+                match crate::cmd::kubectl_exec_is_application_ready_with_retry(
+                    kubernetes_config_file_path.as_str(),
+                    environment.namespace(),
+                    self.name(),
+                    vec![],
+                ) {
+                    Ok(Some(true)) => {}
+                    _ => return Err(ServiceError::DeploymentFailed),
+                }
             }
         }
 
