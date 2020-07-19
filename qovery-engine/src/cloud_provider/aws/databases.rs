@@ -50,6 +50,19 @@ impl PostgreSQL {
             format!("databases/postgresql-{}", self.id()),
         )
     }
+
+    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
+        let mut context = self.default_context(kubernetes, environment);
+
+        context.insert("database_login", self.options.login.as_str());
+        context.insert("database_password", self.options.password.as_str());
+        context.insert("database_port", &self.private_port());
+        context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
+        context.insert("database_instance_type", "db.t2.micro"); // TODO customizable
+        context.insert("database_disk_type", "gp2"); // TODO customizable
+
+        context
+    }
 }
 
 impl StatefulService for PostgreSQL {}
@@ -77,19 +90,6 @@ impl Service for PostgreSQL {
 
     fn private_port(&self) -> u16 {
         self.options.port
-    }
-
-    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
-        let mut context = Service::context(self, kubernetes, environment);
-
-        context.insert("database_login", self.options.login.as_str());
-        context.insert("database_password", self.options.password.as_str());
-        context.insert("database_port", &self.private_port());
-        context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
-        context.insert("database_instance_type", "db.t2.micro"); // TODO customizable
-        context.insert("database_disk_type", "gp2"); // TODO customizable
-
-        context
     }
 }
 

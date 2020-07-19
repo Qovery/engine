@@ -29,7 +29,7 @@ pub trait Service {
         Ok(())
     }
 
-    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
+    fn default_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
         let mut context = Context::new();
 
         context.insert("owner_id", environment.owner_id.as_str());

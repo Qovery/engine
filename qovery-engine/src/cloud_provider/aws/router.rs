@@ -60,35 +60,9 @@ impl Router {
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(self.execution_id(), format!("charts/routers/{}", self.id()))
     }
-}
-
-impl<'a> Service for Router {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
-    }
-
-    fn service_type(&self) -> ServiceType {
-        ServiceType::Router
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        "1.0"
-    }
-
-    fn private_port(&self) -> u16 {
-        0
-    }
 
     fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
-        let mut context = Service::context(self, kubernetes, environment);
+        let mut context = self.default_context(kubernetes, environment);
 
         let applications = environment
             .stateless_services
@@ -186,6 +160,32 @@ impl<'a> Service for Router {
         );
 
         context
+    }
+}
+
+impl<'a> Service for Router {
+    fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
+    fn service_type(&self) -> ServiceType {
+        ServiceType::Router
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        "1.0"
+    }
+
+    fn private_port(&self) -> u16 {
+        0
     }
 }
 
