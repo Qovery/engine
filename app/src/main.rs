@@ -100,7 +100,7 @@ pub fn main() -> Result<(), Error> {
     println!("{}", ASCII_BANNER);
     env_logger::init();
 
-    let customer = env::var("CUSTOMER");
+    let organization = env::var("ORGANIZATION");
     let cloud_provider = env::var("CLOUD_PROVIDER");
     let region = env::var("REGION");
     let nats_server = env::var("NATS_SERVER").expect("NATS_SERVER is mandatory");
@@ -110,16 +110,16 @@ pub fn main() -> Result<(), Error> {
         env::current_dir().unwrap().to_str().unwrap()
     );
 
-    let mode = if customer.is_ok() && cloud_provider.is_ok() && region.is_ok() {
-        let c = customer.unwrap();
+    let mode = if organization.is_ok() && cloud_provider.is_ok() && region.is_ok() {
+        let org = organization.unwrap();
         let cp = cloud_provider.unwrap();
         let r = region.unwrap();
 
         info!("starting in cloud mode");
-        info!("customer: {}", c.as_str());
+        info!("organization: {}", org.as_str());
         info!("cloud provider: {}", cp.as_str());
         info!("region: {}", r.as_str());
-        Mode::Cloud(c, cp, r)
+        Mode::Cloud(org, cp, r)
     } else {
         info!("starting in local mode");
         Mode::Local
@@ -129,9 +129,9 @@ pub fn main() -> Result<(), Error> {
 
     let name = match &mode {
         Mode::Local => "qovery-engine-app.local".to_string(),
-        Mode::Cloud(customer, cloud_provider, region) => format!(
+        Mode::Cloud(organization, cloud_provider, region) => format!(
             "qovery-engine-app.{}.{}.{}",
-            customer, cloud_provider, region
+            organization, cloud_provider, region
         ),
     };
 

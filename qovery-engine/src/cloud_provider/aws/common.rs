@@ -4,16 +4,19 @@ use std::str::FromStr;
 
 pub fn kubernetes_config_path(
     workspace_directory: &str,
-    owner_id: &str,
+    organization_id: &str,
     kubernetes_cluster_id: &str,
     access_key_id: &str,
     secret_access_key: &str,
     region: &str,
 ) -> Result<String, Error> {
-    let kubernetes_config_bucket_name = format!("kubeconfigs-{}", owner_id);
-    let kubernetes_config_object_key = format!("{}-{}", region, kubernetes_cluster_id);
+    let kubernetes_config_bucket_name = format!("kubeconfigs-{}", organization_id);
+    let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
 
-    let kubernetes_config_file_path = format!("{}/kubernetes_config", workspace_directory);
+    let kubernetes_config_file_path = format!(
+        "{}/kubernetes_config_{}",
+        workspace_directory, kubernetes_cluster_id
+    );
 
     let _region = Region::from_str(region).unwrap();
 

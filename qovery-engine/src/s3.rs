@@ -121,22 +121,24 @@ pub fn get_object(
             x.body.unwrap().into_blocking_read().read_to_string(&mut s);
             Ok(s)
         }
-        Err(err) => match err {
-            RusotoError::Service(s) => match s {
-                GetObjectError::NoSuchKey(x) => {
-                    info!("no such key: {}", x.as_str());
-                    return Err(Error::new(
-                        ErrorKind::NotFound,
-                        format!("no such key: {}", x.as_str()),
-                    ));
+        Err(err) => {
+            return match err {
+                RusotoError::Service(s) => match s {
+                    GetObjectError::NoSuchKey(x) => {
+                        info!("no such key: {}", x.as_str());
+                        Err(Error::new(
+                            ErrorKind::NotFound,
+                            format!("no such key: {}", x.as_str()),
+                        ))
+                    }
+                },
+                RusotoError::Unknown(r) => {
+                    error!("{}", r.body_as_str());
+                    Err(_err)
                 }
-            },
-            RusotoError::Unknown(r) => {
-                error!("{}", r.body_as_str());
-                return Err(_err);
+                _ => Err(_err),
             }
-            _ => return Err(_err),
-        },
+        }
     }
 }
 

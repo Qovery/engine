@@ -1,18 +1,18 @@
 pub fn subject<'a>(mode: &'a Mode, subject: &'a str) -> String {
     match mode {
         Mode::Local => format!("engine.local.{}", subject),
-        Mode::Cloud(cloud_provider, region, customer) => format!(
+        Mode::Cloud(organization, cloud_provider, region) => format!(
             "engine.cloud.{}.{}.{}.{}",
-            customer, cloud_provider, region, subject
+            organization, cloud_provider, region, subject
         ),
     }
 }
 
 pub type CloudProvider = String;
 pub type Region = String;
-pub type Customer = String;
+pub type Organization = String;
 
 pub enum Mode {
     Local,
-    Cloud(Customer, CloudProvider, Region),
+    Cloud(Organization, CloudProvider, Region),
 }

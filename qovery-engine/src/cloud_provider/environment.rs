@@ -9,6 +9,7 @@ pub struct Environment {
     pub id: String,
     pub project_id: String,
     pub owner_id: String,
+    pub organization_id: String,
     pub stateless_services: Vec<Box<dyn StatelessService>>,
     pub stateful_services: Vec<Box<dyn StatefulService>>,
 }
@@ -19,6 +20,7 @@ impl Environment {
         id: &str,
         project_id: &str,
         owner_id: &str,
+        organization_id: &str,
         stateless_services: Vec<Box<dyn StatelessService>>,
         stateful_services: Vec<Box<dyn StatefulService>>,
     ) -> Self {
@@ -28,6 +30,7 @@ impl Environment {
             id: id.to_string(),
             project_id: project_id.to_string(),
             owner_id: owner_id.to_string(),
+            organization_id: organization_id.to_string(),
             stateless_services,
             stateful_services,
         }

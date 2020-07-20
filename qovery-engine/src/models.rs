@@ -22,6 +22,7 @@ pub struct Environment {
     pub kind: Kind,
     pub owner_id: String,
     pub project_id: String,
+    pub organization_id: String,
     pub action: Action,
     pub applications: Vec<Application>,
     pub routers: Vec<Router>,
@@ -86,6 +87,7 @@ impl Environment {
             self.id.as_str(),
             self.project_id.as_str(),
             self.owner_id.as_str(),
+            self.organization_id.as_str(),
             stateless_services,
             stateful_services,
         )

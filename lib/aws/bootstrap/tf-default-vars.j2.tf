@@ -11,6 +11,12 @@ variable "region" {
   type        = string
 }
 
+variable "organization_id" {
+  description = "Qovery Organization ID"
+  default     = "{{ organization_id }}"
+  type        = string
+}
+
 variable "vpc_cidr_block" {
   description = "VPC CIDR block"
   default = "{{ vpc_cidr_block }}"
