@@ -5,7 +5,7 @@ use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::models::Request;
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
@@ -126,7 +126,16 @@ impl TaskManager {
         let _ = thread::spawn(move || loop {
             let _ = match self_it_receiver.try_recv() {
                 Ok(internal_task) => {
+                    let start_time = Instant::now();
+
+                    // run task
                     internal_task.task.run(tx.clone());
+
+                    info!(
+                        "task {} took {:?} to be executed",
+                        internal_task.task.id(),
+                        start_time.elapsed()
+                    );
 
                     if self_it_receiver.is_empty() && self_end_task_receiver.try_recv().is_ok() {
                         info!("no remaining task to run - shutdown task manager");
