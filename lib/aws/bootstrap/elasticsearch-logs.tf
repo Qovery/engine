@@ -45,6 +45,12 @@ resource "aws_elasticsearch_domain" "qovery_eks_logs" {
 }
 CONFIG
 
+  timeouts {
+    create = "120m"
+    delete = "120m"
+    update = "120m"
+  }
+
   snapshot_options {
     automated_snapshot_start_hour = 3
   }
