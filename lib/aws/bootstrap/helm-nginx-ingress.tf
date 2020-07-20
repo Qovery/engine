@@ -27,7 +27,7 @@ POLICY
 
 resource "helm_release" "nginx_ingress" {
   name = "nginx-ingress"
-  chart = "common/bootstrap/charts/nginx-ingress"
+  chart = "common/charts/nginx-ingress"
   namespace = "nginx-ingress"
   create_namespace = true
   atomic = true

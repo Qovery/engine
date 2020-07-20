@@ -8,7 +8,7 @@ resource "aws_iam_access_key" "fluent_bit" {
 
 resource "helm_release" "fluent_bit" {
   name = "fluent-bit"
-  chart = "common/bootstrap/charts/fluent-bit"
+  chart = "common/charts/fluent-bit"
   namespace = "logging"
   create_namespace = "true"
   atomic = true
