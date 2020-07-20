@@ -1,6 +1,6 @@
 //resource "helm_release" "externaldns" {
 //  name = "externaldns"
-//  chart = "common/charts/externaldns"
+//  chart = "common/bootstrap/charts/externaldns"
 //  namespace = "kube-system"
 //  create_namespace = true
 //  atomic = true

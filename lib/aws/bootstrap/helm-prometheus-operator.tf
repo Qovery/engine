@@ -1,6 +1,6 @@
 resource "helm_release" "prometheus_operator" {
   name = "prometheus-operator"
-  chart = "common/charts/prometheus-operator"
+  chart = "common/bootstrap/charts/prometheus-operator"
   namespace = "prometheus"
   create_namespace = true
   atomic = true

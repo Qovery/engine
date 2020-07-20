@@ -1,6 +1,6 @@
 resource "helm_release" "grafana" {
   name = "grafana"
-  chart = "common/charts/grafana"
+  chart = "common/bootstrap/charts/grafana"
   namespace = "prometheus"
   atomic = true
   max_history = 50
