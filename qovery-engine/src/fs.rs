@@ -53,13 +53,9 @@ where
     P: AsRef<Path>,
 {
     let dir = format!(
-        ".qovery-workspace/{}/{}-{}",
+        ".qovery-workspace/{}/{}",
         execution_id.as_ref().to_str().unwrap(),
         dir_name.as_ref().to_str().unwrap(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::from_secs(0))
-            .as_millis()
     );
 
     let _ = create_dir_all(&dir);

@@ -30,6 +30,6 @@ KUBECONFIG
 }
 
 resource "local_file" "kubeconfig" {
-  filename = "kubeconfigs-${var.organization_id}/${var.eks_cluster_id}.yaml"
+  filename = "{{ s3_kubeconfig_bucket }}/${var.eks_cluster_id}.yaml"
   content = local.kubeconfig
 }

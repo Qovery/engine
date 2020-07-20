@@ -212,9 +212,9 @@ impl<'a> EKS<'a> {
 
         let region_cluster_id = format!("{}-{}", self.region(), self.id());
         let vpc_cidr_block = "10.0.0.0/16";
-        let eks_cloudwatch_log_group = format! {"/aws/eks/{}/cluster", self.id()};
+        let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", self.id());
         let eks_cidr_subnet = "23";
-        let s3_kubeconfig_bucket = format! {"{}-{}-kubeconfig", self.region(), self.id()};
+        let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.cloud_provider.organization_id());
         let rds_cidr_subnet = "23";
         let documentdb_cidr_subnet = "23";
         let elasticsearch_cidr_subnet = "23";
