@@ -63,14 +63,6 @@ impl<'a> EKS<'a> {
     }
 
     fn context(&self) -> Context {
-        let region_cluster_id = format!("{}-{}-{}", self.region(), self.name(), self.id());
-        let vpc_cidr_block = "10.0.0.0/16";
-        let eks_cloudwatch_log_group = format! {"/aws/eks/{}/cluster", self.id};
-        let eks_cidr_subnet = "23";
-        let rds_cidr_subnet = "23";
-        let documentdb_cidr_subnet = "23";
-        let elasticsearch_cidr_subnet = "23";
-
         let eks_zone_a_subnet_blocks = [
             "10.0.0.0/23",
             "10.0.2.0/23",
@@ -218,18 +210,29 @@ impl<'a> EKS<'a> {
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
+        let region_cluster_id = format!("{}-{}", self.region(), self.id());
+        let vpc_cidr_block = "10.0.0.0/16";
+        let eks_cloudwatch_log_group = format! {"/aws/eks/{}/cluster", self.id()};
+        let eks_cidr_subnet = "23";
+        let s3_kubeconfig_bucket = format! {"{}-{}-kubeconfig", self.region(), self.id()};
+        let rds_cidr_subnet = "23";
+        let documentdb_cidr_subnet = "23";
+        let elasticsearch_cidr_subnet = "23";
+
         let mut context = Context::new();
+
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
         context.insert("aws_region", &self.region.name());
         context.insert("aws_terraform_backend_bucket", &self.bucket_name());
         context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
-
         context.insert("vpc_cidr_block", &vpc_cidr_block);
+        context.insert("s3_kubeconfig_bucket", &s3_kubeconfig_bucket);
 
         context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("eks_cluster_name", &self.name());
-        context.insert("eks_cluster_id", region_cluster_id.as_str());
+        context.insert("eks_cluster_id", self.id());
+        context.insert("eks_region_cluster_id", region_cluster_id.as_str());
         context.insert("eks_zone_a_subnet_blocks", &eks_zone_a_subnet_blocks);
         context.insert("eks_zone_b_subnet_blocks", &eks_zone_b_subnet_blocks);
         context.insert("eks_zone_c_subnet_blocks", &eks_zone_c_subnet_blocks);

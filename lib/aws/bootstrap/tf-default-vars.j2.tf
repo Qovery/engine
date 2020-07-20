@@ -86,7 +86,7 @@ variable "eks_cloudwatch_log_group" {
 
 variable "s3_bucket_kubeconfig" {
   description = "S3 bucket with kubeconfigs"
-  default = "{{ eks_cluster_id }}"
+  default = "{{ s3_kubeconfig_bucket }}"
   type = string
 }
 
@@ -155,9 +155,11 @@ variable "documentdb_cidr_subnet" {
 
 # Elasticsearch
 
+# Must start with a lowercase alphabet and be at least 3 and no more than 28 characters long.
+# Valid characters are a-z (lowercase letters), 0-9, and - (hyphen).
 variable "elasticsearch_q_logs_domain_name" {
   description = "ES domain name"
-  default = "q-logs"
+  default = "{{ eks_cluster_id }}-q-logs"
   type = string
 }
 
