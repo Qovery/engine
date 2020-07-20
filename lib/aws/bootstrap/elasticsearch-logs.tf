@@ -46,8 +46,6 @@ resource "aws_elasticsearch_domain" "qovery_eks_logs" {
 CONFIG
 
   timeouts {
-    create = "120m"
-    delete = "120m"
     update = "120m"
   }
 
