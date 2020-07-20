@@ -13,7 +13,7 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
     Action, Application, CustomDomain, Database, DatabaseKind, Environment, EnvironmentVariable,
-    GitCredentials, Route, Router, Storage,
+    GitCredentials, Kind, Route, Router, Storage,
 };
 use qovery_engine::session::Session;
 use qovery_engine::transaction::TransactionResult;
@@ -25,11 +25,11 @@ fn main() {
 
     let environment = Environment {
         execution_id: execution_id.clone(),
+        id: "odiajwio6468a468".to_string(),
+        kind: Kind::Development,
         owner_id: "123456basuiug".to_string(),
         project_id: "adoiwajd45ad4w".to_string(),
-        environment_id: "odiajwio6468a468".to_string(),
         action: Action::Create,
-        is_production: false,
         applications: vec![Application {
             id: "owiahdiu877".to_string(),
             name: "simple-example-node-with-postgresql".to_string(),

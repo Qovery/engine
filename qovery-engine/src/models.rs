@@ -9,20 +9,20 @@ use serde::{Deserialize, Serialize};
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::databases::PostgreSQL;
 use crate::cloud_provider::aws::AWS;
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{DatabaseOptions, Service, StatefulService, StatelessService};
 use crate::cloud_provider::Kind as CPKind;
 use crate::cloud_provider::{CloudProvider as CP, CloudProvider};
+use std::borrow::Borrow;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
     pub execution_id: String,
+    pub id: String,
+    pub kind: Kind,
     pub owner_id: String,
     pub project_id: String,
-    pub environment_id: String,
     pub action: Action,
-    pub is_production: bool,
     pub applications: Vec<Application>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
@@ -79,17 +79,23 @@ impl Environment {
         let stateful_services = databases;
 
         crate::cloud_provider::environment::Environment::new(
-            match self.is_production {
-                true => Kind::Production,
-                false => Kind::Development,
+            match self.kind {
+                Kind::Production => crate::cloud_provider::environment::Kind::Production,
+                Kind::Development => crate::cloud_provider::environment::Kind::Development,
             },
-            self.environment_id.as_str(),
+            self.id.as_str(),
             self.project_id.as_str(),
             self.owner_id.as_str(),
             stateless_services,
             stateful_services,
         )
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub enum Kind {
+    Production,
+    Development,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
