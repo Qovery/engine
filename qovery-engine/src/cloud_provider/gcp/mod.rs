@@ -22,6 +22,10 @@ impl CloudProvider for GCP {
         self.id.as_str()
     }
 
+    fn organization_id(&self) -> &str {
+        unimplemented!()
+    }
+
     fn name(&self) -> &str {
         self.name.as_str()
     }

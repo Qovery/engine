@@ -16,6 +16,7 @@ pub trait CloudProvider {
     fn execution_id(&self) -> &str;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
+    fn organization_id(&self) -> &str;
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), CloudProviderError>;
     fn as_any(&self) -> &dyn Any;

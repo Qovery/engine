@@ -14,12 +14,16 @@ use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
+    organization_id: String,
     request: Request,
 }
 
 impl InfrastructureTask {
-    pub fn new(request: Request) -> Self {
-        InfrastructureTask { request }
+    pub fn new(organization_id: &str, request: Request) -> Self {
+        InfrastructureTask {
+            organization_id: organization_id.to_string(),
+            request,
+        }
     }
 }
 
@@ -55,7 +59,7 @@ impl Task for InfrastructureTask {
         let cloud_provider = self
             .request
             .cloud_provider
-            .as_engine_cloud_provider(self.id());
+            .as_engine_cloud_provider(self.id(), self.organization_id.as_str());
         let container_registry = self
             .request
             .container_registry
@@ -123,12 +127,16 @@ impl Task for InfrastructureTask {
 
 #[derive(Clone)]
 pub struct EnvironmentTask {
+    organization_id: String,
     request: Request,
 }
 
 impl EnvironmentTask {
-    pub fn new(request: Request) -> Self {
-        EnvironmentTask { request }
+    pub fn new(organization_id: &str, request: Request) -> Self {
+        EnvironmentTask {
+            organization_id: organization_id.to_string(),
+            request,
+        }
     }
 }
 
@@ -164,7 +172,7 @@ impl Task for EnvironmentTask {
         let cloud_provider = self
             .request
             .cloud_provider
-            .as_engine_cloud_provider(self.id());
+            .as_engine_cloud_provider(self.id(), self.organization_id.as_str());
         let container_registry = self
             .request
             .container_registry

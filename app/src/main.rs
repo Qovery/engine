@@ -61,6 +61,7 @@ fn subject_name(mode: &Mode, task_selector: &TaskSelector) -> String {
 }
 
 fn listen_for_events(
+    organization_id: String,
     task_selector: TaskSelector,
     nc: &Connection,
     mode: &Mode,
@@ -75,8 +76,12 @@ fn listen_for_events(
         match serde_json::from_slice::<Request>(msg.data.as_slice()) {
             Ok(req) => {
                 tx.send(match task_selector {
-                    TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(req)),
-                    TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(req)),
+                    TaskSelector::Infrastructure(_) => {
+                        Box::new(InfrastructureTask::new(organization_id.as_str(), req))
+                    }
+                    TaskSelector::Environment(_) => {
+                        Box::new(EnvironmentTask::new(organization_id.as_str(), req))
+                    }
                 });
                 msg.respond(Response::new(None).as_json_string());
             }
@@ -110,8 +115,12 @@ pub fn main() -> Result<(), Error> {
         env::current_dir().unwrap().to_str().unwrap()
     );
 
-    let mode = if organization.is_ok() && cloud_provider.is_ok() && region.is_ok() {
-        let org = organization.unwrap();
+    let org = match organization {
+        Ok(x) => x,
+        Err(_) => "qovery".to_string(),
+    };
+
+    let mode = if cloud_provider.is_ok() && region.is_ok() {
         let cp = cloud_provider.unwrap();
         let r = region.unwrap();
 
@@ -119,7 +128,7 @@ pub fn main() -> Result<(), Error> {
         info!("organization: {}", org.as_str());
         info!("cloud provider: {}", cp.as_str());
         info!("region: {}", r.as_str());
-        Mode::Cloud(org, cp, r)
+        Mode::Cloud(org.clone(), cp, r)
     } else {
         info!("starting in local mode");
         Mode::Local
@@ -210,14 +219,20 @@ pub fn main() -> Result<(), Error> {
     });
 
     let infrastructure_sub = listen_for_events(
+        org.clone(),
         Infrastructure("infrastructure"),
         &nc,
         &mode,
         tx_task.clone(),
     )?;
 
-    let environment_sub =
-        listen_for_events(Environment("environment"), &nc, &mode, tx_task.clone())?;
+    let environment_sub = listen_for_events(
+        org.clone(),
+        Environment("environment"),
+        &nc,
+        &mode,
+        tx_task.clone(),
+    )?;
 
     let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
 

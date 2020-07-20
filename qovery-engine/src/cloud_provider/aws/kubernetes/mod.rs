@@ -228,6 +228,7 @@ impl<'a> EKS<'a> {
         context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
         context.insert("vpc_cidr_block", &vpc_cidr_block);
         context.insert("s3_kubeconfig_bucket", &s3_kubeconfig_bucket);
+        context.insert("organization_id", self.cloud_provider.organization_id());
 
         context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("eks_cluster_name", &self.name());

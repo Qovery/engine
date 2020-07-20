@@ -19,6 +19,7 @@ pub mod kubernetes;
 pub struct AWS {
     execution_id: String,
     id: String,
+    organization_id: String,
     name: String,
     pub access_key_id: String,
     pub secret_access_key: String,
@@ -28,6 +29,7 @@ impl AWS {
     pub fn new(
         execution_id: &str,
         id: &str,
+        organization_id: &str,
         name: &str,
         access_key_id: &str,
         secret_access_key: &str,
@@ -35,6 +37,7 @@ impl AWS {
         AWS {
             execution_id: execution_id.to_string(),
             id: id.to_string(),
+            organization_id: organization_id.to_string(),
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
@@ -66,6 +69,10 @@ impl CloudProvider for AWS {
 
     fn id(&self) -> &str {
         self.id.as_str()
+    }
+
+    fn organization_id(&self) -> &str {
+        self.organization_id.as_str()
     }
 
     fn name(&self) -> &str {

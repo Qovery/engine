@@ -63,6 +63,7 @@ impl CloudProvider {
     pub fn as_engine_cloud_provider(
         &self,
         request_id: &str,
+        organization_id: &str,
     ) -> Box<dyn qovery_engine::cloud_provider::CloudProvider> {
         match self.kind {
             qovery_engine::cloud_provider::Kind::AWS => {
@@ -70,6 +71,7 @@ impl CloudProvider {
                 Box::new(AWS::new(
                     request_id,
                     self.id.as_str(),
+                    organization_id,
                     self.name.as_str(),
                     self.options.access_key_id.as_ref().unwrap().as_str(),
                     self.options.secret_access_key.as_ref().unwrap().as_str(),
