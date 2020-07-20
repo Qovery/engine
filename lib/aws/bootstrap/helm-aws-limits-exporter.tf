@@ -32,7 +32,7 @@ EOF
 
 resource "helm_release" "iam_aws_limits_exporter" {
   name = "aws-limits-exporter"
-  chart = "../../../lib/aws/charts/aws-limits-exporter"
+  chart = "charts/aws-limits-exporter"
   namespace = "prometheus"
   create_namespace = true
   atomic = true

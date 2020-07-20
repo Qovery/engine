@@ -1,6 +1,6 @@
 resource "helm_release" "grafana" {
   name = "grafana"
-  chart = "../../../lib/common/charts/grafana"
+  chart = "common/charts/grafana"
   namespace = "prometheus"
   atomic = true
   max_history = 50

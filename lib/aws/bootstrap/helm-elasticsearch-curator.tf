@@ -1,6 +1,6 @@
 resource "helm_release" "elasticsearch_curator" {
   name = "elasticsearch-curator"
-  chart = "../../../lib/common/charts/elasticsearch-curator"
+  chart = "common/charts/elasticsearch-curator"
   namespace = "logging"
   create_namespace = "true"
   atomic = true

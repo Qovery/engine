@@ -35,7 +35,7 @@ EOF
 
 resource "helm_release" "iam_eks_user_mapper" {
   name = "iam-eks-user-mapper"
-  chart = "../../../lib/aws/charts/iam-eks-user-mapper"
+  chart = "charts/iam-eks-user-mapper"
   namespace = "kube-system"
   atomic = true
   max_history = 50

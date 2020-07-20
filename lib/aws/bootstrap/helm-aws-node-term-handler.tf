@@ -1,6 +1,6 @@
 resource "helm_release" "aws_node_term_handler" {
   name = "aws-node-term-handler"
-  chart = "../../../lib/aws/charts/aws-node-termination-handler"
+  chart = "charts/aws-node-termination-handler"
   namespace = "kube-system"
   atomic = true
   max_history = 50

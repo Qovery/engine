@@ -1,6 +1,6 @@
 resource "helm_release" "cert_manager" {
   name = "cert-manager"
-  chart = "../../../lib/common/charts/cert-manager"
+  chart = "common/charts/cert-manager"
   namespace = "cert-manager"
   create_namespace = true
   atomic = true

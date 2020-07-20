@@ -1,7 +1,7 @@
 
 resource "helm_release" "calico" {
   name = "calico"
-  chart = "../../../lib/aws/charts/calico"
+  chart = "charts/calico"
   namespace = "kube-system"
   atomic = true
   max_history = 50
