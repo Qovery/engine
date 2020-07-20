@@ -4,13 +4,13 @@
   "action": "Create",
   "build_platform": {
     "kind": "LocalDocker",
-    "id": "94a7d3c8d4d041d0b581bc86b3373273",
+    "id": "94a7d3c8d4d",
     "name": "my-local-docker",
     "options": {}
   },
   "container_registry": {
     "kind": "ECR",
-    "id": "562b3752481d49c99d93a4c2ee2471f8",
+    "id": "562b375248adw",
     "name": "my-default-ecr",
     "options": {
       "access_key_id": "AKIAZ4KMLSYJLRGNNFNI",
@@ -20,7 +20,7 @@
   },
   "cloud_provider": {
     "kind": "AWS",
-    "id": "5cd5f8520fd444e1af03efc92fafecf1",
+    "id": "5cd5f8520fd4",
     "name": "my-default-aws-account",
     "options": {
       "access_key_id": "AKIAZ4KMLSYJLRGNNFNI",
@@ -28,7 +28,7 @@
     },
     "kubernetes": {
       "kind": "EKS",
-      "id": "c90a17d694fb45fca112d49c0356a606",
+      "id": "c90a17d694fb4",
       "name": "my-eks-cluster",
       "version": "1.14",
       "region": "us-east-2",
