@@ -31,7 +31,7 @@ fn send_nats_request(json_file_path: &str, subject: &str) -> Result<(), Error> {
 fn create_infrastructure() -> Result<(), Error> {
     send_nats_request(
         "tests/assets/create-infrastructure.json",
-        "engine.cloud.us-east-2.a1cd1w2xkw.aws.infrastructure",
+        "engine.cloud.a1cd1w2xkw.aws.us-east-2.infrastructure",
     )?;
 
     Ok(())
@@ -41,7 +41,7 @@ fn create_infrastructure() -> Result<(), Error> {
 fn create_environment() -> Result<(), Error> {
     send_nats_request(
         "tests/assets/create-environment.json",
-        "engine.cloud.us-east-2.a1cd1w2xkw.aws.environment",
+        "engine.cloud.a1cd1w2xkw.aws.us-east-2.environment",
     )?;
 
     Ok(())
