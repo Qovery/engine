@@ -67,6 +67,7 @@ fn main() {
     let eks_eu_west_3 = EKS::new(
         "abc123",
         "abc123",
+        "abc123",
         "1.16",
         "eu-west-3",
         &cloud_provider,
@@ -77,6 +78,7 @@ fn main() {
     let nodes2 = vec![Node::new(4, 32), Node::new(4, 32), Node::new(4, 32)];
 
     let eks_eu_west_31 = EKS::new(
+        "def456",
         "def456",
         "def456",
         "1.16",
