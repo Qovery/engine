@@ -353,8 +353,16 @@ impl<'a> Kubernetes for EKS<'a> {
         let context = self.context();
         let _ = crate::template::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),
-            &temp_dir,
+            temp_dir.as_str(),
             &context,
+        )?;
+
+        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = crate::template::copy_non_template_files(
+            "lib/common/bootstrap/charts",
+            common_charts_temp_dir.as_str(),
         )?;
 
         crate::cmd::terraform_exec_with_init_validate_plan_apply(temp_dir_path_str, true)?;
