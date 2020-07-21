@@ -24,6 +24,7 @@ pub struct PushResult {
     pub image: Image,
 }
 
+#[derive(Debug)]
 pub enum PushError {
     RepositoryInitFailure,
     CredentialsError,

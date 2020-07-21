@@ -93,7 +93,7 @@ impl<'a> Transaction<'a> {
             .iter()
             .filter(|app| app.action == Action::Create); // TODO configurable?
 
-        let applications: Vec<Box<dyn Application>> = apps_to_build
+        let application_and_result_tuples = apps_to_build
             .map(|app| {
                 let result = self.config.build_platform.build(Build {
                     git_repository: GitRepository {
@@ -124,17 +124,34 @@ impl<'a> Transaction<'a> {
 
                 (app, result)
             })
-            .filter(|(_, r)| r.is_ok())
-            .map(|(a, r)| {
-                a.to_application(
-                    environment.execution_id.as_str(),
-                    &r.ok().unwrap().build.image,
-                    self.config.cloud_provider,
-                )
-            })
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
-            .collect();
+            .collect::<Vec<_>>();
+
+        let mut applications: Vec<Box<dyn Application>> =
+            Vec::with_capacity(application_and_result_tuples.len());
+
+        for (application, result) in application_and_result_tuples {
+            // catch build error, can't do it in Fn
+            let build_result = match result {
+                Err(err) => {
+                    error!(
+                        "build error for application {}: {:?}",
+                        application.id.as_str(),
+                        err
+                    );
+                    return Err(err);
+                }
+                Ok(build_result) => build_result,
+            };
+
+            match application.to_application(
+                environment.execution_id.as_str(),
+                &build_result.build.image,
+                self.config.cloud_provider,
+            ) {
+                Some(x) => applications.push(x),
+                None => {}
+            }
+        }
 
         Ok(applications)
     }
@@ -152,7 +169,7 @@ impl<'a> Transaction<'a> {
         for r in results.into_iter() {
             match r {
                 Ok(push_result) => push_results.push(push_result),
-                Err(err) => return Err(err), // stop on error
+                Err(err) => return Err(err), // stop on error // TODO add error! log message here
             }
         }
 
@@ -205,8 +222,10 @@ impl<'a> Transaction<'a> {
                         Err(err) => match self.rollback() {
                             Ok(_) => {
                                 TransactionResult::Rollback(CommitError::CreateKubernetes(err))
+                                // TODO add warn! log message here
                             }
                             Err(e) => TransactionResult::UnrecoverableError(
+                                // TODO add error! log message here
                                 CommitError::CreateKubernetes(err),
                                 e,
                             ),
@@ -220,8 +239,10 @@ impl<'a> Transaction<'a> {
                         Err(err) => match self.rollback() {
                             Ok(_) => {
                                 TransactionResult::Rollback(CommitError::DeleteKubernetes(err))
+                                // TODO add warn! log message here
                             }
                             Err(e) => TransactionResult::UnrecoverableError(
+                                // TODO add error! log message here
                                 CommitError::DeleteKubernetes(err),
                                 e,
                             ),
@@ -263,13 +284,15 @@ impl<'a> Transaction<'a> {
                             Err(service_error) => {
                                 return match self.rollback() {
                                     Ok(_) => TransactionResult::Rollback(
+                                        // TODO add warn! log message here
                                         CommitError::NotValidService(service_error),
                                     ),
                                     Err(err) => TransactionResult::UnrecoverableError(
+                                        // TODO add error! log message here
                                         CommitError::NotValidService(service_error),
                                         err,
                                     ),
-                                }
+                                };
                             }
                             _ => {}
                         };
@@ -279,6 +302,7 @@ impl<'a> Transaction<'a> {
                         Ok(_) => {}
                         Err(err) => {
                             return TransactionResult::Rollback(CommitError::DeployEnvironment(
+                                // TODO add warn! log message here
                                 err,
                             ));
                         }

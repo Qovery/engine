@@ -59,6 +59,7 @@ pub struct BuildResult {
     pub build: Build,
 }
 
+#[derive(Debug)]
 pub enum BuildError {
     Git(Error),
     Error,
