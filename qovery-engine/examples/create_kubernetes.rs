@@ -76,18 +76,18 @@ fn main() {
     );
     tx.create_kubernetes(&eks_eu_west_3);
 
-    //let nodes2 = vec![Node::new(4, 32), Node::new(4, 32), Node::new(4, 32)];
-
-    /*let eks_eu_west_31 = EKS::new(
-        execution_id.as_str(),
-        "def456",
-        "def456",
-        "1.16",
-        "eu-west-3",
-        &cloud_provider,
-        nodes2,
-    );
-    tx.create_kubernetes(&eks_eu_west_31);*/
+    // let nodes2 = vec![Node::new(4, 32), Node::new(4, 32), Node::new(4, 32)];
+    //
+    // let eks_eu_west_31 = EKS::new(
+    //     "def456",
+    //     "def456",
+    //     "def456",
+    //     "1.16",
+    //     "eu-west-3",
+    //     &cloud_provider,
+    //     nodes2,
+    // );
+    // tx.create_kubernetes(&eks_eu_west_31);
 
     // let eks_us_east_2 = EKS::new(
     //     "456def",
