@@ -70,7 +70,7 @@ fn main() {
         "my-eks-id-123",
         "my-default-eks",
         "1.16",
-        "eu-west-3",
+        "us-east-2",
         &cloud_provider,
         nodes,
     );
