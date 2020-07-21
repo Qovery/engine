@@ -7,22 +7,23 @@ use chrono::{DateTime, Utc};
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 
-use crate::build_platform::Image;
+use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
 use crate::cloud_provider::aws::databases::PostgreSQL;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{DatabaseOptions, Service, StatefulService, StatelessService};
 use crate::cloud_provider::Kind as CPKind;
 use crate::cloud_provider::{CloudProvider as CP, CloudProvider};
+use crate::git::Credentials;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
-    WithNoFallback(TargetEnvironment),
-    WithFallback(TargetEnvironment, FallbackEnvironment),
+    Environment(TargetEnvironment),
+    EnvironmentWithFailover(TargetEnvironment, FailoverEnvironment),
 }
 
 pub type TargetEnvironment = Environment;
-pub type FallbackEnvironment = Environment;
+pub type FailoverEnvironment = Environment;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
@@ -168,6 +169,35 @@ impl Application {
                 ),
             )),
             CPKind::GCP => None,
+        }
+    }
+
+    pub fn to_build(&self) -> Build {
+        Build {
+            git_repository: GitRepository {
+                url: self.git_url.clone(),
+                credentials: Some(Credentials {
+                    login: self.git_credentials.login.clone(),
+                    password: self.git_credentials.access_token.clone(),
+                }),
+                commit_id: Some(self.commit_id.clone()),
+                dockerfile_path: ".".to_string(),
+            },
+            image: Image {
+                name: self.name.clone(),
+                tag: self.commit_id.clone(),
+                commit_id: self.commit_id.clone(),
+            },
+            options: BuildOptions {
+                environment_variables: self
+                    .environment_variables
+                    .iter()
+                    .map(|ev| crate::build_platform::EnvironmentVariable {
+                        key: ev.key.clone(),
+                        value: ev.value.clone(),
+                    })
+                    .collect::<Vec<_>>(),
+            },
         }
     }
 }

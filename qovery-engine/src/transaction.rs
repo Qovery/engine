@@ -58,15 +58,11 @@ impl<'a> Transaction<'a> {
 
     pub fn build_environment(
         &mut self,
-        environment: &'a Environment,
+        environment_action: &'a EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
-        match environment.is_valid() {
-            Ok(_) => {
-                self.steps.push(Step::BuildEnvironment(environment));
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
+        let _ = self.check_environment_action(environment_action)?;
+        self.steps.push(Step::BuildEnvironment(environment_action));
+        Ok(())
     }
 
     pub fn deploy_environment(
@@ -107,11 +103,11 @@ impl<'a> Transaction<'a> {
         environment_action: &EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
         match environment_action {
-            EnvironmentAction::WithNoFallback(te) => match te.is_valid() {
+            EnvironmentAction::Environment(te) => match te.is_valid() {
                 Ok(_) => {}
                 Err(err) => return Err(err),
             },
-            EnvironmentAction::WithFallback(te, fe) => {
+            EnvironmentAction::EnvironmentWithFailover(te, fe) => {
                 match te.is_valid() {
                     Ok(_) => {}
                     Err(err) => return Err(err),
@@ -137,36 +133,7 @@ impl<'a> Transaction<'a> {
             .filter(|app| app.action == Action::Create); // TODO configurable?
 
         let application_and_result_tuples = apps_to_build
-            .map(|app| {
-                let result = self.config.build_platform.build(Build {
-                    git_repository: GitRepository {
-                        url: app.git_url.clone(),
-                        credentials: Some(Credentials {
-                            login: app.git_credentials.login.clone(),
-                            password: app.git_credentials.access_token.clone(),
-                        }),
-                        commit_id: Some(app.commit_id.clone()),
-                        dockerfile_path: ".".to_string(),
-                    },
-                    image: Image {
-                        name: app.name.clone(),
-                        tag: app.commit_id.clone(),
-                        commit_id: app.commit_id.clone(),
-                    },
-                    options: BuildOptions {
-                        environment_variables: app
-                            .environment_variables
-                            .iter()
-                            .map(|ev| EnvironmentVariable {
-                                key: ev.key.clone(),
-                                value: ev.value.clone(),
-                            })
-                            .collect::<Vec<_>>(),
-                    },
-                });
-
-                (app, result)
-            })
+            .map(|app| (app, self.config.build_platform.build(app.to_build())))
             .collect::<Vec<_>>();
 
         let mut applications: Vec<Box<dyn Application>> =
@@ -262,19 +229,76 @@ impl<'a> Transaction<'a> {
                         _ => {}
                     };
                 }
-                Step::BuildEnvironment(environment) => {
+                Step::BuildEnvironment(environment_action) => {
                     // revert build applications
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
                     // revert environment deployment
-                    // TODO revert applications and services with the last version,
-                    // TODO if there is no valid state then delete the applications?
+                    let failover_environment = match environment_action {
+                        EnvironmentAction::EnvironmentWithFailover(_, fe) => fe,
+                        EnvironmentAction::Environment(_) => {
+                            warn!(
+                                "DeployEnvironment has failed and there is no failover environment"
+                            );
+                            return Err(RollbackError::NoFailoverEnvironment);
+                        }
+                    };
+
+                    info!("DeployEnvironment has failed - let's rollback on a working environment");
+
+                    let mut _applications =
+                        Vec::with_capacity(failover_environment.applications.len());
+
+                    for application in failover_environment.applications.iter() {
+                        let build = application.to_build();
+
+                        match application.to_application(
+                            failover_environment.execution_id.as_str(),
+                            &build.image,
+                            self.config.cloud_provider,
+                        ) {
+                            Some(x) => _applications.push(x),
+                            None => {}
+                        }
+                    }
+
+                    let _ = match kubernetes.deploy_environment(
+                        &failover_environment
+                            .to_qe_environment(&_applications, self.config.cloud_provider),
+                    ) {
+                        Ok(_) => {}
+                        Err(err) => return Err(RollbackError::DeployEnvironment(err)),
+                    };
                 }
                 Step::PauseEnvironment(kubernetes, environment_action) => {
-                    // TODO what was the last state?
+                    let failover_environment = match environment_action {
+                        EnvironmentAction::EnvironmentWithFailover(_, fe) => fe,
+                        EnvironmentAction::Environment(_) => {
+                            warn!(
+                                "PauseEnvironment has failed and there is no failover environment"
+                            );
+                            return Err(RollbackError::NoFailoverEnvironment);
+                        }
+                    };
+
+                    info!("PauseEnvironment has failed - let's rollback on a working environment");
+
+                    // TODO
                 }
                 Step::DeleteEnvironment(kubernetes, environment_action) => {
-                    // TODO what was the previous state?
+                    let failover_environment = match environment_action {
+                        EnvironmentAction::EnvironmentWithFailover(_, fe) => fe,
+                        EnvironmentAction::Environment(_) => {
+                            warn!(
+                                "DeleteEnvironment has failed and there is no failover environment"
+                            );
+                            return Err(RollbackError::NoFailoverEnvironment);
+                        }
+                    };
+
+                    info!("DeleteEnvironment has failed - let's rollback on a working environment");
+
+                    // TODO
                 }
             }
         }
@@ -333,9 +357,14 @@ impl<'a> Transaction<'a> {
                         _ => TransactionResult::Ok,
                     };
                 }
-                Step::BuildEnvironment(environment) => {
+                Step::BuildEnvironment(environment_action) => {
                     // build applications
-                    let apps_result = match self._build_applications(environment) {
+                    let target_environment = match environment_action {
+                        EnvironmentAction::Environment(te) => te,
+                        EnvironmentAction::EnvironmentWithFailover(te, _) => te,
+                    };
+
+                    let apps_result = match self._build_applications(target_environment) {
                         Ok(applications) => match self._push_applications(&applications) {
                             Ok(_) => Ok(applications),
                             Err(err) => Err(CommitError::PushImage(err)),
@@ -357,18 +386,19 @@ impl<'a> Transaction<'a> {
                     }
 
                     let applications = apps_result.ok().unwrap();
-                    applications_by_environment.insert(environment, applications);
+                    applications_by_environment.insert(target_environment, applications);
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
                     // deploy complete environment
-                    let environment = match environment_action {
-                        EnvironmentAction::WithNoFallback(te) => te,
-                        EnvironmentAction::WithFallback(te, _) => te,
+                    let target_environment = match environment_action {
+                        EnvironmentAction::Environment(te) => te,
+                        EnvironmentAction::EnvironmentWithFailover(te, _) => te,
                     };
 
-                    let built_applications = applications_by_environment.get(environment).unwrap(); // FIXME unsafe?
+                    let built_applications =
+                        applications_by_environment.get(target_environment).unwrap(); // FIXME unsafe?
 
-                    let qe_environment = environment
+                    let qe_environment = target_environment
                         .to_qe_environment(built_applications, kubernetes.cloud_provider());
 
                     let _ = match self.check_environment(&qe_environment) {
@@ -403,7 +433,7 @@ enum Step<'a> {
     // init and create all the necessary resources (Network, Kubernetes)
     CreateKubernetes(&'a dyn Kubernetes),
     DeleteKubernetes(&'a dyn Kubernetes),
-    BuildEnvironment(&'a Environment),
+    BuildEnvironment(&'a EnvironmentAction),
     DeployEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
     PauseEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
     DeleteEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
@@ -435,6 +465,14 @@ pub enum CommitError {
 
 #[derive(Debug)]
 pub enum RollbackError {
+    CreateKubernetes(KubernetesError),
+    DeleteKubernetes(KubernetesError),
+    DeployEnvironment(KubernetesError),
+    NotValidService(ServiceError),
+    BuildImage(BuildError),
+    PushImage(PushError),
+    DeployImage(DeployError),
+    NoFailoverEnvironment,
     Error,
 }
 

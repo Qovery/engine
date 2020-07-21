@@ -12,8 +12,8 @@ use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
-    Action, Application, CustomDomain, Database, DatabaseKind, Environment, EnvironmentVariable,
-    GitCredentials, Kind, Route, Router, Storage,
+    Action, Application, CustomDomain, Database, DatabaseKind, Environment, EnvironmentAction,
+    EnvironmentVariable, GitCredentials, Kind, Route, Router, Storage,
 };
 use qovery_engine::session::Session;
 use qovery_engine::transaction::TransactionResult;
@@ -158,12 +158,13 @@ fn main() {
 
     let mut tx = session.transaction();
 
-    match tx.build_environment(&environment) {
+    let environment_action = EnvironmentAction::Environment(environment);
+    match tx.build_environment(&environment_action) {
         Ok(_) => {}
         Err(err) => panic!("environment error"),
     }
 
-    tx.deploy_environment(&eks, &environment);
+    tx.deploy_environment(&eks, &environment_action);
 
     match tx.commit() {
         TransactionResult::Ok => println!("execution: ok"),

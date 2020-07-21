@@ -21,21 +21,21 @@ pub struct Request {
     pub build_platform: BuildPlatform,
     pub cloud_provider: CloudProvider,
     pub container_registry: ContainerRegistry,
-    pub environment: Option<Environment>,
-    pub fallback_environment: Option<Environment>,
+    pub target_environment: Option<Environment>,
+    pub failover_environment: Option<Environment>,
 }
 
 impl Request {
     pub fn environment_action(&self) -> Option<EnvironmentAction> {
-        if self.environment.is_none() {
+        if self.target_environment.is_none() {
             return None;
         }
 
-        let environment = self.environment.as_ref().unwrap().clone();
+        let environment = self.target_environment.as_ref().unwrap().clone();
 
-        Some(match self.fallback_environment.clone() {
-            Some(fe) => EnvironmentAction::WithFallback(environment, fe),
-            None => EnvironmentAction::WithNoFallback(environment),
+        Some(match self.failover_environment.clone() {
+            Some(fe) => EnvironmentAction::EnvironmentWithFailover(environment, fe),
+            None => EnvironmentAction::Environment(environment),
         })
     }
 }
