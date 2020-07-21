@@ -51,10 +51,10 @@ pub trait Service {
     }
 }
 
-pub trait StatelessService: Service + Create + Delete {}
+pub trait StatelessService: Service + Create + Pause + Delete {}
 
 pub trait StatefulService:
-    Service + Create + Delete + Backup + Clone + Upgrade + Downgrade
+    Service + Create + Pause + Delete + Backup + Clone + Upgrade + Downgrade
 {
 }
 
@@ -65,6 +65,11 @@ pub trait Application: StatelessService {
 pub trait Create {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+}
+
+pub trait Pause {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Delete {

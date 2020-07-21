@@ -9,7 +9,7 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Service, ServiceError,
+    Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service, ServiceError,
     ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
@@ -188,6 +188,16 @@ impl Create for PostgreSQL {
         );
 
         Ok(())
+    }
+}
+
+impl Pause for PostgreSQL {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
     }
 }
 

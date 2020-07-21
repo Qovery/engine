@@ -1,5 +1,6 @@
 use crate::cloud_provider::service::{
-    Backup, Create, Delete, Downgrade, Service, StatefulService, StatelessService, Upgrade,
+    Backup, Create, Delete, Downgrade, Service, ServiceError, StatefulService, StatelessService,
+    Upgrade,
 };
 use std::borrow::Borrow;
 
@@ -38,6 +39,24 @@ impl Environment {
 
     pub fn namespace(&self) -> &str {
         self.namespace.as_str()
+    }
+
+    pub fn is_valid(&self) -> Result<(), ServiceError> {
+        for service in self.stateful_services.iter() {
+            match service.is_valid() {
+                Err(err) => return Err(err),
+                _ => {}
+            }
+        }
+
+        for service in self.stateless_services.iter() {
+            match service.is_valid() {
+                Err(err) => return Err(err),
+                _ => {}
+            }
+        }
+
+        Ok(())
     }
 }
 

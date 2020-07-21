@@ -19,7 +19,7 @@ use crate::cloud_provider::service::Service;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::workspace_directory;
-use crate::models::{Listeners, ProgressListener};
+use crate::models::{Listeners, ProgressInfo, ProgressListener};
 use crate::{cmd, dynamo_db, fs, s3};
 use std::rc::Rc;
 
@@ -338,6 +338,15 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn on_create(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_create() called for {}", self.name());
+
+        self.listeners.iter().for_each(|x| {
+            x.on_progress(ProgressInfo::new(
+                "kubernetes",
+                0,
+                "start to create EKS cluster",
+            ))
+        });
+
         let temp_dir =
             workspace_directory(self.execution_id(), format!("bootstrap/{}", self.name()));
         let temp_dir_path_str = temp_dir.as_str();

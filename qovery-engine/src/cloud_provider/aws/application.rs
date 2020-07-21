@@ -3,7 +3,7 @@ use tera::Context;
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::service::{
-    Create, Delete, Service, ServiceError, ServiceType, StatefulService, StatelessService,
+    Create, Delete, Pause, Service, ServiceError, ServiceType, StatefulService, StatelessService,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
@@ -154,6 +154,16 @@ impl Create for Application {
 
         // FIXME
         Ok(())
+    }
+}
+
+impl Pause for Application {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
     }
 }
 

@@ -10,7 +10,7 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Create, Delete, Service, ServiceError, ServiceType, StatelessService,
+    Create, Delete, Pause, Service, ServiceError, ServiceType, StatelessService,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
@@ -274,6 +274,16 @@ impl Create for Router {
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.router.on_create_error() called for {}", self.name());
+        unimplemented!()
+    }
+}
+
+impl Pause for Router {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 }

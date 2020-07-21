@@ -84,6 +84,36 @@ impl<'a> Transaction<'a> {
         }
     }
 
+    pub fn pause_environment(
+        &mut self,
+        kubernetes: &'a dyn Kubernetes,
+        environment: &'a Environment,
+    ) -> Result<(), EnvironmentError> {
+        match environment.is_valid() {
+            Ok(_) => {
+                self.steps
+                    .push(Step::PauseEnvironment(kubernetes, environment));
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn delete_environment(
+        &mut self,
+        kubernetes: &'a dyn Kubernetes,
+        environment: &'a Environment,
+    ) -> Result<(), EnvironmentError> {
+        match environment.is_valid() {
+            Ok(_) => {
+                self.steps
+                    .push(Step::DeleteEnvironment(kubernetes, environment));
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
+    }
+
     fn _build_applications(
         &self,
         environment: &Environment,
@@ -176,6 +206,32 @@ impl<'a> Transaction<'a> {
         Ok(push_results)
     }
 
+    fn check_environment(
+        &self,
+        environment: &crate::cloud_provider::environment::Environment,
+    ) -> TransactionResult {
+        match environment.is_valid() {
+            Err(service_error) => {
+                warn!("ROLLBACK STARTED! an error occurred {:?}", service_error);
+                return match self.rollback() {
+                    Ok(_) => {
+                        TransactionResult::Rollback(CommitError::NotValidService(service_error))
+                    }
+                    Err(err) => {
+                        error!("ROLLBACK FAILED! fatal error: {:?}", err);
+                        TransactionResult::UnrecoverableError(
+                            CommitError::NotValidService(service_error),
+                            err,
+                        )
+                    }
+                };
+            }
+            _ => {}
+        };
+
+        TransactionResult::Ok
+    }
+
     pub fn rollback(&self) -> Result<(), RollbackError> {
         for step in self.executed_steps.iter() {
             match step {
@@ -201,6 +257,12 @@ impl<'a> Transaction<'a> {
                     // TODO revert applications and services with the last version,
                     // TODO if there is no valid state then delete the applications?
                 }
+                Step::PauseEnvironment(kubernetes, environment) => {
+                    // TODO what was the last state?
+                }
+                Step::DeleteEnvironment(kubernetes, environment) => {
+                    // TODO what was the previous state?
+                }
             }
         }
 
@@ -219,34 +281,42 @@ impl<'a> Transaction<'a> {
                 Step::CreateKubernetes(kubernetes) => {
                     // create kubernetes
                     match kubernetes.on_create() {
-                        Err(err) => match self.rollback() {
-                            Ok(_) => {
-                                TransactionResult::Rollback(CommitError::CreateKubernetes(err))
-                                // TODO add warn! log message here
+                        Err(err) => {
+                            warn!("ROLLBACK STARTED! an error occurred {:?}", err);
+                            match self.rollback() {
+                                Ok(_) => {
+                                    TransactionResult::Rollback(CommitError::CreateKubernetes(err))
+                                }
+                                Err(e) => {
+                                    error!("ROLLBACK FAILED! fatal error: {:?}", e);
+                                    TransactionResult::UnrecoverableError(
+                                        CommitError::CreateKubernetes(err),
+                                        e,
+                                    )
+                                }
                             }
-                            Err(e) => TransactionResult::UnrecoverableError(
-                                // TODO add error! log message here
-                                CommitError::CreateKubernetes(err),
-                                e,
-                            ),
-                        },
+                        }
                         _ => TransactionResult::Ok,
                     };
                 }
                 Step::DeleteKubernetes(kubernetes) => {
                     // delete kubernetes
                     match kubernetes.on_delete() {
-                        Err(err) => match self.rollback() {
-                            Ok(_) => {
-                                TransactionResult::Rollback(CommitError::DeleteKubernetes(err))
-                                // TODO add warn! log message here
+                        Err(err) => {
+                            warn!("ROLLBACK STARTED! an error occurred {:?}", err);
+                            match self.rollback() {
+                                Ok(_) => {
+                                    TransactionResult::Rollback(CommitError::DeleteKubernetes(err))
+                                }
+                                Err(e) => {
+                                    error!("ROLLBACK FAILED! fatal error: {:?}", e);
+                                    TransactionResult::UnrecoverableError(
+                                        CommitError::DeleteKubernetes(err),
+                                        e,
+                                    )
+                                }
                             }
-                            Err(e) => TransactionResult::UnrecoverableError(
-                                // TODO add error! log message here
-                                CommitError::DeleteKubernetes(err),
-                                e,
-                            ),
-                        },
+                        }
                         _ => TransactionResult::Ok,
                     };
                 }
@@ -262,10 +332,14 @@ impl<'a> Transaction<'a> {
 
                     if apps_result.is_err() {
                         let commit_error = apps_result.err().unwrap();
+                        warn!("ROLLBACK STARTED! an error occurred {:?}", commit_error);
 
                         return match self.rollback() {
                             Ok(_) => TransactionResult::Rollback(commit_error),
-                            Err(err) => TransactionResult::UnrecoverableError(commit_error, err),
+                            Err(err) => {
+                                error!("ROLLBACK FAILED! fatal error: {:?}", err);
+                                TransactionResult::UnrecoverableError(commit_error, err)
+                            }
                         };
                     }
 
@@ -279,24 +353,10 @@ impl<'a> Transaction<'a> {
                     let qe_environment = environment
                         .to_qe_environment(built_applications, kubernetes.cloud_provider());
 
-                    for service in qe_environment.stateful_services.iter() {
-                        match service.is_valid() {
-                            Err(service_error) => {
-                                return match self.rollback() {
-                                    Ok(_) => TransactionResult::Rollback(
-                                        // TODO add warn! log message here
-                                        CommitError::NotValidService(service_error),
-                                    ),
-                                    Err(err) => TransactionResult::UnrecoverableError(
-                                        // TODO add error! log message here
-                                        CommitError::NotValidService(service_error),
-                                        err,
-                                    ),
-                                };
-                            }
-                            _ => {}
-                        };
-                    }
+                    let _ = match self.check_environment(&qe_environment) {
+                        TransactionResult::Ok => {}
+                        err => return err, // which it means that an error occurred
+                    };
 
                     let _ = match kubernetes.deploy_environment(&qe_environment) {
                         Ok(_) => {}
@@ -307,6 +367,12 @@ impl<'a> Transaction<'a> {
                             ));
                         }
                     };
+                }
+                Step::PauseEnvironment(kubernetes, environment) => {
+                    // TODO
+                }
+                Step::DeleteEnvironment(kubernetes, environment) => {
+                    // TODO
                 }
             };
         }
@@ -321,6 +387,8 @@ enum Step<'a> {
     DeleteKubernetes(&'a dyn Kubernetes),
     BuildEnvironment(&'a Environment),
     DeployEnvironment(&'a dyn Kubernetes, &'a Environment),
+    PauseEnvironment(&'a dyn Kubernetes, &'a Environment),
+    DeleteEnvironment(&'a dyn Kubernetes, &'a Environment),
 }
 
 impl<'a> Clone for Step<'a> {
@@ -330,10 +398,13 @@ impl<'a> Clone for Step<'a> {
             Step::DeleteKubernetes(k) => Step::DeleteKubernetes(*k),
             Step::BuildEnvironment(e) => Step::BuildEnvironment(*e),
             Step::DeployEnvironment(k, e) => Step::DeployEnvironment(*k, *e),
+            Step::PauseEnvironment(k, e) => Step::PauseEnvironment(*k, *e),
+            Step::DeleteEnvironment(k, e) => Step::DeleteEnvironment(*k, *e),
         }
     }
 }
 
+#[derive(Debug)]
 pub enum CommitError {
     CreateKubernetes(KubernetesError),
     DeleteKubernetes(KubernetesError),
@@ -344,6 +415,7 @@ pub enum CommitError {
     DeployImage(DeployError),
 }
 
+#[derive(Debug)]
 pub enum RollbackError {
     Error,
 }
