@@ -111,7 +111,7 @@ fn main() {
     // use ECR
     let container_registry = ECR::new(
         execution_id.as_str(),
-        "123-abc",
+        "my-ecr-id-123",
         "my-default-ecr",
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
@@ -122,8 +122,8 @@ fn main() {
 
     let cloud_provider = AWS::new(
         execution_id.as_str(),
-        "123-abc",
-        "paowdkkd41",
+        "my-aws-id-123",
+        "adwopakdpo221",
         "my-default-aws",
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
@@ -133,8 +133,8 @@ fn main() {
 
     let eks = EKS::new(
         execution_id.as_str(),
-        "123abc",
-        "my-k8s-cluster",
+        "my-eks-id-123",
+        "my-default-eks",
         "1.14",
         "us-east-2",
         &cloud_provider,
