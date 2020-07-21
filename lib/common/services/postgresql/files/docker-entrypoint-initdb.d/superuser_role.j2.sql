@@ -1,1 +1,1 @@
-alter user {{ databases[database_index]['username'] }} with superuser;
+alter user {{ database_login }} with superuser;

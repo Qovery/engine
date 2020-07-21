@@ -1,16 +1,16 @@
-use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
+use std::ffi::OsStr;
 use std::io::Error;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 use dirs::home_dir;
-
-use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use retry::delay::Exponential;
 use retry::OperationResult;
-use std::ffi::OsStr;
+use serde::{Deserialize, Serialize};
+
+use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 
 fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
 where
@@ -211,6 +211,12 @@ where
     P: AsRef<Path>,
 {
     // do exec helm upgrade
+    info!(
+        "exec helm upgrade for namespace {} and chart {}",
+        namespace,
+        chart_root_dir.as_ref().to_str().unwrap()
+    );
+
     let _ = helm_exec_upgrade(
         kubernetes_config.as_ref(),
         namespace,
@@ -220,6 +226,12 @@ where
     )?;
 
     // list helm history
+    info!(
+        "exec helm history for namespace {} and chart {}",
+        namespace,
+        chart_root_dir.as_ref().to_str().unwrap()
+    );
+
     let helm_history_rows =
         helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
 
@@ -247,9 +259,10 @@ pub fn helm_exec_upgrade<P>(
 where
     P: AsRef<Path>,
 {
-    helm_exec(
+    helm_exec_with_output(
         vec![
             "upgrade",
+            "--debug",
             "--kubeconfig",
             kubernetes_config.as_ref().to_str().unwrap(),
             "--create-namespace",
@@ -257,12 +270,16 @@ where
             "--history-max",
             "50",
             "--wait",
-            "-n",
+            "--namespace",
             namespace,
             release_name,
             chart_root_dir.as_ref().to_str().unwrap(),
         ],
         envs,
+        |out| match out {
+            Ok(line) => info!("{}", line.as_str()),
+            Err(err) => error!("{}", err),
+        },
     )
 }
 
@@ -279,9 +296,10 @@ where
     let _ = helm_exec_with_output(
         vec![
             "history",
+            "--debug",
             "--kubeconfig",
             kubernetes_config.as_ref().to_str().unwrap(),
-            "-n",
+            "--namespace",
             namespace,
             "-o",
             "json",
@@ -539,6 +557,30 @@ where
     let is_ready = container_statuses.iter().find(|cs| !cs.ready).is_none();
 
     Ok(Some(is_ready))
+}
+
+pub fn kubectl_exec_create_namespace<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let _ = kubectl_exec_with_output(
+        vec!["create", "namespace", namespace],
+        _envs,
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            _ => {}
+        },
+    )?;
+
+    Ok(())
 }
 
 #[derive(Debug)]
