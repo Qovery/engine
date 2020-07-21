@@ -11,7 +11,7 @@ use crate::cloud_provider::DeployError;
 use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
-use crate::models::{Action, Environment, EnvironmentError};
+use crate::models::{Action, Environment, EnvironmentAction, EnvironmentError};
 use crate::transaction::CommitError::NotValidService;
 use itertools::Itertools;
 
@@ -72,46 +72,59 @@ impl<'a> Transaction<'a> {
     pub fn deploy_environment(
         &mut self,
         kubernetes: &'a dyn Kubernetes,
-        environment: &'a Environment,
+        environment_action: &'a EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
-        match environment.is_valid() {
-            Ok(_) => {
-                self.steps
-                    .push(Step::DeployEnvironment(kubernetes, environment));
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
+        let _ = self.check_environment_action(environment_action)?;
+        self.steps
+            .push(Step::DeployEnvironment(kubernetes, environment_action));
+        Ok(())
     }
 
     pub fn pause_environment(
         &mut self,
         kubernetes: &'a dyn Kubernetes,
-        environment: &'a Environment,
+        environment_action: &'a EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
-        match environment.is_valid() {
-            Ok(_) => {
-                self.steps
-                    .push(Step::PauseEnvironment(kubernetes, environment));
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
+        let _ = self.check_environment_action(environment_action)?;
+        self.steps
+            .push(Step::PauseEnvironment(kubernetes, environment_action));
+        Ok(())
     }
 
     pub fn delete_environment(
         &mut self,
         kubernetes: &'a dyn Kubernetes,
-        environment: &'a Environment,
+        environment_action: &'a EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
-        match environment.is_valid() {
-            Ok(_) => {
-                self.steps
-                    .push(Step::DeleteEnvironment(kubernetes, environment));
-                Ok(())
+        let _ = self.check_environment_action(environment_action)?;
+        self.steps
+            .push(Step::DeleteEnvironment(kubernetes, environment_action));
+        Ok(())
+    }
+
+    fn check_environment_action(
+        &self,
+        environment_action: &EnvironmentAction,
+    ) -> Result<(), EnvironmentError> {
+        match environment_action {
+            EnvironmentAction::WithNoFallback(te) => match te.is_valid() {
+                Ok(_) => {}
+                Err(err) => return Err(err),
+            },
+            EnvironmentAction::WithFallback(te, fe) => {
+                match te.is_valid() {
+                    Ok(_) => {}
+                    Err(err) => return Err(err),
+                };
+
+                match fe.is_valid() {
+                    Ok(_) => {}
+                    Err(err) => return Err(err),
+                };
             }
-            Err(err) => Err(err),
-        }
+        };
+
+        Ok(())
     }
 
     fn _build_applications(
@@ -252,15 +265,15 @@ impl<'a> Transaction<'a> {
                 Step::BuildEnvironment(environment) => {
                     // revert build applications
                 }
-                Step::DeployEnvironment(kubernetes, environment) => {
+                Step::DeployEnvironment(kubernetes, environment_action) => {
                     // revert environment deployment
                     // TODO revert applications and services with the last version,
                     // TODO if there is no valid state then delete the applications?
                 }
-                Step::PauseEnvironment(kubernetes, environment) => {
+                Step::PauseEnvironment(kubernetes, environment_action) => {
                     // TODO what was the last state?
                 }
-                Step::DeleteEnvironment(kubernetes, environment) => {
+                Step::DeleteEnvironment(kubernetes, environment_action) => {
                     // TODO what was the previous state?
                 }
             }
@@ -346,8 +359,13 @@ impl<'a> Transaction<'a> {
                     let applications = apps_result.ok().unwrap();
                     applications_by_environment.insert(environment, applications);
                 }
-                Step::DeployEnvironment(kubernetes, environment) => {
+                Step::DeployEnvironment(kubernetes, environment_action) => {
                     // deploy complete environment
+                    let environment = match environment_action {
+                        EnvironmentAction::WithNoFallback(te) => te,
+                        EnvironmentAction::WithFallback(te, _) => te,
+                    };
+
                     let built_applications = applications_by_environment.get(environment).unwrap(); // FIXME unsafe?
 
                     let qe_environment = environment
@@ -368,10 +386,10 @@ impl<'a> Transaction<'a> {
                         }
                     };
                 }
-                Step::PauseEnvironment(kubernetes, environment) => {
+                Step::PauseEnvironment(kubernetes, environment_action) => {
                     // TODO
                 }
-                Step::DeleteEnvironment(kubernetes, environment) => {
+                Step::DeleteEnvironment(kubernetes, environment_action) => {
                     // TODO
                 }
             };
@@ -386,9 +404,9 @@ enum Step<'a> {
     CreateKubernetes(&'a dyn Kubernetes),
     DeleteKubernetes(&'a dyn Kubernetes),
     BuildEnvironment(&'a Environment),
-    DeployEnvironment(&'a dyn Kubernetes, &'a Environment),
-    PauseEnvironment(&'a dyn Kubernetes, &'a Environment),
-    DeleteEnvironment(&'a dyn Kubernetes, &'a Environment),
+    DeployEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
+    PauseEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
+    DeleteEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
 }
 
 impl<'a> Clone for Step<'a> {

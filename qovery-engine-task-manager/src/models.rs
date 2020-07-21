@@ -10,7 +10,7 @@ use qovery_engine::cloud_provider::gcp::GCP;
 use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
-use qovery_engine::models::Environment;
+use qovery_engine::models::{Environment, EnvironmentAction};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -22,6 +22,22 @@ pub struct Request {
     pub cloud_provider: CloudProvider,
     pub container_registry: ContainerRegistry,
     pub environment: Option<Environment>,
+    pub fallback_environment: Option<Environment>,
+}
+
+impl Request {
+    pub fn environment_action(&self) -> Option<EnvironmentAction> {
+        if self.environment.is_none() {
+            return None;
+        }
+
+        let environment = self.environment.as_ref().unwrap().clone();
+
+        Some(match self.fallback_environment.clone() {
+            Some(fe) => EnvironmentAction::WithFallback(environment, fe),
+            None => EnvironmentAction::WithNoFallback(environment),
+        })
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]

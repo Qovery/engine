@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::hash::Hash;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -13,7 +14,15 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{DatabaseOptions, Service, StatefulService, StatelessService};
 use crate::cloud_provider::Kind as CPKind;
 use crate::cloud_provider::{CloudProvider as CP, CloudProvider};
-use std::borrow::Borrow;
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub enum EnvironmentAction {
+    WithNoFallback(TargetEnvironment),
+    WithFallback(TargetEnvironment, FallbackEnvironment),
+}
+
+pub type TargetEnvironment = Environment;
+pub type FallbackEnvironment = Environment;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {

@@ -218,11 +218,12 @@ impl Task for EnvironmentTask {
         );
 
         let environment = self.request.environment.as_ref().unwrap();
+        let environment_action = self.request.environment_action().unwrap();
 
         match self.request.action {
             Action::Create => {
                 tx.build_environment(environment);
-                tx.deploy_environment(kubernetes.borrow(), environment);
+                tx.deploy_environment(kubernetes.borrow(), &environment_action);
             }
             Action::Delete => unimplemented!(),
         };

@@ -46,3 +46,13 @@ fn create_environment() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn create_non_working_environment() -> Result<(), Error> {
+    send_nats_request(
+        "tests/assets/create-non-working-environment.json",
+        "engine.cloud.a1cd1w2xkw.aws.us-east-2.environment",
+    )?;
+
+    Ok(())
+}
