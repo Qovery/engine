@@ -29,7 +29,7 @@ fn main() {
         kind: Kind::Development,
         owner_id: "123456basuiug".to_string(),
         project_id: "adoiwajd45ad4w".to_string(),
-        organization_id: "xiiodjwoia465aw".to_string(),
+        organization_id: "adwopakdpo221".to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: "owiahdiu877".to_string(),
@@ -94,7 +94,7 @@ fn main() {
             action: Action::Create,
             id: "waoidja468787454".to_string(),
             name: "my-psql".to_string(),
-            version: "11.5".to_string(),
+            version: "11.5.0".to_string(),
             fqdn_id: "no-fqdn-test".to_string(),
             fqdn: "no-fqdn-test.qovery.io".to_string(),
             port: 5432,
