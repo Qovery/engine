@@ -4,6 +4,8 @@ use crate::cmd::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
+use crate::models::{Listeners, ProgressListener};
+use std::rc::Rc;
 
 pub struct DockerHub {
     execution_id: String,
@@ -11,6 +13,7 @@ pub struct DockerHub {
     name: String,
     login: String,
     password: String,
+    listeners: Listeners,
 }
 
 impl DockerHub {
@@ -21,6 +24,7 @@ impl DockerHub {
             name: name.to_string(),
             login: login.to_string(),
             password: password.to_string(),
+            listeners: vec![],
         }
     }
 }
@@ -45,6 +49,10 @@ impl ContainerRegistry for DockerHub {
     fn is_valid(&self) -> Result<(), ContainerRegistryError> {
         // FIXME check docker binary availability
         Ok(())
+    }
+
+    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+        self.listeners.push(listener);
     }
 
     fn on_create(&self) -> Result<(), ContainerRegistryError> {

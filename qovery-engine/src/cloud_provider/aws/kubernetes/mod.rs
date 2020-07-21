@@ -19,7 +19,9 @@ use crate::cloud_provider::service::Service;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::workspace_directory;
+use crate::models::{Listeners, ProgressListener};
 use crate::{cmd, dynamo_db, fs, s3};
+use std::rc::Rc;
 
 pub mod node;
 
@@ -32,6 +34,7 @@ pub struct EKS<'a> {
     cloud_provider: &'a AWS,
     nodes: Vec<Node>,
     template_directory: String,
+    listeners: Listeners,
 }
 
 impl<'a> EKS<'a> {
@@ -55,6 +58,7 @@ impl<'a> EKS<'a> {
             cloud_provider,
             nodes,
             template_directory,
+            listeners: vec![],
         }
     }
 
@@ -328,6 +332,10 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
+    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+        self.listeners.push(listener);
+    }
+
     fn on_create(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_create() called for {}", self.name());
         let temp_dir =
@@ -486,6 +494,7 @@ mod tests {
 
     fn aws() -> AWS {
         let aws = AWS::new(
+            "kapodwk-awdiwadju-adoajwd",
             "xxx",
             "123-abc",
             "my-default-aws",

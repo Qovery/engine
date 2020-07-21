@@ -40,6 +40,7 @@ fn main() {
     let cloud_provider = AWS::new(
         execution_id.as_str(),
         "123-abc",
+        "adwopakdpo221",
         "my-default-aws",
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",

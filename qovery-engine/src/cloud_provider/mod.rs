@@ -2,9 +2,11 @@ use crate::build_platform::Image;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::models::ProgressListener;
 use rusoto_core::RusotoError;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::rc::Rc;
 
 pub mod aws;
 pub mod environment;
@@ -19,6 +21,7 @@ pub trait CloudProvider {
     fn organization_id(&self) -> &str;
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), CloudProviderError>;
+    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>);
     fn as_any(&self) -> &dyn Any;
 }
 

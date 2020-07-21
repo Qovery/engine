@@ -1,7 +1,9 @@
 use rusoto_core::RusotoError;
 
 use crate::build_platform::Image;
+use crate::models::ProgressListener;
 use serde::{Deserialize, Serialize};
+use std::rc::Rc;
 
 pub mod docker_hub;
 pub mod ecr;
@@ -12,6 +14,7 @@ pub trait ContainerRegistry {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), ContainerRegistryError>;
+    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>);
     fn on_create(&self) -> Result<(), ContainerRegistryError>;
     fn on_create_error(&self) -> Result<(), ContainerRegistryError>;
     fn on_delete(&self) -> Result<(), ContainerRegistryError>;

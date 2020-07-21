@@ -1,6 +1,8 @@
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
+use crate::models::ProgressListener;
 use std::any::Any;
+use std::rc::Rc;
 
 pub struct GCP {
     execution_id: String,
@@ -32,6 +34,10 @@ impl CloudProvider for GCP {
 
     fn is_valid(&self) -> Result<(), CloudProviderError> {
         Ok(())
+    }
+
+    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+        // TODO
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -15,8 +15,10 @@ use crate::cmd::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
+use crate::models::{Listeners, ProgressListener};
 use crate::runtime::async_run;
 use crate::transaction::CommitError::PushImage;
+use std::rc::Rc;
 
 pub struct ECR {
     execution_id: String,
@@ -25,6 +27,7 @@ pub struct ECR {
     access_key_id: String,
     secret_access_key: String,
     region: Region,
+    listeners: Listeners,
 }
 
 impl ECR {
@@ -43,6 +46,7 @@ impl ECR {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
             region: Region::from_str(region).unwrap(),
+            listeners: vec![],
         }
     }
 
@@ -159,6 +163,10 @@ impl ContainerRegistry for ECR {
             Ok(x) => Ok(()),
             Err(err) => Err(ContainerRegistryError::from(err)),
         }
+    }
+
+    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+        self.listeners.push(listener);
     }
 
     fn on_create(&self) -> Result<(), ContainerRegistryError> {

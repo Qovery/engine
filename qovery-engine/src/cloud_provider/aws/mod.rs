@@ -6,7 +6,9 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
+use crate::models::{Listeners, ProgressListener};
 use crate::runtime::async_run;
+use std::rc::Rc;
 
 mod common;
 
@@ -23,6 +25,7 @@ pub struct AWS {
     name: String,
     pub access_key_id: String,
     pub secret_access_key: String,
+    listeners: Listeners,
 }
 
 impl AWS {
@@ -41,6 +44,7 @@ impl AWS {
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
+            listeners: vec![],
         }
     }
 
@@ -87,6 +91,10 @@ impl CloudProvider for AWS {
             Ok(x) => Ok(()),
             Err(err) => Err(CloudProviderError::from(err)),
         }
+    }
+
+    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+        self.listeners.push(listener);
     }
 
     fn as_any(&self) -> &dyn Any {

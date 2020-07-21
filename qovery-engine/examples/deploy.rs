@@ -29,6 +29,7 @@ fn main() {
         kind: Kind::Development,
         owner_id: "123456basuiug".to_string(),
         project_id: "adoiwajd45ad4w".to_string(),
+        organization_id: "xiiodjwoia465aw".to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: "owiahdiu877".to_string(),
@@ -122,6 +123,7 @@ fn main() {
     let cloud_provider = AWS::new(
         execution_id.as_str(),
         "123-abc",
+        "paowdkkd41",
         "my-default-aws",
         "AKIAZ4KMLSYJLRGNNFNI",
         "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
