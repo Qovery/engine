@@ -50,16 +50,22 @@ impl Task for InfrastructureTask {
             .request
             .build_platform
             .as_engine_build_platform(self.id());
+
         build_platform.add_listener(my_progress_listener.clone());
 
-        let cloud_provider = self
+        let mut cloud_provider = self
             .request
             .cloud_provider
             .as_engine_cloud_provider(self.id(), self.request.organization_id.as_str());
-        let container_registry = self
+
+        cloud_provider.add_listener(my_progress_listener.clone());
+
+        let mut container_registry = self
             .request
             .container_registry
             .as_engine_container_registry(self.id());
+
+        container_registry.add_listener(my_progress_listener.clone());
 
         let config = Config::new(
             build_platform.borrow(),
@@ -159,16 +165,22 @@ impl Task for EnvironmentTask {
             .request
             .build_platform
             .as_engine_build_platform(self.id());
+
         build_platform.add_listener(my_progress_listener.clone());
 
-        let cloud_provider = self
+        let mut cloud_provider = self
             .request
             .cloud_provider
             .as_engine_cloud_provider(self.id(), self.request.organization_id.as_str());
-        let container_registry = self
+
+        cloud_provider.add_listener(my_progress_listener.clone());
+
+        let mut container_registry = self
             .request
             .container_registry
             .as_engine_container_registry(self.id());
+
+        container_registry.add_listener(my_progress_listener.clone());
 
         let config = Config::new(
             build_platform.borrow(),
