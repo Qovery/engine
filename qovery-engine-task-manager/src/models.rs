@@ -15,6 +15,7 @@ use qovery_engine::models::Environment;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
     pub id: String,
+    pub organization_id: String,
     pub created_at: DateTime<Utc>,
     pub action: Action,
     pub build_platform: BuildPlatform,
