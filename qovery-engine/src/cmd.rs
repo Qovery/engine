@@ -300,7 +300,7 @@ pub fn helm_exec_history<P>(
 where
     P: AsRef<Path>,
 {
-    let mut output_json_string = String::new();
+    let mut output_string = String::new();
     let _ = helm_exec_with_output(
         vec![
             "history",
@@ -315,19 +315,18 @@ where
         ],
         envs,
         |out| match out {
-            Ok(line) => output_json_string = line,
+            Ok(line) => output_string = line,
             _ => {}
         },
     )?;
 
-    let mut results = match serde_json::from_str::<Vec<HelmHistoryRow>>(output_json_string.as_str())
-    {
+    let mut results = match serde_json::from_str::<Vec<HelmHistoryRow>>(output_string.as_str()) {
         Ok(x) => x,
-        Err(err) => {
-            error!("{}", err.to_string());
+        Err(_) => {
+            error!("{}", output_string.as_str());
             return Err(CmdError::Io(Error::new(
                 std::io::ErrorKind::InvalidData,
-                err.to_string(),
+                output_string,
             )));
         }
     };
@@ -406,7 +405,7 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let mut output_json_string = String::new();
+    let mut output_string = String::new();
     let _ = kubectl_exec_with_output(
         vec![
             "get", "svc", "-o", "json", "-n", namespace, "-l", // selector
@@ -414,23 +413,22 @@ where
         ],
         _envs,
         |out| match out {
-            Ok(line) => output_json_string = line,
+            Ok(line) => output_string = line,
             _ => {}
         },
     )?;
 
-    let result = match serde_json::from_str::<KubernetesList<KubernetesService>>(
-        output_json_string.as_str(),
-    ) {
-        Ok(x) => x,
-        Err(err) => {
-            error!("{}", err.to_string());
-            return Err(CmdError::Io(Error::new(
-                std::io::ErrorKind::InvalidData,
-                err.to_string(),
-            )));
-        }
-    };
+    let result =
+        match serde_json::from_str::<KubernetesList<KubernetesService>>(output_string.as_str()) {
+            Ok(x) => x,
+            Err(_) => {
+                error!("{}", output_string.as_str());
+                return Err(CmdError::Io(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    output_string,
+                )));
+            }
+        };
 
     if result.items.is_empty()
         || result
@@ -516,7 +514,7 @@ where
 
     let selector = format!("app={}", application_name);
 
-    let mut output_json_string = String::new();
+    let mut output_string = String::new();
     let _ = kubectl_exec_with_output(
         vec![
             "get",
@@ -530,22 +528,22 @@ where
         ],
         _envs,
         |out| match out {
-            Ok(line) => output_json_string = line,
+            Ok(line) => output_string = line,
             _ => {}
         },
     )?;
 
-    let result =
-        match serde_json::from_str::<KubernetesList<KubernetesPod>>(output_json_string.as_str()) {
-            Ok(x) => x,
-            Err(err) => {
-                error!("{}", err.to_string());
-                return Err(CmdError::Io(Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    err.to_string(),
-                )));
-            }
-        };
+    let result = match serde_json::from_str::<KubernetesList<KubernetesPod>>(output_string.as_str())
+    {
+        Ok(x) => x,
+        Err(_) => {
+            error!("{}", output_string.as_str());
+            return Err(CmdError::Io(Error::new(
+                std::io::ErrorKind::InvalidData,
+                output_string,
+            )));
+        }
+    };
 
     if result.items.is_empty()
         || result
