@@ -56,6 +56,9 @@ pub fn exec<P>(binary: P, args: Vec<&str>) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
 {
+    let command_string = command_to_string(binary.as_ref(), &args);
+    info!("command: {}", command_string.as_str());
+
     let exit_status = match command(binary, args, None).spawn().unwrap().wait() {
         Ok(x) => x,
         Err(err) => return Err(CmdError::Io(err)),
@@ -76,6 +79,9 @@ pub fn exec_with_envs<P>(
 where
     P: AsRef<Path>,
 {
+    let command_string = command_with_envs_to_string(binary.as_ref(), &args, &envs);
+    info!("command: {}", command_string.as_str());
+
     let exit_status = match command(binary, args, Some(envs)).spawn().unwrap().wait() {
         Ok(x) => x,
         Err(err) => return Err(CmdError::Io(err)),
@@ -111,6 +117,9 @@ where
     P: AsRef<Path>,
     F: FnMut(Result<String, Error>),
 {
+    let command_string = command_to_string(binary.as_ref(), &args);
+    info!("command: {}", command_string.as_str());
+
     let mut child = _with_output(command(binary, args, None).spawn().unwrap(), output);
 
     let exit_status = match child.wait() {
@@ -135,6 +144,9 @@ where
     P: AsRef<Path>,
     F: FnMut(Result<String, Error>),
 {
+    let command_string = command_with_envs_to_string(binary.as_ref(), &args, &envs);
+    info!("command: {}", command_string.as_str());
+
     let mut child = _with_output(command(binary, args, Some(envs)).spawn().unwrap(), output);
 
     let exit_status = match child.wait() {
@@ -155,21 +167,17 @@ pub fn terraform_exec_with_init_validate_plan_apply(
 ) -> Result<(), CmdError> {
     // terraform init
     let init_args = if first_time_init_terraform {
-        info!("exec: terraform init -backend-config=backend.tf -no-color");
         vec!["init", "-backend-config=backend.tf", "-no-color"]
     } else {
-        info!("exec: terraform init -no-color");
         vec!["init", "-no-color"]
     };
 
     terraform_exec(root_dir, init_args)?;
 
     // terraform validate config
-    info!("exec: terraform validate");
     terraform_exec(root_dir, vec!["validate"])?;
 
     // terraform plan
-    info!("exec: terraform plan -out tf_plan -no-color");
     terraform_exec(root_dir, vec!["plan", "-out", "tf_plan", "-no-color"])?;
 
     // terraform apply
@@ -581,6 +589,30 @@ where
     )?;
 
     Ok(())
+}
+
+fn command_to_string<P>(binary: P, args: &Vec<&str>) -> String
+where
+    P: AsRef<Path>,
+{
+    format!("{} {}", binary.as_ref().to_str().unwrap(), args.join(" "))
+}
+
+fn command_with_envs_to_string<P>(binary: P, args: &Vec<&str>, envs: &Vec<(&str, &str)>) -> String
+where
+    P: AsRef<Path>,
+{
+    let _envs = envs
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>();
+
+    format!(
+        "{} {} {}",
+        _envs.join(" "),
+        binary.as_ref().to_str().unwrap(),
+        args.join(" ")
+    )
 }
 
 #[derive(Debug)]
