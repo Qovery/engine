@@ -28,6 +28,7 @@ pub trait Kubernetes {
     fn on_delete(&self) -> Result<(), KubernetesError>;
     fn on_delete_error(&self) -> Result<(), KubernetesError>;
     fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
+    fn pause_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
     fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
 }
 

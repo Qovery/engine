@@ -477,6 +477,11 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
+    fn pause_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
+        warn!("EKS.pause_environment() called for {}", self.name());
+        unimplemented!()
+    }
+
     fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         warn!("EKS.delete_environment() called for {}", self.name());
         // TODO delete the namespace - do services are all deleted?
