@@ -378,32 +378,32 @@ impl<'a> Transaction<'a> {
                 Step::DeployEnvironment(kubernetes, environment_action) => {
                     // deploy complete environment
                     self.commit_environment(
-                        kubernetes,
-                        environment_action,
+                        *kubernetes,
+                        *environment_action,
                         &applications_by_environment,
                         |qe_env| kubernetes.deploy_environment(qe_env),
                         |err| CommitError::DeployEnvironment(err),
-                    )
+                    );
                 }
                 Step::PauseEnvironment(kubernetes, environment_action) => {
                     // pause complete environment
                     self.commit_environment(
-                        kubernetes,
-                        environment_action,
+                        *kubernetes,
+                        *environment_action,
                         &applications_by_environment,
                         |qe_env| kubernetes.pause_environment(qe_env),
                         |err| CommitError::PauseEnvironment(err),
-                    )
+                    );
                 }
                 Step::DeleteEnvironment(kubernetes, environment_action) => {
                     // delete complete environment
                     self.commit_environment(
-                        kubernetes,
-                        environment_action,
+                        *kubernetes,
+                        *environment_action,
                         &applications_by_environment,
                         |qe_env| kubernetes.delete_environment(qe_env),
                         |err| CommitError::DeleteEnvironment(err),
-                    )
+                    );
                 }
             };
         }
