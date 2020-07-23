@@ -19,6 +19,10 @@ retry = "1.0.0"
 dns-lookup = "1.0.3"
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 
+# tar gz
+flate2 = "1.0.16" # tar gz
+tar = "0.4.29"
+
 # logger
 env_logger = "0.7.1"
 log = "0.4.8"

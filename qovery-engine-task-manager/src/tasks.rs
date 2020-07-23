@@ -123,6 +123,13 @@ impl Task for InfrastructureTask {
             }
         }
 
+        match qovery_engine::fs::create_workspace_archive(self.id()) {
+            Ok(file) => {
+                // TODO upload archive
+            }
+            Err(err) => error!("{:?}", err),
+        };
+
         info!("infrastructure task {} finished", self.id());
     }
 }
@@ -242,6 +249,13 @@ impl Task for EnvironmentTask {
                 self.update_status(&sender, Status::Failed { message: None });
             }
         }
+
+        match qovery_engine::fs::create_workspace_archive(self.id()) {
+            Ok(file) => {
+                // TODO upload archive
+            }
+            Err(err) => error!("{:?}", err),
+        };
 
         info!("environment task {} finished", self.id());
     }

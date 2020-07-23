@@ -11,7 +11,7 @@ pub mod container_registry;
 mod crypto;
 mod dynamo_db;
 pub mod error;
-mod fs;
+pub mod fs;
 mod git;
 pub mod models;
 mod runtime;
