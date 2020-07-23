@@ -83,17 +83,7 @@ impl ECR {
         }
     }
 
-    pub fn get_or_create_repository(
-        &self,
-        image: &Image,
-    ) -> Result<Repository, ContainerRegistryError> {
-        // check if the repository already exists
-        let repository = self.get_repository(image.name.as_str());
-        if repository.is_some() {
-            info!("ECR repository {} already exists", image.name.as_str());
-            return Ok(repository.unwrap());
-        }
-
+    pub fn create(&self, image: &Image) -> Result<Repository, ContainerRegistryError> {
         info!("ECR create repository {}", image.name.as_str());
         let mut crr = CreateRepositoryRequest::default();
         crr.repository_name = image.name.clone();
@@ -135,6 +125,20 @@ impl ECR {
             Err(err) => Err(ContainerRegistryError::from(err)),
             _ => Ok(self.get_repository(image.name.as_str()).unwrap()),
         }
+    }
+
+    pub fn get_or_create_repository(
+        &self,
+        image: &Image,
+    ) -> Result<Repository, ContainerRegistryError> {
+        // check if the repository already exists
+        let repository = self.get_repository(image.name.as_str());
+        if repository.is_some() {
+            info!("ECR repository {} already exists", image.name.as_str());
+            return Ok(repository.unwrap());
+        }
+
+        self.create(&image)
     }
 }
 
@@ -186,7 +190,11 @@ impl ContainerRegistry for ECR {
         unimplemented!()
     }
 
-    fn push(&self, image: Image) -> Result<PushResult, PushError> {
+    fn does_image_exists(&self, image: &Image) -> bool {
+        self.get_repository(image.name.as_str()).is_some()
+    }
+
+    fn push(&self, image: Image, force_push: bool) -> Result<PushResult, PushError> {
         let r = async_run(
             self.ecr_client()
                 .get_authorization_token(GetAuthorizationTokenRequest::default()),
@@ -214,7 +222,11 @@ impl ContainerRegistry for ECR {
             _ => return Err(PushError::RepositoryInitFailure),
         };
 
-        let repository = match self.get_or_create_repository(&image) {
+        let repository = match if force_push {
+            self.create(&image)
+        } else {
+            self.get_or_create_repository(&image)
+        } {
             Ok(r) => r,
             _ => return Err(PushError::RepositoryInitFailure),
         };

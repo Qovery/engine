@@ -71,7 +71,11 @@ impl ContainerRegistry for DockerHub {
         Ok(())
     }
 
-    fn push(&self, image: Image) -> Result<PushResult, PushError> {
+    fn does_image_exists(&self, image: &Image) -> bool {
+        false // TODO check if image exists on the remote repository
+    }
+
+    fn push(&self, image: Image, force_push: bool) -> Result<PushResult, PushError> {
         match cmd::exec(
             "docker",
             vec![

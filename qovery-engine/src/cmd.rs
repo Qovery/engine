@@ -214,7 +214,7 @@ pub fn helm_exec_with_upgrade_history<P>(
     release_name: &str,
     chart_root_dir: P,
     envs: Vec<(&str, &str)>,
-) -> Result<HelmHistoryRow, CmdError>
+) -> Result<Option<HelmHistoryRow>, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -243,18 +243,11 @@ where
     let helm_history_rows =
         helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
 
-    // take the last deployment from helm history
-    let helm_history_row = match helm_history_rows.first() {
-        Some(helm_history_row) => helm_history_row,
-        None => {
-            // should never happened
-            return Err(CmdError::Unexpected(
-                "helm history is empty - what's wrong?".to_string(),
-            ));
-        }
-    };
-
-    Ok(helm_history_row.clone())
+    // take the last deployment from helm history - or return none if there is no history
+    Ok(match helm_history_rows.first() {
+        Some(helm_history_row) => Some(helm_history_row.clone()),
+        None => None,
+    })
 }
 
 pub fn helm_exec_upgrade<P>(
@@ -321,13 +314,7 @@ where
 
     let mut results = match serde_json::from_str::<Vec<HelmHistoryRow>>(output_string.as_str()) {
         Ok(x) => x,
-        Err(_) => {
-            error!("{}", output_string.as_str());
-            return Err(CmdError::Io(Error::new(
-                std::io::ErrorKind::InvalidData,
-                output_string,
-            )));
-        }
+        Err(_) => vec![],
     };
 
     // unsort results by revision number

@@ -172,7 +172,11 @@ impl<'a> Transaction<'a> {
     ) -> Result<Vec<PushResult>, PushError> {
         let results: Vec<_> = applications
             .iter()
-            .map(|app| self.config.container_registry.push(app.image().clone()))
+            .map(|app| {
+                self.config
+                    .container_registry
+                    .push(app.image().clone(), false)
+            })
             .collect();
 
         let mut push_results: Vec<PushResult> = vec![];

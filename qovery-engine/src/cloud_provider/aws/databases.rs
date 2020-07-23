@@ -161,7 +161,9 @@ impl Create for PostgreSQL {
                 )?;
 
                 // check deployment status
-                if !helm_history_row.is_successfully_deployed() {
+                if helm_history_row.is_none()
+                    || !helm_history_row.unwrap().is_successfully_deployed()
+                {
                     return Err(ServiceError::OnCreateFailed);
                 }
 
