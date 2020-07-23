@@ -1,6 +1,8 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
+use itertools::Itertools;
+
 use crate::build_platform::{
     Build, BuildError, BuildOptions, EnvironmentVariable, GitRepository, Image,
 };
@@ -13,7 +15,6 @@ use crate::container_registry::{PushError, PushResult};
 use crate::git::Credentials;
 use crate::models::{Action, Environment, EnvironmentAction, EnvironmentError};
 use crate::transaction::CommitError::NotValidService;
-use itertools::Itertools;
 
 pub struct Transaction<'a> {
     pub config: Config<'a>,
@@ -238,19 +239,13 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
                     // revert environment deployment
-                    self.rollback_environment(*kubernetes, *environment_action, |err| {
-                        RollbackError::DeployEnvironment(err)
-                    })?;
+                    self.rollback_environment(*kubernetes, *environment_action)?;
                 }
                 Step::PauseEnvironment(kubernetes, environment_action) => {
-                    self.rollback_environment(*kubernetes, *environment_action, |err| {
-                        RollbackError::PauseEnvironment(err)
-                    })?;
+                    self.rollback_environment(*kubernetes, *environment_action)?;
                 }
                 Step::DeleteEnvironment(kubernetes, environment_action) => {
-                    self.rollback_environment(*kubernetes, *environment_action, |err| {
-                        RollbackError::DeleteEnvironment(err)
-                    })?;
+                    self.rollback_environment(*kubernetes, *environment_action)?;
                 }
             }
         }
@@ -258,40 +253,95 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
-    fn rollback_environment<F>(
+    /// This function is a wrapper to correctly revert all changes of a attempt deployment AND
+    /// if a failover environment is provided, then rollback.
+    fn rollback_environment(
         &self,
         kubernetes: &dyn Kubernetes,
         environment_action: &EnvironmentAction,
-        rollback_error: F,
-    ) -> Result<(), RollbackError>
-    where
-        F: Fn(KubernetesError) -> RollbackError,
-    {
-        let failover_environment = match environment_action {
-            EnvironmentAction::EnvironmentWithFailover(_, fe) => fe,
-            EnvironmentAction::Environment(_) => return Err(RollbackError::NoFailoverEnvironment),
+    ) -> Result<(), RollbackError> {
+        let qe_environment = |environment: &Environment| {
+            let mut _applications = Vec::with_capacity(environment.applications.len());
+
+            for application in environment.applications.iter() {
+                let build = application.to_build();
+
+                match application.to_application(
+                    environment.execution_id.as_str(),
+                    &build.image,
+                    self.config.cloud_provider,
+                ) {
+                    Some(x) => _applications.push(x),
+                    None => {}
+                }
+            }
+
+            let qe_environment =
+                environment.to_qe_environment(&_applications, self.config.cloud_provider);
+
+            qe_environment
         };
 
-        let mut _applications = Vec::with_capacity(failover_environment.applications.len());
+        let (target_environment, failover_environment) = match environment_action {
+            EnvironmentAction::EnvironmentWithFailover(te, fe) => (te, fe),
+            EnvironmentAction::Environment(te) => {
+                // revert changes but there is no failover environment
+                let target_qe_environment = qe_environment(&te);
 
-        for application in failover_environment.applications.iter() {
-            let build = application.to_build();
+                let action = match te.action {
+                    Action::Create => kubernetes.deploy_environment_error(&target_qe_environment),
+                    Action::Pause => kubernetes.pause_environment_error(&target_qe_environment),
+                    Action::Delete => kubernetes.delete_environment_error(&target_qe_environment),
+                    Action::Nothing => Ok(()),
+                };
 
-            match application.to_application(
-                failover_environment.execution_id.as_str(),
-                &build.image,
-                self.config.cloud_provider,
-            ) {
-                Some(x) => _applications.push(x),
-                None => {}
+                let _ = match action {
+                    Ok(_) => {}
+                    Err(err) => {
+                        return Err(match te.action {
+                            Action::Create => RollbackError::DeployEnvironment(err),
+                            Action::Pause => RollbackError::PauseEnvironment(err),
+                            Action::Delete => RollbackError::DeleteEnvironment(err),
+                            Action::Nothing => RollbackError::Error, // it can't happens
+                        });
+                    }
+                };
+
+                return Err(RollbackError::NoFailoverEnvironment);
             }
-        }
+        };
 
-        let _ = match kubernetes.deploy_environment(
-            &failover_environment.to_qe_environment(&_applications, self.config.cloud_provider),
-        ) {
+        // let's reverse changes and rollback on the provided failover version
+
+        let target_qe_environment = qe_environment(&target_environment);
+        let failover_qe_environment = qe_environment(&failover_environment);
+
+        let action = match failover_environment.action {
+            Action::Create => {
+                kubernetes.deploy_environment_error(&target_qe_environment);
+                kubernetes.deploy_environment(&failover_qe_environment)
+            }
+            Action::Pause => {
+                kubernetes.pause_environment_error(&target_qe_environment);
+                kubernetes.pause_environment(&failover_qe_environment)
+            }
+            Action::Delete => {
+                kubernetes.delete_environment_error(&target_qe_environment);
+                kubernetes.delete_environment(&failover_qe_environment)
+            }
+            Action::Nothing => Ok(()),
+        };
+
+        let _ = match action {
             Ok(_) => {}
-            Err(err) => return Err(rollback_error(err)),
+            Err(err) => {
+                return Err(match failover_environment.action {
+                    Action::Create => RollbackError::DeployEnvironment(err),
+                    Action::Pause => RollbackError::PauseEnvironment(err),
+                    Action::Delete => RollbackError::DeleteEnvironment(err),
+                    Action::Nothing => RollbackError::Error, // it can't happens
+                });
+            }
         };
 
         Ok(())
@@ -381,33 +431,42 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
                     // deploy complete environment
-                    self.commit_environment(
+                    match self.commit_environment(
                         *kubernetes,
                         *environment_action,
                         &applications_by_environment,
                         |qe_env| kubernetes.deploy_environment(qe_env),
                         |err| CommitError::DeployEnvironment(err),
-                    );
+                    ) {
+                        TransactionResult::Ok => {}
+                        err => return err,
+                    };
                 }
                 Step::PauseEnvironment(kubernetes, environment_action) => {
                     // pause complete environment
-                    self.commit_environment(
+                    match self.commit_environment(
                         *kubernetes,
                         *environment_action,
                         &applications_by_environment,
                         |qe_env| kubernetes.pause_environment(qe_env),
                         |err| CommitError::PauseEnvironment(err),
-                    );
+                    ) {
+                        TransactionResult::Ok => {}
+                        err => return err,
+                    };
                 }
                 Step::DeleteEnvironment(kubernetes, environment_action) => {
                     // delete complete environment
-                    self.commit_environment(
+                    match self.commit_environment(
                         *kubernetes,
                         *environment_action,
                         &applications_by_environment,
                         |qe_env| kubernetes.delete_environment(qe_env),
                         |err| CommitError::DeleteEnvironment(err),
-                    );
+                    ) {
+                        TransactionResult::Ok => {}
+                        err => return err,
+                    };
                 }
             };
         }

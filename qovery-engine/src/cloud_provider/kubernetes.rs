@@ -28,8 +28,11 @@ pub trait Kubernetes {
     fn on_delete(&self) -> Result<(), KubernetesError>;
     fn on_delete_error(&self) -> Result<(), KubernetesError>;
     fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
+    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError>;
     fn pause_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
+    fn pause_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError>;
     fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError>;
+    fn delete_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError>;
 }
 
 pub trait KubernetesNode {
@@ -49,7 +52,7 @@ pub enum KubernetesError {
     Cmd(CmdError),
     Io(std::io::Error),
     Create(ExitStatus),
-    Service(ServiceError),
+    Deploy(ServiceError),
     Error,
 }
 

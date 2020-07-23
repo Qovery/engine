@@ -447,7 +447,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         stateful_service.id(),
                         err
                     );
-                    return Err(KubernetesError::Service(err));
+
+                    return Err(KubernetesError::Deploy(err));
                 }
                 _ => {}
             }
@@ -467,7 +468,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Service(err));
+                    return Err(KubernetesError::Deploy(err));
                 }
                 _ => {}
             }
@@ -484,7 +485,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Service(err));
+                    return Err(KubernetesError::Deploy(err));
                 }
                 _ => {}
             }
@@ -500,7 +501,60 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Service(err));
+                    return Err(KubernetesError::Deploy(err));
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError> {
+        warn!("EKS.deploy_environment_error() called for {}", self.name());
+
+        let stateful_deployment_target = match environment.kind {
+            crate::cloud_provider::environment::Kind::Production => {
+                DeploymentTarget::ManagedServices(self, environment)
+            }
+            crate::cloud_provider::environment::Kind::Development => {
+                DeploymentTarget::SelfHosted(self, environment)
+            }
+        };
+
+        // clean up all stateful services (database)
+        for stateful_service in &environment.stateful_services {
+            // TODO add multi threading to improve deployment performance - but consider to respect the deployment order
+            match stateful_service.on_create_error(&stateful_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with stateful service {} , id: {} => {:?}",
+                        stateful_service.name(),
+                        stateful_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Deploy(err));
+                }
+                _ => {}
+            }
+        }
+
+        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
+        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
+        // clean up all stateless services (router, application...)
+        for stateless_service in &environment.stateless_services {
+            // TODO add multi threading to improve deployment performance - but consider to respect the deployment order
+            match stateless_service.on_create_error(&stateless_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with stateless service {} , id: {} => {:?}",
+                        stateless_service.name(),
+                        stateless_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Deploy(err));
                 }
                 _ => {}
             }
@@ -510,13 +564,23 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn pause_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
-        warn!("EKS.pause_environment() called for {}", self.name());
+        info!("EKS.pause_environment() called for {}", self.name());
+        Ok(())
+    }
+
+    fn pause_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError> {
+        warn!("EKS.pause_environment_error() called for {}", self.name());
         Ok(())
     }
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
-        warn!("EKS.delete_environment() called for {}", self.name());
+        info!("EKS.delete_environment() called for {}", self.name());
         // TODO delete the namespace - do services are all deleted?
+        Ok(())
+    }
+
+    fn delete_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError> {
+        warn!("EKS.delete_environment_error() called for {}", self.name());
         Ok(())
     }
 }
