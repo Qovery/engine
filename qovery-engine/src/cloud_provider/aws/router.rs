@@ -10,12 +10,15 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Create, Delete, Pause, Service, ServiceError, ServiceType, StatelessService,
+    Create, Delete, Pause, Router as RRouter, Service, ServiceError, ServiceType, StatelessService,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use dns_lookup::lookup_host;
 use itertools::enumerate;
+use retry::delay::Exponential;
+use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
 pub struct Router {
@@ -189,6 +192,33 @@ impl<'a> Service for Router {
     }
 }
 
+impl crate::cloud_provider::service::Router for Router {
+    fn check_domains(&self) -> Result<(), ServiceError> {
+        for custom_domain in &self.custom_domains {
+            let check_result = retry::retry(Exponential::from_millis(1000).take(5), || {
+                // TODO send information back to the core - does the custom domain is linked?
+                info!("check custom domain {}", custom_domain.domain.as_str());
+                match lookup_host(custom_domain.domain.as_str()) {
+                    Ok(_) => OperationResult::Ok(()),
+                    Err(err) => {
+                        debug!("{:?}", err);
+                        OperationResult::Retry(())
+                    }
+                }
+            });
+
+            match check_result {
+                Ok(_) => {}
+                Err(_) => return Err(ServiceError::CheckFailed),
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl StatelessService for Router {}
+
 impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.router.on_create() called for {}", self.name());
@@ -241,7 +271,7 @@ impl Create for Router {
 
             // check deployment status
             if !helm_history_row.is_successfully_deployed() {
-                return Err(ServiceError::DeploymentFailed);
+                return Err(ServiceError::OnCreateFailed);
             }
         }
 
@@ -266,10 +296,14 @@ impl Create for Router {
 
         // check deployment status
         if !helm_history_row.is_successfully_deployed() {
-            return Err(ServiceError::DeploymentFailed);
+            return Err(ServiceError::OnCreateFailed);
         }
 
         Ok(())
+    }
+
+    fn on_create_check(&self) -> Result<(), ServiceError> {
+        self.check_domains()
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
@@ -299,8 +333,6 @@ impl Delete for Router {
         unimplemented!()
     }
 }
-
-impl StatelessService for Router {}
 
 pub struct CustomDomain {
     pub domain: String,

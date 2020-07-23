@@ -16,6 +16,7 @@ base64 = "0.12.3"
 dirs = "3.0.1"
 rust-crypto = "0.2.36"
 retry = "1.0.0"
+dns-lookup = "1.0.3"
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 
 # logger

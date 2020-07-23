@@ -62,8 +62,13 @@ pub trait Application: StatelessService {
     fn image(&self) -> &Image;
 }
 
+pub trait Router: StatelessService {
+    fn check_domains(&self) -> Result<(), ServiceError>;
+}
+
 pub trait Create {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_create_check(&self) -> Result<(), ServiceError>;
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
@@ -125,7 +130,8 @@ pub enum ServiceType<'a> {
 
 #[derive(Debug)]
 pub enum ServiceError {
-    DeploymentFailed,
+    OnCreateFailed,
+    CheckFailed,
     Cmd(CmdError),
     Io(Error),
     Unexpected(String),

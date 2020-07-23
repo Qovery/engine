@@ -162,7 +162,7 @@ impl Create for PostgreSQL {
 
                 // check deployment status
                 if !helm_history_row.is_successfully_deployed() {
-                    return Err(ServiceError::DeploymentFailed);
+                    return Err(ServiceError::OnCreateFailed);
                 }
 
                 // check app status
@@ -173,11 +173,15 @@ impl Create for PostgreSQL {
                     vec![],
                 ) {
                     Ok(Some(true)) => {}
-                    _ => return Err(ServiceError::DeploymentFailed),
+                    _ => return Err(ServiceError::OnCreateFailed),
                 }
             }
         }
 
+        Ok(())
+    }
+
+    fn on_create_check(&self) -> Result<(), ServiceError> {
         Ok(())
     }
 

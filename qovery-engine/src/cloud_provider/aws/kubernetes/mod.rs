@@ -15,7 +15,7 @@ use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
-use crate::cloud_provider::service::Service;
+use crate::cloud_provider::service::{Service, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::workspace_directory;
@@ -442,7 +442,7 @@ impl<'a> Kubernetes for EKS<'a> {
             match stateful_service.on_create(&stateful_deployment_target) {
                 Err(err) => {
                     error!(
-                        "error with service {} , id: {} => {:?}",
+                        "error with stateful service {} , id: {} => {:?}",
                         stateful_service.name(),
                         stateful_service.id(),
                         err
@@ -461,7 +461,7 @@ impl<'a> Kubernetes for EKS<'a> {
             match stateless_service.on_create(&stateless_deployment_target) {
                 Err(err) => {
                     error!(
-                        "error with service {} , id: {} => {:?}",
+                        "error with stateless service {} , id: {} => {:?}",
                         stateless_service.name(),
                         stateless_service.id(),
                         err
@@ -473,19 +473,51 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
-        // TODO check custom domain working
+        // check all deployed services
+        for stateful_service in &environment.stateful_services {
+            match stateful_service.on_create_check() {
+                Err(err) => {
+                    error!(
+                        "error with stateful service while checking it {} , id: {} => {:?}",
+                        stateful_service.name(),
+                        stateful_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Service(err));
+                }
+                _ => {}
+            }
+        }
+
+        for stateless_service in &environment.stateless_services {
+            match stateless_service.on_create_check() {
+                Err(err) => {
+                    error!(
+                        "error with stateless service while checking it {} , id: {} => {:?}",
+                        stateless_service.name(),
+                        stateless_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Service(err));
+                }
+                _ => {}
+            }
+        }
+
         Ok(())
     }
 
     fn pause_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         warn!("EKS.pause_environment() called for {}", self.name());
-        unimplemented!()
+        Ok(())
     }
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         warn!("EKS.delete_environment() called for {}", self.name());
         // TODO delete the namespace - do services are all deleted?
-        unimplemented!()
+        Ok(())
     }
 }
 

@@ -218,14 +218,14 @@ impl<'a> Transaction<'a> {
                 Step::CreateKubernetes(kubernetes) => {
                     // revert kubernetes creation
                     match kubernetes.on_create_error() {
-                        Err(err) => return Err(RollbackError::Error),
+                        Err(err) => return Err(RollbackError::CreateKubernetes(err)),
                         _ => {}
                     };
                 }
                 Step::DeleteKubernetes(kubernetes) => {
                     // revert kubernetes deletion
                     match kubernetes.on_delete_error() {
-                        Err(err) => return Err(RollbackError::Error),
+                        Err(err) => return Err(RollbackError::DeleteKubernetes(err)),
                         _ => {}
                     };
                 }
