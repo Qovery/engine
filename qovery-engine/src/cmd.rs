@@ -270,7 +270,6 @@ where
     helm_exec_with_output(
         vec![
             "upgrade",
-            "--debug",
             "--kubeconfig",
             kubernetes_config.as_ref().to_str().unwrap(),
             "--create-namespace",
