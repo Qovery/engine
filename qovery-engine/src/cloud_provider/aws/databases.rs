@@ -200,52 +200,15 @@ impl Create for PostgreSQL {
                 // TODO what to do with a PostgreSQL that is badly deployed on RDS?
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
-                let aws = kubernetes
-                    .cloud_provider()
-                    .as_any()
-                    .downcast_ref::<AWS>()
-                    .unwrap();
-
-                let kubernetes_config_file_path = common::kubernetes_config_path(
-                    workspace_dir.as_str(),
-                    environment.organization_id.as_str(),
-                    kubernetes.id(),
-                    aws.access_key_id.as_str(),
-                    aws.secret_access_key.as_str(),
-                    kubernetes.region(),
-                )?;
-
+                let workspace_dir = self.workspace_directory();
                 let helm_release_name = self.helm_release_name();
-                let helm_envs = vec![
-                    (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-                    (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-                ];
 
-                let history_rows = crate::cmd::helm_exec_history(
-                    kubernetes_config_file_path.as_str(),
-                    environment.namespace(),
+                let _ = common::on_stateless_service_error_cleanup(
+                    *kubernetes,
+                    *environment,
+                    workspace_dir.as_str(),
                     helm_release_name.as_str(),
-                    helm_envs.clone(),
                 )?;
-
-                // if there is no valid history - then delete the helm chart
-                let first_valid_history_row =
-                    history_rows.iter().find(|x| x.is_successfully_deployed());
-
-                if first_valid_history_row.is_none() {
-                    info!(
-                        "there is no valid deployment for {} {} - let's delete it",
-                        self.name(),
-                        self.id()
-                    );
-
-                    crate::cmd::helm_exec_uninstall(
-                        kubernetes_config_file_path.as_str(),
-                        environment.namespace(),
-                        helm_release_name.as_str(),
-                        helm_envs,
-                    )?;
-                }
             }
         }
 

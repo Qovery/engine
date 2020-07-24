@@ -308,6 +308,22 @@ impl Create for Router {
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.router.on_create_error() called for {}", self.name());
+
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        };
+
+        let workspace_dir = self.workspace_directory();
+        let helm_release_name = self.helm_release_name();
+
+        let _ = common::on_stateless_service_error_cleanup(
+            kubernetes,
+            environment,
+            workspace_dir.as_str(),
+            helm_release_name.as_str(),
+        )?;
+
         Ok(())
     }
 }

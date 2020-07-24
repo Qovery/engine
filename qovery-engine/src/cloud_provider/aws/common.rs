@@ -1,3 +1,8 @@
+use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::service::ServiceError;
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use rusoto_core::Region;
 use std::io::Error;
 use std::str::FromStr;
@@ -30,4 +35,52 @@ pub fn kubernetes_config_path(
     )?;
 
     Ok(kubernetes_config_file_path)
+}
+
+pub fn on_stateless_service_error_cleanup(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+    workspace_dir: &str,
+    helm_release_name: &str,
+) -> Result<(), ServiceError> {
+    let aws = kubernetes
+        .cloud_provider()
+        .as_any()
+        .downcast_ref::<AWS>()
+        .unwrap();
+
+    let kubernetes_config_file_path = kubernetes_config_path(
+        workspace_dir,
+        environment.organization_id.as_str(),
+        kubernetes.id(),
+        aws.access_key_id.as_str(),
+        aws.secret_access_key.as_str(),
+        kubernetes.region(),
+    )?;
+
+    let helm_envs = vec![
+        (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+        (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
+    ];
+
+    let history_rows = crate::cmd::helm_exec_history(
+        kubernetes_config_file_path.as_str(),
+        environment.namespace(),
+        helm_release_name,
+        helm_envs.clone(),
+    )?;
+
+    // if there is no valid history - then delete the helm chart
+    let first_valid_history_row = history_rows.iter().find(|x| x.is_successfully_deployed());
+
+    if first_valid_history_row.is_none() {
+        crate::cmd::helm_exec_uninstall(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name,
+            helm_envs,
+        )?;
+    }
+
+    Ok(())
 }
