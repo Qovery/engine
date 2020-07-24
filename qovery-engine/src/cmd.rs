@@ -417,7 +417,7 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let mut output_string = String::new();
+    let mut output_vec: Vec<String> = Vec::with_capacity(20);
     let _ = kubectl_exec_with_output(
         vec![
             "get", "svc", "-o", "json", "-n", namespace, "-l", // selector
@@ -425,15 +425,18 @@ where
         ],
         _envs,
         |out| match out {
-            Ok(line) => output_string = line,
+            Ok(line) => output_vec.push(line),
             _ => {}
         },
     )?;
 
+    let output_string: String = output_vec.join("");
+
     let result =
         match serde_json::from_str::<KubernetesList<KubernetesService>>(output_string.as_str()) {
             Ok(x) => x,
-            Err(_) => {
+            Err(err) => {
+                error!("{:?}", err);
                 error!("{}", output_string.as_str());
                 return Err(CmdError::Io(Error::new(
                     std::io::ErrorKind::InvalidData,

@@ -90,18 +90,20 @@ impl Router {
             .routes
             .iter()
             .map(|r| {
-                // FIXME unsafe to unwrap here?
-                let application = applications
+                match applications
                     .iter()
                     .find(|app| app.id() == r.application_id.as_str())
-                    .unwrap();
-
-                RouteDataTemplate {
-                    path: r.path.clone(),
-                    application_name: application.name().to_string(),
-                    application_port: application.private_port(),
+                {
+                    Some(application) => Some(RouteDataTemplate {
+                        path: r.path.clone(),
+                        application_name: application.name().to_string(),
+                        application_port: application.private_port(),
+                    }),
+                    _ => None,
                 }
             })
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
         let workspace_dir = self.workspace_directory();
@@ -133,11 +135,11 @@ impl Router {
                         context.insert("external_ingress_hostname", hostname.as_str())
                     }
                     None => {
-                        warn!("unable to get external_ingress_hostname - what's wrong? This should never occurred");
+                        warn!("unable to get external_ingress_hostname - what's wrong? This must never happened");
                     }
                 },
                 _ => {
-                    warn!("can't fetch kubernetes config file - what's wrong? This should never occurred");
+                    warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
                 }
             }
         }

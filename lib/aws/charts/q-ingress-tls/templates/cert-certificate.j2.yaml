@@ -15,7 +15,7 @@ spec:
     name: {{ custom_domain.domain_hash }}
     kind: Issuer
   dnsNames:
-    - {{ domain_name }}
+    - {{ custom_domain.domain }}
   acme:
     config:
       - http01:

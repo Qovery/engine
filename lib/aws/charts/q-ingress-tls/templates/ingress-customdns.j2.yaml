@@ -1,5 +1,5 @@
 {%- for custom_domain in custom_domains %}
-{% if custom_domain.target_domain %}
+{%- if custom_domain.target_domain %}
 ---
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
@@ -45,5 +45,5 @@ spec:
               serviceName: "{{ route.application_name }}"
               servicePort: {{ route.application_port }}
         {%- endfor %}
-{%- endfor %}
 {%- endif %}
+{%- endfor %}

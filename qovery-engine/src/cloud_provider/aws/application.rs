@@ -2,8 +2,11 @@ use tera::Context;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Create, Delete, Pause, Service, ServiceError, ServiceType, StatefulService, StatelessService,
+    Application as CApplication, Create, Delete, Pause, Service, ServiceError, ServiceType,
+    StatefulService, StatelessService,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
@@ -39,6 +42,15 @@ impl Application {
             self.execution_id(),
             format!("applications/{}-{}", self.name(), self.id()),
         )
+    }
+
+    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
+        let mut context = self.default_context(kubernetes, environment);
+        let commit_id = self.image().commit_id.as_str();
+
+        context.insert("helm_app_version", &commit_id[..7]);
+
+        context
     }
 }
 
@@ -90,7 +102,8 @@ impl Create for Application {
             .downcast_ref::<AWS>()
             .unwrap();
 
-        let context = Context::new();
+        let context = self.context(kubernetes, environment);
+
         // TODO add context variables
 
         let workspace_dir = self.workspace_directory();
