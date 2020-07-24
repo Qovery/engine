@@ -41,7 +41,7 @@ impl PostgreSQL {
     }
 
     fn helm_release_name(&self) -> String {
-        format!("postgresql-{}", self.id())
+        crate::string::cut(format!("postgresql-{}", self.id()), 50)
     }
 
     fn workspace_directory(&self) -> String {

@@ -17,7 +17,7 @@ use crate::cmd::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use dns_lookup::lookup_host;
 use itertools::enumerate;
-use retry::delay::Exponential;
+use retry::delay::{Exponential, Fibonacci};
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
@@ -50,7 +50,7 @@ impl Router {
     }
 
     fn helm_release_name(&self) -> String {
-        format!("router-{}", self.id())
+        crate::string::cut(format!("router-{}", self.id()), 50)
     }
 
     fn aws_credentials_envs<'a>(&self, aws: &'a AWS) -> [(&'a str, &'a str); 2] {
@@ -200,7 +200,7 @@ impl<'a> Service for Router {
 impl crate::cloud_provider::service::Router for Router {
     fn check_domains(&self) -> Result<(), ServiceError> {
         for custom_domain in &self.custom_domains {
-            let check_result = retry::retry(Exponential::from_millis(1000).take(5), || {
+            let check_result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
                 // TODO send information back to the core - does the custom domain is linked?
                 info!("check custom domain {}", custom_domain.domain.as_str());
                 match lookup_host(custom_domain.domain.as_str()) {

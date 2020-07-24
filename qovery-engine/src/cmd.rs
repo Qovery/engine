@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 use dirs::home_dir;
-use retry::delay::Exponential;
+use retry::delay::{Exponential, Fibonacci};
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
@@ -484,7 +484,7 @@ where
     P: AsRef<Path>,
 {
     // TODO check this
-    let result = retry::retry(Exponential::from_millis(1000).take(5), || {
+    let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
         let r = crate::cmd::kubectl_exec_is_application_ready(
             kubernetes_config.as_ref(),
             namespace,
@@ -495,7 +495,11 @@ where
         match r {
             Ok(is_ready) => match is_ready {
                 Some(true) => OperationResult::Ok(true),
-                _ => OperationResult::Retry("application not ready yet".to_string()),
+                _ => {
+                    let t = format!("{} is not ready yet", application_name);
+                    info!("{}", t.as_str());
+                    OperationResult::Retry(t)
+                }
             },
             Err(err) => OperationResult::Err(format!("command error: {:?}", err)),
         }

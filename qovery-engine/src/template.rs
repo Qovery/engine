@@ -2,6 +2,7 @@ use std::fs;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 
+use itertools::Itertools;
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;

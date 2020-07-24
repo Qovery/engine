@@ -17,5 +17,6 @@ pub mod models;
 mod runtime;
 mod s3;
 pub mod session;
+mod string;
 mod template;
 pub mod transaction;

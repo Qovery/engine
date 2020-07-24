@@ -49,7 +49,7 @@ impl Application {
     }
 
     fn helm_release_name(&self) -> String {
-        format!("application-{}-{}", self.name(), self.id())
+        crate::string::cut(format!("application-{}-{}", self.name(), self.id()), 50)
     }
 
     fn workspace_directory(&self) -> String {
@@ -150,9 +150,6 @@ impl Create for Application {
             .unwrap();
 
         let context = self.context(kubernetes, environment);
-
-        // TODO add context variables
-
         let workspace_dir = self.workspace_directory();
 
         let _ = crate::template::generate_and_copy_all_files_into_dir(
