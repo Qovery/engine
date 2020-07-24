@@ -21,7 +21,11 @@ use qovery_engine::transaction::TransactionResult;
 fn main() {
     env_logger::init();
 
-    let execution_id = Utc::now().to_rfc3339();
+    let execution_id = Utc::now()
+        .to_rfc3339()
+        .replace(":", "-")
+        .replace(".", "-")
+        .replace("+", "-");
 
     let environment = Environment {
         execution_id: execution_id.clone(),

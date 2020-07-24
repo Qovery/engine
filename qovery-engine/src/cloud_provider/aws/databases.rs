@@ -146,7 +146,7 @@ impl Create for PostgreSQL {
 
                 // render templates
                 let helm_release_name = self.helm_release_name();
-                let helm_envs = vec![
+                let aws_credentials_envs = vec![
                     (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
                     (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
                 ];
@@ -157,7 +157,7 @@ impl Create for PostgreSQL {
                     environment.namespace(),
                     helm_release_name.as_str(),
                     workspace_dir.as_str(),
-                    helm_envs,
+                    aws_credentials_envs.clone(),
                 )?;
 
                 // check deployment status
@@ -172,7 +172,7 @@ impl Create for PostgreSQL {
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     self.name(),
-                    vec![],
+                    aws_credentials_envs,
                 ) {
                     Ok(Some(true)) => {}
                     _ => return Err(ServiceError::OnCreateFailed),
@@ -192,6 +192,62 @@ impl Create for PostgreSQL {
             "AWS.PostgreSQL.on_create_error() called for {}",
             self.name()
         );
+
+        let workspace_dir = self.workspace_directory();
+
+        match target {
+            DeploymentTarget::ManagedServices(_, _) => {
+                // TODO what to do with a PostgreSQL that is badly deployed on RDS?
+            }
+            DeploymentTarget::SelfHosted(kubernetes, environment) => {
+                let aws = kubernetes
+                    .cloud_provider()
+                    .as_any()
+                    .downcast_ref::<AWS>()
+                    .unwrap();
+
+                let kubernetes_config_file_path = common::kubernetes_config_path(
+                    workspace_dir.as_str(),
+                    environment.organization_id.as_str(),
+                    kubernetes.id(),
+                    aws.access_key_id.as_str(),
+                    aws.secret_access_key.as_str(),
+                    kubernetes.region(),
+                )?;
+
+                let helm_release_name = self.helm_release_name();
+                let helm_envs = vec![
+                    (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+                    (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
+                ];
+
+                let history_rows = crate::cmd::helm_exec_history(
+                    kubernetes_config_file_path.as_str(),
+                    environment.namespace(),
+                    helm_release_name.as_str(),
+                    helm_envs.clone(),
+                )?;
+
+                // if there is no valid history - then delete the helm chart
+                let first_valid_history_row =
+                    history_rows.iter().find(|x| x.is_successfully_deployed());
+
+                if first_valid_history_row.is_none() {
+                    info!(
+                        "there is no valid deployment for {} {} - let's delete it",
+                        self.name(),
+                        self.id()
+                    );
+
+                    crate::cmd::helm_exec_uninstall(
+                        kubernetes_config_file_path.as_str(),
+                        environment.namespace(),
+                        helm_release_name.as_str(),
+                        helm_envs,
+                    )?;
+                }
+            }
+        }
 
         Ok(())
     }

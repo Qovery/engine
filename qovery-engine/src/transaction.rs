@@ -502,7 +502,15 @@ impl<'a> Transaction<'a> {
         };
 
         let _ = match action_fn(&qe_environment) {
-            Err(err) => return TransactionResult::Rollback(commit_error(err)),
+            Err(err) => {
+                return match self.rollback() {
+                    Ok(_) => TransactionResult::Rollback(commit_error(err)),
+                    Err(rollback_err) => {
+                        error!("ROLLBACK FAILED! fatal error: {:?}", rollback_err);
+                        TransactionResult::UnrecoverableError(commit_error(err), rollback_err)
+                    }
+                }
+            }
             _ => {}
         };
 

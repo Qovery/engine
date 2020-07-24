@@ -3,8 +3,8 @@
 ## Current available global Docker image parameters: imageRegistry and imagePullSecrets
 ##
 
-nameOverride: {{ id }}
-fullnameOverride: {{ id }}
+nameOverride: {{ name }}
+fullnameOverride: {{ name }}
 
 global:
   postgresql: {}

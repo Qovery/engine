@@ -283,6 +283,32 @@ where
     )
 }
 
+pub fn helm_exec_uninstall<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    release_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), CmdError>
+where
+    P: AsRef<Path>,
+{
+    helm_exec_with_output(
+        vec![
+            "uninstall",
+            "--kubeconfig",
+            kubernetes_config.as_ref().to_str().unwrap(),
+            "--namespace",
+            namespace,
+            release_name,
+        ],
+        envs,
+        |out| match out {
+            Ok(line) => info!("{}", line.as_str()),
+            Err(err) => error!("{}", err),
+        },
+    )
+}
+
 pub fn helm_exec_history<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -294,9 +320,9 @@ where
 {
     let mut output_string = String::new();
     let _ = helm_exec_with_output(
+        // WARN: do not add argument --debug, otherwise JSON decoding will not work
         vec![
             "history",
-            "--debug",
             "--kubeconfig",
             kubernetes_config.as_ref().to_str().unwrap(),
             "--namespace",
@@ -500,7 +526,7 @@ where
 
     let selector = format!("app={}", application_name);
 
-    let mut output_string = String::new();
+    let mut output_vec: Vec<String> = Vec::with_capacity(20);
     let _ = kubectl_exec_with_output(
         vec![
             "get",
@@ -514,15 +540,18 @@ where
         ],
         _envs,
         |out| match out {
-            Ok(line) => output_string = line,
+            Ok(line) => output_vec.push(line),
             _ => {}
         },
     )?;
 
+    let output_string: String = output_vec.join("");
+
     let result = match serde_json::from_str::<KubernetesList<KubernetesPod>>(output_string.as_str())
     {
         Ok(x) => x,
-        Err(_) => {
+        Err(err) => {
+            error!("{:?}", err);
             error!("{}", output_string.as_str());
             return Err(CmdError::Io(Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -633,36 +662,43 @@ struct KubernetesList<T> {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
 struct KubernetesService {
     pub status: KubernetesServiceStatus,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
 struct KubernetesServiceStatus {
     pub load_balancer: KubernetesServiceStatusLoadBalancer,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
 struct KubernetesServiceStatusLoadBalancer {
     pub ingress: Vec<KubernetesServiceStatusLoadBalancerIngress>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
 struct KubernetesServiceStatusLoadBalancerIngress {
     pub hostname: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
 struct KubernetesPod {
     pub status: KubernetesPodStatus,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
 struct KubernetesPodStatus {
     pub container_statuses: Vec<KubernetesPodContainerStatus>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
 struct KubernetesPodContainerStatus {
     pub ready: bool,
 }

@@ -53,7 +53,7 @@ impl Router {
         format!("router-{}", self.id())
     }
 
-    fn helm_envs<'a>(&self, aws: &'a AWS) -> [(&'a str, &'a str); 2] {
+    fn aws_credentials_envs<'a>(&self, aws: &'a AWS) -> [(&'a str, &'a str); 2] {
         [
             (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
@@ -126,7 +126,7 @@ impl Router {
                 kubernetes_config_file_path.unwrap().as_str(),
                 environment.namespace(),
                 "app=nginx-ingress,component=controller",
-                self.helm_envs(aws).to_vec(),
+                self.aws_credentials_envs(aws).to_vec(),
             ) {
                 Ok(external_ingress_hostname) => match external_ingress_hostname {
                     Some(hostname) => {
@@ -266,7 +266,7 @@ impl Create for Router {
                 environment.namespace(),
                 helm_release_name.as_str(), // FIXME change helm release name?
                 into_dir.as_str(),
-                self.helm_envs(aws).to_vec(),
+                self.aws_credentials_envs(aws).to_vec(),
             )?;
 
             // check deployment status
@@ -291,7 +291,7 @@ impl Create for Router {
             environment.namespace(),
             helm_release_name.as_str(),
             workspace_dir.as_str(),
-            self.helm_envs(aws).to_vec(),
+            self.aws_credentials_envs(aws).to_vec(),
         )?;
 
         // check deployment status
@@ -308,7 +308,7 @@ impl Create for Router {
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.router.on_create_error() called for {}", self.name());
-        unimplemented!()
+        Ok(())
     }
 }
 

@@ -20,7 +20,11 @@ use qovery_engine::transaction::TransactionResult;
 fn main() {
     env_logger::init();
 
-    let execution_id = Utc::now().to_rfc3339();
+    let execution_id = Utc::now()
+        .to_rfc3339()
+        .replace(":", "-")
+        .replace(".", "-")
+        .replace("+", "-");
 
     // use DockerHub
     //let container_registry = DockerHub::new("qoveryrd", "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24");

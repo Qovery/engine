@@ -104,7 +104,7 @@ impl Create for Application {
         // render
         // TODO check the rendered files?
         let helm_release_name = self.helm_release_name();
-        let helm_envs = vec![
+        let aws_credentials_envs = vec![
             (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
@@ -124,7 +124,7 @@ impl Create for Application {
             environment.namespace(),
             helm_release_name.as_str(),
             workspace_dir.as_str(),
-            helm_envs,
+            aws_credentials_envs.clone(),
         )?;
 
         // check deployment status
@@ -138,7 +138,7 @@ impl Create for Application {
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             self.name(),
-            vec![],
+            aws_credentials_envs,
         ) {
             Ok(Some(true)) => {}
             _ => return Err(ServiceError::OnCreateFailed),
