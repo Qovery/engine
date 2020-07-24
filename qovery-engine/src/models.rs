@@ -128,7 +128,7 @@ pub struct Application {
     pub branch: String,
     pub commit_id: String,
     pub dockerfile_path: String,
-    pub private_port: u16,
+    pub private_port: Option<u16>,
     pub storage: Vec<Storage>,
     pub environment_variables: Vec<EnvironmentVariable>,
 }
@@ -146,7 +146,16 @@ impl Application {
                     execution_id,
                     self.id.as_str(),
                     self.name.as_str(),
+                    self.private_port,
                     image.clone(),
+                    self.storage
+                        .iter()
+                        .map(|s| s.to_aws_storage())
+                        .collect::<Vec<_>>(),
+                    self.environment_variables
+                        .iter()
+                        .map(|ev| ev.to_aws_environment_variable())
+                        .collect::<Vec<_>>(),
                 ),
             )),
             CPKind::GCP => None,
@@ -165,7 +174,16 @@ impl Application {
                     execution_id,
                     self.id.as_str(),
                     self.name.as_str(),
+                    self.private_port,
                     image.clone(),
+                    self.storage
+                        .iter()
+                        .map(|s| s.to_aws_storage())
+                        .collect::<Vec<_>>(),
+                    self.environment_variables
+                        .iter()
+                        .map(|ev| ev.to_aws_environment_variable())
+                        .collect::<Vec<_>>(),
                 ),
             )),
             CPKind::GCP => None,
@@ -208,6 +226,17 @@ pub struct EnvironmentVariable {
     pub value: String,
 }
 
+impl EnvironmentVariable {
+    pub fn to_aws_environment_variable(
+        &self,
+    ) -> crate::cloud_provider::aws::application::EnvironmentVariable {
+        crate::cloud_provider::aws::application::EnvironmentVariable {
+            key: self.key.clone(),
+            value: self.value.clone(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct GitCredentials {
     pub login: String,
@@ -223,6 +252,19 @@ pub struct Storage {
     pub size_in_gib: u16,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
+}
+
+impl Storage {
+    pub fn to_aws_storage(&self) -> crate::cloud_provider::aws::application::Storage {
+        crate::cloud_provider::aws::application::Storage {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            storage_type: self.storage_type.clone(),
+            size_in_gib: self.size_in_gib,
+            mount_point: self.mount_point.clone(),
+            snapshot_retention_in_days: self.snapshot_retention_in_days,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

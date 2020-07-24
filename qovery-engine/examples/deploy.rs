@@ -61,7 +61,7 @@ fn main() {
                 value: "VAL_TEST_1".to_string(),
             }],
             branch: "master".to_string(),
-            private_port: 8080,
+            private_port: Some(8080),
         }],
         routers: vec![
             Router {

@@ -1,24 +1,24 @@
-{%- if qovery_env.applications[application_index]['storage'] %}
-{%- for disk in qovery_env.applications[application_index]['storage'] %}
-{% if disk['from_id'] %}
+{%- if is_storage %}
+{%- for s in storage %}
+{% if clone %}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ disk['id'] }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ s.id }}
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
-    diskId: {{ disk['id'] }}
-    diskType: {{ disk['type'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    appId: {{ id }}
+    diskId: {{ s.id }}
+    diskType: {{ s.storage_type }}
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: aws-ebs-{{ disk['type'] }}-{{ disk['snapshot_retention_in_days'] }}
+  storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
   dataSource:
-    name: {{ disk['from_id'] }}
+    name: {{ s.id }}
     kind: PersistentVolumeClaim
   resources:
     requests:
@@ -28,21 +28,21 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ disk['id'] }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ s.id }}
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
-    diskId: {{ disk['id'] }}
-    diskType: {{ disk['type'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    appId: {{ id }}
+    diskId: {{ s.id }}
+    diskType: {{ s.storage_type }}
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: aws-ebs-{{ disk['type'] }}-{{ disk['snapshot_retention_in_days'] }}
+  storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
   resources:
     requests:
-      storage: {{ disk['size_in_gib'] }}Gi
+      storage: {{ s.size_in_gib }}Gi
 {%- endif %}
 {%- endfor %}
 {%- endif %}

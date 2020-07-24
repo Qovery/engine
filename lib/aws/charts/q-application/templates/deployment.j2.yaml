@@ -2,69 +2,69 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: {{ qovery_env.applications[application_index]['id'] }}-{{ qovery_env.environment_id }}-app
-  namespace: {{ qovery_env.project_id }}
+  name: {{ name }}
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    appId: {{ id }}
 type: Opaque
 stringData:
-{%- for key, value in qovery_env.applications[application_index]['environment_variables'].items() %}
-    {{ key | environment_key_checker }}: {{ value | yaml_quote }}
+{%- for ev in environment_variables %}
+    {{ ev.key }}: "{{ ev.value }}"
 {%- endfor %}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ qovery_env.applications[application_index]['id'] }}-{{ qovery_env.environment_id }}
-  namespace: {{ qovery_env.project_id }}
+  name: {{ name }}
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    envId: {{ qovery_env.environment_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    appId: {{ id }}
 spec:
   replicas: 1
   strategy:
     type: RollingUpdate
   selector:
     matchLabels:
-      ownerId: {{ qovery_env.owner_id }}
-      envId: {{ qovery_env.environment_id }}
-      appId: {{ qovery_env.applications[application_index]['id'] }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+      appId: {{ id }}
   template:
     metadata:
       labels:
-        ownerId: {{ qovery_env.owner_id }}
-        envId: {{ qovery_env.environment_id }}
-        appId: {{ qovery_env.applications[application_index]['id'] }}
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ id }}
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
       securityContext: {}
       containers:
-        - name: {{ qovery_env.get_image_name(application_index) }}-{{ qovery_env.environment_id }}
-          image: "{{ qovery_env.get_image_fullname(application_index) }}"
+        - name: {{ name }}
+          image: "{{ image_name_with_tag }}"
           env:
-            {%- for key, value in qovery_env.applications[application_index]['environment_variables'].items() %}
-            - name: "{{ key }}"
+            {%- for ev in environment_variables %}
+            - name: "{{ ev.key }}"
               valueFrom:
                 secretKeyRef:
-                  name: {{ qovery_env.applications[application_index]['id'] }}-{{ qovery_env.environment_id }}-app
-                  key: {{ key | environment_key_checker }}
+                  name: {{ name }}
+                  key: {{ ev.key }}
             {%- endfor %}
-            {%- if qovery_env.applications[application_index]['private_port'] %}
+            {%- if private_port %}
           ports:
-            - containerPort: {{ qovery_env.applications[application_index]['private_port'] }}
+            - containerPort: {{ private_port }}
               protocol: TCP
           readinessProbe:
             tcpSocket:
-              port: {{ qovery_env.applications[application_index]['private_port'] }}
+              port: {{ private_port }}
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
-              port: {{ qovery_env.applications[application_index]['private_port'] }}
+              port: {{ private_port }}
             initialDelaySeconds: 15
             periodSeconds: 20
             {%- endif %}
@@ -76,17 +76,17 @@ spec:
               cpu: 125m
               memory: 256Mi
           volumeMounts:
-{%- if qovery_env.applications[application_index]['storage'] %}
-{%- for disk in qovery_env.applications[application_index]['storage'] %}
-            - name: {{ disk['id'] }}
-              mountPath: {{ disk['mount_point'] }}
+{%- if is_storage %}
+{%- for s in storage %}
+            - name: {{ s.id }}
+              mountPath: {{ s.mount_point }}
 {%- endfor %}
 {%- endif %}
       volumes:
-{%- if qovery_env.applications[application_index]['storage'] %}
-{%- for disk in qovery_env.applications[application_index]['storage'] %}
-        - name: {{ disk['id'] }}
+{%- if is_storage %}
+{%- for s in storage %}
+        - name: {{ s.id }}
           persistentVolumeClaim:
-            claimName: {{ disk['id'] }}
+            claimName: {{ s.id }}
 {%- endfor %}
 {%- endif %}

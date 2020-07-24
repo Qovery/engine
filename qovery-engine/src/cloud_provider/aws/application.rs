@@ -1,3 +1,7 @@
+use chrono::Duration;
+use retry::delay::{jitter, Exponential};
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
 use tera::Context;
 
 use crate::build_platform::Image;
@@ -11,25 +15,36 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use chrono::Duration;
-use retry::delay::{jitter, Exponential};
-use retry::OperationResult;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
-    pub execution_id: String,
-    pub id: String,
-    pub name: String,
-    pub image: Image,
+    execution_id: String,
+    id: String,
+    name: String,
+    private_port: Option<u16>,
+    image: Image,
+    storage: Vec<Storage>,
+    environment_variables: Vec<EnvironmentVariable>,
 }
 
 impl Application {
-    pub fn new(execution_id: &str, id: &str, name: &str, image: Image) -> Self {
+    pub fn new(
+        execution_id: &str,
+        id: &str,
+        name: &str,
+        private_port: Option<u16>,
+        image: Image,
+        storage: Vec<Storage>,
+        environment_variables: Vec<EnvironmentVariable>,
+    ) -> Self {
         Application {
             execution_id: execution_id.to_string(),
             id: id.to_string(),
             name: name.to_string(),
+            private_port,
             image,
+            storage,
+            environment_variables,
         }
     }
 
@@ -47,8 +62,40 @@ impl Application {
     fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
         let mut context = self.default_context(kubernetes, environment);
         let commit_id = self.image().commit_id.as_str();
+        let image_name_with_tag = self.image().name_with_tag();
 
         context.insert("helm_app_version", &commit_id[..7]);
+        context.insert("image_name_with_tag", image_name_with_tag.as_str());
+
+        let environment_variables = self
+            .environment_variables
+            .iter()
+            .map(|ev| EnvironmentVariableDataTemplate {
+                key: ev.key.clone(),
+                value: ev.value.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        context.insert("environment_variables", &environment_variables);
+
+        let storage = self
+            .storage
+            .iter()
+            .map(|s| StorageDataTemplate {
+                id: s.id.clone(),
+                name: s.name.clone(),
+                storage_type: s.storage_type.clone(),
+                size_in_gib: s.size_in_gib,
+                mount_point: s.mount_point.clone(),
+                snapshot_retention_in_days: s.snapshot_retention_in_days,
+            })
+            .collect::<Vec<_>>();
+
+        let is_storage = storage.len() > 0;
+
+        context.insert("storage", &storage);
+        context.insert("is_storage", &is_storage);
+        context.insert("clone", &false);
 
         context
     }
@@ -83,8 +130,8 @@ impl Service for Application {
         self.image.commit_id.as_str()
     }
 
-    fn private_port(&self) -> u16 {
-        8080 // TODO it's customizable by the user
+    fn private_port(&self) -> Option<u16> {
+        self.private_port
     }
 }
 
@@ -202,4 +249,36 @@ impl Delete for Application {
         // FIXME
         Ok(())
     }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct EnvironmentVariable {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct EnvironmentVariableDataTemplate {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct Storage {
+    pub id: String,
+    pub name: String,
+    pub storage_type: String,
+    pub size_in_gib: u16,
+    pub mount_point: String,
+    pub snapshot_retention_in_days: u16,
+}
+
+#[derive(Serialize, Deserialize)]
+struct StorageDataTemplate {
+    pub id: String,
+    pub name: String,
+    pub storage_type: String,
+    pub size_in_gib: u16,
+    pub mount_point: String,
+    pub snapshot_retention_in_days: u16,
 }

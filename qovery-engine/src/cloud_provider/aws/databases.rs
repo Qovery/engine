@@ -88,8 +88,8 @@ impl Service for PostgreSQL {
         self.version.as_str()
     }
 
-    fn private_port(&self) -> u16 {
-        self.options.port
+    fn private_port(&self) -> Option<u16> {
+        Some(self.options.port)
     }
 }
 

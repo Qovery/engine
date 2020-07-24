@@ -94,11 +94,14 @@ impl Router {
                     .iter()
                     .find(|app| app.id() == r.application_id.as_str())
                 {
-                    Some(application) => Some(RouteDataTemplate {
-                        path: r.path.clone(),
-                        application_name: application.name().to_string(),
-                        application_port: application.private_port(),
-                    }),
+                    Some(application) => match application.private_port() {
+                        Some(private_port) => Some(RouteDataTemplate {
+                            path: r.path.clone(),
+                            application_name: application.name().to_string(),
+                            application_port: private_port,
+                        }),
+                        _ => None,
+                    },
                     _ => None,
                 }
             })
@@ -189,8 +192,8 @@ impl<'a> Service for Router {
         "1.0"
     }
 
-    fn private_port(&self) -> u16 {
-        0
+    fn private_port(&self) -> Option<u16> {
+        None
     }
 }
 

@@ -2,50 +2,50 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ qovery_env.applications[application_index]['id'] }}-{{ qovery_env.environment_id }}-default
-  namespace: {{ qovery_env.project_id }}
+  name: {{ name }}-default
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
-    envId: {{ qovery_env.environment_id }}
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    envId: {{ environment_id }}
 spec:
   # Deny all ingress by default to this application
   podSelector:
     matchLabels:
-      appId: {{ qovery_env.applications[application_index]['id'] }}
-      ownerId: {{ qovery_env.owner_id }}
-      envId: {{ qovery_env.environment_id }}
+      appId: {{ id }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
   policyTypes:
   - Ingress
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ qovery_env.applications[application_index]['id'] }}-{{ qovery_env.environment_id }}-app-access
-  namespace: {{ qovery_env.project_id }}
+  name: {{ name }}-app-access
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
-    envId: {{ qovery_env.environment_id }}
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    envId: {{ environment_id }}
 spec:
   # Then allow some ingress to this application
   podSelector:
     matchLabels:
-      appId: {{ qovery_env.applications[application_index]['id'] }}
-      ownerId: {{ qovery_env.owner_id }}
-      envId: {{ qovery_env.environment_id }}
+      appId: {{ id }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
   ingress:
   # Allow ingress from same environment
   - from:
     - podSelector:
         matchLabels:
-          ownerId: {{ qovery_env.owner_id }}
-          envId: {{ qovery_env.environment_id }}
+          ownerId: {{ owner_id }}
+          envId: {{ environment_id }}
 
   # Allow ingress from everywhere but only to application port
-  {% if qovery_env.applications[application_index]['private_port'] %}
+  {% if is_private_port %}
   - ports:
-    - port: {{ qovery_env.applications[application_index]['private_port'] }}
+    - port: {{ private_port }}
   {% endif %}
   # FIXME(sileht): Previous rule is not perfect as other pods/namespaces can
   # access to the application port without going through the Ingress object,
@@ -69,18 +69,18 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ qovery_env.applications[application_index]['id'] }}-{{ qovery_env.environment_id }}-deny-aws-metadata-server
-  namespace: {{ qovery_env.project_id }}
+  name: {{ name }}-deny-aws-metadata-server
+  namespace: {{ namespace }}
   labels:
-    ownerId: {{ qovery_env.owner_id }}
-    appId: {{ qovery_env.applications[application_index]['id'] }}
-    envId: {{ qovery_env.environment_id }}
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    envId: {{ environment_id }}
 spec:
   podSelector:
     matchLabels:
-      appId: {{ qovery_env.applications[application_index]['id'] }}
-      ownerId: {{ qovery_env.owner_id }}
-      envId: {{ qovery_env.environment_id }}
+      appId: {{ id }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
   egress:
   - to:
     - ipBlock:

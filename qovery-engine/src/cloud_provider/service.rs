@@ -12,7 +12,7 @@ pub trait Service {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn version(&self) -> &str;
-    fn private_port(&self) -> u16;
+    fn private_port(&self) -> Option<u16>;
 
     fn is_valid(&self) -> Result<(), ServiceError> {
         let binaries = ["kubectl", "helm", "terraform", "aws-iam-authenticator"];
@@ -40,7 +40,12 @@ pub trait Service {
         context.insert("name", self.name());
         context.insert("namespace", environment.namespace());
         context.insert("cluster_name", kubernetes.name());
-        context.insert("private_port", &self.private_port());
+
+        context.insert("is_private_port", &self.private_port().is_some());
+        if self.private_port().is_some() {
+            context.insert("private_port", &self.private_port().unwrap());
+        }
+
         context.insert("version", self.version());
         // TODO check: is it possible to set the `name` as an `id` if the namespace is per environment?
         context.insert("fqdn_id", self.name());
