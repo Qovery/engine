@@ -340,7 +340,9 @@ pub enum DatabaseKind {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentError {}
 
+#[derive(Clone)]
 pub struct ProgressInfo {
+    pub created_at: DateTime<Utc>,
     pub step_name: String,
     pub percent: u8,
     pub message: String,
@@ -349,6 +351,7 @@ pub struct ProgressInfo {
 impl ProgressInfo {
     pub fn new(step_name: &str, percent: u8, message: &str) -> Self {
         ProgressInfo {
+            created_at: Utc::now(),
             step_name: step_name.to_string(),
             percent,
             message: message.to_string(),
@@ -363,3 +366,29 @@ pub trait ProgressListener {
 }
 
 pub type Listeners = Vec<Rc<Box<dyn ProgressListener>>>;
+
+pub struct ListenersHelper<'a> {
+    listeners: &'a Listeners,
+}
+
+impl<'a> ListenersHelper<'a> {
+    pub fn new(listeners: &'a Listeners) -> Self {
+        ListenersHelper { listeners }
+    }
+
+    pub fn on_progress(&self, info: ProgressInfo) {
+        self.listeners
+            .iter()
+            .for_each(|l| l.on_progress(info.clone()));
+    }
+
+    pub fn on_complete(&self, info: ProgressInfo) {
+        self.listeners
+            .iter()
+            .for_each(|l| l.on_complete(info.clone()));
+    }
+
+    pub fn on_error(&self, info: ProgressInfo) {
+        self.listeners.iter().for_each(|l| l.on_error(info.clone()));
+    }
+}

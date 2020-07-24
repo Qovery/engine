@@ -19,7 +19,7 @@ use crate::cloud_provider::service::{Service, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::workspace_directory;
-use crate::models::{Listeners, ProgressInfo, ProgressListener};
+use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressListener};
 use crate::{cmd, dynamo_db, fs, s3};
 use std::rc::Rc;
 
@@ -339,13 +339,13 @@ impl<'a> Kubernetes for EKS<'a> {
     fn on_create(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_create() called for {}", self.name());
 
-        self.listeners.iter().for_each(|x| {
-            x.on_progress(ProgressInfo::new(
-                "kubernetes",
-                0,
-                "start to create EKS cluster",
-            ))
-        });
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        listeners_helper.on_progress(ProgressInfo::new(
+            "kubernetes",
+            0,
+            "start to create EKS cluster",
+        ));
 
         let temp_dir =
             workspace_directory(self.execution_id(), format!("bootstrap/{}", self.name()));
@@ -512,6 +512,9 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError> {
         warn!("EKS.deploy_environment_error() called for {}", self.name());
+
+        // TODO get output of all pods and send it back through the listener
+        // TODO helm uninstall for each stateless service
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {

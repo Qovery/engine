@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::build_platform::error::BuildPlatformError;
 use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Kind};
 use crate::fs::workspace_directory;
-use crate::models::{Listeners, ProgressInfo, ProgressListener};
+use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressListener};
 use crate::{cmd, git};
 
 /// use Docker in local
@@ -59,6 +59,8 @@ impl BuildPlatform for LocalDocker {
 
     fn build(&self, build: Build) -> Result<BuildResult, BuildError> {
         info!("LocalDocker.build() called for {}", self.name());
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
 
         // git clone
         let into_dir = workspace_directory(
@@ -118,9 +120,7 @@ impl BuildPlatform for LocalDocker {
             let line_str = line_string.as_str();
             info!("{}", line_str);
 
-            self.listeners
-                .iter()
-                .for_each(|l| l.on_progress(ProgressInfo::new("build", 50, line_str)));
+            listeners_helper.on_progress(ProgressInfo::new("build", 50, line_str));
         });
 
         match exit_status {
@@ -128,9 +128,7 @@ impl BuildPlatform for LocalDocker {
             Err(_) => return Err(BuildError::Error),
         }
 
-        self.listeners
-            .iter()
-            .for_each(|l| l.on_complete(ProgressInfo::new("build", 100, "build done")));
+        listeners_helper.on_complete(ProgressInfo::new("build", 100, "build done"));
 
         Ok(BuildResult { build })
     }
@@ -138,9 +136,8 @@ impl BuildPlatform for LocalDocker {
     fn build_error(&self, build: Build) -> Result<BuildResult, BuildError> {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
-        self.listeners
-            .iter()
-            .for_each(|l| l.on_error(ProgressInfo::new("build", 100, "something goes wrong")));
+        let listener_helper = ListenersHelper::new(&self.listeners);
+        listener_helper.on_error(ProgressInfo::new("build", 100, "something goes wrong"));
 
         // FIXME
         Err(BuildError::Error)
