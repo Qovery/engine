@@ -255,7 +255,7 @@ impl Create for Router {
             // copy nginx-ingress files, there is no templates so do not generate anything and
             // simply copy/paste files into our working dir
             let _ = crate::template::copy_non_template_files(
-                "lib/common/charts/nginx-ingress",
+                "lib/common/bootstrap/charts/nginx-ingress",
                 into_dir.as_str(),
             )?;
 
