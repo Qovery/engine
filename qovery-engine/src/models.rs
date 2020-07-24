@@ -229,6 +229,7 @@ pub struct Storage {
 pub struct Router {
     pub id: String,
     pub name: String,
+    pub action: Action,
     pub default_domain: String,
     pub public_port: u16,
     pub custom_domains: Vec<CustomDomain>,

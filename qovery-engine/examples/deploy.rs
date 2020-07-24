@@ -63,6 +63,7 @@ fn main() {
             Router {
                 id: "ofejoiafj5464".to_string(),
                 name: "main".to_string(),
+                action: Action::Create,
                 default_domain: "toto-default.qovery.io".to_string(),
                 public_port: 443,
                 custom_domains: vec![CustomDomain {
@@ -77,6 +78,7 @@ fn main() {
             Router {
                 id: "adawhdiua545545".to_string(),
                 name: "second-router".to_string(),
+                action: Action::Create,
                 default_domain: "coco-default.qovery.io".to_string(),
                 public_port: 443,
                 custom_domains: vec![CustomDomain {
