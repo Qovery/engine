@@ -76,7 +76,7 @@ fn main() {
                 }],
                 routes: vec![Route {
                     path: "/*".to_string(),
-                    application_id: "simple-example-node-with-postgresql".to_string(),
+                    application_name: "simple-example-node-with-postgresql".to_string(),
                 }],
             },
             Router {
@@ -91,7 +91,7 @@ fn main() {
                 }],
                 routes: vec![Route {
                     path: "/coco/*".to_string(),
-                    application_id: "simple-example-node-with-postgresql".to_string(),
+                    application_name: "simple-example-node-with-postgresql".to_string(),
                 }],
             },
         ],

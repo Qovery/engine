@@ -45,10 +45,7 @@ impl PostgreSQL {
     }
 
     fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(
-            self.execution_id(),
-            format!("databases/postgresql-{}", self.id()),
-        )
+        crate::fs::workspace_directory(self.execution_id(), format!("databases/{}", self.name()))
     }
 
     fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {

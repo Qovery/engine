@@ -61,7 +61,7 @@ impl Router {
     }
 
     fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(self.execution_id(), format!("charts/routers/{}", self.id()))
+        crate::fs::workspace_directory(self.execution_id(), format!("routers/{}", self.name()))
     }
 
     fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
@@ -92,7 +92,7 @@ impl Router {
             .map(|r| {
                 match applications
                     .iter()
-                    .find(|app| app.id() == r.application_id.as_str())
+                    .find(|app| app.name() == r.application_name.as_str())
                 {
                     Some(application) => match application.private_port() {
                         Some(private_port) => Some(RouteDataTemplate {
@@ -255,7 +255,7 @@ impl Create for Router {
             info!("setup NGINX ingress for custom domains");
 
             let into_dir =
-                crate::fs::workspace_directory(self.execution_id(), "charts/routers/nginx-ingress");
+                crate::fs::workspace_directory(self.execution_id(), "routers/nginx-ingress");
 
             // copy nginx-ingress files, there is no templates so do not generate anything and
             // simply copy/paste files into our working dir
@@ -369,7 +369,7 @@ struct CustomDomainDataTemplate {
 
 pub struct Route {
     pub path: String,
-    pub application_id: String,
+    pub application_name: String,
 }
 
 #[derive(Serialize, Deserialize)]

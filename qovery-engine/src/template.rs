@@ -96,35 +96,65 @@ where
         let j2_path = path_str.replace(root_dir_str, "");
 
         let j2_file_name = file.file_name().to_str().unwrap();
+        let j2_path_split = j2_path.split("/").collect::<Vec<_>>();
+        let j2_root_path: String = j2_path_split.as_slice()[..j2_path_split.len() - 1].join("/");
         let file_name = j2_file_name.replace(".j2", "");
 
         let content = tera.render(&j2_path[1..], &context)?;
-        results.push(RenderedTemplate::new(file_name, content));
+
+        results.push(RenderedTemplate::new(j2_root_path, file_name, content));
     }
 
     Ok(results)
-}
-
-pub struct RenderedTemplate {
-    pub file_name: String,
-    pub content: String,
 }
 
 pub fn write_rendered_templates(
     rendered_templates: &[RenderedTemplate],
     into: &Path,
 ) -> Result<(), Error> {
-    let _ = fs::create_dir_all(into);
     for rt in rendered_templates {
-        let mut f = fs::File::create(format!("{}/{}", into.to_str().unwrap(), rt.file_name))?;
+        let dest = format!("{}/{}", into.to_str().unwrap(), rt.path_and_file_name());
+
+        if dest.contains("/") {
+            // create the parent directories
+            let s_dest = dest.split("/").collect::<Vec<_>>();
+            let dir: String = s_dest.as_slice()[..s_dest.len() - 1].join("/");
+            let _ = fs::create_dir_all(dir);
+        }
+
+        // remove file if it already exists
+        let _ = fs::remove_file(dest.as_str());
+
+        // create an empty file
+        let mut f = fs::File::create(dest)?;
+
+        // write rendered template into the new file
         f.write_all(rt.content.as_bytes())?;
     }
 
     Ok(())
 }
 
+pub struct RenderedTemplate {
+    pub path: String,
+    pub file_name: String,
+    pub content: String,
+}
+
 impl RenderedTemplate {
-    pub fn new(file_name: String, content: String) -> Self {
-        RenderedTemplate { file_name, content }
+    pub fn new(path: String, file_name: String, content: String) -> Self {
+        RenderedTemplate {
+            path,
+            file_name,
+            content,
+        }
+    }
+
+    pub fn path_and_file_name(&self) -> String {
+        if self.path.trim().is_empty() || self.path.as_str() == "." {
+            self.file_name.clone()
+        } else {
+            format!("{}/{}", self.path.as_str(), self.file_name.as_str())
+        }
     }
 }

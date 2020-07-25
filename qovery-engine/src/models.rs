@@ -303,7 +303,7 @@ impl Router {
                             .iter()
                             .map(|x| crate::cloud_provider::aws::router::Route {
                                 path: x.path.clone(),
-                                application_id: x.application_id.clone(),
+                                application_name: x.application_name.clone(),
                             })
                             .collect::<Vec<_>>(),
                     ));
@@ -323,7 +323,7 @@ pub struct CustomDomain {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Route {
     pub path: String,
-    pub application_id: String,
+    pub application_name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

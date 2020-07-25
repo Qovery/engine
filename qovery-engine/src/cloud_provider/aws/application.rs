@@ -53,10 +53,7 @@ impl Application {
     }
 
     fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(
-            self.execution_id(),
-            format!("applications/{}-{}", self.name(), self.id()),
-        )
+        crate::fs::workspace_directory(self.execution_id(), format!("applications/{}", self.name()))
     }
 
     fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
