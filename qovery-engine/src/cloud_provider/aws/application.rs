@@ -81,7 +81,13 @@ impl Application {
             .map(|s| StorageDataTemplate {
                 id: s.id.clone(),
                 name: s.name.clone(),
-                storage_type: s.storage_type.clone(),
+                storage_type: match s.storage_type {
+                    StorageType::SC1 => "sc1",
+                    StorageType::ST1 => "st1",
+                    StorageType::GP2 => "gp2",
+                    StorageType::IO1 => "io1",
+                }
+                .to_string(),
                 size_in_gib: s.size_in_gib,
                 mount_point: s.mount_point.clone(),
                 snapshot_retention_in_days: s.snapshot_retention_in_days,
@@ -286,10 +292,18 @@ struct EnvironmentVariableDataTemplate {
 pub struct Storage {
     pub id: String,
     pub name: String,
-    pub storage_type: String,
+    pub storage_type: StorageType,
     pub size_in_gib: u16,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum StorageType {
+    SC1,
+    ST1,
+    GP2,
+    IO1,
 }
 
 #[derive(Serialize, Deserialize)]

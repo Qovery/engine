@@ -23,7 +23,7 @@ spec:
     kind: PersistentVolumeClaim
   resources:
     requests:
-      storage: {{ disk['size_in_gib'] }}Gi
+      storage: {{ disk.size_in_gib }}Gi
 {% else %}
 ---
 apiVersion: v1

@@ -248,10 +248,18 @@ pub struct GitCredentials {
 pub struct Storage {
     pub id: String,
     pub name: String,
-    pub storage_type: String,
+    pub storage_type: StorageType,
     pub size_in_gib: u16,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub enum StorageType {
+    SlowHDD,
+    HDD,
+    SSD,
+    FastSSD,
 }
 
 impl Storage {
@@ -259,7 +267,12 @@ impl Storage {
         crate::cloud_provider::aws::application::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
-            storage_type: self.storage_type.clone(),
+            storage_type: match self.storage_type {
+                StorageType::SlowHDD => crate::cloud_provider::aws::application::StorageType::SC1,
+                StorageType::HDD => crate::cloud_provider::aws::application::StorageType::ST1,
+                StorageType::SSD => crate::cloud_provider::aws::application::StorageType::GP2,
+                StorageType::FastSSD => crate::cloud_provider::aws::application::StorageType::IO1,
+            },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,

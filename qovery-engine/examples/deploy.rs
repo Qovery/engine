@@ -13,7 +13,7 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
     Action, Application, CustomDomain, Database, DatabaseKind, Environment, EnvironmentAction,
-    EnvironmentVariable, GitCredentials, Kind, Route, Router, Storage,
+    EnvironmentVariable, GitCredentials, Kind, Route, Router, Storage, StorageType,
 };
 use qovery_engine::session::Session;
 use qovery_engine::transaction::TransactionResult;
@@ -51,7 +51,7 @@ fn main() {
             storage: vec![Storage {
                 id: "adawd5wa4d65aw4".to_string(),
                 name: "photos".to_string(),
-                storage_type: "ssd".to_string(),
+                storage_type: StorageType::SSD,
                 size_in_gib: 10,
                 mount_point: "/mnt/photos".to_string(),
                 snapshot_retention_in_days: 30,
