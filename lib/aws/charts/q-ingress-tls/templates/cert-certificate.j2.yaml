@@ -16,10 +16,4 @@ spec:
     kind: Issuer
   dnsNames:
     - {{ custom_domain.domain }}
-  acme:
-    config:
-      - http01:
-          ingressClass: nginx-{{ project_id }}
-        domains:
-          - {{ custom_domain.domain }}
 {%- endfor %}
