@@ -11,6 +11,7 @@ metadata:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
+    app: {{ name }}
     diskId: {{ s.id }}
     diskType: {{ s.storage_type }}
 spec:

@@ -7,12 +7,14 @@ metadata:
   labels:
     ownerId: {{ owner_id }}
     appId: {{ id }}
+    app: {{ name }}
     envId: {{ environment_id }}
 spec:
   # Deny all ingress by default to this application
   podSelector:
     matchLabels:
       appId: {{ id }}
+      app: {{ name }}
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   policyTypes:
@@ -26,12 +28,14 @@ metadata:
   labels:
     ownerId: {{ owner_id }}
     appId: {{ id }}
+    app: {{ name }}
     envId: {{ environment_id }}
 spec:
   # Then allow some ingress to this application
   podSelector:
     matchLabels:
       appId: {{ id }}
+      app: {{ name }}
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   ingress:
@@ -74,11 +78,13 @@ metadata:
   labels:
     ownerId: {{ owner_id }}
     appId: {{ id }}
+    app: {{ name }}
     envId: {{ environment_id }}
 spec:
   podSelector:
     matchLabels:
       appId: {{ id }}
+      app: {{ name }}
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   egress:

@@ -2,6 +2,7 @@ use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::ServiceError;
+use crate::cmd::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use rusoto_core::Region;
 use std::io::Error;
@@ -37,7 +38,73 @@ pub fn kubernetes_config_path(
     Ok(kubernetes_config_file_path)
 }
 
-pub fn on_stateless_service_error_cleanup(
+pub type Logs = String;
+pub type Describe = String;
+
+pub fn get_stateless_resource_information(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+    workspace_dir: &str,
+    selector: &str,
+) -> Result<(Describe, Logs), CmdError> {
+    let aws = kubernetes
+        .cloud_provider()
+        .as_any()
+        .downcast_ref::<AWS>()
+        .unwrap();
+
+    let kubernetes_config_file_path = kubernetes_config_path(
+        workspace_dir,
+        environment.organization_id.as_str(),
+        kubernetes.id(),
+        aws.access_key_id.as_str(),
+        aws.secret_access_key.as_str(),
+        kubernetes.region(),
+    )?;
+
+    let aws_credentials_envs = vec![
+        (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+        (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
+    ];
+
+    // exec describe pod...
+    let describe = match crate::cmd::kubectl_exec_describe(
+        kubernetes_config_file_path.as_str(),
+        environment.namespace(),
+        selector,
+        aws_credentials_envs.clone(),
+    ) {
+        Ok(output) => {
+            info!("{}", output);
+            output
+        }
+        Err(err) => {
+            error!("{:?}", err);
+            return Err(err);
+        }
+    };
+
+    // exec logs...
+    let logs = match crate::cmd::kubectl_exec_logs(
+        kubernetes_config_file_path.as_str(),
+        environment.namespace(),
+        selector,
+        aws_credentials_envs.clone(),
+    ) {
+        Ok(output) => {
+            info!("{}", output);
+            output
+        }
+        Err(err) => {
+            error!("{:?}", err);
+            return Err(err);
+        }
+    };
+
+    Ok((describe, logs))
+}
+
+pub fn do_stateless_service_cleanup(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     workspace_dir: &str,
@@ -58,7 +125,7 @@ pub fn on_stateless_service_error_cleanup(
         kubernetes.region(),
     )?;
 
-    let helm_envs = vec![
+    let aws_credentials_envs = vec![
         (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
         (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
     ];
@@ -67,7 +134,7 @@ pub fn on_stateless_service_error_cleanup(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         helm_release_name,
-        helm_envs.clone(),
+        aws_credentials_envs.clone(),
     )?;
 
     // if there is no valid history - then delete the helm chart
@@ -78,7 +145,7 @@ pub fn on_stateless_service_error_cleanup(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name,
-            helm_envs,
+            aws_credentials_envs,
         )?;
     }
 

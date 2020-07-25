@@ -56,10 +56,16 @@ fn main() {
                 mount_point: "/mnt/photos".to_string(),
                 snapshot_retention_in_days: 30,
             }],
-            environment_variables: vec![EnvironmentVariable {
-                key: "KEY_TEST_1".to_string(),
-                value: "VAL_TEST_1".to_string(),
-            }],
+            environment_variables: vec![
+                EnvironmentVariable {
+                    key: "KEY_TEST_1".to_string(),
+                    value: "VAL_TEST_1".to_string(),
+                },
+                EnvironmentVariable {
+                    key: "KEY_TEST_2".to_string(),
+                    value: "VAL_TEST_2".to_string(),
+                },
+            ],
             branch: "master".to_string(),
             private_port: Some(8080),
         }],

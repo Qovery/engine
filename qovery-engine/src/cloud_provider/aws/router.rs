@@ -322,7 +322,7 @@ impl Create for Router {
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let _ = common::on_stateless_service_error_cleanup(
+        let _ = common::do_stateless_service_cleanup(
             kubernetes,
             environment,
             workspace_dir.as_str(),

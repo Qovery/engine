@@ -477,7 +477,7 @@ where
 pub fn kubectl_exec_is_application_ready_with_retry<P>(
     kubernetes_config: P,
     namespace: &str,
-    application_name: &str,
+    selector: &str,
     envs: Vec<(&str, &str)>,
 ) -> Result<Option<bool>, CmdError>
 where
@@ -488,7 +488,7 @@ where
         let r = crate::cmd::kubectl_exec_is_application_ready(
             kubernetes_config.as_ref(),
             namespace,
-            application_name,
+            selector,
             envs.clone(),
         );
 
@@ -496,7 +496,7 @@ where
             Ok(is_ready) => match is_ready {
                 Some(true) => OperationResult::Ok(true),
                 _ => {
-                    let t = format!("{} is not ready yet", application_name);
+                    let t = format!("application with selector: {} is not ready yet", selector);
                     info!("{}", t.as_str());
                     OperationResult::Retry(t)
                 }
@@ -521,7 +521,7 @@ where
 pub fn kubectl_exec_is_application_ready<P>(
     kubernetes_config: P,
     namespace: &str,
-    application_name: &str,
+    selector: &str,
     envs: Vec<(&str, &str)>,
 ) -> Result<Option<bool>, CmdError>
 where
@@ -531,20 +531,9 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let selector = format!("app={}", application_name);
-
     let mut output_vec: Vec<String> = Vec::with_capacity(20);
     let _ = kubectl_exec_with_output(
-        vec![
-            "get",
-            "pod",
-            "-o",
-            "json",
-            "-n",
-            namespace,
-            "-l", // selector
-            selector.as_str(),
-        ],
+        vec!["get", "pod", "-o", "json", "-n", namespace, "-l", selector],
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
@@ -609,6 +598,58 @@ where
     )?;
 
     Ok(())
+}
+
+pub fn kubectl_exec_logs<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<String, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let mut output_vec: Vec<String> = Vec::with_capacity(50);
+    let _ = kubectl_exec_with_output(
+        vec!["logs", "--tail", "1000", "-n", namespace, "-l", selector],
+        _envs,
+        |out| match out {
+            Ok(line) => output_vec.push(line),
+            _ => {}
+        },
+    )?;
+
+    Ok(output_vec.join("\n"))
+}
+
+pub fn kubectl_exec_describe<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<String, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let mut output_vec: Vec<String> = Vec::with_capacity(50);
+    let _ = kubectl_exec_with_output(
+        vec!["describe", "pod", "-n", namespace, "-l", selector],
+        _envs,
+        |out| match out {
+            Ok(line) => output_vec.push(line),
+            _ => {}
+        },
+    )?;
+
+    Ok(output_vec.join("\n"))
 }
 
 fn command_to_string<P>(binary: P, args: &Vec<&str>) -> String

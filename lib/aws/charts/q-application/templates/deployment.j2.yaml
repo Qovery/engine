@@ -8,6 +8,7 @@ metadata:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
+    app: {{ name }}
 type: Opaque
 stringData:
 {%- for ev in environment_variables %}
@@ -23,6 +24,7 @@ metadata:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
+    app: {{ name }}
 spec:
   replicas: 1
   strategy:
@@ -32,12 +34,14 @@ spec:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       appId: {{ id }}
+      app: {{ name }}
   template:
     metadata:
       labels:
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
+        app: {{ name }}
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60

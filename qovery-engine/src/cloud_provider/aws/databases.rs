@@ -165,10 +165,12 @@ impl Create for PostgreSQL {
                 }
 
                 // check app status
+                let selector = format!("app={}", self.name());
+
                 match crate::cmd::kubectl_exec_is_application_ready_with_retry(
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
-                    self.name(),
+                    selector.as_str(),
                     aws_credentials_envs,
                 ) {
                     Ok(Some(true)) => {}
@@ -195,12 +197,21 @@ impl Create for PostgreSQL {
         match target {
             DeploymentTarget::ManagedServices(_, _) => {
                 // TODO what to do with a PostgreSQL that is badly deployed on RDS?
+                // TODO how to show the log of AWS or.. Like I do for the selfhosted with k8s ??
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
-                let workspace_dir = self.workspace_directory();
                 let helm_release_name = self.helm_release_name();
+                let selector = format!("app={}", self.name());
 
-                let _ = common::on_stateless_service_error_cleanup(
+                let _ = common::get_stateless_resource_information(
+                    *kubernetes,
+                    *environment,
+                    workspace_dir.as_str(),
+                    selector.as_str(),
+                )?;
+
+                // clean the resource
+                let _ = common::do_stateless_service_cleanup(
                     *kubernetes,
                     *environment,
                     workspace_dir.as_str(),
