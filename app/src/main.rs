@@ -81,11 +81,11 @@ fn listen_for_events(
                 msg.respond(Response::new(None).as_json_string());
             }
             Err(err) => {
+                error!("{}", msg);
                 error!(
                     "receiving request but JSON decoding error occurred: {:?}",
                     err
                 );
-                error!("{}", msg);
                 msg.respond(Response::new(Some(err.to_string())).as_json_string());
             }
         };
