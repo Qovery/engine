@@ -106,7 +106,7 @@ fn main() {
             action: Action::Create,
             id: "waoidja468787454".to_string(),
             name: "my-psql".to_string(),
-            version: "11.5.0".to_string(),
+            version: "11.8.0".to_string(),
             fqdn_id: "no-fqdn-test".to_string(),
             fqdn: "no-fqdn-test.qovery.io".to_string(),
             port: 5432,
