@@ -32,7 +32,7 @@ strategy: {}
   # type: RollingUpdate
   # rollingUpdate:
   #   maxSurge: 0
-#   maxUnavailable: 1
+  #   maxUnavailable: 1
 
 # Comma separated list of feature gates that should be enabled on the
 # controller pod.
@@ -65,7 +65,7 @@ extraArgs: []
   # supporting resources required for each ClusterIssuer (default is kube-system)
   # - --cluster-resource-namespace=kube-system
   # When this flag is enabled, secrets will be automatically removed when the certificate resource is deleted
-# - --enable-certificate-owner-ref=true
+  # - --enable-certificate-owner-ref=true
 
 extraEnv: []
 # - name: SOME_VAR
@@ -74,7 +74,7 @@ extraEnv: []
 resources: {}
   # requests:
   #   cpu: 10m
-#   memory: 32Mi
+  #   memory: 32Mi
 
 # Pod Security Context
 # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -98,7 +98,7 @@ containerSecurityContext: {}
   #   drop:
   #   - ALL
   # readOnlyRootFilesystem: true
-# runAsNonRoot: true
+  # runAsNonRoot: true
 
 
 volumes: []
@@ -129,7 +129,7 @@ nodeSelector: {}
 ingressShim: {}
   # defaultIssuerName: ""
   # defaultIssuerKind: ""
-# defaultIssuerGroup: ""
+  # defaultIssuerGroup: ""
 
 prometheus:
   enabled: true
@@ -176,7 +176,7 @@ webhook:
     # type: RollingUpdate
     # rollingUpdate:
     #   maxSurge: 0
-  #   maxUnavailable: 1
+    #   maxUnavailable: 1
 
   securityContext: {}
 
@@ -187,7 +187,7 @@ webhook:
     #   drop:
     #   - ALL
     # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
+    # runAsNonRoot: true
 
   # Optional additional annotations to add to the webhook Deployment
   # deploymentAnnotations: {}
@@ -201,7 +201,7 @@ webhook:
   resources: {}
     # requests:
     #   cpu: 10m
-  #   memory: 32Mi
+    #   memory: 32Mi
 
   nodeSelector: {}
 
@@ -240,7 +240,7 @@ cainjector:
     # type: RollingUpdate
     # rollingUpdate:
     #   maxSurge: 0
-  #   maxUnavailable: 1
+    #   maxUnavailable: 1
 
   securityContext: {}
 
@@ -251,7 +251,7 @@ cainjector:
     #   drop:
     #   - ALL
     # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
+    # runAsNonRoot: true
 
 
   # Optional additional annotations to add to the cainjector Deployment
@@ -266,7 +266,7 @@ cainjector:
   resources: {}
     # requests:
     #   cpu: 10m
-  #   memory: 32Mi
+    #   memory: 32Mi
 
   nodeSelector: {}
 

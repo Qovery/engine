@@ -1,6 +1,6 @@
 charts:
   - name: cert-manager
-    version: v0.15.2
+    version: v0.16.0
   - name: external-dns
     repo_name: bitnami
     version: 3.2.3

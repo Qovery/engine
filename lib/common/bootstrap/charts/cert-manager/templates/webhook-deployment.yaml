@@ -56,7 +56,7 @@ spec:
           - --v={{ .Values.global.logLevel }}
           {{- end }}
           - --secure-port={{ .Values.webhook.securePort }}
-          - --dynamic-serving-ca-secret-namespace={{ .Release.Namespace }}
+          - --dynamic-serving-ca-secret-namespace=$(POD_NAMESPACE)
           - --dynamic-serving-ca-secret-name={{ template "webhook.fullname" . }}-ca
           - --dynamic-serving-dns-names={{ template "webhook.fullname" . }},{{ template "webhook.fullname" . }}.{{ .Release.Namespace }},{{ template "webhook.fullname" . }}.{{ .Release.Namespace }}.svc
         {{- if .Values.webhook.extraArgs }}
@@ -79,6 +79,10 @@ spec:
               scheme: HTTP
             initialDelaySeconds: 5
             periodSeconds: 5
+          {{- if .Values.webhook.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.webhook.containerSecurityContext | nindent 12 }}
+          {{- end }}
           env:
           - name: POD_NAMESPACE
             valueFrom:
