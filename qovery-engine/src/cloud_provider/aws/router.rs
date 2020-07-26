@@ -205,23 +205,23 @@ impl<'a> Service for Router {
 
 impl crate::cloud_provider::service::Router for Router {
     fn check_domains(&self) -> Result<(), ServiceError> {
-        for custom_domain in &self.custom_domains {
-            let check_result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
-                // TODO send information back to the core - does the custom domain is linked?
-                info!("check custom domain {}", custom_domain.domain.as_str());
-                match lookup_host(custom_domain.domain.as_str()) {
-                    Ok(_) => OperationResult::Ok(()),
-                    Err(err) => {
-                        debug!("{:?}", err);
-                        OperationResult::Retry(())
-                    }
+        let check_result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
+            // TODO send information back to the core
+            info!("check custom domain {}", self.default_domain.as_str());
+            match lookup_host(self.default_domain.as_str()) {
+                Ok(_) => OperationResult::Ok(()),
+                Err(err) => {
+                    debug!("{:?}", err);
+                    OperationResult::Retry(())
                 }
-            });
-
-            match check_result {
-                Ok(_) => {}
-                Err(_) => return Err(ServiceError::CheckFailed),
             }
+        });
+
+        // TODO - check custom domains? if yes, why wasting time waiting for user setting up the custom domain?
+
+        match check_result {
+            Ok(_) => {}
+            Err(_) => return Err(ServiceError::CheckFailed),
         }
 
         Ok(())
