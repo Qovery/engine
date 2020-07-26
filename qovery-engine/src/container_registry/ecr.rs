@@ -3,9 +3,9 @@ use std::str::FromStr;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    CreateRepositoryRequest, DescribeRepositoriesRequest, Ecr, EcrClient,
-    GetAuthorizationTokenRequest, GetAuthorizationTokenResponse, ListImagesRequest,
-    PutLifecyclePolicyRequest, Repository,
+    CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesRequest, Ecr, EcrClient,
+    GetAuthorizationTokenRequest, GetAuthorizationTokenResponse, ImageDetail, ImageIdentifier,
+    ListImagesRequest, PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -67,9 +67,9 @@ impl ECR {
         EcrClient::new_with_client(self.client(), self.region.clone())
     }
 
-    pub fn get_repository(&self, image_name: &str) -> Option<Repository> {
+    fn get_repository(&self, image: &Image) -> Option<Repository> {
         let mut drr = DescribeRepositoriesRequest::default();
-        drr.repository_names = Some(vec![image_name.to_string()]);
+        drr.repository_names = Some(vec![image.name.to_string()]);
 
         let r = async_run(self.ecr_client().describe_repositories(drr));
 
@@ -83,7 +83,58 @@ impl ECR {
         }
     }
 
-    pub fn create(&self, image: &Image) -> Result<Repository, ContainerRegistryError> {
+    fn get_image(&self, image: &Image) -> Option<ImageDetail> {
+        let mut dir = DescribeImagesRequest::default();
+        dir.repository_name = image.name.to_string();
+
+        let mut image_identifier = ImageIdentifier::default();
+        image_identifier.image_tag = Some(image.tag.to_string());
+        dir.image_ids = Some(vec![image_identifier]);
+
+        let r = async_run(self.ecr_client().describe_images(dir));
+
+        match r {
+            Err(_) => None,
+            Ok(res) => match res.image_details {
+                // assume there is only one repository returned - why? Because we set only one repository_names above
+                Some(image_details) => image_details.into_iter().next(),
+                _ => None,
+            },
+        }
+    }
+
+    fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, PushError> {
+        // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
+        // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
+        match cmd::exec(
+            "docker",
+            vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
+        ) {
+            Err(err) => match err {
+                CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
+            },
+            _ => {}
+        };
+
+        // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
+        match cmd::exec("docker", vec!["push", dest.as_str()]) {
+            Err(err) => match err {
+                CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
+            },
+            _ => {}
+        };
+
+        let mut image = image.clone();
+        image.registry_url = Some(dest);
+
+        Ok(PushResult { image })
+    }
+
+    fn create_repository(&self, image: &Image) -> Result<Repository, ContainerRegistryError> {
         info!("ECR create repository {}", image.name.as_str());
         let mut crr = CreateRepositoryRequest::default();
         crr.repository_name = image.name.clone();
@@ -123,22 +174,22 @@ impl ECR {
 
         match r {
             Err(err) => Err(ContainerRegistryError::from(err)),
-            _ => Ok(self.get_repository(image.name.as_str()).unwrap()),
+            _ => Ok(self.get_repository(&image).unwrap()),
         }
     }
 
-    pub fn get_or_create_repository(
+    fn get_or_create_repository(
         &self,
         image: &Image,
     ) -> Result<Repository, ContainerRegistryError> {
         // check if the repository already exists
-        let repository = self.get_repository(image.name.as_str());
+        let repository = self.get_repository(&image);
         if repository.is_some() {
             info!("ECR repository {} already exists", image.name.as_str());
             return Ok(repository.unwrap());
         }
 
-        self.create(&image)
+        self.create_repository(&image)
     }
 }
 
@@ -191,7 +242,7 @@ impl ContainerRegistry for ECR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        self.get_repository(image.name.as_str()).is_some()
+        self.get_repository(&image).is_some()
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {
@@ -223,7 +274,7 @@ impl ContainerRegistry for ECR {
         };
 
         let repository = match if force_push {
-            self.create(&image)
+            self.create_repository(&image)
         } else {
             self.get_or_create_repository(&image)
         } {
@@ -256,34 +307,15 @@ impl ContainerRegistry for ECR {
             image.tag.as_str()
         );
 
-        // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
-        // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
-        match cmd::exec(
-            "docker",
-            vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
-        ) {
-            Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
-            },
-            _ => {}
-        };
+        if !force_push && self.get_image(image).is_some() {
+            // check if image does exist - if yes, do not upload it again
+            let mut image = image.clone();
+            image.registry_url = Some(dest);
 
-        // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
-        match cmd::exec("docker", vec!["push", dest.as_str()]) {
-            Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
-            },
-            _ => {}
-        };
+            return Ok(PushResult { image });
+        }
 
-        let mut image = image.clone();
-        image.registry_url = Some(dest);
-
-        Ok(PushResult { image })
+        self.push_image(dest, image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
