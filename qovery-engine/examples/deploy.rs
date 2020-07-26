@@ -67,7 +67,7 @@ fn main() {
                 },
             ],
             branch: "master".to_string(),
-            private_port: Some(8080),
+            private_port: Some(3000),
         }],
         routers: vec![
             Router {
