@@ -9,7 +9,7 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Application as CApplication, Create, Delete, Pause, Service, ServiceError, ServiceType,
+    Action, Application as CApplication, Create, Delete, Pause, Service, ServiceError, ServiceType,
     StatefulService, StatelessService,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
@@ -20,6 +20,7 @@ use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 pub struct Application {
     execution_id: String,
     id: String,
+    action: Action,
     name: String,
     private_port: Option<u16>,
     image: Image,
@@ -31,6 +32,7 @@ impl Application {
     pub fn new(
         execution_id: &str,
         id: &str,
+        action: Action,
         name: &str,
         private_port: Option<u16>,
         image: Image,
@@ -40,6 +42,7 @@ impl Application {
         Application {
             execution_id: execution_id.to_string(),
             id: id.to_string(),
+            action,
             name: name.to_string(),
             private_port,
             image,
@@ -142,6 +145,10 @@ impl Service for Application {
 
     fn version(&self) -> &str {
         self.image.commit_id.as_str()
+    }
+
+    fn action(&self) -> &Action {
+        &self.action
     }
 
     fn private_port(&self) -> Option<u16> {
@@ -260,11 +267,20 @@ impl Create for Application {
 
 impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        unimplemented!()
+        info!("AWS.application.on_pause() called for {}", self.name());
+
+        // FIXME
+        Ok(())
     }
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        unimplemented!()
+        warn!(
+            "AWS.application.on_pause_error() called for {}",
+            self.name()
+        );
+
+        // FIXME
+        Ok(())
     }
 }
 

@@ -10,7 +10,8 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Create, Delete, Pause, Router as RRouter, Service, ServiceError, ServiceType, StatelessService,
+    Action, Create, Delete, Pause, Router as RRouter, Service, ServiceError, ServiceType,
+    StatelessService,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
@@ -193,6 +194,10 @@ impl<'a> Service for Router {
         "1.0"
     }
 
+    fn action(&self) -> &Action {
+        &Action::Create
+    }
+
     fn private_port(&self) -> Option<u16> {
         None
     }
@@ -336,23 +341,27 @@ impl Create for Router {
 
 impl Pause for Router {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        unimplemented!()
+        Ok(())
     }
 }
 
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.router.on_delete() called for {}", self.name());
-        unimplemented!()
+
+        // FIXME
+        Ok(())
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.router.on_delete_error() called for {}", self.name());
-        unimplemented!()
+
+        // FIXME
+        Ok(())
     }
 }
 

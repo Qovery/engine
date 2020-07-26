@@ -131,7 +131,8 @@ impl<'a> Transaction<'a> {
         let apps_to_build = environment
             .applications
             .iter()
-            .filter(|app| app.action == Action::Create); // TODO configurable?
+            // build only applications that are set with Action: Create
+            .filter(|app| app.action == Action::Create);
 
         let application_and_result_tuples = apps_to_build
             .map(|app| (app, self.config.build_platform.build(app.to_build())))

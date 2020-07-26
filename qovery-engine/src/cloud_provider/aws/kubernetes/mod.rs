@@ -438,8 +438,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // create all stateful services (database)
         for stateful_service in &environment.stateful_services {
-            // TODO add multi threading to improve deployment performance - but consider to respect the deployment order
-            match stateful_service.on_create(&stateful_deployment_target) {
+            match stateful_service.exec_action(&stateful_deployment_target) {
                 Err(err) => {
                     error!(
                         "error with stateful service {} , id: {} => {:?}",
@@ -458,8 +457,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         // create all stateless services (router, application...)
         for stateless_service in &environment.stateless_services {
-            // TODO add multi threading to improve deployment performance - but consider to respect the deployment order
-            match stateless_service.on_create(&stateless_deployment_target) {
+            match stateless_service.exec_action(&stateless_deployment_target) {
                 Err(err) => {
                     error!(
                         "error with stateless service {} , id: {} => {:?}",

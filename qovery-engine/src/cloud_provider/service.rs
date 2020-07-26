@@ -13,6 +13,7 @@ pub trait Service {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn version(&self) -> &str;
+    fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
 
     fn is_valid(&self) -> Result<(), ServiceError> {
@@ -57,11 +58,28 @@ pub trait Service {
     }
 }
 
-pub trait StatelessService: Service + Create + Pause + Delete {}
+pub trait StatelessService: Service + Create + Pause + Delete {
+    fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), ServiceError> {
+        match self.action() {
+            crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
+            crate::cloud_provider::service::Action::Delete => self.on_delete(deployment_target),
+            crate::cloud_provider::service::Action::Pause => self.on_pause(deployment_target),
+            crate::cloud_provider::service::Action::Nothing => Ok(()),
+        }
+    }
+}
 
 pub trait StatefulService:
     Service + Create + Pause + Delete + Backup + Clone + Upgrade + Downgrade
 {
+    fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), ServiceError> {
+        match self.action() {
+            crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
+            crate::cloud_provider::service::Action::Delete => self.on_delete(deployment_target),
+            crate::cloud_provider::service::Action::Pause => self.on_pause(deployment_target),
+            crate::cloud_provider::service::Action::Nothing => Ok(()),
+        }
+    }
 }
 
 pub trait Application: StatelessService {
@@ -109,6 +127,14 @@ pub trait Upgrade {
 pub trait Downgrade {
     fn on_downgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
     fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum Action {
+    Create,
+    Pause,
+    Delete,
+    Nothing,
 }
 
 #[derive(Eq, PartialEq)]

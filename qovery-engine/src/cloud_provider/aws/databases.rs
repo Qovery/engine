@@ -9,8 +9,8 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service, ServiceError,
-    ServiceType, StatefulService, Upgrade,
+    Action, Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service,
+    ServiceError, ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
@@ -18,6 +18,7 @@ use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 pub struct PostgreSQL {
     execution_id: String,
     id: String,
+    action: Action,
     name: String,
     version: String,
     options: DatabaseOptions,
@@ -27,12 +28,14 @@ impl PostgreSQL {
     pub fn new(
         execution_id: &str,
         id: &str,
+        action: Action,
         name: &str,
         version: &str,
         options: DatabaseOptions,
     ) -> Self {
         PostgreSQL {
             execution_id: execution_id.to_string(),
+            action,
             id: id.to_string(),
             name: name.to_string(),
             version: version.to_string(),
@@ -83,6 +86,10 @@ impl Service for PostgreSQL {
 
     fn version(&self) -> &str {
         self.version.as_str()
+    }
+
+    fn action(&self) -> &Action {
+        &self.action
     }
 
     fn private_port(&self) -> Option<u16> {
@@ -226,11 +233,15 @@ impl Create for PostgreSQL {
 
 impl Pause for PostgreSQL {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        unimplemented!()
+        info!("AWS.PostgreSQL.on_pause() called for {}", self.name());
+
+        Ok(())
     }
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        unimplemented!()
+        warn!("AWS.PostgreSQL.on_pause_error() called for {}", self.name());
+
+        Ok(())
     }
 }
 

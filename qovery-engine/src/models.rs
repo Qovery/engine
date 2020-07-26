@@ -118,6 +118,17 @@ pub enum Action {
     Nothing,
 }
 
+impl Action {
+    pub fn to_service_action(&self) -> crate::cloud_provider::service::Action {
+        match self {
+            Action::Create => crate::cloud_provider::service::Action::Create,
+            Action::Pause => crate::cloud_provider::service::Action::Pause,
+            Action::Delete => crate::cloud_provider::service::Action::Delete,
+            Action::Nothing => crate::cloud_provider::service::Action::Nothing,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     pub id: String,
@@ -145,6 +156,7 @@ impl Application {
                 crate::cloud_provider::aws::application::Application::new(
                     execution_id,
                     self.id.as_str(),
+                    self.action.to_service_action(),
                     self.name.as_str(),
                     self.private_port,
                     image.clone(),
@@ -173,6 +185,7 @@ impl Application {
                 crate::cloud_provider::aws::application::Application::new(
                     execution_id,
                     self.id.as_str(),
+                    self.action.to_service_action(),
                     self.name.as_str(),
                     self.private_port,
                     image.clone(),
@@ -367,6 +380,7 @@ impl Database {
                     let db: Box<dyn StatefulService> = Box::new(PostgreSQL::new(
                         execution_id,
                         self.id.as_str(),
+                        self.action.to_service_action(),
                         self.name.as_str(),
                         self.version.as_str(),
                         DatabaseOptions {
