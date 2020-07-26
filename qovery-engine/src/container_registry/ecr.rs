@@ -309,11 +309,23 @@ impl ContainerRegistry for ECR {
 
         if !force_push && self.get_image(image).is_some() {
             // check if image does exist - if yes, do not upload it again
+            info!(
+                "image {:?} does already exist into ECR {} repository",
+                image,
+                self.name()
+            );
+
             let mut image = image.clone();
             image.registry_url = Some(dest);
 
             return Ok(PushResult { image });
         }
+
+        info!(
+            "image {:?} does not exist into ECR {} repository - let's upload it",
+            image,
+            self.name()
+        );
 
         self.push_image(dest, image)
     }

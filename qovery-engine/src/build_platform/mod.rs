@@ -42,7 +42,7 @@ pub struct GitRepository {
     pub dockerfile_path: String,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Image {
     pub name: String,
     pub tag: String,
