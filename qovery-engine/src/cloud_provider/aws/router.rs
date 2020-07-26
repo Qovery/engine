@@ -165,7 +165,7 @@ impl Router {
         );
         context.insert(
             "spec_acme_server",
-            //"https://acme-v02.api.letsencrypt.org/directory",
+            //"https://acme-v02.api.letsencrypt.org/directory", TODO use in production only
             "https://acme-staging-v02.api.letsencrypt.org/directory",
         );
 

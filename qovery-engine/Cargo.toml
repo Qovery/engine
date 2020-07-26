@@ -44,3 +44,6 @@ rusoto_ecr = "0.44.0"
 rusoto_eks = "0.44.0"
 rusoto_s3 = "0.44.0"
 rusoto_dynamodb = "0.44.0"
+
+[dev-dependencies]
+test-utilities = { path = "test_utilities" }
