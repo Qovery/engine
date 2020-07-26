@@ -205,6 +205,7 @@ impl Application {
                 name: self.name.clone(),
                 tag: self.commit_id.clone(),
                 commit_id: self.commit_id.clone(),
+                registry_url: None,
             },
             options: BuildOptions {
                 environment_variables: self

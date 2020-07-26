@@ -54,7 +54,7 @@ fn main() {
                 storage_type: StorageType::SSD,
                 size_in_gib: 10,
                 mount_point: "/mnt/photos".to_string(),
-                snapshot_retention_in_days: 30,
+                snapshot_retention_in_days: 0,
             }],
             environment_variables: vec![
                 EnvironmentVariable {

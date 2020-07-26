@@ -75,7 +75,7 @@ impl ContainerRegistry for DockerHub {
         false // TODO check if image exists on the remote repository
     }
 
-    fn push(&self, image: Image, force_push: bool) -> Result<PushResult, PushError> {
+    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {
         match cmd::exec(
             "docker",
             vec![
@@ -120,10 +120,13 @@ impl ContainerRegistry for DockerHub {
             _ => {}
         };
 
+        let mut image = image.clone();
+        image.registry_url = Some(dest);
+
         Ok(PushResult { image })
     }
 
-    fn push_error(&self, image: Image) -> Result<PushResult, PushError> {
+    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
         unimplemented!()
     }
 }

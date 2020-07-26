@@ -47,6 +47,7 @@ pub struct Image {
     pub name: String,
     pub tag: String,
     pub commit_id: String,
+    pub registry_url: Option<String>,
 }
 
 impl Image {

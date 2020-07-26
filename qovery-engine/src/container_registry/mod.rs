@@ -20,8 +20,8 @@ pub trait ContainerRegistry {
     fn on_delete(&self) -> Result<(), ContainerRegistryError>;
     fn on_delete_error(&self) -> Result<(), ContainerRegistryError>;
     fn does_image_exists(&self, image: &Image) -> bool;
-    fn push(&self, image: Image, force_push: bool) -> Result<PushResult, PushError>;
-    fn push_error(&self, image: Image) -> Result<PushResult, PushError>;
+    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError>;
+    fn push_error(&self, image: &Image) -> Result<PushResult, PushError>;
 }
 
 pub struct PushResult {

@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 
 use itertools::Itertools;
@@ -169,26 +169,31 @@ impl<'a> Transaction<'a> {
 
     fn _push_applications(
         &self,
-        applications: &Vec<Box<dyn Application>>,
-    ) -> Result<Vec<PushResult>, PushError> {
-        let results: Vec<_> = applications
-            .iter()
-            .map(|app| {
-                self.config
-                    .container_registry
-                    .push(app.image().clone(), false)
-            })
+        applications: Vec<Box<dyn Application>>,
+    ) -> Result<Vec<(Box<dyn Application>, PushResult)>, PushError> {
+        let application_and_push_results: Vec<_> = applications
+            .into_iter()
+            .map(
+                |mut app| match self.config.container_registry.push(app.image(), false) {
+                    Ok(push_result) => {
+                        // I am not a big fan of doing that but it's the most effective way
+                        app.set_image(push_result.image.clone());
+                        Ok((app, push_result))
+                    }
+                    Err(err) => Err(err),
+                },
+            )
             .collect();
 
-        let mut push_results: Vec<PushResult> = vec![];
-        for r in results.into_iter() {
-            match r {
-                Ok(push_result) => push_results.push(push_result),
+        let mut results: Vec<(Box<dyn Application>, PushResult)> = vec![];
+        for result in application_and_push_results.into_iter() {
+            match result {
+                Ok(tuple) => results.push(tuple),
                 Err(err) => return Err(err), // stop on error // TODO add error! log message here
             }
         }
 
-        Ok(push_results)
+        Ok(results)
     }
 
     fn check_environment(
@@ -406,8 +411,13 @@ impl<'a> Transaction<'a> {
                     };
 
                     let apps_result = match self._build_applications(target_environment) {
-                        Ok(applications) => match self._push_applications(&applications) {
-                            Ok(_) => Ok(applications),
+                        Ok(applications) => match self._push_applications(applications) {
+                            Ok(results) => {
+                                let applications =
+                                    results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
+
+                                Ok(applications)
+                            }
                             Err(err) => Err(CommitError::PushImage(err)),
                         },
                         Err(err) => Err(CommitError::BuildImage(err)),

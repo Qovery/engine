@@ -194,7 +194,7 @@ impl ContainerRegistry for ECR {
         self.get_repository(image.name.as_str()).is_some()
     }
 
-    fn push(&self, image: Image, force_push: bool) -> Result<PushResult, PushError> {
+    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {
         let r = async_run(
             self.ecr_client()
                 .get_authorization_token(GetAuthorizationTokenRequest::default()),
@@ -280,10 +280,13 @@ impl ContainerRegistry for ECR {
             _ => {}
         };
 
+        let mut image = image.clone();
+        image.registry_url = Some(dest);
+
         Ok(PushResult { image })
     }
 
-    fn push_error(&self, image: Image) -> Result<PushResult, PushError> {
+    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
         unimplemented!()
     }
 }

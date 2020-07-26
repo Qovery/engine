@@ -59,10 +59,17 @@ impl Application {
     fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
         let mut context = self.default_context(kubernetes, environment);
         let commit_id = self.image().commit_id.as_str();
-        let image_name_with_tag = self.image().name_with_tag();
 
         context.insert("helm_app_version", &commit_id[..7]);
-        context.insert("image_name_with_tag", image_name_with_tag.as_str());
+
+        match &self.image().registry_url {
+            Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
+            None => {
+                let image_name_with_tag = self.image().name_with_tag();
+                warn!("there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
+                context.insert("image_name_with_tag", image_name_with_tag.as_str());
+            }
+        }
 
         let environment_variables = self
             .environment_variables
@@ -107,6 +114,10 @@ impl Application {
 impl crate::cloud_provider::service::Application for Application {
     fn image(&self) -> &Image {
         &self.image
+    }
+
+    fn set_image(&mut self, image: Image) {
+        self.image = image;
     }
 }
 

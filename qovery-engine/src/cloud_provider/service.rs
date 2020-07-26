@@ -3,6 +3,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
+use crate::container_registry::PushResult;
 use std::io::Error;
 use tera::Context;
 
@@ -65,6 +66,7 @@ pub trait StatefulService:
 
 pub trait Application: StatelessService {
     fn image(&self) -> &Image;
+    fn set_image(&mut self, image: Image);
 }
 
 pub trait Router: StatelessService {
