@@ -1,7 +1,27 @@
 extern crate test_utilities;
 
 #[test]
-fn deploy_a_working_environment_on_aws_eks() {
+fn deploy_a_working_environment_with_all_options_on_aws_eks() {
+    // TODO
+}
+
+#[test]
+fn deploy_a_working_environment_with_no_router_on_aws_eks() {
+    // TODO
+}
+
+#[test]
+fn deploy_a_working_environment_with_no_database_on_aws_eks() {
+    // TODO
+}
+
+#[test]
+fn deploy_a_working_environment_with_no_storage_on_aws_eks() {
+    // TODO
+}
+
+#[test]
+fn deploy_a_working_environment_with_no_custom_domain_on_aws_eks() {
     // TODO
 }
 
@@ -21,6 +41,11 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
 }
 
 #[test]
+fn deploy_a_working_environment_with_a_failing_default_domain_on_aws_eks() {
+    // TODO
+}
+
+#[test]
 fn deploy_but_fail_to_push_image_on_container_registry() {
     // TODO
 }
@@ -31,12 +56,22 @@ fn delete_a_working_environment_on_aws_eks() {
 }
 
 #[test]
+fn delete_a_non_working_environment_on_aws_eks() {
+    // TODO
+}
+
+#[test]
 fn deploy_and_delete_and_deploy_a_working_environment_on_aws_eks() {
     // TODO
 }
 
 #[test]
 fn pause_a_working_environment_on_aws_eks() {
+    // TODO
+}
+
+#[test]
+fn pause_a_non_working_environment_on_aws_eks() {
     // TODO
 }
 
