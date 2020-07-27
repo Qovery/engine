@@ -253,16 +253,42 @@ fn delete_a_working_production_environment_on_aws_eks() {
 
 #[test]
 fn delete_a_non_working_environment_on_aws_eks() {
+    // DEPLOY
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+    environment.kind = Kind::Development;
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // DELETE
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+    environment.kind = Kind::Development;
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+}
+
+#[test]
+fn pause_a_working_development_environment_on_aws_eks() {
     // TODO
 }
 
 #[test]
-fn deploy_and_delete_and_deploy_a_working_environment_on_aws_eks() {
-    // TODO
-}
-
-#[test]
-fn pause_a_working_environment_on_aws_eks() {
+fn pause_a_working_production_environment_on_aws_eks() {
     // TODO
 }
 
