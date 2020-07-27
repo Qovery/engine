@@ -310,7 +310,7 @@ impl ContainerRegistry for ECR {
         if !force_push && self.get_image(image).is_some() {
             // check if image does exist - if yes, do not upload it again
             info!(
-                "image {:?} does already exist into ECR {} repository",
+                "image {:?} does already exist into ECR {} repository - no need to upload it",
                 image,
                 self.name()
             );
