@@ -1,5 +1,5 @@
 use qovery_engine::cloud_provider::CloudProviderError;
-use qovery_engine::config::Config;
+use qovery_engine::engine::Engine;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::transaction::TransactionResult;
 
@@ -8,9 +8,9 @@ fn main() {
 
     let execution_id = test_utilities::execution_id();
 
-    let config = test_utilities::default_config(execution_id.as_str());
+    let engine = test_utilities::default_engine(execution_id.as_str());
 
-    let session = match config.session() {
+    let session = match engine.session() {
         Ok(session) => session,
         Err(err) => match err {
             ConfigurationError::BuildPlatform(e) => panic!(e),

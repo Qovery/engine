@@ -7,9 +7,9 @@ use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::gcp::GCP;
-use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
+use qovery_engine::engine::Engine;
 use qovery_engine::models::{Environment, EnvironmentAction, ProgressListener};
 use std::rc::Rc;
 
@@ -27,7 +27,7 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn config(&self, progress_listener: Rc<Box<dyn ProgressListener>>) -> Config {
+    pub fn engine(&self, progress_listener: Rc<Box<dyn ProgressListener>>) -> Engine {
         let mut build_platform = self
             .build_platform
             .to_engine_build_platform(self.id.as_str());
@@ -46,7 +46,7 @@ impl Request {
 
         container_registry.add_listener(progress_listener.clone());
 
-        Config::new(build_platform, container_registry, cloud_provider)
+        Engine::new(build_platform, container_registry, cloud_provider)
     }
 
     pub fn environment_action(&self) -> Option<EnvironmentAction> {

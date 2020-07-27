@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crossbeam_channel::Sender;
 
 use qovery_engine::cloud_provider::CloudProviderError;
-use qovery_engine::config::Config;
+use qovery_engine::engine::Engine;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{ProgressInfo, ProgressListener};
 use qovery_engine::transaction::TransactionResult;
@@ -46,10 +46,10 @@ impl Task for InfrastructureTask {
                 sender: sender.clone(),
             }));
 
-        let config = self.request.config(my_progress_listener);
+        let engine = self.request.engine(my_progress_listener);
 
         // FIXME - return errors with Sender
-        let session = match config.session() {
+        let session = match engine.session() {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
@@ -73,7 +73,7 @@ impl Task for InfrastructureTask {
 
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             self.id(),
-            config.cloud_provider(),
+            engine.cloud_provider(),
             nodes.borrow(),
         );
 
@@ -143,10 +143,10 @@ impl Task for EnvironmentTask {
                 sender: sender.clone(),
             }));
 
-        let config = self.request.config(my_progress_listener);
+        let engine = self.request.engine(my_progress_listener);
 
         // FIXME - return errors with Sender
-        let session = match config.session() {
+        let session = match engine.session() {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
@@ -170,7 +170,7 @@ impl Task for EnvironmentTask {
 
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             self.id(),
-            config.cloud_provider(),
+            engine.cloud_provider(),
             nodes.borrow(),
         );
 

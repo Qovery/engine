@@ -5,19 +5,19 @@ use crate::error::ConfigurationError;
 use crate::session::Session;
 use std::borrow::Borrow;
 
-pub struct Config {
+pub struct Engine {
     build_platform: Box<dyn BuildPlatform>,
     container_registry: Box<dyn ContainerRegistry>,
     cloud_provider: Box<dyn CloudProvider>,
 }
 
-impl Config {
+impl Engine {
     pub fn new(
         build_platform: Box<dyn BuildPlatform>,
         container_registry: Box<dyn ContainerRegistry>,
         cloud_provider: Box<dyn CloudProvider>,
-    ) -> Config {
-        Config {
+    ) -> Engine {
+        Engine {
             build_platform,
             container_registry,
             cloud_provider,
@@ -25,7 +25,7 @@ impl Config {
     }
 }
 
-impl<'a> Config {
+impl<'a> Engine {
     /// Read JSON and return a Config
     pub fn from_json(json: &str) -> Self {
         unimplemented!()
@@ -71,7 +71,7 @@ impl<'a> Config {
     /// check and init the connection to all the services
     pub fn session(&'a self) -> Result<Session<'a>, ConfigurationError> {
         match self.is_valid() {
-            Ok(_) => Ok(Session::<'a> { config: self }),
+            Ok(_) => Ok(Session::<'a> { engine: self }),
             Err(err) => Err(err),
         }
     }
@@ -79,10 +79,10 @@ impl<'a> Config {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::Config;
+    use crate::engine::Engine;
 
     #[test]
     fn read_from_json() {
-        Config::from_json("");
+        Engine::from_json("");
     }
 }

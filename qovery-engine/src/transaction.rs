@@ -10,22 +10,22 @@ use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesError};
 use crate::cloud_provider::service::Application;
 use crate::cloud_provider::service::{Service, ServiceError, StatefulService, StatelessService};
 use crate::cloud_provider::DeployError;
-use crate::config::Config;
 use crate::container_registry::{PushError, PushResult};
+use crate::engine::Engine;
 use crate::git::Credentials;
 use crate::models::{Action, Environment, EnvironmentAction, EnvironmentError};
 use crate::transaction::CommitError::NotValidService;
 
 pub struct Transaction<'a> {
-    config: &'a Config,
+    engine: &'a Engine,
     steps: Vec<Step<'a>>,
     executed_steps: Vec<Step<'a>>,
 }
 
 impl<'a> Transaction<'a> {
-    pub fn new(config: &'a Config) -> Self {
+    pub fn new(engine: &'a Engine) -> Self {
         Transaction::<'a> {
-            config,
+            engine,
             steps: vec![],
             executed_steps: vec![],
         }
@@ -153,7 +153,7 @@ impl<'a> Transaction<'a> {
             .map(|app| {
                 (
                     app,
-                    self.config
+                    self.engine
                         .build_platform()
                         .build(app.to_build(), option.force_build),
                 )
@@ -180,7 +180,7 @@ impl<'a> Transaction<'a> {
             match application.to_application(
                 environment.execution_id.as_str(),
                 &build_result.build.image,
-                self.config.cloud_provider(),
+                self.engine.cloud_provider(),
             ) {
                 Some(x) => applications.push(x),
                 None => {}
@@ -199,7 +199,7 @@ impl<'a> Transaction<'a> {
             .into_iter()
             .map(|mut app| {
                 match self
-                    .config
+                    .engine
                     .container_registry()
                     .push(app.image(), option.force_push)
                 {
@@ -302,7 +302,7 @@ impl<'a> Transaction<'a> {
                 match application.to_application(
                     environment.execution_id.as_str(),
                     &build.image,
-                    self.config.cloud_provider(),
+                    self.engine.cloud_provider(),
                 ) {
                     Some(x) => _applications.push(x),
                     None => {}
@@ -310,7 +310,7 @@ impl<'a> Transaction<'a> {
             }
 
             let qe_environment =
-                environment.to_qe_environment(&_applications, self.config.cloud_provider());
+                environment.to_qe_environment(&_applications, self.engine.cloud_provider());
 
             qe_environment
         };

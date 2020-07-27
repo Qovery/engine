@@ -6,8 +6,8 @@ use qovery_engine::transaction::TransactionResult;
 #[test]
 fn deploy_a_working_environment_with_all_options_on_aws_eks() {
     let execution_id = test_utilities::execution_id();
-    let config = test_utilities::default_config(execution_id.as_str());
-    let session = config.session().unwrap();
+    let engine = test_utilities::default_engine(execution_id.as_str());
+    let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
     let cp = test_utilities::cloud_provider_aws(execution_id.as_str());

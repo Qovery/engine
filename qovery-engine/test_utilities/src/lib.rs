@@ -5,10 +5,10 @@ use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::CloudProvider;
-use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::ContainerRegistry;
+use qovery_engine::engine::Engine;
 use qovery_engine::models::{
     Action, Application, CustomDomain, Database, DatabaseKind, Environment, EnvironmentVariable,
     GitCredentials, Kind, Route, Router, Storage, StorageType,
@@ -89,7 +89,7 @@ pub fn aws_kubernetes_eks<'a>(
     )
 }
 
-pub fn default_config(execution_id: &str) -> Config {
+pub fn default_engine(execution_id: &str) -> Engine {
     // use ECR
     let container_registry = Box::new(container_registry_ecr(execution_id));
 
@@ -99,7 +99,7 @@ pub fn default_config(execution_id: &str) -> Config {
     // use AWS
     let cloud_provider = Box::new(cloud_provider_aws(execution_id));
 
-    Config::new(build_platform, container_registry, cloud_provider)
+    Engine::new(build_platform, container_registry, cloud_provider)
 }
 
 pub fn working_environment(execution_id: &str) -> Environment {
