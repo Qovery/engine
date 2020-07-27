@@ -178,7 +178,6 @@ impl Task for EnvironmentTask {
 
         match self.request.action {
             Action::Create => {
-                tx.build_environment(&environment_action);
                 tx.deploy_environment(kubernetes.borrow(), &environment_action);
             }
             Action::Delete => unimplemented!(),

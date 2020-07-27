@@ -19,7 +19,12 @@ fn deploy_a_working_environment_with_all_options_on_aws_eks() {
         EnvironmentAction::Environment(test_utilities::working_environment(execution_id.as_str()));
 
     tx.deploy_environment(&k, &ea);
-    assert!(tx.commit() == TransactionResult::Ok);
+
+    match tx.commit() {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]

@@ -17,7 +17,7 @@ use crate::models::{Action, Environment, EnvironmentAction, EnvironmentError};
 use crate::transaction::CommitError::NotValidService;
 
 pub struct Transaction<'a> {
-    pub config: &'a Config,
+    config: &'a Config,
     steps: Vec<Step<'a>>,
     executed_steps: Vec<Step<'a>>,
 }
@@ -57,38 +57,37 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn build_environment(
+    pub fn deploy_environment(
         &mut self,
+        kubernetes: &'a dyn Kubernetes,
         environment_action: &'a EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
-        self.build_environment_with_options(
+        self.deploy_environment_with_options(
+            kubernetes,
             environment_action,
-            BuildEnvironmentOption {
+            DeploymentEnvironmentOption {
                 force_build: false,
                 force_push: false,
             },
         )
     }
 
-    pub fn build_environment_with_options(
-        &mut self,
-        environment_action: &'a EnvironmentAction,
-        option: BuildEnvironmentOption,
-    ) -> Result<(), EnvironmentError> {
-        let _ = self.check_environment_action(environment_action)?;
-        self.steps
-            .push(Step::BuildEnvironment(environment_action, option));
-        Ok(())
-    }
-
-    pub fn deploy_environment(
+    pub fn deploy_environment_with_options(
         &mut self,
         kubernetes: &'a dyn Kubernetes,
         environment_action: &'a EnvironmentAction,
+        option: DeploymentEnvironmentOption,
     ) -> Result<(), EnvironmentError> {
         let _ = self.check_environment_action(environment_action)?;
+
+        // add build step
+        self.steps
+            .push(Step::BuildEnvironment(environment_action, option));
+
+        // add deployment step
         self.steps
             .push(Step::DeployEnvironment(kubernetes, environment_action));
+
         Ok(())
     }
 
@@ -142,7 +141,7 @@ impl<'a> Transaction<'a> {
     fn _build_applications(
         &self,
         environment: &Environment,
-        option: &BuildEnvironmentOption,
+        option: &DeploymentEnvironmentOption,
     ) -> Result<Vec<Box<dyn Application>>, BuildError> {
         let apps_to_build = environment
             .applications
@@ -194,7 +193,7 @@ impl<'a> Transaction<'a> {
     fn _push_applications(
         &self,
         applications: Vec<Box<dyn Application>>,
-        option: &BuildEnvironmentOption,
+        option: &DeploymentEnvironmentOption,
     ) -> Result<Vec<(Box<dyn Application>, PushResult)>, PushError> {
         let application_and_push_results: Vec<_> = applications
             .into_iter()
@@ -558,7 +557,7 @@ impl<'a> Transaction<'a> {
 }
 
 #[derive(Clone)]
-pub struct BuildEnvironmentOption {
+pub struct DeploymentEnvironmentOption {
     force_build: bool,
     force_push: bool,
 }
@@ -567,7 +566,7 @@ enum Step<'a> {
     // init and create all the necessary resources (Network, Kubernetes)
     CreateKubernetes(&'a dyn Kubernetes),
     DeleteKubernetes(&'a dyn Kubernetes),
-    BuildEnvironment(&'a EnvironmentAction, BuildEnvironmentOption),
+    BuildEnvironment(&'a EnvironmentAction, DeploymentEnvironmentOption),
     DeployEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
     PauseEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
     DeleteEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),

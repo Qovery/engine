@@ -29,10 +29,6 @@ fn main() {
     let environment = test_utilities::working_environment(execution_id.as_str());
 
     let environment_action = EnvironmentAction::Environment(environment);
-    match tx.build_environment(&environment_action) {
-        Ok(_) => {}
-        Err(err) => panic!("environment error"),
-    }
 
     let eks = test_utilities::aws_kubernetes_eks(
         execution_id.as_str(),
