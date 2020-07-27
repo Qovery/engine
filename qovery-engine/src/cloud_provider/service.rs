@@ -105,33 +105,40 @@ pub trait Create {
 
 pub trait Pause {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_pause_check(&self) -> Result<(), ServiceError>;
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Delete {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_delete_check(&self) -> Result<(), ServiceError>;
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Backup {
     fn on_backup(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_backup_check(&self) -> Result<(), ServiceError>;
     fn on_backup_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
     fn on_restore(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_restore_check(&self) -> Result<(), ServiceError>;
     fn on_restore_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Clone {
     fn on_clone(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_clone_check(&self) -> Result<(), ServiceError>;
     fn on_clone_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Upgrade {
     fn on_upgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_upgrade_check(&self) -> Result<(), ServiceError>;
     fn on_upgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Downgrade {
     fn on_downgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_downgrade_check(&self) -> Result<(), ServiceError>;
     fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 

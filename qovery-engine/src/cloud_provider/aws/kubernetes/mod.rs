@@ -566,6 +566,85 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn pause_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         info!("EKS.pause_environment() called for {}", self.name());
+
+        let stateful_deployment_target = match environment.kind {
+            crate::cloud_provider::environment::Kind::Production => {
+                DeploymentTarget::ManagedServices(self, environment)
+            }
+            crate::cloud_provider::environment::Kind::Development => {
+                DeploymentTarget::SelfHosted(self, environment)
+            }
+        };
+
+        // create all stateful services (database)
+        for stateful_service in &environment.stateful_services {
+            match stateful_service.on_pause(&stateful_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with stateful service {} , id: {} => {:?}",
+                        stateful_service.name(),
+                        stateful_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Pause(err));
+                }
+                _ => {}
+            }
+        }
+
+        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
+        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
+        // create all stateless services (router, application...)
+        for stateless_service in &environment.stateless_services {
+            match stateless_service.on_pause(&stateless_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with stateless service {} , id: {} => {:?}",
+                        stateless_service.name(),
+                        stateless_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Pause(err));
+                }
+                _ => {}
+            }
+        }
+
+        // check all deployed services
+        for stateful_service in &environment.stateful_services {
+            match stateful_service.on_pause_check() {
+                Err(err) => {
+                    error!(
+                        "error with stateful service while checking it {} , id: {} => {:?}",
+                        stateful_service.name(),
+                        stateful_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Pause(err));
+                }
+                _ => {}
+            }
+        }
+
+        for stateless_service in &environment.stateless_services {
+            match stateless_service.on_pause_check() {
+                Err(err) => {
+                    error!(
+                        "error with stateless service while checking it {} , id: {} => {:?}",
+                        stateless_service.name(),
+                        stateless_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Pause(err));
+                }
+                _ => {}
+            }
+        }
+
         Ok(())
     }
 
@@ -576,7 +655,85 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         info!("EKS.delete_environment() called for {}", self.name());
-        // TODO delete the namespace - do services are all deleted?
+
+        let stateful_deployment_target = match environment.kind {
+            crate::cloud_provider::environment::Kind::Production => {
+                DeploymentTarget::ManagedServices(self, environment)
+            }
+            crate::cloud_provider::environment::Kind::Development => {
+                DeploymentTarget::SelfHosted(self, environment)
+            }
+        };
+
+        // create all stateful services (database)
+        for stateful_service in &environment.stateful_services {
+            match stateful_service.on_delete(&stateful_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with stateful service {} , id: {} => {:?}",
+                        stateful_service.name(),
+                        stateful_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Delete(err));
+                }
+                _ => {}
+            }
+        }
+
+        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
+        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
+        // create all stateless services (router, application...)
+        for stateless_service in &environment.stateless_services {
+            match stateless_service.on_delete(&stateless_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with stateless service {} , id: {} => {:?}",
+                        stateless_service.name(),
+                        stateless_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Delete(err));
+                }
+                _ => {}
+            }
+        }
+
+        // check all deployed services
+        for stateful_service in &environment.stateful_services {
+            match stateful_service.on_delete_check() {
+                Err(err) => {
+                    error!(
+                        "error with stateful service while checking it {} , id: {} => {:?}",
+                        stateful_service.name(),
+                        stateful_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Delete(err));
+                }
+                _ => {}
+            }
+        }
+
+        for stateless_service in &environment.stateless_services {
+            match stateless_service.on_delete_check() {
+                Err(err) => {
+                    error!(
+                        "error with stateless service while checking it {} , id: {} => {:?}",
+                        stateless_service.name(),
+                        stateless_service.id(),
+                        err
+                    );
+
+                    return Err(KubernetesError::Delete(err));
+                }
+                _ => {}
+            }
+        }
+
         Ok(())
     }
 

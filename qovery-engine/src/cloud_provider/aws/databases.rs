@@ -256,6 +256,10 @@ impl Pause for PostgreSQL {
         Ok(())
     }
 
+    fn on_pause_check(&self) -> Result<(), ServiceError> {
+        Ok(())
+    }
+
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.PostgreSQL.on_pause_error() called for {}", self.name());
 
@@ -267,6 +271,10 @@ impl Delete for PostgreSQL {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.PostgreSQL.on_delete() called for {}", self.name());
 
+        Ok(())
+    }
+
+    fn on_delete_check(&self) -> Result<(), ServiceError> {
         Ok(())
     }
 
@@ -285,6 +293,10 @@ impl crate::cloud_provider::service::Clone for PostgreSQL {
         unimplemented!()
     }
 
+    fn on_clone_check(&self) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
     fn on_clone_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
@@ -292,6 +304,10 @@ impl crate::cloud_provider::service::Clone for PostgreSQL {
 
 impl Upgrade for PostgreSQL {
     fn on_upgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_upgrade_check(&self) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
@@ -305,6 +321,10 @@ impl Downgrade for PostgreSQL {
         unimplemented!()
     }
 
+    fn on_downgrade_check(&self) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
     fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
@@ -315,11 +335,19 @@ impl Backup for PostgreSQL {
         unimplemented!()
     }
 
+    fn on_backup_check(&self) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
     fn on_backup_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
     fn on_restore(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        unimplemented!()
+    }
+
+    fn on_restore_check(&self) -> Result<(), ServiceError> {
         unimplemented!()
     }
 

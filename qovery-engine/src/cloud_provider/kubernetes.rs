@@ -53,6 +53,8 @@ pub enum KubernetesError {
     Io(std::io::Error),
     Create(ExitStatus),
     Deploy(ServiceError),
+    Pause(ServiceError),
+    Delete(ServiceError),
     Error,
 }
 

@@ -171,6 +171,25 @@ impl Router {
 
         context
     }
+
+    fn delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        };
+
+        let workspace_dir = self.workspace_directory();
+        let helm_release_name = self.helm_release_name();
+
+        let _ = common::do_stateless_service_cleanup(
+            kubernetes,
+            environment,
+            workspace_dir.as_str(),
+            helm_release_name.as_str(),
+        )?;
+
+        Ok(())
+    }
 }
 
 impl<'a> Service for Router {
@@ -331,49 +350,40 @@ impl Create for Router {
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.router.on_create_error() called for {}", self.name());
-
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let workspace_dir = self.workspace_directory();
-        let helm_release_name = self.helm_release_name();
-
-        let _ = common::do_stateless_service_cleanup(
-            kubernetes,
-            environment,
-            workspace_dir.as_str(),
-            helm_release_name.as_str(),
-        )?;
-
-        Ok(())
+        self.delete(target)
     }
 }
 
 impl Pause for Router {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+        info!("AWS.router.on_pause() called for {}", self.name());
+        self.delete(target)
+    }
+
+    fn on_pause_check(&self) -> Result<(), ServiceError> {
+        warn!("AWS.router.on_pause_error() called for {}", self.name());
+        // TODO check resource has been cleaned?
         Ok(())
     }
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
-        Ok(())
+        self.delete(target)
     }
 }
 
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.router.on_delete() called for {}", self.name());
+        self.delete(target)
+    }
 
-        // FIXME
+    fn on_delete_check(&self) -> Result<(), ServiceError> {
         Ok(())
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.router.on_delete_error() called for {}", self.name());
-
-        // FIXME
-        Ok(())
+        self.delete(target)
     }
 }
 
