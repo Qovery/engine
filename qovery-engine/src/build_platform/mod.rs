@@ -16,7 +16,7 @@ pub trait BuildPlatform {
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), BuildPlatformError>;
     fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>);
-    fn build(&self, build: Build) -> Result<BuildResult, BuildError>;
+    fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, BuildError>;
     fn build_error(&self, build: Build) -> Result<BuildResult, BuildError>;
 }
 

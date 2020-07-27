@@ -61,8 +61,23 @@ impl<'a> Transaction<'a> {
         &mut self,
         environment_action: &'a EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
+        self.build_environment_with_options(
+            environment_action,
+            BuildEnvironmentOption {
+                force_build: false,
+                force_push: false,
+            },
+        )
+    }
+
+    pub fn build_environment_with_options(
+        &mut self,
+        environment_action: &'a EnvironmentAction,
+        option: BuildEnvironmentOption,
+    ) -> Result<(), EnvironmentError> {
         let _ = self.check_environment_action(environment_action)?;
-        self.steps.push(Step::BuildEnvironment(environment_action));
+        self.steps
+            .push(Step::BuildEnvironment(environment_action, option));
         Ok(())
     }
 
@@ -127,6 +142,7 @@ impl<'a> Transaction<'a> {
     fn _build_applications(
         &self,
         environment: &Environment,
+        option: &BuildEnvironmentOption,
     ) -> Result<Vec<Box<dyn Application>>, BuildError> {
         let apps_to_build = environment
             .applications
@@ -135,7 +151,14 @@ impl<'a> Transaction<'a> {
             .filter(|app| app.action == Action::Create);
 
         let application_and_result_tuples = apps_to_build
-            .map(|app| (app, self.config.build_platform.build(app.to_build())))
+            .map(|app| {
+                (
+                    app,
+                    self.config
+                        .build_platform
+                        .build(app.to_build(), option.force_build),
+                )
+            })
             .collect::<Vec<_>>();
 
         let mut applications: Vec<Box<dyn Application>> =
@@ -171,19 +194,24 @@ impl<'a> Transaction<'a> {
     fn _push_applications(
         &self,
         applications: Vec<Box<dyn Application>>,
+        option: &BuildEnvironmentOption,
     ) -> Result<Vec<(Box<dyn Application>, PushResult)>, PushError> {
         let application_and_push_results: Vec<_> = applications
             .into_iter()
-            .map(
-                |mut app| match self.config.container_registry.push(app.image(), false) {
+            .map(|mut app| {
+                match self
+                    .config
+                    .container_registry
+                    .push(app.image(), option.force_push)
+                {
                     Ok(push_result) => {
                         // I am not a big fan of doing that but it's the most effective way
                         app.set_image(push_result.image.clone());
                         Ok((app, push_result))
                     }
                     Err(err) => Err(err),
-                },
-            )
+                }
+            })
             .collect();
 
         let mut results: Vec<(Box<dyn Application>, PushResult)> = vec![];
@@ -240,7 +268,7 @@ impl<'a> Transaction<'a> {
                         _ => {}
                     };
                 }
-                Step::BuildEnvironment(environment_action) => {
+                Step::BuildEnvironment(environment_action, option) => {
                     // revert build applications
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
@@ -404,15 +432,15 @@ impl<'a> Transaction<'a> {
                         _ => TransactionResult::Ok,
                     };
                 }
-                Step::BuildEnvironment(environment_action) => {
+                Step::BuildEnvironment(environment_action, option) => {
                     // build applications
                     let target_environment = match environment_action {
                         EnvironmentAction::Environment(te) => te,
                         EnvironmentAction::EnvironmentWithFailover(te, _) => te,
                     };
 
-                    let apps_result = match self._build_applications(target_environment) {
-                        Ok(applications) => match self._push_applications(applications) {
+                    let apps_result = match self._build_applications(target_environment, option) {
+                        Ok(applications) => match self._push_applications(applications, option) {
                             Ok(results) => {
                                 let applications =
                                     results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
@@ -529,11 +557,17 @@ impl<'a> Transaction<'a> {
     }
 }
 
+#[derive(Clone)]
+pub struct BuildEnvironmentOption {
+    force_build: bool,
+    force_push: bool,
+}
+
 enum Step<'a> {
     // init and create all the necessary resources (Network, Kubernetes)
     CreateKubernetes(&'a dyn Kubernetes),
     DeleteKubernetes(&'a dyn Kubernetes),
-    BuildEnvironment(&'a EnvironmentAction),
+    BuildEnvironment(&'a EnvironmentAction, BuildEnvironmentOption),
     DeployEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
     PauseEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
     DeleteEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
@@ -544,7 +578,7 @@ impl<'a> Clone for Step<'a> {
         match self {
             Step::CreateKubernetes(k) => Step::CreateKubernetes(*k),
             Step::DeleteKubernetes(k) => Step::DeleteKubernetes(*k),
-            Step::BuildEnvironment(e) => Step::BuildEnvironment(*e),
+            Step::BuildEnvironment(e, option) => Step::BuildEnvironment(*e, option.clone()),
             Step::DeployEnvironment(k, e) => Step::DeployEnvironment(*k, *e),
             Step::PauseEnvironment(k, e) => Step::PauseEnvironment(*k, *e),
             Step::DeleteEnvironment(k, e) => Step::DeleteEnvironment(*k, *e),

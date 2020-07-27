@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::build_platform::error::BuildPlatformError;
-use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Kind};
+use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image, Kind};
 use crate::fs::workspace_directory;
 use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressListener};
 use crate::{cmd, git};
@@ -23,6 +23,18 @@ impl LocalDocker {
             name: name.to_string(),
             listeners: vec![],
         }
+    }
+
+    fn image_does_exist(&self, image: &Image) -> Result<bool, BuildError> {
+        Ok(
+            match crate::cmd::exec(
+                "docker",
+                vec!["image", "inspect", image.name_with_tag().as_str()],
+            ) {
+                Ok(_) => true,
+                _ => false,
+            },
+        )
     }
 }
 
@@ -57,10 +69,19 @@ impl BuildPlatform for LocalDocker {
         self.listeners.push(listener);
     }
 
-    fn build(&self, build: Build) -> Result<BuildResult, BuildError> {
+    fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, BuildError> {
         info!("LocalDocker.build() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        if !force_build && self.image_does_exist(&build.image)? {
+            info!(
+                "image {:?} does already exist - no need to build it",
+                build.image
+            );
+
+            return Ok(BuildResult { build });
+        }
 
         // git clone
         let into_dir = workspace_directory(
