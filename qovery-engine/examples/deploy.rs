@@ -9,7 +9,7 @@ fn main() {
 
     let execution_id = test_utilities::execution_id();
 
-    let engine = test_utilities::default_engine(execution_id.as_str());
+    let engine = test_utilities::docker_ecr_aws_engine(execution_id.as_str());
 
     let session = match engine.session() {
         Ok(session) => session,

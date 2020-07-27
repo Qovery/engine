@@ -3,24 +3,29 @@ extern crate test_utilities;
 use qovery_engine::models::EnvironmentAction;
 use qovery_engine::transaction::TransactionResult;
 
-#[test]
-fn deploy_a_working_environment_with_all_options_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
-    let engine = test_utilities::default_engine(execution_id.as_str());
+fn do_deployment(execution_id: &str, environment_action: &EnvironmentAction) -> TransactionResult {
+    let engine = test_utilities::docker_ecr_aws_engine(execution_id);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::cloud_provider_aws(execution_id.as_str());
+    let cp = test_utilities::cloud_provider_aws(execution_id);
     let nodes = test_utilities::aws_kubernetes_nodes();
 
-    let k = test_utilities::aws_kubernetes_eks(execution_id.as_str(), &cp, nodes);
+    let k = test_utilities::aws_kubernetes_eks(execution_id, &cp, nodes);
+
+    tx.deploy_environment(&k, &environment_action);
+
+    tx.commit()
+}
+
+#[test]
+fn deploy_a_working_environment_with_all_options_on_aws_eks() {
+    let execution_id = test_utilities::execution_id();
 
     let ea =
         EnvironmentAction::Environment(test_utilities::working_environment(execution_id.as_str()));
 
-    tx.deploy_environment(&k, &ea);
-
-    match tx.commit() {
+    match do_deployment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -29,7 +34,19 @@ fn deploy_a_working_environment_with_all_options_on_aws_eks() {
 
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+
+    environment.routers = vec![];
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]

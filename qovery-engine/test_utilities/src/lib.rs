@@ -89,7 +89,7 @@ pub fn aws_kubernetes_eks<'a>(
     )
 }
 
-pub fn default_engine(execution_id: &str) -> Engine {
+pub fn docker_ecr_aws_engine(execution_id: &str) -> Engine {
     // use ECR
     let container_registry = Box::new(container_registry_ecr(execution_id));
 
