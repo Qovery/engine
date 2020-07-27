@@ -17,13 +17,13 @@ use crate::models::{Action, Environment, EnvironmentAction, EnvironmentError};
 use crate::transaction::CommitError::NotValidService;
 
 pub struct Transaction<'a> {
-    pub config: Config<'a>,
+    pub config: &'a Config,
     steps: Vec<Step<'a>>,
     executed_steps: Vec<Step<'a>>,
 }
 
 impl<'a> Transaction<'a> {
-    pub fn new(config: Config<'a>) -> Self {
+    pub fn new(config: &'a Config) -> Self {
         Transaction::<'a> {
             config,
             steps: vec![],
@@ -181,7 +181,7 @@ impl<'a> Transaction<'a> {
             match application.to_application(
                 environment.execution_id.as_str(),
                 &build_result.build.image,
-                self.config.cloud_provider,
+                self.config.cloud_provider.borrow(),
             ) {
                 Some(x) => applications.push(x),
                 None => {}
@@ -303,7 +303,7 @@ impl<'a> Transaction<'a> {
                 match application.to_application(
                     environment.execution_id.as_str(),
                     &build.image,
-                    self.config.cloud_provider,
+                    self.config.cloud_provider.borrow(),
                 ) {
                     Some(x) => _applications.push(x),
                     None => {}
@@ -311,7 +311,7 @@ impl<'a> Transaction<'a> {
             }
 
             let qe_environment =
-                environment.to_qe_environment(&_applications, self.config.cloud_provider);
+                environment.to_qe_environment(&_applications, self.config.cloud_provider.borrow());
 
             qe_environment
         };

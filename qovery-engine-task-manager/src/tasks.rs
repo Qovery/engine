@@ -46,32 +46,29 @@ impl Task for InfrastructureTask {
                 sender: sender.clone(),
             }));
 
+        // TODO refactor
         let mut build_platform = self
             .request
             .build_platform
-            .as_engine_build_platform(self.id());
+            .to_engine_build_platform(self.id());
 
         build_platform.add_listener(my_progress_listener.clone());
 
         let mut cloud_provider = self
             .request
             .cloud_provider
-            .as_engine_cloud_provider(self.id(), self.request.organization_id.as_str());
+            .to_engine_cloud_provider(self.id(), self.request.organization_id.as_str());
 
         cloud_provider.add_listener(my_progress_listener.clone());
 
         let mut container_registry = self
             .request
             .container_registry
-            .as_engine_container_registry(self.id());
+            .to_engine_container_registry(self.id());
 
         container_registry.add_listener(my_progress_listener.clone());
 
-        let config = Config::new(
-            build_platform.borrow(),
-            container_registry.borrow(),
-            cloud_provider.borrow(),
-        );
+        let config = Config::new(build_platform, container_registry, cloud_provider);
 
         // FIXME - return errors with Sender
         let session = match config.session() {
@@ -94,11 +91,11 @@ impl Task for InfrastructureTask {
             .request
             .cloud_provider
             .kubernetes
-            .as_engine_kubernetes_nodes();
+            .to_engine_kubernetes_nodes();
 
-        let kubernetes = self.request.cloud_provider.kubernetes.as_engine_kubernetes(
+        let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             self.id(),
-            cloud_provider.borrow(),
+            config.cloud_provider.borrow(),
             nodes.borrow(),
         );
 
@@ -171,29 +168,25 @@ impl Task for EnvironmentTask {
         let mut build_platform = self
             .request
             .build_platform
-            .as_engine_build_platform(self.id());
+            .to_engine_build_platform(self.id());
 
         build_platform.add_listener(my_progress_listener.clone());
 
         let mut cloud_provider = self
             .request
             .cloud_provider
-            .as_engine_cloud_provider(self.id(), self.request.organization_id.as_str());
+            .to_engine_cloud_provider(self.id(), self.request.organization_id.as_str());
 
         cloud_provider.add_listener(my_progress_listener.clone());
 
         let mut container_registry = self
             .request
             .container_registry
-            .as_engine_container_registry(self.id());
+            .to_engine_container_registry(self.id());
 
         container_registry.add_listener(my_progress_listener.clone());
 
-        let config = Config::new(
-            build_platform.borrow(),
-            container_registry.borrow(),
-            cloud_provider.borrow(),
-        );
+        let config = Config::new(build_platform, container_registry, cloud_provider);
 
         // FIXME - return errors with Sender
         let session = match config.session() {
@@ -216,11 +209,11 @@ impl Task for EnvironmentTask {
             .request
             .cloud_provider
             .kubernetes
-            .as_engine_kubernetes_nodes();
+            .to_engine_kubernetes_nodes();
 
-        let kubernetes = self.request.cloud_provider.kubernetes.as_engine_kubernetes(
+        let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             self.id(),
-            cloud_provider.borrow(),
+            config.cloud_provider.borrow(),
             nodes.borrow(),
         );
 

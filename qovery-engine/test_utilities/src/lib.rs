@@ -1,15 +1,20 @@
 use chrono::Utc;
 use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::build_platform::BuildPlatform;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::CloudProvider;
+use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
+use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::models::{
     Action, Application, CustomDomain, Database, DatabaseKind, Environment, EnvironmentVariable,
     GitCredentials, Kind, Route, Router, Storage, StorageType,
 };
+use qovery_engine::session::Session;
+use std::borrow::Borrow;
 
 pub const AWS_KEY_ID: &str = "AKIAZ4KMLSYJLRGNNFNI";
 pub const AWS_ACCESS_KEY: &str = "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/";
@@ -82,6 +87,23 @@ pub fn aws_kubernetes_eks<'a>(
         cloud_provider,
         nodes,
     )
+}
+
+pub fn default_config(execution_id: &str) -> Config {
+    // use ECR
+    let container_registry = Box::new(container_registry_ecr(execution_id));
+
+    // use LocalDocker
+    let build_platform = Box::new(build_platform_local_docker(execution_id));
+
+    // use AWS
+    let cloud_provider = Box::new(cloud_provider_aws(execution_id));
+
+    Config::new(build_platform, container_registry, cloud_provider)
+}
+
+pub fn default_session(execution_id: &str) -> Session {
+    default_config(execution_id).session().unwrap()
 }
 
 pub fn working_environment(execution_id: &str) -> Environment {

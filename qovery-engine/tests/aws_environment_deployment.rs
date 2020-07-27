@@ -1,8 +1,24 @@
 extern crate test_utilities;
 
+use qovery_engine::models::EnvironmentAction;
+use qovery_engine::transaction::TransactionResult;
+
 #[test]
 fn deploy_a_working_environment_with_all_options_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+    let session = test_utilities::default_session(execution_id.as_str());
+    let mut tx = session.transaction();
+
+    let cp = test_utilities::cloud_provider_aws(execution_id.as_str());
+    let nodes = test_utilities::aws_kubernetes_nodes();
+
+    let k = test_utilities::aws_kubernetes_eks(execution_id.as_str(), &cp, nodes);
+
+    let ea =
+        EnvironmentAction::Environment(test_utilities::working_environment(execution_id.as_str()));
+
+    tx.deploy_environment(&k, &ea);
+    assert!(tx.commit() == TransactionResult::Ok);
 }
 
 #[test]

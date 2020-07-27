@@ -8,16 +8,7 @@ fn main() {
 
     let execution_id = test_utilities::execution_id();
 
-    // use ECR
-    let container_registry = test_utilities::container_registry_ecr(execution_id.as_str());
-
-    // use LocalDocker
-    let build_platform = test_utilities::build_platform_local_docker(execution_id.as_str());
-
-    // use AWS
-    let cloud_provider = test_utilities::cloud_provider_aws(execution_id.as_str());
-
-    let config = Config::new(&build_platform, &container_registry, &cloud_provider);
+    let config = test_utilities::default_config(execution_id.as_str());
 
     let session = match config.session() {
         Ok(session) => session,

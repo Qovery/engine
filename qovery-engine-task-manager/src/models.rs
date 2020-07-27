@@ -55,7 +55,7 @@ pub struct BuildPlatform {
 }
 
 impl BuildPlatform {
-    pub fn as_engine_build_platform(
+    pub fn to_engine_build_platform(
         &self,
         request_id: &str,
     ) -> Box<dyn qovery_engine::build_platform::BuildPlatform> {
@@ -77,7 +77,7 @@ pub struct CloudProvider {
 }
 
 impl CloudProvider {
-    pub fn as_engine_cloud_provider(
+    pub fn to_engine_cloud_provider(
         &self,
         request_id: &str,
         organization_id: &str,
@@ -118,10 +118,10 @@ pub struct Kubernetes {
 }
 
 impl Kubernetes {
-    pub fn as_engine_kubernetes<'a>(
+    pub fn to_engine_kubernetes<'a>(
         &self,
         request_id: &str,
-        cloud_provider: &'a Box<dyn qovery_engine::cloud_provider::CloudProvider>,
+        cloud_provider: &'a dyn qovery_engine::cloud_provider::CloudProvider,
         nodes: &Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>>,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a> {
         match self.kind {
@@ -145,12 +145,12 @@ impl Kubernetes {
         }
     }
 
-    pub fn as_engine_kubernetes_nodes(
+    pub fn to_engine_kubernetes_nodes(
         &self,
     ) -> Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>> {
         self.nodes
             .iter()
-            .map(|n| n.as_engine_kubernetes_node(self))
+            .map(|n| n.to_engine_kubernetes_node(self))
             .collect::<Vec<_>>()
     }
 }
@@ -162,7 +162,7 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn as_engine_kubernetes_node(
+    pub fn to_engine_kubernetes_node(
         &self,
         kubernetes: &Kubernetes,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode> {
@@ -186,10 +186,10 @@ pub struct ContainerRegistry {
 }
 
 impl ContainerRegistry {
-    pub fn as_engine_container_registry<'a>(
-        &'a self,
+    pub fn to_engine_container_registry(
+        &self,
         request_id: &str,
-    ) -> Box<dyn qovery_engine::container_registry::ContainerRegistry + 'a> {
+    ) -> Box<dyn qovery_engine::container_registry::ContainerRegistry> {
         match self.kind {
             qovery_engine::container_registry::Kind::DockerHub => Box::new(DockerHub::new(
                 request_id,

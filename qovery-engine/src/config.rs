@@ -4,18 +4,18 @@ use crate::container_registry::ContainerRegistry;
 use crate::error::ConfigurationError;
 use crate::session::Session;
 
-pub struct Config<'a> {
-    pub build_platform: &'a dyn BuildPlatform,
-    pub container_registry: &'a dyn ContainerRegistry,
-    pub cloud_provider: &'a dyn CloudProvider,
+pub struct Config {
+    pub build_platform: Box<dyn BuildPlatform>,
+    pub container_registry: Box<dyn ContainerRegistry>,
+    pub cloud_provider: Box<dyn CloudProvider>,
 }
 
-impl<'a> Config<'a> {
+impl Config {
     pub fn new(
-        build_platform: &'a dyn BuildPlatform,
-        container_registry: &'a dyn ContainerRegistry,
-        cloud_provider: &'a dyn CloudProvider,
-    ) -> Config<'a> {
+        build_platform: Box<dyn BuildPlatform>,
+        container_registry: Box<dyn ContainerRegistry>,
+        cloud_provider: Box<dyn CloudProvider>,
+    ) -> Config {
         Config {
             build_platform,
             container_registry,
@@ -24,7 +24,7 @@ impl<'a> Config<'a> {
     }
 }
 
-impl<'a> Config<'a> {
+impl<'a> Config {
     /// Read JSON and return a Config
     pub fn from_json(json: &str) -> Self {
         unimplemented!()
@@ -56,7 +56,7 @@ impl<'a> Config<'a> {
     }
 
     /// check and init the connection to all the services
-    pub fn session(self) -> Result<Session<'a>, ConfigurationError> {
+    pub fn session(&'a self) -> Result<Session<'a>, ConfigurationError> {
         match self.is_valid() {
             Ok(_) => Ok(Session::<'a> { config: self }),
             Err(err) => Err(err),

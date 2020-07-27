@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::transaction::Transaction;
 
 pub struct Session<'a> {
-    pub config: Config<'a>,
+    pub config: &'a Config,
 }
 
 impl<'a> Session<'a> {
