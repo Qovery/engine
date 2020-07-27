@@ -65,7 +65,7 @@ impl<'a> Transaction<'a> {
         self.deploy_environment_with_options(
             kubernetes,
             environment_action,
-            DeploymentEnvironmentOption {
+            DeploymentOption {
                 force_build: false,
                 force_push: false,
             },
@@ -76,7 +76,7 @@ impl<'a> Transaction<'a> {
         &mut self,
         kubernetes: &'a dyn Kubernetes,
         environment_action: &'a EnvironmentAction,
-        option: DeploymentEnvironmentOption,
+        option: DeploymentOption,
     ) -> Result<(), EnvironmentError> {
         let _ = self.check_environment_action(environment_action)?;
 
@@ -141,7 +141,7 @@ impl<'a> Transaction<'a> {
     fn _build_applications(
         &self,
         environment: &Environment,
-        option: &DeploymentEnvironmentOption,
+        option: &DeploymentOption,
     ) -> Result<Vec<Box<dyn Application>>, BuildError> {
         let apps_to_build = environment
             .applications
@@ -193,7 +193,7 @@ impl<'a> Transaction<'a> {
     fn _push_applications(
         &self,
         applications: Vec<Box<dyn Application>>,
-        option: &DeploymentEnvironmentOption,
+        option: &DeploymentOption,
     ) -> Result<Vec<(Box<dyn Application>, PushResult)>, PushError> {
         let application_and_push_results: Vec<_> = applications
             .into_iter()
@@ -557,7 +557,7 @@ impl<'a> Transaction<'a> {
 }
 
 #[derive(Clone)]
-pub struct DeploymentEnvironmentOption {
+pub struct DeploymentOption {
     force_build: bool,
     force_push: bool,
 }
@@ -566,7 +566,7 @@ enum Step<'a> {
     // init and create all the necessary resources (Network, Kubernetes)
     CreateKubernetes(&'a dyn Kubernetes),
     DeleteKubernetes(&'a dyn Kubernetes),
-    BuildEnvironment(&'a EnvironmentAction, DeploymentEnvironmentOption),
+    BuildEnvironment(&'a EnvironmentAction, DeploymentOption),
     DeployEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
     PauseEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
     DeleteEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
