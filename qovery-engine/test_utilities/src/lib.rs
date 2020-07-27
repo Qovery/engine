@@ -102,10 +102,6 @@ pub fn default_config(execution_id: &str) -> Config {
     Config::new(build_platform, container_registry, cloud_provider)
 }
 
-pub fn default_session(execution_id: &str) -> Session {
-    default_config(execution_id).session().unwrap()
-}
-
 pub fn working_environment(execution_id: &str) -> Environment {
     Environment {
         execution_id: execution_id.to_string(),

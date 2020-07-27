@@ -95,7 +95,7 @@ impl Task for InfrastructureTask {
 
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             self.id(),
-            config.cloud_provider.borrow(),
+            config.cloud_provider(),
             nodes.borrow(),
         );
 
@@ -213,7 +213,7 @@ impl Task for EnvironmentTask {
 
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             self.id(),
-            config.cloud_provider.borrow(),
+            config.cloud_provider(),
             nodes.borrow(),
         );
 

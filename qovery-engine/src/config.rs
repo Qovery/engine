@@ -3,11 +3,12 @@ use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::error::ConfigurationError;
 use crate::session::Session;
+use std::borrow::Borrow;
 
 pub struct Config {
-    pub build_platform: Box<dyn BuildPlatform>,
-    pub container_registry: Box<dyn ContainerRegistry>,
-    pub cloud_provider: Box<dyn CloudProvider>,
+    build_platform: Box<dyn BuildPlatform>,
+    container_registry: Box<dyn ContainerRegistry>,
+    cloud_provider: Box<dyn CloudProvider>,
 }
 
 impl Config {
@@ -28,6 +29,18 @@ impl<'a> Config {
     /// Read JSON and return a Config
     pub fn from_json(json: &str) -> Self {
         unimplemented!()
+    }
+
+    pub fn build_platform(&self) -> &dyn BuildPlatform {
+        self.build_platform.borrow()
+    }
+
+    pub fn container_registry(&self) -> &dyn ContainerRegistry {
+        self.container_registry.borrow()
+    }
+
+    pub fn cloud_provider(&self) -> &dyn CloudProvider {
+        self.cloud_provider.borrow()
     }
 
     pub fn is_valid(&self) -> Result<(), ConfigurationError> {

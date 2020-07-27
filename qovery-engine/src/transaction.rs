@@ -155,7 +155,7 @@ impl<'a> Transaction<'a> {
                 (
                     app,
                     self.config
-                        .build_platform
+                        .build_platform()
                         .build(app.to_build(), option.force_build),
                 )
             })
@@ -181,7 +181,7 @@ impl<'a> Transaction<'a> {
             match application.to_application(
                 environment.execution_id.as_str(),
                 &build_result.build.image,
-                self.config.cloud_provider.borrow(),
+                self.config.cloud_provider(),
             ) {
                 Some(x) => applications.push(x),
                 None => {}
@@ -201,7 +201,7 @@ impl<'a> Transaction<'a> {
             .map(|mut app| {
                 match self
                     .config
-                    .container_registry
+                    .container_registry()
                     .push(app.image(), option.force_push)
                 {
                     Ok(push_result) => {
@@ -303,7 +303,7 @@ impl<'a> Transaction<'a> {
                 match application.to_application(
                     environment.execution_id.as_str(),
                     &build.image,
-                    self.config.cloud_provider.borrow(),
+                    self.config.cloud_provider(),
                 ) {
                     Some(x) => _applications.push(x),
                     None => {}
@@ -311,7 +311,7 @@ impl<'a> Transaction<'a> {
             }
 
             let qe_environment =
-                environment.to_qe_environment(&_applications, self.config.cloud_provider.borrow());
+                environment.to_qe_environment(&_applications, self.config.cloud_provider());
 
             qe_environment
         };
