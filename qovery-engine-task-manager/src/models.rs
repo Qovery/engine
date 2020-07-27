@@ -10,7 +10,8 @@ use qovery_engine::cloud_provider::gcp::GCP;
 use qovery_engine::config::Config;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
-use qovery_engine::models::{Environment, EnvironmentAction};
+use qovery_engine::models::{Environment, EnvironmentAction, ProgressListener};
+use std::rc::Rc;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -26,6 +27,28 @@ pub struct Request {
 }
 
 impl Request {
+    pub fn config(&self, progress_listener: Rc<Box<dyn ProgressListener>>) -> Config {
+        let mut build_platform = self
+            .build_platform
+            .to_engine_build_platform(self.id.as_str());
+
+        build_platform.add_listener(progress_listener.clone());
+
+        let mut cloud_provider = self
+            .cloud_provider
+            .to_engine_cloud_provider(self.id.as_str(), self.organization_id.as_str());
+
+        cloud_provider.add_listener(progress_listener.clone());
+
+        let mut container_registry = self
+            .container_registry
+            .to_engine_container_registry(self.id.as_str());
+
+        container_registry.add_listener(progress_listener.clone());
+
+        Config::new(build_platform, container_registry, cloud_provider)
+    }
+
     pub fn environment_action(&self) -> Option<EnvironmentAction> {
         if self.target_environment.is_none() {
             return None;

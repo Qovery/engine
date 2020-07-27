@@ -46,29 +46,7 @@ impl Task for InfrastructureTask {
                 sender: sender.clone(),
             }));
 
-        // TODO refactor
-        let mut build_platform = self
-            .request
-            .build_platform
-            .to_engine_build_platform(self.id());
-
-        build_platform.add_listener(my_progress_listener.clone());
-
-        let mut cloud_provider = self
-            .request
-            .cloud_provider
-            .to_engine_cloud_provider(self.id(), self.request.organization_id.as_str());
-
-        cloud_provider.add_listener(my_progress_listener.clone());
-
-        let mut container_registry = self
-            .request
-            .container_registry
-            .to_engine_container_registry(self.id());
-
-        container_registry.add_listener(my_progress_listener.clone());
-
-        let config = Config::new(build_platform, container_registry, cloud_provider);
+        let config = self.request.config(my_progress_listener);
 
         // FIXME - return errors with Sender
         let session = match config.session() {
@@ -165,28 +143,7 @@ impl Task for EnvironmentTask {
                 sender: sender.clone(),
             }));
 
-        let mut build_platform = self
-            .request
-            .build_platform
-            .to_engine_build_platform(self.id());
-
-        build_platform.add_listener(my_progress_listener.clone());
-
-        let mut cloud_provider = self
-            .request
-            .cloud_provider
-            .to_engine_cloud_provider(self.id(), self.request.organization_id.as_str());
-
-        cloud_provider.add_listener(my_progress_listener.clone());
-
-        let mut container_registry = self
-            .request
-            .container_registry
-            .to_engine_container_registry(self.id());
-
-        container_registry.add_listener(my_progress_listener.clone());
-
-        let config = Config::new(build_platform, container_registry, cloud_provider);
+        let config = self.request.config(my_progress_listener);
 
         // FIXME - return errors with Sender
         let session = match config.session() {
