@@ -180,21 +180,68 @@ pub fn working_environment(execution_id: &str) -> Environment {
                 }],
             },
         ],
-        databases: vec![Database {
-            kind: DatabaseKind::PostgreSQL,
-            action: Action::Create,
-            id: "waoidja468787454".to_string(),
-            name: "my-psql".to_string(),
-            version: "11.8.0".to_string(),
-            fqdn_id: "no-fqdn-test".to_string(),
-            fqdn: "no-fqdn-test.qovery.io".to_string(),
-            port: 5432,
-            username: "superuser".to_string(),
-            password: "BdcDconI2k8AVN6z".to_string(),
-            total_cpus: 2,
-            total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
-        }],
+        databases: vec![
+            Database {
+                kind: DatabaseKind::PostgreSQL,
+                action: Action::Create,
+                id: "waoidja468787454".to_string(),
+                name: "my-psql".to_string(),
+                version: "11.8.0".to_string(),
+                fqdn_id: "my-postgresql-test-123".to_string(),
+                fqdn: "my-postgresql-test-123.qovery.io".to_string(),
+                port: 5432,
+                username: "superuser".to_string(),
+                password: "BdcDconI2k8AVN6z".to_string(),
+                total_cpus: 2,
+                total_ram_in_mib: 512,
+                disk_size_in_gib: 10,
+            }, /*,
+               Database {
+                   kind: DatabaseKind::MySQL,
+                   action: Action::Create,
+                   id: "adoiaj22390soj".to_string(),
+                   name: "my-mysql".to_string(),
+                   version: "11.8.0".to_string(),
+                   fqdn_id: "my-mysql-test-123".to_string(),
+                   fqdn: "my-mysql-test-123.qovery.io".to_string(),
+                   port: 3306,
+                   username: "superuser".to_string(),
+                   password: "BdcDconI2k8AVN6z".to_string(),
+                   total_cpus: 2,
+                   total_ram_in_mib: 512,
+                   disk_size_in_gib: 10,
+               },
+               Database {
+                   kind: DatabaseKind::MongoDB,
+                   action: Action::Create,
+                   id: "waoidja468787454".to_string(),
+                   name: "my-psql".to_string(),
+                   version: "11.8.0".to_string(),
+                   fqdn_id: "my-mongodb-test-123".to_string(),
+                   fqdn: "my-mongodb-test-123.qovery.io".to_string(),
+                   port: 5432,
+                   username: "superuser".to_string(),
+                   password: "BdcDconI2k8AVN6z".to_string(),
+                   total_cpus: 2,
+                   total_ram_in_mib: 512,
+                   disk_size_in_gib: 10,
+               },*/
+        ],
         clone_from_environment_id: None,
     }
+}
+
+pub fn non_working_environment(execution_id: &str) -> Environment {
+    let mut environment = working_environment(execution_id);
+
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.git_url = "https://notworking.com".to_string();
+            app
+        })
+        .collect::<Vec<_>>();
+
+    environment
 }

@@ -1,6 +1,6 @@
 extern crate test_utilities;
 
-use qovery_engine::models::EnvironmentAction;
+use qovery_engine::models::{EnvironmentAction, Kind};
 use qovery_engine::transaction::TransactionResult;
 
 fn do_deployment(execution_id: &str, environment_action: &EnvironmentAction) -> TransactionResult {
@@ -19,11 +19,29 @@ fn do_deployment(execution_id: &str, environment_action: &EnvironmentAction) -> 
 }
 
 #[test]
-fn deploy_a_working_environment_with_all_options_on_aws_eks() {
+fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
     let execution_id = test_utilities::execution_id();
 
-    let ea =
-        EnvironmentAction::Environment(test_utilities::working_environment(execution_id.as_str()));
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    environment.kind = Kind::Development;
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+}
+
+#[test]
+fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    environment.kind = Kind::Production;
+
+    let ea = EnvironmentAction::Environment(environment);
 
     match do_deployment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
@@ -51,32 +69,114 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 
 #[test]
 fn deploy_a_working_environment_with_no_database_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+
+    environment.databases = vec![];
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]
 fn deploy_a_working_environment_with_no_storage_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.storage = vec![];
+            app
+        })
+        .collect::<Vec<_>>();
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]
 fn deploy_a_working_environment_with_no_custom_domain_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+
+    environment.routers = environment
+        .routers
+        .into_iter()
+        .map(|mut router| {
+            router.custom_domains = vec![];
+            router
+        })
+        .collect::<Vec<_>>();
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(false),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
 }
 
 #[test]
 fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+    let mut failover_environment = test_utilities::working_environment(execution_id.as_str());
+
+    let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(false),
+        TransactionResult::Rollback(_) => assert!(true),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]
 fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+    let mut failover_environment = test_utilities::non_working_environment(execution_id.as_str());
+
+    let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(false),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
 }
 
 #[test]
@@ -90,8 +190,65 @@ fn deploy_but_fail_to_push_image_on_container_registry() {
 }
 
 #[test]
-fn delete_a_working_environment_on_aws_eks() {
-    // TODO
+fn delete_a_working_development_environment_on_aws_eks() {
+    // DEPLOY
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    environment.kind = Kind::Development;
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // DELETE
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    environment.kind = Kind::Development;
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+}
+
+#[test]
+fn delete_a_working_production_environment_on_aws_eks() {
+    // DEPLOY
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    environment.kind = Kind::Production;
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // DELETE
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    environment.kind = Kind::Production;
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match do_deployment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]
