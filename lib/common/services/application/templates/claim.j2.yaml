@@ -1,48 +1,46 @@
-{%- if qovery_env.applications[application_index]['storage'] %}
-{%- for disk in qovery_env.applications[application_index]['storage'] %}
-{% if disk['from_id'] %}
+{%- for s in storage %}
+#{% if disk['from_id'] %}
+#---
+#apiVersion: v1
+#kind: PersistentVolumeClaim
+#metadata:
+#  name: {{ s.id }}
+#  namespace: {{ project_id }}
+#  labels:
+#    ownerId: {{ owner_id }}
+#    envId: {{ environment_id }}
+#    appId: {{ id }}
+#    diskId: {{ s.id }}
+#    diskType: {{ s.storage_type }}
+#spec:
+#  accessModes:
+#    - ReadWriteOnce
+#  storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
+#  dataSource:
+#    name: {{ disk['from_id'] }}
+#    kind: PersistentVolumeClaim
+#  resources:
+#    requests:
+#      storage: {{ s.size_in_gib }}Gi
+#{% else %}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ disk['id'] }}
+  name: {{ s.id }}
   namespace: {{ project_id }}
   labels:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
-    appId: {{ applications[application_index]['id'] }}
-    diskId: {{ disk['id'] }}
-    diskType: {{ disk['type'] }}
+    appId: {{ id }}
+    diskId: {{ s.id }}
+    diskType: {{ s.storage_type }}
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: aws-ebs-{{ disk['type'] }}-{{ disk['snapshot_retention_in_days'] }}
-  dataSource:
-    name: {{ disk['from_id'] }}
-    kind: PersistentVolumeClaim
+  storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
   resources:
     requests:
-      storage: {{ disk['size_in_gib'] }}Gi
-{% else %}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ disk['id'] }}
-  namespace: {{ project_id }}
-  labels:
-    ownerId: {{ owner_id }}
-    envId: {{ environment_id }}
-    appId: {{ applications[application_index]['id'] }}
-    diskId: {{ disk['id'] }}
-    diskType: {{ disk['type'] }}
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: aws-ebs-{{ disk['type'] }}-{{ disk['snapshot_retention_in_days'] }}
-  resources:
-    requests:
-      storage: {{ disk['size_in_gib'] }}Gi
-{%- endif %}
+      storage: {{ s.size_in_gib }}Gi
+#{%- endif %}
 {%- endfor %}
-{%- endif %}

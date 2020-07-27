@@ -43,6 +43,12 @@ fn main() {
         Err(err) => panic!("environment error"),
     }
 
+    let eks = test_utilities::aws_kubernetes_eks(
+        execution_id.as_str(),
+        &cloud_provider,
+        test_utilities::aws_kubernetes_nodes(),
+    );
+
     tx.deploy_environment(&eks, &environment_action);
 
     match tx.commit() {

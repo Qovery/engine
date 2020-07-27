@@ -2,17 +2,17 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ applications[application_index]['id'] }}-{{ environment_id }}-default
-  namespace: {{ project_id }}
+  name: {{ name }}-default
+  namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
-    appId: {{ applications[application_index]['id'] }}
+    appId: {{ id }}
     envId: {{ environment_id }}
 spec:
   # Deny all ingress by default to this application
   podSelector:
     matchLabels:
-      appId: {{ applications[application_index]['id'] }}
+      appId: {{ id }}
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   policyTypes:
@@ -21,17 +21,17 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ applications[application_index]['id'] }}-{{ environment_id }}-app-access
-  namespace: {{ project_id }}
+  name: {{ name }}-app-access
+  namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
-    appId: {{ applications[application_index]['id'] }}
+    appId: {{ id }}
     envId: {{ environment_id }}
 spec:
   # Then allow some ingress to this application
   podSelector:
     matchLabels:
-      appId: {{ applications[application_index]['id'] }}
+      appId: {{ id }}
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   ingress:
@@ -43,9 +43,9 @@ spec:
           envId: {{ environment_id }}
 
   # Allow ingress from everywhere but only to application port
-  {% if qovery_env.applications[application_index]['private_port'] %}
+  {% if is_private_port %}
   - ports:
-    - port: {{ applications[application_index]['private_port'] }}
+    - port: {{ private_port }}
   {% endif %}
   # FIXME(sileht): Previous rule is not perfect as other pods/namespaces can
   # access to the application port without going through the Ingress object,
@@ -69,16 +69,16 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ applications[application_index]['id'] }}-{{ environment_id }}-deny-aws-metadata-server
-  namespace: {{ project_id }}
+  name: {{ name }}-deny-aws-metadata-server
+  namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
-    appId: {{ applications[application_index]['id'] }}
+    appId: {{ id }}
     envId: {{ environment_id }}
 spec:
   podSelector:
     matchLabels:
-      appId: {{ applications[application_index]['id'] }}
+      appId: {{ id }}
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   egress:

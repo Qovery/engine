@@ -126,6 +126,9 @@ pub fn working_environment(execution_id: &str) -> Environment {
             ],
             branch: "master".to_string(),
             private_port: Some(3000),
+            total_cpus: 1,
+            total_ram_in_mib: 256,
+            total_instances: 2,
         }],
         routers: vec![
             Router {
@@ -170,6 +173,8 @@ pub fn working_environment(execution_id: &str) -> Environment {
             port: 5432,
             username: "superuser".to_string(),
             password: "BdcDconI2k8AVN6z".to_string(),
+            total_cpus: 2,
+            total_ram_in_mib: 512,
             disk_size_in_gib: 10,
         }],
         clone_from_environment_id: None,

@@ -26,7 +26,7 @@ metadata:
     appId: {{ id }}
     app: {{ name }}
 spec:
-  replicas: 1
+  replicas: {{ total_instances }}
   strategy:
     type: RollingUpdate
   selector:
@@ -74,11 +74,11 @@ spec:
             {%- endif %}
           resources:
             limits:
-              cpu: 125m
-              memory: 256Mi
+              cpu: {{ total_cpus }}
+              memory: {{ total_ram_in_mib }}Mi
             requests:
-              cpu: 125m
-              memory: 256Mi
+              cpu: {{ total_cpus }}
+              memory: {{ total_ram_in_mib }}Mi
           volumeMounts:
 {%- if is_storage %}
 {%- for s in storage %}

@@ -140,6 +140,9 @@ pub struct Application {
     pub commit_id: String,
     pub dockerfile_path: String,
     pub private_port: Option<u16>,
+    pub total_cpus: u8,
+    pub total_ram_in_mib: u32,
+    pub total_instances: u16,
     pub storage: Vec<Storage>,
     pub environment_variables: Vec<EnvironmentVariable>,
 }
@@ -159,6 +162,9 @@ impl Application {
                     self.action.to_service_action(),
                     self.name.as_str(),
                     self.private_port,
+                    self.total_cpus,
+                    self.total_ram_in_mib,
+                    self.total_instances,
                     image.clone(),
                     self.storage
                         .iter()
@@ -188,6 +194,9 @@ impl Application {
                     self.action.to_service_action(),
                     self.name.as_str(),
                     self.private_port,
+                    self.total_cpus,
+                    self.total_ram_in_mib,
+                    self.total_instances,
                     image.clone(),
                     self.storage
                         .iter()
@@ -365,6 +374,8 @@ pub struct Database {
     pub port: u16,
     pub username: String,
     pub password: String,
+    pub total_cpus: u8,
+    pub total_ram_in_mib: u32,
     pub disk_size_in_gib: u32,
 }
 
@@ -383,6 +394,8 @@ impl Database {
                         self.action.to_service_action(),
                         self.name.as_str(),
                         self.version.as_str(),
+                        self.total_cpus,
+                        self.total_ram_in_mib,
                         DatabaseOptions {
                             login: self.username.clone(),
                             password: self.password.clone(),

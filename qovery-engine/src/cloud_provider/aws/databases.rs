@@ -21,6 +21,8 @@ pub struct PostgreSQL {
     action: Action,
     name: String,
     version: String,
+    total_cpus: u8,
+    total_ram_in_mib: u32,
     options: DatabaseOptions,
 }
 
@@ -31,6 +33,8 @@ impl PostgreSQL {
         action: Action,
         name: &str,
         version: &str,
+        total_cpus: u8,
+        total_ram_in_mib: u32,
         options: DatabaseOptions,
     ) -> Self {
         PostgreSQL {
@@ -39,6 +43,8 @@ impl PostgreSQL {
             id: id.to_string(),
             name: name.to_string(),
             version: version.to_string(),
+            total_cpus,
+            total_ram_in_mib,
             options,
         }
     }
@@ -94,6 +100,18 @@ impl Service for PostgreSQL {
 
     fn private_port(&self) -> Option<u16> {
         Some(self.options.port)
+    }
+
+    fn total_cpus(&self) -> u8 {
+        self.total_cpus
+    }
+
+    fn total_ram_in_mib(&self) -> u32 {
+        self.total_ram_in_mib
+    }
+
+    fn total_instances(&self) -> u16 {
+        1
     }
 }
 

@@ -380,8 +380,8 @@ slave:
 ##
 resources:
   requests:
-    memory: 256Mi # TODO customizable?
-    cpu: 250m
+    memory: {{ total_ram_in_mib }}Mi # TODO customizable?
+    cpu: {{ total_cpus }}
 
 ## Add annotations to all the deployed resources
 ##

@@ -23,6 +23,9 @@ pub struct Application {
     action: Action,
     name: String,
     private_port: Option<u16>,
+    total_cpus: u8,
+    total_ram_in_mib: u32,
+    total_instances: u16,
     image: Image,
     storage: Vec<Storage>,
     environment_variables: Vec<EnvironmentVariable>,
@@ -35,6 +38,9 @@ impl Application {
         action: Action,
         name: &str,
         private_port: Option<u16>,
+        total_cpus: u8,
+        total_ram_in_mib: u32,
+        total_instances: u16,
         image: Image,
         storage: Vec<Storage>,
         environment_variables: Vec<EnvironmentVariable>,
@@ -45,6 +51,9 @@ impl Application {
             action,
             name: name.to_string(),
             private_port,
+            total_cpus,
+            total_ram_in_mib,
+            total_instances,
             image,
             storage,
             environment_variables,
@@ -153,6 +162,18 @@ impl Service for Application {
 
     fn private_port(&self) -> Option<u16> {
         self.private_port
+    }
+
+    fn total_cpus(&self) -> u8 {
+        self.total_cpus
+    }
+
+    fn total_ram_in_mib(&self) -> u32 {
+        self.total_ram_in_mib
+    }
+
+    fn total_instances(&self) -> u16 {
+        self.total_instances
     }
 }
 

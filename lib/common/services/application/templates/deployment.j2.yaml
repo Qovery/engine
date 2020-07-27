@@ -1,27 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ applications[application_index]['id'] }}-{{ environment_id }}
-  namespace: {{ project_id }}
+  name: {{ name }}
+  namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
-    appId: {{ applications[application_index]['id'] }}
+    appId: {{ id }}
 spec:
-  replicas: 1
+  replicas: {{ total_instances }}
   strategy:
     type: RollingUpdate
   selector:
     matchLabels:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
-      appId: {{ applications[application_index]['id'] }}
+      appId: {{ id }}
   template:
     metadata:
       labels:
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
-        appId: {{ applications[application_index]['id'] }}
+        appId: {{ id }}
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
@@ -30,22 +30,22 @@ spec:
         - name: {{ get_image_name(application_index) }}-{{ environment_id }}
           image: "{{ get_image_fullname(application_index) }}"
           env:
-            {%- for key, value in qovery_env.applications[application_index]['environment_variables'].items() %}
-            - name: {{ key | environment_key_checker }}
-              value: {{ value | yaml_quote }}
+            {%- for key, value in environment_variables %}
+            - name: {{ key }}
+              value: {{ value }}
             {%- endfor %}
-            {%- if qovery_env.applications[application_index]['private_port'] %}
+            {%- if is_private_port %}
           ports:
-            - containerPort: {{ applications[application_index]['private_port'] }}
+            - containerPort: {{ private_port }}
               protocol: TCP
           readinessProbe:
             tcpSocket:
-              port: {{ applications[application_index]['private_port'] }}
+              port: {{ private_port }}
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
-              port: {{ applications[application_index]['private_port'] }}
+              port: {{ private_port }}
             initialDelaySeconds: 15
             periodSeconds: 20
             {%- endif %}
@@ -57,17 +57,13 @@ spec:
               cpu: 125m
               memory: 256Mi
           volumeMounts:
-{%- if qovery_env.applications[application_index]['storage'] %}
-{%- for disk in qovery_env.applications[application_index]['storage'] %}
-            - name: {{ disk['id'] }}
-              mountPath: {{ disk['mount_point'] }}
+{%- for s in storage %}
+            - name: {{ s.id }}
+              mountPath: {{ s.mount_point }}
 {%- endfor %}
-{%- endif %}
       volumes:
-{%- if qovery_env.applications[application_index]['storage'] %}
-{%- for disk in qovery_env.applications[application_index]['storage'] %}
-        - name: {{ disk['id'] }}
+{%- for s in storage %}
+        - name: {{ s.id }}
           persistentVolumeClaim:
-            claimName: {{ disk['id'] }}
+            claimName: {{ s.id }}
 {%- endfor %}
-{%- endif %}

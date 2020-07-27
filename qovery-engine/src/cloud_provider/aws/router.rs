@@ -201,6 +201,18 @@ impl<'a> Service for Router {
     fn private_port(&self) -> Option<u16> {
         None
     }
+
+    fn total_cpus(&self) -> u8 {
+        1
+    }
+
+    fn total_ram_in_mib(&self) -> u32 {
+        1
+    }
+
+    fn total_instances(&self) -> u16 {
+        1
+    }
 }
 
 impl crate::cloud_provider::service::Router for Router {
