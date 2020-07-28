@@ -69,6 +69,40 @@ impl PostgreSQL {
 
         context
     }
+
+    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), ServiceError> {
+        let workspace_dir = self.workspace_directory();
+
+        match target {
+            DeploymentTarget::ManagedServices(_, _) => {
+                // TODO what to do with a PostgreSQL that is badly deployed on RDS?
+                // TODO how to show the log of AWS or.. Like I do for the selfhosted with k8s ??
+            }
+            DeploymentTarget::SelfHosted(kubernetes, environment) => {
+                let helm_release_name = self.helm_release_name();
+                let selector = format!("app={}", self.name());
+
+                if is_error {
+                    let _ = common::get_stateless_resource_information(
+                        *kubernetes,
+                        *environment,
+                        workspace_dir.as_str(),
+                        selector.as_str(),
+                    )?;
+                }
+
+                // clean the resource
+                let _ = common::do_stateless_service_cleanup(
+                    *kubernetes,
+                    *environment,
+                    workspace_dir.as_str(),
+                    helm_release_name.as_str(),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl StatefulService for PostgreSQL {}
@@ -217,41 +251,16 @@ impl Create for PostgreSQL {
             self.name()
         );
 
-        let workspace_dir = self.workspace_directory();
-
-        match target {
-            DeploymentTarget::ManagedServices(_, _) => {
-                // TODO what to do with a PostgreSQL that is badly deployed on RDS?
-                // TODO how to show the log of AWS or.. Like I do for the selfhosted with k8s ??
-            }
-            DeploymentTarget::SelfHosted(kubernetes, environment) => {
-                let helm_release_name = self.helm_release_name();
-                let selector = format!("app={}", self.name());
-
-                let _ = common::get_stateless_resource_information(
-                    *kubernetes,
-                    *environment,
-                    workspace_dir.as_str(),
-                    selector.as_str(),
-                )?;
-
-                // clean the resource
-                let _ = common::do_stateless_service_cleanup(
-                    *kubernetes,
-                    *environment,
-                    workspace_dir.as_str(),
-                    helm_release_name.as_str(),
-                )?;
-            }
-        }
-
-        Ok(())
+        self.delete(target, true)
     }
 }
 
 impl Pause for PostgreSQL {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.PostgreSQL.on_pause() called for {}", self.name());
+
+        // TODO how to pause production? - the goal is to reduce cost, but it is possible to pause a production env?
+        // TODO how to pause development? - the goal is also to reduce cost, we can set the number of instances to 0, which will avoid to delete data :)
 
         Ok(())
     }
@@ -263,6 +272,8 @@ impl Pause for PostgreSQL {
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.PostgreSQL.on_pause_error() called for {}", self.name());
 
+        // TODO what to do if there is a pause error?
+
         Ok(())
     }
 }
@@ -270,8 +281,7 @@ impl Pause for PostgreSQL {
 impl Delete for PostgreSQL {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.PostgreSQL.on_delete() called for {}", self.name());
-
-        Ok(())
+        self.delete(target, false)
     }
 
     fn on_delete_check(&self) -> Result<(), ServiceError> {
@@ -283,8 +293,7 @@ impl Delete for PostgreSQL {
             "AWS.PostgreSQL.on_create_error() called for {}",
             self.name()
         );
-
-        Ok(())
+        self.delete(target, true)
     }
 }
 

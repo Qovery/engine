@@ -122,7 +122,7 @@ impl Application {
         context
     }
 
-    fn delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), ServiceError> {
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
@@ -130,6 +130,16 @@ impl Application {
 
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
+        let selector = format!("app={}", self.name());
+
+        if is_error {
+            let _ = common::get_stateless_resource_information(
+                kubernetes,
+                environment,
+                workspace_dir.as_str(),
+                selector.as_str(),
+            )?;
+        }
 
         // clean the resource
         let _ = common::do_stateless_service_cleanup(
@@ -277,39 +287,14 @@ impl Create for Application {
             "AWS.application.on_create_error() called for {}",
             self.name()
         );
-
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let workspace_dir = self.workspace_directory();
-        let helm_release_name = self.helm_release_name();
-        let selector = format!("app={}", self.name());
-
-        let _ = common::get_stateless_resource_information(
-            kubernetes,
-            environment,
-            workspace_dir.as_str(),
-            selector.as_str(),
-        )?;
-
-        // clean the resource
-        let _ = common::do_stateless_service_cleanup(
-            kubernetes,
-            environment,
-            workspace_dir.as_str(),
-            helm_release_name.as_str(),
-        )?;
-
-        Ok(())
+        self.delete(target, true)
     }
 }
 
 impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.application.on_pause() called for {}", self.name());
-        self.delete(target)
+        self.delete(target, false)
     }
 
     fn on_pause_check(&self) -> Result<(), ServiceError> {
@@ -321,14 +306,14 @@ impl Pause for Application {
             "AWS.application.on_pause_error() called for {}",
             self.name()
         );
-        self.delete(target)
+        self.delete(target, true)
     }
 }
 
 impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.application.on_delete() called for {}", self.name());
-        self.delete(target)
+        self.delete(target, false)
     }
 
     fn on_delete_check(&self) -> Result<(), ServiceError> {
@@ -340,7 +325,7 @@ impl Delete for Application {
             "AWS.application.on_delete_error() called for {}",
             self.name()
         );
-        self.delete(target)
+        self.delete(target, true)
     }
 }
 
