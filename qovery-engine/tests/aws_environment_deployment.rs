@@ -3,7 +3,10 @@ extern crate test_utilities;
 use qovery_engine::models::{EnvironmentAction, Kind};
 use qovery_engine::transaction::TransactionResult;
 
-fn do_deployment(execution_id: &str, environment_action: &EnvironmentAction) -> TransactionResult {
+fn deploy_environment(
+    execution_id: &str,
+    environment_action: &EnvironmentAction,
+) -> TransactionResult {
     let engine = test_utilities::docker_ecr_aws_engine(execution_id);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
@@ -18,6 +21,42 @@ fn do_deployment(execution_id: &str, environment_action: &EnvironmentAction) -> 
     tx.commit()
 }
 
+fn pause_environment(
+    execution_id: &str,
+    environment_action: &EnvironmentAction,
+) -> TransactionResult {
+    let engine = test_utilities::docker_ecr_aws_engine(execution_id);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = test_utilities::cloud_provider_aws(execution_id);
+    let nodes = test_utilities::aws_kubernetes_nodes();
+
+    let k = test_utilities::aws_kubernetes_eks(execution_id, &cp, nodes);
+
+    tx.delete_environment(&k, &environment_action);
+
+    tx.commit()
+}
+
+fn delete_environment(
+    execution_id: &str,
+    environment_action: &EnvironmentAction,
+) -> TransactionResult {
+    let engine = test_utilities::docker_ecr_aws_engine(execution_id);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = test_utilities::cloud_provider_aws(execution_id);
+    let nodes = test_utilities::aws_kubernetes_nodes();
+
+    let k = test_utilities::aws_kubernetes_eks(execution_id, &cp, nodes);
+
+    tx.delete_environment(&k, &environment_action);
+
+    tx.commit()
+}
+
 #[test]
 fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
     let execution_id = test_utilities::execution_id();
@@ -27,7 +66,7 @@ fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match deploy_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -43,7 +82,7 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match deploy_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -60,7 +99,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match deploy_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -77,7 +116,7 @@ fn deploy_a_working_environment_with_no_database_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match deploy_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -101,7 +140,7 @@ fn deploy_a_working_environment_with_no_storage_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match deploy_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -125,7 +164,7 @@ fn deploy_a_working_environment_with_no_custom_domain_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match deploy_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -140,7 +179,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match deploy_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(false),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
@@ -156,7 +195,7 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 
     let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match deploy_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(false),
         TransactionResult::Rollback(_) => assert!(true),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -172,7 +211,7 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
 
     let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match deploy_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(false),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
@@ -199,7 +238,7 @@ fn delete_a_working_development_environment_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match delete_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -213,7 +252,7 @@ fn delete_a_working_development_environment_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match delete_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -230,7 +269,7 @@ fn delete_a_working_production_environment_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match delete_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -244,7 +283,7 @@ fn delete_a_working_production_environment_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match delete_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -261,7 +300,7 @@ fn delete_a_non_working_environment_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match delete_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -275,7 +314,7 @@ fn delete_a_non_working_environment_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match do_deployment(execution_id.as_str(), &ea) {
+    match delete_environment(execution_id.as_str(), &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -284,20 +323,97 @@ fn delete_a_non_working_environment_on_aws_eks() {
 
 #[test]
 fn pause_a_working_development_environment_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    environment.kind = Kind::Development;
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match pause_environment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]
 fn pause_a_working_production_environment_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    environment.kind = Kind::Production;
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match pause_environment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]
 fn pause_a_non_working_environment_on_aws_eks() {
-    // TODO
+    let execution_id = test_utilities::execution_id();
+    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+
+    let ea = EnvironmentAction::Environment(environment);
+
+    match pause_environment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 
 #[test]
-fn pause_and_start_a_working_environment_on_aws_eks() {
-    // TODO
+fn start_and_pause_and_start_and_delete_a_working_environment_on_aws_eks() {
+    // START
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let ea = EnvironmentAction::Environment(environment);
+
+    match deploy_environment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // PAUSE
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let ea = EnvironmentAction::Environment(environment);
+
+    match pause_environment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // START
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let ea = EnvironmentAction::Environment(environment);
+
+    match deploy_environment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // DELETE
+    let execution_id = test_utilities::execution_id();
+
+    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let ea = EnvironmentAction::Environment(environment);
+
+    match delete_environment(execution_id.as_str(), &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }

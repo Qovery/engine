@@ -41,6 +41,7 @@ pub fn kubernetes_config_path(
 pub type Logs = String;
 pub type Describe = String;
 
+/// show different output (kubectl describe, log..) for debug purpose
 pub fn get_stateless_resource_information(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
