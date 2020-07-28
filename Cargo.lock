@@ -28,6 +28,7 @@ dependencies = [
  "qovery-engine",
  "qovery-engine-shared",
  "qovery-engine-task-manager",
+ "retry",
  "serde",
  "serde_json",
  "uuid",

@@ -25,8 +25,13 @@ use crate::constants::ASCII_BANNER;
 use crate::TaskSelector::{Environment, Infrastructure};
 use chrono::{DateTime, Utc};
 use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
+use retry::delay::Fibonacci;
+use retry::OperationResult;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+
+const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";
+const CORE_PING_SUBJECT: &str = "core.ping";
 
 enum TaskSelector {
     Infrastructure(&'static str),
@@ -46,6 +51,24 @@ impl StatusResponse {
             id,
             created_at: Utc::now(),
             status,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Ping {
+    created_at: DateTime<Utc>,
+    engine_started_at: DateTime<Utc>,
+    engine_name: String,
+    // TODO add stats? deployments: { total, total_successes, total_failed ...}
+}
+
+impl Ping {
+    fn new(engine_started_at: DateTime<Utc>, engine_name: &str) -> Self {
+        Ping {
+            created_at: Utc::now(),
+            engine_started_at,
+            engine_name: engine_name.to_string(),
         }
     }
 }
@@ -94,6 +117,49 @@ fn listen_for_events(
     });
 
     Ok(sub)
+}
+
+/// Notify the core server that this engine exists and is running
+/// if the server does not respond - then retry 10 times (with fibonacci retry) -
+/// if it does not respond after all attempts, then gracefully restart the service.
+fn watchdog(name: String, nc: Connection, sig_term_tx: Sender<bool>) {
+    thread::spawn(move || {
+        let engine_started_at = Utc::now();
+
+        loop {
+            let ping_res = retry::retry(Fibonacci::from_millis(3000).take(10), || {
+                let ping = Ping::new(engine_started_at, name.as_str());
+                let json = serde_json::to_string(&ping);
+
+                let res = nc.request_timeout(
+                    CORE_PING_SUBJECT,
+                    json.unwrap().as_bytes(),
+                    Duration::from_secs(5),
+                );
+
+                match res {
+                    Ok(_) => OperationResult::Ok(0),
+                    _ => {
+                        warn!("ping failed (subject: {}), let's retry to ping the core server in a few seconds", CORE_PING_SUBJECT);
+                        OperationResult::Retry(0)
+                    }
+                }
+            });
+
+            match ping_res {
+                Ok(_) => {
+                    debug!("ping OK!");
+                    sleep(Duration::from_secs(600));
+                } // ping every 10 minutes
+                _ => {
+                    error!("--------------------------------------------------");
+                    error!("ping KO!! What's wrong? Let's shutdown the service");
+                    error!("--------------------------------------------------");
+                    sig_term_tx.send(true);
+                }
+            }
+        }
+    });
 }
 
 pub fn main() -> Result<(), Error> {
@@ -184,7 +250,7 @@ pub fn main() -> Result<(), Error> {
 
                         let json = serde_json::to_string(&sr);
                         let _ = nc.request_timeout(
-                            "core.task.status",
+                            CORE_TASK_STATUS_SUBJECT,
                             json.unwrap().as_bytes(),
                             Duration::from_secs(60),
                         );
@@ -220,6 +286,9 @@ pub fn main() -> Result<(), Error> {
         listen_for_events(Environment("environment"), &nc, &mode, tx_task.clone())?;
 
     let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
+
+    // ping pong
+    watchdog(name.clone(), nc.clone(), sig_term_tx.clone());
 
     thread::spawn(move || {
         let _ = sig_term_rx.recv();

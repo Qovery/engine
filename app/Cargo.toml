@@ -17,6 +17,7 @@ serde_json = "1.0"
 uuid = { version = "0.8", features = ["v4"] }
 chrono = "0.4.13"
 ctrlc = "3.1.4" # sig term handler wrapper
+retry = "1.0.0"
 
 # logger
 env_logger = "0.7.1"
