@@ -24,6 +24,11 @@ pub const ORGANIZATION_ID: &str = "adwopakdpo221";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
 
 pub fn init() {
+    println!(
+        "running from current directory: {}",
+        std::env::current_dir().unwrap().to_str().unwrap()
+    );
+
     env_logger::init();
 }
 
@@ -38,10 +43,12 @@ pub fn execution_id() -> String {
 pub fn context() -> Context {
     let execution_id = execution_id();
     let home_dir = home_dir().unwrap();
+    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+
     Context::new(
         execution_id.as_str(),
         home_dir.to_str().unwrap(),
-        "/Users/evoxmusic/IdeaProjects/qovery-engine/lib",
+        lib_root_dir.as_str(),
     )
 }
 
