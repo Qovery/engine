@@ -8,7 +8,7 @@ use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::str::FromStr;
 use tera::Error as TeraError;
-use tera::{Context, Tera};
+use tera::{Context as TeraContext, Tera};
 use walkdir::WalkDir;
 
 use crate::cloud_provider::aws::kubernetes::node::Node;
@@ -19,14 +19,14 @@ use crate::cloud_provider::service::{Service, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::workspace_directory;
-use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressListener};
+use crate::models::{Context, Listeners, ListenersHelper, ProgressInfo, ProgressListener};
 use crate::{cmd, dynamo_db, fs, s3};
 use std::rc::Rc;
 
 pub mod node;
 
 pub struct EKS<'a> {
-    execution_id: String,
+    context: Context,
     id: String,
     name: String,
     version: String,
@@ -39,7 +39,7 @@ pub struct EKS<'a> {
 
 impl<'a> EKS<'a> {
     pub fn new(
-        execution_id: &str,
+        context: Context,
         id: &str,
         name: &str,
         version: &str,
@@ -47,10 +47,10 @@ impl<'a> EKS<'a> {
         cloud_provider: &'a AWS,
         nodes: Vec<Node>,
     ) -> Self {
-        let template_directory = "lib/aws/bootstrap".to_string();
+        let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
         EKS {
-            execution_id: execution_id.to_string(),
+            context,
             id: id.to_string(),
             name: name.to_string(),
             version: version.to_string(),
@@ -66,7 +66,7 @@ impl<'a> EKS<'a> {
         format!("{}-{}-qovery-terraform", self.region.name(), self.id())
     }
 
-    fn context(&self) -> Context {
+    fn tera_context(&self) -> TeraContext {
         let eks_zone_a_subnet_blocks = [
             "10.0.0.0/23",
             "10.0.2.0/23",
@@ -223,7 +223,7 @@ impl<'a> EKS<'a> {
         let documentdb_cidr_subnet = "23";
         let elasticsearch_cidr_subnet = "23";
 
-        let mut context = Context::new();
+        let mut context = TeraContext::new();
 
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
@@ -299,8 +299,8 @@ impl<'a> EKS<'a> {
 }
 
 impl<'a> Kubernetes for EKS<'a> {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
+    fn context(&self) -> &Context {
+        &self.context
     }
 
     fn kind(&self) -> Kind {
@@ -347,8 +347,11 @@ impl<'a> Kubernetes for EKS<'a> {
             "start to create EKS cluster",
         ));
 
-        let temp_dir =
-            workspace_directory(self.execution_id(), format!("bootstrap/{}", self.name()));
+        let temp_dir = workspace_directory(
+            self.context.working_root_dir(),
+            self.context.execution_id(),
+            format!("bootstrap/{}", self.name()),
+        );
         let temp_dir_path_str = temp_dir.as_str();
 
         // create S3 bucket
@@ -368,7 +371,7 @@ impl<'a> Kubernetes for EKS<'a> {
         )?;
 
         // generate terraform files and copy them into temp dir
-        let context = self.context();
+        let context = self.tera_context();
         let _ = crate::template::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),
             temp_dir.as_str(),
@@ -379,7 +382,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
         let _ = crate::template::copy_non_template_files(
-            "lib/common/bootstrap/charts",
+            format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
             common_charts_temp_dir.as_str(),
         )?;
 
@@ -749,41 +752,4 @@ struct WorkerNodeDataTemplate {
     desired_size: String,
     max_size: String,
     min_size: String,
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use crate::cloud_provider::aws::kubernetes::node::Node;
-    use crate::cloud_provider::aws::kubernetes::EKS;
-    use crate::cloud_provider::aws::AWS;
-    use crate::cloud_provider::CloudProvider;
-
-    fn aws() -> AWS {
-        let aws = AWS::new(
-            "kapodwk-awdiwadju-adoajwd",
-            "xxx",
-            "123-abc",
-            "my-default-aws",
-            "AKIAZ4KMLSYJLRGNNFNI",
-            "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
-        );
-
-        match aws.is_valid() {
-            Err(err) => panic!("something goes wrong with the connection to AWS"),
-            _ => {}
-        }
-
-        aws
-    }
-
-    fn nodes() -> Vec<Node> {
-        vec![
-            Node::new(2, 4),
-            Node::new(2, 4),
-            Node::new(2, 4),
-            Node::new(1, 2),
-        ]
-    }
 }

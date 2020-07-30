@@ -4,11 +4,12 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use crate::container_registry::PushResult;
+use crate::models::Context;
 use std::io::Error;
-use tera::Context;
+use tera::Context as TeraContext;
 
 pub trait Service {
-    fn execution_id(&self) -> &str;
+    fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
@@ -34,8 +35,12 @@ pub trait Service {
         Ok(())
     }
 
-    fn default_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
-        let mut context = Context::new();
+    fn default_tera_context(
+        &self,
+        kubernetes: &dyn Kubernetes,
+        environment: &Environment,
+    ) -> TeraContext {
+        let mut context = TeraContext::new();
 
         context.insert("id", self.id());
         context.insert("owner_id", environment.owner_id.as_str());

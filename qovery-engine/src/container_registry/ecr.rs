@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::str::FromStr;
 
 use rusoto_core::{Client, HttpClient, Region};
@@ -15,13 +16,12 @@ use crate::cmd::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
-use crate::models::{Listeners, ProgressListener};
+use crate::models::{Context, Listeners, ProgressListener};
 use crate::runtime::async_run;
 use crate::transaction::CommitError::PushImage;
-use std::rc::Rc;
 
 pub struct ECR {
-    execution_id: String,
+    context: Context,
     id: String,
     name: String,
     access_key_id: String,
@@ -32,7 +32,7 @@ pub struct ECR {
 
 impl ECR {
     pub fn new(
-        execution_id: &str,
+        context: Context,
         id: &str,
         name: &str,
         access_key_id: &str,
@@ -40,7 +40,7 @@ impl ECR {
         region: &str,
     ) -> Self {
         ECR {
-            execution_id: execution_id.to_string(),
+            context,
             id: id.to_string(),
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
@@ -194,8 +194,8 @@ impl ECR {
 }
 
 impl ContainerRegistry for ECR {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
+    fn context(&self) -> &Context {
+        &self.context
     }
 
     fn kind(&self) -> Kind {
@@ -332,36 +332,5 @@ impl ContainerRegistry for ECR {
 
     fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
         unimplemented!()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::build_platform::Image;
-    use crate::container_registry::ecr::ECR;
-    use crate::container_registry::{ContainerRegistry, ContainerRegistryError};
-
-    #[test]
-    fn test_is_not_valid() {
-        let ecr = ECR::new("xxx", "123-abc", "my-ecr", "fake", "fake", "us-east-2");
-        assert_eq!(ecr.is_valid().is_err(), true);
-        assert_eq!(
-            ecr.is_valid().err().unwrap(),
-            ContainerRegistryError::Credentials
-        );
-    }
-
-    #[test]
-    fn test_is_valid() {
-        let ecr = ECR::new(
-            "xxx",
-            "123-abc",
-            "my-ecr",
-            "AKIAZ4KMLSYJLRGNNFNI",
-            "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/",
-            "us-east-2",
-        );
-
-        assert_eq!(ecr.is_valid().is_ok(), true);
     }
 }

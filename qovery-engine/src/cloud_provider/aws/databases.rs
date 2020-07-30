@@ -2,7 +2,7 @@ use std::io::Error;
 use std::str::FromStr;
 
 use rusoto_core::Region;
-use tera::Context;
+use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
@@ -14,9 +14,10 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::models::Context;
 
 pub struct PostgreSQL {
-    execution_id: String,
+    context: Context,
     id: String,
     action: Action,
     name: String,
@@ -28,7 +29,7 @@ pub struct PostgreSQL {
 
 impl PostgreSQL {
     pub fn new(
-        execution_id: &str,
+        context: Context,
         id: &str,
         action: Action,
         name: &str,
@@ -38,7 +39,7 @@ impl PostgreSQL {
         options: DatabaseOptions,
     ) -> Self {
         PostgreSQL {
-            execution_id: execution_id.to_string(),
+            context,
             action,
             id: id.to_string(),
             name: name.to_string(),
@@ -54,11 +55,15 @@ impl PostgreSQL {
     }
 
     fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(self.execution_id(), format!("databases/{}", self.name()))
+        crate::fs::workspace_directory(
+            self.context.working_root_dir(),
+            self.context.execution_id(),
+            format!("databases/{}", self.name()),
+        )
     }
 
-    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
-        let mut context = self.default_context(kubernetes, environment);
+    fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+        let mut context = self.default_tera_context(kubernetes, environment);
 
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
@@ -108,8 +113,8 @@ impl PostgreSQL {
 impl StatefulService for PostgreSQL {}
 
 impl Service for PostgreSQL {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
+    fn context(&self) -> &Context {
+        &self.context
     }
 
     fn service_type(&self) -> ServiceType {
@@ -160,10 +165,11 @@ impl Create for PostgreSQL {
                 // use terraform
                 info!("deploy PostgreSQL on AWS RDS for {}", self.name());
 
-                let context = self.context(*kubernetes, *environment);
+                let context = self.tera_context(*kubernetes, *environment);
 
+                let from_dir = format!("{}/aws/services/postgresql", self.context.lib_root_dir());
                 let _ = crate::template::generate_and_copy_all_files_into_dir(
-                    "lib/aws/services/postgresql",
+                    from_dir.as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
@@ -177,7 +183,7 @@ impl Create for PostgreSQL {
                 // use helm
                 info!("deploy PostgreSQL on Kubernetes for {}", self.name());
 
-                let context = self.context(*kubernetes, *environment);
+                let context = self.tera_context(*kubernetes, *environment);
 
                 let aws = kubernetes
                     .cloud_provider()
@@ -194,8 +200,11 @@ impl Create for PostgreSQL {
                     kubernetes.region(),
                 )?;
 
+                let from_dir =
+                    format!("{}/common/services/postgresql", self.context.lib_root_dir());
+
                 let _ = crate::template::generate_and_copy_all_files_into_dir(
-                    "lib/common/services/postgresql",
+                    from_dir.as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;

@@ -3,7 +3,7 @@ use std::io::{Error, Write};
 use std::path::Path;
 use std::str::FromStr;
 
-use tera::Context;
+use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
@@ -16,6 +16,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::models::Context;
 use dns_lookup::lookup_host;
 use itertools::enumerate;
 use retry::delay::{Exponential, Fibonacci};
@@ -23,7 +24,7 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
 pub struct Router {
-    execution_id: String,
+    context: Context,
     id: String,
     name: String,
     default_domain: String,
@@ -33,7 +34,7 @@ pub struct Router {
 
 impl Router {
     pub fn new(
-        execution_id: &str,
+        context: Context,
         id: &str,
         name: &str,
         default_domain: &str,
@@ -41,7 +42,7 @@ impl Router {
         routes: Vec<Route>,
     ) -> Self {
         Router {
-            execution_id: execution_id.to_string(),
+            context,
             id: id.to_string(),
             name: name.to_string(),
             default_domain: default_domain.to_string(),
@@ -54,7 +55,7 @@ impl Router {
         crate::string::cut(format!("router-{}", self.id()), 50)
     }
 
-    fn aws_credentials_envs<'a>(&self, aws: &'a AWS) -> [(&'a str, &'a str); 2] {
+    fn aws_credentials_envs<'x>(&self, aws: &'x AWS) -> [(&'x str, &'x str); 2] {
         [
             (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
@@ -62,11 +63,15 @@ impl Router {
     }
 
     fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(self.execution_id(), format!("routers/{}", self.name()))
+        crate::fs::workspace_directory(
+            self.context.working_root_dir(),
+            self.context.execution_id(),
+            format!("routers/{}", self.name()),
+        )
     }
 
-    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
-        let mut context = self.default_context(kubernetes, environment);
+    fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+        let mut context = self.default_tera_context(kubernetes, environment);
 
         let applications = environment
             .stateless_services
@@ -192,9 +197,9 @@ impl Router {
     }
 }
 
-impl<'a> Service for Router {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
+impl Service for Router {
+    fn context(&self) -> &Context {
+        &self.context
     }
 
     fn service_type(&self) -> ServiceType {
@@ -291,13 +296,19 @@ impl Create for Router {
             // custom domains? create an NGINX ingress
             info!("setup NGINX ingress for custom domains");
 
-            let into_dir =
-                crate::fs::workspace_directory(self.execution_id(), "routers/nginx-ingress");
+            let into_dir = crate::fs::workspace_directory(
+                self.context.working_root_dir(),
+                self.context.execution_id(),
+                "routers/nginx-ingress",
+            );
 
             // copy nginx-ingress files, there is no templates so do not generate anything and
             // simply copy/paste files into our working dir
             let _ = crate::template::copy_non_template_files(
-                "lib/common/bootstrap/charts/nginx-ingress",
+                format!(
+                    "{}, /common/bootstrap/charts/nginx-ingress",
+                    self.context().lib_root_dir()
+                ),
                 into_dir.as_str(),
             )?;
 
@@ -319,10 +330,11 @@ impl Create for Router {
 
         // respect order - getting the context here and not before is mandatory
         // the nginx-ingress must be available to get the external dns target if necessary
-        let context = self.context(kubernetes, environment);
+        let context = self.tera_context(kubernetes, environment);
 
+        let from_dir = format!("{}/aws/charts/q-ingress-tls", self.context.lib_root_dir());
         let _ = crate::template::generate_and_copy_all_files_into_dir(
-            "lib/aws/charts/q-ingress-tls",
+            from_dir.as_str(),
             workspace_dir.as_str(),
             &context,
         )?;

@@ -2,7 +2,7 @@ use crate::build_platform::Image;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::models::ProgressListener;
+use crate::models::{Context, ProgressListener};
 use rusoto_core::RusotoError;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -15,7 +15,7 @@ pub mod kubernetes;
 pub mod service;
 
 pub trait CloudProvider {
-    fn execution_id(&self) -> &str;
+    fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn organization_id(&self) -> &str;

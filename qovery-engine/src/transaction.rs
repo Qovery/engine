@@ -178,7 +178,7 @@ impl<'a> Transaction<'a> {
             };
 
             match application.to_application(
-                environment.execution_id.as_str(),
+                self.engine.context(),
                 &build_result.build.image,
                 self.engine.cloud_provider(),
             ) {
@@ -300,7 +300,7 @@ impl<'a> Transaction<'a> {
                 let build = application.to_build();
 
                 match application.to_application(
-                    environment.execution_id.as_str(),
+                    self.engine.context(),
                     &build.image,
                     self.engine.cloud_provider(),
                 ) {
@@ -309,8 +309,11 @@ impl<'a> Transaction<'a> {
                 }
             }
 
-            let qe_environment =
-                environment.to_qe_environment(&_applications, self.engine.cloud_provider());
+            let qe_environment = environment.to_qe_environment(
+                self.engine.context(),
+                &_applications,
+                self.engine.cloud_provider(),
+            );
 
             qe_environment
         };
@@ -531,8 +534,11 @@ impl<'a> Transaction<'a> {
 
         let built_applications = applications_by_environment.get(target_environment).unwrap(); // FIXME unsafe?
 
-        let qe_environment =
-            target_environment.to_qe_environment(built_applications, kubernetes.cloud_provider());
+        let qe_environment = target_environment.to_qe_environment(
+            self.engine.context(),
+            built_applications,
+            kubernetes.cloud_provider(),
+        );
 
         let _ = match self.check_environment(&qe_environment) {
             TransactionResult::Ok => {}

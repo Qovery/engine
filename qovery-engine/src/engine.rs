@@ -2,10 +2,12 @@ use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::error::ConfigurationError;
+use crate::models::Context;
 use crate::session::Session;
 use std::borrow::Borrow;
 
 pub struct Engine {
+    context: Context,
     build_platform: Box<dyn BuildPlatform>,
     container_registry: Box<dyn ContainerRegistry>,
     cloud_provider: Box<dyn CloudProvider>,
@@ -13,11 +15,13 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(
+        context: Context,
         build_platform: Box<dyn BuildPlatform>,
         container_registry: Box<dyn ContainerRegistry>,
         cloud_provider: Box<dyn CloudProvider>,
     ) -> Engine {
         Engine {
+            context,
             build_platform,
             container_registry,
             cloud_provider,
@@ -26,9 +30,8 @@ impl Engine {
 }
 
 impl<'a> Engine {
-    /// Read JSON and return a Config
-    pub fn from_json(json: &str) -> Self {
-        unimplemented!()
+    pub fn context(&self) -> &Context {
+        &self.context
     }
 
     pub fn build_platform(&self) -> &dyn BuildPlatform {

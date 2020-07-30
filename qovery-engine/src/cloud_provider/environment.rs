@@ -58,24 +58,6 @@ impl Environment {
 
         Ok(())
     }
-
-    fn get_services_to_deploy<'a, T: Service + ?Sized>(
-        &'a self,
-        services: &'a Vec<Box<T>>,
-    ) -> Vec<&'a Box<T>> {
-        services
-            .iter()
-            .filter(|s| *s.action() == crate::cloud_provider::service::Action::Create)
-            .collect::<Vec<_>>()
-    }
-
-    pub fn stateless_services_to_deploy<'a>(&'a self) -> Vec<&'a Box<dyn StatelessService>> {
-        self.get_services_to_deploy(&self.stateless_services)
-    }
-
-    pub fn stateful_services_to_deploy<'a>(&'a self) -> Vec<&'a Box<dyn StatefulService>> {
-        self.get_services_to_deploy(&self.stateful_services)
-    }
 }
 
 pub enum Kind {

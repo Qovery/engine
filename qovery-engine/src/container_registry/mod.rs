@@ -1,7 +1,7 @@
 use rusoto_core::RusotoError;
 
 use crate::build_platform::Image;
-use crate::models::ProgressListener;
+use crate::models::{Context, ProgressListener};
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
@@ -9,7 +9,7 @@ pub mod docker_hub;
 pub mod ecr;
 
 pub trait ContainerRegistry {
-    fn execution_id(&self) -> &str;
+    fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;

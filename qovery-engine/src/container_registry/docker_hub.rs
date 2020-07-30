@@ -4,11 +4,11 @@ use crate::cmd::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
-use crate::models::{Listeners, ProgressListener};
+use crate::models::{Context, Listeners, ProgressListener};
 use std::rc::Rc;
 
 pub struct DockerHub {
-    execution_id: String,
+    context: Context,
     id: String,
     name: String,
     login: String,
@@ -17,9 +17,9 @@ pub struct DockerHub {
 }
 
 impl DockerHub {
-    pub fn new(execution_id: &str, id: &str, name: &str, login: &str, password: &str) -> Self {
+    pub fn new(context: Context, id: &str, name: &str, login: &str, password: &str) -> Self {
         DockerHub {
-            execution_id: execution_id.to_string(),
+            context,
             id: id.to_string(),
             name: name.to_string(),
             login: login.to_string(),
@@ -30,8 +30,8 @@ impl DockerHub {
 }
 
 impl ContainerRegistry for DockerHub {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
+    fn context(&self) -> &Context {
+        &self.context
     }
 
     fn kind(&self) -> Kind {

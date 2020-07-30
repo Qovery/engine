@@ -1,19 +1,30 @@
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
-use crate::models::ProgressListener;
+use crate::models::{Context, ProgressListener};
 use std::any::Any;
 use std::rc::Rc;
 
 pub struct GCP {
-    execution_id: String,
+    context: Context,
     id: String,
     name: String,
     p12_file_content: String,
 }
 
-impl CloudProvider for GCP {
-    fn execution_id(&self) -> &str {
-        unimplemented!()
+impl GCP {
+    pub fn new(context: Context, id: &str, name: &str, p12_file_content: &str) -> Self {
+        GCP {
+            context,
+            id: id.to_string(),
+            name: name.to_string(),
+            p12_file_content: p12_file_content.to_string(),
+        }
+    }
+}
+
+impl<'x> CloudProvider for GCP {
+    fn context(&self) -> &Context {
+        &self.context
     }
 
     fn kind(&self) -> Kind {
@@ -42,16 +53,5 @@ impl CloudProvider for GCP {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
-
-impl GCP {
-    pub fn new(execution_id: &str, id: &str, name: &str, p12_file_content: &str) -> Self {
-        GCP {
-            execution_id: execution_id.to_string(),
-            id: id.to_string(),
-            name: name.to_string(),
-            p12_file_content: p12_file_content.to_string(),
-        }
     }
 }

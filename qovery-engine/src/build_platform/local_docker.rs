@@ -4,21 +4,21 @@ use std::rc::Rc;
 use crate::build_platform::error::BuildPlatformError;
 use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image, Kind};
 use crate::fs::workspace_directory;
-use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressListener};
+use crate::models::{Context, Listeners, ListenersHelper, ProgressInfo, ProgressListener};
 use crate::{cmd, git};
 
 /// use Docker in local
 pub struct LocalDocker {
-    execution_id: String,
+    context: Context,
     id: String,
     name: String,
     listeners: Listeners,
 }
 
 impl LocalDocker {
-    pub fn new(execution_id: &str, id: &str, name: &str) -> Self {
+    pub fn new(context: Context, id: &str, name: &str) -> Self {
         LocalDocker {
-            execution_id: execution_id.to_string(),
+            context,
             id: id.to_string(),
             name: name.to_string(),
             listeners: vec![],
@@ -39,8 +39,8 @@ impl LocalDocker {
 }
 
 impl BuildPlatform for LocalDocker {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
+    fn context(&self) -> &Context {
+        &self.context
     }
 
     fn kind(&self) -> Kind {
@@ -85,7 +85,8 @@ impl BuildPlatform for LocalDocker {
 
         // git clone
         let into_dir = workspace_directory(
-            self.execution_id(),
+            self.context.working_root_dir(),
+            self.context.execution_id(),
             format!("build/{}", build.image.name.as_str()),
         );
 

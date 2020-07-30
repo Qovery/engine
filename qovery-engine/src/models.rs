@@ -15,6 +15,7 @@ use crate::cloud_provider::service::{DatabaseOptions, Service, StatefulService, 
 use crate::cloud_provider::Kind as CPKind;
 use crate::cloud_provider::{CloudProvider as CP, CloudProvider};
 use crate::git::Credentials;
+use std::path::Path;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -47,6 +48,7 @@ impl Environment {
 
     pub fn to_qe_environment(
         &self,
+        context: &Context,
         built_applications: &Vec<Box<dyn crate::cloud_provider::service::Application>>,
         cloud_provider: &dyn CloudProvider,
     ) -> crate::cloud_provider::environment::Environment {
@@ -55,7 +57,7 @@ impl Environment {
             .iter()
             .map(|x| {
                 x.to_stateless_service(
-                    self.execution_id.as_str(),
+                    context,
                     built_applications
                         .iter()
                         .find(|y| x.id.as_str() == y.id())
@@ -71,7 +73,7 @@ impl Environment {
         let routers = self
             .routers
             .iter()
-            .map(|x| x.to_stateless_service(self.execution_id.as_str(), cloud_provider))
+            .map(|x| x.to_stateless_service(context, cloud_provider))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -82,7 +84,7 @@ impl Environment {
         let databases = self
             .databases
             .iter()
-            .map(|x| x.to_stateful_service(self.execution_id.as_str(), cloud_provider))
+            .map(|x| x.to_stateful_service(context, cloud_provider))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -148,16 +150,16 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn to_application(
+    pub fn to_application<'a>(
         &self,
-        execution_id: &str,
+        context: &Context,
         image: &Image,
         cloud_provider: &dyn CloudProvider,
-    ) -> Option<Box<dyn crate::cloud_provider::service::Application>> {
+    ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
         match cloud_provider.kind() {
             CPKind::AWS => Some(Box::new(
                 crate::cloud_provider::aws::application::Application::new(
-                    execution_id,
+                    context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -182,14 +184,14 @@ impl Application {
 
     pub fn to_stateless_service(
         &self,
-        execution_id: &str,
+        context: &Context,
         image: &Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
         match cloud_provider.kind() {
             CPKind::AWS => Some(Box::new(
                 crate::cloud_provider::aws::application::Application::new(
-                    execution_id,
+                    context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -317,14 +319,14 @@ pub struct Router {
 impl Router {
     pub fn to_stateless_service(
         &self,
-        execution_id: &str,
+        context: &Context,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
         match cloud_provider.kind() {
             CPKind::AWS => {
                 let router: Box<dyn StatelessService> =
                     Box::new(crate::cloud_provider::aws::router::Router::new(
-                        execution_id,
+                        context.clone(),
                         self.id.as_str(),
                         self.name.as_str(),
                         self.default_domain.as_str(),
@@ -382,14 +384,14 @@ pub struct Database {
 impl Database {
     pub fn to_stateful_service(
         &self,
-        execution_id: &str,
+        context: &Context,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatefulService>> {
         match cloud_provider.kind() {
             CPKind::AWS => match self.kind {
                 DatabaseKind::PostgreSQL => {
                     let db: Box<dyn StatefulService> = Box::new(PostgreSQL::new(
-                        execution_id,
+                        context.clone(),
                         self.id.as_str(),
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -474,5 +476,34 @@ impl<'a> ListenersHelper<'a> {
 
     pub fn on_error(&self, info: ProgressInfo) {
         self.listeners.iter().for_each(|l| l.on_error(info.clone()));
+    }
+}
+
+#[derive(PartialEq, Eq, Hash, Clone)]
+pub struct Context {
+    execution_id: String,
+    working_root_dir: String,
+    lib_root_dir: String,
+}
+
+impl Context {
+    pub fn new(execution_id: &str, working_root_dir: &str, lib_root_dir: &str) -> Self {
+        Context {
+            execution_id: execution_id.to_string(),
+            working_root_dir: working_root_dir.to_string(),
+            lib_root_dir: lib_root_dir.to_string(),
+        }
+    }
+
+    pub fn execution_id(&self) -> &str {
+        self.execution_id.as_str()
+    }
+
+    pub fn working_root_dir(&self) -> &str {
+        self.working_root_dir.as_str()
+    }
+
+    pub fn lib_root_dir(&self) -> &str {
+        self.lib_root_dir.as_str()
     }
 }

@@ -72,7 +72,7 @@ impl Task for InfrastructureTask {
             .to_engine_kubernetes_nodes();
 
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
-            self.id(),
+            engine.context(),
             engine.cloud_provider(),
             nodes.borrow(),
         );
@@ -98,7 +98,10 @@ impl Task for InfrastructureTask {
             }
         }
 
-        match qovery_engine::fs::create_workspace_archive(self.id()) {
+        match qovery_engine::fs::create_workspace_archive(
+            engine.context().working_root_dir(),
+            engine.context().execution_id(),
+        ) {
             Ok(file) => {
                 // TODO upload archive
             }
@@ -169,7 +172,7 @@ impl Task for EnvironmentTask {
             .to_engine_kubernetes_nodes();
 
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
-            self.id(),
+            engine.context(),
             engine.cloud_provider(),
             nodes.borrow(),
         );
@@ -199,7 +202,10 @@ impl Task for EnvironmentTask {
             }
         }
 
-        match qovery_engine::fs::create_workspace_archive(self.id()) {
+        match qovery_engine::fs::create_workspace_archive(
+            engine.context().working_root_dir(),
+            engine.context().execution_id(),
+        ) {
             Ok(file) => {
                 // TODO upload archive
             }

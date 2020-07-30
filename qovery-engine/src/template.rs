@@ -7,12 +7,13 @@ use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
 
-pub fn generate_and_copy_all_files_into_dir<P>(
-    from_dir: P,
+pub fn generate_and_copy_all_files_into_dir<S, P>(
+    from_dir: S,
     to_dir: P,
     context: &Context,
 ) -> Result<(), Error>
 where
+    S: AsRef<Path> + Copy,
     P: AsRef<Path> + Copy,
 {
     // generate j2 templates
@@ -58,8 +59,9 @@ where
     Ok(())
 }
 
-pub fn copy_non_template_files<P>(from: P, to: P) -> Result<(), Error>
+pub fn copy_non_template_files<S, P>(from: S, to: P) -> Result<(), Error>
 where
+    S: AsRef<Path>,
     P: AsRef<Path>,
 {
     crate::fs::copy_files(from.as_ref(), to.as_ref(), true)

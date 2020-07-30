@@ -3,14 +3,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::build_platform::error::BuildPlatformError;
 use crate::git::Credentials;
-use crate::models::{Listeners, ProgressListener};
+use crate::models::{Context, Listeners, ProgressListener};
 use std::rc::Rc;
 
 pub mod error;
 pub mod local_docker;
 
 pub trait BuildPlatform {
-    fn execution_id(&self) -> &str;
+    fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;

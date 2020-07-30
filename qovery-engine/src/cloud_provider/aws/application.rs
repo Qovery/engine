@@ -2,7 +2,7 @@ use chrono::Duration;
 use retry::delay::{jitter, Exponential};
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
-use tera::Context;
+use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
@@ -15,10 +15,11 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
-    execution_id: String,
+    context: Context,
     id: String,
     action: Action,
     name: String,
@@ -33,7 +34,7 @@ pub struct Application {
 
 impl Application {
     pub fn new(
-        execution_id: &str,
+        context: Context,
         id: &str,
         action: Action,
         name: &str,
@@ -46,7 +47,7 @@ impl Application {
         environment_variables: Vec<EnvironmentVariable>,
     ) -> Self {
         Application {
-            execution_id: execution_id.to_string(),
+            context,
             id: id.to_string(),
             action,
             name: name.to_string(),
@@ -65,11 +66,15 @@ impl Application {
     }
 
     fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(self.execution_id(), format!("applications/{}", self.name()))
+        crate::fs::workspace_directory(
+            self.context.working_root_dir(),
+            self.context.execution_id(),
+            format!("applications/{}", self.name()),
+        )
     }
 
-    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> Context {
-        let mut context = self.default_context(kubernetes, environment);
+    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+        let mut context = self.default_tera_context(kubernetes, environment);
         let commit_id = self.image().commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
@@ -166,8 +171,8 @@ impl crate::cloud_provider::service::Application for Application {
 impl StatelessService for Application {}
 
 impl Service for Application {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
+    fn context(&self) -> &Context {
+        &self.context
     }
 
     fn service_type(&self) -> ServiceType {
@@ -224,8 +229,9 @@ impl Create for Application {
         let context = self.context(kubernetes, environment);
         let workspace_dir = self.workspace_directory();
 
+        let from_dir = format!("{}/aws/charts/q-application", self.context.lib_root_dir());
         let _ = crate::template::generate_and_copy_all_files_into_dir(
-            "lib/aws/charts/q-application",
+            from_dir.as_str(),
             workspace_dir.as_str(),
             &context,
         )?;

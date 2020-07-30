@@ -2,7 +2,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::{Service, ServiceError};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
-use crate::models::ProgressListener;
+use crate::models::{Context, ProgressListener};
 use crate::transaction::CommitError;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -10,7 +10,7 @@ use std::process::ExitStatus;
 use std::rc::Rc;
 
 pub trait Kubernetes {
-    fn execution_id(&self) -> &str;
+    fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;

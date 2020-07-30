@@ -6,7 +6,7 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
-use crate::models::{Listeners, ProgressListener};
+use crate::models::{Context, Listeners, ProgressListener};
 use crate::runtime::async_run;
 use std::rc::Rc;
 
@@ -19,7 +19,7 @@ pub mod router;
 pub mod kubernetes;
 
 pub struct AWS {
-    execution_id: String,
+    context: Context,
     id: String,
     organization_id: String,
     name: String,
@@ -30,7 +30,7 @@ pub struct AWS {
 
 impl AWS {
     pub fn new(
-        execution_id: &str,
+        context: Context,
         id: &str,
         organization_id: &str,
         name: &str,
@@ -38,7 +38,7 @@ impl AWS {
         secret_access_key: &str,
     ) -> Self {
         AWS {
-            execution_id: execution_id.to_string(),
+            context,
             id: id.to_string(),
             organization_id: organization_id.to_string(),
             name: name.to_string(),
@@ -63,8 +63,8 @@ impl AWS {
 }
 
 impl CloudProvider for AWS {
-    fn execution_id(&self) -> &str {
-        self.execution_id.as_str()
+    fn context(&self) -> &Context {
+        &self.context
     }
 
     fn kind(&self) -> Kind {
@@ -100,10 +100,4 @@ impl CloudProvider for AWS {
     fn as_any(&self) -> &dyn Any {
         self
     }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn aws() {}
 }

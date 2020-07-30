@@ -24,6 +24,7 @@ use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 use crate::constants::ASCII_BANNER;
 use crate::TaskSelector::{Environment, Infrastructure};
 use chrono::{DateTime, Utc};
+use dirs::home_dir;
 use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
@@ -170,11 +171,19 @@ pub fn main() -> Result<(), Error> {
     let cloud_provider = env::var("CLOUD_PROVIDER");
     let region = env::var("REGION");
     let nats_server = env::var("NATS_SERVER").expect("NATS_SERVER is mandatory");
+    let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or("lib".to_string());
+    let workspace_root_dir = env::var("WORKSPACE_ROOT_DIR").unwrap_or(format!(
+        "{}/.qovery-workspace",
+        home_dir().unwrap().to_str().unwrap()
+    ));
 
     info!(
         "running from current directory: {}",
         env::current_dir().unwrap().to_str().unwrap()
     );
+
+    info!("lib root dir: {}/", lib_root_dir.as_str());
+    info!("workspace root dir: {}", workspace_root_dir.as_str());
 
     let mode = if organization.is_ok() && cloud_provider.is_ok() && region.is_ok() {
         let org = organization.unwrap().clone();

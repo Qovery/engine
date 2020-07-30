@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 qovery-engine = { path = "../" }
 chrono = "0.4.11"
+dirs = "3.0.1"

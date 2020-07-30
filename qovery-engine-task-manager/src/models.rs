@@ -10,7 +10,7 @@ use qovery_engine::cloud_provider::gcp::GCP;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::{Environment, EnvironmentAction, ProgressListener};
+use qovery_engine::models::{Context, Environment, EnvironmentAction, ProgressListener};
 use std::rc::Rc;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -28,25 +28,25 @@ pub struct Request {
 
 impl Request {
     pub fn engine(&self, progress_listener: Rc<Box<dyn ProgressListener>>) -> Engine {
-        let mut build_platform = self
-            .build_platform
-            .to_engine_build_platform(self.id.as_str());
+        let context = Context::new(self.id.as_str(), "", ""); // TODO change
+
+        let mut build_platform = self.build_platform.to_engine_build_platform(&context);
 
         build_platform.add_listener(progress_listener.clone());
 
         let mut cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(self.id.as_str(), self.organization_id.as_str());
+            .to_engine_cloud_provider(&context, self.organization_id.as_str());
 
         cloud_provider.add_listener(progress_listener.clone());
 
         let mut container_registry = self
             .container_registry
-            .to_engine_container_registry(self.id.as_str());
+            .to_engine_container_registry(&context);
 
         container_registry.add_listener(progress_listener.clone());
 
-        Engine::new(build_platform, container_registry, cloud_provider)
+        Engine::new(context, build_platform, container_registry, cloud_provider)
     }
 
     pub fn environment_action(&self) -> Option<EnvironmentAction> {
@@ -80,11 +80,11 @@ pub struct BuildPlatform {
 impl BuildPlatform {
     pub fn to_engine_build_platform(
         &self,
-        request_id: &str,
+        context: &Context,
     ) -> Box<dyn qovery_engine::build_platform::BuildPlatform> {
         Box::new(match self.kind {
             qovery_engine::build_platform::Kind::LocalDocker => {
-                LocalDocker::new(request_id, self.id.as_str(), self.name.as_str())
+                LocalDocker::new(context.clone(), self.id.as_str(), self.name.as_str())
             }
         })
     }
@@ -102,14 +102,14 @@ pub struct CloudProvider {
 impl CloudProvider {
     pub fn to_engine_cloud_provider(
         &self,
-        request_id: &str,
+        context: &Context,
         organization_id: &str,
     ) -> Box<dyn qovery_engine::cloud_provider::CloudProvider> {
         match self.kind {
             qovery_engine::cloud_provider::Kind::AWS => {
                 // FIXME
                 Box::new(AWS::new(
-                    request_id,
+                    context.clone(),
                     self.id.as_str(),
                     organization_id,
                     self.name.as_str(),
@@ -120,7 +120,7 @@ impl CloudProvider {
             qovery_engine::cloud_provider::Kind::GCP => {
                 // FIXME
                 Box::new(GCP::new(
-                    request_id,
+                    context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
                     "",
@@ -143,13 +143,13 @@ pub struct Kubernetes {
 impl Kubernetes {
     pub fn to_engine_kubernetes<'a>(
         &self,
-        request_id: &str,
+        context: &Context,
         cloud_provider: &'a dyn qovery_engine::cloud_provider::CloudProvider,
         nodes: &Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>>,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a> {
         match self.kind {
             qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(EKS::new(
-                request_id,
+                context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
                 self.version.as_str(),
@@ -211,18 +211,18 @@ pub struct ContainerRegistry {
 impl ContainerRegistry {
     pub fn to_engine_container_registry(
         &self,
-        request_id: &str,
+        context: &Context,
     ) -> Box<dyn qovery_engine::container_registry::ContainerRegistry> {
         match self.kind {
             qovery_engine::container_registry::Kind::DockerHub => Box::new(DockerHub::new(
-                request_id,
+                context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
                 self.options.login.as_ref().unwrap().as_str(),
                 self.options.password.as_ref().unwrap().as_str(),
             )),
             qovery_engine::container_registry::Kind::ECR => Box::new(ECR::new(
-                request_id,
+                context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
                 self.options.access_key_id.as_ref().unwrap().as_str(),
