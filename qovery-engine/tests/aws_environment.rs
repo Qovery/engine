@@ -8,8 +8,6 @@ fn deploy_environment(
     context: &Context,
     environment_action: &EnvironmentAction,
 ) -> TransactionResult {
-    test_utilities::init();
-
     let engine = test_utilities::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
@@ -28,8 +26,6 @@ fn pause_environment(
     context: &Context,
     environment_action: &EnvironmentAction,
 ) -> TransactionResult {
-    test_utilities::init();
-
     let engine = test_utilities::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
@@ -48,8 +44,6 @@ fn delete_environment(
     context: &Context,
     environment_action: &EnvironmentAction,
 ) -> TransactionResult {
-    test_utilities::init();
-
     let engine = test_utilities::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
