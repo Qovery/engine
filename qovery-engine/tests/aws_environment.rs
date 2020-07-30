@@ -1,20 +1,23 @@
 extern crate test_utilities;
 
-use qovery_engine::models::{EnvironmentAction, Kind};
+use qovery_engine::models::{Context, EnvironmentAction, Kind};
 use qovery_engine::transaction::TransactionResult;
+use test_utilities::context;
 
 fn deploy_environment(
-    execution_id: &str,
+    context: &Context,
     environment_action: &EnvironmentAction,
 ) -> TransactionResult {
-    let engine = test_utilities::docker_ecr_aws_engine(execution_id);
+    test_utilities::init();
+
+    let engine = test_utilities::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::cloud_provider_aws(execution_id);
+    let cp = test_utilities::cloud_provider_aws(&context);
     let nodes = test_utilities::aws_kubernetes_nodes();
 
-    let k = test_utilities::aws_kubernetes_eks(execution_id, &cp, nodes);
+    let k = test_utilities::aws_kubernetes_eks(&context, &cp, nodes);
 
     tx.deploy_environment(&k, &environment_action);
 
@@ -22,17 +25,19 @@ fn deploy_environment(
 }
 
 fn pause_environment(
-    execution_id: &str,
+    context: &Context,
     environment_action: &EnvironmentAction,
 ) -> TransactionResult {
-    let engine = test_utilities::docker_ecr_aws_engine(execution_id);
+    test_utilities::init();
+
+    let engine = test_utilities::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::cloud_provider_aws(execution_id);
+    let cp = test_utilities::cloud_provider_aws(&context);
     let nodes = test_utilities::aws_kubernetes_nodes();
 
-    let k = test_utilities::aws_kubernetes_eks(execution_id, &cp, nodes);
+    let k = test_utilities::aws_kubernetes_eks(&context, &cp, nodes);
 
     tx.delete_environment(&k, &environment_action);
 
@@ -40,17 +45,19 @@ fn pause_environment(
 }
 
 fn delete_environment(
-    execution_id: &str,
+    context: &Context,
     environment_action: &EnvironmentAction,
 ) -> TransactionResult {
-    let engine = test_utilities::docker_ecr_aws_engine(execution_id);
+    test_utilities::init();
+
+    let engine = test_utilities::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::cloud_provider_aws(execution_id);
+    let cp = test_utilities::cloud_provider_aws(&context);
     let nodes = test_utilities::aws_kubernetes_nodes();
 
-    let k = test_utilities::aws_kubernetes_eks(execution_id, &cp, nodes);
+    let k = test_utilities::aws_kubernetes_eks(&context, &cp, nodes);
 
     tx.delete_environment(&k, &environment_action);
 
@@ -59,14 +66,16 @@ fn delete_environment(
 
 #[test]
 fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let context = context();
+
+    let mut environment = test_utilities::working_environment(&context);
     environment.kind = Kind::Development;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -75,14 +84,16 @@ fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
 
 #[test]
 fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let context = context();
+
+    let mut environment = test_utilities::working_environment(&context);
     environment.kind = Kind::Production;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -91,15 +102,17 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
 
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let context = context();
+
+    let mut environment = test_utilities::working_environment(&context);
 
     environment.routers = vec![];
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -108,15 +121,17 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 
 #[test]
 fn deploy_a_working_environment_with_no_database_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let context = context();
+
+    let mut environment = test_utilities::working_environment(&context);
 
     environment.databases = vec![];
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -125,9 +140,11 @@ fn deploy_a_working_environment_with_no_database_on_aws_eks() {
 
 #[test]
 fn deploy_a_working_environment_with_no_storage_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let context = context();
+
+    let mut environment = test_utilities::working_environment(&context);
 
     environment.applications = environment
         .applications
@@ -140,7 +157,7 @@ fn deploy_a_working_environment_with_no_storage_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -149,9 +166,11 @@ fn deploy_a_working_environment_with_no_storage_on_aws_eks() {
 
 #[test]
 fn deploy_a_working_environment_with_no_custom_domain_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let context = context();
+
+    let mut environment = test_utilities::working_environment(&context);
 
     environment.routers = environment
         .routers
@@ -164,7 +183,7 @@ fn deploy_a_working_environment_with_no_custom_domain_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -173,13 +192,15 @@ fn deploy_a_working_environment_with_no_custom_domain_on_aws_eks() {
 
 #[test]
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+    let context = context();
+
+    let mut environment = test_utilities::non_working_environment(&context);
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(false),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
@@ -188,14 +209,16 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 
 #[test]
 fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
-    let mut failover_environment = test_utilities::working_environment(execution_id.as_str());
+    let context = context();
+
+    let mut environment = test_utilities::non_working_environment(&context);
+    let mut failover_environment = test_utilities::working_environment(&context);
 
     let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(false),
         TransactionResult::Rollback(_) => assert!(true),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -204,14 +227,16 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 
 #[test]
 fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
-    let mut failover_environment = test_utilities::non_working_environment(execution_id.as_str());
+    let context = context();
+
+    let mut environment = test_utilities::non_working_environment(&context);
+    let mut failover_environment = test_utilities::non_working_environment(&context);
 
     let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(false),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
@@ -220,39 +245,45 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
 
 #[test]
 fn deploy_a_working_environment_with_a_failing_default_domain_on_aws_eks() {
+    test_utilities::init();
+
     // TODO
 }
 
 #[test]
 fn deploy_but_fail_to_push_image_on_container_registry() {
+    test_utilities::init();
+
     // TODO
 }
 
 #[test]
 fn delete_a_working_development_environment_on_aws_eks() {
-    // DEPLOY
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    // DEPLOY
+    let context = context();
+
+    let mut environment = test_utilities::working_environment(&context);
     environment.kind = Kind::Development;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match delete_environment(execution_id.as_str(), &ea) {
+    match delete_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 
     // DELETE
-    let execution_id = test_utilities::execution_id();
+    let context = test_utilities::context();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let mut environment = test_utilities::working_environment(&context);
     environment.kind = Kind::Development;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match delete_environment(execution_id.as_str(), &ea) {
+    match delete_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -261,29 +292,31 @@ fn delete_a_working_development_environment_on_aws_eks() {
 
 #[test]
 fn delete_a_working_production_environment_on_aws_eks() {
-    // DEPLOY
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    // DEPLOY
+    let context = context();
+
+    let mut environment = test_utilities::working_environment(&context);
     environment.kind = Kind::Production;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match delete_environment(execution_id.as_str(), &ea) {
+    match delete_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 
     // DELETE
-    let execution_id = test_utilities::execution_id();
+    let context = test_utilities::context();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let mut environment = test_utilities::working_environment(&context);
     environment.kind = Kind::Production;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match delete_environment(execution_id.as_str(), &ea) {
+    match delete_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -292,29 +325,31 @@ fn delete_a_working_production_environment_on_aws_eks() {
 
 #[test]
 fn delete_a_non_working_environment_on_aws_eks() {
-    // DEPLOY
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+    // DEPLOY
+    let context = test_utilities::context();
+
+    let mut environment = test_utilities::non_working_environment(&context);
     environment.kind = Kind::Development;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match delete_environment(execution_id.as_str(), &ea) {
+    match delete_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 
     // DELETE
-    let execution_id = test_utilities::execution_id();
+    let context = test_utilities::context();
 
-    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+    let mut environment = test_utilities::non_working_environment(&context);
     environment.kind = Kind::Development;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match delete_environment(execution_id.as_str(), &ea) {
+    match delete_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -323,14 +358,16 @@ fn delete_a_non_working_environment_on_aws_eks() {
 
 #[test]
 fn pause_a_working_development_environment_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let context = test_utilities::context();
+
+    let mut environment = test_utilities::working_environment(&context);
     environment.kind = Kind::Development;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match pause_environment(execution_id.as_str(), &ea) {
+    match pause_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -339,14 +376,16 @@ fn pause_a_working_development_environment_on_aws_eks() {
 
 #[test]
 fn pause_a_working_production_environment_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let context = test_utilities::context();
+
+    let mut environment = test_utilities::working_environment(&context);
     environment.kind = Kind::Production;
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match pause_environment(execution_id.as_str(), &ea) {
+    match pause_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -355,12 +394,15 @@ fn pause_a_working_production_environment_on_aws_eks() {
 
 #[test]
 fn pause_a_non_working_environment_on_aws_eks() {
-    let execution_id = test_utilities::execution_id();
-    let mut environment = test_utilities::non_working_environment(execution_id.as_str());
+    test_utilities::init();
+
+    let context = test_utilities::context();
+
+    let mut environment = test_utilities::non_working_environment(&context);
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match pause_environment(execution_id.as_str(), &ea) {
+    match pause_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -369,49 +411,51 @@ fn pause_a_non_working_environment_on_aws_eks() {
 
 #[test]
 fn start_and_pause_and_start_and_delete_a_working_environment_on_aws_eks() {
-    // START
-    let execution_id = test_utilities::execution_id();
+    test_utilities::init();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    // START
+    let context = test_utilities::context();
+
+    let mut environment = test_utilities::working_environment(&context);
     let ea = EnvironmentAction::Environment(environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 
     // PAUSE
-    let execution_id = test_utilities::execution_id();
+    let context = test_utilities::context();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let mut environment = test_utilities::working_environment(&context);
     let ea = EnvironmentAction::Environment(environment);
 
-    match pause_environment(execution_id.as_str(), &ea) {
+    match pause_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 
     // START
-    let execution_id = test_utilities::execution_id();
+    let context = test_utilities::context();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let mut environment = test_utilities::working_environment(&context);
     let ea = EnvironmentAction::Environment(environment);
 
-    match deploy_environment(execution_id.as_str(), &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 
     // DELETE
-    let execution_id = test_utilities::execution_id();
+    let context = test_utilities::context();
 
-    let mut environment = test_utilities::working_environment(execution_id.as_str());
+    let mut environment = test_utilities::working_environment(&context);
     let ea = EnvironmentAction::Environment(environment);
 
-    match delete_environment(execution_id.as_str(), &ea) {
+    match delete_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),

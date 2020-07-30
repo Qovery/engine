@@ -23,6 +23,10 @@ pub const AWS_DEFAULT_REGION: &str = "us-east-2";
 pub const ORGANIZATION_ID: &str = "adwopakdpo221";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
 
+pub fn init() {
+    env_logger::init();
+}
+
 pub fn execution_id() -> String {
     Utc::now()
         .to_rfc3339()
@@ -37,7 +41,7 @@ pub fn context() -> Context {
     Context::new(
         execution_id.as_str(),
         home_dir.to_str().unwrap(),
-        "../../../../lib",
+        "/Users/evoxmusic/IdeaProjects/qovery-engine/lib",
     )
 }
 

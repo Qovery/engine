@@ -2408,6 +2408,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dirs 3.0.1",
+ "env_logger",
  "qovery-engine",
 ]
 

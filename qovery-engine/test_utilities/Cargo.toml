@@ -10,3 +10,4 @@ edition = "2018"
 qovery-engine = { path = "../" }
 chrono = "0.4.11"
 dirs = "3.0.1"
+env_logger = "0.7.1"
