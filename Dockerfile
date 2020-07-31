@@ -17,7 +17,7 @@ RUN groupadd -g 1000 qovery && \
 
 WORKDIR /home/qovery
 COPY --from=build /usr/src/app/target/release/app .
-COPY --from=build /usr/src/app/lib .
+COPY --from=build /usr/src/app/lib ./lib
 
 RUN chown -Rf qovery. . && chmod 500 app
 USER qovery
