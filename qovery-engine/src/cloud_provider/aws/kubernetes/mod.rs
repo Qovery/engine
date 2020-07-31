@@ -348,7 +348,7 @@ impl<'a> Kubernetes for EKS<'a> {
         ));
 
         let temp_dir = workspace_directory(
-            self.context.working_root_dir(),
+            self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
         );

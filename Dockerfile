@@ -28,8 +28,11 @@ RUN adduser -D -s /bin/sh -u 1000 -G app app
 WORKDIR /home/app/bin/
 
 COPY --from=build /usr/src/app/target/x86_64-unknown-linux-musl/release/app .
+COPY --from=build /usr/src/app/lib /home/app/lib
 
 RUN chown app:app app
+RUN chown -R app:app /home/app/lib
+
 USER app
 
 CMD ["./app"]

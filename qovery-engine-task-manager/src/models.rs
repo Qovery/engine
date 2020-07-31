@@ -27,9 +27,11 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn engine(&self, progress_listener: Rc<Box<dyn ProgressListener>>) -> Engine {
-        let context = Context::new(self.id.as_str(), "", ""); // TODO change
-
+    pub fn engine(
+        &self,
+        context: &Context,
+        progress_listener: Rc<Box<dyn ProgressListener>>,
+    ) -> Engine {
         let mut build_platform = self.build_platform.to_engine_build_platform(&context);
 
         build_platform.add_listener(progress_listener.clone());
@@ -46,7 +48,12 @@ impl Request {
 
         container_registry.add_listener(progress_listener.clone());
 
-        Engine::new(context, build_platform, container_registry, cloud_provider)
+        Engine::new(
+            context.clone(),
+            build_platform,
+            container_registry,
+            cloud_provider,
+        )
     }
 
     pub fn environment_action(&self) -> Option<EnvironmentAction> {

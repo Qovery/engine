@@ -6,7 +6,7 @@ use crossbeam_channel::Sender;
 use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::ConfigurationError;
-use qovery_engine::models::{ProgressInfo, ProgressListener};
+use qovery_engine::models::{Context, ProgressInfo, ProgressListener};
 use qovery_engine::transaction::TransactionResult;
 
 use crate::models::{Action, Request};
@@ -14,12 +14,13 @@ use crate::task_manager::{InternalTask, Message, Status, Task};
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
+    context: Context,
     request: Request,
 }
 
 impl InfrastructureTask {
-    pub fn new(request: Request) -> Self {
-        InfrastructureTask { request }
+    pub fn new(context: Context, request: Request) -> Self {
+        InfrastructureTask { context, request }
     }
 }
 
@@ -46,7 +47,7 @@ impl Task for InfrastructureTask {
                 sender: sender.clone(),
             }));
 
-        let engine = self.request.engine(my_progress_listener);
+        let engine = self.request.engine(&self.context, my_progress_listener);
 
         // FIXME - return errors with Sender
         let session = match engine.session() {
@@ -99,7 +100,7 @@ impl Task for InfrastructureTask {
         }
 
         match qovery_engine::fs::create_workspace_archive(
-            engine.context().working_root_dir(),
+            engine.context().workspace_root_dir(),
             engine.context().execution_id(),
         ) {
             Ok(file) => {
@@ -114,12 +115,13 @@ impl Task for InfrastructureTask {
 
 #[derive(Clone)]
 pub struct EnvironmentTask {
+    context: Context,
     request: Request,
 }
 
 impl EnvironmentTask {
-    pub fn new(request: Request) -> Self {
-        EnvironmentTask { request }
+    pub fn new(context: Context, request: Request) -> Self {
+        EnvironmentTask { context, request }
     }
 }
 
@@ -146,7 +148,7 @@ impl Task for EnvironmentTask {
                 sender: sender.clone(),
             }));
 
-        let engine = self.request.engine(my_progress_listener);
+        let engine = self.request.engine(&self.context, my_progress_listener);
 
         // FIXME - return errors with Sender
         let session = match engine.session() {
@@ -203,7 +205,7 @@ impl Task for EnvironmentTask {
         }
 
         match qovery_engine::fs::create_workspace_archive(
-            engine.context().working_root_dir(),
+            engine.context().workspace_root_dir(),
             engine.context().execution_id(),
         ) {
             Ok(file) => {

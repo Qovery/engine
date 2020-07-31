@@ -56,7 +56,7 @@ impl PostgreSQL {
 
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(
-            self.context.working_root_dir(),
+            self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("databases/{}", self.name()),
         )

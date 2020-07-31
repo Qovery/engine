@@ -482,15 +482,15 @@ impl<'a> ListenersHelper<'a> {
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Context {
     execution_id: String,
-    working_root_dir: String,
+    workspace_root_dir: String,
     lib_root_dir: String,
 }
 
 impl Context {
-    pub fn new(execution_id: &str, working_root_dir: &str, lib_root_dir: &str) -> Self {
+    pub fn new(execution_id: &str, workspace_root_dir: &str, lib_root_dir: &str) -> Self {
         Context {
             execution_id: execution_id.to_string(),
-            working_root_dir: working_root_dir.to_string(),
+            workspace_root_dir: workspace_root_dir.to_string(),
             lib_root_dir: lib_root_dir.to_string(),
         }
     }
@@ -499,8 +499,8 @@ impl Context {
         self.execution_id.as_str()
     }
 
-    pub fn working_root_dir(&self) -> &str {
-        self.working_root_dir.as_str()
+    pub fn workspace_root_dir(&self) -> &str {
+        self.workspace_root_dir.as_str()
     }
 
     pub fn lib_root_dir(&self) -> &str {

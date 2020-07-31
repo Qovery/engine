@@ -64,7 +64,7 @@ impl Router {
 
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(
-            self.context.working_root_dir(),
+            self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("routers/{}", self.name()),
         )
@@ -297,7 +297,7 @@ impl Create for Router {
             info!("setup NGINX ingress for custom domains");
 
             let into_dir = crate::fs::workspace_directory(
-                self.context.working_root_dir(),
+                self.context.workspace_root_dir(),
                 self.context.execution_id(),
                 "routers/nginx-ingress",
             );

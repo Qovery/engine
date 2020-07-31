@@ -85,7 +85,7 @@ impl BuildPlatform for LocalDocker {
 
         // git clone
         let into_dir = workspace_directory(
-            self.context.working_root_dir(),
+            self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("build/{}", build.image.name.as_str()),
         );

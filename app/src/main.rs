@@ -26,6 +26,7 @@ use crate::TaskSelector::{Environment, Infrastructure};
 use chrono::{DateTime, Utc};
 use dirs::home_dir;
 use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
+use qovery_engine::models::Context;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::path::Path;
@@ -85,6 +86,8 @@ fn subject_name(mode: &Mode, task_selector: &TaskSelector) -> String {
 }
 
 fn listen_for_events(
+    workspace_root_dir: String,
+    lib_root_dir: String,
     task_selector: TaskSelector,
     nc: &Connection,
     mode: &Mode,
@@ -98,9 +101,17 @@ fn listen_for_events(
         debug!("{}", msg);
         match serde_json::from_slice::<Request>(msg.data.as_slice()) {
             Ok(req) => {
+                let context = Context::new(
+                    req.id.as_str(),
+                    workspace_root_dir.as_str(),
+                    lib_root_dir.as_str(),
+                );
+
                 tx.send(match task_selector {
-                    TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(req)),
-                    TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(req)),
+                    TaskSelector::Infrastructure(_) => {
+                        Box::new(InfrastructureTask::new(context, req))
+                    }
+                    TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(context, req)),
                 });
                 msg.respond(Response::new(None).as_json_string());
             }
@@ -285,14 +296,22 @@ pub fn main() -> Result<(), Error> {
     });
 
     let infrastructure_sub = listen_for_events(
+        workspace_root_dir.clone(),
+        lib_root_dir.clone(),
         Infrastructure("infrastructure"),
         &nc,
         &mode,
         tx_task.clone(),
     )?;
 
-    let environment_sub =
-        listen_for_events(Environment("environment"), &nc, &mode, tx_task.clone())?;
+    let environment_sub = listen_for_events(
+        workspace_root_dir,
+        lib_root_dir,
+        Environment("environment"),
+        &nc,
+        &mode,
+        tx_task.clone(),
+    )?;
 
     let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
 
