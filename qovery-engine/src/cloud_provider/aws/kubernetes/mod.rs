@@ -15,7 +15,7 @@ use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
-use crate::cloud_provider::service::{Service, ServiceType};
+use crate::cloud_provider::service::{Service, ServiceType, ServiceError};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::workspace_directory;

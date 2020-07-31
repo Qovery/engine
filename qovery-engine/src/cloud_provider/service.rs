@@ -7,6 +7,8 @@ use crate::container_registry::PushResult;
 use crate::models::Context;
 use std::io::Error;
 use tera::Context as TeraContext;
+use crate::transaction::{ErrorContext, ItemType};
+use std::process::id;
 
 pub trait Service {
     fn context(&self) -> &Context;
@@ -26,7 +28,7 @@ pub trait Service {
         for binary in binaries.iter() {
             if !crate::cmd::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
-                return Err(ServiceError::Unexpected(err));
+                return Err(ServiceError::Unexpected(err, ErrorContext{ item_type: ItemType::Service, item_id: id().to_string() }));
             }
         }
 
@@ -181,21 +183,21 @@ pub enum ServiceType<'a> {
 
 #[derive(Debug)]
 pub enum ServiceError {
-    OnCreateFailed,
-    CheckFailed,
-    Cmd(CmdError),
-    Io(Error),
-    Unexpected(String),
+    OnCreateFailed(ErrorContext),
+    CheckFailed(ErrorContext),
+    Cmd(CmdError, ErrorContext),
+    Io(Error, ErrorContext),
+    Unexpected(String, ErrorContext),
 }
 
 impl From<std::io::Error> for ServiceError {
     fn from(err: Error) -> Self {
-        ServiceError::Io(err)
+        ServiceError::Io(err, ErrorContext{ item_type: ItemType::Service, item_id: "".to_string() })
     }
 }
 
 impl From<CmdError> for ServiceError {
     fn from(err: CmdError) -> Self {
-        ServiceError::Cmd(err)
+        ServiceError::Cmd(err, ErrorContext{ item_type: ItemType::Service, item_id: "".to_string() })
     }
 }

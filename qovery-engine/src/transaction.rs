@@ -619,6 +619,17 @@ pub enum RollbackError {
     Error,
 }
 
+#[derive(Debug)]
+pub struct ErrorContext {
+    pub(crate) item_type: ItemType,
+    pub(crate) item_id: String
+}
+
+#[derive(Debug)]
+pub enum ItemType {
+    Service, Application, Router
+}
+
 pub enum TransactionResult {
     Ok,
     Rollback(CommitError),
