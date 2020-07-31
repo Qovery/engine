@@ -1,38 +1,24 @@
 # docker build stage
-FROM ekidd/rust-musl-builder:stable as build
+FROM rust:1.45-slim-buster as build
 
+RUN apt-get update && apt-get -y install make libfindbin-libs-perl
 WORKDIR /usr/src/app
-
 ADD . .
-#ADD lib lib
-#ADD qovery-engine qovery-engine
-#ADD qovery-engine-shared qovery-engine-shared
-#ADD qovery-engine-task-manager qovery-engine-task-manager
-#ADD Cargo.toml Cargo.toml
-#ADD Cargo.lock Cargo.lock
-
-RUN sudo chown -R rust:rust .
 
 # run tests
 #RUN cargo test --workspace
-
 # run release build
 RUN cargo build --release
 
-# final docker stage
-FROM alpine:latest
+FROM debian:buster-slim as run
 
-RUN addgroup -g 1000 app
-RUN adduser -D -s /bin/sh -u 1000 -G app app
+RUN groupadd -g 1000 qovery && \
+    useradd --home-dir /home/qovery --gid 1000 --uid 1000 -m -s /bin/bash qovery
 
-WORKDIR /home/app/bin/
+WORKDIR /home/qovery
+COPY --from=build /usr/src/app/target/release/app .
+COPY --from=build /usr/src/app/lib .
 
-COPY --from=build /usr/src/app/target/x86_64-unknown-linux-musl/release/app .
-COPY --from=build /usr/src/app/lib /home/app/lib
-
-RUN chown app:app app
-RUN chown -R app:app /home/app/lib
-
-USER app
-
+RUN chown -Rf qovery. . && chmod 500 app
+USER qovery
 CMD ["./app"]

@@ -42,7 +42,7 @@ sources:
 ## DNS provider where the DNS records will be created. Available providers are:
 ## - alibabacloud, aws, azure, cloudflare, coredns, designate, digitalocoean, google, infoblox, rfc2136, transip
 ##
-provider: aws
+provider: {{ external_dns_provider }}
 
 ## Flags related to processing sources
 ## ref: https://github.com/kubernetes-sigs/external-dns/blob/master/pkg/apis/externaldns/types.go#L272
@@ -157,10 +157,11 @@ azure:
 
 ## Cloudflare configuration to be set via arguments/env. variables
 ##
+{% if external_dns_provider == "cloudflare" %}
 cloudflare:
   ## `CF_API_TOKEN` to set in the environment
   ##
-  apiToken: ""
+  apiToken: "{% cloudflare_api_token %}"
   ## `CF_API_KEY` to set in the environment
   ##
   apiKey: ""
@@ -170,10 +171,11 @@ cloudflare:
   # secretName:
   ## `CF_API_EMAIL` to set in the environment
   ##
-  email: ""
+  email: "{% cloudflare_email %}"
   ## Enable the proxy feature of Cloudflare
   ##
-  proxied: true
+  proxied: {% cloudflare_proxied|default("false", false) %}
+{% endif %}
 
 ## CoreDNS configuration to be set via arguments/env variables
 ##
