@@ -294,6 +294,15 @@ impl<'a> EKS<'a> {
 
         context.insert("eks_worker_nodes", &worker_nodes);
 
+        // Todo: export this, do not let it this way
+        // DNS configuration
+        context.insert("external_dns_provider", "cloudflare");
+        context.insert(
+            "cloudflare_api_token",
+            "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7",
+        );
+        context.insert("cloudflare_email", "dns@qovery.com");
+
         context
     }
 }

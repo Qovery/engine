@@ -161,7 +161,7 @@ azure:
 cloudflare:
   ## `CF_API_TOKEN` to set in the environment
   ##
-  apiToken: "{% cloudflare_api_token %}"
+  apiToken: "{{ cloudflare_api_token }}"
   ## `CF_API_KEY` to set in the environment
   ##
   apiKey: ""
@@ -171,10 +171,10 @@ cloudflare:
   # secretName:
   ## `CF_API_EMAIL` to set in the environment
   ##
-  email: "{% cloudflare_email %}"
+  email: "{{ cloudflare_email }}"
   ## Enable the proxy feature of Cloudflare
   ##
-  proxied: {% cloudflare_proxied|default("false", false) %}
+  proxied: {{ cloudflare_proxied|default(value="false") }}
 {% endif %}
 
 ## CoreDNS configuration to be set via arguments/env variables
@@ -392,7 +392,7 @@ extraEnv: []
 
 ## Replica count
 ##
-replicas: 3
+replicas: 1
 
 ## Affinity for pod assignment (this value is evaluated as a template)
 ## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
