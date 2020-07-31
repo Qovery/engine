@@ -268,10 +268,13 @@ pub fn main() -> Result<(), Error> {
                             internal_task.status,
                         );
 
-                        let json = serde_json::to_string(&sr);
+                        let json_result = serde_json::to_string(&sr);
+                        let json = json_result.unwrap();
+
+                        debug!("status response: {}", json.as_str());
                         let _ = nc.request_timeout(
                             CORE_TASK_STATUS_SUBJECT,
-                            json.unwrap().as_bytes(),
+                            json.as_bytes(),
                             Duration::from_secs(60),
                         );
                         // FIXME handle timeout?

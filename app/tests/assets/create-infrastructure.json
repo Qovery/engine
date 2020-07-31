@@ -2,7 +2,7 @@
   "id": "blabl1aowkdoiqjdoiwjqdioqj",
   "organization_id": "poadjoiaw4455a",
   "created_at": "2020-07-05T22:07:28Z",
-  "action": "Create",
+  "action": "CREATE",
   "build_platform": {
     "kind": "LocalDocker",
     "id": "94a7d3c8d4d",

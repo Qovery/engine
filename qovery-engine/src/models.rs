@@ -107,12 +107,14 @@ impl Environment {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Production,
     Development,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Action {
     Create,
     Pause,
@@ -280,6 +282,7 @@ pub struct Storage {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StorageType {
     SlowHDD,
     HDD,
@@ -417,6 +420,7 @@ impl Database {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DatabaseKind {
     PostgreSQL,
     MySQL,
@@ -424,6 +428,7 @@ pub enum DatabaseKind {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EnvironmentError {}
 
 #[derive(Clone)]
