@@ -189,6 +189,10 @@ pub fn terraform_exec_with_init_validate_plan_apply(
     Ok(())
 }
 
+pub fn terraform_exec_destroy(root_dir: &str) -> Result<(), CmdError> {
+    terraform_exec(root_dir, vec!["destroy", "-auto-approve", "-no-color"])
+}
+
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     let home_dir = home_dir().unwrap();
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());

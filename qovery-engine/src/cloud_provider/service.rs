@@ -19,7 +19,10 @@ pub trait Service {
     fn total_cpus(&self) -> u8;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
-
+    fn is_listening(&self) -> Result<(), ServiceError> {
+        // TODO test the connection by opening a TCP socket
+        Ok(())
+    }
     fn is_valid(&self) -> Result<(), ServiceError> {
         let binaries = ["kubectl", "helm", "terraform", "aws-iam-authenticator"];
 
@@ -101,6 +104,8 @@ pub trait Application: StatelessService {
 pub trait Router: StatelessService {
     fn check_domains(&self) -> Result<(), ServiceError>;
 }
+
+pub trait Database: StatefulService {}
 
 pub trait Create {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
