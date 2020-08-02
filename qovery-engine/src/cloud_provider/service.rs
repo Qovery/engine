@@ -6,6 +6,8 @@ use crate::cmd::CmdError;
 use crate::container_registry::PushResult;
 use crate::models::Context;
 use std::io::Error;
+use std::net::{SocketAddr, TcpStream};
+use std::time::Duration;
 use tera::Context as TeraContext;
 
 pub trait Service {
@@ -19,9 +21,16 @@ pub trait Service {
     fn total_cpus(&self) -> u8;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
-    fn is_listening(&self) -> Result<(), ServiceError> {
-        // TODO test the connection by opening a TCP socket
-        Ok(())
+    fn is_listening(&self, ip: &str) -> bool {
+        let private_port = match self.private_port() {
+            Some(private_port) => private_port,
+            _ => return false,
+        };
+
+        match TcpStream::connect(format!("{}:{}", ip, private_port)) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
     }
     fn is_valid(&self) -> Result<(), ServiceError> {
         let binaries = ["kubectl", "helm", "terraform", "aws-iam-authenticator"];
