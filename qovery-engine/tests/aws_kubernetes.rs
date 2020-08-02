@@ -38,7 +38,7 @@ fn create_eks_cluster_in_us_east_2() -> Result<(), KubernetesError> {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+    }?;
 
     Ok(())
 }
@@ -72,7 +72,7 @@ fn create_eks_cluster_in_eu_west_3() -> Result<(), KubernetesError> {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+    }?;
 
     Ok(())
 }
@@ -106,7 +106,7 @@ fn delete_eks_cluster_in_us_east_2() -> Result<(), KubernetesError> {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+    }?;
 
     Ok(())
 }
@@ -140,7 +140,7 @@ fn delete_eks_cluster_in_eu_west_3() -> Result<(), KubernetesError> {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+    }?;
 
     Ok(())
 }
