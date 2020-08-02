@@ -100,7 +100,7 @@ fn delete_eks_cluster_in_us_east_2() -> Result<(), KubernetesError> {
         nodes,
     );
 
-    let _ = tx.create_kubernetes(&kubernetes)?;
+    let _ = tx.delete_kubernetes(&kubernetes)?;
 
     let _ = match tx.commit() {
         TransactionResult::Ok => assert!(true),
@@ -134,7 +134,7 @@ fn delete_eks_cluster_in_eu_west_3() -> Result<(), KubernetesError> {
         nodes,
     );
 
-    let _ = tx.create_kubernetes(&kubernetes)?;
+    let _ = tx.delete_kubernetes(&kubernetes)?;
 
     let _ = match tx.commit() {
         TransactionResult::Ok => assert!(true),
