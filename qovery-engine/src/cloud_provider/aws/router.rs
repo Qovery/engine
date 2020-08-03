@@ -306,7 +306,7 @@ impl Create for Router {
             // simply copy/paste files into our working dir
             let _ = crate::template::copy_non_template_files(
                 format!(
-                    "{}, /common/bootstrap/charts/nginx-ingress",
+                    "{}/common/bootstrap/charts/nginx-ingress",
                     self.context().lib_root_dir()
                 ),
                 into_dir.as_str(),
