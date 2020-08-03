@@ -103,7 +103,7 @@ pub fn aws_kubernetes_eks<'a>(
 ) -> EKS<'a> {
     EKS::<'a>::new(
         context.clone(),
-        "my-eks-id-123",
+        "my-eks-on-us-east-2",
         "my-default-eks",
         AWS_KUBERNETES_VERSION,
         "us-east-2",
