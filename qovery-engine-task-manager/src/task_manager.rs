@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use crate::models::Request;
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use evmap::{ReadHandle, WriteHandle};
+use qovery_engine::transaction::ActionContext;
 
 pub type Id = String;
 pub type Message = Result<InternalTask, Error>;
@@ -63,12 +64,12 @@ impl TaskManager {
         self.status_by_task_id_w
             .lock()
             .unwrap()
-            .insert(task.id().to_string(), Status::Waiting { message: None })
+            .insert(task.id().to_string(), Status::Waiting { message: None, context: None })
             .refresh();
 
         let _ = self.it_sender.send(InternalTask {
             task,
-            status: Status::Waiting { message: None },
+            status: Status::Waiting { message: None, context: None },
         });
     }
 
@@ -170,14 +171,14 @@ pub struct InternalTask {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind")]
+#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Status {
-    Waiting { message: Option<String> },
-    Running { message: Option<String> },
-    Warning { message: Option<String> },
-    Error { message: Option<String> },
-    Failed { message: Option<String> },
-    Done { message: Option<String> },
+    Waiting { message: Option<String>, context: Option<ActionContext> },
+    Running { message: Option<String>, context: Option<ActionContext> },
+    Warning { message: Option<String>, context: Option<ActionContext> },
+    Error { message: Option<String>, context: Option<ActionContext> },
+    Failed { message: Option<String>, context: Option<ActionContext> },
+    Done { message: Option<String>, context: Option<ActionContext> },
 }
 
 impl evmap::ShallowCopy for Status {

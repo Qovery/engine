@@ -22,7 +22,7 @@ use itertools::enumerate;
 use retry::delay::{Exponential, Fibonacci};
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
-use crate::transaction::{ErrorContext, ItemType};
+use crate::transaction::{ActionContext, ItemType};
 
 pub struct Router {
     context: Context,
@@ -258,7 +258,7 @@ impl crate::cloud_provider::service::Router for Router {
 
         match check_result {
             Ok(_) => {}
-            Err(_) => return Err(ServiceError::CheckFailed(ErrorContext{ item_type: ItemType::Router, item_id: "".to_string() })),
+            Err(_) => return Err(ServiceError::CheckFailed(ActionContext { item_type: ItemType::Router, item_id: self.id().to_string() })),
         }
 
         Ok(())
@@ -325,7 +325,7 @@ impl Create for Router {
 
             // check deployment status
             if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-                return Err(ServiceError::OnCreateFailed(ErrorContext{ item_type: ItemType::Router, item_id: self.id().to_string() }));
+                return Err(ServiceError::OnCreateFailed(ActionContext { item_type: ItemType::Router, item_id: self.id().to_string() }));
             }
         }
 
@@ -351,7 +351,7 @@ impl Create for Router {
 
         // check deployment status
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(ServiceError::OnCreateFailed(ErrorContext{ item_type: ItemType::Router, item_id: self.id().to_string() }));
+            return Err(ServiceError::OnCreateFailed(ActionContext { item_type: ItemType::Router, item_id: self.id().to_string() }));
         }
 
         Ok(())

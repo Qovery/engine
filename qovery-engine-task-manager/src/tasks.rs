@@ -7,10 +7,13 @@ use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{Context, ProgressInfo, ProgressListener};
-use qovery_engine::transaction::TransactionResult;
+use qovery_engine::transaction::{TransactionResult, CommitError, ActionContext};
 
 use crate::models::{Action, Request};
 use crate::task_manager::{InternalTask, Message, Status, Task};
+use qovery_engine::cloud_provider::kubernetes::KubernetesError;
+use qovery_engine::cloud_provider::service::ServiceError;
+use std::any::Any;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -39,7 +42,7 @@ impl Task for InfrastructureTask {
 
     fn run(&self, sender: Sender<Message>) {
         info!("infrastructure task {} started", self.id());
-        self.update_status(&sender, Status::Running { message: None });
+        self.update_status(&sender, Status::Running { message: None, context: None });
 
         let my_progress_listener: Rc<Box<dyn ProgressListener>> =
             Rc::new(Box::new(MyProgressListener {
@@ -54,13 +57,13 @@ impl Task for InfrastructureTask {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed { message: None });
+                self.update_status(&sender, Status::Failed { message: None, context: None });
                 None
             }
         };
 
         if session.is_none() {
-            self.update_status(&sender, Status::Failed { message: None });
+            self.update_status(&sender, Status::Failed { message: None, context: None });
             return;
         }
 
@@ -87,15 +90,25 @@ impl Task for InfrastructureTask {
 
         match tx.commit() {
             TransactionResult::Ok => {
-                self.update_status(&sender, Status::Done { message: None });
+                self.update_status(&sender, Status::Done { message: None, context: None });
             }
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed { message: None });
+                let err = ServiceError::from(commit_err);
+                let ac = ActionContext::from(err);
+                self.update_status(&sender, Status::Failed {
+                    message: None,
+                    context: Option::from(ac),
+                })
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed { message: None });
+                let err = ServiceError::from(commit_err);
+                let ac = ActionContext::from(err);
+                self.update_status(&sender, Status::Failed {
+                    message: None,
+                    context: Option::from(ac),
+                })
             }
         }
 
@@ -140,7 +153,7 @@ impl Task for EnvironmentTask {
 
     fn run(&self, sender: Sender<Message>) {
         info!("environment task {} started", self.id());
-        self.update_status(&sender, Status::Running { message: None });
+        self.update_status(&sender, Status::Running { message: None, context: None });
 
         let my_progress_listener: Rc<Box<dyn ProgressListener>> =
             Rc::new(Box::new(MyProgressListener {
@@ -155,13 +168,13 @@ impl Task for EnvironmentTask {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed { message: None });
+                self.update_status(&sender, Status::Failed { message: None, context: None });
                 None
             }
         };
 
         if session.is_none() {
-            self.update_status(&sender, Status::Failed { message: None });
+            self.update_status(&sender, Status::Failed { message: None, context: None });
             return;
         }
 
@@ -192,15 +205,17 @@ impl Task for EnvironmentTask {
 
         match tx.commit() {
             TransactionResult::Ok => {
-                self.update_status(&sender, Status::Done { message: None });
+                self.update_status(&sender, Status::Done { message: None, context: None });
             }
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed { message: None });
+                let ac = ActionContext::from(ServiceError::from(commit_err));
+                self.update_status(&sender, Status::Failed { message: None, context: Option::from(ac) });
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed { message: None });
+                let ac = ActionContext::from(ServiceError::from(commit_err));
+                self.update_status(&sender, Status::Failed { message: None, context: Option::from(ac) });
             }
         }
 
@@ -245,6 +260,7 @@ where
     fn on_progress(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Running {
             message: Some(info.message),
+            context: None
         });
 
         let it = self.sender.send(Ok(it));
@@ -253,6 +269,7 @@ where
     fn on_complete(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Done {
             message: Some(info.message),
+            context: None
         });
 
         let it = self.sender.send(Ok(it));
@@ -261,6 +278,7 @@ where
     fn on_error(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Error {
             message: Some(info.message),
+            context: None
         });
 
         let it = self.sender.send(Ok(it));

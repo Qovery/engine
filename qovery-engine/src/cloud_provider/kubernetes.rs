@@ -69,3 +69,26 @@ impl From<CmdError> for KubernetesError {
         KubernetesError::Cmd(error)
     }
 }
+
+impl From<KubernetesError> for ServiceError {
+    fn from(item: KubernetesError) -> Self {
+        return match item {
+            // TODO
+            KubernetesError::Cmd(e) => {
+                panic!("")
+            }
+            KubernetesError::Io(_) => {
+                panic!("")
+            }
+            KubernetesError::Create(_) => {
+                panic!("")
+            }
+            KubernetesError::Deploy(e) => { e }
+            KubernetesError::Pause(e) => { e }
+            KubernetesError::Delete(e) => { e }
+            KubernetesError::Error => {
+                panic!("")
+            }
+        };
+    }
+}
