@@ -7,7 +7,7 @@ metadata:
   labels:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
-    appId: {{ app_id }}
+    appId: {{ id }}
     app: {{ name }}
 type: Opaque
 stringData:
@@ -23,7 +23,7 @@ metadata:
   labels:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
-    appId: {{ app_id }}
+    appId: {{ id }}
     app: {{ name }}
 spec:
   replicas: {{ total_instances }}
@@ -33,14 +33,14 @@ spec:
     matchLabels:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
-      appId: {{ app_id }}
+      appId: {{ id }}
       app: {{ name }}
   template:
     metadata:
       labels:
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
-        appId: {{ app_id }}
+        appId: {{ id }}
         app: {{ name }}
     spec:
       automountServiceAccountToken: false

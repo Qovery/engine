@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate log;
-extern crate serde;
 extern crate tera;
 
 pub mod build_platform;
