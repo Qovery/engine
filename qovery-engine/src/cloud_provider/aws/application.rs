@@ -266,7 +266,7 @@ impl Create for Application {
         // check deployment status
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
             // TODO get pod output by using kubectl and return it into the OnCreateFailed
-            return Err(ServiceError::OnCreateFailed(Option::from(ActionContext { item_type: ItemType::Application, item_id: self.id().to_string() })));
+            return Err(ServiceError::OnCreateFailed(Some(ActionContext { kind: ItemType::Application, id: self.id().to_string() })));
         }
 
         // check app status
@@ -279,7 +279,7 @@ impl Create for Application {
             aws_credentials_envs,
         ) {
             Ok(Some(true)) => {}
-            _ => return Err(ServiceError::OnCreateFailed(Option::from(ActionContext { item_type: ItemType::Application, item_id: self.id().to_string() }))),
+            _ => return Err(ServiceError::OnCreateFailed(Some(ActionContext { kind: ItemType::Application, id: self.id().to_string() }))),
         }
 
         Ok(())
