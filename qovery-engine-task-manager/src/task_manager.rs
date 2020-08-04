@@ -64,12 +64,12 @@ impl TaskManager {
         self.status_by_task_id_w
             .lock()
             .unwrap()
-            .insert(task.id().to_string(), Status::Waiting { message: None, context: ActionContext { kind: ItemType::Environment, id: "".to_string() } })
-            .refresh();
+            .insert(task.id().to_string(), Status::Waiting { message: None, context:
+            ActionContext { kind: ItemType::Execution, id: task.id().to_string() } }).refresh();
 
         let _ = self.it_sender.send(InternalTask {
             task,
-            status: Status::Waiting { message: None, context: ActionContext { kind: ItemType::Environment, id: "".to_string() } },
+            status: Status::Waiting { message: None, context: ActionContext { kind: ItemType::Execution, id: task.id().to_string() } },
         });
     }
 

@@ -306,7 +306,7 @@ where
     fn on_progress(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Running {
             message: Some(info.message),
-            context: ActionContext { kind: ItemType::Environment, id: "".to_string() }
+            context: ActionContext { kind: ItemType::Execution, id: info.execution_id }
         });
 
         let it = self.sender.send(Ok(it));
@@ -315,7 +315,7 @@ where
     fn on_complete(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Done {
             message: Some(info.message),
-            context: ActionContext { kind: ItemType::Environment, id: "".to_string() }
+            context: ActionContext { kind: ItemType::Execution, id: info.execution_id }
         });
 
         let it = self.sender.send(Ok(it));
@@ -324,7 +324,7 @@ where
     fn on_error(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Error {
             message: Some(info.message),
-            context: ActionContext { kind: ItemType::Environment, id: "".to_string() }
+            context: ActionContext { kind: ItemType::Execution, id: info.execution_id }
         });
 
         let it = self.sender.send(Ok(it));

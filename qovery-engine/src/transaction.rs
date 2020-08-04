@@ -629,7 +629,7 @@ pub struct ActionContext {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ItemType {
-    Service, Application, Router, Environment
+    Service, Application, Router, Environment, Execution
 }
 
 pub enum TransactionResult {

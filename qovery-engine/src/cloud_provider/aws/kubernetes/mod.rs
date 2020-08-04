@@ -345,6 +345,7 @@ impl<'a> Kubernetes for EKS<'a> {
             "kubernetes",
             0,
             "start to create EKS cluster",
+            self.context.execution_id()
         ));
 
         let temp_dir = workspace_directory(
