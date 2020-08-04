@@ -61,15 +61,16 @@ impl TaskManager {
             Err(_) => (),
         };
 
+        let task_id = task.id().to_string();
         self.status_by_task_id_w
             .lock()
             .unwrap()
-            .insert(task.id().to_string(), Status::Waiting { message: None, context:
-            ActionContext { kind: ItemType::Execution, id: task.id().to_string() } }).refresh();
+            .insert(task_id.to_string(), Status::Waiting { message: None, context:
+            ActionContext { kind: ItemType::Execution, id: task_id.to_string() } }).refresh();
 
         let _ = self.it_sender.send(InternalTask {
             task,
-            status: Status::Waiting { message: None, context: ActionContext { kind: ItemType::Execution, id: task.id().to_string() } },
+            status: Status::Waiting { message: None, context: ActionContext { kind: ItemType::Execution, id: task_id.to_string() } },
         });
     }
 
