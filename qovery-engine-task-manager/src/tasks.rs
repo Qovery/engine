@@ -95,16 +95,16 @@ impl Task for InfrastructureTask {
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
                 let err = ServiceError::from(commit_err);
-                let ac = ActionContext::from(err);
+                let ac = Option::from(err);
                 self.update_status(&sender, Status::Failed {
                     message: None,
-                    context: Option::from(ac),
+                    context: ac,
                 })
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 // FIXME return error message
                 let err = ServiceError::from(commit_err);
-                let ac = ActionContext::from(err);
+                let ac = Option::from(err);
                 self.update_status(&sender, Status::Failed {
                     message: None,
                     context: Option::from(ac),
@@ -209,12 +209,12 @@ impl Task for EnvironmentTask {
             }
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
-                let ac = ActionContext::from(ServiceError::from(commit_err));
+                let ac = Option::from(ServiceError::from(commit_err));
                 self.update_status(&sender, Status::Failed { message: None, context: Option::from(ac) });
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 // FIXME return error message
-                let ac = ActionContext::from(ServiceError::from(commit_err));
+                let ac = Option::from(ServiceError::from(commit_err));
                 self.update_status(&sender, Status::Failed { message: None, context: Option::from(ac) });
             }
         }

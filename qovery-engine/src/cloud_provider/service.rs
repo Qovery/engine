@@ -28,7 +28,7 @@ pub trait Service {
         for binary in binaries.iter() {
             if !crate::cmd::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
-                return Err(ServiceError::Unexpected(err, ActionContext { item_type: ItemType::Service, item_id: id().to_string() }));
+                return Err(ServiceError::Unexpected(err, Option::from(ActionContext { item_type: ItemType::Service, item_id: id().to_string() })));
             }
         }
 
@@ -183,26 +183,26 @@ pub enum ServiceType<'a> {
 
 #[derive(Debug)]
 pub enum ServiceError {
-    OnCreateFailed(ActionContext),
-    CheckFailed(ActionContext),
-    Cmd(CmdError, ActionContext),
-    Io(Error, ActionContext),
-    Unexpected(String, ActionContext),
+    OnCreateFailed(Option<ActionContext>),
+    CheckFailed(Option<ActionContext>),
+    Cmd(CmdError, Option<ActionContext>),
+    Io(Error, Option<ActionContext>),
+    Unexpected(String, Option<ActionContext>),
 }
 
 impl From<std::io::Error> for ServiceError {
     fn from(err: Error) -> Self {
-        ServiceError::Io(err, ActionContext { item_type: ItemType::Unknown, item_id: "".to_string() })
+        ServiceError::Io(err, None)
     }
 }
 
 impl From<CmdError> for ServiceError {
     fn from(err: CmdError) -> Self {
-        ServiceError::Cmd(err, ActionContext { item_type: ItemType::Unknown, item_id: "".to_string() })
+        ServiceError::Cmd(err, None)
     }
 }
 
-impl From<ServiceError> for ActionContext {
+impl From<ServiceError> for Option<ActionContext> {
     fn from(err: ServiceError) -> Self {
         return match err {
             ServiceError::OnCreateFailed(ac) => { ac }
