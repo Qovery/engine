@@ -129,7 +129,7 @@ impl Router {
             aws.access_key_id.as_str(),
             aws.secret_access_key.as_str(),
             kubernetes.region(),
-        )?;
+        );
 
         if kubernetes_config_file_path.is_ok() {
             // it should never occurred.. but in case of..
