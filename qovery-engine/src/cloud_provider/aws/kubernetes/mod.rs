@@ -222,8 +222,15 @@ impl<'a> EKS<'a> {
         let rds_cidr_subnet = "23";
         let documentdb_cidr_subnet = "23";
         let elasticsearch_cidr_subnet = "23";
+        let managed_dns = ["oom.sh"]
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>(); // Todo: make it customizable
 
         let mut context = TeraContext::new();
+
+        context.insert("organization_id", self.cloud_provider.organization_id());
+        context.insert("managed_dns", &managed_dns);
 
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
@@ -232,7 +239,6 @@ impl<'a> EKS<'a> {
         context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
         context.insert("vpc_cidr_block", &vpc_cidr_block);
         context.insert("s3_kubeconfig_bucket", &s3_kubeconfig_bucket);
-        context.insert("organization_id", self.cloud_provider.organization_id());
 
         context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("eks_cluster_name", &self.name());
