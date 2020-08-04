@@ -132,26 +132,34 @@ impl Router {
             kubernetes.region(),
         );
 
-        if kubernetes_config_file_path.is_ok() {
-            // it should never occurred.. but in case of..
-            match crate::cmd::kubectl_exec_get_external_ingress_hostname(
-                kubernetes_config_file_path.unwrap().as_str(),
-                environment.namespace(),
-                "app=nginx-ingress,component=controller",
-                self.aws_credentials_envs(aws).to_vec(),
-            ) {
-                Ok(external_ingress_hostname) => match external_ingress_hostname {
-                    Some(hostname) => {
-                        context.insert("external_ingress_hostname", hostname.as_str())
+        match kubernetes_config_file_path {
+            Ok(kubernetes_config_file_path_string) => {
+                let external_ingress_hostname =
+                    crate::cmd::kubectl_exec_get_external_ingress_hostname(
+                        kubernetes_config_file_path_string.as_str(),
+                        environment.namespace(),
+                        "app=nginx-ingress,component=controller",
+                        self.aws_credentials_envs(aws).to_vec(),
+                    );
+
+                match external_ingress_hostname {
+                    Ok(external_ingress_hostname) => match external_ingress_hostname {
+                        Some(hostname) => {
+                            context.insert("external_ingress_hostname", hostname.as_str())
+                        }
+                        None => {
+                            warn!("unable to get external_ingress_hostname - what's wrong? This must never happened");
+                        }
+                    },
+                    _ => {
+                        // FIXME really?
+                        warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
                     }
-                    None => {
-                        warn!("unable to get external_ingress_hostname - what's wrong? This must never happened");
-                    }
-                },
-                _ => {
-                    warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
                 }
             }
+            Err(_) => error!(
+                "can't fetch kubernetes config file - what's wrong? This must never happened"
+            ), // FIXME should I return an Err?
         }
 
         let router_default_domain_hash =
@@ -307,7 +315,7 @@ impl Create for Router {
             // simply copy/paste files into our working dir
             let _ = crate::template::copy_non_template_files(
                 format!(
-                    "{}, /common/bootstrap/charts/nginx-ingress",
+                    "{}/common/bootstrap/charts/nginx-ingress",
                     self.context().lib_root_dir()
                 ),
                 into_dir.as_str(),

@@ -294,6 +294,15 @@ impl<'a> EKS<'a> {
 
         context.insert("eks_worker_nodes", &worker_nodes);
 
+        // Todo: export this, do not let it this way
+        // DNS configuration
+        context.insert("external_dns_provider", "cloudflare");
+        context.insert(
+            "cloudflare_api_token",
+            "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7",
+        );
+        context.insert("cloudflare_email", "dns@qovery.com");
+
         context
     }
 }
@@ -353,7 +362,6 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
         );
-        let temp_dir_path_str = temp_dir.as_str();
 
         // create S3 bucket
         let _ = s3::create_bucket(
@@ -387,7 +395,7 @@ impl<'a> Kubernetes for EKS<'a> {
             common_charts_temp_dir.as_str(),
         )?;
 
-        crate::cmd::terraform_exec_with_init_validate_plan_apply(temp_dir_path_str, true)?;
+        let _ = crate::cmd::terraform_exec_with_init_validate_plan_apply(temp_dir.as_str(), true)?;
 
         Ok(())
     }
@@ -420,12 +428,35 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn on_delete(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_delete() called for {}", self.name());
-        unimplemented!()
+
+        let temp_dir = workspace_directory(
+            self.context.workspace_root_dir(),
+            self.context.execution_id(),
+            format!("bootstrap/{}", self.name()),
+        );
+
+        // TODO delete s3 bucket?
+        // TODO delete dynamodb table?
+
+        // generate terraform files and copy them into temp dir
+        let context = self.tera_context();
+        let _ = crate::template::generate_and_copy_all_files_into_dir(
+            self.template_directory.as_str(),
+            temp_dir.as_str(),
+            &context,
+        )?;
+
+        let _ = crate::cmd::terraform_exec_destroy(temp_dir.as_str())?;
+
+        Ok(())
     }
 
     fn on_delete_error(&self) -> Result<(), KubernetesError> {
         warn!("EKS.on_delete_error() called for {}", self.name());
-        unimplemented!()
+
+        // FIXME What should we do if something goes wrong while deleting the cluster?
+
+        Ok(())
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {

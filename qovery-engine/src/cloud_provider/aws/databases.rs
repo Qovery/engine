@@ -9,8 +9,8 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Action, Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service,
-    ServiceError, ServiceType, StatefulService, Upgrade,
+    Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause,
+    Service, ServiceError, ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
@@ -72,6 +72,8 @@ impl PostgreSQL {
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
         context.insert("database_instance_type", "db.t2.micro"); // TODO customizable
         context.insert("database_disk_type", "gp2"); // TODO customizable
+        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib); // TODO customizable
+        context.insert("database_total_cpus", &self.total_cpus); // TODO customizable
 
         context
     }
@@ -80,9 +82,22 @@ impl PostgreSQL {
         let workspace_dir = self.workspace_directory();
 
         match target {
-            DeploymentTarget::ManagedServices(_, _) => {
-                // TODO what to do with a PostgreSQL that is badly deployed on RDS?
-                // TODO how to show the log of AWS or.. Like I do for the selfhosted with k8s ??
+            DeploymentTarget::ManagedServices(kubernetes, environment) => {
+                if is_error {
+                    // do not delete if it is an error
+                    return Ok(());
+                }
+
+                let context = self.tera_context(*kubernetes, *environment);
+
+                let from_dir = format!("{}/aws/services/postgresql", self.context.lib_root_dir());
+                let _ = crate::template::generate_and_copy_all_files_into_dir(
+                    from_dir.as_str(),
+                    workspace_dir.as_str(),
+                    &context,
+                )?;
+
+                let _ = crate::cmd::terraform_exec_destroy(workspace_dir.as_str())?;
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 let helm_release_name = self.helm_release_name();
@@ -155,6 +170,8 @@ impl Service for PostgreSQL {
     }
 }
 
+impl Database for PostgreSQL {}
+
 impl Create for PostgreSQL {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.PostgreSQL.on_create() called for {}", self.name());
@@ -175,7 +192,7 @@ impl Create for PostgreSQL {
                     &context,
                 )?;
 
-                crate::cmd::terraform_exec_with_init_validate_plan_apply(
+                let _ = crate::cmd::terraform_exec_with_init_validate_plan_apply(
                     workspace_dir.as_str(),
                     false,
                 )?;

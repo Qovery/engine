@@ -380,8 +380,8 @@ slave:
 ##
 resources:
   requests:
-    memory: {{ total_ram_in_mib }}Mi # TODO customizable?
-    cpu: {{ total_cpus }}
+    memory: "{{ database_ram_size_in_mib }}Mi" # TODO customizable?
+    cpu: "{{ database_total_cpus }}"
 
 ## Add annotations to all the deployed resources
 ##

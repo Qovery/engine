@@ -79,15 +79,15 @@ spec:
             requests:
               cpu: {{ total_cpus }}
               memory: {{ total_ram_in_mib }}Mi
-          volumeMounts:
 {%- if is_storage %}
+          volumeMounts:
 {%- for s in storage %}
             - name: {{ s.id }}
               mountPath: {{ s.mount_point }}
 {%- endfor %}
 {%- endif %}
-      volumes:
 {%- if is_storage %}
+      volumes:
 {%- for s in storage %}
         - name: {{ s.id }}
           persistentVolumeClaim:

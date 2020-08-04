@@ -167,9 +167,9 @@ pub fn terraform_exec_with_init_validate_plan_apply(
 ) -> Result<(), CmdError> {
     // terraform init
     let init_args = if first_time_init_terraform {
-        vec!["init", "-backend-config=backend.tf", "-no-color"]
+        vec!["init", "-backend-config=backend.tf"]
     } else {
-        vec!["init", "-no-color"]
+        vec!["init"]
     };
 
     terraform_exec(root_dir, init_args)?;
@@ -178,15 +178,16 @@ pub fn terraform_exec_with_init_validate_plan_apply(
     terraform_exec(root_dir, vec!["validate"])?;
 
     // terraform plan
-    terraform_exec(root_dir, vec!["plan", "-out", "tf_plan", "-no-color"])?;
+    terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"])?;
 
     // terraform apply
-    terraform_exec(
-        root_dir,
-        vec!["apply", "-auto-approve", "-no-color", "tf_plan"],
-    )?;
+    terraform_exec(root_dir, vec!["apply", "-auto-approve", "tf_plan"])?;
 
     Ok(())
+}
+
+pub fn terraform_exec_destroy(root_dir: &str) -> Result<(), CmdError> {
+    terraform_exec(root_dir, vec!["destroy", "-auto-approve", "-no-color"])
 }
 
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {

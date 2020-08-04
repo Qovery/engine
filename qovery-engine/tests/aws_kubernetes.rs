@@ -10,7 +10,7 @@ use std::borrow::Borrow;
 use test_utilities::AWS_KUBERNETES_VERSION;
 
 #[test]
-fn create_eks_cluster_in_us_east_2() -> Result<(), KubernetesError> {
+fn create_eks_cluster_in_us_east_2() {
     test_utilities::init();
 
     let context = test_utilities::context();
@@ -39,12 +39,10 @@ fn create_eks_cluster_in_us_east_2() -> Result<(), KubernetesError> {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
-
-    Ok(())
 }
 
 #[test]
-fn create_eks_cluster_in_eu_west_3() -> Result<(), KubernetesError> {
+fn create_eks_cluster_in_eu_west_3() {
     test_utilities::init();
 
     let context = test_utilities::context();
@@ -73,12 +71,10 @@ fn create_eks_cluster_in_eu_west_3() -> Result<(), KubernetesError> {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
-
-    Ok(())
 }
 
 #[test]
-fn delete_eks_cluster_in_us_east_2() -> Result<(), KubernetesError> {
+fn delete_eks_cluster_in_us_east_2() {
     test_utilities::init();
 
     let context = test_utilities::context();
@@ -100,19 +96,17 @@ fn delete_eks_cluster_in_us_east_2() -> Result<(), KubernetesError> {
         nodes,
     );
 
-    let _ = tx.create_kubernetes(&kubernetes)?;
+    let _ = tx.delete_kubernetes(&kubernetes)?;
 
     let _ = match tx.commit() {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
-
-    Ok(())
 }
 
 #[test]
-fn delete_eks_cluster_in_eu_west_3() -> Result<(), KubernetesError> {
+fn delete_eks_cluster_in_eu_west_3() {
     test_utilities::init();
 
     let context = test_utilities::context();
@@ -134,13 +128,11 @@ fn delete_eks_cluster_in_eu_west_3() -> Result<(), KubernetesError> {
         nodes,
     );
 
-    let _ = tx.create_kubernetes(&kubernetes)?;
+    let _ = tx.delete_kubernetes(&kubernetes)?;
 
     let _ = match tx.commit() {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
-
-    Ok(())
 }

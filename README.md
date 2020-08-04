@@ -1,6 +1,7 @@
 # Qovery Engine
 
-The Qovery Engine is an abstraction layer to deploy stateless and stateful applications on any Cloud providers.
+The Qovery Engine is an abstraction layer to deploy stateless and stateful applications on any Cloud providers.delete
+It also bootstraps Kubernetes clusters and mandatory elements (network) for clients.
 
 ## Features
 * TODO
@@ -24,6 +25,8 @@ TDOO
 * docker
 * terraform
 * helm
+* kubectl
+* aws-iam-authenticator
 
 ## Get Started
 ### Run locally
@@ -39,8 +42,21 @@ TODO
 ### Cloud Providers
 TODO
 
-## Example
-see [examples](qovery-engine/examples) directory
+## Tests
+
+You can deploy a new cluster:
+```shell script
+RUST_LOG=info LIB_ROOT_DIR=~/qovery-engine/lib WORKSPACE_ROOT_DIR=~/.qovery-workspace cargo test --package qovery-engine --test aws_kubernetes create_eks_cluster_in_us_east_2 -- --exact --nocapture
+```
+
+And deploy an application:
+```shell script
+RUST_LOG=info LIB_ROOT_DIR=~/qovery-engine/lib WORKSPACE_ROOT_DIR=~/.qovery-workspace cargo test --package qovery-engine --test aws_environment deploy_a_working_development_environment_with_all_options_on_aws_eks -- --exact --nocapture
+```
+
+* RUST_LOG: log level
+* LIB_ROOT_DIR: where the lib folder is located
+* WORKSPACE_ROOT_DIR: where the rendered config will be located
 
 ## Contribute
 
