@@ -258,7 +258,7 @@ impl crate::cloud_provider::service::Router for Router {
 
         match check_result {
             Ok(_) => {}
-            Err(_) => return Err(ServiceError::CheckFailed(Some(ActionContext { kind: Kind::Application, id: self.id().to_string() }))),
+            Err(_) => return Err(ServiceError::CheckFailed(Some(ActionContext::new(Kind::Application, self.id().to_string())))),
         }
 
         Ok(())
@@ -325,7 +325,7 @@ impl Create for Router {
 
             // check deployment status
             if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-                return Err(ServiceError::OnCreateFailed(Some(ActionContext { kind: Kind::Application, id: self.id().to_string() })));
+                return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(Kind::Application, self.id().to_string()))));
             }
         }
 
@@ -351,7 +351,7 @@ impl Create for Router {
 
         // check deployment status
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(ServiceError::OnCreateFailed(Some(ActionContext { kind: Kind::Application, id: self.id().to_string() })));
+            return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(Kind::Application, self.id().to_string()))));
         }
 
         Ok(())

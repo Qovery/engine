@@ -626,6 +626,10 @@ pub struct ActionContext {
     pub id: String
 }
 
+impl ActionContext {
+    pub fn new(kind: Kind, id: String) -> Self { ActionContext { kind, id } }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {

@@ -30,7 +30,7 @@ pub trait Service {
         for binary in binaries.iter() {
             if !crate::cmd::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
-                return Err(ServiceError::Unexpected(err, Some(ActionContext { kind: Kind::Service, id: id().to_string() })));
+                return Err(ServiceError::Unexpected(err, Some(ActionContext::new(Kind::Service, id().to_string()))));
             }
         }
 
