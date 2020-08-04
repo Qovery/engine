@@ -78,6 +78,7 @@ impl Application {
         let commit_id = self.image().commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
+        context.insert("app_id", &self.id);
 
         match &self.image().registry_url {
             Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),

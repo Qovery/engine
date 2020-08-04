@@ -63,7 +63,7 @@ pub trait Service {
         context.insert("namespace", environment.namespace());
         context.insert("cluster_name", kubernetes.name());
         context.insert("total_cpus", &self.total_cpus());
-        context.insert("total_ram_in_gib", &self.total_ram_in_mib());
+        context.insert("total_ram_in_mib", &self.total_ram_in_mib());
         context.insert("total_instances", &self.total_instances());
 
         context.insert("is_private_port", &self.private_port().is_some());
