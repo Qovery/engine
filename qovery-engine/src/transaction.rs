@@ -622,13 +622,13 @@ pub enum RollbackError {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ActionContext {
-    pub kind: ItemType,
+    pub kind: Kind,
     pub id: String
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ItemType {
+pub enum Kind {
     Service, Application, Router, Environment, Execution
 }
 

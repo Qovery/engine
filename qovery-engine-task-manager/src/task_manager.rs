@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use crate::models::Request;
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use evmap::{ReadHandle, WriteHandle};
-use qovery_engine::transaction::{ActionContext, ItemType};
+use qovery_engine::transaction::{ActionContext, Kind};
 
 pub type Id = String;
 pub type Message = Result<InternalTask, Error>;
@@ -66,11 +66,11 @@ impl TaskManager {
             .lock()
             .unwrap()
             .insert(task_id.to_string(), Status::Waiting { message: None, context:
-            ActionContext { kind: ItemType::Execution, id: task_id.to_string() } }).refresh();
+            ActionContext { kind: Kind::Execution, id: task_id.to_string() } }).refresh();
 
         let _ = self.it_sender.send(InternalTask {
             task,
-            status: Status::Waiting { message: None, context: ActionContext { kind: ItemType::Execution, id: task_id.to_string() } },
+            status: Status::Waiting { message: None, context: ActionContext { kind: Kind::Execution, id: task_id.to_string() } },
         });
     }
 

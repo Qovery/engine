@@ -15,7 +15,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
-use crate::transaction::{ActionContext, ItemType};
+use crate::transaction::{ActionContext, Kind};
 
 pub struct PostgreSQL {
     context: Context,
@@ -230,7 +230,7 @@ impl Create for PostgreSQL {
                 if helm_history_row.is_none()
                     || !helm_history_row.unwrap().is_successfully_deployed()
                 {
-                    return Err(ServiceError::OnCreateFailed(Some(ActionContext { kind: ItemType::Application, id: self.id().to_string() })));
+                    return Err(ServiceError::OnCreateFailed(Some(ActionContext { kind: Kind::Application, id: self.id().to_string() })));
                 }
 
                 // check app status
@@ -243,7 +243,7 @@ impl Create for PostgreSQL {
                     aws_credentials_envs,
                 ) {
                     Ok(Some(true)) => {}
-                    _ => return Err(ServiceError::OnCreateFailed(Some(ActionContext { kind: ItemType::Application, id: self.id().to_string() }))),
+                    _ => return Err(ServiceError::OnCreateFailed(Some(ActionContext { kind: Kind::Application, id: self.id().to_string() }))),
                 }
             }
         }

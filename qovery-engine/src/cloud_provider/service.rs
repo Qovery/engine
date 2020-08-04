@@ -10,7 +10,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cmd::CmdError;
 use crate::container_registry::PushResult;
 use crate::models::Context;
-use crate::transaction::{ActionContext, CommitError, ItemType};
+use crate::transaction::{ActionContext, CommitError, Kind};
 
 pub trait Service {
     fn context(&self) -> &Context;
@@ -30,7 +30,7 @@ pub trait Service {
         for binary in binaries.iter() {
             if !crate::cmd::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
-                return Err(ServiceError::Unexpected(err, Some(ActionContext { kind: ItemType::Service, id: id().to_string() })));
+                return Err(ServiceError::Unexpected(err, Some(ActionContext { kind: Kind::Service, id: id().to_string() })));
             }
         }
 
