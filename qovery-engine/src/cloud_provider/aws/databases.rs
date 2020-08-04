@@ -15,6 +15,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
+use serde::export::fmt::format;
 
 pub struct PostgreSQL {
     context: Context,
