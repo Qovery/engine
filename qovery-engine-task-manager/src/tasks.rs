@@ -94,8 +94,11 @@ impl Task for InfrastructureTask {
             }
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
-                let err = ServiceError::from(commit_err);
-                let ac = Option::from(err);
+                let err: Option<ServiceError> = Option::from(commit_err);
+                let ac = match err {
+                    None => { None },
+                    Some(x) => { Option::from(x) },
+                };
                 self.update_status(&sender, Status::Failed {
                     message: None,
                     context: ac,
@@ -103,11 +106,14 @@ impl Task for InfrastructureTask {
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 // FIXME return error message
-                let err = ServiceError::from(commit_err);
-                let ac = Option::from(err);
+                let err: Option<ServiceError> = Option::from(commit_err);
+                let ac = match err {
+                    None => { None },
+                    Some(x) => { Option::from(x) },
+                };
                 self.update_status(&sender, Status::Failed {
                     message: None,
-                    context: Option::from(ac),
+                    context: ac,
                 })
             }
         }
@@ -209,12 +215,20 @@ impl Task for EnvironmentTask {
             }
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
-                let ac = Option::from(ServiceError::from(commit_err));
+                let err: Option<ServiceError> = Option::from(commit_err);
+                let ac = match err {
+                    None => { None },
+                    Some(x) => { Option::from(x) },
+                };
                 self.update_status(&sender, Status::Failed { message: None, context: Option::from(ac) });
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 // FIXME return error message
-                let ac = Option::from(ServiceError::from(commit_err));
+                let err: Option<ServiceError> = Option::from(commit_err);
+                let ac = match err {
+                    None => { None },
+                    Some(x) => { Option::from(x) },
+                };
                 self.update_status(&sender, Status::Failed { message: None, context: Option::from(ac) });
             }
         }

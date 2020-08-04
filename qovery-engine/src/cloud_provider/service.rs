@@ -1,14 +1,16 @@
+use std::io::Error;
+use std::process::id;
+
+use tera::Context as TeraContext;
+
 use crate::build_platform::Image;
+use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use crate::container_registry::PushResult;
 use crate::models::Context;
-use std::io::Error;
-use tera::Context as TeraContext;
-use crate::transaction::{ActionContext, ItemType, CommitError};
-use std::process::id;
+use crate::transaction::{ActionContext, CommitError, ItemType};
 
 pub trait Service {
     fn context(&self) -> &Context;
@@ -205,46 +207,31 @@ impl From<CmdError> for ServiceError {
 impl From<ServiceError> for Option<ActionContext> {
     fn from(err: ServiceError) -> Self {
         return match err {
-            ServiceError::OnCreateFailed(ac) => { ac }
-            ServiceError::CheckFailed(ac) => { ac }
-            ServiceError::Unexpected(_, ac) => { ac }
-            ServiceError::Cmd(_, ac) => { ac }
+            ServiceError::OnCreateFailed(ac) |
+            ServiceError::CheckFailed(ac) |
+            ServiceError::Unexpected(_, ac) |
+            ServiceError::Cmd(_, ac) |
             ServiceError::Io(_, ac) => { ac }
         };
     }
 }
 
-impl From<CommitError> for ServiceError {
+impl From<CommitError> for Option<ServiceError> {
     fn from(err: CommitError) -> Self {
         return match err {
+            CommitError::DeleteEnvironment(e) |
+            CommitError::PauseEnvironment(e) |
+            CommitError::DeployEnvironment(e) |
+            CommitError::DeleteKubernetes(e) |
             CommitError::CreateKubernetes(e) => {
-                ServiceError::from(e)
-            },
-            CommitError::DeleteKubernetes(e) => {
-                ServiceError::from(e)
-            },
-            CommitError::DeployEnvironment(e) => {
-                ServiceError::from(e)
-            },
-            CommitError::PauseEnvironment(e) => {
-                ServiceError::from(e)
-            },
-            CommitError::DeleteEnvironment(e) => {
-                ServiceError::from(e)
-            },
+                Option::from(e)
+            }
             CommitError::NotValidService(e) => {
-                e
-            },
-            // TODO
-            CommitError::BuildImage(e) => {
-                panic!("")
-            },
-            CommitError::PushImage(e) => {
-                panic!("")
-            },
-            CommitError::DeployImage(e) => {
-                panic!("")
-            },
+                Option::Some(e)
+            }
+            _ => {
+                None
+            }
         };
     }
 }
