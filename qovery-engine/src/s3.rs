@@ -1,4 +1,6 @@
 use crate::runtime::async_run;
+use retry::delay::Fibonacci;
+use retry::OperationResult;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
@@ -37,15 +39,15 @@ pub fn create_bucket(
     match r {
         Err(err) => match err {
             RusotoError::Service(s) => match s {
-                CreateBucketError::BucketAlreadyExists(x) => info!("bucket already exists"),
-                CreateBucketError::BucketAlreadyOwnedByYou(x) => {}
+                CreateBucketError::BucketAlreadyExists(_) => info!("bucket already exists"),
+                CreateBucketError::BucketAlreadyOwnedByYou(x) => info!("{}", x),
             },
             RusotoError::Unknown(r) => error!("{}", r.body_as_str()),
             _ => {
                 return Err(Error::new(
                     ErrorKind::Other,
                     "something goes wrong while creating the S3 bucket",
-                ))
+                ));
             }
         },
         _ => {}
@@ -75,10 +77,10 @@ pub fn create_bucket(
                 return Err(Error::new(
                     ErrorKind::Other,
                     "something goes wrong while versioning the S3 bucket",
-                ))
+                ));
             }
         },
-        Ok(x) => Ok(()),
+        Ok(x) => Ok(x),
     }
 }
 
@@ -119,6 +121,15 @@ pub fn get_object(
         Ok(x) => {
             let mut s = String::new();
             x.body.unwrap().into_blocking_read().read_to_string(&mut s);
+
+            if s.is_empty() {
+                // It looks like we receive sometimes empty content from s3. This is a quick and dirty patch, is there another better way ? Like using s3 Hash ?
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "file content is empty - which is not the expected content - what's wrong?",
+                ));
+            }
+
             Ok(s)
         }
         Err(err) => {
@@ -137,7 +148,7 @@ pub fn get_object(
                     Err(_err)
                 }
                 _ => Err(_err),
-            }
+            };
         }
     }
 }
@@ -159,13 +170,30 @@ where
         Err(_) => {}
     };
 
-    let file_content = crate::s3::get_object(
-        access_key_id,
-        secret_access_key,
-        region,
-        kubernetes_config_bucket_name,
-        kubernetes_config_object_key,
-    )?;
+    let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
+        let file_content = crate::s3::get_object(
+            access_key_id,
+            secret_access_key,
+            region,
+            kubernetes_config_bucket_name,
+            kubernetes_config_object_key,
+        );
+
+        match file_content {
+            Ok(file_content) => OperationResult::Ok(file_content),
+            Err(err) => OperationResult::Retry(err),
+        }
+    });
+
+    let file_content = match file_content_result {
+        Ok(file_content) => file_content,
+        Err(_) => {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "file content is empty (retry failed multiple times) - which is not the expected content - what's wrong?",
+            ));
+        }
+    };
 
     let mut kubernetes_config_file = File::create(file_path.as_ref())?;
     let _ = kubernetes_config_file.write(file_content.as_bytes())?;
