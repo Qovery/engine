@@ -137,13 +137,20 @@ impl BuildPlatform for LocalDocker {
         };
 
         // docker build
-        let exit_status = cmd::exec_with_output("docker", final_args, |line| {
-            let line_string = line.unwrap();
-            let line_str = line_string.as_str();
-            info!("{}", line_str);
+        let exit_status = cmd::exec_with_output(
+            "docker",
+            final_args,
+            |line| {
+                let line_string = line.unwrap();
+                info!("{}", line_string.as_str());
 
-            listeners_helper.on_progress(ProgressInfo::new("build", 50, line_str));
-        });
+                listeners_helper.on_progress(ProgressInfo::new("build", 50, line_string.as_str()));
+            },
+            |line| {
+                let line_string = line.unwrap();
+                error!("{}", line_string.as_str());
+            },
+        );
 
         match exit_status {
             Ok(_) => {}

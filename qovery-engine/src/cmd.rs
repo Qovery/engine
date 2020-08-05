@@ -94,33 +94,43 @@ where
     Err(CmdError::Exec(exit_status))
 }
 
-fn _with_output<F>(mut child: Child, mut output: F) -> Child
+fn _with_output<F, X>(mut child: Child, mut stdout_output: F, mut stderr_output: X) -> Child
 where
     F: FnMut(Result<String, Error>),
+    X: FnMut(Result<String, Error>),
 {
     let stdout_reader = BufReader::new(child.stdout.as_mut().unwrap());
-    let stderr_reader = BufReader::new(child.stderr.as_mut().unwrap());
-
     for line in stdout_reader.lines() {
-        output(line);
+        stdout_output(line);
     }
 
+    let stderr_reader = BufReader::new(child.stderr.as_mut().unwrap());
     for line in stderr_reader.lines() {
-        output(line);
+        stderr_output(line);
     }
 
     child
 }
 
-pub fn exec_with_output<P, F>(binary: P, args: Vec<&str>, mut output: F) -> Result<(), CmdError>
+pub fn exec_with_output<P, F, X>(
+    binary: P,
+    args: Vec<&str>,
+    mut stdout_output: F,
+    mut stderr_output: X,
+) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
     F: FnMut(Result<String, Error>),
+    X: FnMut(Result<String, Error>),
 {
     let command_string = command_to_string(binary.as_ref(), &args);
     info!("command: {}", command_string.as_str());
 
-    let mut child = _with_output(command(binary, args, None).spawn().unwrap(), output);
+    let mut child = _with_output(
+        command(binary, args, None).spawn().unwrap(),
+        stdout_output,
+        stderr_output,
+    );
 
     let exit_status = match child.wait() {
         Ok(x) => x,
@@ -134,20 +144,26 @@ where
     Err(CmdError::Exec(exit_status))
 }
 
-pub fn exec_with_envs_and_output<P, F>(
+pub fn exec_with_envs_and_output<P, F, X>(
     binary: P,
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-    mut output: F,
+    mut stdout_output: F,
+    mut stderr_output: X,
 ) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
     F: FnMut(Result<String, Error>),
+    X: FnMut(Result<String, Error>),
 {
     let command_string = command_with_envs_to_string(binary.as_ref(), &args, &envs);
     info!("command: {}", command_string.as_str());
 
-    let mut child = _with_output(command(binary, args, Some(envs)).spawn().unwrap(), output);
+    let mut child = _with_output(
+        command(binary, args, Some(envs)).spawn().unwrap(),
+        stdout_output,
+        stderr_output,
+    );
 
     let exit_status = match child.wait() {
         Ok(x) => x,
@@ -198,8 +214,11 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
         format!("{} terraform", root_dir).as_str(),
         args,
         vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
-        |line| {
+        |line: Result<String, std::io::Error>| {
             info!("{}", line.unwrap());
+        },
+        |line: Result<String, std::io::Error>| {
+            error!("{}", line.unwrap());
         },
     ) {
         Err(err) => return Err(err),
@@ -281,6 +300,10 @@ where
             Ok(line) => info!("{}", line.as_str()),
             Err(err) => error!("{}", err),
         },
+        |out| match out {
+            Ok(line) => error!("{}", line.as_str()),
+            Err(err) => error!("{}", err),
+        },
     )
 }
 
@@ -305,6 +328,10 @@ where
         envs,
         |out| match out {
             Ok(line) => info!("{}", line.as_str()),
+            Err(err) => error!("{}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line.as_str()),
             Err(err) => error!("{}", err),
         },
     )
@@ -335,7 +362,11 @@ where
         envs,
         |out| match out {
             Ok(line) => output_string = line,
-            _ => {}
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
         },
     )?;
 
@@ -353,20 +384,29 @@ where
 }
 
 pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CmdError> {
-    helm_exec_with_output(args, envs, |line| {
-        info!("{}", line.unwrap());
-    })
+    helm_exec_with_output(
+        args,
+        envs,
+        |line| {
+            info!("{}", line.unwrap());
+        },
+        |line| {
+            error!("{}", line.unwrap());
+        },
+    )
 }
 
-pub fn helm_exec_with_output<F>(
+pub fn helm_exec_with_output<F, X>(
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-    mut output: F,
+    mut stdout_output: F,
+    mut stderr_output: X,
 ) -> Result<(), CmdError>
 where
     F: FnMut(Result<String, Error>),
+    X: FnMut(Result<String, Error>),
 {
-    match exec_with_envs_and_output("helm", args, envs, output) {
+    match exec_with_envs_and_output("helm", args, envs, stdout_output, stderr_output) {
         Err(err) => return Err(err),
         _ => {}
     };
@@ -374,15 +414,17 @@ where
     Ok(())
 }
 
-pub fn kubectl_exec_with_output<F>(
+pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-    mut output: F,
+    mut stdout_output: F,
+    mut stderr_output: X,
 ) -> Result<(), CmdError>
 where
     F: FnMut(Result<String, Error>),
+    X: FnMut(Result<String, Error>),
 {
-    match exec_with_envs_and_output("kubectl", args, envs, output) {
+    match exec_with_envs_and_output("kubectl", args, envs, stdout_output, stderr_output) {
         Err(err) => return Err(err),
         _ => {}
     };
@@ -427,7 +469,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            _ => {}
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
         },
     )?;
 
@@ -538,7 +584,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            _ => {}
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
         },
     )?;
 
@@ -594,7 +644,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => info!("{}", line),
-            _ => {}
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
         },
     )?;
 
@@ -620,7 +674,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            _ => {}
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
         },
     )?;
 
@@ -646,7 +704,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            _ => {}
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
         },
     )?;
 

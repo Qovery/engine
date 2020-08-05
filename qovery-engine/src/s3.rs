@@ -39,8 +39,8 @@ pub fn create_bucket(
     match r {
         Err(err) => match err {
             RusotoError::Service(s) => match s {
-                CreateBucketError::BucketAlreadyExists(x) => info!("bucket already exists"),
-                CreateBucketError::BucketAlreadyOwnedByYou(x) => {}
+                CreateBucketError::BucketAlreadyExists(_) => info!("bucket already exists"),
+                CreateBucketError::BucketAlreadyOwnedByYou(x) => info!("{}", x),
             },
             RusotoError::Unknown(r) => error!("{}", r.body_as_str()),
             _ => {
@@ -80,7 +80,7 @@ pub fn create_bucket(
                 ));
             }
         },
-        Ok(x) => Ok(()),
+        Ok(x) => Ok(x),
     }
 }
 
