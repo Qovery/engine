@@ -15,6 +15,7 @@ use crate::engine::Engine;
 use crate::git::Credentials;
 use crate::models::{Action, Environment, EnvironmentAction, EnvironmentError};
 use crate::transaction::CommitError::NotValidService;
+use serde::{Deserialize, Serialize};
 
 pub struct Transaction<'a> {
     engine: &'a Engine,
@@ -617,6 +618,23 @@ pub enum RollbackError {
     DeployImage(DeployError),
     NoFailoverEnvironment,
     Error,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct ActionContext {
+    pub kind: Kind,
+    pub id: String,
+    pub execution_id: String
+}
+
+impl ActionContext {
+    pub fn new(kind: Kind, id: String, execution_id: String) -> Self { ActionContext { kind, id, execution_id } }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Kind {
+    Service, Application, Router, Environment, Execution
 }
 
 pub enum TransactionResult {

@@ -437,15 +437,17 @@ pub struct ProgressInfo {
     pub step_name: String,
     pub percent: u8,
     pub message: String,
+    pub execution_id: String
 }
 
 impl ProgressInfo {
-    pub fn new(step_name: &str, percent: u8, message: &str) -> Self {
+    pub fn new(step_name: &str, percent: u8, message: &str, execution_id: &str) -> Self {
         ProgressInfo {
             created_at: Utc::now(),
             step_name: step_name.to_string(),
             percent,
             message: message.to_string(),
+            execution_id: execution_id.to_string()
         }
     }
 }

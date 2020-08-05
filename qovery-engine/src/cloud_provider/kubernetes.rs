@@ -69,3 +69,16 @@ impl From<CmdError> for KubernetesError {
         KubernetesError::Cmd(error)
     }
 }
+
+impl From<KubernetesError> for Option<ServiceError> {
+    fn from(item: KubernetesError) -> Self {
+        return match item {
+            KubernetesError::Deploy(e) |
+            KubernetesError::Pause(e) |
+            KubernetesError::Delete(e) => { Option::from(e) }
+            _ => {
+                None
+            }
+        };
+    }
+}

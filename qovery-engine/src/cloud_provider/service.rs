@@ -1,7 +1,9 @@
+use std::process::id;
+
 use crate::build_platform::Image;
+use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::CmdError;
 use crate::container_registry::PushResult;
 use crate::models::Context;
@@ -9,6 +11,7 @@ use std::io::Error;
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 use tera::Context as TeraContext;
+use crate::transaction::{ActionContext, CommitError, Kind};
 
 pub trait Service {
     fn context(&self) -> &Context;
@@ -38,7 +41,7 @@ pub trait Service {
         for binary in binaries.iter() {
             if !crate::cmd::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
-                return Err(ServiceError::Unexpected(err));
+                return Err(ServiceError::Unexpected(err, Some(ActionContext::new(Kind::Service, id().to_string(), self.context().execution_id().to_string()))));
             }
         }
 
@@ -195,21 +198,53 @@ pub enum ServiceType<'a> {
 
 #[derive(Debug)]
 pub enum ServiceError {
-    OnCreateFailed,
-    CheckFailed,
-    Cmd(CmdError),
-    Io(Error),
-    Unexpected(String),
+    OnCreateFailed(Option<ActionContext>),
+    CheckFailed(Option<ActionContext>),
+    Cmd(CmdError, Option<ActionContext>),
+    Io(Error, Option<ActionContext>),
+    Unexpected(String, Option<ActionContext>),
 }
 
 impl From<std::io::Error> for ServiceError {
     fn from(err: Error) -> Self {
-        ServiceError::Io(err)
+        ServiceError::Io(err, None)
     }
 }
 
 impl From<CmdError> for ServiceError {
     fn from(err: CmdError) -> Self {
-        ServiceError::Cmd(err)
+        ServiceError::Cmd(err, None)
+    }
+}
+
+impl From<ServiceError> for Option<ActionContext> {
+    fn from(err: ServiceError) -> Self {
+        return match err {
+            ServiceError::OnCreateFailed(ac) |
+            ServiceError::CheckFailed(ac) |
+            ServiceError::Unexpected(_, ac) |
+            ServiceError::Cmd(_, ac) |
+            ServiceError::Io(_, ac) => { ac }
+        };
+    }
+}
+
+impl From<CommitError> for Option<ServiceError> {
+    fn from(err: CommitError) -> Self {
+        return match err {
+            CommitError::DeleteEnvironment(e) |
+            CommitError::PauseEnvironment(e) |
+            CommitError::DeployEnvironment(e) |
+            CommitError::DeleteKubernetes(e) |
+            CommitError::CreateKubernetes(e) => {
+                Option::from(e)
+            }
+            CommitError::NotValidService(e) => {
+                Option::Some(e)
+            }
+            _ => {
+                None
+            }
+        };
     }
 }
