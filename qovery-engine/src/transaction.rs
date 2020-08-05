@@ -623,11 +623,12 @@ pub enum RollbackError {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ActionContext {
     pub kind: Kind,
-    pub id: String
+    pub id: String,
+    pub execution_id: String
 }
 
 impl ActionContext {
-    pub fn new(kind: Kind, id: String) -> Self { ActionContext { kind, id } }
+    pub fn new(kind: Kind, id: String, execution_id: String) -> Self { ActionContext { kind, id, execution_id } }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]

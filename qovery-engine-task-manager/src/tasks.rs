@@ -42,7 +42,7 @@ impl Task for InfrastructureTask {
 
     fn run(&self, sender: Sender<Message>) {
         info!("infrastructure task {} started", self.id());
-        self.update_status(&sender, Status::Running { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string()) });
+        self.update_status(&sender, Status::Running { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) });
 
         let my_progress_listener: Rc<Box<dyn ProgressListener>> =
             Rc::new(Box::new(MyProgressListener {
@@ -57,13 +57,14 @@ impl Task for InfrastructureTask {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string()) });
+                self.update_status(&sender, Status::Failed { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) });
                 None
             }
         };
 
         if session.is_none() {
-            self.update_status(&sender, Status::Failed { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string()) });
+            self.update_status(&sender, Status::Failed { message: None, context:
+            ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) });
             return;
         }
 
@@ -90,18 +91,19 @@ impl Task for InfrastructureTask {
 
         match tx.commit() {
             TransactionResult::Ok => {
-                self.update_status(&sender, Status::Done { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string()) });
+                self.update_status(&sender, Status::Done { message: None, context:
+                ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) });
             }
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
                 let err: Option<ServiceError> = Option::from(commit_err);
                 let ac = match err {
-                    None => { ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string()) },
+                    None => { ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) },
                     Some(x) => {
                         let option: Option<ActionContext> = Option::from(x);
                         match option {
                             None => {
-                                ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string())
+                                ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string())
                             },
                             Some(ac) => { ac },
                         }
@@ -116,12 +118,12 @@ impl Task for InfrastructureTask {
                 // FIXME return error message
                 let err: Option<ServiceError> = Option::from(commit_err);
                 let ac = match err {
-                    None => ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string()),
+                    None => ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()),
                     Some(x) => {
                         let option: Option<ActionContext> = Option::from(x);
                         match option {
                             None => {
-                                ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string())
+                                ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string())
                             },
                             Some(ac) => { ac },
                         }
@@ -175,7 +177,7 @@ impl Task for EnvironmentTask {
 
     fn run(&self, sender: Sender<Message>) {
         info!("environment task {} started", self.id());
-        self.update_status(&sender, Status::Running { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string()) });
+        self.update_status(&sender, Status::Running { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) });
 
         let my_progress_listener: Rc<Box<dyn ProgressListener>> =
             Rc::new(Box::new(MyProgressListener {
@@ -190,13 +192,15 @@ impl Task for EnvironmentTask {
             Ok(session) => Some(session),
             Err(err) => {
                 // FIXME return error message
-                self.update_status(&sender, Status::Failed { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string()) });
+                self.update_status(&sender, Status::Failed { message: None, context:
+                ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) });
                 None
             }
         };
 
         if session.is_none() {
-            self.update_status(&sender, Status::Failed { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string()) });
+            self.update_status(&sender, Status::Failed { message: None, context:
+            ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) });
             return;
         }
 
@@ -227,18 +231,19 @@ impl Task for EnvironmentTask {
 
         match tx.commit() {
             TransactionResult::Ok => {
-                self.update_status(&sender, Status::Done { message: None, context: ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string()) });
+                self.update_status(&sender, Status::Done { message: None, context:
+                ActionContext::new(Kind::Environment,  self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) });
             }
             TransactionResult::Rollback(commit_err) => {
                 // FIXME return error message
                 let err: Option<ServiceError> = Option::from(commit_err);
                 let ac = match err {
-                    None => { ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string()) },
+                    None => { ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) },
                     Some(x) => {
                         let option: Option<ActionContext> = Option::from(x);
                         match option {
                             None => {
-                                ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string())
+                                ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string())
                             },
                             Some(ac) => { ac },
                         }
@@ -250,12 +255,12 @@ impl Task for EnvironmentTask {
                 // FIXME return error message
                 let err: Option<ServiceError> = Option::from(commit_err);
                 let ac = match err {
-                    None => { ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string()) },
+                    None => { ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string()) },
                     Some(x) => {
                         let option: Option<ActionContext> = Option::from(x);
                         match option {
                             None => {
-                                ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string())
+                                ActionContext::new(Kind::Environment, self.request.target_environment.as_ref().unwrap().id.to_string(), self.id().to_string())
                             },
                             Some(ac) => { ac },
                         }
@@ -306,7 +311,7 @@ where
     fn on_progress(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Running {
             message: Some(info.message),
-            context: ActionContext::new(Kind::Execution, info.execution_id)
+            context: ActionContext::new(Kind::Execution, info.execution_id.to_string(), info.execution_id.to_string())
         });
 
         let it = self.sender.send(Ok(it));
@@ -315,7 +320,7 @@ where
     fn on_complete(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Done {
             message: Some(info.message),
-            context: ActionContext::new(Kind::Execution, info.execution_id)
+            context: ActionContext::new(Kind::Execution, info.execution_id.to_string(), info.execution_id.to_string())
         });
 
         let it = self.sender.send(Ok(it));
@@ -324,7 +329,7 @@ where
     fn on_error(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Error {
             message: Some(info.message),
-            context: ActionContext::new(Kind::Execution, info.execution_id)
+            context: ActionContext::new(Kind::Execution, info.execution_id.to_string(), info.execution_id.to_string())
         });
 
         let it = self.sender.send(Ok(it));
