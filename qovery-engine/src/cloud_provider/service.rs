@@ -1,7 +1,4 @@
-use std::io::Error;
 use std::process::id;
-
-use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
