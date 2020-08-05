@@ -218,20 +218,53 @@ impl<'a> EKS<'a> {
         let vpc_cidr_block = "10.0.0.0/16";
         let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", self.id());
         let eks_cidr_subnet = "23";
+        let worker_nodes = self
+            .nodes
+            .iter()
+            .group_by(|e| e.instance_type())
+            .into_iter()
+            .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
+            .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
+                instance_type: instance_type.to_string(),
+                desired_size: nodes.len().to_string(),
+                max_size: nodes.len().to_string(),
+                min_size: nodes.len().to_string(),
+            })
+            .collect::<Vec<WorkerNodeDataTemplate>>();
         let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.cloud_provider.organization_id());
         let rds_cidr_subnet = "23";
         let documentdb_cidr_subnet = "23";
         let elasticsearch_cidr_subnet = "23";
-        let managed_dns = ["oom.sh"]
+        let managed_dns = ["oom.sh"];
+        let managed_dns_helm_format = managed_dns
             .iter()
-            .map(|ip| format!("\"{}\"", ip))
+            .map(|name| format!("\"{}\"", name))
             .collect::<Vec<_>>(); // Todo: make it customizable
+        let managed_dns_terraform_format = managed_dns
+            .iter()
+            .map(|name| format!("{{{}}}", name))
+            .collect::<Vec<_>>()
+            .join(",");
 
         let mut context = TeraContext::new();
 
         context.insert("organization_id", self.cloud_provider.organization_id());
+        // DNS configuration
         context.insert("managed_dns", &managed_dns);
+        context.insert("managed_dns_helm_format", &managed_dns_helm_format);
+        context.insert(
+            "managed_dns_terraform_format",
+            &managed_dns_terraform_format,
+        );
+        context.insert("external_dns_provider", "cloudflare");
+        context.insert(
+            "cloudflare_api_token",
+            "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7",
+        );
+        context.insert("cloudflare_email", "dns@qovery.com");
+        context.insert("dns_email_report", "dns@qovery.com");
 
+        // AWS
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
         context.insert("aws_region", &self.region.name());
@@ -240,10 +273,12 @@ impl<'a> EKS<'a> {
         context.insert("vpc_cidr_block", &vpc_cidr_block);
         context.insert("s3_kubeconfig_bucket", &s3_kubeconfig_bucket);
 
+        // AWS - EKS
         context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("eks_cluster_name", &self.name());
         context.insert("eks_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
+        context.insert("eks_worker_nodes", &worker_nodes);
         context.insert("eks_zone_a_subnet_blocks", &eks_zone_a_subnet_blocks);
         context.insert("eks_zone_b_subnet_blocks", &eks_zone_b_subnet_blocks);
         context.insert("eks_zone_c_subnet_blocks", &eks_zone_c_subnet_blocks);
@@ -251,11 +286,13 @@ impl<'a> EKS<'a> {
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
 
+        // AWS - RDS
         context.insert("rds_cidr_subnet", &rds_cidr_subnet);
         context.insert("rds_zone_a_subnet_blocks", &rds_zone_a_subnet_blocks);
         context.insert("rds_zone_b_subnet_blocks", &rds_zone_b_subnet_blocks);
         context.insert("rds_zone_c_subnet_blocks", &rds_zone_c_subnet_blocks);
 
+        // AWS - DocumentDB
         context.insert("documentdb_cidr_subnet", &documentdb_cidr_subnet);
         context.insert(
             "documentdb_zone_a_subnet_blocks",
@@ -270,6 +307,7 @@ impl<'a> EKS<'a> {
             &documentdb_zone_c_subnet_blocks,
         );
 
+        // AWS - Elasticsearch
         context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet);
         context.insert(
             "elasticsearch_zone_a_subnet_blocks",
@@ -283,31 +321,6 @@ impl<'a> EKS<'a> {
             "elasticsearch_zone_c_subnet_blocks",
             &elasticsearch_zone_c_subnet_blocks,
         );
-
-        let worker_nodes = self
-            .nodes
-            .iter()
-            .group_by(|e| e.instance_type())
-            .into_iter()
-            .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
-            .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
-                instance_type: instance_type.to_string(),
-                desired_size: nodes.len().to_string(),
-                max_size: nodes.len().to_string(),
-                min_size: nodes.len().to_string(),
-            })
-            .collect::<Vec<WorkerNodeDataTemplate>>();
-
-        context.insert("eks_worker_nodes", &worker_nodes);
-
-        // Todo: export this, do not let it this way
-        // DNS configuration
-        context.insert("external_dns_provider", "cloudflare");
-        context.insert(
-            "cloudflare_api_token",
-            "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7",
-        );
-        context.insert("cloudflare_email", "dns@qovery.com");
 
         context
     }

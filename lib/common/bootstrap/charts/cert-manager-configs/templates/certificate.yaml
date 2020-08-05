@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: qovery-letsencrypt-tls
+  namespace: {{ .Values.namespace }}
+spec:
+  secretName: letsencrypt-acme-qovery-cert
+  issuerRef:
+    name: letsencrypt-qovery
+    kind: ClusterIssuer
+  dnsNames:
+  - '*.{{- join "'\n  - '*." .Values.managedDns }}'

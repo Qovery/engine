@@ -48,3 +48,40 @@ resource "helm_release" "cert_manager" {
     helm_release.prometheus_operator
   ]
 }
+
+resource "helm_release" "cert_manager_config" {
+  name = "cert-manager-configs"
+  chart = "common/charts/cert-manager-configs"
+  namespace = "cert-manager"
+  atomic = true
+  max_history = 50
+
+  depends_on = [helm_release.cert_manager]
+
+  set {
+    name = "externalDnsProvider"
+    value = "{{ external_dns_provider }}"
+  }
+
+  set {
+    name = "emailReport"
+    value = "{{ dns_email_report }}" // Todo: customize it with client address?
+  }
+
+  set {
+    name = "managedDns"
+    value = "{{ managed_dns_terraform_format }}"
+  }
+
+{% if external_dns_provider == "cloudflare" %}
+  set {
+    name = "provider.cloudflare.apiToken"
+    value = "{{ cloudflare_api_token }}"
+  }
+
+  set {
+    name = "provider.cloudflare.email"
+    value = "{{ cloudflare_email }}"
+  }
+{% endif %}
+}
