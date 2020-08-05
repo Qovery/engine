@@ -42,12 +42,13 @@ pub fn execution_id() -> String {
 
 pub fn context() -> Context {
     let execution_id = execution_id();
-    let home_dir = home_dir().unwrap();
+    let home_dir = std::env::var("WORKSPACE_ROOT_DIR")
+        .unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
 
     Context::new(
         execution_id.as_str(),
-        home_dir.to_str().unwrap(),
+        home_dir.as_str(),
         lib_root_dir.as_str(),
     )
 }
