@@ -189,7 +189,7 @@ pub fn working_environment(context: &Context) -> Environment {
                     target_domain: "toto.oom.sh".to_string(),
                 }],
                 routes: vec![Route {
-                    path: "/*".to_string(),
+                    path: "/".to_string(),
                     application_name: "simple-example-node-with-postgresql".to_string(),
                 }],
             },
@@ -204,7 +204,7 @@ pub fn working_environment(context: &Context) -> Environment {
                     target_domain: "coco.oom.sh".to_string(),
                 }],
                 routes: vec![Route {
-                    path: "/coco/*".to_string(),
+                    path: "/coco".to_string(),
                     application_name: "simple-example-node-with-postgresql".to_string(),
                 }],
             },
