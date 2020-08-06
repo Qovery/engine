@@ -32,7 +32,10 @@ fn create_eks_cluster_in_us_east_2() {
         nodes,
     );
 
-    let _ = tx.create_kubernetes(&kubernetes);
+    match tx.create_kubernetes(&kubernetes) {
+        Err(err) => panic!("{:?}", err),
+        _ => {}
+    }
 
     let _ = match tx.commit() {
         TransactionResult::Ok => assert!(true),
@@ -64,7 +67,10 @@ fn create_eks_cluster_in_eu_west_3() {
         nodes,
     );
 
-    let _ = tx.create_kubernetes(&kubernetes);
+    match tx.create_kubernetes(&kubernetes) {
+        Err(err) => panic!("{:?}", err),
+        _ => {}
+    }
 
     let _ = match tx.commit() {
         TransactionResult::Ok => assert!(true),
@@ -96,7 +102,10 @@ fn delete_eks_cluster_in_us_east_2() {
         nodes,
     );
 
-    let _ = tx.delete_kubernetes(&kubernetes);
+    match tx.create_kubernetes(&kubernetes) {
+        Err(err) => panic!("{:?}", err),
+        _ => {}
+    }
 
     let _ = match tx.commit() {
         TransactionResult::Ok => assert!(true),
@@ -128,7 +137,10 @@ fn delete_eks_cluster_in_eu_west_3() {
         nodes,
     );
 
-    let _ = tx.delete_kubernetes(&kubernetes);
+    match tx.create_kubernetes(&kubernetes) {
+        Err(err) => panic!("{:?}", err),
+        _ => {}
+    }
 
     let _ = match tx.commit() {
         TransactionResult::Ok => assert!(true),
