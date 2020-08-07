@@ -102,7 +102,7 @@ fn delete_eks_cluster_in_us_east_2() {
         nodes,
     );
 
-    match tx.create_kubernetes(&kubernetes) {
+    match tx.delete_kubernetes(&kubernetes) {
         Err(err) => panic!("{:?}", err),
         _ => {}
     }
@@ -137,7 +137,7 @@ fn delete_eks_cluster_in_eu_west_3() {
         nodes,
     );
 
-    match tx.create_kubernetes(&kubernetes) {
+    match tx.delete_kubernetes(&kubernetes) {
         Err(err) => panic!("{:?}", err),
         _ => {}
     }
