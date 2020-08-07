@@ -96,6 +96,12 @@ variable "s3_bucket_kubeconfig" {
   type = string
 }
 
+variable "s3_bucket_qengine_resources" {
+  description = "S3 bucket containing qengine resources (libs)"
+  default = "prod-qengine-resources"
+  type = string
+}
+
 # EC2 SSH default SSH key
 
 variable "ec2_ssh_default_key" {

@@ -25,7 +25,12 @@ function get_commit_id() {
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
   tag=$(get_commit_id)
-  docker build -t qovery-engine:${tag} .
+  docker build -t qoveryrd/engine:${tag} .
+}
+
+function push_image() {
+  tag=$(get_commit_id)
+  docker push qovery-engine:${tag}
 }
 
 function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
@@ -54,6 +59,7 @@ function new_release() { ## Generate a new release with commit ID as tag
     check_untracked_files
     build_image
     s3_upload_resources
+    push_image
 }
 
 
@@ -66,6 +72,9 @@ s3_upload_resources)
   ;;
 new_release)
   new_release
+  ;;
+push_image)
+  push_image
   ;;
 *)
   echo "Usage: $0 <option>"
