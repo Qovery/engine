@@ -28,9 +28,9 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   docker build -t qoveryrd/engine:${tag} .
 }
 
-function push_image() {
+function push_image() { ## Push local image with current commit ID as tag
   tag=$(get_commit_id)
-  docker push qovery-engine:${tag}
+  docker push qoveryrd/engine:${tag}
 }
 
 function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3

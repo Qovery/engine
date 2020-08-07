@@ -12,8 +12,14 @@ image:
 namespace: "qovery"
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
+
+labels:
+  app: qovery-engine
+
+environmentVariables:
+  resources-accessKey: ""
+  resources-secretKey: ""
+  resources-url: ""
 
 serviceAccount:
   # Specifies whether a service account should be created
