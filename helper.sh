@@ -24,7 +24,7 @@ function get_commit_id() {
 }
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
-  tag=get_commit_id
+  tag=$(get_commit_id)
   docker build -t qovery-engine:${tag} .
 }
 
@@ -35,7 +35,7 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
   export AWS_SECRET_ACCESS_KEY="9479l2ctGe8KSsMndn5p2dLwz2bwnmetqS26MWwk"
 
   bucket=prod-qengine-resources
-  file_prefix=get_commit_id
+  file_prefix=$(get_commit_id)
   file="${file_prefix}-lib.tgz"
   resource="/${bucket}/${file}"
 
