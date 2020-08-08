@@ -26,7 +26,10 @@ ENV HOME_DIR="/home/qovery"
 ENV BIN_DIR=$HOME_DIR/binaries
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 
-RUN groupadd -g 1000 qovery && \
+RUN apt-get update && \
+    apt-get -y install awscli && \
+    apt-get clean &&\
+    groupadd -g 1000 qovery && \
     useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery
 
 WORKDIR $HOME_DIR
