@@ -61,6 +61,11 @@ resource "helm_release" "qovery_engine_resources" {
     value = "panic.qovery.com"
   }
 
+  set {
+    name = "environmentVariables.RUST_LOG"
+    value = "info"
+  }
+
   depends_on = [
     aws_eks_cluster.eks_cluster,
     aws_iam_access_key.qovery_engine_resources
