@@ -42,18 +42,23 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   set {
-    name = "environmentVariables.resources-accessKey"
+    name = "environmentVariables.ENGINE_RES_AK"
     value = aws_iam_access_key.qovery_engine_resources.id
   }
 
   set {
-    name = "environmentVariables.resources-secretKey"
+    name = "environmentVariables.ENGINE_RES_SK"
     value = aws_iam_access_key.qovery_engine_resources.secret
   }
 
   set {
-    name = "environmentVariables.resources-url"
-    value = "s3://"
+    name = "environmentVariables.ENGINE_RES_URL"
+    value = "s3://prod-qengine-resources/fc5bda3-lib.tgz"
+  }
+
+  set {
+    name = "environmentVariables.NATS_SERVER"
+    value = "panic.qovery.com"
   }
 
   depends_on = [

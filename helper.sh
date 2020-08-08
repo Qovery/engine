@@ -13,7 +13,20 @@ function check_num_args() {
 }
 
 function check_untracked_files() {
+  no_commit=1
+  if [ $(git diff --exit-code | wc -l) -ne 0 ] ; then
+    no_commit=0
+  fi
+
+  if [ $(git diff --cached --exit-code | wc -l) -ne 0 ] ; then
+    no_commit=0
+  fi
+
   if [ $(git ls-files --other --exclude-standard --directory | wc -l) -ne 0 ] ; then
+    no_commit=0
+  fi
+
+  if [ $no_commit -eq 0 ] ; then
     echo "There are some untracked files changes by git. Ensure you've commited all your files first"
     exit 1
   fi
@@ -46,7 +59,7 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
 
   aws s3api get-object-tagging --bucket prod-qengine-resources --key $file 2>/dev/null
   if [ $? -ne 0 ] ; then
-    tar -czf $file lib
+    tar czf $file --exclude='*/bootstrap' lib
     aws s3 cp $file s3://$bucket
     rm -f $file
   else
