@@ -57,6 +57,7 @@ function install() { ## Make symlinks to install binaries in default PATH
   ln -s $BIN_DIR/kubectl${KUBECTL_VERSION} /usr/bin/kubectl
   ln -s $BIN_DIR/aws-iam-authenticator${AWS_IAM_AUTHENTICATOR_VERSION} /usr/bin/aws-iam-authenticator
 
+  # Generate all symlinks at once
   ln -s $BIN_DIR/* /usr/bin/
 }
 

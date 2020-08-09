@@ -38,9 +38,12 @@ COPY --from=build /usr/src/app/docker/load.sh .
 COPY --from=build /usr/src/app/docker/run.sh .
 COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
-RUN ./load.sh install $BIN_DIR && chown -Rf qovery. . && chmod 500 app
+RUN ./load.sh install $BIN_DIR && \
+    chown -Rf qovery. . && \
+    chmod 500 app && \
+    rm -f ./load.sh
 
 USER qovery
 ENV PATH="/home/qovery/binaries:${PATH}"
 
-CMD ["./app"]
+CMD ["./run.sh"]
