@@ -28,6 +28,10 @@ resource "aws_iam_user_policy" "qovery_engine_resources" {
 EOF
 }
 
+locals {
+  qovery_engine_version = "187eda5"
+}
+
 resource "helm_release" "qovery_engine_resources" {
   name = "qovery-engine"
   chart = "common/charts/qovery-engine"
@@ -38,7 +42,12 @@ resource "helm_release" "qovery_engine_resources" {
 
   set {
     name = "image.tag"
-    value = "86e3fa7"
+    value = local.qovery_engine_version
+  }
+
+  set {
+    name = "buildContainer.tag"
+    value = "19.03.12-dind"
   }
 
   set {

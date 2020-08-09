@@ -22,6 +22,10 @@ environmentVariables:
   ENGINE_RES_URL: ""
   NATS_SERVER: ""
 
+buildContainer:
+  image: docker
+  tag: 19.03.12-dind
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true

@@ -26,9 +26,7 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+        - name: qovery-engine
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
@@ -41,9 +39,34 @@ spec:
             {{ end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+        - name: docker-build
+          image: "{{ .Values.buildContainer.image }}:{{ .Values.buildContainer.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+            {{ range $key, $value := .Values.environmentVariables -}}
+            - name: "{{ $key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: qovery-engine
+                  key: {{ $key }}
+            {{ end }}
+          livenessProbe:
+            tcpSocket:
+              port: 2375
+              host: 127.0.0.1
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            periodSeconds: 15
+          resources:
+          {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - mountPath: /var/run/docker.sock
-              name: docker-socket-volume
+            - name: docker-graph-storage
+              mountPath: /var/lib/docker
       dnsPolicy: "None"
       dnsConfig:
         nameservers:
@@ -69,7 +92,5 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
-        - name: docker-socket-volume
-          hostPath:
-            path: /var/run/docker.sock
-            type: File
+      - name: docker-graph-storage
+        emptyDir: {}
