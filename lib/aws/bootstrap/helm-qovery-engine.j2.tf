@@ -53,12 +53,12 @@ resource "helm_release" "qovery_engine_resources" {
 
   set {
     name = "environmentVariables.ENGINE_RES_URL"
-    value = "s3://prod-qengine-resources/86e3fa7-lib.tgz"
+    value = "s3://prod-qengine-resources/${local.qovery_engine_version}-lib.tgz"
   }
 
   set {
     name = "environmentVariables.NATS_SERVER"
-    value = "panic.qovery.com"
+    value = "nats://panic.qovery.com:4242"
   }
 
   set {
