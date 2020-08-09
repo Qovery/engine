@@ -38,7 +38,7 @@ resource "helm_release" "qovery_engine_resources" {
 
   set {
     name = "image.tag"
-    value = "3196a0a"
+    value = "86e3fa7"
   }
 
   set {
@@ -53,7 +53,7 @@ resource "helm_release" "qovery_engine_resources" {
 
   set {
     name = "environmentVariables.ENGINE_RES_URL"
-    value = "s3://prod-qengine-resources/3196a0a-lib.tgz"
+    value = "s3://prod-qengine-resources/86e3fa7-lib.tgz"
   }
 
   set {
