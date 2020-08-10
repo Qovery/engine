@@ -9,7 +9,10 @@ It also bootstraps Kubernetes clusters and mandatory elements (network) for clie
 
 ## Packages
 ### qovery-engine
-TODO
+Qovery engine is able to deploy complete clusters environments and deploy client's applications inside a deployed clusters.
+
+### docker
+Files to make images that should run for builds or Qovery application run.
 
 ### app
 TODO
@@ -29,8 +32,16 @@ TDOO
 * aws-iam-authenticator
 
 ## Get Started
+
 ### Run locally
 TODO
+
+### Generate a new image version
+To generate a new Engine image version, you have to use Gitlab. Simply push on master and run a build job on Gitlab:
+https://gitlab.com/qovery/qovery-engine/-/jobs
+
+At the end of the job, the image and tag will be shown. Replace the Terraform "qovery_engine_version" variable with the
+image tag and push.
 
 ## Supported connectors
 ### Build Platforms

@@ -83,7 +83,12 @@ pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
 }
 
 pub fn aws_kubernetes_nodes() -> Vec<Node> {
-    vec![Node::new(2, 16), Node::new(2, 16), Node::new(2, 16)]
+    vec![
+        Node::new(2, 16),
+        Node::new(2, 16),
+        Node::new(2, 16),
+        Node::new(2, 16),
+    ]
 }
 
 pub fn cloud_provider_aws(context: &Context) -> AWS {

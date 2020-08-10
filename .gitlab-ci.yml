@@ -1,0 +1,23 @@
+image: qoveryrd/ci:2fc52f23cf4b8f18f8501be1c6e9d2e05bf0c943
+
+services:
+  - docker:dind
+
+stages:
+  - build
+
+before_script:
+  - test -z $KUBERNETES_PORT || export DOCKER_HOST=tcp://127.0.0.1:2375
+
+master:
+  stage: build
+  retry: 0
+  script:
+    - git fetch origin
+    - git checkout master
+    - git reset --hard origin/master
+    - ./helper.sh new_release
+  when: manual
+  only:
+    refs:
+      - master

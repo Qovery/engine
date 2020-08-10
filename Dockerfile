@@ -15,7 +15,7 @@ ADD . .
 # run release build
 RUN cargo build --release
 
-RUN ./docker/load.sh download
+RUN ./docker/engine/load.sh download
 
 # Final image
 FROM debian:buster-slim as run
@@ -34,8 +34,8 @@ RUN apt-get update && \
 
 WORKDIR $HOME_DIR
 COPY --from=build /usr/src/app/target/release/app .
-COPY --from=build /usr/src/app/docker/load.sh .
-COPY --from=build /usr/src/app/docker/run.sh .
+COPY --from=build /usr/src/app/docker/engine/load.sh .
+COPY --from=build /usr/src/app/docker/engine/run.sh .
 COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
 RUN ./load.sh install $BIN_DIR && \
