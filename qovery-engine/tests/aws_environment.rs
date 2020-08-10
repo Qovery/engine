@@ -35,7 +35,7 @@ fn pause_environment(
 
     let k = test_utilities::aws_kubernetes_eks(&context, &cp, nodes);
 
-    tx.delete_environment(&k, &environment_action);
+    tx.pause_environment(&k, &environment_action);
 
     tx.commit()
 }
