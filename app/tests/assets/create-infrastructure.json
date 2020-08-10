@@ -1,6 +1,6 @@
 {
   "id": "blabl1aowkdoiqjdoiwjqdioqj",
-  "organization_id": "poadjoiaw4455a",
+  "organization_id": "adwopakdpo221",
   "created_at": "2020-07-05T22:07:28Z",
   "action": "CREATE",
   "build_platform": {
@@ -31,7 +31,7 @@
       "kind": "EKS",
       "id": "c90a17d694fb4",
       "name": "my-eks-cluster",
-      "version": "1.14",
+      "version": "1.16",
       "region": "us-east-2",
       "nodes": [
         {

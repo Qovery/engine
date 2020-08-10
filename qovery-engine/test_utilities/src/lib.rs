@@ -156,7 +156,7 @@ pub fn working_environment(context: &Context) -> Environment {
             storage: vec![Storage {
                 id: "adawd5wa4d65aw4".to_string(),
                 name: "photos".to_string(),
-                storage_type: StorageType::SSD,
+                storage_type: StorageType::Ssd,
                 size_in_gib: 10,
                 mount_point: "/mnt/photos".to_string(),
                 snapshot_retention_in_days: 0,
@@ -211,7 +211,7 @@ pub fn working_environment(context: &Context) -> Environment {
         ],
         databases: vec![
             Database {
-                kind: DatabaseKind::PostgreSQL,
+                kind: DatabaseKind::PostgreSql,
                 action: Action::Create,
                 id: "waoidja468787454".to_string(),
                 name: "my-psql".to_string(),

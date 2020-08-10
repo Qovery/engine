@@ -284,10 +284,10 @@ pub struct Storage {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StorageType {
-    SlowHDD,
-    HDD,
-    SSD,
-    FastSSD,
+    SlowHdd,
+    Hdd,
+    Ssd,
+    FastSsd,
 }
 
 impl Storage {
@@ -296,10 +296,10 @@ impl Storage {
             id: self.id.clone(),
             name: self.name.clone(),
             storage_type: match self.storage_type {
-                StorageType::SlowHDD => crate::cloud_provider::aws::application::StorageType::SC1,
-                StorageType::HDD => crate::cloud_provider::aws::application::StorageType::ST1,
-                StorageType::SSD => crate::cloud_provider::aws::application::StorageType::GP2,
-                StorageType::FastSSD => crate::cloud_provider::aws::application::StorageType::IO1,
+                StorageType::SlowHdd => crate::cloud_provider::aws::application::StorageType::SC1,
+                StorageType::Hdd => crate::cloud_provider::aws::application::StorageType::ST1,
+                StorageType::Ssd => crate::cloud_provider::aws::application::StorageType::GP2,
+                StorageType::FastSsd => crate::cloud_provider::aws::application::StorageType::IO1,
             },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
@@ -392,7 +392,7 @@ impl Database {
     ) -> Option<Box<dyn StatefulService>> {
         match cloud_provider.kind() {
             CPKind::AWS => match self.kind {
-                DatabaseKind::PostgreSQL => {
+                DatabaseKind::PostgreSql => {
                     let db: Box<dyn StatefulService> = Box::new(PostgreSQL::new(
                         context.clone(),
                         self.id.as_str(),
@@ -422,9 +422,9 @@ impl Database {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DatabaseKind {
-    PostgreSQL,
-    MySQL,
-    MongoDB,
+    PostgreSql,
+    MySql,
+    MongoDb,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -437,7 +437,7 @@ pub struct ProgressInfo {
     pub step_name: String,
     pub percent: u8,
     pub message: String,
-    pub execution_id: String
+    pub execution_id: String,
 }
 
 impl ProgressInfo {
@@ -447,7 +447,7 @@ impl ProgressInfo {
             step_name: step_name.to_string(),
             percent,
             message: message.to_string(),
-            execution_id: execution_id.to_string()
+            execution_id: execution_id.to_string(),
         }
     }
 }
