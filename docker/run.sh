@@ -3,7 +3,7 @@
 set -x
 
 function get_lib() {
-    AWS_ACCESS_KEY_ID="${ENGINE_RES_AK}" AWS_SECRET_ACCESS_KEY="${ENGINE_RES_SK}" aws s3 cp ${ENGINE_RES_URL} lib.tgz && echo 0
+    aws s3 cp ${ENGINE_RES_URL} lib.tgz && echo 0
     echo 1
 }
 

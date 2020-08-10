@@ -33,7 +33,7 @@ function check_untracked_files() {
 }
 
 function get_commit_id() {
-  git rev-parse --short HEAD
+  git rev-parse HEAD
 }
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
