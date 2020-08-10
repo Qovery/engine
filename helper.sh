@@ -59,6 +59,7 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
 
   aws s3api get-object-tagging --bucket prod-qengine-resources --key $file 2>/dev/null
   if [ $? -ne 0 ] ; then
+    echo "Pushing lib to s3"
     tar czf $file --exclude='*/bootstrap' lib
     aws s3 cp $file s3://$bucket
     aws s3api put-object-acl --bucket $bucket --key $file --acl public-read
@@ -72,8 +73,8 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
 function new_release() { ## Generate a new release with commit ID as tag
     check_untracked_files
     build_image
-    s3_upload_resources
     push_image
+    s3_upload_resources
 }
 
 

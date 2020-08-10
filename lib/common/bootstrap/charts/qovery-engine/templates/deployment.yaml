@@ -54,14 +54,6 @@ spec:
                   name: qovery-engine
                   key: {{ $key }}
             {{ end }}
-          livenessProbe:
-            tcpSocket:
-              port: 2375
-              host: 127.0.0.1
-            initialDelaySeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-            periodSeconds: 15
           resources:
           {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

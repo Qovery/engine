@@ -39,11 +39,11 @@ function download() { ## Download prerequisites binaries for the engine
   mv kubectl $BIN_DEST_FOLDER/kubectl${KUBECTL_VERSION}
 
   # Aws iam authenticator
-  curl -so aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v${AWS_IAM_AUTHENTICATOR_VERSION}/aws-iam-authenticator_${AWS_IAM_AUTHENTICATOR_VERSION}_${SYSTEM}_${ARCH}
+  curl -sLo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v${AWS_IAM_AUTHENTICATOR_VERSION}/aws-iam-authenticator_${AWS_IAM_AUTHENTICATOR_VERSION}_${SYSTEM}_${ARCH}
   mv aws-iam-authenticator $BIN_DEST_FOLDER/aws-iam-authenticator${AWS_IAM_AUTHENTICATOR_VERSION}
 
   # Dumb init
-  curl -so dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_${ARCH}
+  curl -sLo dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_${ARCH}
   mv dumb-init $BIN_DEST_FOLDER/
 
   chmod 755 $BIN_DEST_FOLDER/*

@@ -1,5 +1,5 @@
 locals {
-  qovery_engine_version = "47dbf31a9a50dc7183accc0304c81d0979ee29d4"
+  qovery_engine_version = "b4ab6cee8dca7930de866908ee1743954b0260a5"
 }
 
 resource "helm_release" "qovery_engine_resources" {
@@ -17,7 +17,7 @@ resource "helm_release" "qovery_engine_resources" {
 
   set {
     name = "environmentVariables.ENGINE_RES_URL"
-    value = "s3://prod-qengine-resources/${local.qovery_engine_version}-lib.tgz"
+    value = "https://prod-qengine-resources.s3.eu-west-3.amazonaws.com/${local.qovery_engine_version}-lib.tgz"
   }
 
   set {
