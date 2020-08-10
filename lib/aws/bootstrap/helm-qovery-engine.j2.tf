@@ -1,5 +1,5 @@
 locals {
-  qovery_engine_version = "1da5e7305895a059279e8b2f50e01045c9b99635"
+  qovery_engine_version = "afea2cfc117b1d67926983269eed678a6cc83364"
 }
 
 resource "helm_release" "qovery_engine_resources" {

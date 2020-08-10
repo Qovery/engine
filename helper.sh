@@ -56,7 +56,6 @@ function push_image() { ## Push local image with current commit ID as tag
 
   docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
   docker push qoveryrd/engine:${tag}
-  echo "New image name is: qoveryrd/engine:${tag}"
 }
 
 function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
@@ -89,6 +88,7 @@ function new_release() { ## Generate a new release with commit ID as tag
     build_image
     push_image
     s3_upload_resources
+    echo -e "\e[92mNew image name is: qoveryrd/engine:${tag}\e[0m"
 }
 
 
