@@ -19,6 +19,9 @@ labels:
 environmentVariables:
   ENGINE_RES_URL: ""
   NATS_SERVER: ""
+  ORGANIZATION: ""
+  CLOUD_PROVIDER: ""
+  REGION: ""
 
 buildContainer:
   image: docker

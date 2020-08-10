@@ -1,5 +1,5 @@
 locals {
-  qovery_engine_version = "eb7b237d8b7130cfdfdfb949fe15fba939373b76"
+  qovery_engine_version = "2d540235fbad115498d8b25e6ba25461da1ff361"
 }
 
 resource "helm_release" "qovery_engine_resources" {
@@ -24,6 +24,21 @@ resource "helm_release" "qovery_engine_resources" {
   set {
     name = "environmentVariables.NATS_SERVER"
     value = "nats://panic.qovery.com:4242"
+  }
+
+  set {
+    name = "environmentVariables.ORGANIZATION"
+    value = var.organization_id
+  }
+
+  set {
+    name = "environmentVariables.CLOUD_PROVIDER"
+    value = var.cloud_provider
+  }
+
+  set {
+    name = "environmentVariables.REGION"
+    value = var.region
   }
 
   set {
