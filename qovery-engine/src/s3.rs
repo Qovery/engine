@@ -136,10 +136,10 @@ pub fn get_object(
             return match err {
                 RusotoError::Service(s) => match s {
                     GetObjectError::NoSuchKey(x) => {
-                        info!("no such key: {}", x.as_str());
+                        info!("no such key '{}': {}", object_key, x.as_str());
                         Err(Error::new(
                             ErrorKind::NotFound,
-                            format!("no such key: {}", x.as_str()),
+                            format!("no such key '{}': {}", object_key, x.as_str()),
                         ))
                     }
                 },

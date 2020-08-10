@@ -211,7 +211,7 @@ pub fn working_environment(context: &Context) -> Environment {
         ],
         databases: vec![
             Database {
-                kind: DatabaseKind::PostgreSql,
+                kind: DatabaseKind::Postgresql,
                 action: Action::Create,
                 id: "waoidja468787454".to_string(),
                 name: "my-psql".to_string(),

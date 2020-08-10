@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 use std::hash::Hash;
+use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -15,7 +16,6 @@ use crate::cloud_provider::service::{DatabaseOptions, Service, StatefulService, 
 use crate::cloud_provider::Kind as CPKind;
 use crate::cloud_provider::{CloudProvider as CP, CloudProvider};
 use crate::git::Credentials;
-use std::path::Path;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -392,7 +392,7 @@ impl Database {
     ) -> Option<Box<dyn StatefulService>> {
         match cloud_provider.kind() {
             CPKind::AWS => match self.kind {
-                DatabaseKind::PostgreSql => {
+                DatabaseKind::Postgresql => {
                     let db: Box<dyn StatefulService> = Box::new(PostgreSQL::new(
                         context.clone(),
                         self.id.as_str(),
@@ -422,9 +422,9 @@ impl Database {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DatabaseKind {
-    PostgreSql,
-    MySql,
-    MongoDb,
+    Postgresql,
+    Mysql,
+    Mongodb,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
