@@ -18,6 +18,7 @@ spec:
       labels:
         {{- include "qovery-engine.selectorLabels" . | nindent 8 }}
     spec:
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -54,6 +55,11 @@ spec:
                   name: qovery-engine
                   key: {{ $key }}
             {{ end }}
+          livenessProbe:
+            exec:
+              command: [ "docker", "info" ]
+            initialDelaySeconds: 15
+            periodSeconds: 30
           resources:
           {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

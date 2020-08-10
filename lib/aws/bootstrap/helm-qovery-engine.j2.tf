@@ -1,5 +1,5 @@
 locals {
-  qovery_engine_version = "b4ab6cee8dca7930de866908ee1743954b0260a5"
+  qovery_engine_version = "eb7b237d8b7130cfdfdfb949fe15fba939373b76"
 }
 
 resource "helm_release" "qovery_engine_resources" {
@@ -9,6 +9,7 @@ resource "helm_release" "qovery_engine_resources" {
   atomic = true
   create_namespace = true
   max_history = 50
+  force_update = true
 
   set {
     name = "image.tag"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -x
+#set -x
 
 function get_lib() {
     curl -so lib.tgz ${ENGINE_RES_URL}
