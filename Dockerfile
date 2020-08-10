@@ -27,7 +27,7 @@ ENV BIN_DIR=$HOME_DIR/binaries
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 
 RUN apt-get update && \
-    apt-get -y install awscli && \
+    apt-get -y install curl && \
     apt-get clean &&\
     groupadd -g 1000 qovery && \
     useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery

@@ -31,7 +31,6 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   depends_on = [
-    aws_eks_cluster.eks_cluster,
-    aws_iam_access_key.qovery_engine_resources
+    aws_eks_cluster.eks_cluster
   ]
 }

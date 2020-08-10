@@ -61,6 +61,7 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
   if [ $? -ne 0 ] ; then
     tar czf $file --exclude='*/bootstrap' lib
     aws s3 cp $file s3://$bucket
+    aws s3api put-object-acl --bucket $bucket --key $file --acl public-read
     rm -f $file
   else
     echo "File $file already exists in bucket $bucket"

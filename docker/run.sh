@@ -3,8 +3,8 @@
 set -x
 
 function get_lib() {
-    aws s3 cp ${ENGINE_RES_URL} lib.tgz && echo 0
-    echo 1
+    curl -so lib.tgz ${ENGINE_RES_URL}
+    echo $?
 }
 
 # Load lib
