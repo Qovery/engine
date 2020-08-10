@@ -2,6 +2,15 @@
 
 #set -x
 
+awk=awk
+sed=sed
+grep=grep
+if [ "$(uname)" == "Darwin" ] ; then
+  grep='ggrep'
+  awk='gawk'
+  sed='gsed'
+fi
+
 ARGS_NUM=$#
 
 function check_num_args() {
@@ -49,8 +58,8 @@ function push_image() { ## Push local image with current commit ID as tag
 function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
   check_untracked_files
 
-  export AWS_ACCESS_KEY_ID="AKIAUD622NVNEHRNE5G2"
-  export AWS_SECRET_ACCESS_KEY="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"
+  export AWS_ACCESS_KEY_ID="$S3_RES_ACCESS_KEY_ID"
+  export AWS_SECRET_ACCESS_KEY="$S3_RES_SECRET_KEY_ID"
 
   bucket=prod-qengine-resources
   file_prefix=$(get_commit_id)
@@ -93,7 +102,7 @@ push_image)
   ;;
 *)
   echo "Usage: $0 <option>"
-  grep '##' $0 | grep -v grep | sed -r "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
+  $grep '##' $0 | $grep -v grep | $sed -r "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | $awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
   exit 1
   ;;
 esac
