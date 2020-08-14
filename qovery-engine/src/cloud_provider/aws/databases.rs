@@ -97,7 +97,9 @@ impl PostgreSQL {
                     &context,
                 )?;
 
-                let _ = crate::cmd::terraform_exec_destroy(workspace_dir.as_str())?;
+                let _ = crate::cmd::terraform_exec_with_init_validate_plan_destroy(
+                    workspace_dir.as_str(),
+                )?;
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 let helm_release_name = self.helm_release_name();
@@ -247,7 +249,11 @@ impl Create for PostgreSQL {
                 if helm_history_row.is_none()
                     || !helm_history_row.unwrap().is_successfully_deployed()
                 {
-                    return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(Kind::Application, self.id().to_string(), self.context().execution_id().to_string()))));
+                    return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(
+                        Kind::Application,
+                        self.id().to_string(),
+                        self.context().execution_id().to_string(),
+                    ))));
                 }
 
                 // check app status
@@ -260,7 +266,13 @@ impl Create for PostgreSQL {
                     aws_credentials_envs,
                 ) {
                     Ok(Some(true)) => {}
-                    _ => return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(Kind::Application, self.id().to_string(), self.context().execution_id().to_string())))),
+                    _ => {
+                        return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(
+                            Kind::Application,
+                            self.id().to_string(),
+                            self.context().execution_id().to_string(),
+                        ))))
+                    }
                 }
             }
         }

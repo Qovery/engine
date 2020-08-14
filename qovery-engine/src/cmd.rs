@@ -177,7 +177,7 @@ where
     Err(CmdError::Exec(exit_status))
 }
 
-pub fn terraform_exec_with_init_validate_plan_apply(
+fn terraform_exec_with_init_validate_plan(
     root_dir: &str,
     first_time_init_terraform: bool,
 ) -> Result<(), CmdError> {
@@ -196,14 +196,30 @@ pub fn terraform_exec_with_init_validate_plan_apply(
     // terraform plan
     terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"])?;
 
+    Ok(())
+}
+
+pub fn terraform_exec_with_init_validate_plan_apply(
+    root_dir: &str,
+    first_time_init_terraform: bool,
+) -> Result<(), CmdError> {
+    // terraform init and plan
+    terraform_exec_with_init_validate_plan(root_dir, first_time_init_terraform);
+
     // terraform apply
     terraform_exec(root_dir, vec!["apply", "-auto-approve", "tf_plan"])?;
 
     Ok(())
 }
 
-pub fn terraform_exec_destroy(root_dir: &str) -> Result<(), CmdError> {
-    terraform_exec(root_dir, vec!["destroy", "-auto-approve", "-no-color"])
+pub fn terraform_exec_with_init_validate_plan_destroy(root_dir: &str) -> Result<(), CmdError> {
+    // terraform init and plan
+    terraform_exec_with_init_validate_plan(root_dir, false);
+
+    // terraform destroy
+    terraform_exec(root_dir, vec!["destroy", "-auto-approve"]);
+
+    Ok(())
 }
 
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {

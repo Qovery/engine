@@ -15,7 +15,7 @@ use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
-use crate::cloud_provider::service::{Service, ServiceType, ServiceError};
+use crate::cloud_provider::service::{Service, ServiceError, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::workspace_directory;
@@ -373,7 +373,7 @@ impl<'a> Kubernetes for EKS<'a> {
             "kubernetes",
             0,
             "start to create EKS cluster",
-            self.context.execution_id()
+            self.context.execution_id(),
         ));
 
         let temp_dir = workspace_directory(
@@ -454,9 +454,6 @@ impl<'a> Kubernetes for EKS<'a> {
             format!("bootstrap/{}", self.name()),
         );
 
-        // TODO delete s3 bucket?
-        // TODO delete dynamodb table?
-
         // generate terraform files and copy them into temp dir
         let context = self.tera_context();
         let _ = crate::template::generate_and_copy_all_files_into_dir(
@@ -465,7 +462,18 @@ impl<'a> Kubernetes for EKS<'a> {
             &context,
         )?;
 
-        let _ = crate::cmd::terraform_exec_destroy(temp_dir.as_str())?;
+        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = crate::template::copy_non_template_files(
+            format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+            common_charts_temp_dir.as_str(),
+        )?;
+
+        let _ = crate::cmd::terraform_exec_with_init_validate_plan_destroy(temp_dir.as_str())?;
+
+        // TODO: delete s3 bucket
+        // TODO: delete dynamodb table
 
         Ok(())
     }
