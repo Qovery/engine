@@ -43,6 +43,20 @@ spec:
         appId: {{ id }}
         app: {{ name }}
     spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                    - {{ name }}
+                  - key: "envId"
+                    operator: In
+                    values:
+                    - {{ environment_id }}
+              topologyKey: "kubernetes.io/hostname"
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
       securityContext: {}
