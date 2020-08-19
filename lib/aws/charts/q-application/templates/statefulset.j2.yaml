@@ -1,7 +1,7 @@
-{%- if not is_storage %}
+{%- if is_storage %}
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ name }}
   namespace: {{ namespace }}
@@ -12,8 +12,7 @@ metadata:
     app: {{ name }}
 spec:
   replicas: {{ total_instances }}
-  strategy:
-    type: RollingUpdate
+  serviceName: {{ name }}
   selector:
     matchLabels:
       ownerId: {{ owner_id }}
@@ -74,4 +73,49 @@ spec:
             requests:
               cpu: {{ total_cpus }}
               memory: {{ total_ram_in_mib }}Mi
+          volumeMounts:
+{%- for s in storage %}
+            - name: {{ s.id }}
+              mountPath: {{ s.mount_point }}
+{%- endfor %}
+  volumeClaimTemplates:
+{%- for s in storage %}
+{% if clone %}
+  - metadata:
+      name: {{ s.id }}
+      labels:
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ id }}
+        app: {{ name }}
+        diskId: {{ s.id }}
+        diskType: {{ s.storage_type }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
+      dataSource:
+        name: {{ s.id }}
+        kind: PersistentVolumeClaim
+      resources:
+        requests:
+          storage: {{ disk.size_in_gib }}Gi
+{% else %}
+  - metadata:
+      name: {{ s.id }}
+      labels:
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ id }}
+        diskId: {{ s.id }}
+        diskType: {{ s.storage_type }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
+      resources:
+        requests:
+          storage: {{ s.size_in_gib }}Gi
+{%- endif %}
+{%- endfor %}
 {%- endif %}
