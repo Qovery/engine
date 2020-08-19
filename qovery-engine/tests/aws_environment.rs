@@ -263,7 +263,7 @@ fn delete_a_working_development_environment_on_aws_eks() {
 
     let ea = EnvironmentAction::Environment(environment);
 
-    match delete_environment(&context, &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
