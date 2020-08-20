@@ -58,6 +58,26 @@ resource "helm_release" "fluent_bit" {
     value = "localhost"
   }
 
+  set {
+    name = "resources.limits.cpu"
+    value = "200m"
+  }
+
+  set {
+    name = "resources.requests.cpu"
+    value = "50m"
+  }
+
+  set {
+    name = "resources.limits.memory"
+    value = "64Mi"
+  }
+
+  set {
+    name = "resources.requests.memory"
+    value = "64Mi"
+  }
+
   // AWS direct authentication is not production ready
 //  set {
 //    name = "image.fluent_bit.tag"

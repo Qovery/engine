@@ -7,5 +7,25 @@ resource "helm_release" "externaldns" {
 
   values = [file("chart_values/external-dns.yaml")]
 
+  set {
+    name = "resources.limits.cpu"
+    value = "50m"
+  }
+
+  set {
+    name = "resources.requests.cpu"
+    value = "50m"
+  }
+
+  set {
+    name = "resources.limits.memory"
+    value = "50Mi"
+  }
+
+  set {
+    name = "resources.requests.memory"
+    value = "50Mi"
+  }
+
   depends_on = [aws_eks_cluster.eks_cluster]
 }
