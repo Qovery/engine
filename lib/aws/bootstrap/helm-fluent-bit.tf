@@ -135,5 +135,9 @@ resource "helm_release" "fluent_bit" {
 //    value = aws_iam_access_key.fluent-bit.secret
 //  }
 
-  depends_on = [aws_eks_cluster.eks_cluster, helm_release.prometheus_operator]
+  depends_on = [
+    aws_eks_cluster.eks_cluster,
+    helm_release.prometheus_operator,
+    helm_release.aws_vpc_cni,
+  ]
 }

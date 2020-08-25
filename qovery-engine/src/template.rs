@@ -1,8 +1,12 @@
-use std::fs;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
+use std::{fs, io};
 
 use itertools::Itertools;
+use std::ffi::OsStr;
+use std::fs::File;
+use std::os::unix::fs::PermissionsExt;
+use std::process::Command;
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
@@ -128,13 +132,27 @@ pub fn write_rendered_templates(
         let _ = fs::remove_file(dest.as_str());
 
         // create an empty file
-        let mut f = fs::File::create(dest)?;
+        let mut f = fs::File::create(&dest)?;
 
         // write rendered template into the new file
         f.write_all(rt.content.as_bytes())?;
+
+        // perform spcific action based on the extension
+        let extension = Path::new(&dest).extension().and_then(OsStr::to_str);
+        match extension {
+            Some("sh") => set_file_permission(&f, 0o755),
+            _ => {}
+        }
     }
 
     Ok(())
+}
+
+pub fn set_file_permission(f: &File, mode: u32) {
+    let metadata = f.metadata().unwrap();
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(mode);
+    f.set_permissions(permissions).unwrap();
 }
 
 pub struct RenderedTemplate {

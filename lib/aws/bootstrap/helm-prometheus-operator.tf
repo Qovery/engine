@@ -18,5 +18,8 @@ resource "helm_release" "prometheus_operator" {
     value = "prometheus-operator"
   }
 
-  depends_on = [aws_eks_cluster.eks_cluster]
+  depends_on = [
+    aws_eks_cluster.eks_cluster,
+    helm_release.aws_vpc_cni,
+  ]
 }

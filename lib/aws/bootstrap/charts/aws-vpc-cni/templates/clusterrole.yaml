@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "aws-vpc-cni.fullname" . }}
+  labels:
+{{ include "aws-vpc-cni.labels" . | indent 4 }}
+rules:
+  - apiGroups:
+      - crd.k8s.amazonaws.com
+    resources:
+      - "*"
+      - namespaces
+    verbs:
+      - "*"
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - namespaces
+    verbs: ["list", "watch", "get"]
+  - apiGroups: ["extensions"]
+    resources:
+      - daemonsets
+    verbs: ["list", "watch"]

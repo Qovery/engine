@@ -50,6 +50,7 @@ resource "helm_release" "elasticsearch_curator" {
 
   depends_on = [
     aws_eks_cluster.eks_cluster,
-    aws_elasticsearch_domain.qovery_eks_logs
+    aws_elasticsearch_domain.qovery_eks_logs,
+    helm_release.aws_vpc_cni,
   ]
 }

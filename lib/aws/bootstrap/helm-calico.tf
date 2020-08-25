@@ -1,10 +1,13 @@
 
 resource "helm_release" "calico" {
   name = "calico"
-  chart = "charts/calico"
+  chart = "charts/aws-calico"
   namespace = "kube-system"
   atomic = true
   max_history = 50
 
-  depends_on = [aws_eks_cluster.eks_cluster]
+  depends_on = [
+    aws_eks_cluster.eks_cluster,
+    helm_release.aws_vpc_cni,
+  ]
 }
