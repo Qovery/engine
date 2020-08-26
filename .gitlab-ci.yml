@@ -6,6 +6,7 @@ services:
 stages:
   - build
   - release
+  - set_ga
 
 before_script:
   - test -z $KUBERNETES_PORT || export DOCKER_HOST=tcp://127.0.0.1:2375
@@ -15,6 +16,10 @@ wip-build:
   retry: 0
   script:
     - ./helper.sh build_image
+  except:
+    refs:
+      - dev
+      - master
 
 dev-build:
   stage: build
@@ -47,7 +52,17 @@ master-release:
   stage: release
   retry: 1
   script:
-    - ./helper.sh new_ga_release
+    - ./helper.sh new_release
+  when: manual
+  only:
+    refs:
+      - master
+
+master-set-ga:
+  stage: set_ga
+  retry: 2
+  script:
+    - ./helper.sh set_release_ga
   when: manual
   only:
     refs:

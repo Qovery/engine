@@ -92,9 +92,8 @@ function new_release() { ## Release a new engine version with commit ID as tag
   echo -e "\e[92mNew image name is: qoveryrd/engine:${tag}\e[0m"
 }
 
-function new_ga_release() { ## Release a new engine version and mark it as globally available
+function set_release_ga() { ## Release a new engine version and mark it as globally available
   tag=$(get_commit_id)
-  new_release
   # Note: this is the dev version for the moment as the prod one is not released yet
   curl -X PUT -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://api-dev.qovery.com/api/v1/engine-version?type=ga&version=${tag}"
 }
@@ -111,6 +110,9 @@ new_release)
   ;;
 push_image)
   push_image
+  ;;
+set_release_ga)
+  set_release_ga
   ;;
 *)
   echo "Usage: $0 <option>"
