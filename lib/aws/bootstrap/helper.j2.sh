@@ -104,6 +104,15 @@ function delete_cni_managed_by_aws() { ## Delete the CNI not handled by helm. Ar
   exit 0
 }
 
+function get_engine_version_to_use() { ## get the engine version for a given cluster. Args: token, api_fqdn, cluster_id
+  ENGINE_VERSION_CONTROLLER_TOKEN=$1
+  API_FQDN=$2
+  CLUSTER_ID=$3
+  API_URL="https://$API_FQDN/api/v1/engine-version"
+
+  curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "$API_URL?type=cluster&clusterId=$CLUSTER_ID" && exit 0
+}
+
 case $1 in
   create_elasticsearch_role_for_aws_service)
     check_args 2
@@ -121,6 +130,10 @@ case $1 in
   delete_cni_managed_by_aws)
     check_args 1
     delete_cni_managed_by_aws "$2"
+  ;;
+  get_engine_version_to_use)
+    check_args 3
+    get_engine_version_to_use "$2" "$3" "$4"
   ;;
   *)
     help

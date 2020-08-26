@@ -83,14 +83,21 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
   fi
 }
 
-function new_release() { ## Generate a new release with commit ID as tag
-    check_untracked_files
-    build_image
-    push_image
-    s3_upload_resources
-    echo -e "\e[92mNew image name is: qoveryrd/engine:${tag}\e[0m"
+function new_release() { ## Release a new engine version with commit ID as tag
+  tag=$(get_commit_id)
+  check_untracked_files
+  build_image
+  push_image
+  s3_upload_resources
+  echo -e "\e[92mNew image name is: qoveryrd/engine:${tag}\e[0m"
 }
 
+function new_ga_release() { ## Release a new engine version and mark it as globally available
+  tag=$(get_commit_id)
+  new_release
+  # Note: this is the dev version for the moment as the prod one is not released yet
+  curl -X PUT -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://api-dev.qovery.com/api/v1/engine-version?type=ga&version=${tag}"
+}
 
 case $1 in
 build_image)

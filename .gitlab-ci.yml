@@ -5,18 +5,49 @@ services:
 
 stages:
   - build
+  - release
 
 before_script:
   - test -z $KUBERNETES_PORT || export DOCKER_HOST=tcp://127.0.0.1:2375
 
-master:
+wip-build:
   stage: build
   retry: 0
   script:
-    - git fetch origin
-    - git checkout master
-    - git reset --hard origin/master
+    - ./helper.sh build_image
+
+dev-build:
+  stage: build
+  retry: 0
+  script:
+    - ./helper.sh build_image
+  only:
+    refs:
+      - dev
+
+dev-release:
+  stage: release
+  retry: 1
+  script:
     - ./helper.sh new_release
+  only:
+    refs:
+      - dev
+
+master-build:
+  stage: build
+  retry: 0
+  script:
+    - ./helper.sh build_image
+  only:
+    refs:
+      - master
+
+master-release:
+  stage: release
+  retry: 1
+  script:
+    - ./helper.sh new_ga_release
   when: manual
   only:
     refs:

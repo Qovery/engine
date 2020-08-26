@@ -113,6 +113,17 @@ variable "ec2_ssh_default_key" {
   type = map(string)
 }
 
+# Engine info
+
+variable "qovery_engine_info" {
+  description = "Qovery engine info"
+  default = {
+    "token" = "{{ engine_version_controller_token }}"
+    "api_fqdn" = "{{ qovery_api_url }}"
+  }
+  type = map(string)
+}
+
 # RDS
 
 variable "rds_subnets_zone_a" {

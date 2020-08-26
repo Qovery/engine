@@ -232,6 +232,8 @@ impl<'a> EKS<'a> {
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
         let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.cloud_provider.organization_id());
+        let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
+        let qovery_api_url = "api-dev.qovery.com";
         let rds_cidr_subnet = "23";
         let documentdb_cidr_subnet = "23";
         let elasticsearch_cidr_subnet = "23";
@@ -247,8 +249,14 @@ impl<'a> EKS<'a> {
             .join(",");
 
         let mut context = TeraContext::new();
-
+        // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
+        context.insert("qovery_api_url", &qovery_api_url);
+        context.insert(
+            "engine_version_controller_token",
+            &engine_version_controller_token,
+        );
+
         // DNS configuration
         context.insert("managed_dns", &managed_dns);
         context.insert("managed_dns_helm_format", &managed_dns_helm_format);

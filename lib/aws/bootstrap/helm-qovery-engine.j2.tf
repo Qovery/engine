@@ -1,5 +1,5 @@
-locals {
-  qovery_engine_version = "afea2cfc117b1d67926983269eed678a6cc83364"
+data "external" "get_engine_version_to_use" {
+  program = ["./helper.sh", "get_engine_version_to_use", var.qovery_engine_info.token, var.qovery_engine_info.api_fqdn, var.eks_cluster_id]
 }
 
 resource "helm_release" "qovery_engine_resources" {
@@ -13,12 +13,12 @@ resource "helm_release" "qovery_engine_resources" {
 
   set {
     name = "image.tag"
-    value = local.qovery_engine_version
+    value = data.external.get_engine_version_to_use.result.version
   }
 
   set {
     name = "environmentVariables.ENGINE_RES_URL"
-    value = "https://prod-qengine-resources.s3.eu-west-3.amazonaws.com/${local.qovery_engine_version}-lib.tgz"
+    value = "https://prod-qengine-resources.s3.eu-west-3.amazonaws.com/${data.external.get_engine_version_to_use.result.version}-lib.tgz"
   }
 
   set {

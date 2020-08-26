@@ -1,13 +1,3 @@
-//# Dirty trick used with those data because TF do not support label filters and deamonset yet
-//data "external" "delete_cni_managed_by_aws" {
-//  program = ["./helper.sh", "delete_cni_managed_by_aws", local_file.kubeconfig.filename]
-//
-//  depends_on = [
-//    aws_eks_cluster.eks_cluster,
-//    local_file.kubeconfig,
-//  ]
-//}
-
 # On the first boot, it's required to remove the existing CNI to get them managed by helm
 resource "null_resource" "delete_aws_managed_cni" {
   provisioner "local-exec" {
