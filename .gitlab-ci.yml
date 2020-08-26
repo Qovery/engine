@@ -53,7 +53,6 @@ master-release:
   retry: 1
   script:
     - ./helper.sh new_release
-  when: manual
   only:
     refs:
       - master
