@@ -14,6 +14,10 @@ provider "external" {
   version = "~> 1.2"
 }
 
+provider "null" {
+  version = "~> 2.1"
+}
+
 provider "helm" {
   version = "~> 1.2"
   kubernetes {
