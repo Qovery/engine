@@ -315,7 +315,7 @@ datasources:
     datasources:
       - name: Prometheus
         type: prometheus
-        url: "http://prometheus-prometheus-oper-prometheus:9090"
+        url: "http://prometheus-operator-prometheus:9090"
         access: proxy
         isDefault: true
 
