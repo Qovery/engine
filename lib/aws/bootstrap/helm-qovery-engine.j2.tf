@@ -46,6 +46,27 @@ resource "helm_release" "qovery_engine_resources" {
     value = "info"
   }
 
+  # Limits
+  set {
+    name = "resources.limits.cpu"
+    value = "200m"
+  }
+
+  set {
+    name = "resources.requests.cpu"
+    value = "200m"
+  }
+
+  set {
+    name = "resources.limits.memory"
+    value = "512Mi"
+  }
+
+  set {
+    name = "resources.requests.memory"
+    value = "512Mi"
+  }
+
   depends_on = [
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,

@@ -60,6 +60,27 @@ resource "helm_release" "iam_eks_user_mapper" {
     value = "Admins"
   }
 
+  # Limits
+  set {
+    name = "resources.limits.cpu"
+    value = "20m"
+  }
+
+  set {
+    name = "resources.requests.cpu"
+    value = "10m"
+  }
+
+  set {
+    name = "resources.limits.memory"
+    value = "32Mi"
+  }
+
+  set {
+    name = "resources.requests.memory"
+    value = "32Mi"
+  }
+
   depends_on = [
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,

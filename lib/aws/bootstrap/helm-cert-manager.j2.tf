@@ -43,6 +43,69 @@ resource "helm_release" "cert_manager" {
     value = "qovery"
   }
 
+  # Limits
+  set {
+    name = "resources.limits.cpu"
+    value = "200m"
+  }
+
+  set {
+    name = "resources.requests.cpu"
+    value = "100m"
+  }
+
+  set {
+    name = "resources.limits.memory"
+    value = "512Mi"
+  }
+
+  set {
+    name = "resources.requests.memory"
+    value = "256Mi"
+  }
+
+  # Limits webhook
+  set {
+    name = "webhook.resources.limits.cpu"
+    value = "20m"
+  }
+
+  set {
+    name = "webhook.resources.requests.cpu"
+    value = "20m"
+  }
+
+  set {
+    name = "webhook.resources.limits.memory"
+    value = "32Mi"
+  }
+
+  set {
+    name = "webhook.resources.requests.memory"
+    value = "32Mi"
+  }
+
+  # Limits cainjector
+  set {
+    name = "cainjector.resources.limits.cpu"
+    value = "500m"
+  }
+
+  set {
+    name = "cainjector.resources.requests.cpu"
+    value = "100m"
+  }
+
+  set {
+    name = "cainjector.resources.limits.memory"
+    value = "512Mi"
+  }
+
+  set {
+    name = "cainjector.resources.requests.memory"
+    value = "256Mi"
+  }
+
   depends_on = [
     aws_eks_cluster.eks_cluster,
     helm_release.prometheus_operator,

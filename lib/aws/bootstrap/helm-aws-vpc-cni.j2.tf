@@ -64,6 +64,27 @@ resource "helm_release" "aws_vpc_cni" {
     value = "100"
   }
 
+  # Limits
+  set {
+    name = "resources.limits.cpu"
+    value = "200m"
+  }
+
+  set {
+    name = "resources.requests.cpu"
+    value = "50m"
+  }
+
+  set {
+    name = "resources.limits.memory"
+    value = "128Mi"
+  }
+
+  set {
+    name = "resources.requests.memory"
+    value = "128Mi"
+  }
+
   depends_on = [
     aws_eks_cluster.eks_cluster,
     null_resource.delete_aws_managed_cni,
