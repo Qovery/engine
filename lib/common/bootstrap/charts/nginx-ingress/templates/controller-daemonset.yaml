@@ -11,7 +11,7 @@ metadata:
     release: {{ template "nginx-ingress.releaseLabel" . }}
     app.kubernetes.io/component: controller
   name: {{ template "nginx-ingress.controller.fullname" . }}
-  annotations:
+  annotations:    
 {{ toYaml .Values.controller.deploymentAnnotations | indent 4}}
 spec:
   selector:

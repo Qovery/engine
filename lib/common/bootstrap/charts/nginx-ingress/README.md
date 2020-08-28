@@ -306,7 +306,7 @@ The port NLB `80` will be mapped to nginx container port `80` and NLB port `443`
 ```
 controller:
   config:
-    ssl-redirect: "false" # we use `special` port to control ssl redirection
+    ssl-redirect: "false" # we use `special` port to control ssl redirection 
     server-snippet: |
       listen 8000;
       if ( $server_port = 80 ) {
