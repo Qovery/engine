@@ -1,0 +1,51 @@
+charts:
+  - name: cert-manager
+    version: v0.16.0
+    repo_name: jetstack
+  - name: external-dns
+    repo_name: bitnami
+    version: 3.2.3
+  - name: fluent-bit
+    repo_name: lifen
+    version: 2.8.0
+  - name: grafana
+    version: 5.3.4
+  - name: nginx-ingress
+    version: 1.40.2
+  - name: prometheus-operator
+    version: 8.15.12
+  - name: elasticsearch-curator
+    version: 2.1.5
+  - name: aws-node-termination-handler
+    repo_name: aws
+    dest: aws-bootstrap
+    version: 0.8.0
+  - name: amazon-vpc-cni
+    repo_name: aws
+    dest: aws-bootstrap
+    version: 1.0.9
+  - name: aws-calico
+    repo_name: aws
+    dest: aws-bootstrap
+    version: 0.3.1
+
+repos:
+  - name: jetstack
+    url: https://charts.jetstack.io
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+  - name: lifen
+    url: https://honestica.github.io/lifen-charts
+  - name: aws
+    url: https://aws.github.io/eks-charts
+
+destinations:
+  - name: default
+    path: common/bootstrap/charts
+  - name: aws-bootstrap
+    path: aws/bootstrap/charts
+
+#charts:
+#  - name: aws-limits-exporter
+#    repo_name:
+#    version:
