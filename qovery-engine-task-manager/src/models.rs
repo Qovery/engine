@@ -268,3 +268,18 @@ impl Response {
         serde_json::to_string(self).unwrap()
     }
 }
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CheckTask {
+    pub is_running: bool,
+}
+
+impl CheckTask {
+    pub fn new(is_running: bool) -> Self {
+        CheckTask { is_running }
+    }
+
+    pub fn as_json_string(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}

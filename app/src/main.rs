@@ -17,7 +17,7 @@ use crossbeam_channel::{unbounded, Sender};
 use nats::{Connection, Subscription};
 
 use qovery_engine_shared::{subject, Mode};
-use qovery_engine_task_manager::models::{Request, Response};
+use qovery_engine_task_manager::models::{CheckTask, Request, Response};
 use qovery_engine_task_manager::task_manager::{InternalTask, Status, Task, TaskManager};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
@@ -34,6 +34,7 @@ use std::sync::{Arc, Mutex};
 
 const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";
 const CORE_PING_SUBJECT: &str = "core.ping";
+const ENGINE_TASK_RUNNING_CHECK_SUBJECT: &str = "engine.task_running_check";
 
 enum TaskSelector {
     Infrastructure(&'static str),
@@ -85,6 +86,71 @@ fn subject_name(mode: &Mode, task_selector: &TaskSelector) -> String {
     )
 }
 
+/// check that the same task is not running on another instance of Q-engine.
+/// we use the task.group_id() to determine if it is the case
+fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> bool {
+    let subject_name = subject(&mode, ENGINE_TASK_RUNNING_CHECK_SUBJECT);
+    let sub = match nc.request_multi(subject_name.as_str(), task.group_id()) {
+        Ok(sub) => sub,
+        Err(_) => {
+            error!(
+                "can't check that the task '{}' with group id '{}' is running or not,\
+             then act like it was already running to prevent critical outage",
+                task.id(),
+                task.group_id()
+            );
+            return true;
+        }
+    };
+
+    for msg in sub.next() {
+        let is_task_running = match serde_json::from_slice::<CheckTask>(msg.data.as_slice()) {
+            Ok(check_task) => check_task.is_running,
+            Err(err) => panic!(err),
+        };
+
+        msg.respond(Response::new(None).as_json_string());
+
+        if is_task_running {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn listen_for_task_running_check_events(
+    task_manager: Arc<Mutex<TaskManager>>,
+    nc: &Connection,
+    mode: &Mode,
+) -> Result<Subscription, Error> {
+    let subject_name = subject(&mode, ENGINE_TASK_RUNNING_CHECK_SUBJECT);
+    let sub = nc.queue_subscribe(subject_name.as_str(), subject_name.as_str())?;
+    info!("subscribe to {}", subject_name.as_str());
+
+    sub.clone().with_handler(move |msg| {
+        let group_id = String::from_utf8(msg.data.clone()).unwrap();
+
+        let is_running = match task_manager
+            .lock()
+            .unwrap()
+            .get_task_status_by_group_id(&group_id)
+        {
+            Some(status) => match status {
+                Status::Running { .. } => true,
+                _ => false,
+            },
+            None => false,
+        };
+
+        let _ = msg.respond(CheckTask::new(is_running).as_json_string());
+
+        Ok(())
+    });
+
+    Ok(sub)
+}
+
 fn listen_for_events(
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -97,38 +163,55 @@ fn listen_for_events(
     let sub = nc.queue_subscribe(subject_name.as_str(), subject_name.as_str())?;
     info!("subscribe to {}", subject_name.as_str());
 
-    let _ = sub.clone().with_handler(move |msg| {
-        debug!("{}", msg);
-        match serde_json::from_slice::<Request>(msg.data.as_slice()) {
-            Ok(req) => {
-                let context = Context::new(
-                    req.id.as_str(),
-                    workspace_root_dir.as_str(),
-                    lib_root_dir.as_str(),
-                );
+    let nc = nc.clone();
+    let sub_1 = sub.clone();
+    let mode = mode.clone();
 
-                tx.send(match task_selector {
-                    TaskSelector::Infrastructure(_) => {
-                        Box::new(InfrastructureTask::new(context, req))
-                    }
-                    TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(context, req)),
+    thread::spawn(move || {
+        let nc = nc.clone();
+
+        loop {
+            for msg in sub.next() {
+                debug!("{}", msg);
+
+                let nc_1 = nc.clone();
+                let mode = mode.clone();
+                let pre_run_callback = Box::new(move |task: &dyn Task| {
+                    is_the_same_task_running(task, nc_1.clone(), mode.clone())
                 });
-                msg.respond(Response::new(None).as_json_string());
-            }
-            Err(err) => {
-                error!("{}", msg);
-                error!(
-                    "receiving request but JSON decoding error occurred: {:?}",
-                    err
-                );
-                msg.respond(Response::new(Some(err.to_string())).as_json_string());
-            }
-        };
 
-        Ok(())
+                match serde_json::from_slice::<Request>(msg.data.as_slice()) {
+                    Ok(req) => {
+                        let context = Context::new(
+                            req.id.as_str(),
+                            workspace_root_dir.as_str(),
+                            lib_root_dir.as_str(),
+                        );
+
+                        tx.send(match task_selector {
+                            TaskSelector::Infrastructure(_) => {
+                                Box::new(InfrastructureTask::new(context, req, pre_run_callback))
+                            }
+                            TaskSelector::Environment(_) => {
+                                Box::new(EnvironmentTask::new(context, req, pre_run_callback))
+                            }
+                        });
+                        msg.respond(Response::new(None).as_json_string());
+                    }
+                    Err(err) => {
+                        error!("{}", msg);
+                        error!(
+                            "receiving request but JSON decoding error occurred: {:?}",
+                            err
+                        );
+                        msg.respond(Response::new(Some(err.to_string())).as_json_string());
+                    }
+                };
+            }
+        }
     });
 
-    Ok(sub)
+    Ok(sub_1)
 }
 
 /// Notify the core server that this engine exists and is running

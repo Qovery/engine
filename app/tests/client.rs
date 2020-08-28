@@ -38,6 +38,16 @@ fn create_infrastructure() -> Result<(), Error> {
 }
 
 #[test]
+fn create_qovery_infrastructure() -> Result<(), Error> {
+    send_nats_request(
+        "tests/assets/create-qovery-infrastructure.json",
+        "engine.cloud.adwopakdpo221.aws.us-east-2.infrastructure",
+    )?;
+
+    Ok(())
+}
+
+#[test]
 fn create_environment() -> Result<(), Error> {
     send_nats_request(
         "tests/assets/create-environment.json",

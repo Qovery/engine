@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::iter::Map;
 use std::mem::ManuallyDrop;
@@ -7,12 +6,16 @@ use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, Instant};
 
-use crate::models::Request;
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use evmap::{ReadHandle, WriteHandle};
+use serde::{Deserialize, Serialize};
+
 use qovery_engine::transaction::{ActionContext, Kind};
 
+use crate::models::Request;
+
 pub type Id = String;
+pub type GroupId = Id;
 pub type Message = Result<InternalTask, Error>;
 
 pub struct TaskManager {
@@ -49,27 +52,12 @@ impl TaskManager {
     }
 
     pub fn add_task(&mut self, task: Box<dyn Task>) {
-        let _ = match self.end_task_sig_receiver.try_recv() {
-            Ok(x) => {
-                if x {
-                    // stop accepting new task
-                    return;
-                } else {
-                    ()
-                }
-            }
-            Err(_) => (),
-        };
-
-        let task_id = task.id().to_string();
-        self.status_by_task_id_w
-            .lock()
-            .unwrap()
-            .insert(task_id.to_string(), Status::Waiting { message: None, context: ActionContext::new(Kind::Execution, task_id.to_string(), task_id.to_string()) }).refresh();
-
-        let _ = self.it_sender.send(InternalTask {
-            task, status: Status::Waiting { message: None, context: ActionContext::new(Kind::Execution, task_id.to_string(), task_id.to_string()) },
-        });
+        add_task(
+            &self.end_task_sig_receiver,
+            &self.status_by_task_id_w,
+            &self.it_sender,
+            task,
+        );
     }
 
     pub fn remaining_tasks_to_run(&self) -> usize {
@@ -87,6 +75,11 @@ impl TaskManager {
         }
     }
 
+    pub fn get_task_status_by_group_id(&self, group_id: &GroupId) -> Option<Status> {
+        // id and group_id should be unique, so we use the same data structure to store them all
+        self.get_task_status(group_id)
+    }
+
     /// gracefully end the remaining tasks but stop accepting new ones
     pub fn stop(&self) {
         self.end_task_sig_sender.send(true);
@@ -100,20 +93,23 @@ impl TaskManager {
         // only one run allowed
         self.running = true;
 
-        let (tx, rx) = unbounded::<Message>();
+        let (tx_run_msg, rx_run_msg) = unbounded::<Message>();
+        let self_it_sender = self.it_sender.clone();
         let self_it_receiver = self.it_receiver.clone();
-        let self_end_task_receiver = self.end_task_sig_receiver.clone();
+        let self_end_task_sig_receiver = self.end_task_sig_receiver.clone();
         let self_task_terminated_sender = self.task_terminated_sender.clone();
 
-        let receiver = rx.clone();
-        let w = self.status_by_task_id_w.clone();
+        let rx_run_msg_2 = rx_run_msg.clone();
+        let status_by_task_id_w_1 = self.status_by_task_id_w.clone();
+        let status_by_task_id_w_2 = self.status_by_task_id_w.clone();
 
         thread::spawn(move || loop {
-            match receiver.recv() {
+            match rx_run_msg_2.recv() {
                 Ok(msg) => {
                     let msg = msg.unwrap();
                     // update task status
-                    w.lock()
+                    status_by_task_id_w_1
+                        .lock()
                         .unwrap()
                         .empty(msg.task.id().to_string())
                         .insert(msg.task.id().to_string(), msg.status)
@@ -128,25 +124,44 @@ impl TaskManager {
                 Ok(internal_task) => {
                     let start_time = Instant::now();
 
-                    // run task
-                    internal_task.task.run(tx.clone());
+                    // does the task is validated to be run?
+                    if internal_task.task.pre_run() {
+                        // run task
+                        internal_task.task.run(tx_run_msg.clone());
 
-                    info!(
-                        "task {} took {:?} to be executed",
-                        internal_task.task.id(),
-                        start_time.elapsed()
-                    );
+                        info!(
+                            "task {} took {:?} to be executed",
+                            internal_task.task.id(),
+                            start_time.elapsed()
+                        );
 
-                    if self_it_receiver.is_empty() && self_end_task_receiver.try_recv().is_ok() {
-                        info!("no remaining task to run - shutdown task manager");
-                        self_task_terminated_sender.send(true);
-                    } else if self_it_receiver.len() > 0 {
-                        info!("it remains {} tasks to run", self_it_receiver.len());
+                        if self_it_receiver.is_empty()
+                            && self_end_task_sig_receiver.try_recv().is_ok()
+                        {
+                            info!("no remaining task to run - shutdown task manager");
+                            self_task_terminated_sender.send(true);
+                        } else if self_it_receiver.len() > 0 {
+                            info!("it remains {} tasks to run", self_it_receiver.len());
+                        }
+                    } else {
+                        // postpone the task
+                        info!("postpone task id {}", internal_task.task.id());
+
+                        // re-add the task
+                        add_task(
+                            &self_end_task_sig_receiver,
+                            &status_by_task_id_w_2,
+                            &self_it_sender,
+                            internal_task.task,
+                        );
+
+                        // wait a few seconds
+                        thread::sleep(Duration::from_secs(5))
                     }
                 }
                 Err(err) => {
                     sleep(Duration::from_secs(1));
-                    if self_end_task_receiver.try_recv().is_ok() {
+                    if self_end_task_sig_receiver.try_recv().is_ok() {
                         info!("shutdown task manager");
                         self_task_terminated_sender.send(true);
                     }
@@ -154,13 +169,61 @@ impl TaskManager {
             };
         });
 
-        Ok(rx)
+        Ok(rx_run_msg)
     }
 }
 
+fn add_task(
+    end_task_sig_receiver: &Receiver<bool>,
+    status_by_task_id_w: &Arc<Mutex<WriteHandle<Id, Status>>>,
+    it_sender: &Sender<InternalTask>,
+    task: Box<dyn Task>,
+) {
+    let _ = match end_task_sig_receiver.try_recv() {
+        Ok(x) => {
+            if x {
+                // stop accepting new task
+                return;
+            } else {
+                ()
+            }
+        }
+        Err(_) => (),
+    };
+
+    let task_id = task.id().to_string();
+    status_by_task_id_w
+        .lock()
+        .unwrap()
+        .insert(
+            task_id.to_string(),
+            Status::Waiting {
+                message: None,
+                context: ActionContext::new(
+                    Kind::Execution,
+                    task_id.to_string(),
+                    task_id.to_string(),
+                ),
+            },
+        )
+        .refresh();
+
+    let _ = it_sender.send(InternalTask {
+        task,
+        status: Status::Waiting {
+            message: None,
+            context: ActionContext::new(Kind::Execution, task_id.to_string(), task_id.to_string()),
+        },
+    });
+}
+
 pub trait Task: Send {
+    fn group_id(&self) -> &str;
     fn id(&self) -> &str;
     fn update_status(&self, sender: &Sender<Message>, status: Status);
+    /// return true if you want to run it now, or false if you want to run this task later.
+    /// this function is called just before `run()` is called.
+    fn pre_run(&self) -> bool;
     fn run(&self, sender: Sender<Message>);
 }
 
@@ -172,12 +235,30 @@ pub struct InternalTask {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Status {
-    Waiting { message: Option<String>, context: ActionContext },
-    Running { message: Option<String>, context: ActionContext },
-    Warning { message: Option<String>, context: ActionContext },
-    Error { message: Option<String>, context: ActionContext },
-    Failed { message: Option<String>, context: ActionContext },
-    Done { message: Option<String>, context: ActionContext },
+    Waiting {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    Running {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    Warning {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    Error {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    Failed {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    Done {
+        message: Option<String>,
+        context: ActionContext,
+    },
 }
 
 impl evmap::ShallowCopy for Status {
