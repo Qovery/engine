@@ -70,8 +70,10 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
   file="${file_prefix}-lib.tgz"
   resource="/${bucket}/${file}"
 
+  set +e
   aws s3api get-object-tagging --bucket prod-qengine-resources --key $file 2>/dev/null
   if [ $? -ne 0 ] ; then
+    set -e
     echo "Pushing lib to s3"
     tar czf $file --exclude='*/bootstrap' lib
     aws s3 cp $file s3://$bucket
