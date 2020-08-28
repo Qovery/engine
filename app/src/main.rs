@@ -381,6 +381,9 @@ pub fn main() -> Result<(), Error> {
         }
     });
 
+    let task_running_check_sub =
+        listen_for_task_running_check_events(task_manager.clone(), &nc, &mode)?;
+
     let infrastructure_sub = listen_for_events(
         workspace_root_dir.clone(),
         lib_root_dir.clone(),
@@ -408,6 +411,7 @@ pub fn main() -> Result<(), Error> {
         let _ = sig_term_rx.recv();
         warn!("Termination signal received - graceful termination in progress...");
         // unsubscribe listeners
+        task_running_check_sub.unsubscribe();
         infrastructure_sub.unsubscribe();
         environment_sub.unsubscribe();
         task_manager.lock().unwrap().stop();
