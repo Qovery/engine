@@ -177,7 +177,7 @@ fn listen_for_events(
                 let nc_1 = nc.clone();
                 let mode = mode.clone();
                 let pre_run_callback = Box::new(move |task: &dyn Task| {
-                    is_the_same_task_running(task, nc_1.clone(), mode.clone())
+                    !is_the_same_task_running(task, nc_1.clone(), mode.clone())
                 });
 
                 match serde_json::from_slice::<Request>(msg.data.as_slice()) {

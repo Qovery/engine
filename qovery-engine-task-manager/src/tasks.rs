@@ -38,6 +38,15 @@ impl InfrastructureTask {
             pre_run_callback: Arc::new(pre_run_callback),
         }
     }
+
+    fn infrastructure_id(&self) -> String {
+        format!(
+            "{}-{}-{}",
+            self.request.cloud_provider.id.as_str(),
+            self.request.container_registry.id.as_str(),
+            self.request.build_platform.id.as_str()
+        )
+    }
 }
 
 impl Task for InfrastructureTask {
@@ -62,19 +71,19 @@ impl Task for InfrastructureTask {
     }
 
     fn run(&self, sender: Sender<Message>) {
-        info!("infrastructure task {} started", self.id());
+        info!(
+            "infrastructure task {} started with infrastructure id {}",
+            self.id(),
+            self.infrastructure_id()
+        );
+
         self.update_status(
             &sender,
             Status::Running {
                 message: None,
                 context: ActionContext::new(
-                    Kind::Environment,
-                    self.request
-                        .target_environment
-                        .as_ref()
-                        .unwrap()
-                        .id
-                        .to_string(),
+                    Kind::Infrastructure,
+                    self.infrastructure_id(),
                     self.id().to_string(),
                 ),
             },
@@ -98,13 +107,8 @@ impl Task for InfrastructureTask {
                     Status::Failed {
                         message: None,
                         context: ActionContext::new(
-                            Kind::Environment,
-                            self.request
-                                .target_environment
-                                .as_ref()
-                                .unwrap()
-                                .id
-                                .to_string(),
+                            Kind::Infrastructure,
+                            self.infrastructure_id(),
                             self.id().to_string(),
                         ),
                     },
@@ -119,13 +123,8 @@ impl Task for InfrastructureTask {
                 Status::Failed {
                     message: None,
                     context: ActionContext::new(
-                        Kind::Environment,
-                        self.request
-                            .target_environment
-                            .as_ref()
-                            .unwrap()
-                            .id
-                            .to_string(),
+                        Kind::Infrastructure,
+                        self.infrastructure_id(),
                         self.id().to_string(),
                     ),
                 },
@@ -161,13 +160,8 @@ impl Task for InfrastructureTask {
                     Status::Done {
                         message: None,
                         context: ActionContext::new(
-                            Kind::Environment,
-                            self.request
-                                .target_environment
-                                .as_ref()
-                                .unwrap()
-                                .id
-                                .to_string(),
+                            Kind::Infrastructure,
+                            self.infrastructure_id(),
                             self.id().to_string(),
                         ),
                     },
@@ -178,26 +172,16 @@ impl Task for InfrastructureTask {
                 let err: Option<ServiceError> = Option::from(commit_err);
                 let ac = match err {
                     None => ActionContext::new(
-                        Kind::Environment,
-                        self.request
-                            .target_environment
-                            .as_ref()
-                            .unwrap()
-                            .id
-                            .to_string(),
+                        Kind::Infrastructure,
+                        self.infrastructure_id(),
                         self.id().to_string(),
                     ),
                     Some(x) => {
                         let option: Option<ActionContext> = Option::from(x);
                         match option {
                             None => ActionContext::new(
-                                Kind::Environment,
-                                self.request
-                                    .target_environment
-                                    .as_ref()
-                                    .unwrap()
-                                    .id
-                                    .to_string(),
+                                Kind::Infrastructure,
+                                self.infrastructure_id(),
                                 self.id().to_string(),
                             ),
                             Some(ac) => ac,
@@ -217,26 +201,16 @@ impl Task for InfrastructureTask {
                 let err: Option<ServiceError> = Option::from(commit_err);
                 let ac = match err {
                     None => ActionContext::new(
-                        Kind::Environment,
-                        self.request
-                            .target_environment
-                            .as_ref()
-                            .unwrap()
-                            .id
-                            .to_string(),
+                        Kind::Infrastructure,
+                        self.infrastructure_id(),
                         self.id().to_string(),
                     ),
                     Some(x) => {
                         let option: Option<ActionContext> = Option::from(x);
                         match option {
                             None => ActionContext::new(
-                                Kind::Environment,
-                                self.request
-                                    .target_environment
-                                    .as_ref()
-                                    .unwrap()
-                                    .id
-                                    .to_string(),
+                                Kind::Infrastructure,
+                                self.infrastructure_id(),
                                 self.id().to_string(),
                             ),
                             Some(ac) => ac,
