@@ -37,6 +37,11 @@ resource "helm_release" "nginx_ingress" {
   timeout = 300
   values = [file("chart_values/nginx-ingress.yaml")]
 
+  set {
+    name = "priorityClassName"
+    value = "high-priority"
+  }
+
   # Controller resources
   set {
     name = "controller.resources.limits.cpu"
