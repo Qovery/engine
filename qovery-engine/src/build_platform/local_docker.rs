@@ -26,10 +26,16 @@ impl LocalDocker {
     }
 
     fn image_does_exist(&self, image: &Image) -> Result<bool, BuildError> {
+        let envs = match self.context.docker_tcp_socket() {
+            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
+            None => vec![],
+        };
+
         Ok(
-            match crate::cmd::exec(
+            match crate::cmd::exec_with_envs(
                 "docker",
                 vec!["image", "inspect", image.name_with_tag().as_str()],
+                envs,
             ) {
                 Ok(_) => true,
                 _ => false,
@@ -136,15 +142,26 @@ impl BuildPlatform for LocalDocker {
             args
         };
 
+        let envs = match self.context.docker_tcp_socket() {
+            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
+            None => vec![],
+        };
+
         // docker build
-        let exit_status = cmd::exec_with_output(
+        let exit_status = cmd::exec_with_envs_and_output(
             "docker",
             final_args,
+            envs,
             |line| {
                 let line_string = line.unwrap();
                 info!("{}", line_string.as_str());
 
-                listeners_helper.on_progress(ProgressInfo::new("build", 50, line_string.as_str(), self.context.execution_id()));
+                listeners_helper.on_progress(ProgressInfo::new(
+                    "build",
+                    50,
+                    line_string.as_str(),
+                    self.context.execution_id(),
+                ));
             },
             |line| {
                 let line_string = line.unwrap();
@@ -157,7 +174,12 @@ impl BuildPlatform for LocalDocker {
             Err(_) => return Err(BuildError::Error),
         }
 
-        listeners_helper.on_complete(ProgressInfo::new("build", 100, "build done", self.context.execution_id()));
+        listeners_helper.on_complete(ProgressInfo::new(
+            "build",
+            100,
+            "build done",
+            self.context.execution_id(),
+        ));
 
         Ok(BuildResult { build })
     }
@@ -166,7 +188,12 @@ impl BuildPlatform for LocalDocker {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
         let listener_helper = ListenersHelper::new(&self.listeners);
-        listener_helper.on_error(ProgressInfo::new("build", 100, "something goes wrong", self.context.execution_id()));
+        listener_helper.on_error(ProgressInfo::new(
+            "build",
+            100,
+            "something goes wrong",
+            self.context.execution_id(),
+        ));
 
         // FIXME
         Err(BuildError::Error)

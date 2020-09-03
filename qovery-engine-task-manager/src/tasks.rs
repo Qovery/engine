@@ -105,7 +105,7 @@ impl Task for InfrastructureTask {
                 self.update_status(
                     &sender,
                     Status::Failed {
-                        message: Some("failed to get engine session".to_string()),
+                        message: Some(format!("failed to get engine session {:?}", err)),
                         context: ActionContext::new(
                             Kind::Infrastructure,
                             self.infrastructure_id(),

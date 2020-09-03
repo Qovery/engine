@@ -76,7 +76,12 @@ impl ContainerRegistry for DockerHub {
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {
-        match cmd::exec(
+        let envs = match self.context.docker_tcp_socket() {
+            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
+            None => vec![],
+        };
+
+        match cmd::exec_with_envs(
             "docker",
             vec![
                 "login",
@@ -85,6 +90,7 @@ impl ContainerRegistry for DockerHub {
                 "-p",
                 self.password.as_str(),
             ],
+            envs.clone(),
         ) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
@@ -95,13 +101,14 @@ impl ContainerRegistry for DockerHub {
         };
 
         let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
-        match cmd::exec(
+        match cmd::exec_with_envs(
             "docker",
             vec![
                 "tag",
                 dest.as_str(),
                 format!("{}/{}", self.login.as_str(), dest.as_str()).as_str(),
             ],
+            envs.clone(),
         ) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
@@ -111,7 +118,7 @@ impl ContainerRegistry for DockerHub {
             _ => {}
         };
 
-        match cmd::exec("docker", vec!["push", dest.as_str()]) {
+        match cmd::exec_with_envs("docker", vec!["push", dest.as_str()], envs) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
                 CmdError::Io(err) => panic!(err),

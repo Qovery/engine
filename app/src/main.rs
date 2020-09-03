@@ -3,19 +3,25 @@ extern crate log;
 #[macro_use]
 extern crate serde;
 
-mod constants;
-
-use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{Error, Read, Write};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, thread};
 
+use chrono::{DateTime, Utc};
 use crossbeam_channel::{unbounded, Sender};
+use dirs::home_dir;
+use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
 use nats::{Connection, Subscription};
+use retry::delay::Fibonacci;
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
 
+use qovery_engine::models::Context;
 use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::{CheckTask, Request, Response};
 use qovery_engine_task_manager::task_manager::{InternalTask, Status, Task, TaskManager};
@@ -23,14 +29,8 @@ use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::constants::ASCII_BANNER;
 use crate::TaskSelector::{Environment, Infrastructure};
-use chrono::{DateTime, Utc};
-use dirs::home_dir;
-use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
-use qovery_engine::models::Context;
-use retry::delay::Fibonacci;
-use retry::OperationResult;
-use std::path::Path;
-use std::sync::{Arc, Mutex};
+
+mod constants;
 
 const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";
 const CORE_PING_SUBJECT: &str = "core.ping";
@@ -154,6 +154,7 @@ fn listen_for_task_running_check_events(
 fn listen_for_events(
     workspace_root_dir: String,
     lib_root_dir: String,
+    docker_tcp_socket: Option<String>,
     task_selector: TaskSelector,
     nc: &Connection,
     mode: &Mode,
@@ -186,6 +187,7 @@ fn listen_for_events(
                             req.id.as_str(),
                             workspace_root_dir.as_str(),
                             lib_root_dir.as_str(),
+                            docker_tcp_socket.clone(),
                         );
 
                         tx.send(match task_selector {
@@ -266,6 +268,7 @@ pub fn main() -> Result<(), Error> {
     let region = env::var("REGION");
     let nats_server = env::var("NATS_SERVER").expect("NATS_SERVER is mandatory");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or("lib".to_string());
+    let docker_host = env::var("DOCKER_HOST").ok();
     let workspace_root_dir = env::var("WORKSPACE_ROOT_DIR").unwrap_or(format!(
         "{}/.qovery-workspace",
         home_dir().unwrap().to_str().unwrap()
@@ -387,6 +390,7 @@ pub fn main() -> Result<(), Error> {
     let infrastructure_sub = listen_for_events(
         workspace_root_dir.clone(),
         lib_root_dir.clone(),
+        docker_host.clone(),
         Infrastructure("infrastructure"),
         &nc,
         &mode,
@@ -396,6 +400,7 @@ pub fn main() -> Result<(), Error> {
     let environment_sub = listen_for_events(
         workspace_root_dir,
         lib_root_dir,
+        docker_host,
         Environment("environment"),
         &nc,
         &mode,

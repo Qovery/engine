@@ -491,14 +491,21 @@ pub struct Context {
     execution_id: String,
     workspace_root_dir: String,
     lib_root_dir: String,
+    docker_host: Option<String>,
 }
 
 impl Context {
-    pub fn new(execution_id: &str, workspace_root_dir: &str, lib_root_dir: &str) -> Self {
+    pub fn new(
+        execution_id: &str,
+        workspace_root_dir: &str,
+        lib_root_dir: &str,
+        docker_host: Option<String>,
+    ) -> Self {
         Context {
             execution_id: execution_id.to_string(),
             workspace_root_dir: workspace_root_dir.to_string(),
             lib_root_dir: lib_root_dir.to_string(),
+            docker_host,
         }
     }
 
@@ -512,5 +519,9 @@ impl Context {
 
     pub fn lib_root_dir(&self) -> &str {
         self.lib_root_dir.as_str()
+    }
+
+    pub fn docker_tcp_socket(&self) -> &Option<String> {
+        &self.docker_host
     }
 }

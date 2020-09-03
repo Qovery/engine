@@ -103,12 +103,21 @@ impl ECR {
         }
     }
 
+    fn docker_envs(&self) -> Vec<(&str, &str)> {
+        match self.context.docker_tcp_socket() {
+            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
+            None => vec![],
+        }
+    }
+
     fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, PushError> {
         // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
         // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
-        match cmd::exec(
+
+        match cmd::exec_with_envs(
             "docker",
             vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
+            self.docker_envs(),
         ) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
@@ -119,7 +128,7 @@ impl ECR {
         };
 
         // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
-        match cmd::exec("docker", vec!["push", dest.as_str()]) {
+        match cmd::exec_with_envs("docker", vec!["push", dest.as_str()], self.docker_envs()) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
                 CmdError::Io(err) => panic!(err),
@@ -282,7 +291,7 @@ impl ContainerRegistry for ECR {
             _ => return Err(PushError::RepositoryInitFailure),
         };
 
-        match cmd::exec(
+        match cmd::exec_with_envs(
             "docker",
             vec![
                 "login",
@@ -292,6 +301,7 @@ impl ContainerRegistry for ECR {
                 password.as_str(),
                 endpoint_url.as_str(),
             ],
+            self.docker_envs(),
         ) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
