@@ -23,7 +23,7 @@ resource "helm_release" "qovery_engine_resources" {
 
   set {
     name = "environmentVariables.NATS_SERVER"
-    value = "nats://panic.qovery.com:4242"
+    value = "panic.qovery.com:4242"
   }
 
   set {
@@ -44,6 +44,11 @@ resource "helm_release" "qovery_engine_resources" {
   set {
     name = "environmentVariables.RUST_LOG"
     value = "info"
+  }
+
+  set {
+    name = "environmentVariables.LIB_ROOT_DIR"
+    value = "/home/qovery/lib"
   }
 
   # Limits
