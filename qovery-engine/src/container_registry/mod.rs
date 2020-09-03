@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
 pub mod docker_hub;
+pub mod docr;
 pub mod ecr;
 
 pub trait ContainerRegistry {
@@ -41,6 +42,7 @@ pub enum PushError {
 pub enum Kind {
     DockerHub,
     ECR,
+    DOCR,
 }
 
 #[derive(Debug, Eq, PartialEq)]

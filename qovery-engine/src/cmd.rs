@@ -188,6 +188,7 @@ fn terraform_exec_with_init_validate_plan(
         vec!["init"]
     };
 
+    //TODO print
     terraform_exec(root_dir, init_args)?;
 
     // terraform validate config
