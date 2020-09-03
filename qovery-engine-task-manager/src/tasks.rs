@@ -105,7 +105,7 @@ impl Task for InfrastructureTask {
                 self.update_status(
                     &sender,
                     Status::Failed {
-                        message: None,
+                        message: Some("failed to get engine session".to_string()),
                         context: ActionContext::new(
                             Kind::Infrastructure,
                             self.infrastructure_id(),
@@ -121,7 +121,7 @@ impl Task for InfrastructureTask {
             self.update_status(
                 &sender,
                 Status::Failed {
-                    message: None,
+                    message: Some("session is None, what's wrong?".to_string()),
                     context: ActionContext::new(
                         Kind::Infrastructure,
                         self.infrastructure_id(),
@@ -188,10 +188,13 @@ impl Task for InfrastructureTask {
                         }
                     }
                 };
+
                 self.update_status(
                     &sender,
                     Status::Failed {
-                        message: None,
+                        message: Some(
+                            "deployment has failed but rollback has succeeded".to_string(),
+                        ),
                         context: ac,
                     },
                 )
@@ -217,10 +220,11 @@ impl Task for InfrastructureTask {
                         }
                     }
                 };
+
                 self.update_status(
                     &sender,
                     Status::Failed {
-                        message: None,
+                        message: Some("deployment and rollback have failed".to_string()),
                         context: ac,
                     },
                 )
