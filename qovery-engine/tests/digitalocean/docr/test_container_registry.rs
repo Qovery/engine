@@ -11,3 +11,6 @@ fn create_do_repository_on_container_registry() {}
 
 #[test]
 fn delete_do_repository_on_container_registry() {}
+
+#[test]
+fn push_sample_image_on_container_registry() {}
