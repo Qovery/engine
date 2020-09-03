@@ -10,7 +10,7 @@ use std::borrow::Borrow;
 use test_utilities::AWS_KUBERNETES_VERSION;
 
 #[test]
-fn create_kube_cluster_in_nyc_1() {
+fn create_eks_cluster_in_us_east_2() {
     test_utilities::init();
 
     let context = test_utilities::context();
@@ -45,7 +45,7 @@ fn create_kube_cluster_in_nyc_1() {
 }
 
 #[test]
-fn create_kube_cluster_in_fra_1() {
+fn create_eks_cluster_in_eu_west_3() {
     test_utilities::init();
 
     let context = test_utilities::context();
