@@ -74,6 +74,8 @@ pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
     )
 }
 
+pub fn container_registry_digital_ocean(context: &context) -> DOContainerRegistry {}
+
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(
         context.clone(),

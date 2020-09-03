@@ -45,5 +45,8 @@ rusoto_eks = "0.44.0"
 rusoto_s3 = "0.44.0"
 rusoto_dynamodb = "0.44.0"
 
+# Digital Ocean Deps
+digitalocean = "0.1.1"
+
 [dev-dependencies]
 test-utilities = { path = "test_utilities" }
