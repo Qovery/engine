@@ -78,6 +78,11 @@ resource "helm_release" "fluent_bit" {
     value = "64Mi"
   }
 
+  set {
+    name = "priorityClassName"
+    value = "medium-priority"
+  }
+
   // AWS direct authentication is not production ready
 //  set {
 //    name = "image.fluent_bit.tag"
