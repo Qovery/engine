@@ -11,6 +11,7 @@ HELM_VERSION="3.2.4"
 KUBECTL_VERSION="1.18.6"
 AWS_IAM_AUTHENTICATOR_VERSION="0.5.1"
 DUMB_INIT_VERSION="1.2.2"
+DOCTL_VERSION="1.46.0"
 
 function check_num_args() {
   desired_number=$1
@@ -46,6 +47,10 @@ function download() { ## Download prerequisites binaries for the engine
   curl -sLo dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_${ARCH}
   mv dumb-init $BIN_DEST_FOLDER/
 
+  # DigitalOcean Doctl
+  curl -sLo doctl https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-${SYSTEM}-${ARCH}.tar.gz
+  mv doctl $BIN_DEST_FOLDER/doctl${DOCTL_VERSION}
+
   chmod 755 $BIN_DEST_FOLDER/*
 }
 
@@ -56,6 +61,7 @@ function install() { ## Make symlinks to install binaries in default PATH
   ln -s $BIN_DIR/terraform${TERRAFORM_VERSION} /usr/bin/terraform
   ln -s $BIN_DIR/kubectl${KUBECTL_VERSION} /usr/bin/kubectl
   ln -s $BIN_DIR/aws-iam-authenticator${AWS_IAM_AUTHENTICATOR_VERSION} /usr/bin/aws-iam-authenticator
+  ln -s $BIN_DIR/doctl${DOCTL_VERSION} /usr/bin/doctl
 
   # Generate all symlinks at once
   ln -s $BIN_DIR/* /usr/bin/
