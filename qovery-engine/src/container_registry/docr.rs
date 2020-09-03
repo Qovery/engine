@@ -1,11 +1,11 @@
+use crate::build_platform::Image;
+use crate::cmd;
+use crate::cmd::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
 use crate::models::{Context, ProgressListener};
-use crate::cmd;
-use crate::cmd::CmdError;
 use std::rc::Rc;
-use crate::build_platform::Image;
 
 pub struct DOCR {
     context: Context,
@@ -24,12 +24,12 @@ impl DOCR {
 }
 
 impl ContainerRegistry for DOCR {
-    fn context(&Self) -> &Context {
+    fn context(&self) -> &Context {
         &self.context
     }
 
     fn kind(&self) -> Kind {
-       Kind::DOCR
+        Kind::DOCR
     }
 
     fn id(&self) -> &str {
