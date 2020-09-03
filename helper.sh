@@ -68,6 +68,7 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
   bucket=prod-qengine-resources
   file_prefix=$(get_commit_id)
   file="${file_prefix}-lib.tgz"
+  file_with_bootstrap="${file_prefix}-lib-with-bootstrap.tgz"
   resource="/${bucket}/${file}"
 
   set +e
@@ -76,9 +77,13 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
     set -e
     echo "Pushing lib to s3"
     tar czf $file --exclude='*/bootstrap' lib
+    tar czf $file_with_bootstrap lib
     aws s3 cp $file s3://$bucket
+    aws s3 cp $file_with_bootstrap s3://$bucket
     aws s3api put-object-acl --bucket $bucket --key $file --acl public-read
+    aws s3api put-object-acl --bucket $bucket --key $file_with_bootstrap --acl public-read
     rm -f $file
+    rm -f $file_with_bootstrap
   else
     echo "File $file already exists in bucket $bucket"
     exit 1
