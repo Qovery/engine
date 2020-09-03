@@ -14,6 +14,11 @@ resource "helm_release" "elasticsearch_curator" {
   }
 
   set {
+    name = "priorityClassName"
+    value = "medium-priority"
+  }
+
+  set {
     name = "image.tag"
     value = "5.8.1-aws"
   }

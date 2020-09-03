@@ -1,0 +1,23 @@
+kind: PriorityClass
+apiVersion: scheduling.k8s.io/v1
+metadata:
+  name: high-priority
+value: 1000000
+globalDefault: false
+description: "This priority class should be used for Infra high level pods."
+---
+kind: PriorityClass
+apiVersion: scheduling.k8s.io/v1
+metadata:
+  name: medium-priority
+value: 10000
+globalDefault: false
+description: "This priority class should be used for Infra medium level pods."
+---
+kind: PriorityClass
+apiVersion: scheduling.k8s.io/v1
+metadata:
+  name: low-priority
+value: 100
+globalDefault: true
+description: "This priority class should be used for clients applications"
