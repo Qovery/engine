@@ -51,6 +51,11 @@ resource "helm_release" "qovery_engine_resources" {
     value = "/home/qovery/lib"
   }
 
+  set {
+    name = "environmentVariables.DOCKER_HOST"
+    value = "tcp://0.0.0.0:2375"
+  }
+
   # Limits
   set {
     name = "resources.limits.cpu"
