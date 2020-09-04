@@ -13,9 +13,9 @@ use std::rc::Rc;
 // see https://www.digitalocean.com/community/tutorials/how-to-use-doctl-the-official-digitalocean-command-line-client
 
 pub struct DOCR {
-    context: Context,
-    registry_name: String,
-    api_key: String,
+    pub context: Context,
+    pub registry_name: String,
+    pub api_key: String,
 }
 
 impl DOCR {
@@ -30,7 +30,7 @@ impl DOCR {
         DigitalOcean::new(self.api_key.as_str()).unwrap()
     }
 
-    fn create_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
+    pub fn create_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
         match cmd::exec(
             "doctl",
             vec![
@@ -51,7 +51,7 @@ impl DOCR {
         Ok(())
     }
 
-    fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, PushError> {
+    pub fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, PushError> {
         match cmd::exec(
             "docker",
             vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
