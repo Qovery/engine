@@ -9,6 +9,9 @@ use crate::models::{Context, ProgressListener};
 use digitalocean::DigitalOcean;
 use std::rc::Rc;
 
+// TODO : use --output json
+// see https://www.digitalocean.com/community/tutorials/how-to-use-doctl-the-official-digitalocean-command-line-client
+
 pub struct DOCR {
     context: Context,
     registry_name: String,
@@ -48,9 +51,37 @@ impl DOCR {
         Ok(())
     }
 
+    fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, PushError> {
+        match cmd::exec(
+            "docker",
+            vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
+        ) {
+            Err(err) => match err {
+                CmdError::Exec(_exit_status) => return Err(PushError::ImageTagFailed),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
+            },
+            _ => {}
+        };
+
+        match cmd::exec("docker", vec!["push", dest.as_str()]) {
+            Err(err) => match err {
+                CmdError::Exec(_exit_status) => return Err(PushError::ImagePushFailed),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
+            },
+            _ => {}
+        };
+
+        let mut image = image.clone();
+        image.registry_url = Some(dest);
+
+        Ok(PushResult { image })
+    }
+
     fn get_or_create_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
-        // TODO check if repository exist
-        create_repository(&image)
+        // TODO check if repository really exist
+        self.create_repository(&_image)
     }
 
     fn delete_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
@@ -145,7 +176,7 @@ impl ContainerRegistry for DOCR {
         };
         //TODO check force or not
         let dest = format!("{}:{}", self.registry_name.as_str(), image.tag.as_str());
-        self.push_image(dest, image)
+        self.push_image(dest, &image)
     }
 
     fn push_error(&self, _image: &Image) -> Result<PushResult, PushError> {
