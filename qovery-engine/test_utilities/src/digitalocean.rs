@@ -1,13 +1,18 @@
 use digitalocean::DigitalOcean;
+use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::container_registry::docr;
 use qovery_engine::container_registry::docr::DOCR;
+use qovery_engine::engine::Engine;
+use qovery_engine::models::Context;
+
+use crate::utilities::build_platform_local_docker;
 
 //TODO: should be environment var
 pub const DIGITAL_OCEAN_TOKEN: &str =
     "34158dea3388309455954a9602be686de63b84ca6374db04588e818731ccf184";
 pub const DIGITAL_OCEAN_URL: &str = "https://api.digitalocean.com/v2/";
 
-pub fn container_registry_digital_ocean(context: &context) -> DOContainerRegistry {
+pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     DOCR::new(context.clone(), "qovery-registry", DIGITAL_OCEAN_TOKEN)
 }
 
@@ -26,6 +31,6 @@ pub fn docker_cr_do_engine(context: &Context) -> Engine {
     )
 }
 
-pub fn cloud_provider_digitalocean(context: &Context) -> DigitalOcean {
+pub fn cloud_provider_digitalocean(context: &Context) -> DO {
     DO::new(context.clone(), "test", DIGITAL_OCEAN_TOKEN)
 }

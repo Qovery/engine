@@ -5,8 +5,8 @@ use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
     CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesRequest, Ecr, EcrClient,
-    GetAuthorizationTokenRequest, GetAuthorizationTokenResponse, ImageDetail, ImageIdentifier,
-    ListImagesRequest, PutLifecyclePolicyRequest, Repository,
+    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest,
+    Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -18,7 +18,6 @@ use crate::container_registry::{
 };
 use crate::models::{Context, Listeners, ProgressListener};
 use crate::runtime::async_run;
-use crate::transaction::CommitError::PushImage;
 
 pub struct ECR {
     context: Context,
@@ -120,7 +119,7 @@ impl ECR {
             self.docker_envs(),
         ) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
+                CmdError::Exec(_exit_status) => return Err(PushError::ImageTagFailed),
                 CmdError::Io(err) => panic!(err),
                 CmdError::Unexpected(err) => panic!(err),
             },
@@ -130,7 +129,7 @@ impl ECR {
         // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
         match cmd::exec_with_envs("docker", vec!["push", dest.as_str()], self.docker_envs()) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
+                CmdError::Exec(_exit_status) => return Err(PushError::ImagePushFailed),
                 CmdError::Io(err) => panic!(err),
                 CmdError::Unexpected(err) => panic!(err),
             },
@@ -224,7 +223,7 @@ impl ContainerRegistry for ECR {
         let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
-            Ok(x) => Ok(()),
+            Ok(_x) => Ok(()),
             Err(err) => Err(ContainerRegistryError::from(err)),
         }
     }
@@ -304,7 +303,7 @@ impl ContainerRegistry for ECR {
             self.docker_envs(),
         ) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
+                CmdError::Exec(_exit_status) => return Err(PushError::CredentialsError),
                 CmdError::Io(err) => panic!(err),
                 CmdError::Unexpected(err) => panic!(err),
             },
@@ -340,7 +339,7 @@ impl ContainerRegistry for ECR {
         self.push_image(dest, image)
     }
 
-    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
+    fn push_error(&self, _image: &Image) -> Result<PushResult, PushError> {
         unimplemented!()
     }
 }

@@ -71,7 +71,7 @@ impl ContainerRegistry for DockerHub {
         Ok(())
     }
 
-    fn does_image_exists(&self, image: &Image) -> bool {
+    fn does_image_exists(&self, _image: &Image) -> bool {
         false // TODO check if image exists on the remote repository
     }
 
@@ -133,7 +133,7 @@ impl ContainerRegistry for DockerHub {
         Ok(PushResult { image })
     }
 
-    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
+    fn push_error(&self, _image: &Image) -> Result<PushResult, PushError> {
         unimplemented!()
     }
 }

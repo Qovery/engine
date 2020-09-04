@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::build_platform::error::BuildPlatformError;
 use crate::git::Credentials;
-use crate::models::{Context, Listeners, ProgressListener};
+use crate::models::{Context, ProgressListener};
 use std::rc::Rc;
 
 pub mod error;

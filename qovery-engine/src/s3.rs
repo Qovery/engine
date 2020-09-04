@@ -7,7 +7,7 @@ use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, GetObjectError,
     GetObjectRequest, PutBucketVersioningRequest, S3Client, VersioningConfiguration, S3,
 };
-use std::fs;
+
 use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::path::Path;

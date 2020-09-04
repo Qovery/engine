@@ -1,11 +1,3 @@
-use std::fs::File;
-use std::io::{Error, Write};
-use std::path::Path;
-use std::str::FromStr;
-
-use tera::Context as TeraContext;
-
-use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -13,16 +5,15 @@ use crate::cloud_provider::service::{
     Action, Create, Delete, Pause, Router as RRouter, Service, ServiceError, ServiceType,
     StatelessService,
 };
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
-use crate::cmd::CmdError;
+use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
 use crate::transaction::{ActionContext, Kind};
 use dns_lookup::lookup_host;
-use itertools::enumerate;
-use retry::delay::{Exponential, Fibonacci};
+use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
+use tera::Context as TeraContext;
 
 pub struct Router {
     context: Context,

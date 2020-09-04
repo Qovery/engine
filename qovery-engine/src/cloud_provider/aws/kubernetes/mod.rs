@@ -1,26 +1,18 @@
-use dirs::home_dir;
 use itertools::Itertools;
 use rusoto_core::Region;
-use rusoto_s3::CreateBucketConfiguration;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-use std::io::{Error, ErrorKind};
-use std::path::Path;
 use std::str::FromStr;
-use tera::Error as TeraError;
-use tera::{Context as TeraContext, Tera};
-use walkdir::WalkDir;
+use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
-use crate::cloud_provider::service::{Service, ServiceError, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
-use crate::cmd::{exec_with_envs_and_output, exec_with_output, CmdError};
 use crate::fs::workspace_directory;
 use crate::models::{Context, Listeners, ListenersHelper, ProgressInfo, ProgressListener};
-use crate::{cmd, dynamo_db, fs, s3};
+use crate::{dynamo_db, s3};
 use std::rc::Rc;
 
 pub mod node;
@@ -718,7 +710,7 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn pause_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError> {
+    fn pause_environment_error(&self, _environment: &Environment) -> Result<(), KubernetesError> {
         warn!("EKS.pause_environment_error() called for {}", self.name());
         Ok(())
     }
@@ -807,7 +799,7 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn delete_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError> {
+    fn delete_environment_error(&self, _environment: &Environment) -> Result<(), KubernetesError> {
         warn!("EKS.delete_environment_error() called for {}", self.name());
         Ok(())
     }

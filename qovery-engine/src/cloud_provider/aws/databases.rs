@@ -1,10 +1,5 @@
-use std::io::Error;
-use std::str::FromStr;
-
-use rusoto_core::Region;
 use tera::Context as TeraContext;
 
-use crate::build_platform::Image;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -12,7 +7,7 @@ use crate::cloud_provider::service::{
     Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause,
     Service, ServiceError, ServiceType, StatefulService, Upgrade,
 };
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
 use crate::transaction::{ActionContext, Kind};
@@ -295,7 +290,7 @@ impl Create for PostgreSQL {
 }
 
 impl Pause for PostgreSQL {
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.PostgreSQL.on_pause() called for {}", self.name());
 
         // TODO how to pause production? - the goal is to reduce cost, but it is possible to pause a production env?
@@ -308,7 +303,7 @@ impl Pause for PostgreSQL {
         Ok(())
     }
 
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.PostgreSQL.on_pause_error() called for {}", self.name());
 
         // TODO what to do if there is a pause error?
@@ -337,7 +332,7 @@ impl Delete for PostgreSQL {
 }
 
 impl crate::cloud_provider::service::Clone for PostgreSQL {
-    fn on_clone(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_clone(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
@@ -345,13 +340,13 @@ impl crate::cloud_provider::service::Clone for PostgreSQL {
         unimplemented!()
     }
 
-    fn on_clone_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_clone_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 }
 
 impl Upgrade for PostgreSQL {
-    fn on_upgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_upgrade(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
@@ -359,13 +354,13 @@ impl Upgrade for PostgreSQL {
         unimplemented!()
     }
 
-    fn on_upgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_upgrade_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 }
 
 impl Downgrade for PostgreSQL {
-    fn on_downgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_downgrade(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
@@ -373,13 +368,13 @@ impl Downgrade for PostgreSQL {
         unimplemented!()
     }
 
-    fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_downgrade_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 }
 
 impl Backup for PostgreSQL {
-    fn on_backup(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_backup(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
@@ -387,11 +382,11 @@ impl Backup for PostgreSQL {
         unimplemented!()
     }
 
-    fn on_backup_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_backup_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_restore(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_restore(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
@@ -399,7 +394,7 @@ impl Backup for PostgreSQL {
         unimplemented!()
     }
 
-    fn on_restore_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 }

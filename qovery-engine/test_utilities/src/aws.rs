@@ -17,6 +17,8 @@ use qovery_engine::models::{
 use qovery_engine::session::Session;
 use std::borrow::Borrow;
 
+use crate::utilities::build_platform_local_docker;
+
 pub const AWS_KEY_ID: &str = "AKIAZ4KMLSYJLRGNNFNI";
 pub const AWS_ACCESS_KEY: &str = "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/";
 pub const AWS_DEFAULT_REGION: &str = "us-east-2";
@@ -71,14 +73,6 @@ pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
         "my-default-docker-hub",
         "qoveryrd",
         "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24",
-    )
-}
-
-pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
-    LocalDocker::new(
-        context.clone(),
-        "my-local-docker-id-123",
-        "my-default-local-docker",
     )
 }
 

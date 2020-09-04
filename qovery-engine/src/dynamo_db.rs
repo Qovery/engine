@@ -60,6 +60,6 @@ pub fn create_terraform_table(
                 ))
             }
         },
-        Ok(x) => Ok(()),
+        Ok(_x) => Ok(()),
     }
 }

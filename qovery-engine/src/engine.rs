@@ -79,13 +79,3 @@ impl<'a> Engine {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::engine::Engine;
-
-    #[test]
-    fn read_from_json() {
-        Engine::from_json("");
-    }
-}

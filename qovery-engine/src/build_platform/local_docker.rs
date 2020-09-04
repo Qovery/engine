@@ -1,4 +1,3 @@
-use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::build_platform::error::BuildPlatformError;
@@ -184,7 +183,7 @@ impl BuildPlatform for LocalDocker {
         Ok(BuildResult { build })
     }
 
-    fn build_error(&self, build: Build) -> Result<BuildResult, BuildError> {
+    fn build_error(&self, _build: Build) -> Result<BuildResult, BuildError> {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
         let listener_helper = ListenersHelper::new(&self.listeners);

@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+
 use std::ffi::OsStr;
 use std::io::Error;
 use std::io::{BufRead, BufReader};
@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 use dirs::home_dir;
-use retry::delay::{Exponential, Fibonacci};
+use retry::delay::{Fibonacci};
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
@@ -115,8 +115,8 @@ where
 pub fn exec_with_output<P, F, X>(
     binary: P,
     args: Vec<&str>,
-    mut stdout_output: F,
-    mut stderr_output: X,
+    stdout_output: F,
+    stderr_output: X,
 ) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
@@ -148,8 +148,8 @@ pub fn exec_with_envs_and_output<P, F, X>(
     binary: P,
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-    mut stdout_output: F,
-    mut stderr_output: X,
+    stdout_output: F,
+    stderr_output: X,
 ) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
@@ -416,8 +416,8 @@ pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CmdErro
 pub fn helm_exec_with_output<F, X>(
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-    mut stdout_output: F,
-    mut stderr_output: X,
+    stdout_output: F,
+    stderr_output: X,
 ) -> Result<(), CmdError>
 where
     F: FnMut(Result<String, Error>),
@@ -434,8 +434,8 @@ where
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-    mut stdout_output: F,
-    mut stderr_output: X,
+    stdout_output: F,
+    stderr_output: X,
 ) -> Result<(), CmdError>
 where
     F: FnMut(Result<String, Error>),
@@ -572,9 +572,9 @@ where
     match result {
         Err(err) => match err {
             retry::Error::Operation {
-                error,
-                total_delay,
-                tries,
+                error: _,
+                total_delay: _,
+                tries: _,
             } => Ok(Some(false)),
             retry::Error::Internal(err) => Err(CmdError::Unexpected(err)),
         },

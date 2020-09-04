@@ -2909,6 +2909,7 @@ name = "test-utilities"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "digitalocean",
  "dirs 3.0.1",
  "env_logger",
  "qovery-engine",

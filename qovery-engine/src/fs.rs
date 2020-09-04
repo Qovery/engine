@@ -1,11 +1,11 @@
-use std::borrow::Borrow;
+
 use std::fs;
 use std::fs::{create_dir_all, File};
-use std::io::{Error, ErrorKind, Write};
+use std::io::{Error};
 use std::path::Path;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use dirs::home_dir;
+
+
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use walkdir::WalkDir;

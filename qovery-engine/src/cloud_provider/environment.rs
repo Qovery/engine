@@ -1,8 +1,4 @@
-use crate::cloud_provider::service::{
-    Backup, Create, Delete, Downgrade, Service, ServiceError, StatefulService, StatelessService,
-    Upgrade,
-};
-use std::borrow::Borrow;
+use crate::cloud_provider::service::{ServiceError, StatefulService, StatelessService};
 
 pub struct Environment {
     namespace: String,
