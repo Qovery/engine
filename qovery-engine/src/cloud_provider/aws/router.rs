@@ -160,27 +160,29 @@ impl Router {
                 }
 
                 // Check if there is a custom domain first
-                let external_ingress_hostname_custom =
-                    crate::cmd::kubectl_exec_get_external_ingress_hostname(
-                        kubernetes_config_file_path_string.as_str(),
-                        environment.namespace(),
-                        "app=nginx-ingress,component=controller",
-                        self.aws_credentials_envs(aws).to_vec(),
-                    );
+                if !self.custom_domains.is_empty() {
+                    let external_ingress_hostname_custom =
+                        crate::cmd::kubectl_exec_get_external_ingress_hostname(
+                            kubernetes_config_file_path_string.as_str(),
+                            environment.namespace(),
+                            "app=nginx-ingress,component=controller",
+                            self.aws_credentials_envs(aws).to_vec(),
+                        );
 
-                match external_ingress_hostname_custom {
-                    Ok(external_ingress_hostname_custom) => {
-                        match external_ingress_hostname_custom {
-                            Some(hostname) => context
-                                .insert("external_ingress_hostname_custom", hostname.as_str()),
-                            None => {
-                                warn!("unable to get external_ingress_hostname_custom - what's wrong? This must never happened");
+                    match external_ingress_hostname_custom {
+                        Ok(external_ingress_hostname_custom) => {
+                            match external_ingress_hostname_custom {
+                                Some(hostname) => context
+                                    .insert("external_ingress_hostname_custom", hostname.as_str()),
+                                None => {
+                                    warn!("unable to get external_ingress_hostname_custom - what's wrong? This must never happened");
+                                }
                             }
                         }
-                    }
-                    _ => {
-                        // FIXME really?
-                        warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
+                        _ => {
+                            // FIXME really?
+                            warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
+                        }
                     }
                 }
             }
