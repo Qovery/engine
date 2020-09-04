@@ -282,6 +282,11 @@ pub fn main() -> Result<(), Error> {
     info!("lib root dir: {}/", lib_root_dir.as_str());
     info!("workspace root dir: {}", workspace_root_dir.as_str());
 
+    match &docker_host {
+        Some(docker_host) => info!("docker host: {}", docker_host),
+        None => info!("docker host is not set"),
+    };
+
     let mode = if organization.is_ok() && cloud_provider.is_ok() && region.is_ok() {
         let org = organization.unwrap().clone();
         let cp = cloud_provider.unwrap();
