@@ -1,21 +1,17 @@
-use std::borrow::Borrow;
 use std::hash::Hash;
-use std::path::Path;
+
 use std::rc::Rc;
-use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use rusoto_core::Region;
+
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
 use crate::cloud_provider::aws::databases::PostgreSQL;
-use crate::cloud_provider::aws::AWS;
-use crate::cloud_provider::digitalocean::DO;
-use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::{DatabaseOptions, Service, StatefulService, StatelessService};
+
+use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
+use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
-use crate::cloud_provider::{CloudProvider as CP, CloudProvider};
 use crate::git::Credentials;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

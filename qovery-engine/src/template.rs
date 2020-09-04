@@ -1,12 +1,11 @@
+use std::fs;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
-use std::{fs, io};
 
-use itertools::Itertools;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
-use std::process::Command;
+
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;

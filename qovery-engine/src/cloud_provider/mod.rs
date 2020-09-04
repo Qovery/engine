@@ -1,5 +1,3 @@
-use crate::build_platform::Image;
-use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::models::{Context, ProgressListener};

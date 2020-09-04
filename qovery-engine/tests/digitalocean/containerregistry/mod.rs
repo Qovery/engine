@@ -1,4 +1,4 @@
-use qovery_engine::container_registry::DOCR;
+use qovery_engine::container_registry::docr::DOCR;
 extern crate test_utilities;
 
 #[test]

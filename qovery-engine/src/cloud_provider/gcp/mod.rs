@@ -1,4 +1,3 @@
-use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
 use crate::models::{Context, ProgressListener};
 use std::any::Any;
@@ -47,7 +46,7 @@ impl<'x> CloudProvider for GCP {
         Ok(())
     }
 
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+    fn add_listener(&mut self, _listener: Rc<Box<dyn ProgressListener>>) {
         // TODO
     }
 

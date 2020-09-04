@@ -4,7 +4,6 @@ use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
-use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
 use crate::models::{Context, Listeners, ProgressListener};
 use crate::runtime::async_run;
@@ -88,7 +87,7 @@ impl CloudProvider for AWS {
         let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
-            Ok(x) => Ok(()),
+            Ok(_x) => Ok(()),
             Err(err) => Err(CloudProviderError::from(err)),
         }
     }

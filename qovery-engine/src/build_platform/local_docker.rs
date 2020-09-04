@@ -1,4 +1,3 @@
-use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::build_platform::error::BuildPlatformError;
@@ -144,7 +143,12 @@ impl BuildPlatform for LocalDocker {
                 let line_string = line.unwrap();
                 info!("{}", line_string.as_str());
 
-                listeners_helper.on_progress(ProgressInfo::new("build", 50, line_string.as_str(), self.context.execution_id()));
+                listeners_helper.on_progress(ProgressInfo::new(
+                    "build",
+                    50,
+                    line_string.as_str(),
+                    self.context.execution_id(),
+                ));
             },
             |line| {
                 let line_string = line.unwrap();
@@ -157,16 +161,26 @@ impl BuildPlatform for LocalDocker {
             Err(_) => return Err(BuildError::Error),
         }
 
-        listeners_helper.on_complete(ProgressInfo::new("build", 100, "build done", self.context.execution_id()));
+        listeners_helper.on_complete(ProgressInfo::new(
+            "build",
+            100,
+            "build done",
+            self.context.execution_id(),
+        ));
 
         Ok(BuildResult { build })
     }
 
-    fn build_error(&self, build: Build) -> Result<BuildResult, BuildError> {
+    fn build_error(&self, _build: Build) -> Result<BuildResult, BuildError> {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
         let listener_helper = ListenersHelper::new(&self.listeners);
-        listener_helper.on_error(ProgressInfo::new("build", 100, "something goes wrong", self.context.execution_id()));
+        listener_helper.on_error(ProgressInfo::new(
+            "build",
+            100,
+            "something goes wrong",
+            self.context.execution_id(),
+        ));
 
         // FIXME
         Err(BuildError::Error)

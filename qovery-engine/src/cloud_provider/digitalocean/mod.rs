@@ -50,7 +50,7 @@ impl CloudProvider for DO {
         unimplemented!()
     }
 
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+    fn add_listener(&mut self, _listener: Rc<Box<dyn ProgressListener>>) {
         unimplemented!()
     }
 

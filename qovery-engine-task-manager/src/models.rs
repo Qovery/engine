@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::gcp::GCP;
 use qovery_engine::container_registry::docker_hub::DockerHub;
+use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{Context, Environment, EnvironmentAction, ProgressListener};
@@ -134,6 +136,14 @@ impl CloudProvider {
                     "",
                 ))
             }
+            qovery_engine::cloud_provider::Kind::DO => {
+                // FIXME
+                Box::new(DO::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.options.secret_access_key.as_ref().unwrap().as_str(),
+                ))
+            }
         }
     }
 }
@@ -237,13 +247,10 @@ impl ContainerRegistry {
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
                 self.options.region.as_ref().unwrap().as_str(),
             )),
-            qovery_engine::container_registry::Kind::DOCR => Box::new(ECR::new(
+            qovery_engine::container_registry::Kind::DOCR => Box::new(DOCR::new(
                 context.clone(),
-                self.id.as_str(),
                 self.name.as_str(),
-                self.options.access_key_id.as_ref().unwrap().as_str(),
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
-                self.options.region.as_ref().unwrap().as_str(),
             )),
         }
     }

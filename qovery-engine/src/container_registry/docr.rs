@@ -27,7 +27,7 @@ impl DOCR {
         DigitalOcean::new(self.api_key.as_str()).unwrap()
     }
 
-    fn create_repository(&self, image: &Image) -> Result<(), ContainerRegistryError> {
+    fn create_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
         match cmd::exec(
             "doctl",
             vec![
@@ -39,7 +39,7 @@ impl DOCR {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(ContainerRegistryError::Unknown),
+                CmdError::Exec(_exit_status) => return Err(ContainerRegistryError::Unknown),
                 CmdError::Io(err) => panic!(err),
                 CmdError::Unexpected(err) => panic!(err),
             },
@@ -48,7 +48,7 @@ impl DOCR {
         Ok(())
     }
 
-    fn delete_repository(&self, image: &Image) -> Result<(), ContainerRegistryError> {
+    fn delete_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
         match cmd::exec(
             "doctl",
             vec![
@@ -61,7 +61,7 @@ impl DOCR {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(ContainerRegistryError::Unknown),
+                CmdError::Exec(_exit_status) => return Err(ContainerRegistryError::Unknown),
                 CmdError::Io(err) => panic!(err),
                 CmdError::Unexpected(err) => panic!(err),
             },
@@ -92,7 +92,7 @@ impl ContainerRegistry for DOCR {
         unimplemented!()
     }
 
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+    fn add_listener(&mut self, _listener: Rc<Box<dyn ProgressListener>>) {
         unimplemented!()
     }
 
@@ -112,17 +112,17 @@ impl ContainerRegistry for DOCR {
         unimplemented!()
     }
 
-    fn does_image_exists(&self, image: &Image) -> bool {
+    fn does_image_exists(&self, _image: &Image) -> bool {
         unimplemented!()
     }
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
-    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {
-        let mut image = image.clone();
+    fn push(&self, image: &Image, _force_push: bool) -> Result<PushResult, PushError> {
+        let image = image.clone();
         Ok(PushResult { image })
     }
 
-    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
+    fn push_error(&self, _image: &Image) -> Result<PushResult, PushError> {
         unimplemented!()
     }
 }

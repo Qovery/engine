@@ -1,9 +1,8 @@
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::service::{Service, ServiceError};
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cloud_provider::service::ServiceError;
+use crate::cloud_provider::CloudProvider;
 use crate::cmd::CmdError;
 use crate::models::{Context, ProgressListener};
-use crate::transaction::CommitError;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::process::ExitStatus;
@@ -73,12 +72,10 @@ impl From<CmdError> for KubernetesError {
 impl From<KubernetesError> for Option<ServiceError> {
     fn from(item: KubernetesError) -> Self {
         return match item {
-            KubernetesError::Deploy(e) |
-            KubernetesError::Pause(e) |
-            KubernetesError::Delete(e) => { Option::from(e) }
-            _ => {
-                None
+            KubernetesError::Deploy(e) | KubernetesError::Pause(e) | KubernetesError::Delete(e) => {
+                Option::from(e)
             }
+            _ => None,
         };
     }
 }

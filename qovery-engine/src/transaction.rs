@@ -1,20 +1,15 @@
-use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 
-use itertools::Itertools;
-
-use crate::build_platform::{
-    Build, BuildError, BuildOptions, EnvironmentVariable, GitRepository, Image,
-};
+use crate::build_platform::BuildError;
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesError};
 use crate::cloud_provider::service::Application;
-use crate::cloud_provider::service::{Service, ServiceError, StatefulService, StatelessService};
+use crate::cloud_provider::service::ServiceError;
 use crate::cloud_provider::DeployError;
 use crate::container_registry::{PushError, PushResult};
 use crate::engine::Engine;
-use crate::git::Credentials;
+
 use crate::models::{Action, Environment, EnvironmentAction, EnvironmentError};
-use crate::transaction::CommitError::NotValidService;
+
 use serde::{Deserialize, Serialize};
 
 pub struct Transaction<'a> {
@@ -268,7 +263,7 @@ impl<'a> Transaction<'a> {
                         _ => {}
                     };
                 }
-                Step::BuildEnvironment(environment_action, option) => {
+                Step::BuildEnvironment(_environment_action, _option) => {
                     // revert build applications
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
@@ -624,17 +619,27 @@ pub enum RollbackError {
 pub struct ActionContext {
     pub kind: Kind,
     pub id: String,
-    pub execution_id: String
+    pub execution_id: String,
 }
 
 impl ActionContext {
-    pub fn new(kind: Kind, id: String, execution_id: String) -> Self { ActionContext { kind, id, execution_id } }
+    pub fn new(kind: Kind, id: String, execution_id: String) -> Self {
+        ActionContext {
+            kind,
+            id,
+            execution_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
-    Service, Application, Router, Environment, Execution
+    Service,
+    Application,
+    Router,
+    Environment,
+    Execution,
 }
 
 pub enum TransactionResult {

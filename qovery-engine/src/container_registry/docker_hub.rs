@@ -71,11 +71,11 @@ impl ContainerRegistry for DockerHub {
         Ok(())
     }
 
-    fn does_image_exists(&self, image: &Image) -> bool {
+    fn does_image_exists(&self, _image: &Image) -> bool {
         false // TODO check if image exists on the remote repository
     }
 
-    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {
+    fn push(&self, image: &Image, _force_push: bool) -> Result<PushResult, PushError> {
         match cmd::exec(
             "docker",
             vec![
@@ -87,7 +87,7 @@ impl ContainerRegistry for DockerHub {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
+                CmdError::Exec(_exit_status) => return Err(PushError::CredentialsError),
                 CmdError::Io(err) => panic!(err),
                 CmdError::Unexpected(err) => panic!(err),
             },
@@ -104,7 +104,7 @@ impl ContainerRegistry for DockerHub {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
+                CmdError::Exec(_exit_status) => return Err(PushError::ImageTagFailed),
                 CmdError::Io(err) => panic!(err),
                 CmdError::Unexpected(err) => panic!(err),
             },
@@ -113,7 +113,7 @@ impl ContainerRegistry for DockerHub {
 
         match cmd::exec("docker", vec!["push", dest.as_str()]) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
+                CmdError::Exec(_exit_status) => return Err(PushError::ImagePushFailed),
                 CmdError::Io(err) => panic!(err),
                 CmdError::Unexpected(err) => panic!(err),
             },
@@ -126,7 +126,7 @@ impl ContainerRegistry for DockerHub {
         Ok(PushResult { image })
     }
 
-    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
+    fn push_error(&self, _image: &Image) -> Result<PushResult, PushError> {
         unimplemented!()
     }
 }
