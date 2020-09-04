@@ -99,7 +99,7 @@ impl Task for InfrastructureTask {
 
         // FIXME - return errors with Sender
         let session = match engine.session() {
-            Ok(session) => Some(session),
+            Ok(session) => session,
             Err(err) => {
                 // FIXME return error message
                 self.update_status(
@@ -113,26 +113,12 @@ impl Task for InfrastructureTask {
                         ),
                     },
                 );
-                None
+
+                return;
             }
         };
 
-        if session.is_none() {
-            self.update_status(
-                &sender,
-                Status::Failed {
-                    message: Some("session is None, what's wrong?".to_string()),
-                    context: ActionContext::new(
-                        Kind::Infrastructure,
-                        self.infrastructure_id(),
-                        self.id().to_string(),
-                    ),
-                },
-            );
-            return;
-        }
-
-        let mut tx = session.unwrap().transaction();
+        let mut tx = session.transaction();
 
         let nodes = self
             .request
@@ -319,13 +305,13 @@ impl Task for EnvironmentTask {
 
         // FIXME - return errors with Sender
         let session = match engine.session() {
-            Ok(session) => Some(session),
+            Ok(session) => session,
             Err(err) => {
                 // FIXME return error message
                 self.update_status(
                     &sender,
                     Status::Failed {
-                        message: None,
+                        message: Some(format!("failed to get engine session {:?}", err)),
                         context: ActionContext::new(
                             Kind::Environment,
                             self.request
@@ -338,31 +324,12 @@ impl Task for EnvironmentTask {
                         ),
                     },
                 );
-                None
+
+                return;
             }
         };
 
-        if session.is_none() {
-            self.update_status(
-                &sender,
-                Status::Failed {
-                    message: None,
-                    context: ActionContext::new(
-                        Kind::Environment,
-                        self.request
-                            .target_environment
-                            .as_ref()
-                            .unwrap()
-                            .id
-                            .to_string(),
-                        self.id().to_string(),
-                    ),
-                },
-            );
-            return;
-        }
-
-        let mut tx = session.unwrap().transaction();
+        let mut tx = session.transaction();
 
         let nodes = self
             .request
