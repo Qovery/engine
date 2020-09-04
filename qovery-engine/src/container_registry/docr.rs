@@ -48,6 +48,11 @@ impl DOCR {
         Ok(())
     }
 
+    fn get_or_create_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
+        // TODO check if repository exist
+        create_repository(&image)
+    }
+
     fn delete_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
         match cmd::exec(
             "doctl",
@@ -119,7 +124,28 @@ impl ContainerRegistry for DOCR {
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
     fn push(&self, image: &Image, _force_push: bool) -> Result<PushResult, PushError> {
         let image = image.clone();
-        Ok(PushResult { image })
+        //TODO instead use get_or_create_repository
+        self.create_repository(&image);
+        match cmd::exec(
+            "doctl",
+            vec![
+                "registry",
+                "login",
+                self.registry_name.as_str(),
+                "-t",
+                self.api_key.as_str(),
+            ],
+        ) {
+            Err(err) => match err {
+                CmdError::Exec(_exit_status) => return Err(PushError::CredentialsError),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
+            },
+            _ => {}
+        };
+        //TODO check force or not
+        let dest = format!("{}:{}", self.registry_name.as_str(), image.tag.as_str());
+        self.push_image(dest, image)
     }
 
     fn push_error(&self, _image: &Image) -> Result<PushResult, PushError> {

@@ -1,2 +1,0 @@
-mod containerregistry;
-mod infrastructure;

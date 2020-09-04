@@ -18,21 +18,13 @@ use qovery_engine::session::Session;
 use std::borrow::Borrow;
 
 use crate::utilities::build_platform_local_docker;
+use crate::utilities::init;
 
 pub const AWS_KEY_ID: &str = "AKIAZ4KMLSYJLRGNNFNI";
 pub const AWS_ACCESS_KEY: &str = "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/";
 pub const AWS_DEFAULT_REGION: &str = "us-east-2";
 pub const ORGANIZATION_ID: &str = "adwopakdpo221";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
-
-pub fn init() {
-    println!(
-        "running from current directory: {}",
-        std::env::current_dir().unwrap().to_str().unwrap()
-    );
-
-    env_logger::init();
-}
 
 pub fn execution_id() -> String {
     Utc::now()

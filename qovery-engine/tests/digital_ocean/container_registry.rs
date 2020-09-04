@@ -1,11 +1,15 @@
-use qovery_engine::container_registry::docr::DOCR;
 extern crate test_utilities;
+
+use self::test_utilities::aws::context;
+use self::test_utilities::digitalocean::docker_cr_do_engine;
+use self::test_utilities::utilities::init;
+use qovery_engine::container_registry::docr::DOCR;
 
 #[test]
 fn create_do_container_registry() {
-    test_utilities::init();
+    init();
     let context = context();
-    test_utilities::docker_cr_do_engine(&context);
+    docker_cr_do_engine(&context);
 }
 
 #[test]
