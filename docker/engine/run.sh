@@ -7,6 +7,17 @@ function get_lib() {
     echo $?
 }
 
+# shellcheck disable=SC2236
+if [ -z "$ENGINE_RES_URL" ] ; then
+  echo "Missing ENGINE_RES_URL variable!"
+  exit 1
+fi
+
+if [ "$ENGINE_RES_URL" == "" ] ; then
+  echo "ENGINE_RES_URL variable is empty!"
+  exit 1
+fi
+
 # Load lib
 counter=0
 max_retry=5
