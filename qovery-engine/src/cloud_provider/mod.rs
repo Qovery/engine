@@ -9,6 +9,7 @@ use std::any::Any;
 use std::rc::Rc;
 
 pub mod aws;
+pub mod digitalocean;
 pub mod environment;
 pub mod gcp;
 pub mod kubernetes;
@@ -67,6 +68,7 @@ pub enum DeployError {
 pub enum Kind {
     AWS,
     GCP,
+    DO,
 }
 
 pub enum DeploymentTarget<'a> {

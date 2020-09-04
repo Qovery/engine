@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
 use crate::cloud_provider::aws::databases::PostgreSQL;
 use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{DatabaseOptions, Service, StatefulService, StatelessService};
 use crate::cloud_provider::Kind as CPKind;
@@ -181,6 +182,8 @@ impl Application {
                 ),
             )),
             CPKind::GCP => None,
+            _ => None,
+            //TODO to implement
         }
     }
 
@@ -213,6 +216,8 @@ impl Application {
                 ),
             )),
             CPKind::GCP => None,
+            _ => None,
+            //TODO to implement
         }
     }
 
@@ -351,6 +356,8 @@ impl Router {
                 Some(router)
             }
             CPKind::GCP => None,
+            _ => None,
+            //TODO to implement
         }
     }
 }
@@ -415,6 +422,8 @@ impl Database {
                 _ => None,
             },
             CPKind::GCP => None,
+            _ => None,
+            //TODO to implement
         }
     }
 }

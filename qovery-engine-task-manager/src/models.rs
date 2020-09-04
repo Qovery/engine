@@ -237,6 +237,14 @@ impl ContainerRegistry {
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
                 self.options.region.as_ref().unwrap().as_str(),
             )),
+            qovery_engine::container_registry::Kind::DOCR => Box::new(ECR::new(
+                context.clone(),
+                self.id.as_str(),
+                self.name.as_str(),
+                self.options.access_key_id.as_ref().unwrap().as_str(),
+                self.options.secret_access_key.as_ref().unwrap().as_str(),
+                self.options.region.as_ref().unwrap().as_str(),
+            )),
         }
     }
 }
