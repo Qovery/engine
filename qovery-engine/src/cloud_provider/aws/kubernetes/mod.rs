@@ -233,7 +233,7 @@ impl<'a> EKS<'a> {
             .collect::<Vec<WorkerNodeDataTemplate>>();
         let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.cloud_provider.organization_id());
         let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
-        let qovery_api_url = "api-dev.qovery.com";
+        let qovery_api_url = "api.qovery.com";
         let rds_cidr_subnet = "23";
         let documentdb_cidr_subnet = "23";
         let elasticsearch_cidr_subnet = "23";

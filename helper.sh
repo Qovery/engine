@@ -12,6 +12,8 @@ if [ "$(uname)" == "Darwin" ] ; then
 fi
 
 ARGS_NUM=$#
+# Note: this is the dev version for the moment as the prod one is not released yet
+QOVERY_API="api.qovery.com"
 
 function check_num_args() {
   desired_number=$1
@@ -102,8 +104,14 @@ function new_release() { ## Release a new engine version with commit ID as tag
 function set_release_ga() { ## Release a new engine version and mark it as globally available
   tag=$(get_commit_id)
   # Note: this is the dev version for the moment as the prod one is not released yet
-  curl -X PUT -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://api-dev.qovery.com/api/v1/engine-version?type=ga&version=${tag}"
+  curl -s -X PUT -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}"
 }
+
+function get_release_ga() { ## Get globally available release version
+  echo -e "Last defined GA version: "
+  curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"
+}
+
 
 case $1 in
 build_image)
@@ -120,6 +128,9 @@ push_image)
   ;;
 set_release_ga)
   set_release_ga
+  ;;
+get_release_ga)
+  get_release_ga
   ;;
 *)
   echo "Usage: $0 <option>"
