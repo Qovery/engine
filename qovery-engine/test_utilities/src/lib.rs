@@ -1,3 +1,3 @@
-mod aws;
-mod digitalocean;
-mod utilities;
+pub mod aws;
+pub mod digitalocean;
+pub mod utilities;

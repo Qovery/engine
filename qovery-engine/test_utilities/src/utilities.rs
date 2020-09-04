@@ -8,3 +8,12 @@ pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
         "my-default-local-docker",
     )
 }
+
+pub fn init() {
+    println!(
+        "running from current directory: {}",
+        std::env::current_dir().unwrap().to_str().unwrap()
+    );
+
+    env_logger::init();
+}
