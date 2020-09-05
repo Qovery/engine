@@ -346,10 +346,8 @@ impl Task for EnvironmentTask {
         let environment_action = self.request.environment_action().unwrap();
 
         match self.request.action {
-            Action::Create => {
-                tx.deploy_environment(kubernetes.borrow(), &environment_action);
-            }
-            Action::Delete => unimplemented!(),
+            Action::Create => tx.deploy_environment(kubernetes.borrow(), &environment_action),
+            Action::Delete => tx.delete_environment(kubernetes.borrow(), &environment_action),
         };
 
         // TODO implement on_progress callback and send status update in real time
