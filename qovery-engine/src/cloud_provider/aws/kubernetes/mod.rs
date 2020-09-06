@@ -237,7 +237,7 @@ impl<'a> EKS<'a> {
         let rds_cidr_subnet = "23";
         let documentdb_cidr_subnet = "23";
         let elasticsearch_cidr_subnet = "23";
-        let managed_dns = ["oom.sh"];
+        let managed_dns = ["qoveyr.io"];
         let managed_dns_helm_format = managed_dns
             .iter()
             .map(|name| format!("\"{}\"", name))
