@@ -51,10 +51,10 @@ spec:
             {%- endif %}
           resources:
             limits:
-              cpu: 125m
+              cpu: 512m
               memory: 256Mi
             requests:
-              cpu: 125m
+              cpu: 16m
               memory: 256Mi
           volumeMounts:
 {%- for s in storage %}
