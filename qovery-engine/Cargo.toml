@@ -17,6 +17,7 @@ dirs = "3.0.1"
 rust-crypto = "0.2.36"
 retry = "1.0.0"
 dns-lookup = "1.0.3"
+rand = "0.7.3"
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 
 # tar gz

@@ -11,6 +11,7 @@ qovery-engine = { path = "../" }
 chrono = "0.4.11"
 dirs = "3.0.1"
 env_logger = "0.7.1"
+rand = "0.7.3"
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"

@@ -17,8 +17,8 @@ use qovery_engine::models::{
 use qovery_engine::session::Session;
 use std::borrow::Borrow;
 
-use crate::utilities::build_platform_local_docker;
 use crate::utilities::init;
+use crate::utilities::{build_platform_local_docker, generate_id};
 
 pub const AWS_KEY_ID: &str = "AKIAZ4KMLSYJLRGNNFNI";
 pub const AWS_ACCESS_KEY: &str = "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/";
@@ -126,14 +126,14 @@ pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
 pub fn working_environment(context: &Context) -> Environment {
     Environment {
         execution_id: context.execution_id().to_string(),
-        id: "odiajwio6468a468".to_string(),
+        id: generate_id(),
         kind: Kind::Development,
-        owner_id: "123456basuiug".to_string(),
-        project_id: "adoiwajd45ad4w".to_string(),
+        owner_id: generate_id(),
+        project_id: generate_id(),
         organization_id: ORGANIZATION_ID.to_string(),
         action: Action::Create,
         applications: vec![Application {
-            id: "owiahdiu877".to_string(),
+            id: generate_id(),
             name: "simple-example-node-with-postgresql".to_string(),
             git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
                 .to_string(),
@@ -146,7 +146,7 @@ pub fn working_environment(context: &Context) -> Environment {
                 expired_at: Utc::now(),
             },
             storage: vec![Storage {
-                id: "adawd5wa4d65aw4".to_string(),
+                id: generate_id(),
                 name: "photos".to_string(),
                 storage_type: StorageType::Ssd,
                 size_in_gib: 10,
@@ -171,14 +171,14 @@ pub fn working_environment(context: &Context) -> Environment {
         }],
         routers: vec![
             Router {
-                id: "ofejoiafj5464".to_string(),
+                id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: "toto-default.oom.sh".to_string(),
+                default_domain: generate_id() + ".oom.sh",
                 public_port: 443,
                 custom_domains: vec![CustomDomain {
-                    domain: "toto.custom.io".to_string(),
-                    target_domain: "toto.oom.sh".to_string(),
+                    domain: generate_id() + "custom.io",
+                    target_domain: generate_id() + "toto.oom.sh",
                 }],
                 routes: vec![Route {
                     path: "/".to_string(),
@@ -186,14 +186,14 @@ pub fn working_environment(context: &Context) -> Environment {
                 }],
             },
             Router {
-                id: "adawhdiua545545".to_string(),
+                id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: "coco-default.oom.sh".to_string(),
+                default_domain: generate_id() + ".oom.sh",
                 public_port: 443,
                 custom_domains: vec![CustomDomain {
-                    domain: "coco.custom.io".to_string(),
-                    target_domain: "coco.oom.sh".to_string(),
+                    domain: generate_id() + "custom.io",
+                    target_domain: generate_id() + ".oom.sh",
                 }],
                 routes: vec![Route {
                     path: "/coco".to_string(),
@@ -205,14 +205,14 @@ pub fn working_environment(context: &Context) -> Environment {
             Database {
                 kind: DatabaseKind::Postgresql,
                 action: Action::Create,
-                id: "waoidja468787454".to_string(),
+                id: generate_id(),
                 name: "my-psql".to_string(),
                 version: "11.8.0".to_string(),
-                fqdn_id: "my-postgresql-test-123".to_string(),
-                fqdn: "my-postgresql-test-123.oom.sh".to_string(),
+                fqdn_id: "my-postgresql-".to_string() + generate_id().as_str(),
+                fqdn: "my-postgresql-".to_string() + generate_id().as_str() + ".oom.sh",
                 port: 5432,
                 username: "superuser".to_string(),
-                password: "BdcDconI2k8AVN6z".to_string(),
+                password: generate_id(),
                 total_cpus: 2,
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
