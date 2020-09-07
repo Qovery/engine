@@ -123,6 +123,53 @@ pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
     )
 }
 
+pub fn working_minimal_environment(context: &Context) -> Environment {
+    Environment {
+        execution_id: context.execution_id().to_string(),
+        id: generate_id(),
+        kind: Kind::Development,
+        owner_id: generate_id(),
+        project_id: generate_id(),
+        organization_id: ORGANIZATION_ID.to_string(),
+        action: Action::Create,
+        applications: vec![Application {
+            id: generate_id(),
+            name: "simple-example-node-with-postgresql".to_string(),
+            git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
+                .to_string(),
+            commit_id: "f400e2f199e6a7eb446690b6f2df1017dbbae518".to_string(),
+            dockerfile_path: "Dockerfile".to_string(),
+            action: Action::Create,
+            git_credentials: GitCredentials {
+                login: "x-access-token".to_string(),
+                access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
+                expired_at: Utc::now(),
+            },
+            storage: vec![],
+            environment_variables: vec![],
+            branch: "master".to_string(),
+            private_port: Some(3000),
+            total_cpus: 1,
+            total_ram_in_mib: 256,
+            total_instances: 2,
+        }],
+        routers: vec![Router {
+            id: generate_id(),
+            name: "main".to_string(),
+            action: Action::Create,
+            default_domain: generate_id() + ".oom.sh",
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                application_name: "simple-example-node-with-postgresql".to_string(),
+            }],
+        }],
+        databases: vec![],
+        clone_from_environment_id: None,
+    }
+}
+
 pub fn working_environment(context: &Context) -> Environment {
     Environment {
         execution_id: context.execution_id().to_string(),
