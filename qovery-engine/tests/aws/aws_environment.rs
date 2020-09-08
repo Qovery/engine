@@ -1,6 +1,8 @@
 extern crate test_utilities;
 
-use qovery_engine::models::{Context, EnvironmentAction, Kind};
+use qovery_engine::cmd;
+use qovery_engine::cmd::kubectl_exec_delete_namespace;
+use qovery_engine::models::{Action, Context, EnvironmentAction, Kind};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::aws::context;
 use test_utilities::utilities::init;
@@ -101,17 +103,27 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 
     let context = context();
 
-    let mut environment = test_utilities::aws::working_environment(&context);
-
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.routers = vec![];
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
 
     let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
 
     match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+
+    match delete_environment(&context, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    kubectl_exec_delete_namespace();
 }
 
 #[test]

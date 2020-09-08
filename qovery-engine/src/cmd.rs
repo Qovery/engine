@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 use dirs::home_dir;
-use retry::delay::{Fibonacci};
+use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
@@ -657,6 +657,34 @@ where
 
     let _ = kubectl_exec_with_output(
         vec!["create", "namespace", namespace],
+        _envs,
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+
+    Ok(())
+}
+
+pub fn kubectl_exec_delete_namespace<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let _ = kubectl_exec_with_output(
+        vec!["delete", "namespace", namespace],
         _envs,
         |out| match out {
             Ok(line) => info!("{}", line),
