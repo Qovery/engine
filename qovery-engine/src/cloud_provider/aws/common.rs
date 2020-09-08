@@ -141,7 +141,7 @@ pub fn do_stateless_service_cleanup(
     // if there is no valid history - then delete the helm chart
     let first_valid_history_row = history_rows.iter().find(|x| x.is_successfully_deployed());
 
-    if first_valid_history_row.is_none() {
+    if first_valid_history_row.is_some() {
         crate::cmd::helm_exec_uninstall(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),

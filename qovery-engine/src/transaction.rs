@@ -93,6 +93,16 @@ impl<'a> Transaction<'a> {
         environment_action: &'a EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
         let _ = self.check_environment_action(environment_action)?;
+
+        // add build step
+        self.steps.push(Step::BuildEnvironment(
+            environment_action,
+            DeploymentOption {
+                force_build: false,
+                force_push: false,
+            },
+        ));
+
         self.steps
             .push(Step::PauseEnvironment(kubernetes, environment_action));
         Ok(())
@@ -104,6 +114,16 @@ impl<'a> Transaction<'a> {
         environment_action: &'a EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
         let _ = self.check_environment_action(environment_action)?;
+
+        // add build step
+        self.steps.push(Step::BuildEnvironment(
+            environment_action,
+            DeploymentOption {
+                force_build: false,
+                force_push: false,
+            },
+        ));
+
         self.steps
             .push(Step::DeleteEnvironment(kubernetes, environment_action));
         Ok(())
