@@ -12,7 +12,6 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
-use crate::transaction::{ActionContext, Kind};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
@@ -262,11 +261,7 @@ impl Create for Application {
         // check deployment status
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
             // TODO get pod output by using kubectl and return it into the OnCreateFailed
-            return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(
-                Kind::Application,
-                self.id().to_string(),
-                self.context.execution_id().to_string(),
-            ))));
+            return Err(ServiceError::OnCreateFailed);
         }
 
         // check app status
@@ -279,13 +274,7 @@ impl Create for Application {
             aws_credentials_envs,
         ) {
             Ok(Some(true)) => {}
-            _ => {
-                return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(
-                    Kind::Application,
-                    self.id().to_string(),
-                    self.context.execution_id().to_string(),
-                ))))
-            }
+            _ => return Err(ServiceError::OnCreateFailed),
         }
 
         Ok(())

@@ -362,7 +362,7 @@ pub fn main() -> Result<(), Error> {
                         let json_result = serde_json::to_string(&sr);
                         let json = json_result.unwrap();
 
-                        info!("send through NATS StatusResponse: {}", json.as_str());
+                        debug!("send through NATS StatusResponse: {}", json.as_str());
                         let _ = nc.publish(CORE_TASK_STATUS_SUBJECT, json.as_bytes());
                     }
                     Err(err) => error!("{:?}", err),

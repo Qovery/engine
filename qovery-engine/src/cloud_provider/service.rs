@@ -1,4 +1,8 @@
+use std::io::Error;
+use std::net::TcpStream;
 use std::process::id;
+
+use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
@@ -6,11 +10,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::CmdError;
 use crate::models::Context;
-use crate::transaction::{ActionContext, CommitError, Kind};
-use std::io::Error;
-use std::net::TcpStream;
-
-use tera::Context as TeraContext;
+use crate::transaction::CommitError;
 
 pub trait Service {
     fn context(&self) -> &Context;
@@ -40,14 +40,7 @@ pub trait Service {
         for binary in binaries.iter() {
             if !crate::cmd::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
-                return Err(ServiceError::Unexpected(
-                    err,
-                    Some(ActionContext::new(
-                        Kind::Service,
-                        id().to_string(),
-                        self.context().execution_id().to_string(),
-                    )),
-                ));
+                return Err(ServiceError::Unexpected(err));
             }
         }
 
@@ -204,34 +197,22 @@ pub enum ServiceType<'a> {
 
 #[derive(Debug)]
 pub enum ServiceError {
-    OnCreateFailed(Option<ActionContext>),
-    CheckFailed(Option<ActionContext>),
-    Cmd(CmdError, Option<ActionContext>),
-    Io(Error, Option<ActionContext>),
-    Unexpected(String, Option<ActionContext>),
+    OnCreateFailed,
+    CheckFailed,
+    Cmd(CmdError),
+    Io(Error),
+    Unexpected(String),
 }
 
 impl From<std::io::Error> for ServiceError {
     fn from(err: Error) -> Self {
-        ServiceError::Io(err, None)
+        ServiceError::Io(err)
     }
 }
 
 impl From<CmdError> for ServiceError {
     fn from(err: CmdError) -> Self {
-        ServiceError::Cmd(err, None)
-    }
-}
-
-impl From<ServiceError> for Option<ActionContext> {
-    fn from(err: ServiceError) -> Self {
-        return match err {
-            ServiceError::OnCreateFailed(ac)
-            | ServiceError::CheckFailed(ac)
-            | ServiceError::Unexpected(_, ac)
-            | ServiceError::Cmd(_, ac)
-            | ServiceError::Io(_, ac) => ac,
-        };
+        ServiceError::Cmd(err)
     }
 }
 

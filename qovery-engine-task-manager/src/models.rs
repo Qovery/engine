@@ -76,6 +76,7 @@ impl Request {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Action {
     Create,
+    Pause,
     Delete,
 }
 

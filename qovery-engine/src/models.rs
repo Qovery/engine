@@ -1,14 +1,11 @@
 use std::hash::Hash;
-
 use std::rc::Rc;
 
 use chrono::{DateTime, Utc};
-
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
 use crate::cloud_provider::aws::databases::PostgreSQL;
-
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
@@ -439,16 +436,46 @@ pub enum EnvironmentError {}
 #[derive(Clone)]
 pub struct ProgressInfo {
     pub created_at: DateTime<Utc>,
-    pub step_name: String,
+    pub step: ProgressStep,
+    pub level: ProgressLevel,
     pub message: String,
     pub execution_id: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ProgressStep {
+    WaitingToRun,
+    BootstrapInfrastructure,
+    CreateKubernetes,
+    BuildApplication,
+    DeployEnvironment,
+    PauseEnvironment,
+    DeleteEnvironment,
+    DeleteKubernetes,
+    DeleteInfrastructure,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ProgressLevel {
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
 impl ProgressInfo {
-    pub fn new(step_name: &str, message: &str, execution_id: &str) -> Self {
+    pub fn new(
+        step: ProgressStep,
+        level: ProgressLevel,
+        message: &str,
+        execution_id: &str,
+    ) -> Self {
         ProgressInfo {
             created_at: Utc::now(),
-            step_name: step_name.to_string(),
+            step,
+            level,
             message: message.to_string(),
             execution_id: execution_id.to_string(),
         }

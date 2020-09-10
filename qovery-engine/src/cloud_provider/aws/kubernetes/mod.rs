@@ -11,7 +11,10 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::fs::workspace_directory;
-use crate::models::{Context, Listeners, ListenersHelper, ProgressInfo, ProgressListener};
+use crate::models::{
+    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
+    ProgressStep,
+};
 use crate::{dynamo_db, s3};
 use std::rc::Rc;
 
@@ -370,7 +373,8 @@ impl<'a> Kubernetes for EKS<'a> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         listeners_helper.on_progress(ProgressInfo::new(
-            "kubernetes",
+            ProgressStep::CreateKubernetes,
+            ProgressLevel::Info,
             "start to create EKS cluster",
             self.context.execution_id(),
         ));

@@ -8,7 +8,6 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
-use crate::transaction::{ActionContext, Kind};
 use dns_lookup::lookup_host;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
@@ -286,13 +285,7 @@ impl crate::cloud_provider::service::Router for Router {
 
         match check_result {
             Ok(_) => {}
-            Err(_) => {
-                return Err(ServiceError::CheckFailed(Some(ActionContext::new(
-                    Kind::Application,
-                    self.id().to_string(),
-                    self.context().execution_id().to_string(),
-                ))))
-            }
+            Err(_) => return Err(ServiceError::CheckFailed),
         }
 
         Ok(())
@@ -359,11 +352,7 @@ impl Create for Router {
 
             // check deployment status
             if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-                return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(
-                    Kind::Application,
-                    self.id().to_string(),
-                    self.context().execution_id().to_string(),
-                ))));
+                return Err(ServiceError::OnCreateFailed);
             }
         }
 
@@ -389,11 +378,7 @@ impl Create for Router {
 
         // check deployment status
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(ServiceError::OnCreateFailed(Some(ActionContext::new(
-                Kind::Application,
-                self.id().to_string(),
-                self.context().execution_id().to_string(),
-            ))));
+            return Err(ServiceError::OnCreateFailed);
         }
 
         Ok(())

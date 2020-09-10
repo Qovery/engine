@@ -635,34 +635,6 @@ pub enum RollbackError {
     Error,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct ActionContext {
-    pub kind: Kind,
-    pub id: String,
-    pub execution_id: String,
-}
-
-impl ActionContext {
-    pub fn new(kind: Kind, id: String, execution_id: String) -> Self {
-        ActionContext {
-            kind,
-            id,
-            execution_id,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Kind {
-    Infrastructure,
-    Service,
-    Application,
-    Router,
-    Environment,
-    Execution,
-}
-
 pub enum TransactionResult {
     Ok,
     Rollback(CommitError),

@@ -10,9 +10,10 @@ use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use evmap::{ReadHandle, WriteHandle};
 use serde::{Deserialize, Serialize};
 
-use qovery_engine::transaction::{ActionContext, Kind};
+use qovery_engine::models::{ProgressLevel, ProgressStep};
 
 use crate::models::Request;
+use qovery_engine::cloud_provider::service::ServiceError;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -213,7 +214,9 @@ fn add_task(
             Status::Waiting {
                 message: None,
                 context: ActionContext::new(
-                    Kind::Execution,
+                    Scope::Queued,
+                    ProgressStep::WaitingToRun,
+                    ProgressLevel::Info,
                     task_id.to_string(),
                     task_id.to_string(),
                 ),
@@ -225,7 +228,13 @@ fn add_task(
         task,
         status: Status::Waiting {
             message: None,
-            context: ActionContext::new(Kind::Execution, task_id.to_string(), task_id.to_string()),
+            context: ActionContext::new(
+                Scope::Queued,
+                ProgressStep::WaitingToRun,
+                ProgressLevel::Info,
+                task_id.to_string(),
+                task_id.to_string(),
+            ),
         },
     });
 }
@@ -243,6 +252,44 @@ pub trait Task: Send {
 pub struct InternalTask {
     pub task: Box<dyn Task>,
     pub status: Status,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Scope {
+    Queued,
+    Infrastructure,
+    Service,
+    Application,
+    Router,
+    Environment,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct ActionContext {
+    pub scope: Scope,
+    pub step: ProgressStep,
+    pub level: ProgressLevel,
+    pub id: String,
+    pub execution_id: String,
+}
+
+impl ActionContext {
+    pub fn new(
+        scope: Scope,
+        step: ProgressStep,
+        level: ProgressLevel,
+        id: String,
+        execution_id: String,
+    ) -> Self {
+        ActionContext {
+            scope,
+            step,
+            level,
+            id,
+            execution_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]

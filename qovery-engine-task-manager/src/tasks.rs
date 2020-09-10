@@ -13,11 +13,11 @@ use qovery_engine::cloud_provider::service::ServiceError;
 use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::ConfigurationError;
-use qovery_engine::models::{Context, ProgressInfo, ProgressListener};
-use qovery_engine::transaction::{ActionContext, CommitError, Kind, TransactionResult};
+use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressStep};
+use qovery_engine::transaction::{CommitError, TransactionResult};
 
 use crate::models::{Action, Request};
-use crate::task_manager::{InternalTask, Message, Status, Task};
+use crate::task_manager::{ActionContext, InternalTask, Message, Scope, Status, Task};
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -77,12 +77,20 @@ impl Task for InfrastructureTask {
             self.infrastructure_id()
         );
 
+        let progress_step = match self.request.action {
+            Action::Create => ProgressStep::CreateKubernetes,
+            Action::Pause => ProgressStep::CreateKubernetes, // this is preferable to create a kubernetes cluster instead of deleting it
+            Action::Delete => ProgressStep::DeleteKubernetes,
+        };
+
         self.update_status(
             &sender,
             Status::Running {
                 message: None,
                 context: ActionContext::new(
-                    Kind::Infrastructure,
+                    Scope::Infrastructure,
+                    progress_step.clone(),
+                    ProgressLevel::Info,
                     self.infrastructure_id(),
                     self.id().to_string(),
                 ),
@@ -97,17 +105,17 @@ impl Task for InfrastructureTask {
 
         let engine = self.request.engine(&self.context, my_progress_listener);
 
-        // FIXME - return errors with Sender
         let session = match engine.session() {
             Ok(session) => session,
             Err(err) => {
-                // FIXME return error message
                 self.update_status(
                     &sender,
                     Status::Failed {
                         message: Some(format!("failed to get engine session {:?}", err)),
                         context: ActionContext::new(
-                            Kind::Infrastructure,
+                            Scope::Infrastructure,
+                            progress_step,
+                            ProgressLevel::Error,
                             self.infrastructure_id(),
                             self.id().to_string(),
                         ),
@@ -134,6 +142,7 @@ impl Task for InfrastructureTask {
 
         match self.request.action {
             Action::Create => tx.create_kubernetes(kubernetes.borrow()),
+            Action::Pause => tx.create_kubernetes(kubernetes.borrow()),
             Action::Delete => tx.delete_kubernetes(kubernetes.borrow()),
         };
 
@@ -146,7 +155,9 @@ impl Task for InfrastructureTask {
                     Status::Done {
                         message: None,
                         context: ActionContext::new(
-                            Kind::Infrastructure,
+                            Scope::Infrastructure,
+                            progress_step,
+                            ProgressLevel::Info,
                             self.infrastructure_id(),
                             self.id().to_string(),
                         ),
@@ -154,66 +165,51 @@ impl Task for InfrastructureTask {
                 );
             }
             TransactionResult::Rollback(commit_err) => {
-                // FIXME return error message
-                let err: Option<ServiceError> = Option::from(commit_err);
-                let ac = match err {
-                    None => ActionContext::new(
-                        Kind::Infrastructure,
-                        self.infrastructure_id(),
-                        self.id().to_string(),
-                    ),
-                    Some(x) => {
-                        let option: Option<ActionContext> = Option::from(x);
-                        match option {
-                            None => ActionContext::new(
-                                Kind::Infrastructure,
-                                self.infrastructure_id(),
-                                self.id().to_string(),
-                            ),
-                            Some(ac) => ac,
-                        }
-                    }
-                };
+                let ac = ActionContext::new(
+                    Scope::Infrastructure,
+                    progress_step,
+                    ProgressLevel::Warn,
+                    self.request
+                        .target_environment
+                        .as_ref()
+                        .unwrap()
+                        .id
+                        .to_string(),
+                    self.id().to_string(),
+                );
 
                 self.update_status(
                     &sender,
                     Status::Failed {
-                        message: Some(
-                            "deployment has failed but rollback has succeeded".to_string(),
-                        ),
+                        message: Some(format!("rollback error - commit error: {:?}", commit_err)),
                         context: ac,
                     },
-                )
+                );
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
-                // FIXME return error message
-                let err: Option<ServiceError> = Option::from(commit_err);
-                let ac = match err {
-                    None => ActionContext::new(
-                        Kind::Infrastructure,
-                        self.infrastructure_id(),
-                        self.id().to_string(),
-                    ),
-                    Some(x) => {
-                        let option: Option<ActionContext> = Option::from(x);
-                        match option {
-                            None => ActionContext::new(
-                                Kind::Infrastructure,
-                                self.infrastructure_id(),
-                                self.id().to_string(),
-                            ),
-                            Some(ac) => ac,
-                        }
-                    }
-                };
+                let ac = ActionContext::new(
+                    Scope::Infrastructure,
+                    progress_step,
+                    ProgressLevel::Error,
+                    self.request
+                        .target_environment
+                        .as_ref()
+                        .unwrap()
+                        .id
+                        .to_string(),
+                    self.id().to_string(),
+                );
 
                 self.update_status(
                     &sender,
                     Status::Failed {
-                        message: Some("deployment and rollback have failed".to_string()),
+                        message: Some(format!(
+                            "unrecoverable error - commit error: {:?} - rollback error: {:?}",
+                            commit_err, rollback_err
+                        )),
                         context: ac,
                     },
-                )
+                );
             }
         }
 
@@ -278,12 +274,21 @@ impl Task for EnvironmentTask {
 
     fn run(&self, sender: Sender<Message>) {
         info!("environment task {} started", self.id());
+
+        let progress_step = match self.request.action {
+            Action::Create => ProgressStep::DeployEnvironment,
+            Action::Pause => ProgressStep::PauseEnvironment,
+            Action::Delete => ProgressStep::DeleteEnvironment,
+        };
+
         self.update_status(
             &sender,
             Status::Running {
                 message: None,
                 context: ActionContext::new(
-                    Kind::Environment,
+                    Scope::Environment,
+                    progress_step.clone(),
+                    ProgressLevel::Info,
                     self.request
                         .target_environment
                         .as_ref()
@@ -313,7 +318,9 @@ impl Task for EnvironmentTask {
                     Status::Failed {
                         message: Some(format!("failed to get engine session {:?}", err)),
                         context: ActionContext::new(
-                            Kind::Environment,
+                            Scope::Environment,
+                            progress_step.clone(),
+                            ProgressLevel::Info,
                             self.request
                                 .target_environment
                                 .as_ref()
@@ -347,10 +354,9 @@ impl Task for EnvironmentTask {
 
         match self.request.action {
             Action::Create => tx.deploy_environment(kubernetes.borrow(), &environment_action),
+            Action::Pause => tx.pause_environment(kubernetes.borrow(), &environment_action),
             Action::Delete => tx.delete_environment(kubernetes.borrow(), &environment_action),
         };
-
-        // TODO implement on_progress callback and send status update in real time
 
         match tx.commit() {
             TransactionResult::Ok => {
@@ -359,7 +365,9 @@ impl Task for EnvironmentTask {
                     Status::Done {
                         message: None,
                         context: ActionContext::new(
-                            Kind::Environment,
+                            Scope::Environment,
+                            progress_step,
+                            ProgressLevel::Info,
                             self.request
                                 .target_environment
                                 .as_ref()
@@ -372,79 +380,48 @@ impl Task for EnvironmentTask {
                 );
             }
             TransactionResult::Rollback(commit_err) => {
-                // FIXME return error message
-                let err: Option<ServiceError> = Option::from(commit_err);
-                let ac = match err {
-                    None => ActionContext::new(
-                        Kind::Environment,
-                        self.request
-                            .target_environment
-                            .as_ref()
-                            .unwrap()
-                            .id
-                            .to_string(),
-                        self.id().to_string(),
-                    ),
-                    Some(x) => {
-                        let option: Option<ActionContext> = Option::from(x);
-                        match option {
-                            None => ActionContext::new(
-                                Kind::Environment,
-                                self.request
-                                    .target_environment
-                                    .as_ref()
-                                    .unwrap()
-                                    .id
-                                    .to_string(),
-                                self.id().to_string(),
-                            ),
-                            Some(ac) => ac,
-                        }
-                    }
-                };
+                let ac = ActionContext::new(
+                    Scope::Environment,
+                    progress_step,
+                    ProgressLevel::Warn,
+                    self.request
+                        .target_environment
+                        .as_ref()
+                        .unwrap()
+                        .id
+                        .to_string(),
+                    self.id().to_string(),
+                );
+
                 self.update_status(
                     &sender,
                     Status::Failed {
-                        message: None,
+                        message: Some(format!("rollback error - commit error: {:?}", commit_err)),
                         context: ac,
                     },
                 );
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
-                // FIXME return error message
-                let err: Option<ServiceError> = Option::from(commit_err);
-                let ac = match err {
-                    None => ActionContext::new(
-                        Kind::Environment,
-                        self.request
-                            .target_environment
-                            .as_ref()
-                            .unwrap()
-                            .id
-                            .to_string(),
-                        self.id().to_string(),
-                    ),
-                    Some(x) => {
-                        let option: Option<ActionContext> = Option::from(x);
-                        match option {
-                            None => ActionContext::new(
-                                Kind::Environment,
-                                self.request
-                                    .target_environment
-                                    .as_ref()
-                                    .unwrap()
-                                    .id
-                                    .to_string(),
-                                self.id().to_string(),
-                            ),
-                            Some(ac) => ac,
-                        }
-                    }
-                };
+                let ac = ActionContext::new(
+                    Scope::Environment,
+                    progress_step,
+                    ProgressLevel::Error,
+                    self.request
+                        .target_environment
+                        .as_ref()
+                        .unwrap()
+                        .id
+                        .to_string(),
+                    self.id().to_string(),
+                );
+
                 self.update_status(
                     &sender,
                     Status::Failed {
-                        message: None,
+                        message: Some(format!(
+                            "unrecoverable error - commit error: {:?} - rollback error: {:?}",
+                            commit_err, rollback_err
+                        )),
                         context: ac,
                     },
                 );
@@ -493,7 +470,9 @@ where
         let it = self.get_internal_task(Status::Running {
             message: Some(info.message),
             context: ActionContext::new(
-                Kind::Execution,
+                Scope::Queued,
+                info.step,
+                info.level,
                 info.execution_id.to_string(),
                 info.execution_id.to_string(),
             ),
@@ -509,7 +488,9 @@ where
         let it = self.get_internal_task(Status::Done {
             message: Some(info.message),
             context: ActionContext::new(
-                Kind::Execution,
+                Scope::Queued,
+                info.step,
+                info.level,
                 info.execution_id.to_string(),
                 info.execution_id.to_string(),
             ),
@@ -525,7 +506,9 @@ where
         let it = self.get_internal_task(Status::Error {
             message: Some(info.message),
             context: ActionContext::new(
-                Kind::Execution,
+                Scope::Queued,
+                info.step,
+                info.level,
                 info.execution_id.to_string(),
                 info.execution_id.to_string(),
             ),
