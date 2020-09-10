@@ -1,9 +1,14 @@
 extern crate test_utilities;
 
+use self::test_utilities::utilities::generate_id;
+use qovery_engine::cloud_provider::service::Router;
 use qovery_engine::cmd;
-use qovery_engine::cmd::kubectl_exec_delete_namespace;
-use qovery_engine::models::{Action, Context, EnvironmentAction, Kind};
+use qovery_engine::models::{
+    Action, Context, CustomDomain, Database, DatabaseKind, EnvironmentAction, EnvironmentVariable,
+    Kind, Storage, StorageType,
+};
 use qovery_engine::transaction::TransactionResult;
+use rusoto_core::region::Region::Custom;
 use test_utilities::aws::context;
 use test_utilities::utilities::init;
 
@@ -62,6 +67,236 @@ fn delete_environment(
 }
 
 #[test]
+fn deploy_a_working_environment_with_no_router_on_aws_eks() {
+    init();
+
+    let context = context();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+
+    environment.routers = vec![];
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    match delete_environment(&context, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    //Todo: remove the namespace (or project)
+}
+
+#[test]
+fn deploy_a_working_environment_with_domain() {
+    init();
+
+    let context = context();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    match delete_environment(&context, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    //Todo: remove the namespace (or project)
+}
+
+#[test]
+fn deploy_a_working_environment_with_custom_domain() {
+    init();
+
+    let context = context();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    // Todo: fix domains
+    environment.routers = environment
+        .routers
+        .into_iter()
+        .map(|mut router| {
+            router.custom_domains = vec![CustomDomain {
+                domain: "my-custom.oom.sh".to_string(),
+                target_domain: "my-custom.oom.sh".to_string(),
+            }];
+            router
+        })
+        .collect::<Vec<qovery_engine::models::Router>>();
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // Todo: check the domain is ready and setup one if needed
+
+    match delete_environment(&context, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    //Todo: remove the namespace (or project)
+}
+
+#[test]
+fn deploy_a_working_environment_with_storage_on_aws_eks() {
+    init();
+
+    let context = context();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+
+    // Todo: make an image that check there is a mounted disk
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.storage = vec![Storage {
+                id: generate_id(),
+                name: "photos".to_string(),
+                storage_type: StorageType::Ssd,
+                size_in_gib: 10,
+                mount_point: "/mnt/photos".to_string(),
+                snapshot_retention_in_days: 0,
+            }];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // todo: check the disk is here and with correct size
+
+    match delete_environment(&context, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    //Todo: remove the namespace (or project)
+}
+
+#[test]
+fn deploy_a_working_environment_with_postgresql() {
+    init();
+
+    let context = context();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+
+    let database_host = "postgresql-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
+    let database_port = 5432;
+    let database_db_name = "my-postgres";
+    let database_username = "superuser";
+    let database_password = generate_id();
+    environment.databases = vec![Database {
+        kind: DatabaseKind::Postgresql,
+        action: Action::Create,
+        id: generate_id(),
+        name: (&database_db_name).to_string(),
+        version: "11.8.0".to_string(),
+        fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
+        fqdn: (&database_host).to_string(),
+        port: database_port.clone(),
+        username: (&database_username).to_string(),
+        password: (&database_password).to_string(),
+        total_cpus: 2,
+        total_ram_in_mib: 512,
+        disk_size_in_gib: 10,
+    }];
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.branch = "postgres-app".to_string();
+            app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
+            app.private_port = Some(1234);
+            app.environment_variables = vec![
+                EnvironmentVariable {
+                    key: "PG_HOST".to_string(),
+                    value: (&database_host).to_string(),
+                },
+                EnvironmentVariable {
+                    key: "PG_PORT".to_string(),
+                    value: (&database_port).to_string(),
+                },
+                EnvironmentVariable {
+                    key: "PG_DBNAME".to_string(),
+                    value: (&database_db_name).to_string(),
+                },
+                EnvironmentVariable {
+                    key: "PG_USERNAME".to_string(),
+                    value: (&database_username).to_string(),
+                },
+                EnvironmentVariable {
+                    key: "PG_PASSWORD".to_string(),
+                    value: (&database_password).to_string(),
+                },
+            ];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // todo: check the database disk is here and with correct size
+
+    match delete_environment(&context, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    //Todo: remove the namespace (or project)
+}
+
+#[test]
 fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
     init();
 
@@ -87,106 +322,6 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
 
     let mut environment = test_utilities::aws::working_environment(&context);
     environment.kind = Kind::Production;
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
-fn deploy_a_working_environment_with_no_router_on_aws_eks() {
-    init();
-
-    let context = context();
-
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
-    environment.routers = vec![];
-    let mut environment_delete = environment.clone();
-    environment_delete.action = Action::Delete;
-
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    match delete_environment(&context, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    kubectl_exec_delete_namespace();
-}
-
-#[test]
-fn deploy_a_working_environment_with_no_database_on_aws_eks() {
-    init();
-
-    let context = context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-
-    environment.databases = vec![];
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
-fn deploy_a_working_environment_with_no_storage_on_aws_eks() {
-    init();
-
-    let context = context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.storage = vec![];
-            app
-        })
-        .collect::<Vec<_>>();
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
-fn deploy_a_working_environment_with_no_custom_domain_on_aws_eks() {
-    init();
-
-    let context = context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-
-    environment.routers = environment
-        .routers
-        .into_iter()
-        .map(|mut router| {
-            router.custom_domains = vec![];
-            router
-        })
-        .collect::<Vec<_>>();
 
     let ea = EnvironmentAction::Environment(environment);
 

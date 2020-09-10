@@ -134,10 +134,9 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: "simple-example-node-with-postgresql".to_string(),
-            git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
-                .to_string(),
-            commit_id: "f400e2f199e6a7eb446690b6f2df1017dbbae518".to_string(),
+            name: "simple-app".to_string(),
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+            commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: "Dockerfile".to_string(),
             action: Action::Create,
             git_credentials: GitCredentials {
@@ -147,8 +146,8 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             },
             storage: vec![],
             environment_variables: vec![],
-            branch: "master".to_string(),
-            private_port: Some(3000),
+            branch: "basic-app-deploy".to_string(),
+            private_port: Some(5678),
             total_cpus: 1,
             total_ram_in_mib: 256,
             total_instances: 2,
@@ -162,7 +161,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: "simple-example-node-with-postgresql".to_string(),
+                application_name: "simple-app".to_string(),
             }],
         }],
         databases: vec![],
