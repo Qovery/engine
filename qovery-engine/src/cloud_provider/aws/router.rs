@@ -255,8 +255,8 @@ impl Service for Router {
         None
     }
 
-    fn total_cpus(&self) -> u8 {
-        1
+    fn total_cpus(&self) -> String {
+        "1".to_string()
     }
 
     fn total_ram_in_mib(&self) -> u32 {

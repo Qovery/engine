@@ -18,7 +18,7 @@ pub struct PostgreSQL {
     action: Action,
     name: String,
     version: String,
-    total_cpus: u8,
+    total_cpus: String,
     total_ram_in_mib: u32,
     options: DatabaseOptions,
 }
@@ -30,7 +30,7 @@ impl PostgreSQL {
         action: Action,
         name: &str,
         version: &str,
-        total_cpus: u8,
+        total_cpus: String,
         total_ram_in_mib: u32,
         options: DatabaseOptions,
     ) -> Self {
@@ -154,8 +154,8 @@ impl Service for PostgreSQL {
         Some(self.options.port)
     }
 
-    fn total_cpus(&self) -> u8 {
-        self.total_cpus
+    fn total_cpus(&self) -> String {
+        self.total_cpus.to_string()
     }
 
     fn total_ram_in_mib(&self) -> u32 {

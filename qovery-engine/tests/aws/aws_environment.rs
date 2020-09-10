@@ -237,7 +237,7 @@ fn deploy_a_working_environment_with_postgresql() {
         port: database_port.clone(),
         username: (&database_username).to_string(),
         password: (&database_password).to_string(),
-        total_cpus: 2,
+        total_cpus: "2".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
     }];

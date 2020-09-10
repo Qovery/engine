@@ -20,7 +20,7 @@ pub trait Service {
     fn version(&self) -> &str;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
-    fn total_cpus(&self) -> u8;
+    fn total_cpus(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
     fn is_listening(&self, ip: &str) -> bool {

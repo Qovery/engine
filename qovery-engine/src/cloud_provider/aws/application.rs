@@ -21,7 +21,7 @@ pub struct Application {
     action: Action,
     name: String,
     private_port: Option<u16>,
-    total_cpus: u8,
+    total_cpus: String,
     total_ram_in_mib: u32,
     total_instances: u16,
     image: Image,
@@ -36,7 +36,7 @@ impl Application {
         action: Action,
         name: &str,
         private_port: Option<u16>,
-        total_cpus: u8,
+        total_cpus: String,
         total_ram_in_mib: u32,
         total_instances: u16,
         image: Image,
@@ -196,8 +196,8 @@ impl Service for Application {
         self.private_port
     }
 
-    fn total_cpus(&self) -> u8 {
-        self.total_cpus
+    fn total_cpus(&self) -> String {
+        self.total_cpus.to_string()
     }
 
     fn total_ram_in_mib(&self) -> u32 {
