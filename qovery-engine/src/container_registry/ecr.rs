@@ -16,7 +16,10 @@ use crate::cmd::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
-use crate::models::{Context, Listeners, ProgressListener};
+use crate::models::{
+    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
+    ProgressStep,
+};
 use crate::runtime::async_run;
 
 pub struct ECR {
@@ -304,8 +307,8 @@ impl ContainerRegistry for ECR {
         ) {
             Err(err) => match err {
                 CmdError::Exec(_exit_status) => return Err(PushError::CredentialsError),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
             },
             _ => {}
         };
@@ -316,13 +319,24 @@ impl ContainerRegistry for ECR {
             image.tag.as_str()
         );
 
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
         if !force_push && self.get_image(image).is_some() {
             // check if image does exist - if yes, do not upload it again
-            info!(
+            let info_message = format!(
                 "image {:?} does already exist into ECR {} repository - no need to upload it",
                 image,
                 self.name()
             );
+
+            info!("{}", info_message.as_str());
+
+            listeners_helper.on_progress(ProgressInfo::new(
+                ProgressStep::DeployEnvironment,
+                ProgressLevel::Info,
+                info_message,
+                self.context.execution_id(),
+            ));
 
             let mut image = image.clone();
             image.registry_url = Some(dest);
@@ -330,11 +344,20 @@ impl ContainerRegistry for ECR {
             return Ok(PushResult { image });
         }
 
-        info!(
+        let info_message = format!(
             "image {:?} does not exist into ECR {} repository - let's upload it",
             image,
             self.name()
         );
+
+        info!("{}", info_message.as_str());
+
+        listeners_helper.on_progress(ProgressInfo::new(
+            ProgressStep::DeployEnvironment,
+            ProgressLevel::Info,
+            info_message,
+            self.context.execution_id(),
+        ));
 
         self.push_image(dest, image)
     }

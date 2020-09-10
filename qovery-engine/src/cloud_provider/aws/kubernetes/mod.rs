@@ -375,7 +375,11 @@ impl<'a> Kubernetes for EKS<'a> {
         listeners_helper.on_progress(ProgressInfo::new(
             ProgressStep::CreateKubernetes,
             ProgressLevel::Info,
-            "start to create EKS cluster",
+            format!(
+                "start to delete EKS cluster {} with id {}",
+                self.name(),
+                self.id()
+            ),
             self.context.execution_id(),
         ));
 
@@ -451,6 +455,19 @@ impl<'a> Kubernetes for EKS<'a> {
     fn on_delete(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_delete() called for {}", self.name());
 
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        listeners_helper.on_progress(ProgressInfo::new(
+            ProgressStep::DeleteKubernetes,
+            ProgressLevel::Warn,
+            format!(
+                "start to delete EKS cluster {} with id {}",
+                self.name(),
+                self.id()
+            ),
+            self.context.execution_id(),
+        ));
+
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
@@ -492,6 +509,8 @@ impl<'a> Kubernetes for EKS<'a> {
     fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         info!("EKS.deploy_environment() called for {}", self.name());
 
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
                 DeploymentTarget::ManagedServices(self, environment)
@@ -502,71 +521,207 @@ impl<'a> Kubernetes for EKS<'a> {
         };
 
         // create all stateful services (database)
-        for stateful_service in &environment.stateful_services {
-            match stateful_service.exec_action(&stateful_deployment_target) {
+        for service in &environment.stateful_services {
+            listeners_helper.on_progress(ProgressInfo::new(
+                ProgressStep::DeployEnvironment,
+                ProgressLevel::Info,
+                format!(
+                    "let's deploy {} {}",
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                ),
+                self.context.execution_id(),
+            ));
+
+            match service.exec_action(&stateful_deployment_target) {
                 Err(err) => {
                     error!(
                         "error with stateful service {} , id: {} => {:?}",
-                        stateful_service.name(),
-                        stateful_service.id(),
+                        service.name(),
+                        service.id(),
                         err
                     );
 
+                    listeners_helper.on_error(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Error,
+                        format!(
+                            "error while deploying {} {} : error => {:?}",
+                            service.service_type().name().to_lowercase(),
+                            service.name(),
+                            err
+                        ),
+                        self.context.execution_id(),
+                    ));
+
                     return Err(KubernetesError::Deploy(err));
                 }
-                _ => {}
+                _ => {
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Info,
+                        format!(
+                            "deployment succeeded for {} {}",
+                            service.service_type().name().to_lowercase(),
+                            service.name()
+                        ),
+                        self.context.execution_id(),
+                    ));
+                }
             }
         }
 
         // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         // create all stateless services (router, application...)
-        for stateless_service in &environment.stateless_services {
-            match stateless_service.exec_action(&stateless_deployment_target) {
+        for service in &environment.stateless_services {
+            listeners_helper.on_progress(ProgressInfo::new(
+                ProgressStep::DeployEnvironment,
+                ProgressLevel::Info,
+                format!(
+                    "let's deploy {} {}",
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                ),
+                self.context.execution_id(),
+            ));
+
+            match service.exec_action(&stateless_deployment_target) {
                 Err(err) => {
                     error!(
                         "error with stateless service {} , id: {} => {:?}",
-                        stateless_service.name(),
-                        stateless_service.id(),
+                        service.name(),
+                        service.id(),
                         err
                     );
 
+                    listeners_helper.on_error(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Error,
+                        format!(
+                            "error while deploying {} {} : error => {:?}",
+                            service.service_type().name().to_lowercase(),
+                            service.name(),
+                            err
+                        ),
+                        self.context.execution_id(),
+                    ));
+
                     return Err(KubernetesError::Deploy(err));
                 }
-                _ => {}
+                _ => {
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Info,
+                        format!(
+                            "deployment succeeded for {} {}",
+                            service.service_type().name().to_lowercase(),
+                            service.name()
+                        ),
+                        self.context.execution_id(),
+                    ));
+                }
             }
         }
 
         // check all deployed services
-        for stateful_service in &environment.stateful_services {
-            match stateful_service.on_create_check() {
+        for service in &environment.stateful_services {
+            listeners_helper.on_progress(ProgressInfo::new(
+                ProgressStep::DeployEnvironment,
+                ProgressLevel::Info,
+                format!(
+                    "check {} {}",
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                ),
+                self.context.execution_id(),
+            ));
+
+            match service.on_create_check() {
                 Err(err) => {
                     error!(
                         "error with stateful service while checking it {} , id: {} => {:?}",
-                        stateful_service.name(),
-                        stateful_service.id(),
+                        service.name(),
+                        service.id(),
                         err
                     );
 
+                    listeners_helper.on_error(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Error,
+                        format!(
+                            "error while checking {} {} : error => {:?}",
+                            service.service_type().name().to_lowercase(),
+                            service.name(),
+                            err
+                        ),
+                        self.context.execution_id(),
+                    ));
+
                     return Err(KubernetesError::Deploy(err));
                 }
-                _ => {}
+                _ => {
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Info,
+                        format!(
+                            "{} {} is up and running",
+                            service.service_type().name().to_lowercase(),
+                            service.name()
+                        ),
+                        self.context.execution_id(),
+                    ));
+                }
             }
         }
 
-        for stateless_service in &environment.stateless_services {
-            match stateless_service.on_create_check() {
+        for service in &environment.stateless_services {
+            listeners_helper.on_progress(ProgressInfo::new(
+                ProgressStep::DeployEnvironment,
+                ProgressLevel::Info,
+                format!(
+                    "check {} {}",
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                ),
+                self.context.execution_id(),
+            ));
+
+            match service.on_create_check() {
                 Err(err) => {
                     error!(
                         "error with stateless service while checking it {} , id: {} => {:?}",
-                        stateless_service.name(),
-                        stateless_service.id(),
+                        service.name(),
+                        service.id(),
                         err
                     );
 
+                    listeners_helper.on_error(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Error,
+                        format!(
+                            "error while checking {} {} : error => {:?}",
+                            service.service_type().name().to_lowercase(),
+                            service.name(),
+                            err
+                        ),
+                        self.context.execution_id(),
+                    ));
+
                     return Err(KubernetesError::Deploy(err));
                 }
-                _ => {}
+                _ => {
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Info,
+                        format!(
+                            "{} {} is up and running",
+                            service.service_type().name().to_lowercase(),
+                            service.name()
+                        ),
+                        self.context.execution_id(),
+                    ));
+                }
             }
         }
 
@@ -576,8 +731,14 @@ impl<'a> Kubernetes for EKS<'a> {
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError> {
         warn!("EKS.deploy_environment_error() called for {}", self.name());
 
-        // TODO get output of all pods and send it back through the listener
-        // TODO helm uninstall for each stateless service
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        listeners_helper.on_progress(ProgressInfo::new(
+            ProgressStep::DeployEnvironment,
+            ProgressLevel::Warn,
+            "An error occurred while trying to deploy the environment, so let's revert changes",
+            self.context.execution_id(),
+        ));
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
@@ -589,40 +750,106 @@ impl<'a> Kubernetes for EKS<'a> {
         };
 
         // clean up all stateful services (database)
-        for stateful_service in &environment.stateful_services {
-            // TODO add multi threading to improve deployment performance - but consider to respect the deployment order
-            match stateful_service.on_create_error(&stateful_deployment_target) {
+        for service in &environment.stateful_services {
+            listeners_helper.on_progress(ProgressInfo::new(
+                ProgressStep::DeployEnvironment,
+                ProgressLevel::Info,
+                format!(
+                    "reverting changes for {} {}",
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                ),
+                self.context.execution_id(),
+            ));
+
+            match service.on_create_error(&stateful_deployment_target) {
                 Err(err) => {
                     error!(
                         "error with stateful service {} , id: {} => {:?}",
-                        stateful_service.name(),
-                        stateful_service.id(),
+                        service.name(),
+                        service.id(),
                         err
                     );
 
+                    listeners_helper.on_error(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Error,
+                        format!(
+                            "error while reverting changes for {} {} : error => {:?}",
+                            service.service_type().name().to_lowercase(),
+                            service.name(),
+                            err
+                        ),
+                        self.context.execution_id(),
+                    ));
+
                     return Err(KubernetesError::Deploy(err));
                 }
-                _ => {}
+                _ => {
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Info,
+                        format!(
+                            "reverting changes succeeded for {} {}",
+                            service.service_type().name().to_lowercase(),
+                            service.name()
+                        ),
+                        self.context.execution_id(),
+                    ));
+                }
             }
         }
 
         // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         // clean up all stateless services (router, application...)
-        for stateless_service in &environment.stateless_services {
-            // TODO add multi threading to improve deployment performance - but consider to respect the deployment order
-            match stateless_service.on_create_error(&stateless_deployment_target) {
+        for service in &environment.stateless_services {
+            listeners_helper.on_progress(ProgressInfo::new(
+                ProgressStep::DeployEnvironment,
+                ProgressLevel::Info,
+                format!(
+                    "reverting changes for {} {}",
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                ),
+                self.context.execution_id(),
+            ));
+
+            match service.on_create_error(&stateless_deployment_target) {
                 Err(err) => {
                     error!(
                         "error with stateless service {} , id: {} => {:?}",
-                        stateless_service.name(),
-                        stateless_service.id(),
+                        service.name(),
+                        service.id(),
                         err
                     );
 
+                    listeners_helper.on_error(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Error,
+                        format!(
+                            "error while reverting changes for {} {} : error => {:?}",
+                            service.service_type().name().to_lowercase(),
+                            service.name(),
+                            err
+                        ),
+                        self.context.execution_id(),
+                    ));
+
                     return Err(KubernetesError::Deploy(err));
                 }
-                _ => {}
+                _ => {
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressStep::DeployEnvironment,
+                        ProgressLevel::Info,
+                        format!(
+                            "reverting changes succeeded for {} {}",
+                            service.service_type().name().to_lowercase(),
+                            service.name()
+                        ),
+                        self.context.execution_id(),
+                    ));
+                }
             }
         }
 
@@ -631,6 +858,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn pause_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         info!("EKS.pause_environment() called for {}", self.name());
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
@@ -720,6 +949,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
         info!("EKS.delete_environment() called for {}", self.name());
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {

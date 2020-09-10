@@ -195,6 +195,16 @@ pub enum ServiceType<'a> {
     Router,
 }
 
+impl<'a> ServiceType<'a> {
+    pub fn name(&self) -> &str {
+        match self {
+            ServiceType::Application => "Application",
+            ServiceType::Database(_) => "Database",
+            ServiceType::Router => "Router",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ServiceError {
     OnCreateFailed,

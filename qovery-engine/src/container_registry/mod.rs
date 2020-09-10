@@ -33,9 +33,11 @@ pub struct PushResult {
 pub enum PushError {
     RepositoryInitFailure,
     CredentialsError,
+    IoError(std::io::Error),
     ImageTagFailed,
     ImagePushFailed,
     ImageAlreadyExists,
+    Unknown(String),
 }
 
 #[derive(Serialize, Deserialize, Clone)]

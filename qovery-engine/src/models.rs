@@ -466,18 +466,18 @@ pub enum ProgressLevel {
 }
 
 impl ProgressInfo {
-    pub fn new(
+    pub fn new<T: Into<String>, X: Into<String>>(
         step: ProgressStep,
         level: ProgressLevel,
-        message: &str,
-        execution_id: &str,
+        message: T,
+        execution_id: X,
     ) -> Self {
         ProgressInfo {
             created_at: Utc::now(),
             step,
             level,
-            message: message.to_string(),
-            execution_id: execution_id.to_string(),
+            message: message.into(),
+            execution_id: execution_id.into(),
         }
     }
 }
