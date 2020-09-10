@@ -74,10 +74,6 @@ pub trait Service {
         }
 
         context.insert("version", self.version());
-        // TODO check: is it possible to set the `name` as an `id` if the namespace is per environment?
-        context.insert("fqdn_id", self.name());
-        // TODO change
-        context.insert("fqdn", self.name());
 
         context
     }

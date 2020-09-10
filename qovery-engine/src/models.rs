@@ -399,6 +399,8 @@ impl Database {
                         self.action.to_service_action(),
                         self.name.as_str(),
                         self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         DatabaseOptions {

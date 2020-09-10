@@ -17,6 +17,8 @@ pub struct PostgreSQL {
     action: Action,
     name: String,
     version: String,
+    fqdn: String,
+    fqdn_id: String,
     total_cpus: String,
     total_ram_in_mib: u32,
     options: DatabaseOptions,
@@ -29,6 +31,8 @@ impl PostgreSQL {
         action: Action,
         name: &str,
         version: &str,
+        fqdn: &str,
+        fqdn_id: &str,
         total_cpus: String,
         total_ram_in_mib: u32,
         options: DatabaseOptions,
@@ -39,6 +43,8 @@ impl PostgreSQL {
             id: id.to_string(),
             name: name.to_string(),
             version: version.to_string(),
+            fqdn: fqdn.to_string(),
+            fqdn_id: fqdn_id.to_string(),
             total_cpus,
             total_ram_in_mib,
             options,
@@ -59,6 +65,9 @@ impl PostgreSQL {
 
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
+
+        context.insert("fqdn_id", self.fqdn_id.as_str());
+        context.insert("fqdn", self.fqdn.as_str());
 
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
