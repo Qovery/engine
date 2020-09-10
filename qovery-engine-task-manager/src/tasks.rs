@@ -499,7 +499,10 @@ where
             ),
         });
 
-        let it = self.sender.send(Ok(it));
+        match self.sender.send(Ok(it)) {
+            Ok(_) => {}
+            Err(err) => error!("{:?}", err),
+        };
     }
 
     fn on_complete(&self, info: ProgressInfo) {
@@ -512,7 +515,10 @@ where
             ),
         });
 
-        let it = self.sender.send(Ok(it));
+        match self.sender.send(Ok(it)) {
+            Ok(_) => {}
+            Err(err) => error!("{:?}", err),
+        };
     }
 
     fn on_error(&self, info: ProgressInfo) {
@@ -525,6 +531,9 @@ where
             ),
         });
 
-        let it = self.sender.send(Ok(it));
+        match self.sender.send(Ok(it)) {
+            Ok(_) => {}
+            Err(err) => error!("{:?}", err),
+        };
     }
 }

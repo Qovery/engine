@@ -371,7 +371,6 @@ impl<'a> Kubernetes for EKS<'a> {
 
         listeners_helper.on_progress(ProgressInfo::new(
             "kubernetes",
-            0,
             "start to create EKS cluster",
             self.context.execution_id(),
         ));

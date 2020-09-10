@@ -157,7 +157,6 @@ impl BuildPlatform for LocalDocker {
 
                 listeners_helper.on_progress(ProgressInfo::new(
                     "build",
-                    50,
                     line_string.as_str(),
                     self.context.execution_id(),
                 ));
@@ -165,6 +164,12 @@ impl BuildPlatform for LocalDocker {
             |line| {
                 let line_string = line.unwrap();
                 error!("{}", line_string.as_str());
+
+                listeners_helper.on_error(ProgressInfo::new(
+                    "build",
+                    line_string.as_str(),
+                    self.context.execution_id(),
+                ));
             },
         );
 
@@ -175,8 +180,7 @@ impl BuildPlatform for LocalDocker {
 
         listeners_helper.on_complete(ProgressInfo::new(
             "build",
-            100,
-            "build done",
+            "build is done ✅",
             self.context.execution_id(),
         ));
 
@@ -189,7 +193,6 @@ impl BuildPlatform for LocalDocker {
         let listener_helper = ListenersHelper::new(&self.listeners);
         listener_helper.on_error(ProgressInfo::new(
             "build",
-            100,
             "something goes wrong",
             self.context.execution_id(),
         ));

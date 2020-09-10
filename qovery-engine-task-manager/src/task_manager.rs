@@ -85,6 +85,7 @@ impl TaskManager {
         self.end_task_sig_sender.send(true);
     }
 
+    /// run task manager - only a single instance will run
     pub fn run(&mut self) -> Result<Receiver<Message>, Error> {
         if self.running {
             return Err(Error::AlreadyRunning);
@@ -94,28 +95,40 @@ impl TaskManager {
         self.running = true;
 
         let (tx_run_msg, rx_run_msg) = unbounded::<Message>();
+        let (tx_run_msg_2, rx_run_msg_2) = unbounded::<Message>();
         let self_it_sender = self.it_sender.clone();
         let self_it_receiver = self.it_receiver.clone();
         let self_end_task_sig_receiver = self.end_task_sig_receiver.clone();
         let self_task_terminated_sender = self.task_terminated_sender.clone();
 
-        let rx_run_msg_2 = rx_run_msg.clone();
         let status_by_task_id_w_1 = self.status_by_task_id_w.clone();
         let status_by_task_id_w_2 = self.status_by_task_id_w.clone();
 
-        thread::spawn(move || loop {
-            match rx_run_msg_2.recv() {
-                Ok(msg) => {
-                    let msg = msg.unwrap();
-                    // update task status
-                    status_by_task_id_w_1
-                        .lock()
-                        .unwrap()
-                        .empty(msg.task.id().to_string())
-                        .insert(msg.task.id().to_string(), msg.status)
-                        .refresh();
+        thread::spawn(move || {
+            let tx_run_msg_2 = tx_run_msg_2;
+
+            loop {
+                match rx_run_msg.recv() {
+                    Ok(msg) => {
+                        match msg {
+                            Ok(it) => {
+                                // update task status
+                                status_by_task_id_w_1
+                                    .lock()
+                                    .unwrap()
+                                    .empty(it.task.id().to_string())
+                                    .insert(it.task.id().to_string(), it.status.clone())
+                                    .refresh();
+
+                                tx_run_msg_2.send(Ok(it));
+                            }
+                            Err(err) => {
+                                tx_run_msg_2.send(Err(err));
+                            }
+                        }
+                    }
+                    Err(err) => {} // FIXME: handle this?
                 }
-                Err(err) => {} // FIXME: handle this?
             }
         });
 
@@ -169,7 +182,7 @@ impl TaskManager {
             };
         });
 
-        Ok(rx_run_msg)
+        Ok(rx_run_msg_2)
     }
 }
 
