@@ -38,7 +38,7 @@ pub struct EnvironmentVariable {
 pub struct GitRepository {
     pub url: String,
     pub credentials: Option<Credentials>,
-    pub commit_id: Option<String>,
+    pub commit_id: String,
     pub dockerfile_path: String,
 }
 

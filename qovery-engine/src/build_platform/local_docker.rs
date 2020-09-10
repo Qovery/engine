@@ -5,6 +5,7 @@ use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image
 use crate::fs::workspace_directory;
 use crate::models::{Context, Listeners, ListenersHelper, ProgressInfo, ProgressListener};
 use crate::{cmd, git};
+use git2::Oid;
 
 /// use Docker in local
 pub struct LocalDocker {
@@ -102,6 +103,14 @@ impl BuildPlatform for LocalDocker {
         );
 
         match git_clone {
+            Ok(_) => {}
+            Err(err) => return Err(BuildError::Git(err)),
+        }
+
+        // git checkout to given commit
+        let repo = &git_clone.unwrap();
+        let commit_id = &build.git_repository.commit_id;
+        match git::checkout(&repo, &commit_id) {
             Ok(_) => {}
             Err(err) => return Err(BuildError::Git(err)),
         }

@@ -225,7 +225,7 @@ impl Application {
                     login: self.git_credentials.login.clone(),
                     password: self.git_credentials.access_token.clone(),
                 }),
-                commit_id: Some(self.commit_id.clone()),
+                commit_id: self.commit_id.clone(),
                 dockerfile_path: ".".to_string(),
             },
             image: Image {
