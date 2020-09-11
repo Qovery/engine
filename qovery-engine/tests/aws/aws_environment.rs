@@ -223,20 +223,20 @@ fn deploy_a_working_environment_with_postgresql() {
 
     let database_host = "postgresql-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
     let database_port = 5432;
-    let database_db_name = "my-postgres";
-    let database_username = "superuser";
+    let database_db_name = "my-postgres".to_string();
+    let database_username = "superuser".to_string();
     let database_password = generate_id();
     environment.databases = vec![Database {
         kind: DatabaseKind::Postgresql,
         action: Action::Create,
         id: generate_id(),
-        name: (&database_db_name).to_string(),
+        name: database_db_name.clone(),
         version: "11.8.0".to_string(),
         fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
-        fqdn: (&database_host).to_string(),
+        fqdn: database_host.clone(),
         port: database_port.clone(),
-        username: (&database_username).to_string(),
-        password: (&database_password).to_string(),
+        username: database_username.clone(),
+        password: database_password.clone(),
         total_cpus: "2".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
@@ -251,23 +251,23 @@ fn deploy_a_working_environment_with_postgresql() {
             app.environment_variables = vec![
                 EnvironmentVariable {
                     key: "PG_HOST".to_string(),
-                    value: (&database_host).to_string(),
+                    value: database_host.clone(),
                 },
                 EnvironmentVariable {
                     key: "PG_PORT".to_string(),
-                    value: (&database_port).to_string(),
+                    value: database_port.clone().to_string(),
                 },
                 EnvironmentVariable {
                     key: "PG_DBNAME".to_string(),
-                    value: (&database_db_name).to_string(),
+                    value: database_db_name.clone(),
                 },
                 EnvironmentVariable {
                     key: "PG_USERNAME".to_string(),
-                    value: (&database_username).to_string(),
+                    value: database_username.clone(),
                 },
                 EnvironmentVariable {
                     key: "PG_PASSWORD".to_string(),
-                    value: (&database_password).to_string(),
+                    value: database_password.clone(),
                 },
             ];
             app
