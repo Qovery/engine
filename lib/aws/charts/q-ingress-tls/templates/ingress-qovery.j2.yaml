@@ -8,7 +8,7 @@ metadata:
     ownerId: {{ owner_id }}
     routerId: {{ name }}
     envId: {{ environment_id }}
-    fqdn: "{{ fqdn }}"
+    fqdn: "{{ router_default_domain }}"
   annotations:
     external-dns.alpha.kubernetes.io/hostname: {{ router_default_domain }}
     external-dns.alpha.kubernetes.io/ttl: "300"
