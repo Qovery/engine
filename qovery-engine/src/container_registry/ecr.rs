@@ -18,7 +18,7 @@ use crate::container_registry::{
 };
 use crate::models::{
     Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
-    ProgressStep,
+    ProgressScope, ProgressStep,
 };
 use crate::runtime::async_run;
 
@@ -332,7 +332,8 @@ impl ContainerRegistry for ECR {
             info!("{}", info_message.as_str());
 
             listeners_helper.on_progress(ProgressInfo::new(
-                ProgressStep::DeployEnvironment,
+                ProgressScope::Application,
+                ProgressStep::PushApplication,
                 ProgressLevel::Info,
                 info_message,
                 self.context.execution_id(),
@@ -353,7 +354,8 @@ impl ContainerRegistry for ECR {
         info!("{}", info_message.as_str());
 
         listeners_helper.on_progress(ProgressInfo::new(
-            ProgressStep::DeployEnvironment,
+            ProgressScope::Application,
+            ProgressStep::PushApplication,
             ProgressLevel::Info,
             info_message,
             self.context.execution_id(),

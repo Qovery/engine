@@ -438,19 +438,51 @@ pub enum EnvironmentError {}
 #[derive(Clone)]
 pub struct ProgressInfo {
     pub created_at: DateTime<Utc>,
+    pub scope: ProgressScope,
     pub step: ProgressStep,
     pub level: ProgressLevel,
     pub message: String,
     pub execution_id: String,
 }
 
+impl ProgressInfo {
+    pub fn new<T: Into<String>, X: Into<String>>(
+        scope: ProgressScope,
+        step: ProgressStep,
+        level: ProgressLevel,
+        message: T,
+        execution_id: X,
+    ) -> Self {
+        ProgressInfo {
+            created_at: Utc::now(),
+            scope,
+            step,
+            level,
+            message: message.into(),
+            execution_id: execution_id.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ProgressScope {
+    Queued,
+    Infrastructure,
+    Database,
+    Application,
+    Router,
+    Environment,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProgressStep {
-    WaitingToRun,
+    Start,
     BootstrapInfrastructure,
     CreateKubernetes,
     BuildApplication,
+    PushApplication,
     DeployEnvironment,
     PauseEnvironment,
     DeleteEnvironment,
@@ -467,27 +499,10 @@ pub enum ProgressLevel {
     Error,
 }
 
-impl ProgressInfo {
-    pub fn new<T: Into<String>, X: Into<String>>(
-        step: ProgressStep,
-        level: ProgressLevel,
-        message: T,
-        execution_id: X,
-    ) -> Self {
-        ProgressInfo {
-            created_at: Utc::now(),
-            step,
-            level,
-            message: message.into(),
-            execution_id: execution_id.into(),
-        }
-    }
-}
-
 pub trait ProgressListener {
     fn on_progress(&self, info: ProgressInfo);
     fn on_complete(&self, info: ProgressInfo);
-    fn on_error(&self, info: ProgressInfo);
+    fn on_complete_with_error(&self, info: ProgressInfo);
 }
 
 pub type Listeners = Vec<Rc<Box<dyn ProgressListener>>>;
@@ -513,8 +528,10 @@ impl<'a> ListenersHelper<'a> {
             .for_each(|l| l.on_complete(info.clone()));
     }
 
-    pub fn on_error(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.on_error(info.clone()));
+    pub fn on_complete_with_error(&self, info: ProgressInfo) {
+        self.listeners
+            .iter()
+            .for_each(|l| l.on_complete_with_error(info.clone()));
     }
 }
 

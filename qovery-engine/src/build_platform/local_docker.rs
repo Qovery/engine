@@ -5,7 +5,7 @@ use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
-    ProgressStep,
+    ProgressScope, ProgressStep,
 };
 use crate::{cmd, git};
 use git2::Oid;
@@ -168,6 +168,7 @@ impl BuildPlatform for LocalDocker {
                 info!("{}", line_string.as_str());
 
                 listeners_helper.on_progress(ProgressInfo::new(
+                    ProgressScope::Application,
                     ProgressStep::BuildApplication,
                     ProgressLevel::Info,
                     line_string.as_str(),
@@ -178,7 +179,8 @@ impl BuildPlatform for LocalDocker {
                 let line_string = line.unwrap();
                 error!("{}", line_string.as_str());
 
-                listeners_helper.on_error(ProgressInfo::new(
+                listeners_helper.on_progress(ProgressInfo::new(
+                    ProgressScope::Application,
                     ProgressStep::BuildApplication,
                     ProgressLevel::Error,
                     line_string.as_str(),
@@ -193,6 +195,7 @@ impl BuildPlatform for LocalDocker {
         }
 
         listeners_helper.on_complete(ProgressInfo::new(
+            ProgressScope::Application,
             ProgressStep::BuildApplication,
             ProgressLevel::Info,
             "build is done ✅",
@@ -206,7 +209,8 @@ impl BuildPlatform for LocalDocker {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
         let listener_helper = ListenersHelper::new(&self.listeners);
-        listener_helper.on_error(ProgressInfo::new(
+        listener_helper.on_progress(ProgressInfo::new(
+            ProgressScope::Application,
             ProgressStep::BuildApplication,
             ProgressLevel::Error,
             "something goes wrong",

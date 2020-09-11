@@ -13,11 +13,13 @@ use qovery_engine::cloud_provider::service::ServiceError;
 use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::ConfigurationError;
-use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressStep};
+use qovery_engine::models::{
+    Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope, ProgressStep,
+};
 use qovery_engine::transaction::{CommitError, TransactionResult};
 
 use crate::models::{Action, Request};
-use crate::task_manager::{ActionContext, InternalTask, Message, Scope, Status, Task};
+use crate::task_manager::{ActionContext, InternalTask, Message, Status, Task};
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -88,7 +90,7 @@ impl Task for InfrastructureTask {
             Status::Running {
                 message: None,
                 context: ActionContext::new(
-                    Scope::Infrastructure,
+                    ProgressScope::Infrastructure,
                     progress_step.clone(),
                     ProgressLevel::Info,
                     self.infrastructure_id(),
@@ -110,10 +112,10 @@ impl Task for InfrastructureTask {
             Err(err) => {
                 self.update_status(
                     &sender,
-                    Status::Failed {
+                    Status::TerminatedWithError {
                         message: Some(format!("failed to get engine session {:?}", err)),
                         context: ActionContext::new(
-                            Scope::Infrastructure,
+                            ProgressScope::Infrastructure,
                             progress_step,
                             ProgressLevel::Error,
                             self.infrastructure_id(),
@@ -152,10 +154,10 @@ impl Task for InfrastructureTask {
             TransactionResult::Ok => {
                 self.update_status(
                     &sender,
-                    Status::Done {
+                    Status::Terminated {
                         message: None,
                         context: ActionContext::new(
-                            Scope::Infrastructure,
+                            ProgressScope::Infrastructure,
                             progress_step,
                             ProgressLevel::Info,
                             self.infrastructure_id(),
@@ -166,7 +168,7 @@ impl Task for InfrastructureTask {
             }
             TransactionResult::Rollback(commit_err) => {
                 let ac = ActionContext::new(
-                    Scope::Infrastructure,
+                    ProgressScope::Infrastructure,
                     progress_step,
                     ProgressLevel::Warn,
                     self.request
@@ -180,7 +182,7 @@ impl Task for InfrastructureTask {
 
                 self.update_status(
                     &sender,
-                    Status::Failed {
+                    Status::TerminatedWithError {
                         message: Some(format!("rollback error - commit error: {:?}", commit_err)),
                         context: ac,
                     },
@@ -188,7 +190,7 @@ impl Task for InfrastructureTask {
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 let ac = ActionContext::new(
-                    Scope::Infrastructure,
+                    ProgressScope::Infrastructure,
                     progress_step,
                     ProgressLevel::Error,
                     self.request
@@ -202,7 +204,7 @@ impl Task for InfrastructureTask {
 
                 self.update_status(
                     &sender,
-                    Status::Failed {
+                    Status::TerminatedWithError {
                         message: Some(format!(
                             "unrecoverable error - commit error: {:?} - rollback error: {:?}",
                             commit_err, rollback_err
@@ -286,7 +288,7 @@ impl Task for EnvironmentTask {
             Status::Running {
                 message: None,
                 context: ActionContext::new(
-                    Scope::Environment,
+                    ProgressScope::Environment,
                     progress_step.clone(),
                     ProgressLevel::Info,
                     self.request
@@ -315,10 +317,10 @@ impl Task for EnvironmentTask {
                 // FIXME return error message
                 self.update_status(
                     &sender,
-                    Status::Failed {
+                    Status::TerminatedWithError {
                         message: Some(format!("failed to get engine session {:?}", err)),
                         context: ActionContext::new(
-                            Scope::Environment,
+                            ProgressScope::Environment,
                             progress_step.clone(),
                             ProgressLevel::Info,
                             self.request
@@ -362,10 +364,10 @@ impl Task for EnvironmentTask {
             TransactionResult::Ok => {
                 self.update_status(
                     &sender,
-                    Status::Done {
+                    Status::Terminated {
                         message: None,
                         context: ActionContext::new(
-                            Scope::Environment,
+                            ProgressScope::Environment,
                             progress_step,
                             ProgressLevel::Info,
                             self.request
@@ -381,7 +383,7 @@ impl Task for EnvironmentTask {
             }
             TransactionResult::Rollback(commit_err) => {
                 let ac = ActionContext::new(
-                    Scope::Environment,
+                    ProgressScope::Environment,
                     progress_step,
                     ProgressLevel::Warn,
                     self.request
@@ -395,7 +397,7 @@ impl Task for EnvironmentTask {
 
                 self.update_status(
                     &sender,
-                    Status::Failed {
+                    Status::TerminatedWithError {
                         message: Some(format!("rollback error - commit error: {:?}", commit_err)),
                         context: ac,
                     },
@@ -403,7 +405,7 @@ impl Task for EnvironmentTask {
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 let ac = ActionContext::new(
-                    Scope::Environment,
+                    ProgressScope::Environment,
                     progress_step,
                     ProgressLevel::Error,
                     self.request
@@ -417,7 +419,7 @@ impl Task for EnvironmentTask {
 
                 self.update_status(
                     &sender,
-                    Status::Failed {
+                    Status::TerminatedWithError {
                         message: Some(format!(
                             "unrecoverable error - commit error: {:?} - rollback error: {:?}",
                             commit_err, rollback_err
@@ -470,7 +472,7 @@ where
         let it = self.get_internal_task(Status::Running {
             message: Some(info.message),
             context: ActionContext::new(
-                Scope::Queued,
+                info.scope,
                 info.step,
                 info.level,
                 info.execution_id.to_string(),
@@ -485,10 +487,10 @@ where
     }
 
     fn on_complete(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::Done {
+        let it = self.get_internal_task(Status::Terminated {
             message: Some(info.message),
             context: ActionContext::new(
-                Scope::Queued,
+                info.scope,
                 info.step,
                 info.level,
                 info.execution_id.to_string(),
@@ -502,11 +504,11 @@ where
         };
     }
 
-    fn on_error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::Error {
+    fn on_complete_with_error(&self, info: ProgressInfo) {
+        let it = self.get_internal_task(Status::TerminatedWithError {
             message: Some(info.message),
             context: ActionContext::new(
-                Scope::Queued,
+                info.scope,
                 info.step,
                 info.level,
                 info.execution_id.to_string(),

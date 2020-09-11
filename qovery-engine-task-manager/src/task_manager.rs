@@ -10,10 +10,10 @@ use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use evmap::{ReadHandle, WriteHandle};
 use serde::{Deserialize, Serialize};
 
-use qovery_engine::models::{ProgressLevel, ProgressStep};
+use qovery_engine::cloud_provider::service::ServiceError;
+use qovery_engine::models::{ProgressLevel, ProgressScope, ProgressStep};
 
 use crate::models::Request;
-use qovery_engine::cloud_provider::service::ServiceError;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -214,8 +214,8 @@ fn add_task(
             Status::Waiting {
                 message: None,
                 context: ActionContext::new(
-                    Scope::Queued,
-                    ProgressStep::WaitingToRun,
+                    ProgressScope::Queued,
+                    ProgressStep::Start,
                     ProgressLevel::Info,
                     task_id.to_string(),
                     task_id.to_string(),
@@ -229,8 +229,8 @@ fn add_task(
         status: Status::Waiting {
             message: None,
             context: ActionContext::new(
-                Scope::Queued,
-                ProgressStep::WaitingToRun,
+                ProgressScope::Queued,
+                ProgressStep::Start,
                 ProgressLevel::Info,
                 task_id.to_string(),
                 task_id.to_string(),
@@ -255,19 +255,8 @@ pub struct InternalTask {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Scope {
-    Queued,
-    Infrastructure,
-    Service,
-    Application,
-    Router,
-    Environment,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ActionContext {
-    pub scope: Scope,
+    pub scope: ProgressScope,
     pub step: ProgressStep,
     pub level: ProgressLevel,
     pub id: String,
@@ -276,7 +265,7 @@ pub struct ActionContext {
 
 impl ActionContext {
     pub fn new(
-        scope: Scope,
+        scope: ProgressScope,
         step: ProgressStep,
         level: ProgressLevel,
         id: String,
@@ -293,7 +282,7 @@ impl ActionContext {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "status", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Status {
     Waiting {
         message: Option<String>,
@@ -303,19 +292,11 @@ pub enum Status {
         message: Option<String>,
         context: ActionContext,
     },
-    Warning {
+    Terminated {
         message: Option<String>,
         context: ActionContext,
     },
-    Error {
-        message: Option<String>,
-        context: ActionContext,
-    },
-    Failed {
-        message: Option<String>,
-        context: ActionContext,
-    },
-    Done {
+    TerminatedWithError {
         message: Option<String>,
         context: ActionContext,
     },

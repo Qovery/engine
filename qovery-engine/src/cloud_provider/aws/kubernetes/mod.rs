@@ -13,7 +13,7 @@ use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
-    ProgressStep,
+    ProgressScope, ProgressStep,
 };
 use crate::{dynamo_db, s3};
 use std::rc::Rc;
@@ -373,6 +373,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         listeners_helper.on_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure,
             ProgressStep::CreateKubernetes,
             ProgressLevel::Info,
             format!(
@@ -458,6 +459,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         listeners_helper.on_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure,
             ProgressStep::DeleteKubernetes,
             ProgressLevel::Warn,
             format!(
@@ -523,6 +525,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // create all stateful services (database)
         for service in &environment.stateful_services {
             listeners_helper.on_progress(ProgressInfo::new(
+                ProgressScope::Environment,
                 ProgressStep::DeployEnvironment,
                 ProgressLevel::Info,
                 format!(
@@ -542,7 +545,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Error,
                         format!(
@@ -558,6 +562,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 }
                 _ => {
                     listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Info,
                         format!(
@@ -576,6 +581,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // create all stateless services (router, application...)
         for service in &environment.stateless_services {
             listeners_helper.on_progress(ProgressInfo::new(
+                ProgressScope::Environment,
                 ProgressStep::DeployEnvironment,
                 ProgressLevel::Info,
                 format!(
@@ -595,7 +601,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Error,
                         format!(
@@ -611,6 +618,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 }
                 _ => {
                     listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Info,
                         format!(
@@ -627,6 +635,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // check all deployed services
         for service in &environment.stateful_services {
             listeners_helper.on_progress(ProgressInfo::new(
+                ProgressScope::Environment,
                 ProgressStep::DeployEnvironment,
                 ProgressLevel::Info,
                 format!(
@@ -646,7 +655,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Error,
                         format!(
@@ -662,6 +672,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 }
                 _ => {
                     listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Info,
                         format!(
@@ -677,6 +688,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         for service in &environment.stateless_services {
             listeners_helper.on_progress(ProgressInfo::new(
+                ProgressScope::Environment,
                 ProgressStep::DeployEnvironment,
                 ProgressLevel::Info,
                 format!(
@@ -696,7 +708,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Error,
                         format!(
@@ -712,6 +725,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 }
                 _ => {
                     listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Info,
                         format!(
@@ -734,6 +748,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         listeners_helper.on_progress(ProgressInfo::new(
+            ProgressScope::Environment,
             ProgressStep::DeployEnvironment,
             ProgressLevel::Warn,
             "An error occurred while trying to deploy the environment, so let's revert changes",
@@ -752,6 +767,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // clean up all stateful services (database)
         for service in &environment.stateful_services {
             listeners_helper.on_progress(ProgressInfo::new(
+                ProgressScope::Environment,
                 ProgressStep::DeployEnvironment,
                 ProgressLevel::Info,
                 format!(
@@ -771,7 +787,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Error,
                         format!(
@@ -787,6 +804,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 }
                 _ => {
                     listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Info,
                         format!(
@@ -805,6 +823,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // clean up all stateless services (router, application...)
         for service in &environment.stateless_services {
             listeners_helper.on_progress(ProgressInfo::new(
+                ProgressScope::Environment,
                 ProgressStep::DeployEnvironment,
                 ProgressLevel::Info,
                 format!(
@@ -824,7 +843,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Error,
                         format!(
@@ -840,6 +860,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 }
                 _ => {
                     listeners_helper.on_progress(ProgressInfo::new(
+                        ProgressScope::Environment,
                         ProgressStep::DeployEnvironment,
                         ProgressLevel::Info,
                         format!(
