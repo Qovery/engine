@@ -237,7 +237,7 @@ fn deploy_a_working_environment_with_postgresql() {
         port: database_port.clone(),
         username: database_username.clone(),
         password: database_password.clone(),
-        total_cpus: "2".to_string(),
+        total_cpus: "500m".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
     }];
@@ -267,6 +267,90 @@ fn deploy_a_working_environment_with_postgresql() {
                 },
                 EnvironmentVariable {
                     key: "PG_PASSWORD".to_string(),
+                    value: database_password.clone(),
+                },
+            ];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // todo: check the database disk is here and with correct size
+
+    match delete_environment(&context, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    //Todo: remove the namespace (or project)
+}
+
+// Todo: Can't work, missing implementation, MySQL is not bootstraped
+#[test]
+fn deploy_a_working_environment_with_mysql() {
+    init();
+
+    let context = context();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+
+    let database_host = "mysql-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
+    let database_port = 3306;
+    let database_db_name = "mydb".to_string();
+    let database_username = "superuser".to_string();
+    let database_password = generate_id();
+    environment.databases = vec![Database {
+        kind: DatabaseKind::Mysql,
+        action: Action::Create,
+        id: generate_id(),
+        name: database_db_name.clone(),
+        version: "5.7.30".to_string(),
+        fqdn_id: "mysql-".to_string() + generate_id().as_str(),
+        fqdn: database_host.clone(),
+        port: database_port.clone(),
+        username: database_username.clone(),
+        password: database_password.clone(),
+        total_cpus: "500m".to_string(),
+        total_ram_in_mib: 512,
+        disk_size_in_gib: 10,
+    }];
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.branch = "mysql-app".to_string();
+            app.commit_id = "222295112d58d78227c21060d3a707687302e86f".to_string();
+            app.private_port = Some(1234);
+            app.environment_variables = vec![
+                EnvironmentVariable {
+                    key: "MYSQL_HOST".to_string(),
+                    value: database_host.clone(),
+                },
+                EnvironmentVariable {
+                    key: "MYSQL_PORT".to_string(),
+                    value: database_port.clone().to_string(),
+                },
+                EnvironmentVariable {
+                    key: "MYSQL_DBNAME".to_string(),
+                    value: database_db_name.clone(),
+                },
+                EnvironmentVariable {
+                    key: "MYSQL_USERNAME".to_string(),
+                    value: database_username.clone(),
+                },
+                EnvironmentVariable {
+                    key: "MYSQL_PASSWORD".to_string(),
                     value: database_password.clone(),
                 },
             ];
