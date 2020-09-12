@@ -112,10 +112,20 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> bool
         msg.respond(Response::new(None).as_json_string());
 
         if is_task_running {
+            warn!(
+                "task with group id {} and id {} is already running",
+                task.group_id(),
+                task.id()
+            );
             return true;
         }
     }
 
+    info!(
+        "task with group id {} and id {} is not running",
+        task.group_id(),
+        task.id()
+    );
     false
 }
 
@@ -416,16 +426,19 @@ pub fn main() -> Result<(), Error> {
         let _ = sig_term_rx.recv();
         warn!("Termination signal received - graceful termination in progress...");
         // unsubscribe listeners
-        task_running_check_sub.unsubscribe();
-        infrastructure_sub.unsubscribe();
-        environment_sub.unsubscribe();
+        // do not unsubscribe "task_running_check_sub - it must be alive during the whole tasks completion"
+        let _ = infrastructure_sub.unsubscribe();
+        info!("unsubscribe from infrastructure subject");
+        let _ = environment_sub.unsubscribe();
+        info!("unsubscribe from environment subject");
         task_manager.lock().unwrap().stop();
+        info!("request to TaskManager to stop receiving new tasks");
     });
 
     ctrlc::set_handler(move || {
         sig_term_tx.send(true);
     })
-    .expect("Error setting Ctrl-C (Sig. Term) handler");
+    .expect("Error setting Ctrl-C (SIGTERM) handler");
 
     info!("server started and listening for incoming requests");
     let _ = rx_quit.recv();

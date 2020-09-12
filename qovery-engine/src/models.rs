@@ -478,7 +478,7 @@ pub enum ProgressScope {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProgressStep {
-    Start,
+    Init,
     BootstrapInfrastructure,
     CreateKubernetes,
     BuildApplication,

@@ -21,7 +21,9 @@ pub type Message = Result<InternalTask, Error>;
 
 pub struct TaskManager {
     it_sender: Sender<InternalTask>,
-    it_receiver: Receiver<InternalTask>,
+    // Arc + Mutex used to avoid to get 2 receivers and miss messages (Receiver is not a Bus).
+    // Because the receiver is passed to another thread
+    it_receiver: Arc<Mutex<Receiver<InternalTask>>>,
     end_task_sig_sender: Sender<bool>,
     end_task_sig_receiver: Receiver<bool>,
     task_terminated_sender: Sender<bool>,
@@ -41,7 +43,7 @@ impl TaskManager {
 
         TaskManager {
             it_sender,
-            it_receiver,
+            it_receiver: Arc::new(Mutex::new(it_receiver)),
             end_task_sig_sender,
             end_task_sig_receiver,
             task_terminated_sender,
@@ -62,7 +64,7 @@ impl TaskManager {
     }
 
     pub fn remaining_tasks_to_run(&self) -> usize {
-        self.it_receiver.len()
+        self.it_receiver.lock().unwrap().len()
     }
 
     pub fn is_terminated(&self) -> Receiver<bool> {
@@ -134,6 +136,7 @@ impl TaskManager {
         });
 
         let _ = thread::spawn(move || loop {
+            let self_it_receiver = self_it_receiver.lock().unwrap();
             let _ = match self_it_receiver.try_recv() {
                 Ok(internal_task) => {
                     let start_time = Instant::now();
@@ -149,7 +152,7 @@ impl TaskManager {
                             start_time.elapsed()
                         );
 
-                        if self_it_receiver.is_empty()
+                        if self_it_receiver.len() == 0
                             && self_end_task_sig_receiver.try_recv().is_ok()
                         {
                             info!("no remaining task to run - shutdown task manager");
@@ -159,7 +162,11 @@ impl TaskManager {
                         }
                     } else {
                         // postpone the task
-                        info!("postpone task id {}", internal_task.task.id());
+                        info!(
+                            "postpone task group id {} with id {}",
+                            internal_task.task.group_id(),
+                            internal_task.task.id()
+                        );
 
                         // re-add the task
                         add_task(
@@ -174,6 +181,7 @@ impl TaskManager {
                     }
                 }
                 Err(err) => {
+                    debug!("no task to run, wait for 1 sec");
                     sleep(Duration::from_secs(1));
                     if self_end_task_sig_receiver.try_recv().is_ok() {
                         info!("shutdown task manager");
@@ -193,6 +201,8 @@ fn add_task(
     it_sender: &Sender<InternalTask>,
     task: Box<dyn Task>,
 ) {
+    // TODO notify task has been queued
+
     let _ = match end_task_sig_receiver.try_recv() {
         Ok(x) => {
             if x {
@@ -215,7 +225,7 @@ fn add_task(
                 message: None,
                 context: ActionContext::new(
                     ProgressScope::Queued,
-                    ProgressStep::Start,
+                    ProgressStep::Init,
                     ProgressLevel::Info,
                     task_id.to_string(),
                     task_id.to_string(),
@@ -230,7 +240,7 @@ fn add_task(
             message: None,
             context: ActionContext::new(
                 ProgressScope::Queued,
-                ProgressStep::Start,
+                ProgressStep::Init,
                 ProgressLevel::Info,
                 task_id.to_string(),
                 task_id.to_string(),
