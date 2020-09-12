@@ -44,6 +44,7 @@ pub struct GitRepository {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Image {
+    pub application_id: String,
     pub name: String,
     pub tag: String,
     pub commit_id: String,

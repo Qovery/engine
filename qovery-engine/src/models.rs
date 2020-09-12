@@ -226,6 +226,7 @@ impl Application {
                 dockerfile_path: ".".to_string(),
             },
             image: Image {
+                application_id: self.id.clone(),
                 name: self.name.clone(),
                 tag: self.commit_id.clone(),
                 commit_id: self.commit_id.clone(),
@@ -465,29 +466,27 @@ impl ProgressInfo {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProgressScope {
     Queued,
-    Infrastructure,
-    Database,
-    Application,
-    Router,
-    Environment,
+    Infrastructure { execution_id: String },
+    Database { id: String },
+    Application { id: String },
+    Router { id: String },
+    Environment { id: String },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProgressStep {
     Init,
-    BootstrapInfrastructure,
-    CreateKubernetes,
-    BuildApplication,
-    PushApplication,
-    DeployEnvironment,
-    PauseEnvironment,
-    DeleteEnvironment,
-    DeleteKubernetes,
-    DeleteInfrastructure,
+    Create,
+    Build,
+    Push,
+    Deploy,
+    Start,
+    Pause,
+    Delete,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

@@ -228,7 +228,6 @@ fn add_task(
                     ProgressStep::Init,
                     ProgressLevel::Info,
                     task_id.to_string(),
-                    task_id.to_string(),
                 ),
             },
         )
@@ -242,7 +241,6 @@ fn add_task(
                 ProgressScope::Queued,
                 ProgressStep::Init,
                 ProgressLevel::Info,
-                task_id.to_string(),
                 task_id.to_string(),
             ),
         },
@@ -269,7 +267,6 @@ pub struct ActionContext {
     pub scope: ProgressScope,
     pub step: ProgressStep,
     pub level: ProgressLevel,
-    pub id: String,
     pub execution_id: String,
 }
 
@@ -278,14 +275,12 @@ impl ActionContext {
         scope: ProgressScope,
         step: ProgressStep,
         level: ProgressLevel,
-        id: String,
         execution_id: String,
     ) -> Self {
         ActionContext {
             scope,
             step,
             level,
-            id,
             execution_id,
         }
     }

@@ -167,8 +167,10 @@ impl BuildPlatform for LocalDocker {
                 info!("{}", line_string.as_str());
 
                 listeners_helper.on_progress(ProgressInfo::new(
-                    ProgressScope::Application,
-                    ProgressStep::BuildApplication,
+                    ProgressScope::Application {
+                        id: build.image.application_id.clone(),
+                    },
+                    ProgressStep::Build,
                     ProgressLevel::Info,
                     line_string.as_str(),
                     self.context.execution_id(),
@@ -179,8 +181,10 @@ impl BuildPlatform for LocalDocker {
                 error!("{}", line_string.as_str());
 
                 listeners_helper.on_progress(ProgressInfo::new(
-                    ProgressScope::Application,
-                    ProgressStep::BuildApplication,
+                    ProgressScope::Application {
+                        id: build.image.application_id.clone(),
+                    },
+                    ProgressStep::Build,
                     ProgressLevel::Error,
                     line_string.as_str(),
                     self.context.execution_id(),
@@ -194,8 +198,10 @@ impl BuildPlatform for LocalDocker {
         }
 
         listeners_helper.on_complete(ProgressInfo::new(
-            ProgressScope::Application,
-            ProgressStep::BuildApplication,
+            ProgressScope::Application {
+                id: build.image.application_id.clone(),
+            },
+            ProgressStep::Build,
             ProgressLevel::Info,
             "build is done ✅",
             self.context.execution_id(),
@@ -204,13 +210,15 @@ impl BuildPlatform for LocalDocker {
         Ok(BuildResult { build })
     }
 
-    fn build_error(&self, _build: Build) -> Result<BuildResult, BuildError> {
+    fn build_error(&self, build: Build) -> Result<BuildResult, BuildError> {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
         let listener_helper = ListenersHelper::new(&self.listeners);
         listener_helper.on_progress(ProgressInfo::new(
-            ProgressScope::Application,
-            ProgressStep::BuildApplication,
+            ProgressScope::Application {
+                id: build.image.application_id,
+            },
+            ProgressStep::Build,
             ProgressLevel::Error,
             "something goes wrong",
             self.context.execution_id(),

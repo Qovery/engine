@@ -80,9 +80,9 @@ impl Task for InfrastructureTask {
         );
 
         let progress_step = match self.request.action {
-            Action::Create => ProgressStep::CreateKubernetes,
-            Action::Pause => ProgressStep::CreateKubernetes, // this is preferable to create a kubernetes cluster instead of deleting it
-            Action::Delete => ProgressStep::DeleteKubernetes,
+            Action::Create => ProgressStep::Create,
+            Action::Pause => ProgressStep::Create, // this is preferable to create a kubernetes cluster instead of deleting it
+            Action::Delete => ProgressStep::Delete,
         };
 
         self.update_status(
@@ -90,10 +90,11 @@ impl Task for InfrastructureTask {
             Status::Running {
                 message: None,
                 context: ActionContext::new(
-                    ProgressScope::Infrastructure,
+                    ProgressScope::Infrastructure {
+                        execution_id: self.id().to_string(),
+                    },
                     progress_step.clone(),
                     ProgressLevel::Info,
-                    self.infrastructure_id(),
                     self.id().to_string(),
                 ),
             },
@@ -115,10 +116,11 @@ impl Task for InfrastructureTask {
                     Status::TerminatedWithError {
                         message: Some(format!("failed to get engine session {:?}", err)),
                         context: ActionContext::new(
-                            ProgressScope::Infrastructure,
+                            ProgressScope::Infrastructure {
+                                execution_id: self.id().to_string(),
+                            },
                             progress_step,
                             ProgressLevel::Error,
-                            self.infrastructure_id(),
                             self.id().to_string(),
                         ),
                     },
@@ -157,10 +159,11 @@ impl Task for InfrastructureTask {
                     Status::Terminated {
                         message: None,
                         context: ActionContext::new(
-                            ProgressScope::Infrastructure,
+                            ProgressScope::Infrastructure {
+                                execution_id: self.id().to_string(),
+                            },
                             progress_step,
                             ProgressLevel::Info,
-                            self.infrastructure_id(),
                             self.id().to_string(),
                         ),
                     },
@@ -168,15 +171,11 @@ impl Task for InfrastructureTask {
             }
             TransactionResult::Rollback(commit_err) => {
                 let ac = ActionContext::new(
-                    ProgressScope::Infrastructure,
+                    ProgressScope::Infrastructure {
+                        execution_id: self.id().to_string(),
+                    },
                     progress_step,
                     ProgressLevel::Warn,
-                    self.request
-                        .target_environment
-                        .as_ref()
-                        .unwrap()
-                        .id
-                        .to_string(),
                     self.id().to_string(),
                 );
 
@@ -190,15 +189,11 @@ impl Task for InfrastructureTask {
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 let ac = ActionContext::new(
-                    ProgressScope::Infrastructure,
+                    ProgressScope::Infrastructure {
+                        execution_id: self.id().to_string(),
+                    },
                     progress_step,
                     ProgressLevel::Error,
-                    self.request
-                        .target_environment
-                        .as_ref()
-                        .unwrap()
-                        .id
-                        .to_string(),
                     self.id().to_string(),
                 );
 
@@ -278,25 +273,29 @@ impl Task for EnvironmentTask {
         info!("environment task {} started", self.id());
 
         let progress_step = match self.request.action {
-            Action::Create => ProgressStep::DeployEnvironment,
-            Action::Pause => ProgressStep::PauseEnvironment,
-            Action::Delete => ProgressStep::DeleteEnvironment,
+            Action::Create => ProgressStep::Deploy,
+            Action::Pause => ProgressStep::Pause,
+            Action::Delete => ProgressStep::Delete,
         };
+
+        let target_environment_id = self
+            .request
+            .target_environment
+            .as_ref()
+            .unwrap()
+            .id
+            .to_string();
 
         self.update_status(
             &sender,
             Status::Running {
                 message: None,
                 context: ActionContext::new(
-                    ProgressScope::Environment,
+                    ProgressScope::Environment {
+                        id: target_environment_id.clone(),
+                    },
                     progress_step.clone(),
                     ProgressLevel::Info,
-                    self.request
-                        .target_environment
-                        .as_ref()
-                        .unwrap()
-                        .id
-                        .to_string(),
                     self.id().to_string(),
                 ),
             },
@@ -320,15 +319,11 @@ impl Task for EnvironmentTask {
                     Status::TerminatedWithError {
                         message: Some(format!("failed to get engine session {:?}", err)),
                         context: ActionContext::new(
-                            ProgressScope::Environment,
+                            ProgressScope::Environment {
+                                id: target_environment_id.clone(),
+                            },
                             progress_step.clone(),
                             ProgressLevel::Info,
-                            self.request
-                                .target_environment
-                                .as_ref()
-                                .unwrap()
-                                .id
-                                .to_string(),
                             self.id().to_string(),
                         ),
                     },
@@ -367,15 +362,11 @@ impl Task for EnvironmentTask {
                     Status::Terminated {
                         message: None,
                         context: ActionContext::new(
-                            ProgressScope::Environment,
+                            ProgressScope::Environment {
+                                id: target_environment_id.clone(),
+                            },
                             progress_step,
                             ProgressLevel::Info,
-                            self.request
-                                .target_environment
-                                .as_ref()
-                                .unwrap()
-                                .id
-                                .to_string(),
                             self.id().to_string(),
                         ),
                     },
@@ -383,15 +374,11 @@ impl Task for EnvironmentTask {
             }
             TransactionResult::Rollback(commit_err) => {
                 let ac = ActionContext::new(
-                    ProgressScope::Environment,
+                    ProgressScope::Environment {
+                        id: target_environment_id.clone(),
+                    },
                     progress_step,
                     ProgressLevel::Warn,
-                    self.request
-                        .target_environment
-                        .as_ref()
-                        .unwrap()
-                        .id
-                        .to_string(),
                     self.id().to_string(),
                 );
 
@@ -405,15 +392,11 @@ impl Task for EnvironmentTask {
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
                 let ac = ActionContext::new(
-                    ProgressScope::Environment,
+                    ProgressScope::Environment {
+                        id: target_environment_id.clone(),
+                    },
                     progress_step,
                     ProgressLevel::Error,
-                    self.request
-                        .target_environment
-                        .as_ref()
-                        .unwrap()
-                        .id
-                        .to_string(),
                     self.id().to_string(),
                 );
 
@@ -476,7 +459,6 @@ where
                 info.step,
                 info.level,
                 info.execution_id.to_string(),
-                info.execution_id.to_string(),
             ),
         });
 
@@ -494,7 +476,6 @@ where
                 info.step,
                 info.level,
                 info.execution_id.to_string(),
-                info.execution_id.to_string(),
             ),
         });
 
@@ -511,7 +492,6 @@ where
                 info.scope,
                 info.step,
                 info.level,
-                info.execution_id.to_string(),
                 info.execution_id.to_string(),
             ),
         });

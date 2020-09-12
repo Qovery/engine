@@ -394,8 +394,7 @@ pub fn main() -> Result<(), Error> {
         }
     });
 
-    let task_running_check_sub =
-        listen_for_task_running_check_events(task_manager.clone(), &nc, &mode)?;
+    let _ = listen_for_task_running_check_events(task_manager.clone(), &nc, &mode)?;
 
     let infrastructure_sub = listen_for_events(
         workspace_root_dir.clone(),

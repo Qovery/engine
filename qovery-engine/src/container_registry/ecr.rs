@@ -332,8 +332,10 @@ impl ContainerRegistry for ECR {
             info!("{}", info_message.as_str());
 
             listeners_helper.on_progress(ProgressInfo::new(
-                ProgressScope::Application,
-                ProgressStep::PushApplication,
+                ProgressScope::Application {
+                    id: image.application_id.clone(),
+                },
+                ProgressStep::Push,
                 ProgressLevel::Info,
                 info_message,
                 self.context.execution_id(),
@@ -354,8 +356,10 @@ impl ContainerRegistry for ECR {
         info!("{}", info_message.as_str());
 
         listeners_helper.on_progress(ProgressInfo::new(
-            ProgressScope::Application,
-            ProgressStep::PushApplication,
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressStep::Push,
             ProgressLevel::Info,
             info_message,
             self.context.execution_id(),
