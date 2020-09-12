@@ -8,7 +8,6 @@ use crate::models::{
     ProgressScope, ProgressStep,
 };
 use crate::{cmd, git};
-use git2::Oid;
 
 /// use Docker in local
 pub struct LocalDocker {
