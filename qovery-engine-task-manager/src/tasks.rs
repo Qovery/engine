@@ -468,6 +468,23 @@ where
         };
     }
 
+    fn on_error(&self, info: ProgressInfo) {
+        let it = self.get_internal_task(Status::Error {
+            message: Some(info.message),
+            context: ActionContext::new(
+                info.scope,
+                info.step,
+                info.level,
+                info.execution_id.to_string(),
+            ),
+        });
+
+        match self.sender.send(Ok(it)) {
+            Ok(_) => {}
+            Err(err) => error!("{:?}", err),
+        };
+    }
+
     fn on_complete(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Terminated {
             message: Some(info.message),

@@ -500,6 +500,7 @@ pub enum ProgressLevel {
 
 pub trait ProgressListener {
     fn on_progress(&self, info: ProgressInfo);
+    fn on_error(&self, info: ProgressInfo);
     fn on_complete(&self, info: ProgressInfo);
     fn on_complete_with_error(&self, info: ProgressInfo);
 }
@@ -519,6 +520,10 @@ impl<'a> ListenersHelper<'a> {
         self.listeners
             .iter()
             .for_each(|l| l.on_progress(info.clone()));
+    }
+
+    pub fn on_error(&self, info: ProgressInfo) {
+        self.listeners.iter().for_each(|l| l.on_error(info.clone()));
     }
 
     pub fn on_complete(&self, info: ProgressInfo) {

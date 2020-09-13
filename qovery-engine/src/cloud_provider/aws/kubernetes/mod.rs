@@ -1,8 +1,10 @@
+use std::borrow::Borrow;
+use std::rc::Rc;
+use std::str::FromStr;
+
 use itertools::Itertools;
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
-use std::str::FromStr;
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::kubernetes::node::Node;
@@ -17,7 +19,6 @@ use crate::models::{
     ProgressScope, ProgressStep,
 };
 use crate::{dynamo_db, s3};
-use std::rc::Rc;
 
 pub mod node;
 
@@ -565,7 +566,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.on_error(ProgressInfo::new(
                         progress_scope,
                         ProgressStep::Deploy,
                         ProgressLevel::Error,
@@ -623,7 +624,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.on_error(ProgressInfo::new(
                         progress_scope,
                         ProgressStep::Deploy,
                         ProgressLevel::Error,
@@ -679,7 +680,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.on_error(ProgressInfo::new(
                         progress_scope,
                         ProgressStep::Deploy,
                         ProgressLevel::Error,
@@ -695,7 +696,7 @@ impl<'a> Kubernetes for EKS<'a> {
                     return Err(KubernetesError::Deploy(err));
                 }
                 _ => {
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.on_complete(ProgressInfo::new(
                         progress_scope,
                         ProgressStep::Deploy,
                         ProgressLevel::Info,
@@ -734,7 +735,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.on_error(ProgressInfo::new(
                         progress_scope,
                         ProgressStep::Deploy,
                         ProgressLevel::Error,
@@ -817,7 +818,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.on_error(ProgressInfo::new(
                         progress_scope,
                         ProgressStep::Deploy,
                         ProgressLevel::Error,
@@ -875,7 +876,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.on_error(ProgressInfo::new(
                         progress_scope,
                         ProgressStep::Deploy,
                         ProgressLevel::Error,

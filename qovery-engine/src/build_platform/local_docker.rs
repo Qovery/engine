@@ -180,7 +180,7 @@ impl BuildPlatform for LocalDocker {
                 let line_string = line.unwrap();
                 error!("{}", line_string.as_str());
 
-                listeners_helper.on_progress(ProgressInfo::new(
+                listeners_helper.on_error(ProgressInfo::new(
                     ProgressScope::Application {
                         id: build.image.application_id.clone(),
                     },
@@ -214,13 +214,13 @@ impl BuildPlatform for LocalDocker {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
         let listener_helper = ListenersHelper::new(&self.listeners);
-        listener_helper.on_progress(ProgressInfo::new(
+        listener_helper.on_error(ProgressInfo::new(
             ProgressScope::Application {
                 id: build.image.application_id,
             },
             ProgressStep::Build,
             ProgressLevel::Error,
-            "something goes wrong",
+            "something goes wrong (not implemented)",
             self.context.execution_id(),
         ));
 

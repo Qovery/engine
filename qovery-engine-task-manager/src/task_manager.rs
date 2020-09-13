@@ -297,6 +297,10 @@ pub enum Status {
         message: Option<String>,
         context: ActionContext,
     },
+    Error {
+        message: Option<String>,
+        context: ActionContext,
+    },
     Terminated {
         message: Option<String>,
         context: ActionContext,
