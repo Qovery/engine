@@ -1,7 +1,8 @@
-use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
-use crate::models::{Context, ProgressListener};
 use std::any::Any;
 use std::rc::Rc;
+
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
+use crate::models::{Context, Listener, ProgressListener};
 
 pub struct GCP {
     context: Context,
@@ -46,7 +47,7 @@ impl<'x> CloudProvider for GCP {
         Ok(())
     }
 
-    fn add_listener(&mut self, _listener: Rc<Box<dyn ProgressListener>>) {
+    fn add_listener(&mut self, _listener: Listener) {
         // TODO
     }
 

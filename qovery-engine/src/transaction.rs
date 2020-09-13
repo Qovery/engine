@@ -1,16 +1,18 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::build_platform::BuildError;
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesError};
-use crate::cloud_provider::service::Application;
 use crate::cloud_provider::service::ServiceError;
+use crate::cloud_provider::service::{Application, Service};
 use crate::cloud_provider::DeployError;
 use crate::container_registry::{PushError, PushResult};
 use crate::engine::Engine;
-
-use crate::models::{Action, Environment, EnvironmentAction, EnvironmentError};
-
-use serde::{Deserialize, Serialize};
+use crate::models::{
+    Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo,
+    ProgressLevel, ProgressScope, ProgressStep,
+};
 
 pub struct Transaction<'a> {
     engine: &'a Engine,
@@ -561,17 +563,55 @@ impl<'a> Transaction<'a> {
             err => return err, // which it means that an error occurred
         };
 
+        let lh = ListenersHelper::new(kubernetes.listeners());
+        let execution_id = self.engine.context().execution_id();
+
+        // inner function - I use it instead of closure because of ?Sized
+        fn get_final_progress_info<T>(service: &Box<T>, execution_id: &str) -> ProgressInfo
+        where
+            T: Service + ?Sized,
+        {
+            ProgressInfo::new(
+                service.progress_scope(),
+                ProgressStep::Final,
+                ProgressLevel::Info,
+                None::<&str>,
+                execution_id,
+            )
+        };
+
         let _ = match action_fn(&qe_environment) {
             Err(err) => {
-                return match self.rollback() {
+                let rollback_result = match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(commit_error(err)),
                     Err(rollback_err) => {
                         error!("ROLLBACK FAILED! fatal error: {:?}", rollback_err);
                         TransactionResult::UnrecoverableError(commit_error(err), rollback_err)
                     }
+                };
+
+                // !!! don't change the order
+                // terminal update
+                for service in &qe_environment.stateful_services {
+                    lh.on_complete_with_error(get_final_progress_info(service, execution_id));
+                }
+
+                for service in &qe_environment.stateless_services {
+                    lh.on_complete_with_error(get_final_progress_info(service, execution_id));
+                }
+
+                return rollback_result;
+            }
+            _ => {
+                // terminal update
+                for service in &qe_environment.stateful_services {
+                    lh.on_complete(get_final_progress_info(service, execution_id));
+                }
+
+                for service in &qe_environment.stateless_services {
+                    lh.on_complete(get_final_progress_info(service, execution_id));
                 }
             }
-            _ => {}
         };
 
         TransactionResult::Ok

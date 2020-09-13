@@ -9,7 +9,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::CmdError;
-use crate::models::Context;
+use crate::models::{Context, ProgressScope};
 use crate::transaction::CommitError;
 
 pub trait Service {
@@ -34,6 +34,7 @@ pub trait Service {
             Err(_) => false,
         }
     }
+
     fn is_valid(&self) -> Result<(), ServiceError> {
         let binaries = ["kubectl", "helm", "terraform", "aws-iam-authenticator"];
 
@@ -76,6 +77,16 @@ pub trait Service {
         context.insert("version", self.version());
 
         context
+    }
+
+    fn progress_scope(&self) -> ProgressScope {
+        let id = self.id().to_string();
+
+        match self.service_type() {
+            ServiceType::Application => ProgressScope::Application { id },
+            ServiceType::Database(_) => ProgressScope::Database { id },
+            ServiceType::Router => ProgressScope::Router { id },
+        }
     }
 }
 

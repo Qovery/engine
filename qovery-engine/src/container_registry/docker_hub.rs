@@ -1,11 +1,12 @@
+use std::rc::Rc;
+
 use crate::build_platform::Image;
 use crate::cmd;
 use crate::cmd::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
-use crate::models::{Context, Listeners, ProgressListener};
-use std::rc::Rc;
+use crate::models::{Context, Listener, Listeners, ProgressListener};
 
 pub struct DockerHub {
     context: Context,
@@ -51,7 +52,7 @@ impl ContainerRegistry for DockerHub {
         Ok(())
     }
 
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+    fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
 

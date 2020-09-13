@@ -5,7 +5,7 @@ use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
-use crate::models::{Context, Listeners, ProgressListener};
+use crate::models::{Context, Listener, Listeners, ProgressListener};
 use crate::runtime::async_run;
 use std::rc::Rc;
 
@@ -92,7 +92,7 @@ impl CloudProvider for AWS {
         }
     }
 
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+    fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
 

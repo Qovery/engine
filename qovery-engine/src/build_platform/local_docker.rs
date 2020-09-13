@@ -172,7 +172,7 @@ impl BuildPlatform for LocalDocker {
                     },
                     ProgressStep::Build,
                     ProgressLevel::Info,
-                    line_string.as_str(),
+                    Some(line_string.as_str()),
                     self.context.execution_id(),
                 ));
             },
@@ -186,7 +186,7 @@ impl BuildPlatform for LocalDocker {
                     },
                     ProgressStep::Build,
                     ProgressLevel::Error,
-                    line_string.as_str(),
+                    Some(line_string.as_str()),
                     self.context.execution_id(),
                 ));
             },
@@ -203,7 +203,7 @@ impl BuildPlatform for LocalDocker {
             },
             ProgressStep::Build,
             ProgressLevel::Info,
-            "build is done ✅",
+            Some("build is done ✅"),
             self.context.execution_id(),
         ));
 
@@ -220,7 +220,7 @@ impl BuildPlatform for LocalDocker {
             },
             ProgressStep::Build,
             ProgressLevel::Error,
-            "something goes wrong (not implemented)",
+            Some("something goes wrong (not implemented)"),
             self.context.execution_id(),
         ));
 

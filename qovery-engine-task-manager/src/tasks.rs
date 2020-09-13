@@ -453,7 +453,7 @@ where
 {
     fn on_progress(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Running {
-            message: Some(info.message),
+            message: info.message,
             context: ActionContext::new(
                 info.scope,
                 info.step,
@@ -470,7 +470,7 @@ where
 
     fn on_error(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Error {
-            message: Some(info.message),
+            message: info.message,
             context: ActionContext::new(
                 info.scope,
                 info.step,
@@ -487,7 +487,7 @@ where
 
     fn on_complete(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::Terminated {
-            message: Some(info.message),
+            message: info.message,
             context: ActionContext::new(
                 info.scope,
                 info.step,
@@ -504,7 +504,7 @@ where
 
     fn on_complete_with_error(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::TerminatedWithError {
-            message: Some(info.message),
+            message: info.message,
             context: ActionContext::new(
                 info.scope,
                 info.step,

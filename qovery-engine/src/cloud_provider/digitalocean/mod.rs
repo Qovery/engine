@@ -1,6 +1,6 @@
 extern crate digitalocean;
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
-use crate::models::{Context, ProgressListener};
+use crate::models::{Context, Listener, ProgressListener};
 use digitalocean::DigitalOcean;
 use std::any::Any;
 use std::rc::Rc;
@@ -50,7 +50,7 @@ impl CloudProvider for DO {
         unimplemented!()
     }
 
-    fn add_listener(&mut self, _listener: Rc<Box<dyn ProgressListener>>) {
+    fn add_listener(&mut self, _listener: Listener) {
         unimplemented!()
     }
 

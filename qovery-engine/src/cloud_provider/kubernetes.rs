@@ -2,7 +2,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::ServiceError;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::CmdError;
-use crate::models::{Context, ProgressListener};
+use crate::models::{Context, Listener, Listeners, ProgressListener};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::process::ExitStatus;
@@ -17,7 +17,8 @@ pub trait Kubernetes {
     fn region(&self) -> &str;
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn is_valid(&self) -> Result<(), KubernetesError>;
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>);
+    fn add_listener(&mut self, listener: Listener);
+    fn listeners(&self) -> &Listeners;
     fn on_create(&self) -> Result<(), KubernetesError>;
     fn on_create_error(&self) -> Result<(), KubernetesError>;
     fn on_upgrade(&self) -> Result<(), KubernetesError>;

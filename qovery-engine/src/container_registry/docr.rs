@@ -4,8 +4,10 @@ use crate::cmd::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
+
 extern crate digitalocean;
-use crate::models::{Context, ProgressListener};
+
+use crate::models::{Context, Listener, ProgressListener};
 use digitalocean::DigitalOcean;
 use std::rc::Rc;
 
@@ -128,7 +130,7 @@ impl ContainerRegistry for DOCR {
         unimplemented!()
     }
 
-    fn add_listener(&mut self, _listener: Rc<Box<dyn ProgressListener>>) {
+    fn add_listener(&mut self, _listener: Listener) {
         unimplemented!()
     }
 

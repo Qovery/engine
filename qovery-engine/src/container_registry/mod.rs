@@ -1,7 +1,7 @@
 use rusoto_core::RusotoError;
 
 use crate::build_platform::Image;
-use crate::models::{Context, ProgressListener};
+use crate::models::{Context, Listener, ProgressListener};
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
@@ -15,7 +15,7 @@ pub trait ContainerRegistry {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), ContainerRegistryError>;
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>);
+    fn add_listener(&mut self, listener: Listener);
     fn on_create(&self) -> Result<(), ContainerRegistryError>;
     fn on_create_error(&self) -> Result<(), ContainerRegistryError>;
     fn on_delete(&self) -> Result<(), ContainerRegistryError>;

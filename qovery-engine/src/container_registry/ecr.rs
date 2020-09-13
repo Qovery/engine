@@ -17,7 +17,7 @@ use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
 use crate::models::{
-    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope, ProgressStep,
 };
 use crate::runtime::async_run;
@@ -231,7 +231,7 @@ impl ContainerRegistry for ECR {
         }
     }
 
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
+    fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
 
@@ -337,7 +337,7 @@ impl ContainerRegistry for ECR {
                 },
                 ProgressStep::Push,
                 ProgressLevel::Info,
-                info_message,
+                Some(info_message),
                 self.context.execution_id(),
             ));
 
@@ -361,7 +361,7 @@ impl ContainerRegistry for ECR {
             },
             ProgressStep::Push,
             ProgressLevel::Info,
-            info_message,
+            Some(info_message),
             self.context.execution_id(),
         ));
 

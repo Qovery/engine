@@ -12,7 +12,7 @@ use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::{Context, Environment, EnvironmentAction, ProgressListener};
+use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, ProgressListener};
 use std::rc::Rc;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -29,11 +29,7 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn engine(
-        &self,
-        context: &Context,
-        progress_listener: Rc<Box<dyn ProgressListener>>,
-    ) -> Engine {
+    pub fn engine(&self, context: &Context, progress_listener: Listener) -> Engine {
         let mut build_platform = self.build_platform.to_engine_build_platform(&context);
 
         build_platform.add_listener(progress_listener.clone());
@@ -117,34 +113,25 @@ impl CloudProvider {
         organization_id: &str,
     ) -> Box<dyn qovery_engine::cloud_provider::CloudProvider> {
         match self.kind {
-            qovery_engine::cloud_provider::Kind::AWS => {
-                // FIXME
-                Box::new(AWS::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    organization_id,
-                    self.name.as_str(),
-                    self.options.access_key_id.as_ref().unwrap().as_str(),
-                    self.options.secret_access_key.as_ref().unwrap().as_str(),
-                ))
-            }
-            qovery_engine::cloud_provider::Kind::GCP => {
-                // FIXME
-                Box::new(GCP::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.name.as_str(),
-                    "",
-                ))
-            }
-            qovery_engine::cloud_provider::Kind::DO => {
-                // FIXME
-                Box::new(DO::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.options.secret_access_key.as_ref().unwrap().as_str(),
-                ))
-            }
+            qovery_engine::cloud_provider::Kind::AWS => Box::new(AWS::new(
+                context.clone(),
+                self.id.as_str(),
+                organization_id,
+                self.name.as_str(),
+                self.options.access_key_id.as_ref().unwrap().as_str(),
+                self.options.secret_access_key.as_ref().unwrap().as_str(),
+            )),
+            qovery_engine::cloud_provider::Kind::GCP => Box::new(GCP::new(
+                context.clone(),
+                self.id.as_str(),
+                self.name.as_str(),
+                "",
+            )),
+            qovery_engine::cloud_provider::Kind::DO => Box::new(DO::new(
+                context.clone(),
+                self.id.as_str(),
+                self.options.secret_access_key.as_ref().unwrap().as_str(),
+            )),
         }
     }
 }

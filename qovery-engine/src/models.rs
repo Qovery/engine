@@ -442,7 +442,7 @@ pub struct ProgressInfo {
     pub scope: ProgressScope,
     pub step: ProgressStep,
     pub level: ProgressLevel,
-    pub message: String,
+    pub message: Option<String>,
     pub execution_id: String,
 }
 
@@ -451,7 +451,7 @@ impl ProgressInfo {
         scope: ProgressScope,
         step: ProgressStep,
         level: ProgressLevel,
-        message: T,
+        message: Option<T>,
         execution_id: X,
     ) -> Self {
         ProgressInfo {
@@ -459,7 +459,10 @@ impl ProgressInfo {
             scope,
             step,
             level,
-            message: message.into(),
+            message: match message {
+                Some(msg) => Some(msg.into()),
+                _ => None,
+            },
             execution_id: execution_id.into(),
         }
     }
@@ -487,6 +490,7 @@ pub enum ProgressStep {
     Start,
     Pause,
     Delete,
+    Final,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -505,7 +509,8 @@ pub trait ProgressListener {
     fn on_complete_with_error(&self, info: ProgressInfo);
 }
 
-pub type Listeners = Vec<Rc<Box<dyn ProgressListener>>>;
+pub type Listener = Rc<Box<dyn ProgressListener>>;
+pub type Listeners = Vec<Listener>;
 
 pub struct ListenersHelper<'a> {
     listeners: &'a Listeners,
