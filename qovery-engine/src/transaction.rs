@@ -304,7 +304,7 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
-    /// This function is a wrapper to correctly revert all changes of a attempt deployment AND
+    /// This function is a wrapper to correctly revert all changes of an attempted deployment AND
     /// if a failover environment is provided, then rollback.
     fn rollback_environment(
         &self,
@@ -336,8 +336,45 @@ impl<'a> Transaction<'a> {
             qe_environment
         };
 
-        let (target_environment, failover_environment) = match environment_action {
-            EnvironmentAction::EnvironmentWithFailover(te, fe) => (te, fe),
+        match environment_action {
+            EnvironmentAction::EnvironmentWithFailover(
+                target_environment,
+                failover_environment,
+            ) => {
+                // let's reverse changes and rollback on the provided failover version
+                let target_qe_environment = qe_environment(&target_environment);
+                let failover_qe_environment = qe_environment(&failover_environment);
+
+                let action = match failover_environment.action {
+                    Action::Create => {
+                        kubernetes.deploy_environment_error(&target_qe_environment);
+                        kubernetes.deploy_environment(&failover_qe_environment)
+                    }
+                    Action::Pause => {
+                        kubernetes.pause_environment_error(&target_qe_environment);
+                        kubernetes.pause_environment(&failover_qe_environment)
+                    }
+                    Action::Delete => {
+                        kubernetes.delete_environment_error(&target_qe_environment);
+                        kubernetes.delete_environment(&failover_qe_environment)
+                    }
+                    Action::Nothing => Ok(()),
+                };
+
+                let _ = match action {
+                    Ok(_) => {}
+                    Err(err) => {
+                        return Err(match failover_environment.action {
+                            Action::Create => RollbackError::DeployEnvironment(err),
+                            Action::Pause => RollbackError::PauseEnvironment(err),
+                            Action::Delete => RollbackError::DeleteEnvironment(err),
+                            Action::Nothing => RollbackError::Error, // it can't happens
+                        });
+                    }
+                };
+
+                Ok(())
+            }
             EnvironmentAction::Environment(te) => {
                 // revert changes but there is no failover environment
                 let target_qe_environment = qe_environment(&te);
@@ -361,44 +398,9 @@ impl<'a> Transaction<'a> {
                     }
                 };
 
-                return Err(RollbackError::NoFailoverEnvironment);
+                Err(RollbackError::NoFailoverEnvironment)
             }
-        };
-
-        // let's reverse changes and rollback on the provided failover version
-
-        let target_qe_environment = qe_environment(&target_environment);
-        let failover_qe_environment = qe_environment(&failover_environment);
-
-        let action = match failover_environment.action {
-            Action::Create => {
-                kubernetes.deploy_environment_error(&target_qe_environment);
-                kubernetes.deploy_environment(&failover_qe_environment)
-            }
-            Action::Pause => {
-                kubernetes.pause_environment_error(&target_qe_environment);
-                kubernetes.pause_environment(&failover_qe_environment)
-            }
-            Action::Delete => {
-                kubernetes.delete_environment_error(&target_qe_environment);
-                kubernetes.delete_environment(&failover_qe_environment)
-            }
-            Action::Nothing => Ok(()),
-        };
-
-        let _ = match action {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(match failover_environment.action {
-                    Action::Create => RollbackError::DeployEnvironment(err),
-                    Action::Pause => RollbackError::PauseEnvironment(err),
-                    Action::Delete => RollbackError::DeleteEnvironment(err),
-                    Action::Nothing => RollbackError::Error, // it can't happens
-                });
-            }
-        };
-
-        Ok(())
+        }
     }
 
     pub fn commit(&mut self) -> TransactionResult {
