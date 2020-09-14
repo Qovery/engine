@@ -37,7 +37,7 @@ serde = "1.0.114"
 serde_json = "1.0.57"
 
 # AWS deps
-tokio = "0.2.21"
+tokio = "0.2.22"
 rusoto_core = "0.44.0"
 rusoto_sts = "0.44.0"
 rusoto_credential = "0.44.0"

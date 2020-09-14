@@ -135,7 +135,7 @@ fn listen_for_task_running_check_events(
     mode: &Mode,
 ) -> Result<Subscription, Error> {
     let subject_name = subject(&mode, ENGINE_TASK_RUNNING_CHECK_SUBJECT);
-    let sub = nc.queue_subscribe(subject_name.as_str(), subject_name.as_str())?;
+    let sub = nc.subscribe(subject_name.as_str())?;
     info!("subscribe to {}", subject_name.as_str());
 
     sub.clone().with_handler(move |msg| {

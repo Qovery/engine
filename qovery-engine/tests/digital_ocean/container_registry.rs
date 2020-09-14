@@ -18,6 +18,7 @@ fn create_do_container_registry() {
         api_key: DIGITAL_OCEAN_TOKEN.to_string(),
     };
     let image_test = Image {
+        application_id: "abcdefappxxx".to_string(),
         name: "imageName".to_string(),
         tag: "v666".to_string(),
         commit_id: "sha256".to_string(),
