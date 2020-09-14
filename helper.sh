@@ -112,6 +112,15 @@ function get_release_ga() { ## Get globally available release version
   curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"
 }
 
+function fast_tests() { # Run fast tests only on qovery-engine
+  cd qovery-engine
+  cargo test
+}
+
+function all_tests() { # Run all tests on qovery-engine
+  cd qovery-engine
+  cargo test -- --ignored
+}
 
 case $1 in
 build_image)
@@ -131,6 +140,12 @@ set_release_ga)
   ;;
 get_release_ga)
   get_release_ga
+  ;;
+fast_tests)
+  fast_tests
+  ;;
+all_tests)
+  all_tests
   ;;
 *)
   echo "Usage: $0 <option>"

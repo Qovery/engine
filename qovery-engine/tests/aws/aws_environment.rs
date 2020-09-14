@@ -97,6 +97,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_domain() {
     init();
 
@@ -125,6 +126,7 @@ fn deploy_a_working_environment_with_domain() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_custom_domain() {
     init();
 
@@ -167,6 +169,7 @@ fn deploy_a_working_environment_with_custom_domain() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
     init();
 
@@ -214,6 +217,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_postgresql() {
     init();
 
@@ -298,6 +302,7 @@ fn deploy_a_working_environment_with_postgresql() {
 
 // Todo: Can't work, missing implementation, MySQL is not bootstraped
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_mysql() {
     init();
 
@@ -381,6 +386,7 @@ fn deploy_a_working_environment_with_mysql() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
     init();
 
@@ -399,6 +405,7 @@ fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
     init();
 
@@ -417,6 +424,7 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     init();
 
@@ -434,6 +442,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     init();
 
@@ -452,6 +461,7 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
     init();
 
@@ -470,6 +480,7 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_a_failing_default_domain_on_aws_eks() {
     init();
 
@@ -477,6 +488,7 @@ fn deploy_a_working_environment_with_a_failing_default_domain_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_but_fail_to_push_image_on_container_registry() {
     init();
 
@@ -484,105 +496,7 @@ fn deploy_but_fail_to_push_image_on_container_registry() {
 }
 
 #[test]
-fn delete_a_working_development_environment_on_aws_eks() {
-    init();
-
-    // DEPLOY
-    let context = context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    environment.kind = Kind::Development;
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    // DELETE
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    environment.kind = Kind::Development;
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match delete_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
-fn delete_a_working_production_environment_on_aws_eks() {
-    init();
-
-    // DEPLOY
-    let context = context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    environment.kind = Kind::Production;
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match delete_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    // DELETE
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    environment.kind = Kind::Production;
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match delete_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
-fn delete_a_non_working_environment_on_aws_eks() {
-    init();
-
-    // DEPLOY
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::non_working_environment(&context);
-    environment.kind = Kind::Development;
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match delete_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    // DELETE
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::non_working_environment(&context);
-    environment.kind = Kind::Development;
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match delete_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
+#[ignore]
 fn pause_a_working_development_environment_on_aws_eks() {
     init();
 
@@ -601,6 +515,7 @@ fn pause_a_working_development_environment_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn pause_a_working_production_environment_on_aws_eks() {
     init();
 
@@ -619,6 +534,7 @@ fn pause_a_working_production_environment_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn pause_a_non_working_environment_on_aws_eks() {
     init();
 
@@ -636,6 +552,7 @@ fn pause_a_non_working_environment_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn start_and_pause_and_start_and_delete_a_working_environment_on_aws_eks() {
     init();
 

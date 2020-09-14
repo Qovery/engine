@@ -8,6 +8,7 @@ use qovery_engine::container_registry::docr::DOCR;
 use test_utilities::digitalocean::DIGITAL_OCEAN_TOKEN;
 
 #[test]
+#[ignore]
 fn create_do_container_registry() {
     init();
     let context = context();

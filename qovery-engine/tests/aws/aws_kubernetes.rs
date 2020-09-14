@@ -11,6 +11,7 @@ use std::borrow::Borrow;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 
 #[test]
+#[ignore]
 fn create_eks_cluster_in_us_east_2() {
     init();
 
@@ -46,6 +47,7 @@ fn create_eks_cluster_in_us_east_2() {
 }
 
 #[test]
+#[ignore]
 fn create_eks_cluster_in_eu_west_3() {
     init();
 
@@ -81,6 +83,7 @@ fn create_eks_cluster_in_eu_west_3() {
 }
 
 #[test]
+#[ignore]
 fn delete_eks_cluster_in_us_east_2() {
     init();
 
@@ -116,6 +119,7 @@ fn delete_eks_cluster_in_us_east_2() {
 }
 
 #[test]
+#[ignore]
 fn delete_eks_cluster_in_eu_west_3() {
     init();
 

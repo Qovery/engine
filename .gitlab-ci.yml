@@ -4,6 +4,7 @@ services:
   - docker:dind
 
 stages:
+  - tests
   - build
   - release
   - set_ga
@@ -11,21 +12,31 @@ stages:
 before_script:
   - test -z $KUBERNETES_PORT || export DOCKER_HOST=tcp://127.0.0.1:2375
 
-wip-build:
-  stage: build
+wip-tests:
+  stage: tests
   retry: 0
   script:
-    - ./helper.sh build_image
+    - ./helper.sh fast_tests
   except:
     refs:
       - dev
       - master
 
-dev-build:
-  stage: build
+dev-tests:
+  stage: tests
   retry: 0
   script:
+    - ./helper.sh all_tests
+  only:
+    refs:
+      - dev
+
+dev-build:
+  stage: build
+  retry: 1
+  script:
     - ./helper.sh build_image
+  when: manual
   only:
     refs:
       - dev
@@ -39,6 +50,15 @@ dev-release:
   only:
     refs:
       - dev
+
+master-tests:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh all_tests
+  only:
+    refs:
+      - master
 
 master-build:
   stage: build
