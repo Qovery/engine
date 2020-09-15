@@ -197,13 +197,13 @@ impl BuildPlatform for LocalDocker {
             Err(_) => return Err(BuildError::Error),
         }
 
-        listeners_helper.on_complete(ProgressInfo::new(
+        listeners_helper.on_progress(ProgressInfo::new(
             ProgressScope::Application {
                 id: build.image.application_id.clone(),
             },
             ProgressStep::Build,
             ProgressLevel::Info,
-            Some("build is done ✅"),
+            Some("build is done ✔"),
             self.context.execution_id(),
         ));
 
