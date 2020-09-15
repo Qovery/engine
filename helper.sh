@@ -58,7 +58,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
   tag=$(get_commit_id)
   cp docker/load.sh docker/ci/load.sh
   cd docker/ci
-  docker build -t qoveryrd/ci:${tag} .
+  docker build --no-cache -t qoveryrd/ci:${tag} .
   rm -f docker/ci/load.sh
 }
 
@@ -131,11 +131,15 @@ function get_release_ga() { ## Get globally available release version
 }
 
 function fast_tests() { # Run fast tests only on qovery-engine
+  export LIB_ROOT_DIR=$(pwd)/lib
+  export RUST_LOG=info
   cd qovery-engine
   cargo test
 }
 
 function all_tests() { # Run all tests on qovery-engine
+  export LIB_ROOT_DIR=$(pwd)/lib
+  export RUST_LOG=info
   cd qovery-engine
   cargo test -- --ignored
 }
