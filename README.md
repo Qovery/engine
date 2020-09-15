@@ -53,7 +53,7 @@ TODO
 ### Cloud Providers
 TODO
 
-## Tests
+## Run Tests
 
 You can deploy a new cluster:
 ```shell script
@@ -68,6 +68,10 @@ RUST_LOG=info LIB_ROOT_DIR=~/qovery-engine/lib WORKSPACE_ROOT_DIR=~/.qovery-work
 * RUST_LOG: log level
 * LIB_ROOT_DIR: where the lib folder is located
 * WORKSPACE_ROOT_DIR: where the rendered config will be located
+
+## Add a new test
+
+How to add a test in a fast or long process? Simply add "#[ignore]" as a test annotation (I know it's not really convenient to get it, but it's how it works in Rust). If the annotation is missing, it will be considered as a fast test.
 
 ## Contribute
 
