@@ -1,8 +1,7 @@
 FROM docker:19.03.12-dind
 
 ARG BIN_DEST_FOLDER="/binaries"
-ENV HOME_DIR="/root"
-ENV BIN_DIR=$HOME_DIR/binaries
+ENV BIN_DIR=$BIN_DEST_FOLDER
 
 RUN apk add -U --no-cache git bash aws-cli curl cargo openssl-dev
 ADD load.sh /

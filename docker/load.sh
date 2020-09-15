@@ -5,6 +5,7 @@ set -e
 ARCH="amd64"
 SYSTEM="linux"
 ARGS_NUM=$#
+TMP_FOLDER="/tmp/binaries"
 
 TERRAFORM_VERSION="0.12.29"
 HELM_VERSION="3.2.4"
@@ -22,7 +23,7 @@ function check_num_args() {
 }
 
 function download() { ## Download prerequisites binaries for the engine
-  mkdir -p /tmp/binaries && cd /tmp/binaries
+  mkdir -p $TMP_FOLDER && cd $TMP_FOLDER
   mkdir $BIN_DEST_FOLDER
 
   # terraform
@@ -52,6 +53,9 @@ function download() { ## Download prerequisites binaries for the engine
   mv doctl $BIN_DEST_FOLDER/doctl${DOCTL_VERSION}
 
   chmod 755 $BIN_DEST_FOLDER/*
+
+  rm -Rf $TMP_FOLDER
+  cd ~
 }
 
 function install() { ## Make symlinks to install binaries in default PATH
