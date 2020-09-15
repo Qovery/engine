@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use git2::build::RepoBuilder;
-use git2::{Commit, Error, Oid, Repository};
+use git2::{Error, Oid, Repository, Submodule};
 
 /// TODO support SSH repository_url - we assume that the repository URL starts with HTTPS
 /// TODO support git submodules
@@ -74,6 +74,21 @@ pub fn checkout(repo: &Repository, commit_id: &str, repo_url: &str) -> Result<()
     repo.checkout_tree(&obj, None);
 
     repo.set_head(&("refs/heads/".to_owned() + &commit_id))
+}
+
+pub fn checkout_submodules(repo: &Repository) -> Result<(), Error> {
+    for mut submodule in repo.submodules().unwrap() {
+        info!(
+            "getting submodule {:?} from {:?}",
+            submodule.name().unwrap(),
+            submodule.url().unwrap()
+        );
+        match submodule.update(true, None) {
+            Err(e) => return Err(e),
+            _ => (),
+        }
+    }
+    Ok(())
 }
 
 pub struct Credentials {

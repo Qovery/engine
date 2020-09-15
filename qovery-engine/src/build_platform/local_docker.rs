@@ -4,6 +4,7 @@ use crate::build_platform::error::BuildPlatformError;
 use std::path::Path;
 use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image, Kind};
 use crate::fs::workspace_directory;
+use crate::git::checkout_submodules;
 use crate::models::{
     Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope, ProgressStep,
@@ -100,6 +101,7 @@ impl BuildPlatform for LocalDocker {
             format!("build/{}", build.image.name.as_str()),
         );
 
+        info!("cloning repository: {}", build.git_repository.url);
         let git_clone = git::clone(
             build.git_repository.url.as_str(),
             &into_dir,
@@ -121,6 +123,9 @@ impl BuildPlatform for LocalDocker {
             Ok(_) => {}
             Err(err) => return Err(BuildError::Git(err)),
         }
+
+        // git checkout submodules
+        checkout_submodules(&repo);
 
         let dockerfile_dir = match build.git_repository.dockerfile_path.trim() {
             "" | "." | "/" | "/." | "./" => format!("{}/.", into_dir.as_str()),

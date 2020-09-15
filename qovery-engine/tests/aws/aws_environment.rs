@@ -168,9 +168,12 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
     };
+
+    //Todo: remove the namespace (or project)
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_domain() {
     init();
 
@@ -195,6 +198,8 @@ fn deploy_a_working_environment_with_domain() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+
+    //Todo: remove the namespace (or project)
 }
 
 #[test]
@@ -249,9 +254,11 @@ fn deploy_a_working_environment_with_custom_domain() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 
+    //Todo: remove the namespace (or project)
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
     init();
 
@@ -315,6 +322,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 }
 /*
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_postgresql() {
     init();
 
@@ -482,6 +490,7 @@ fn deploy_a_working_environment_with_mysql() {
 }*/
 
 #[test]
+#[ignore]
 fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
     init();
 
@@ -668,7 +677,9 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     init();
 
     let context = context();
+
     let mut environment = test_utilities::aws::non_working_environment(&context);
+
     let ea = EnvironmentAction::Environment(environment);
 
     let context_for_delete = context.clone_not_same_execution_id();
@@ -689,10 +700,12 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     init();
     // context for non working environment
     let context = context();
+
     let mut environment = test_utilities::aws::non_working_environment(&context);
     let mut failover_environment = test_utilities::aws::working_environment(&context);
     // context for deletion
@@ -715,10 +728,12 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
     init();
 
     let context = context();
+
     let mut environment = test_utilities::aws::non_working_environment(&context);
     let mut failover_environment = test_utilities::aws::non_working_environment(&context);
 
@@ -864,4 +879,3 @@ fn start_and_pause_and_start_and_delete_a_working_environment_on_aws_eks() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 }
-*/
