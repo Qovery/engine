@@ -8,11 +8,13 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::kubernetes::node::Node;
-use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
 use crate::cloud_provider::service::{Service, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cmd::kubectl_exec_delete_namespace;
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
@@ -1008,7 +1010,7 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         };
 
-        // create all stateful services (database)
+        // delete all stateful services (database)
         for stateful_service in &environment.stateful_services {
             match stateful_service.on_delete(&stateful_deployment_target) {
                 Err(err) => {
@@ -1027,7 +1029,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
-        // create all stateless services (router, application...)
+        // delete all stateless services (router, application...)
         for stateless_service in &environment.stateless_services {
             match stateless_service.on_delete(&stateless_deployment_target) {
                 Err(err) => {
@@ -1076,6 +1078,32 @@ impl<'a> Kubernetes for EKS<'a> {
                 _ => {}
             }
         }
+
+        let aws_credentials_envs = vec![
+            (
+                AWS_ACCESS_KEY_ID,
+                self.cloud_provider.access_key_id.as_str(),
+            ),
+            (
+                AWS_SECRET_ACCESS_KEY,
+                &self.cloud_provider.secret_access_key.as_str(),
+            ),
+        ];
+
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            &self.context.workspace_root_dir(),
+            &environment.organization_id.as_str(),
+            &self.id,
+            &self.cloud_provider.access_key_id.as_str(),
+            &self.cloud_provider.secret_access_key.as_str(),
+            &self.region.name(),
+        )?;
+
+        kubectl_exec_delete_namespace(
+            kubernetes_config_file_path,
+            &environment.namespace(),
+            aws_credentials_envs,
+        );
 
         Ok(())
     }
