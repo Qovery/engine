@@ -12,7 +12,7 @@ stages:
 before_script:
   - test -z $KUBERNETES_PORT || export DOCKER_HOST=tcp://127.0.0.1:2375
 
-wip-tests:
+wip-fast-tests:
   stage: tests
   retry: 0
   script:
@@ -22,7 +22,18 @@ wip-tests:
       - dev
       - master
 
-dev-tests:
+wip-full-tests:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh all_tests
+  when: manual
+  except:
+    refs:
+      - dev
+      - master
+
+dev-full-tests:
   stage: tests
   retry: 0
   script:
@@ -50,15 +61,6 @@ dev-release:
   only:
     refs:
       - dev
-
-master-tests:
-  stage: tests
-  retry: 0
-  script:
-    - ./helper.sh all_tests
-  only:
-    refs:
-      - master
 
 master-build:
   stage: build
