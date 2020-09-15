@@ -1,4 +1,4 @@
-image: qoveryrd/ci:b96b756b5b54a1dd2359ab04a1128bb5494d903b
+image: qoveryrd/ci:8e3c889018fe26011da7852e9887e049ccb26f58
 
 services:
   - docker:dind
