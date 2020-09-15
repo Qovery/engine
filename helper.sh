@@ -49,15 +49,33 @@ function get_commit_id() {
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
   tag=$(get_commit_id)
+  cp docker/load.sh docker/engine/load.sh
   docker build -t qoveryrd/engine:${tag} .
+  rm -f docker/engine/load.sh
 }
 
-function push_image() { ## Push local image with current commit ID as tag
+function build_ci_image() { ## Build CI image locally. Args: <tag_version>
+  tag=$(get_commit_id)
+  cp docker/load.sh docker/ci/load.sh
+  cd docker/ci
+  docker build -t qoveryrd/ci:${tag} .
+  rm -f docker/ci/load.sh
+}
+
+function push_image() { ## Push Engine local image with current commit ID as tag
   tag=$(get_commit_id)
   set -e
 
   docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
   docker push qoveryrd/engine:${tag}
+}
+
+function push_ci_image() { ## Push CI local image with current commit ID as tag
+  tag=$(get_commit_id)
+  set -e
+
+  docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
+  docker push qoveryrd/ci:${tag}
 }
 
 function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
@@ -126,6 +144,9 @@ case $1 in
 build_image)
   build_image $2
   ;;
+build_ci_image)
+  build_ci_image $2
+  ;;
 s3_upload_resources)
   s3_upload_resources
   ;;
@@ -134,6 +155,9 @@ new_release)
   ;;
 push_image)
   push_image
+  ;;
+push_ci_image)
+  push_ci_image
   ;;
 set_release_ga)
   set_release_ga
