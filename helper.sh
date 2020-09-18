@@ -135,7 +135,7 @@ function fast_tests() { # Run fast tests only on qovery-engine
   export RUST_LOG=info
   nb_treads=$1
   cd qovery-engine
-  cargo test --color always --test-threads=$nb_treads
+  cargo test --color always -- --color always --test-threads=$nb_treads
 }
 
 function all_tests() { # Run all tests on qovery-engine
