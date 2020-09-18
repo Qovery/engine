@@ -59,7 +59,6 @@ pub fn create_bucket(
 
     let bucket_versioning_output = s3_client.put_bucket_versioning(PutBucketVersioningRequest {
         bucket: bc.bucket.clone(),
-        content_md5: None,
         mfa: None,
         versioning_configuration: VersioningConfiguration {
             mfa_delete: None,
