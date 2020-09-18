@@ -51,7 +51,7 @@ impl MySQL {
         }
     }
     fn helm_release_name(&self) -> String {
-        crate::string::cut(format!("postgresql-{}", self.id()), 50)
+        crate::string::cut(format!("mysql-{}", self.id()), 50)
     }
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(

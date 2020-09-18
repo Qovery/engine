@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
-use crate::cloud_provider::aws::databases::PostgreSQL;
+use crate::cloud_provider::aws::databases::{PostgreSQL, MySQL};
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
@@ -415,7 +415,29 @@ impl Database {
                     ));
 
                     Some(db)
-                }
+                },
+                DatabaseKind::Mysql => {
+                    let db: Box<dyn StatefulService> = Box::new(MySQL::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        DatabaseOptions {
+                            login: self.username.clone(),
+                            password: self.password.clone(),
+                            host: self.fqdn.clone(),
+                            port: self.port,
+                            disk_size_in_gib: self.disk_size_in_gib,
+                        },
+                    ));
+
+                    Some(db)
+                },
                 _ => None,
             },
             CPKind::GCP => None,
