@@ -3,7 +3,10 @@ extern crate test_utilities;
 use self::test_utilities::utilities::generate_id;
 use qovery_engine::cloud_provider::service::Router;
 use qovery_engine::cmd;
-use qovery_engine::models::{Action, Context, CustomDomain, Database, DatabaseKind, EnvironmentAction, EnvironmentVariable, Kind, Storage, StorageType, Clone2, Environment};
+use qovery_engine::models::{
+    Action, Clone2, Context, CustomDomain, Database, DatabaseKind, Environment, EnvironmentAction,
+    EnvironmentVariable, Kind, Storage, StorageType,
+};
 use qovery_engine::transaction::TransactionResult;
 use rusoto_core::region::Region::Custom;
 use test_utilities::aws::context;
@@ -15,7 +18,7 @@ use test_utilities::utilities::init;
 // TODO implement it well
 fn generate_contexts_and_environments(
     number: u8,
-    func: fn(&Context) -> Environment
+    func: fn(&Context) -> Environment,
 ) -> (Vec<Context>, Vec<Environment>) {
     let mut context_vec: Vec<Context> = Vec::new();
     let mut env_vec: Vec<Environment> = Vec::new();
@@ -25,7 +28,7 @@ fn generate_contexts_and_environments(
         let mut environment = func(&context);
         env_vec.push(environment);
     }
-    (context_vec,env_vec)
+    (context_vec, env_vec)
 }
 
 fn deploy_environment(
@@ -110,7 +113,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 }
 
 #[test]
-fn deploy_dockerfile_not_exist(){
+fn deploy_dockerfile_not_exist() {
     init();
     let context = context();
     let context2 = context.clone_not_same_execution_id();
@@ -151,7 +154,8 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
 
     environment.routers = vec![];
 
-    let mut environment_delete =test_utilities::aws::non_working_environment(&context_for_deletion);
+    let mut environment_delete =
+        test_utilities::aws::non_working_environment(&context_for_deletion);
     environment_delete.routers = vec![];
     environment_delete.action = Action::Delete;
     let ea = EnvironmentAction::Environment(environment);
@@ -224,7 +228,8 @@ fn deploy_a_working_environment_with_custom_domain() {
         })
         .collect::<Vec<qovery_engine::models::Router>>();
 
-    let mut environment_delete = test_utilities::aws::working_minimal_environment(&context_for_delete);
+    let mut environment_delete =
+        test_utilities::aws::working_minimal_environment(&context_for_delete);
     environment_delete.routers = environment_delete
         .routers
         .into_iter()
@@ -284,7 +289,8 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         })
         .collect::<Vec<qovery_engine::models::Application>>();
 
-    let mut environment_delete = test_utilities::aws::working_minimal_environment(&context_for_deletion);
+    let mut environment_delete =
+        test_utilities::aws::working_minimal_environment(&context_for_deletion);
     environment_delete.action = Action::Delete;
     environment_delete.applications = environment_delete
         .applications
@@ -320,9 +326,8 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 
     //Todo: remove the namespace (or project)
 }
-/*
+
 #[test]
-#[ignore]
 fn deploy_a_working_environment_with_postgresql() {
     init();
 
@@ -402,7 +407,7 @@ fn deploy_a_working_environment_with_postgresql() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
     };
-}*/
+}
 
 // Todo: Can't work, missing implementation, MySQL is not bootstraped
 /*#[test]
@@ -554,7 +559,8 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
     let context_for_delete = context.clone_not_same_execution_id();
     // env part generation
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
-    let mut environment_for_not_working = test_utilities::aws::working_minimal_environment(&context_for_not_working);
+    let mut environment_for_not_working =
+        test_utilities::aws::working_minimal_environment(&context_for_not_working);
     // this environment is broken by container exit
     environment_for_not_working.applications = environment_for_not_working
         .applications
@@ -568,7 +574,8 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         })
         .collect::<Vec<qovery_engine::models::Application>>();
 
-    let mut environment_for_delete = test_utilities::aws::working_minimal_environment(&context_for_delete);
+    let mut environment_for_delete =
+        test_utilities::aws::working_minimal_environment(&context_for_delete);
     environment_for_delete.action = Action::Delete;
     // environment actions
     let ea = EnvironmentAction::Environment(environment);
@@ -601,10 +608,12 @@ fn deploy_ok_fail_fail_ok_environment() {
     let ea = EnvironmentAction::Environment(environment);
     // not working 1
     let context_for_not_working = context.clone_not_same_execution_id();
-    let mut not_working_env = test_utilities::aws::working_minimal_environment(&context_for_not_working);
+    let mut not_working_env =
+        test_utilities::aws::working_minimal_environment(&context_for_not_working);
     // not working 2
     let context_for_not_working2 = context.clone_not_same_execution_id();
-    let mut not_working_env2 = test_utilities::aws::working_minimal_environment(&context_for_not_working2);
+    let mut not_working_env2 =
+        test_utilities::aws::working_minimal_environment(&context_for_not_working2);
     // final env is working
     let context_for_working2 = context.clone_not_same_execution_id();
     let mut working_env_2 = test_utilities::aws::working_minimal_environment(&context_for_working2);
@@ -879,3 +888,4 @@ fn start_and_pause_and_start_and_delete_a_working_environment_on_aws_eks() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 }
+*/
