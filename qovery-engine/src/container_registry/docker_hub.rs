@@ -48,7 +48,21 @@ impl ContainerRegistry for DockerHub {
     }
 
     fn is_valid(&self) -> Result<(), ContainerRegistryError> {
-        // FIXME check docker binary availability
+        // check the version of docker and print it as info
+        let mut output_from_cmd = String::new();
+        cmd::exec_with_output(
+            "docker",
+            vec!["--version"],
+            |r_out| match r_out {
+                Ok(s) => output_from_cmd.push_str(&s.to_owned()),
+                Err(e) => error!("Error while getting sdtout from docker {}", e),
+            },
+            |r_err| match r_err {
+                Ok(s) => error!("Error executing docker command {}", s),
+                Err(e) => error!("Error while getting stderr from docker {}", e),
+            },
+        );
+        info!("Using Docker: {}", output_from_cmd);
         Ok(())
     }
 
@@ -72,8 +86,55 @@ impl ContainerRegistry for DockerHub {
         Ok(())
     }
 
-    fn does_image_exists(&self, _image: &Image) -> bool {
-        false // TODO check if image exists on the remote repository
+    fn does_image_exists(&self, image: &Image) -> bool {
+        let envs = match self.context.docker_tcp_socket() {
+            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
+            None => vec![],
+        };
+
+        // login into docker hub
+        match cmd::exec_with_envs(
+            "docker",
+            vec![
+                "login",
+                "-u",
+                self.login.as_str(),
+                "-p",
+                self.password.as_str(),
+            ],
+            envs.clone(),
+        ) {
+            Err(err) => match err {
+                CmdError::Exec(exit_status) => error!("Cannot login into dockerhub"),
+                CmdError::Io(err) => panic!(err),
+                CmdError::Unexpected(err) => panic!(err),
+            },
+            _ => {}
+        };
+
+        // check if image and tag exist
+        // note: to retrieve if specific tags exist you can specify the tag at the end of the cUrl path
+        let curl_path = format!(
+            "https://index.docker.io/v1/repositories/{}/tags/",
+            image.name
+        );
+        let mut exist_stdoud: bool = false;
+        let mut exist_stderr: bool = true;
+
+        cmd::exec_with_envs_and_output(
+            "curl",
+            vec!["--silent", "-f", "-lSL", &curl_path],
+            envs.clone(),
+            |r_out| match r_out {
+                Ok(s) => exist_stdoud = true,
+                Err(e) => error!("Error while getting stdout from curl {}", e),
+            },
+            |r_err| match r_err {
+                Ok(s) => exist_stderr = true,
+                Err(e) => error!("Error while getting stderr from curl {}", e),
+            },
+        );
+        exist_stdoud
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {

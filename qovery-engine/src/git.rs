@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use git2::build::RepoBuilder;
-use git2::{Error, Oid, Repository};
+use git2::{Commit, Error, Oid, Repository};
 
 /// TODO support SSH repository_url - we assume that the repository URL starts with HTTPS
 /// TODO support git submodules
@@ -26,15 +26,50 @@ where
     RepoBuilder::new().clone(final_repository_url.as_str(), into_dir.as_ref())
 }
 
-pub fn checkout(repo: &Repository, commit_id: &str) -> Result<(), Error> {
-    let oid = Oid::from_str(&commit_id).unwrap();
-    let commit = repo.find_commit(oid).unwrap();
+pub fn checkout(repo: &Repository, commit_id: &str, repo_url: &str) -> Result<(), Error> {
+    let oid = match Oid::from_str(&commit_id) {
+        Err(e) => {
+            let mut x = git2::Error::from_str(
+                format!(
+                    "Error while trying to validate commit ID {} on repository {}: {}",
+                    &commit_id, &repo_url, &e
+                )
+                .as_ref(),
+            );
+            return Err(x);
+        }
+        Ok(o) => o,
+    };
 
-    let branch = repo.branch(commit_id, &commit, false);
+    let _ = match repo.find_commit(oid) {
+        Err(e) => {
+            let mut x = git2::Error::from_str(
+                format!(
+                    "Commit ID {} on repository {} was not found",
+                    &commit_id, &repo_url
+                )
+                .as_ref(),
+            );
+            x.set_code(e.code());
+            x.set_class(e.class());
+            return Err(x);
+        }
+        Ok(c) => c,
+    };
 
-    let obj = repo
-        .revparse_single(&("refs/heads/".to_owned() + &commit_id))
-        .unwrap();
+    let obj = match repo.revparse_single(&commit_id) {
+        Err(e) => {
+            let mut x = git2::Error::from_str(
+                format!(
+                    "Wasn't able to use git object commit ID {} on repository {}: {}",
+                    &commit_id, &repo_url, &e
+                )
+                .as_ref(),
+            );
+            return Err(x);
+        }
+        Ok(o) => o,
+    };
 
     repo.checkout_tree(&obj, None);
 

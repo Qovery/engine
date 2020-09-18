@@ -289,7 +289,51 @@ impl Create for Application {
             "AWS.application.on_create_error() called for {}",
             self.name()
         );
-        self.delete(target, true)
+
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        };
+
+        let workspace_dir = self.workspace_directory();
+
+        let aws = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<AWS>()
+            .unwrap();
+
+        let aws_credentials_envs = vec![
+            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
+        ];
+
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            workspace_dir.as_str(),
+            environment.organization_id.as_str(),
+            kubernetes.id(),
+            aws.access_key_id.as_str(),
+            aws.secret_access_key.as_str(),
+            kubernetes.region(),
+        )?;
+
+        let helm_release_name = self.helm_release_name();
+
+        let history_rows = crate::cmd::helm_exec_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name.as_str(),
+            aws_credentials_envs.clone(),
+        )?;
+        if history_rows.len() == 1 {
+            crate::cmd::helm_exec_uninstall(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                helm_release_name.as_str(),
+                aws_credentials_envs.clone(),
+            )?;
+        }
+        Ok(())
     }
 }
 

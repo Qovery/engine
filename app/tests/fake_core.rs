@@ -3,7 +3,7 @@ use std::str::from_utf8;
 use std::thread::sleep;
 use std::time::Duration;
 
-#[test]
+/*#[test]
 fn fake_core_task_status_receiver() -> Result<(), Error> {
     let nc = nats::Options::new()
         .with_name("fake_core")
@@ -23,3 +23,4 @@ fn fake_core_task_status_receiver() -> Result<(), Error> {
 
     Ok(())
 }
+*/

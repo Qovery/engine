@@ -181,7 +181,13 @@ where
 
         match file_content {
             Ok(file_content) => OperationResult::Ok(file_content),
-            Err(err) => OperationResult::Retry(err),
+            Err(err) => {
+                warn!(
+                    "Can't download the kubernetes config file {} stored on {}, please check access key and secrets",
+                    kubernetes_config_object_key, kubernetes_config_bucket_name
+                );
+                OperationResult::Retry(err)
+            }
         }
     });
 

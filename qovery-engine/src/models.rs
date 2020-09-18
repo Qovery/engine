@@ -3,7 +3,8 @@ use std::rc::Rc;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
 use crate::cloud_provider::aws::databases::PostgreSQL;
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
@@ -550,6 +551,25 @@ pub struct Context {
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_host: Option<String>,
+}
+
+// trait used to reimplement clone without same fields
+// this trait is used for Context struct
+pub trait Clone2 {
+    fn clone_not_same_execution_id(&self) -> Self;
+}
+// for test we need to clone context but to change the directory workspace used
+// to to this we just have to suffix the execution id in tests
+impl Clone2 for Context {
+    fn clone_not_same_execution_id(&self) -> Context {
+        let mut new = self.clone();
+        let suffixe= rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(10)
+            .collect::<String>();
+        new.execution_id = format!("{}-{}",self.execution_id,suffixe);
+        new
+    }
 }
 
 impl Context {

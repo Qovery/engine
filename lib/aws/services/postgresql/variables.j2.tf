@@ -46,13 +46,13 @@ variable "postgresql_identifier" {
 
 variable "port" {
   description = "PostgreSQL instance port"
-  default = {{ database_port }}
+  default = "{{ database_port }}"
   type = number
 }
 
 variable "disk_size" {
   description = "disk instance size"
-  default = {{ database_disk_size_in_gib }}
+  default = "{{ database_disk_size_in_gib }}"
   type = number
 }
 
@@ -64,13 +64,13 @@ variable "postgresql_version" {
 
 variable "storage_type" {
   description = "One of 'standard' (magnetic), 'gp2' (general purpose SSD), or 'io1' (provisioned IOPS SSD)."
-  default = {{ database_disk_type }}
+  default = "{{ database_disk_type }}"
   type = string
 }
 
 variable "instance_class" {
   description = "Type of instance: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html"
-  default = {{ database_instance_type }}
+  default = "{{ database_instance_type }}"
   type = string
 }
 
@@ -152,6 +152,6 @@ variable "backup_window" {
 # TODO later
 #variable "snapshot_identifier" {
 #  description = "Snapshot ID to restore"
-#  default = "{{ service_info['snapshot']['snapshot_id'] }}"
+#  default = "{ service_info['snapshot']['snapshot_id'] }"
 #  type = string
 #}

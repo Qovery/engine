@@ -363,7 +363,7 @@ where
     P: AsRef<Path>,
 {
     let mut output_string = String::new();
-    let _ = helm_exec_with_output(
+    let x1 = match helm_exec_with_output(
         // WARN: do not add argument --debug, otherwise JSON decoding will not work
         vec![
             "history",
@@ -384,7 +384,11 @@ where
             Ok(line) => error!("{}", line),
             Err(err) => error!("{:?}", err),
         },
-    )?;
+    ) {
+        Err(_) => info!("Helm history found for release name: {}",release_name),
+        Ok(_) => info!("Helm history success for release name: {}", release_name),
+    };
+    // TODO better check, release not found
 
     let mut results = match serde_json::from_str::<Vec<HelmHistoryRow>>(output_string.as_str()) {
         Ok(x) => x,

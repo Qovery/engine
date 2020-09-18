@@ -12,12 +12,11 @@ pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
 }
 
 pub fn init() {
+    env_logger::try_init();
     println!(
         "running from current directory: {}",
         std::env::current_dir().unwrap().to_str().unwrap()
     );
-
-    env_logger::init();
 }
 
 pub fn generate_id() -> String {

@@ -134,7 +134,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: "simple-app".to_string(),
+            name: format!("{}-{}","simple-app".to_string(),generate_id()),
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: "Dockerfile".to_string(),
@@ -147,7 +147,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             storage: vec![],
             environment_variables: vec![],
             branch: "basic-app-deploy".to_string(),
-            private_port: Some(5678),
+            private_port: Some(80),
             total_cpus: "100m".to_string(),
             total_ram_in_mib: 256,
             total_instances: 2,
@@ -180,7 +180,7 @@ pub fn working_environment(context: &Context) -> Environment {
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: "simple-example-node-with-postgresql".to_string(),
+            name: format!("{}-{}","simple-app".to_string(),generate_id()),
             git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
                 .to_string(),
             commit_id: "f400e2f199e6a7eb446690b6f2df1017dbbae518".to_string(),
@@ -259,7 +259,7 @@ pub fn working_environment(context: &Context) -> Environment {
                 port: 5432,
                 username: "superuser".to_string(),
                 password: generate_id(),
-                total_cpus: "2".to_string(),
+                total_cpus: "256m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
             }, /*,
@@ -299,13 +299,15 @@ pub fn working_environment(context: &Context) -> Environment {
 }
 
 pub fn non_working_environment(context: &Context) -> Environment {
-    let mut environment = working_environment(context);
+    let mut environment = working_minimal_environment(context);
 
     environment.applications = environment
         .applications
         .into_iter()
         .map(|mut app| {
-            app.git_url = "https://notworking.com".to_string();
+            app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
+            app.branch = "bugged-image".to_string();
+            app.commit_id = "c2b2d7b5d96832732df25fe992721f53842b5eac".to_string();
             app
         })
         .collect::<Vec<_>>();

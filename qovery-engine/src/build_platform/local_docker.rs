@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::build_platform::error::BuildPlatformError;
+use std::path::Path;
 use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image, Kind};
 use crate::fs::workspace_directory;
 use crate::models::{
@@ -8,6 +9,7 @@ use crate::models::{
     ProgressScope, ProgressStep,
 };
 use crate::{cmd, git};
+use crate::transaction::CommitError::BuildImage;
 
 /// use Docker in local
 pub struct LocalDocker {
@@ -106,13 +108,16 @@ impl BuildPlatform for LocalDocker {
 
         match git_clone {
             Ok(_) => {}
-            Err(err) => return Err(BuildError::Git(err)),
+            Err(err) => {
+                error! {"Error while trying to clone repository {}", build.git_repository.url}
+                return Err(BuildError::Git(err));
+            }
         }
 
         // git checkout to given commit
         let repo = &git_clone.unwrap();
         let commit_id = &build.git_repository.commit_id;
-        match git::checkout(&repo, &commit_id) {
+        match git::checkout(&repo, &commit_id, build.git_repository.url.as_str()) {
             Ok(_) => {}
             Err(err) => return Err(BuildError::Git(err)),
         }
@@ -122,7 +127,14 @@ impl BuildPlatform for LocalDocker {
             dockerfile_root_path => format!("{}/{}/.", into_dir.as_str(), dockerfile_root_path),
         };
 
-        // TODO check that the Dockerfile exists
+        let exist =  Path::new(dockerfile_dir.as_str()).exists();
+        match exist {
+            false => {
+                error!("Unable to find Dockerfile path {}", dockerfile_dir.as_str());
+                return Err(BuildError::Error);
+            }
+            _ => {}
+        }
 
         let env_var_args = &build
             .options

@@ -134,14 +134,14 @@ function fast_tests() { # Run fast tests only on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   cd qovery-engine
-  cargo test --color always
+  cargo test --color always -- --color always --test-threads=8
 }
 
 function all_tests() { # Run all tests on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   cd qovery-engine
-  cargo test --color always -- --ignored
+  cargo test --color always -- --ignored --color always
 }
 
 case $1 in
