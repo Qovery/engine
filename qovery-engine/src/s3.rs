@@ -1,4 +1,9 @@
-use crate::runtime::async_run;
+use std::fmt::Display;
+use std::fs::{read_to_string, File};
+use std::io;
+use std::io::{Error, ErrorKind, Read, Write};
+use std::path::Path;
+
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
@@ -8,9 +13,8 @@ use rusoto_s3::{
     GetObjectRequest, PutBucketVersioningRequest, S3Client, VersioningConfiguration, S3,
 };
 
-use std::fs::File;
-use std::io::{Error, ErrorKind, Read, Write};
-use std::path::Path;
+use crate::cmd::{exec_with_envs, CmdError};
+use crate::runtime::async_run;
 
 pub fn create_bucket(
     access_key_id: &str,
@@ -123,13 +127,17 @@ pub fn get_object(
             x.body.unwrap().into_blocking_read().read_to_string(&mut s);
 
             if s.is_empty() {
-                // It looks like we receive sometimes empty content from s3. This is a quick and dirty patch, is there another better way ? Like using s3 Hash ?
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "file content is empty - which is not the expected content - what's wrong?",
-                ));
+                // this handle a case where the request succeeds but contains an empty body.
+                // https://github.com/rusoto/rusoto/issues/1822
+                let r_from_aws_cli = get_object_via_aws_cli(
+                    access_key_id,
+                    secret_access_key,
+                    region,
+                    bucket_name,
+                    object_key,
+                )?;
+                return Ok(r_from_aws_cli);
             }
-
             Ok(s)
         }
         Err(err) => {
@@ -151,6 +159,35 @@ pub fn get_object(
             };
         }
     }
+}
+
+/// gets an aws s3 object using aws-cli
+/// used as a failover when rusoto_s3 acts up
+fn get_object_via_aws_cli(
+    access_key_id: &str,
+    secret_access_key: &str,
+    region: &Region,
+    bucket_name: &str,
+    object_key: &str,
+) -> Result<FileContent, Error> {
+    let s3_url = format!("s3://{}/{}", bucket_name, object_key);
+    let local_path = format!("/tmp/{}", object_key);
+
+    // FIXME: use generic way to get tmp dir
+    let r = exec_with_envs(
+        "aws",
+        vec!["s3", "cp", &s3_url, &local_path],
+        vec![
+            ("AWS_ACCESS_KEY_ID", &access_key_id),
+            ("AWS_SECRET_ACCESS_KEY", &secret_access_key),
+        ],
+    );
+    match r {
+        Err(e) => return Err(Error::new(ErrorKind::Other, e)),
+        _ => {}
+    };
+    let s = read_to_string(&local_path)?;
+    Ok(s)
 }
 
 pub fn get_kubernetes_config_file<P>(

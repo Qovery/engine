@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::fmt::{Display, Formatter};
 use std::io::Error;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -363,7 +364,7 @@ where
     P: AsRef<Path>,
 {
     let mut output_string = String::new();
-    let x1 = match helm_exec_with_output(
+    let _ = helm_exec_with_output(
         // WARN: do not add argument --debug, otherwise JSON decoding will not work
         vec![
             "history",
@@ -384,11 +385,7 @@ where
             Ok(line) => error!("{}", line),
             Err(err) => error!("{:?}", err),
         },
-    ) {
-        Err(_) => info!("Helm history found for release name: {}",release_name),
-        Ok(_) => info!("Helm history success for release name: {}", release_name),
-    };
-    // TODO better check, release not found
+    )?;
 
     let mut results = match serde_json::from_str::<Vec<HelmHistoryRow>>(output_string.as_str()) {
         Ok(x) => x,
@@ -794,9 +791,21 @@ pub enum CmdError {
     Unexpected(String),
 }
 
+impl Display for CmdError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CmdError: {}", self.to_string())
+    }
+}
+impl std::error::Error for CmdError {}
+
 impl From<std::io::Error> for CmdError {
     fn from(err: Error) -> Self {
         CmdError::Io(err)
+    }
+}
+impl From<CmdError> for std::io::Error {
+    fn from(e: CmdError) -> Self {
+        std::io::Error::new(std::io::ErrorKind::Other, e)
     }
 }
 
