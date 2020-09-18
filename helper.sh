@@ -133,15 +133,17 @@ function get_release_ga() { ## Get globally available release version
 function fast_tests() { # Run fast tests only on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
+  nb_treads=$1
   cd qovery-engine
-  cargo test --color always -- --color always --test-threads=8
+  cargo test --color always --test-threads=$nb_treads
 }
 
 function all_tests() { # Run all tests on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
+  nb_treads=$1
   cd qovery-engine
-  cargo test --color always -- --ignored --color always
+  cargo test --color always -- --ignored --test-threads=$nb_treads
 }
 
 case $1 in
@@ -170,10 +172,16 @@ get_release_ga)
   get_release_ga
   ;;
 fast_tests)
-  fast_tests
+  fast_tests 10
+  ;;
+fast_tests-seq)
+  fast_tests 1
   ;;
 all_tests)
-  all_tests
+  all_tests 10
+  ;;
+all_tests-seq)
+  all_tests 1
   ;;
 *)
   echo "Usage: $0 <option>"
