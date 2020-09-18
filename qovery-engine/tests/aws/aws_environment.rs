@@ -418,6 +418,7 @@ fn deploy_a_working_environment_with_mysql() {
     init();
 
     let context = context();
+    let deletion_context = context.clone_not_same_execution_id();
 
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
@@ -487,12 +488,12 @@ fn deploy_a_working_environment_with_mysql() {
         }
     ).collect::<Vec<qovery_engine::models::Router>>();
 
-    let mut environment_delete = environment.clone_not_same_execution_id();
+    let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
     let ea = EnvironmentAction::Environment(environment);
     let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-    match deploy_environment(&context, &ea) {
+    match deploy_environment(&deletion_context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
