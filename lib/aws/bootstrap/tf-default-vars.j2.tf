@@ -124,6 +124,14 @@ variable "qovery_engine_info" {
   type = map(string)
 }
 
+# Agent info
+
+variable "qovery_agent_replicas" {
+  description = "This variable is used to get random ID generated for the agent"
+  default = "1"
+  type = number
+}
+
 # RDS
 
 variable "rds_subnets_zone_a" {
