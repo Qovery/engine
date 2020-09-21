@@ -411,9 +411,7 @@ fn deploy_a_working_environment_with_postgresql() {
     };
 }
 
-// Todo: Can't work, missing implementation, MySQL is not bootstraped
 #[test]
-#[ignore]
 fn deploy_a_working_environment_with_mysql() {
     init();
 
