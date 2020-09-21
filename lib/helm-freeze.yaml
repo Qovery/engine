@@ -39,6 +39,14 @@ charts:
   - name: metrics-server
     repo_name: bitnami
     version: 4.3.1
+  - name: loki
+    repo_name: loki
+    version: 0.31.1
+    comment: https://github.com/grafana/loki/tree/master/production/helm
+  - name: promtail
+    repo_name: loki
+    version: 0.24.0
+    comment: https://github.com/grafana/loki/tree/master/production/helm
 
 repos:
   - name: stable
@@ -51,6 +59,8 @@ repos:
     url: https://honestica.github.io/lifen-charts
   - name: aws
     url: https://aws.github.io/eks-charts
+  - name: loki
+    url: https://grafana.github.io/loki/charts
 
 destinations:
   - name: default
