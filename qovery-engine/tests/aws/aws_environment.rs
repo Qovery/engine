@@ -491,7 +491,7 @@ fn deploy_a_working_environment_with_mysql() {
     let ea = EnvironmentAction::Environment(environment);
     let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-    match deploy_environment(&deletion_context, &ea) {
+    match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -499,7 +499,7 @@ fn deploy_a_working_environment_with_mysql() {
 
     // todo: check the database disk is here and with correct size
 
-    match delete_environment(&context, &ea_delete) {
+    match delete_environment(&deletion_context, &ea_delete) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
