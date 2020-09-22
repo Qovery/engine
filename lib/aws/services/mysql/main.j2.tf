@@ -43,7 +43,7 @@ resource "aws_db_instance" "mysql_instance" {
     q_environment_id = var.q_environment_id
     q_project_id = var.q_project_id
     database_identifier = var.mysql_identifier
-    {% if service_info["snapshot"]["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
+    {% if snapshot is defined and snapshot["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
   }
 
   # MySQL instance basics
@@ -55,7 +55,7 @@ resource "aws_db_instance" "mysql_instance" {
     delete = "60m"
   }
   password = var.password
-  {%- if service_info["snapshot"]["snapshot_id"] %}
+  {%- if snapshot is defined and snapshot["snapshot_id"] %}
   # Snapshot
   snapshot_identifier = var.snapshot_identifier
   {%- else %}

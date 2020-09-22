@@ -40,49 +40,49 @@ variable "q_environment_id" {
 
 variable "mysql_identifier" {
   description = "MySQL instance name (DB identifier)"
-  default = "{{ service_info['fqdn_id'] }}"
+  default = "{{ fqdn_id }}"
   type = string
 }
 
 variable "port" {
   description = "MySQL instance port"
-  default = {{ service_info["port"] }}
+  default = {{ database_port }}
   type = number
 }
 
 variable "disk_size" {
   description = "disk instance size"
-  default = {{ service_info["disk_size_in_mb"] }}
+  default = {{ database_disk_size_in_gib }}
   type = number
 }
 
 variable "mysql_version" {
   description = "MySQL version"
-  default = "{{ service_info['version'] }}"
+  default = "{{ version }}"
   type = string
 }
 
 variable "storage_type" {
   description = "One of 'standard' (magnetic), 'gp2' (general purpose SSD), or 'io1' (provisioned IOPS SSD)."
-  default = "gp2"
+  default = "{{ database_disk_type }}"
   type = string
 }
 
 variable "instance_class" {
   description = "Type of instance: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html"
-  default = "db.t2.micro"
+  default = "{{database_instance_type}}"
   type = string
 }
 
 variable "username" {
   description = "Admin username for the master DB user"
-  default = "{{ service_info['username'] }}"
+  default = "{{ database_login }}"
   type = string
 }
 
 variable "password" {
   description = "Admin password for the master DB user"
-  default = "{{ service_info['password'] }}"
+  default = "{{ database_password }}"
   type = string
 }
 
@@ -134,10 +134,12 @@ variable "backup_window" {
   type = string
 }
 
-# Snapshots
 
+{% if snapshot is defined %}
+# Snapshots
 variable "snapshot_identifier" {
   description = "Snapshot ID to restore"
-  default = "{{ service_info['snapshot']['snapshot_id'] }}"
+  default = "{{ snapshot['snapshot_id']}}"
   type = string
 }
+{% endif %}

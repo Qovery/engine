@@ -224,7 +224,7 @@ pub fn terraform_exec_with_init_validate_plan_destroy(root_dir: &str) -> Result<
 }
 
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
-    let home_dir = home_dir().unwrap();
+    let home_dir = home_dir().expect("Could not find $HOME");
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
 
     match exec_with_envs_and_output(

@@ -10,6 +10,7 @@ use crate::cloud_provider::service::{
 };
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
+use crate::cloud_provider::aws::kubernetes::EKS;
 
 pub struct MySQL {
     context: Context,
@@ -62,6 +63,7 @@ impl MySQL {
     }
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
+        context.insert("eks_cluster_id", kubernetes.id());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
@@ -183,14 +185,18 @@ impl Create for MySQL {
                 let context = self.tera_context(*kubernetes, *environment);
                 let workspace_dir = self.workspace_directory();
 
-                let from_dir = format!("{}/aws/services/mysql", self.context.lib_root_dir());
-                let _ = crate::template::generate_and_copy_all_files_into_dir(
-                    from_dir.as_str(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                    &workspace_dir,
+                    &context
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
 
-                let _ = crate::cmd::terraform_exec_with_init_validate_plan_apply(
+                crate::cmd::terraform_exec_with_init_validate_plan_apply(
                     workspace_dir.as_str(),
                     false,
                 )?;
