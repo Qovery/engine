@@ -47,7 +47,7 @@ resource "helm_release" "qovery_agent_resources" {
 
   set {
     name = "environmentVariables.ES_HOST_URL"
-    value = aws_elasticsearch_domain.qovery_eks_logs.endpoint
+    value = "https://${aws_elasticsearch_domain.qovery_eks_logs.endpoint}"
   }
 
   set {
