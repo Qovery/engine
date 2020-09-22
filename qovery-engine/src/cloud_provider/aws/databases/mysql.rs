@@ -93,14 +93,18 @@ impl MySQL {
 
                 let context = self.tera_context(*kubernetes, *environment);
 
-                let from_dir = format!("{}/aws/services/mysql", self.context.lib_root_dir());
-                let _ = crate::template::generate_and_copy_all_files_into_dir(
-                    from_dir.as_str(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                    &workspace_dir,
+                    &context
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
 
-                let _ = crate::cmd::terraform_exec_with_init_validate_plan_destroy(
+                crate::cmd::terraform_exec_with_init_validate_plan_destroy(
                     workspace_dir.as_str(),
                 )?;
             }
