@@ -18,6 +18,10 @@ provider "null" {
   version = "~> 2.1"
 }
 
+provider "random" {
+  version = "~> 2.3"
+}
+
 provider "helm" {
   version = "~> 1.2"
   kubernetes {
