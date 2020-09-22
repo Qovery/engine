@@ -32,6 +32,23 @@ data "aws_iam_role" "rds_enhanced_monitoring" {
   name = "rds-enhanced-monitoring-${var.eks_cluster_id}"
 }
 
+resource "helm_release" "mysql_instance_external_name" {
+  name = "${aws_db_instance.mysql_instance.id}-externalname"
+  chart = "aws/charts/external-name-svc"
+  namespace = "tbd"
+  atomic = true
+  max_history = 50
+
+  set {
+    name = "target_hostname"
+    value = aws_db_instance.mysql_instance.address
+  }
+
+  depends_on = [
+    aws_db_instance.mysql_instance
+  ]
+}
+
 # Non snapshoted version
 resource "aws_db_instance" "mysql_instance" {
   identifier = var.mysql_identifier

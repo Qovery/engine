@@ -1,0 +1,11 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: $(svc-id)
+  labels:
+    appId: 
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.target_hostname }}
+spec:
+  type: ExternalName
+  externalName: AWS FQDN (rds)
