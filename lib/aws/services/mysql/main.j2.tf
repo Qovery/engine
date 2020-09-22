@@ -1,15 +1,15 @@
 data "aws_vpc" "selected" {
   filter {
-    name = "tag:RegionClusterName"
-    values = [var.region_cluster_name]
+    name = "tag:ClusterId"
+    values = [var.eks_cluster_id]
   }
 }
 
 data "aws_subnet_ids" "k8s_subnet_ids" {
   vpc_id = data.aws_vpc.selected.id
   filter {
-    name = "tag:RegionClusterName"
-    values = [var.region_cluster_name]
+    name = "tag:ClusterId"
+    values = [var.eks_cluster_id]
   }
   filter {
     name = "tag:Service"
@@ -20,16 +20,16 @@ data "aws_subnet_ids" "k8s_subnet_ids" {
 data "aws_security_group" "selected" {
   filter {
     name = "tag:Name"
-    values = ["${var.region_cluster_name}-workers"]
+    values = ["eks-workers"]
   }
   filter {
-    name   = "tag:kubernetes.io/cluster/${var.region_cluster_name}"
+    name   = "tag:kubernetes.io/cluster/${var.eks_cluster_id}"
     values = ["owned"]
   }
 }
 
 data "aws_iam_role" "rds_enhanced_monitoring" {
-  name = "${var.region}-${var.cluster_name}-rds-enhanced-monitoring"
+  name = "rds-enhanced-monitoring-${var.eks_cluster_id}"
 }
 
 # Non snapshoted version
@@ -38,6 +38,7 @@ resource "aws_db_instance" "mysql_instance" {
 
   tags = {
     cluster_name = var.cluster_name
+    cluster_id = var.eks_cluster_id
     region = var.region
     q_client_id = var.q_customer_id
     q_environment_id = var.q_environment_id
