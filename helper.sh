@@ -14,6 +14,7 @@ fi
 ARGS_NUM=$#
 # Note: this is the dev version for the moment as the prod one is not released yet
 QOVERY_API="api.qovery.com"
+TMP_LIB_DIR="/tmp/qovery-libs/"
 
 function check_num_args() {
   desired_number=$1
@@ -50,16 +51,20 @@ function get_commit_id() {
 function build_image() { ## Build Engine image locally. Args: <tag_version>
   tag=$(get_commit_id)
   cp docker/load.sh docker/engine/load.sh
+  cp docker/bin_versions bin_versions
   docker build -t qoveryrd/engine:${tag} .
   rm -f docker/engine/load.sh
+  rm -f bin_versions
 }
 
 function build_ci_image() { ## Build CI image locally. Args: <tag_version>
   tag=$(get_commit_id)
   cp docker/load.sh docker/ci/load.sh
+  cp docker/bin_versions docker/ci/bin_versions
   cd docker/ci
   docker build --no-cache -t qoveryrd/ci:${tag} .
   rm -f docker/ci/load.sh
+  rm -f docker/ci/bin_versions
 }
 
 function push_image() { ## Push Engine local image with current commit ID as tag
@@ -76,6 +81,18 @@ function push_ci_image() { ## Push CI local image with current commit ID as tag
 
   docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
   docker push qoveryrd/ci:${tag}
+}
+
+function generate_tmp_libs_tar() {
+  file_prefix=$(get_commit_id)
+  file="${file_prefix}-lib.tgz"
+  file_with_bootstrap="${file_prefix}-lib-with-bootstrap.tgz"
+  tar czf $file --exclude='*/bootstrap' lib
+  tar czf $file_with_bootstrap lib
+  mkdir -p $TMP_LIB_DIR
+  mv $file $TMP_LIB_DIR/$file
+  mv $file_with_bootstrap $TMP_LIB_DIR/$file_with_bootstrap
+  ln -s $TMP_LIB_DIR/$file_with_bootstrap $TMP_LIB_DIR/lib.tgz
 }
 
 function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
@@ -96,14 +113,12 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
   if [ $? -ne 0 ] ; then
     set -e
     echo "Pushing lib to s3"
-    tar czf $file --exclude='*/bootstrap' lib
-    tar czf $file_with_bootstrap lib
-    aws s3 cp $file s3://$bucket
-    aws s3 cp $file_with_bootstrap s3://$bucket
+    aws s3 cp $TMP_LIB_DIR/$file s3://$bucket
+    aws s3 cp $TMP_LIB_DIR/$file_with_bootstrap s3://$bucket
     aws s3api put-object-acl --bucket $bucket --key $file --acl public-read
     aws s3api put-object-acl --bucket $bucket --key $file_with_bootstrap --acl public-read
-    rm -f $file
-    rm -f $file_with_bootstrap
+    rm -f $TMP_LIB_DIR/$file
+    rm -f $TMP_LIB_DIR/$file_with_bootstrap
   else
     echo "File $file already exists in bucket $bucket"
     exit 1
@@ -152,6 +167,9 @@ build_image)
   ;;
 build_ci_image)
   build_ci_image $2
+  ;;
+generate_tmp_libs_tar)
+  generate_tmp_libs_tar
   ;;
 s3_upload_resources)
   s3_upload_resources

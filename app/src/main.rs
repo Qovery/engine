@@ -5,7 +5,8 @@ extern crate serde;
 
 use std::borrow::Borrow;
 use std::fs::File;
-use std::io::{Error, Read, Write};
+use std::{fs, process, io};
+use std::io::{Error, Read, Write, BufRead};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -29,8 +30,11 @@ use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::constants::ASCII_BANNER;
 use crate::TaskSelector::{Environment, Infrastructure};
+use crate::custom_error::{EngineInitError, ErrorKind};
+use qovery_engine::cmd;
 
 mod constants;
+mod custom_error;
 
 const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";
 const CORE_PING_SUBJECT: &str = "core.ping";
@@ -268,6 +272,59 @@ fn watchdog(name: String, nc: Connection, sig_term_tx: Sender<bool>) {
         }
     });
 }
+pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
+    match fs::read_dir(path) {
+        Ok(out) => {
+            let is_empty = out.take(1).count() == 0;
+            match is_empty {
+                true => {
+                    return Err(EngineInitError::Regular(ErrorKind::LibsDirEmpty));
+                },
+                false => Ok(()),
+            }
+        },
+        Err(e) => return Err(EngineInitError::Regular(ErrorKind::LibsPathsMissing)),
+    }
+}
+
+fn check_if_file_exist(path: &String) -> bool {
+    let path = Path::new(path);
+    path.exists()
+}
+
+// check_versions_from will check (in file given in parameter) binaries versions
+// will assert an error if used version installed is not not the same than written in file
+fn check_versions_from(path: String) -> Result<(), EngineInitError> {
+    // please append this vector if you want to test more binaries
+        let bin_to_check = ["terraform"];
+        // read line by line the version file
+        if let Ok(lines) = read_lines(path) {
+            for line in lines {
+                if let Ok(bin) = line {
+                    // put in lowercase and split the BINARY_VERSION to BINARY
+                    let lowercase = bin.to_lowercase();
+                    let binary_name = lowercase.split("_").next()
+                        .unwrap_or("");
+                    // check if the binary need to be tested
+                    if bin_to_check.contains(&binary_name) {
+                        let result_cmd = cmd::run_version_command_for(&binary_name);
+                        let version = lowercase.split("=").last().unwrap_or("").replace("\"", "");
+                        match result_cmd.contains(&version) {
+                            false => return Err(EngineInitError::Regular(ErrorKind::BinVersion)),
+                            _ => info!("{} is on right version {}",binary_name.to_string(),version)
+                        };
+                    }
+                }
+            }
+        }
+    Ok(())
+    }
+
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+    where P: AsRef<Path>, {
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
+}
 
 pub fn main() -> Result<(), Error> {
     println!("{}", ASCII_BANNER);
@@ -275,6 +332,7 @@ pub fn main() -> Result<(), Error> {
 
     let organization = env::var("ORGANIZATION");
     let cloud_provider = env::var("CLOUD_PROVIDER");
+    let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let region = env::var("REGION");
     let nats_server = env::var("NATS_SERVER").expect("NATS_SERVER is mandatory");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or("lib".to_string());
@@ -291,6 +349,31 @@ pub fn main() -> Result<(), Error> {
 
     info!("lib root dir: {}/", lib_root_dir.as_str());
     info!("workspace root dir: {}", workspace_root_dir.as_str());
+
+    match check_libs_directory(lib_root_dir.clone()){
+        Ok(e) => info!("Libs directory is not empty"),
+        Err(e) => {
+            error!("Error while initializing the Engine {}",e);
+            process::exit(1);
+        }
+    }
+    //checking if version file exist
+    match check_if_file_exist(&version_file){
+        true => info!("Version file is accessible"),
+        _ => {
+            error!("Error while initializing the Engine, version file is not accessible");
+            process::exit(1);
+        }
+    }
+
+    // check all binaries version from version file
+    match check_versions_from(version_file){
+        Ok(()) => info!("Binaries versions are checked"),
+        Err(e) => {
+            error!("Error while initializing the Engine {}",e);
+            process::exit(1);
+        }
+    }
 
     match &docker_host {
         Some(docker_host) => info!("docker host: {}", docker_host),

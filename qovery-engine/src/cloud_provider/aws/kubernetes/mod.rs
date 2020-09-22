@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 use std::rc::Rc;
 use std::str::FromStr;
-
+use crate::cmd;
 use itertools::Itertools;
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,7 @@ use crate::models::{
     ProgressScope, ProgressStep,
 };
 use crate::{dynamo_db, s3};
+use std::env;
 
 pub mod node;
 
@@ -364,7 +365,6 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn is_valid(&self) -> Result<(), KubernetesError> {
-        // TODO check that terraform binary is available
         Ok(())
     }
 

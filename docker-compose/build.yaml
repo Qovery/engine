@@ -1,0 +1,24 @@
+version: "2"
+
+services:
+  nats:
+    image: 'nats:latest'
+    expose:
+      - "4222"
+    ports:
+      - "8222:8222"
+    hostname: nats-server
+  engine:
+    image: 'qoveryrd/engine:8dcf763e057ccc21d9ee12ecd7578e5ed01f6edd'
+    links:
+      - nats
+    environment:
+      - "NATS_SERVER=nats://nats:4222"
+      - "ENGINE_RES_URL=/qovery_libs"
+      - "LOCAL_DEPLOY=true"
+    depends_on:
+      - nats
+    ports:
+      - "8080:8080"
+    volumes:
+      - /tmp/qovery-libs/:/qovery_libs/

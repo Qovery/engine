@@ -7,13 +7,6 @@ SYSTEM="linux"
 ARGS_NUM=$#
 TMP_FOLDER="/tmp/binaries"
 
-TERRAFORM_VERSION="0.12.29"
-HELM_VERSION="3.2.4"
-KUBECTL_VERSION="1.18.6"
-AWS_IAM_AUTHENTICATOR_VERSION="0.5.1"
-DUMB_INIT_VERSION="1.2.2"
-DOCTL_VERSION="1.46.0"
-
 function check_num_args() {
   desired_number=$1
   if [ $ARGS_NUM -ne ${desired_number} ]; then
@@ -22,10 +15,11 @@ function check_num_args() {
   fi
 }
 
+source bin_versions
+
 function download() { ## Download prerequisites binaries for the engine
   mkdir -p $TMP_FOLDER && cd $TMP_FOLDER
   mkdir $BIN_DEST_FOLDER
-
   # terraform
   curl -so terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_${SYSTEM}_${ARCH}.zip
   unzip terraform.zip

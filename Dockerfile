@@ -14,8 +14,7 @@ ADD . .
 #RUN cargo test --workspace
 # run release build
 RUN cargo build --release
-
-RUN ./docker/engine/load.sh download
+RUN ./docker/load.sh download
 
 # Final image
 FROM debian:buster-slim as run
@@ -36,6 +35,7 @@ WORKDIR $HOME_DIR
 COPY --from=build /usr/src/app/target/release/app .
 COPY --from=build /usr/src/app/docker/engine/load.sh .
 COPY --from=build /usr/src/app/docker/engine/run.sh .
+COPY --from=build /usr/src/app/bin_versions .
 COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
 RUN ./load.sh install $BIN_DIR && \
@@ -44,6 +44,12 @@ RUN ./load.sh install $BIN_DIR && \
     rm -f ./load.sh
 
 USER qovery
+
+# for local use only
+VOLUME /qovery_libs
+ENV LOCAL_DEPLOY false
+
 ENV PATH="/home/qovery/binaries:${PATH}"
+ENV BIN_VERSION_FILE="$HOME_DIR/bin_versions"
 
 CMD ["./run.sh"]
