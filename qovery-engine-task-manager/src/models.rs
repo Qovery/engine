@@ -160,7 +160,7 @@ impl Kubernetes {
                 self.name.as_str(),
                 self.version.as_str(),
                 self.region.as_str(),
-                cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
+                cloud_provider.as_any().downcast_ref::<AWS>().expect("Could not downcast CloudProvider to type AWS"),
                 nodes
                     .into_iter()
                     .map(|x| {
@@ -268,7 +268,7 @@ impl Response {
     }
 
     pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
+        serde_json::to_string(self).expect("Could not convert self to String")
     }
 }
 
@@ -283,6 +283,6 @@ impl CheckTask {
     }
 
     pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
+        serde_json::to_string(self).expect("Could not convert self to String")
     }
 }
