@@ -44,9 +44,9 @@ impl DOCR {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Exec(_exit_status) => return Err(ContainerRegistryError::Unknown),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Exec(_exit_status) => return Err(ContainerRegistryError::Unknown(_exit_status)),
+                CmdError::Io(err) => return Err(ContainerRegistryError::Unknown(err)),
+                CmdError::Unexpected(err) => return Err(ContainerRegistryError::Unknown(err)),
             },
             _ => {}
         };
@@ -60,8 +60,8 @@ impl DOCR {
         ) {
             Err(err) => match err {
                 CmdError::Exec(_exit_status) => return Err(PushError::ImageTagFailed),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
             },
             _ => {}
         };
@@ -69,8 +69,8 @@ impl DOCR {
         match cmd::exec("docker", vec!["push", dest.as_str()]) {
             Err(err) => match err {
                 CmdError::Exec(_exit_status) => return Err(PushError::ImagePushFailed),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
             },
             _ => {}
         };
@@ -99,9 +99,9 @@ impl DOCR {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Exec(_exit_status) => return Err(ContainerRegistryError::Unknown),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Exec(exit_status) => return Err(ContainerRegistryError::Unknown(exit_status)),
+                CmdError::Io(err) => return Err(ContainerRegistryError::Unknown(err)),
+                CmdError::Unexpected(err) => return Err(ContainerRegistryError::Unknown(err)),
             },
             _ => {}
         };
@@ -171,8 +171,8 @@ impl ContainerRegistry for DOCR {
         ) {
             Err(err) => match err {
                 CmdError::Exec(_exit_status) => return Err(PushError::CredentialsError),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
             },
             _ => {}
         };
