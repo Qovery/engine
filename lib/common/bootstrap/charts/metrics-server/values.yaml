@@ -1,0 +1,145 @@
+## Global Docker image parameters
+## Please, note that this will override the image parameters, including dependencies, configured to use the global value
+## Current available global Docker image parameters: imageRegistry and imagePullSecrets
+##
+# global:
+#   imageRegistry: myRegistryName
+#   imagePullSecrets:
+#     - myRegistryKeySecretName
+
+## Bitnami Metrics Server image version
+## ref: https://hub.docker.com/r/bitnami/metrics-server/tags/
+##
+image:
+  registry: docker.io
+  repository: bitnami/metrics-server
+  tag: 0.3.7-debian-10-r103
+  ## Specify a imagePullPolicy
+  ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+  ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+  ##
+  pullPolicy: IfNotPresent
+  ## Optionally specify an array of imagePullSecrets.
+  ## Secrets must be manually created in the namespace.
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+  ##
+  # pullSecrets:
+  #   - myRegistryKeySecretName
+
+## String to partially override metrics-server.fullname template (will maintain the release name)
+##
+# nameOverride:
+
+## String to fully override metrics-server.fullname template
+##
+# fullnameOverride:
+
+## Role Based Access
+## Ref: https://kubernetes.io/docs/admin/authorization/rbac/
+##
+rbac:
+  ## Specifies whether RBAC rules should be created
+  ##
+  create: true
+
+## Pods Service Account
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
+##
+serviceAccount:
+  ## Specifies whether a ServiceAccount should be created
+  ##
+  create: true
+  ## The name of the ServiceAccount to use.
+  ## If not set and create is true, a name is generated using the metrics-server.fullname template
+  # name:
+
+## API service parameters
+##
+apiService:
+  ## Specifies whether the v1beta1.metrics.k8s.io API service should be created
+  ## This should not be necessary in k8s version >= 1.8
+  ##
+  create: false
+
+## Specify the secure port where metrics-server will be running
+##
+securePort: 8443
+
+# Specifies if metrics-server should be started in hostNetwork mode.
+#
+# You would require this enabled if you use alternate overlay networking for pods and
+# API server unable to communicate with metrics-server. As an example, this is required
+# if you use Weave network on EKS
+hostNetwork: false
+
+## Extra arguments to pass to the metrics-server
+## ref: https://github.com/kubernetes-incubator/metrics-server/blob/master/README.md#flags
+##
+## extraArgs:
+##   kubelet-insecure-tls: true
+##   kubelet-preferred-address-types: InternalIP
+##
+extraArgs: {}
+
+## Additional pod annotations for MariaDB Galera pods
+## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+##
+podAnnotations: {}
+
+## Priority class for pod scheduling
+## ref: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/#priorityclass
+# priorityClassName: myPriorityClassName
+
+## Affinity for pod assignment. Evaluated as a template.
+## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+##
+affinity: {}
+
+## Node labels for pod assignment. Evaluated as a template.
+## Ref: https://kubernetes.io/docs/user-guide/node-selection/
+##
+nodeSelector: {}
+
+## Tolerations for pod assignment. Evaluated as a template.
+## Ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+##
+tolerations: {}
+
+##  Metrics Server K8s svc properties
+##
+service:
+  ## Kubernetes service type and port number
+  ##
+  type: ClusterIP
+  port: 443
+
+  ## Specify the nodePort value for the LoadBalancer and NodePort service types.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+  ##
+  # nodePort: 30001
+
+  ## Set the LoadBalancer service type to internal only.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
+  ##
+  # loadBalancerIP:
+
+  ## Provide any additional annotations which may be required. This can be used to
+  ## set the LoadBalancer service type to internal only.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
+  ##
+  annotations: {}
+
+## Metric Server containers' resource requests and limits
+## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+##
+resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  limits: {}
+  #   cpu: 250m
+  #   memory: 256Mi
+  requests: {}
+  #   cpu: 250m
+  #   memory: 256Mi

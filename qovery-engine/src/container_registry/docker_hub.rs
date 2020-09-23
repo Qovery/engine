@@ -105,9 +105,18 @@ impl ContainerRegistry for DockerHub {
             envs.clone(),
         ) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => error!("Cannot login into dockerhub"),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Exec(exit_status) => {
+                    error!("Cannot login into dockerhub");
+                    return false;
+                }
+                CmdError::Io(err) => {
+                    error!("IO error on dockerhub login: {}", err);
+                    return false;
+                }
+                CmdError::Unexpected(err) => {
+                    error!("Unexpected error on dockerhub login: {}", err);
+                    return false;
+                }
             },
             _ => {}
         };
@@ -156,8 +165,8 @@ impl ContainerRegistry for DockerHub {
         ) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
             },
             _ => {}
         };
@@ -174,8 +183,8 @@ impl ContainerRegistry for DockerHub {
         ) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
             },
             _ => {}
         };
@@ -183,8 +192,8 @@ impl ContainerRegistry for DockerHub {
         match cmd::exec_with_envs("docker", vec!["push", dest.as_str()], envs) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
-                CmdError::Io(err) => panic!(err),
-                CmdError::Unexpected(err) => panic!(err),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
             },
             _ => {}
         };

@@ -3,7 +3,14 @@
 #set -x
 
 function get_lib() {
-    curl -so lib.tgz ${ENGINE_RES_URL}
+    if [ "$LOCAL_DEPLOY" = "true" ]
+    then
+      echo "Local: please ensure libs are accessible on ${ENGINE_RES_URL}"
+      cp ${ENGINE_RES_URL}/lib.tgz .
+    else
+      echo "Production: downloading from ENGINE_RES_URL"
+      curl -so lib.tgz ${ENGINE_RES_URL}
+    fi
     echo $?
 }
 
@@ -17,7 +24,6 @@ if [ "$ENGINE_RES_URL" == "" ] ; then
   echo "ENGINE_RES_URL variable is empty!"
   exit 1
 fi
-
 # Load lib
 counter=0
 max_retry=5

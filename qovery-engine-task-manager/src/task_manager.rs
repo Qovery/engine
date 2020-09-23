@@ -64,7 +64,8 @@ impl TaskManager {
     }
 
     pub fn remaining_tasks_to_run(&self) -> usize {
-        self.it_receiver.lock().unwrap().len()
+        //TODO: rewrite me to retry locking
+        self.it_receiver.lock().expect("Could not lock internal task receiver when trying to get the number of remaining tasks").len()
     }
 
     pub fn is_terminated(&self) -> Receiver<bool> {
@@ -116,9 +117,10 @@ impl TaskManager {
                         match msg {
                             Ok(it) => {
                                 // update task status
+                                // TODO: handle lock failure
                                 status_by_task_id_w_1
                                     .lock()
-                                    .unwrap()
+                                    .expect("Could not lock status updater")
                                     .empty(it.task.id().to_string())
                                     .insert(it.task.id().to_string(), it.status.clone())
                                     .refresh();
@@ -136,7 +138,8 @@ impl TaskManager {
         });
 
         let _ = thread::spawn(move || loop {
-            let self_it_receiver = self_it_receiver.lock().unwrap();
+            // TODO: Handle lock failure
+            let self_it_receiver = self_it_receiver.lock().expect("Could not lock internal task receiver");
             let _ = match self_it_receiver.try_recv() {
                 Ok(internal_task) => {
                     let start_time = Instant::now();
@@ -218,7 +221,8 @@ fn add_task(
     let task_id = task.id().to_string();
     status_by_task_id_w
         .lock()
-        .unwrap()
+        //TODO: handle lock failure
+        .expect("could not lock task status writer whin trying to add task")
         .insert(
             task_id.to_string(),
             Status::Waiting {

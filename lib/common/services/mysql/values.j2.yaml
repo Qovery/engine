@@ -15,7 +15,7 @@ image:
   debug: false
   registry: docker.io
   repository: bitnami/mysql
-  tag: "{{ databases[database_index]['version'] }}"
+  tag: "{{ version }}"
 
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
@@ -32,12 +32,12 @@ image:
 ## String to partially override mysql.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
+nameOverride: {{ name }}
 
 ## String to fully override mysql.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
+fullnameOverride: {{ name }}
 
 ## Cluster domain
 ##
@@ -46,7 +46,7 @@ clusterDomain: cluster.local
 labels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
-  databaseId: {{ databases[database_index]['name'] }}
+  databaseId: {{ name }}
 
 ## Init containers parameters:
 ## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
@@ -75,9 +75,9 @@ volumePermissions:
     limits: {}
     #   cpu: 100m
     #   memory: 128Mi
-    requests: {}
-    #   cpu: 100m
-    #   memory: 128Mi
+    requests:
+       cpu: "{{ database_total_cpus }}"
+       memory: "{{ database_ram_size_in_mib }}Mi"
 
 ## Use existing secret (ignores root, db and replication passwords)
 ##
@@ -89,7 +89,7 @@ root:
   ## MySQL admin password
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#setting-the-root-password-on-first-run
   ##
-  password: {{ databases[database_index]['password'] }}
+  password: {{ database_password }}
   ## Option to force users to specify a password. That is required for 'helm upgrade' to work properly.
   ## If it is not force, a random password will be generated.
   ##
@@ -105,12 +105,12 @@ db:
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#creating-a-database-user-on-first-run
   ## Note that this user should be different from the MySQL replication user (replication.user)
   ##
-  user: {{ databases[database_index]['username'] }}
-  password: {{ databases[database_index]['password'] }}
+  user: {{ database_login }}
+  password: {{ database_password }}
   ## Database to create
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#creating-a-database-on-first-run
   ##
-  name: {{ databases[database_index]['name'] }}
+  name: {{ name }}
   ## Option to force users to specify a password. That is required for 'helm upgrade' to work properly.
   ## If it is not force, a random password will be generated.
   ##
@@ -316,7 +316,7 @@ master:
     annotations:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
-      databaseId: {{ databases[database_index]['name'] }}
+      databaseId: {{ name }}
 
     ## Persistent Volume Access Mode
     ##
@@ -324,7 +324,7 @@ master:
       - ReadWriteOnce
     ## Persistent Volume size
     ##
-    size: {{ databases[database_index]['disk_size_in_mb'] }}Mi
+    size: {{ database_disk_size_in_gib }}Gi
     ## Use an existing PVC
     ##
     # existingClaim:
@@ -488,7 +488,7 @@ slave:
       - ReadWriteOnce
     ## Persistent Volume size
     ##
-    size: 8Gi
+    size: {{ database_disk_size_in_gib }}Gi
     ## Use an existing PVC
     ##
     # existingClaim:
@@ -517,7 +517,7 @@ service:
   ##
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-    external-dns.alpha.kubernetes.io/hostname: "{{ databases[database_index]['fqdn'] }}"
+    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
 
   ## loadBalancerIP for the PrestaShop Service (optional, cloud specific)

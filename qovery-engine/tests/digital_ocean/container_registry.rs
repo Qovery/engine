@@ -7,7 +7,7 @@ use qovery_engine::build_platform::Image;
 use qovery_engine::container_registry::docr::DOCR;
 use test_utilities::digitalocean::DIGITAL_OCEAN_TOKEN;
 
-#[test]
+/*#[test]
 #[ignore]
 fn create_do_container_registry() {
     init();
@@ -27,15 +27,15 @@ fn create_do_container_registry() {
     };
     let repository = DOCR::create_repository(&docr, &image_test);
 }
-
-#[test]
+*/
+/*#[test]
 fn create_do_repository_on_container_registry() {}
 
 #[test]
 fn delete_do_repository_on_container_registry() {}
 
 #[test]
-fn push_sample_image_on_container_registry() {}
+fn push_sample_image_on_container_registry() {}*/
 
 //
 // test --package qovery-engine --test container_registry create_do_container_registry -- --exact

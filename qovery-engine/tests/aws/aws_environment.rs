@@ -1,6 +1,7 @@
 extern crate test_utilities;
 
-use self::test_utilities::utilities::generate_id;
+use rusoto_core::region::Region::Custom;
+
 use qovery_engine::cloud_provider::service::Router;
 use qovery_engine::cmd;
 use qovery_engine::models::{
@@ -8,9 +9,10 @@ use qovery_engine::models::{
     EnvironmentVariable, Kind, Storage, StorageType,
 };
 use qovery_engine::transaction::TransactionResult;
-use rusoto_core::region::Region::Custom;
 use test_utilities::aws::context;
 use test_utilities::utilities::init;
+
+use self::test_utilities::utilities::generate_id;
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
@@ -409,13 +411,12 @@ fn deploy_a_working_environment_with_postgresql() {
     };
 }
 
-// Todo: Can't work, missing implementation, MySQL is not bootstraped
-/*#[test]
-#[ignore]
+#[test]
 fn deploy_a_working_environment_with_mysql() {
     init();
 
     let context = context();
+    let deletion_context = context.clone_not_same_execution_id();
 
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
@@ -471,8 +472,21 @@ fn deploy_a_working_environment_with_mysql() {
             app
         })
         .collect::<Vec<qovery_engine::models::Application>>();
+    environment.routers = environment.routers.into_iter().map(
+        |mut router| {
+            router.routes = router.routes.into_iter().map(
+                |mut route| {
+                    if route.application_name == "simple-app" {
+                        route.application_name = "mysql-app".to_string();
+                    }
+                    route
+                }
+            ).collect::<Vec<qovery_engine::models::Route>>();
+            router
+        }
+    ).collect::<Vec<qovery_engine::models::Router>>();
 
-    let mut environment_delete = environment.clone_not_same_execution_id();
+    let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
     let ea = EnvironmentAction::Environment(environment);
     let ea_delete = EnvironmentAction::Environment(environment_delete);
@@ -485,14 +499,14 @@ fn deploy_a_working_environment_with_mysql() {
 
     // todo: check the database disk is here and with correct size
 
-    match delete_environment(&context, &ea_delete) {
+    match delete_environment(&deletion_context, &ea_delete) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 
     //Todo: remove the namespace (or project)
-}*/
+}
 
 #[test]
 #[ignore]

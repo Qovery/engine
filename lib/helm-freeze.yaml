@@ -36,6 +36,9 @@ charts:
     repo_name: aws
     dest: aws-bootstrap
     version: 0.3.1
+  - name: metrics-server
+    repo_name: bitnami
+    version: 4.3.1
 
 repos:
   - name: stable

@@ -14,7 +14,8 @@ use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
-    Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope, ProgressStep,
+    Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
+    ProgressStep,
 };
 use qovery_engine::transaction::{CommitError, TransactionResult};
 
@@ -347,7 +348,24 @@ impl Task for EnvironmentTask {
             nodes.borrow(),
         );
 
-        let environment_action = self.request.environment_action().unwrap();
+        let environment_action = match self.request.environment_action() {
+            None => {
+                self.update_status(&sender,
+                                   Status::Error {
+                                       message: Some("failed to get environment action, self.request.environment_action() returned None variant".to_string()),
+                                       context: ActionContext::new(
+                                           ProgressScope::Environment {
+                                               id: target_environment_id.clone()
+                                           },
+                                           progress_step.clone(),
+                                           ProgressLevel::Error,
+                                           self.id().to_string(),
+                                       ),
+                                   });
+                return;
+            }
+            Some(ea) => ea,
+        };
 
         match self.request.action {
             Action::Create => tx.deploy_environment(kubernetes.borrow(), &environment_action),
