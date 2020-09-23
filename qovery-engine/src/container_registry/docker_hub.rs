@@ -108,15 +108,15 @@ impl ContainerRegistry for DockerHub {
                 CmdError::Exec(exit_status) => {
                     error!("Cannot login into dockerhub");
                     return false;
-                },
+                }
                 CmdError::Io(err) => {
                     error!("IO error on dockerhub login: {}", err);
                     return false;
-                },
+                }
                 CmdError::Unexpected(err) => {
                     error!("Unexpected error on dockerhub login: {}", err);
                     return false;
-                },
+                }
             },
             _ => {}
         };

@@ -44,9 +44,9 @@ impl DOCR {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Exec(_exit_status) => return Err(ContainerRegistryError::Unknown(_exit_status)),
-                CmdError::Io(err) => return Err(ContainerRegistryError::Unknown(err)),
-                CmdError::Unexpected(err) => return Err(ContainerRegistryError::Unknown(err)),
+                CmdError::Exec(_exit_status) => return Err(ContainerRegistryError::Unknown),
+                CmdError::Io(err) => return Err(ContainerRegistryError::Unknown),
+                CmdError::Unexpected(err) => return Err(ContainerRegistryError::Unknown),
             },
             _ => {}
         };
@@ -99,9 +99,9 @@ impl DOCR {
             ],
         ) {
             Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(ContainerRegistryError::Unknown(exit_status)),
-                CmdError::Io(err) => return Err(ContainerRegistryError::Unknown(err)),
-                CmdError::Unexpected(err) => return Err(ContainerRegistryError::Unknown(err)),
+                CmdError::Exec(exit_status) => return Err(ContainerRegistryError::Unknown),
+                CmdError::Io(err) => return Err(ContainerRegistryError::Unknown),
+                CmdError::Unexpected(err) => return Err(ContainerRegistryError::Unknown),
             },
             _ => {}
         };

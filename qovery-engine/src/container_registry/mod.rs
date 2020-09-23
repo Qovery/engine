@@ -3,8 +3,8 @@ use rusoto_core::RusotoError;
 use crate::build_platform::Image;
 use crate::models::{Context, Listener, ProgressListener};
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
 use std::error::Error;
+use std::rc::Rc;
 
 pub mod docker_hub;
 pub mod docr;
@@ -51,7 +51,7 @@ pub enum Kind {
 #[derive(Debug, Eq, PartialEq)]
 pub enum ContainerRegistryError {
     Credentials,
-    Unknown(Error),
+    Unknown,
 }
 
 impl<E> From<RusotoError<E>> for ContainerRegistryError {

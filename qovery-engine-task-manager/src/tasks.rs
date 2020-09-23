@@ -13,7 +13,10 @@ use qovery_engine::cloud_provider::service::ServiceError;
 use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::ConfigurationError;
-use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope, ProgressStep, EnvironmentAction};
+use qovery_engine::models::{
+    Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
+    ProgressStep,
+};
 use qovery_engine::transaction::{CommitError, TransactionResult};
 
 use crate::models::{Action, Request};
@@ -347,20 +350,21 @@ impl Task for EnvironmentTask {
 
         let environment_action = match self.request.environment_action() {
             None => {
-              self.update_status(&sender,
-              Status::Error {
-                  message: Some("failed to get environment action, self.request.environment_action() returned None variant")
-                  context: ActionContext::new(ProgressScope::Environment {
-                      id: target_environment_id.clone()
-                  },
-                  progress_step.clone(),
-                      ProgressLevel::Error,
-                      self.id().to_string()
-                  ),
-              });
+                self.update_status(&sender,
+                                   Status::Error {
+                                       message: Some("failed to get environment action, self.request.environment_action() returned None variant".to_string()),
+                                       context: ActionContext::new(
+                                           ProgressScope::Environment {
+                                               id: target_environment_id.clone()
+                                           },
+                                           progress_step.clone(),
+                                           ProgressLevel::Error,
+                                           self.id().to_string(),
+                                       ),
+                                   });
                 return;
-            },
-            Some(ea) => ea
+            }
+            Some(ea) => ea,
         };
 
         match self.request.action {
