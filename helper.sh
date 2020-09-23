@@ -113,8 +113,8 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
   if [ $? -ne 0 ] ; then
     set -e
     echo "Pushing lib to s3"
-    aws s3 cp $TMP_LIB_DIR/$file s3://$bucket
-    aws s3 cp $TMP_LIB_DIR/$file_with_bootstrap s3://$bucket
+    aws s3 cp $TMP_LIB_DIR$file s3://$bucket
+    aws s3 cp $TMP_LIB_DIR$file_with_bootstrap s3://$bucket
     aws s3api put-object-acl --bucket $bucket --key $file --acl public-read
     aws s3api put-object-acl --bucket $bucket --key $file_with_bootstrap --acl public-read
     rm -f $TMP_LIB_DIR/$file
