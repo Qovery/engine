@@ -66,7 +66,7 @@ impl<'a> EKS<'a> {
         format!("{}-{}-qovery-terraform", self.region.name(), self.id())
     }
 
-    fn tera_context(&self) -> TeraContext {
+    pub fn tera_context(&self) -> TeraContext {
         let eks_zone_a_subnet_blocks = [
             "10.0.0.0/23",
             "10.0.2.0/23",

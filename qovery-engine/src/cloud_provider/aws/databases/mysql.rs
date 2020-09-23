@@ -63,7 +63,12 @@ impl MySQL {
     }
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
+        // FIXME: is there an other way than downcast a pointer?
+        let cp = kubernetes.cloud_provider().as_any().downcast_ref::<AWS>().expect("Could not downcast kubernetes.cloud_provider() to AWS");
+        context.insert("aws_access_key", &cp.access_key_id);
+        context.insert("aws_secret_key", &cp.secret_access_key);
         context.insert("eks_cluster_id", kubernetes.id());
+        context.insert("eks_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());

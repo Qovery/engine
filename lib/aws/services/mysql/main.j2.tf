@@ -43,6 +43,10 @@ resource "helm_release" "mysql_instance_external_name" {
     name = "target_hostname"
     value = aws_db_instance.mysql_instance.address
   }
+  set {
+    name = "source_fqdn"
+    value = "{{database_fqdn}}"
+  }
 
   depends_on = [
     aws_db_instance.mysql_instance
