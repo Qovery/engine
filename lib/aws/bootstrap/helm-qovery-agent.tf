@@ -61,6 +61,11 @@ resource "helm_release" "qovery_agent_resources" {
   }
 
   set {
+    name = "environmentVariables.KUBERNETES_ID"
+    value = var.eks_cluster_id
+  }
+
+  set {
     name = "environmentVariables.RUST_LOG"
     value = "DEBUG"
   }
