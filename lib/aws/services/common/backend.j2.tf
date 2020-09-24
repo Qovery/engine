@@ -3,5 +3,6 @@ terraform {
     secret_suffix    = "state"
     load_config_file = true
     config_path = "{{ kubeconfig_path }}"
+    namespace = "{{ namespace }}"
   }
 }

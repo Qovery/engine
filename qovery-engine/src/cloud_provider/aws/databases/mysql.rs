@@ -85,6 +85,7 @@ impl MySQL {
             aws.secret_access_key.as_str(),
             kubernetes.region(),
         );
+        context.insert("namespace",environment.namespace());
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
