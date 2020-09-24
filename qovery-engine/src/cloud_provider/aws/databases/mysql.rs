@@ -11,7 +11,7 @@ use crate::cloud_provider::service::{
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
 use crate::cloud_provider::aws::kubernetes::EKS;
-use crate::cmd::{kubectl_exec_delete_namespace, kubectl_exec_create_namespace};
+use crate::cmd::{kubectl_exec_delete_namespace, kubectl_exec_create_namespace,kubectl_exec_delete_secret};
 
 pub struct MySQL {
     context: Context,
@@ -87,6 +87,7 @@ impl MySQL {
         );
         match kubernetes_config_file_path {
             Ok(out) => { context.insert("kubeconfig_path", &out.as_str());
+                //create the namespace to insert the tfstate in secrets
                 kubectl_exec_create_namespace(
                 out,
                 &environment.namespace(),
@@ -141,9 +142,15 @@ impl MySQL {
                     &context,
                 )?;
 
-                crate::cmd::terraform_exec_with_init_validate_plan_destroy(
+                match crate::cmd::terraform_exec_with_init_validate_plan_destroy(
                     workspace_dir.as_str(),
-                )?;
+                ){
+                    Ok(o) => {
+                        info!("Deleting secrets containing tfstates");
+                        // make it works
+                    }
+                    Err(e) => error!("Error while destroying infrastructure {}",e)
+                }
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 let helm_release_name = self.helm_release_name();

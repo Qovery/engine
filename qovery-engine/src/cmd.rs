@@ -218,7 +218,7 @@ pub fn terraform_exec_with_init_validate_plan_destroy(root_dir: &str) -> Result<
     terraform_exec_with_init_validate_plan(root_dir, false);
 
     // terraform destroy
-    terraform_exec(root_dir, vec!["destroy", "-auto-approve"]);
+    terraform_exec(root_dir, vec!["destroy", "-auto-approve"])?;
 
     Ok(())
 }
@@ -684,12 +684,44 @@ pub fn kubectl_exec_delete_namespace<P>(
 where
     P: AsRef<Path>,
 {
+    // TODO: before delete namespace , we should be sure that no left tfstate ressources in secrets
+
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
     let _ = kubectl_exec_with_output(
         vec!["delete", "namespace", namespace],
+        _envs,
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+
+    Ok(())
+}
+
+pub fn kubectl_exec_delete_secret<P>(
+    kubernetes_config: P,
+    secret: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), CmdError>
+    where
+        P: AsRef<Path>,
+{
+    // TODO: before delete namespace , we should be sure that no left tfstate ressources in secrets
+
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let _ = kubectl_exec_with_output(
+        vec!["delete", "secret", secret],
         _envs,
         |out| match out {
             Ok(line) => info!("{}", line),
