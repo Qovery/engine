@@ -1,8 +1,7 @@
 terraform {
-  backend "s3" {
-    bucket = "q-applications-{{eks_cluster_id}}"
-    key = "{{ fqdn_id }}.tfstate"
-    dynamodb_table = "q-applications-{{eks_cluster_id}}"
-    region = "{{ region }}"
+  backend "kubernetes" {
+    secret_suffix    = "state"
+    load_config_file = true
+    config_path = "{{ kubeconfig_path }}"
   }
 }

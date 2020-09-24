@@ -65,8 +65,33 @@ impl MySQL {
         let mut context = self.default_tera_context(kubernetes, environment);
         // FIXME: is there an other way than downcast a pointer?
         let cp = kubernetes.cloud_provider().as_any().downcast_ref::<AWS>().expect("Could not downcast kubernetes.cloud_provider() to AWS");
+        // we need the kubernetes config file to store tfstates file in kube secrets
+        let aws = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<AWS>()
+            .unwrap();
+
+        let aws_credentials_envs = vec![
+            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
+        ];
+
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            self.workspace_directory().as_str(),
+            environment.organization_id.as_str(),
+            kubernetes.id(),
+            aws.access_key_id.as_str(),
+            aws.secret_access_key.as_str(),
+            kubernetes.region(),
+        );
+
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
+        match kubernetes_config_file_path {
+            Ok(out) => context.insert("kubeconfig_path", &out.as_str()),
+            _ => error!("Error while generating kubernetes config file")
+        }
         context.insert("eks_cluster_id", kubernetes.id());
         context.insert("eks_cluster_name", kubernetes.name());
 
