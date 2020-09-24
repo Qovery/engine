@@ -11,7 +11,7 @@ use crate::cloud_provider::service::{
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
 use crate::cloud_provider::aws::kubernetes::EKS;
-use crate::cmd;
+use crate::cmd::{kubectl_exec_delete_namespace, kubectl_exec_create_namespace};
 
 pub struct MySQL {
     context: Context,
@@ -85,20 +85,20 @@ impl MySQL {
             aws.secret_access_key.as_str(),
             kubernetes.region(),
         );
-        cmd::kubectl_exec_create_namespace(
-            &kubernetes_config_file_path,
-            &environment.namespace(),
-            aws_credentials_envs.clone()
-        );
+        match kubernetes_config_file_path {
+            Ok(out) => { context.insert("kubeconfig_path", &out.as_str());
+                kubectl_exec_create_namespace(
+                out,
+                &environment.namespace(),
+                aws_credentials_envs);
+                }
+            Err(e) => error!("Failed to generate the kubernetes config file path: {}",e)
 
+        }
         context.insert("namespace",environment.namespace());
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
-        match kubernetes_config_file_path {
-            Ok(out) => context.insert("kubeconfig_path", &out.as_str()),
-            _ => error!("Error while generating kubernetes config file")
-        }
         context.insert("eks_cluster_id", kubernetes.id());
         context.insert("eks_cluster_name", kubernetes.name());
 
