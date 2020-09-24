@@ -685,6 +685,9 @@ where
     P: AsRef<Path>,
 {
     // TODO: before delete namespace , we should be sure that no left tfstate ressources in secrets
+    // get secret
+    // if secret contains tfstate-default-state
+    // do nothing and raise alert
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -714,8 +717,6 @@ pub fn kubectl_exec_delete_secret<P>(
     where
         P: AsRef<Path>,
 {
-    // TODO: before delete namespace , we should be sure that no left tfstate ressources in secrets
-
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
