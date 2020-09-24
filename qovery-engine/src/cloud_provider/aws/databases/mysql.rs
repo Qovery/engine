@@ -11,6 +11,7 @@ use crate::cloud_provider::service::{
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
 use crate::cloud_provider::aws::kubernetes::EKS;
+use crate::cmd;
 
 pub struct MySQL {
     context: Context,
@@ -76,7 +77,6 @@ impl MySQL {
             (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
-
         let kubernetes_config_file_path = common::kubernetes_config_path(
             self.workspace_directory().as_str(),
             environment.organization_id.as_str(),
@@ -85,6 +85,12 @@ impl MySQL {
             aws.secret_access_key.as_str(),
             kubernetes.region(),
         );
+        cmd::kubectl_exec_create_namespace(
+            &kubernetes_config_file_path,
+            &environment.namespace(),
+            aws_credentials_envs.clone()
+        );
+
         context.insert("namespace",environment.namespace());
 
         context.insert("aws_access_key", &cp.access_key_id);
@@ -216,8 +222,8 @@ impl Create for MySQL {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy MySQL on AWS RDS for {}", self.name());
-
                 let context = self.tera_context(*kubernetes, *environment);
+
                 let workspace_dir = self.workspace_directory();
 
                 crate::template::generate_and_copy_all_files_into_dir(
