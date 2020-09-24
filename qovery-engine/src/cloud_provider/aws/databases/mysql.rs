@@ -148,6 +148,35 @@ impl MySQL {
                     Ok(o) => {
                         info!("Deleting secrets containing tfstates");
                         // make it works
+                        let aws = kubernetes
+                            .cloud_provider()
+                            .as_any()
+                            .downcast_ref::<AWS>()
+                            .unwrap();
+                        let aws_credentials_envs = vec![
+                            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+                            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
+                        ];
+                        let kubernetes_config_file_path = common::kubernetes_config_path(
+                            self.workspace_directory().as_str(),
+                            environment.organization_id.as_str(),
+                            kubernetes.id(),
+                            aws.access_key_id.as_str(),
+                            aws.secret_access_key.as_str(),
+                            kubernetes.region(),
+                        );
+                        match kubernetes_config_file_path {
+                            Ok(o) => {
+                                //create the namespace to insert the tfstate in secrets
+                                kubectl_exec_delete_secret(
+                                    kubernetes_config_file_path.clone(),
+                                    "tfstate-default-state",
+                                    aws_credentials_envs);
+                            }
+                            Err(e) => error!("Failed to generate the kubernetes config file path: {}",e)
+
+                        }
+
                     }
                     Err(e) => error!("Error while destroying infrastructure {}",e)
                 }
