@@ -144,10 +144,9 @@ impl TaskManager {
                 .expect("Could not lock internal task receiver");
             let _ = match self_it_receiver.try_recv() {
                 Ok(internal_task) => {
-                    let start_time = Instant::now();
-
                     // does the task is validated to be run?
                     if internal_task.task.pre_run() {
+                        let start_time = Instant::now();
                         // run task
                         let task_id = internal_task.task.id();
 
