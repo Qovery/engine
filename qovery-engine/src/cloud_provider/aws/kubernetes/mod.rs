@@ -85,6 +85,11 @@ fn get_string_array(val: &Value, key: &str) -> Vec<String> {
     val.get(key).unwrap().as_array().unwrap().iter().map(|it| it.as_str()).collect()
 }
 
+fn get_str(val: &Value, key: &str) -> &str {
+    // TODO unwraps
+    val.get(key).unwrap().as_str().unwrap()
+}
+
 pub struct EKS<'a> {
     context: Context,
     id: String,
@@ -123,7 +128,7 @@ impl<'a> EKS<'a> {
             cloud_provider,
             dns_provider,
             subnet_blocks: SubnetBlocks::new(&options),
-            raw_options: options,
+            raw_options: options.clone(),
             nodes,
             template_directory,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
@@ -196,9 +201,9 @@ impl<'a> EKS<'a> {
             .collect::<Vec<_>>();
 
         let region_cluster_id = format!("{}-{}", self.region(), self.id());
-        let vpc_cidr_block = "10.0.0.0/16";
+        let vpc_cidr_block = get_str(&self.options(), "vpc_cidr_block");
         let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", self.id());
-        let eks_cidr_subnet = "23";
+        let eks_cidr_subnet = get_str(&self.options(), "eks_cidr_subnet");
         let worker_nodes = self
             .nodes
             .iter()
@@ -214,11 +219,11 @@ impl<'a> EKS<'a> {
             .collect::<Vec<WorkerNodeDataTemplate>>();
         let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.cloud_provider.organization_id());
         let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
-        let qovery_api_url = "api.qovery.com";
-        let rds_cidr_subnet = "23";
-        let documentdb_cidr_subnet = "23";
-        let elasticsearch_cidr_subnet = "23";
-        let managed_dns = ["qovery.io"];
+        let qovery_api_url = get_str(&self.options(), "qovery_api_url");
+        let rds_cidr_subnet = get_str(&self.options(), "rds_cidr_subnet");
+        let documentdb_cidr_subnet = get_str(&self.options(), "documentdb_cidr_subnet");
+        let elasticsearch_cidr_subnet = get_str(&self.options(), "elasticsearch_cidr_subnet");
+        let managed_dns = get_string_array(&self.options(), "managed_dns");
         let managed_dns_helm_format = managed_dns
             .iter()
             .map(|name| format!("\"{}\"", name))
