@@ -75,8 +75,8 @@ impl PostgreSQL {
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
         context.insert("database_instance_type", "db.t2.micro"); // TODO customizable
         context.insert("database_disk_type", "gp2"); // TODO customizable
-        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib); // TODO customizable
-        context.insert("database_total_cpus", &self.total_cpus); // TODO customizable
+        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
+        context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
 
         context

@@ -5,12 +5,14 @@ use crate::error::ConfigurationError;
 use crate::models::Context;
 use crate::session::Session;
 use std::borrow::Borrow;
+use crate::dns_provider::DnsProvider;
 
 pub struct Engine {
     context: Context,
     build_platform: Box<dyn BuildPlatform>,
     container_registry: Box<dyn ContainerRegistry>,
     cloud_provider: Box<dyn CloudProvider>,
+    dns_provider: Box<dyn DnsProvider>,
 }
 
 impl Engine {
@@ -19,12 +21,14 @@ impl Engine {
         build_platform: Box<dyn BuildPlatform>,
         container_registry: Box<dyn ContainerRegistry>,
         cloud_provider: Box<dyn CloudProvider>,
+        dns_provider: Box<dyn DnsProvider>
     ) -> Engine {
         Engine {
             context,
             build_platform,
             container_registry,
             cloud_provider,
+            dns_provider
         }
     }
 }

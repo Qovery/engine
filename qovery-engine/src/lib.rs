@@ -4,6 +4,7 @@ extern crate tera;
 
 pub mod build_platform;
 pub mod cloud_provider;
+pub mod dns_provider;
 pub mod cmd;
 mod constants;
 pub mod container_registry;
