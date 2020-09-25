@@ -13,7 +13,7 @@ use test_utilities::aws::context;
 use test_utilities::utilities::init;
 
 use self::test_utilities::utilities::generate_id;
-
+use test_utilities::aws::dns_provider_cloudflare;
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
 // it permit you to create several different workspaces for each steps
@@ -44,7 +44,7 @@ fn deploy_environment(
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
 
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider_cloudflare(context), nodes);
 
     tx.deploy_environment(&k, &environment_action);
 
@@ -62,7 +62,7 @@ fn pause_environment(
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
 
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp,&dns_provider_cloudflare(context), nodes);
 
     tx.pause_environment(&k, &environment_action);
 
@@ -80,7 +80,7 @@ fn delete_environment(
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
 
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp,&dns_provider_cloudflare(context), nodes);
 
     tx.delete_environment(&k, &environment_action);
 
