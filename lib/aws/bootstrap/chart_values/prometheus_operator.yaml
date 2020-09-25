@@ -135,15 +135,17 @@ alertmanager:
     route:
       group_by: ['job']
       group_wait: 30s
-      group_interval: 5m
-      repeat_interval: 12h
-      receiver: 'null'
+      group_interval: 2m
+      repeat_interval: 3h
+      receiver: 'discord_webhook'
       routes:
-        - match:
+        - receiver: 'discord_webhook'
+          match:
             alertname: Watchdog
-          receiver: 'null'
     receivers:
-      - name: 'null'
+      - name: 'discord_webhook'
+        webhook_configs:
+          - url: 'http://alertmanager-discord.prometheus.svc:9095'
 
   ## Pass the Alertmanager configuration directives through Helm's templating
   ## engine. If the Alertmanager configuration contains Alertmanager templates,
@@ -389,7 +391,7 @@ alertmanager:
 
     ## 	The external URL the Alertmanager instances will be available under. This is necessary to generate correct URLs. This is necessary if Alertmanager is not served from root of a DNS name.	string	false
     ##
-    externalUrl:
+    externalUrl: "http://127.0.0.1:9093/"
 
     ## 	The route prefix Alertmanager registers HTTP handlers for. This is useful, if using ExternalURL and a proxy is rewriting HTTP routes of a request, and the actual ExternalURL is still true,
     ## but the server serves requests under a different route prefix. For example for use with kubectl proxy.
