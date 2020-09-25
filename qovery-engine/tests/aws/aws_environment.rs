@@ -497,7 +497,6 @@ fn deploy_a_working_environment_with_mysql() {
     //Todo: remove the namespace (or project)
 }
 
-
 #[test]
 #[ignore]
 /// Tests the creation of a simple environment on AWS, with the DB provisioned on RDS.
@@ -530,38 +529,40 @@ fn deploy_a_working_production_environment_with_mysql() {
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
     }];
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.branch = "mysql-app".to_string();
-            app.commit_id = "222295112d58d78227c21060d3a707687302e86f".to_string();
-            app.private_port = Some(1234);
-            app.environment_variables = vec![
-                EnvironmentVariable {
-                    key: "MYSQL_HOST".to_string(),
-                    value: database_host.clone(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_PORT".to_string(),
-                    value: database_port.clone().to_string(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_DBNAME".to_string(),
-                    value: database_db_name.clone(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_USERNAME".to_string(),
-                    value: database_username.clone(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_PASSWORD".to_string(),
-                    value: database_password.clone(),
-                },
-            ];
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
+    environment.applications = Vec::new();
+    /*environment.applications = environment
+       .applications
+       .into_iter()
+       .map(|mut app| {
+           app.branch = "mysql-app".to_string();
+           app.commit_id = "222295112d58d78227c21060d3a707687302e86f".to_string();
+           app.private_port = Some(1234);
+           app.environment_variables = vec![
+               EnvironmentVariable {
+                   key: "MYSQL_HOST".to_string(),
+                   value: database_host.clone(),
+               },
+               EnvironmentVariable {
+                   key: "MYSQL_PORT".to_string(),
+                   value: database_port.clone().to_string(),
+               },
+               EnvironmentVariable {
+                   key: "MYSQL_DBNAME".to_string(),
+                   value: database_db_name.clone(),
+               },
+               EnvironmentVariable {
+                   key: "MYSQL_USERNAME".to_string(),
+                   value: database_username.clone(),
+               },
+               EnvironmentVariable {
+                   key: "MYSQL_PASSWORD".to_string(),
+                   value: database_password.clone(),
+               },
+           ];
+           app
+       })
+       .collect::<Vec<qovery_engine::models::Application>>();
+    */
     environment.routers[0].routes[0].application_name = "mysql-app".to_string();
 
     let mut environment_delete = environment.clone();

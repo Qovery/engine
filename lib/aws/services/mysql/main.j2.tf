@@ -34,7 +34,7 @@ data "aws_iam_role" "rds_enhanced_monitoring" {
 
 resource "helm_release" "mysql_instance_external_name" {
   name = "${aws_db_instance.mysql_instance.id}-externalname"
-  chart = "aws/charts/external-name-svc"
+  chart = "external-name-svc"
   namespace = "tbd"
   atomic = true
   max_history = 50

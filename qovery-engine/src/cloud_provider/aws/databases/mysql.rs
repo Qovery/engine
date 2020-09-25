@@ -107,6 +107,8 @@ impl MySQL {
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib); // TODO customizable
         context.insert("database_total_cpus", &self.total_cpus); // TODO customizable
         context.insert("database_fqdn", &self.options.host.as_str());
+        context.insert("database_id", &self.id());
+        context.insert("kubernetes_namespace", kubernetes.)
 
         context
     }
@@ -133,6 +135,12 @@ impl MySQL {
                     workspace_dir.as_str(),
                     &context,
                 )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/charts/external-name-svc", self.context.lib_root_dir()).as_str(),
+                    workspace_dir.as_str(),
+                    &context,
+                )?;
+
 
                 crate::cmd::terraform_exec_with_init_validate_plan_destroy(
                     workspace_dir.as_str(),

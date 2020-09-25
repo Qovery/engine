@@ -1,7 +1,20 @@
 terraform {
   backend "kubernetes" {
-    secret_suffix    = "state"
+    secret_suffix = "state-{{database_id}}"
     load_config_file = true
     config_path = "{{ kubeconfig_path }}"
+    exec {
+      api_version = "client.authentication.k8s.io/v1alpha1"
+      command = "aws-iam-authenticator"
+      args = [
+        "token",
+        "-i",
+        "{{eks_cluster_id}}"]
+      env = {
+        AWS_ACCESS_KEY_ID = "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY = "{{ aws_secret_key }}"
+        AWS_DEFAULT_REGION = "{{ region }}"
+      }
+    }
   }
 }
