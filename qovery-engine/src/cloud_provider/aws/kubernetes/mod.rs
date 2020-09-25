@@ -1,30 +1,89 @@
 use std::borrow::Borrow;
+use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
-use crate::cmd;
+
 use itertools::Itertools;
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tera::Context as TeraContext;
 
+use syntax::util::map_in_place::MapInPlace;
+
+use crate::{dynamo_db, s3};
+use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cloud_provider::aws::{AWS, common};
 use crate::cloud_provider::aws::common::do_stateless_service_cleanup;
 use crate::cloud_provider::aws::kubernetes::node::Node;
-use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
 use crate::cloud_provider::service::{Service, ServiceType};
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cmd;
 use crate::cmd::kubectl_exec_delete_namespace;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::dns_provider::DnsProvider;
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope, ProgressStep,
 };
-use crate::{dynamo_db, s3};
-use std::env;
 
 pub mod node;
+
+pub struct SubnetBlocks {
+    eks_zone_a_subnet_blocks: Vec<String>,
+    eks_zone_b_subnet_blocks: Vec<String>,
+    eks_zone_c_subnet_blocks: Vec<String>,
+    rds_zone_a_subnet_blocks: Vec<String>,
+    rds_zone_b_subnet_blocks: Vec<String>,
+    rds_zone_c_subnet_blocks: Vec<String>,
+    documentdb_zone_a_subnet_blocks: Vec<String>,
+    documentdb_zone_b_subnet_blocks: Vec<String>,
+    documentdb_zone_c_subnet_blocks: Vec<String>,
+    elasticsearch_zone_a_subnet_blocks: Vec<String>,
+    elasticsearch_zone_b_subnet_blocks: Vec<String>,
+    elasticsearch_zone_c_subnet_blocks: Vec<String>,
+}
+
+impl SubnetBlocks {
+    pub fn new(
+        options: &Value
+    ) -> Self {
+        let eks_zone_a_subnet_blocks: Vec<String> = get_string_array(&options, "eks_zone_a_subnet_blocks");
+        let eks_zone_b_subnet_blocks: Vec<String> = get_string_array(&options, "eks_zone_b_subnet_blocks");
+        let eks_zone_c_subnet_blocks: Vec<String> = get_string_array(&options, "eks_zone_c_subnet_blocks");
+        let rds_zone_a_subnet_blocks: Vec<String> = get_string_array(&options, "rds_zone_a_subnet_blocks");
+        let rds_zone_b_subnet_blocks: Vec<String> = get_string_array(&options, "rds_zone_b_subnet_blocks");
+        let rds_zone_c_subnet_blocks: Vec<String> = get_string_array(&options, "rds_zone_c_subnet_blocks");
+        let documentdb_zone_a_subnet_blocks: Vec<String> = get_string_array(&options, "documentdb_zone_a_subnet_blocks");
+        let documentdb_zone_b_subnet_blocks: Vec<String> = get_string_array(&options, "documentdb_zone_b_subnet_blocks");
+        let documentdb_zone_c_subnet_blocks: Vec<String> = get_string_array(&options, "documentdb_zone_c_subnet_blocks");
+        let elasticsearch_zone_a_subnet_blocks: Vec<String> = get_string_array(&options, "elasticsearch_zone_a_subnet_blocks");
+        let elasticsearch_zone_b_subnet_blocks: Vec<String> = get_string_array(&options, "elasticsearch_zone_b_subnet_blocks");
+        let elasticsearch_zone_c_subnet_blocks: Vec<String> = get_string_array(&options, "elasticsearch_zone_c_subnet_blocks");
+
+        SubnetBlocks {
+            eks_zone_a_subnet_blocks,
+            eks_zone_b_subnet_blocks,
+            eks_zone_c_subnet_blocks,
+            rds_zone_a_subnet_blocks,
+            rds_zone_b_subnet_blocks,
+            rds_zone_c_subnet_blocks,
+            documentdb_zone_a_subnet_blocks,
+            documentdb_zone_b_subnet_blocks,
+            documentdb_zone_c_subnet_blocks,
+            elasticsearch_zone_a_subnet_blocks,
+            elasticsearch_zone_b_subnet_blocks,
+            elasticsearch_zone_c_subnet_blocks,
+        }
+    }
+}
+
+fn get_string_array(val: &Value, key: &str) -> Vec<String> {
+    // TODO unwraps
+    val.get(key).unwrap().as_array().unwrap().iter().map(|it| it.as_str()).collect()
+}
 
 pub struct EKS<'a> {
     context: Context,
@@ -33,8 +92,11 @@ pub struct EKS<'a> {
     version: String,
     region: Region,
     cloud_provider: &'a AWS,
+    dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
     template_directory: String,
+    subnet_blocks: SubnetBlocks,
+    raw_options: Value,
     listeners: Listeners,
 }
 
@@ -46,6 +108,8 @@ impl<'a> EKS<'a> {
         version: &str,
         region: &str,
         cloud_provider: &'a AWS,
+        dns_provider: &'a dyn DnsProvider,
+        options: &Value,
         nodes: Vec<Node>,
     ) -> Self {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
@@ -57,6 +121,9 @@ impl<'a> EKS<'a> {
             version: version.to_string(),
             region: Region::from_str(region).unwrap(),
             cloud_provider,
+            dns_provider,
+            subnet_blocks: SubnetBlocks::new(&options),
+            raw_options: options,
             nodes,
             template_directory,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
@@ -68,149 +135,62 @@ impl<'a> EKS<'a> {
     }
 
     fn tera_context(&self) -> TeraContext {
-        let eks_zone_a_subnet_blocks = [
-            "10.0.0.0/23",
-            "10.0.2.0/23",
-            "10.0.4.0/23",
-            "10.0.6.0/23",
-            "10.0.8.0/23",
-            "10.0.10.0/23",
-            "10.0.12.0/23",
-            "10.0.14.0/23",
-            "10.0.16.0/23",
-            "10.0.18.0/23",
-            "10.0.20.0/23",
-            "10.0.22.0/23",
-            "10.0.24.0/23",
-            "10.0.26.0/23",
-            "10.0.28.0/23",
-            "10.0.30.0/23",
-            "10.0.32.0/23",
-            "10.0.34.0/23",
-            "10.0.36.0/23",
-            "10.0.38.0/23",
-            "10.0.40.0/23",
-        ]
-        .iter()
-        .map(|ip| format!("\"{}\"", ip))
-        .collect::<Vec<_>>();
-
-        let eks_zone_b_subnet_blocks = [
-            "10.0.42.0/23",
-            "10.0.44.0/23",
-            "10.0.46.0/23",
-            "10.0.48.0/23",
-            "10.0.50.0/23",
-            "10.0.52.0/23",
-            "10.0.54.0/23",
-            "10.0.56.0/23",
-            "10.0.58.0/23",
-            "10.0.60.0/23",
-            "10.0.62.0/23",
-            "10.0.64.0/23",
-            "10.0.66.0/23",
-            "10.0.68.0/23",
-            "10.0.70.0/23",
-            "10.0.72.0/23",
-            "10.0.74.0/23",
-            "10.0.78.0/23",
-            "10.0.80.0/23",
-            "10.0.82.0/23",
-            "10.0.84.0/23",
-        ]
-        .iter()
-        .map(|ip| format!("\"{}\"", ip))
-        .collect::<Vec<_>>();
-
-        let eks_zone_c_subnet_blocks = [
-            "10.0.86.0/23",
-            "10.0.88.0/23",
-            "10.0.90.0/23",
-            "10.0.92.0/23",
-            "10.0.94.0/23",
-            "10.0.96.0/23",
-            "10.0.98.0/23",
-            "10.0.100.0/23",
-            "10.0.102.0/23",
-            "10.0.104.0/23",
-            "10.0.106.0/23",
-            "10.0.108.0/23",
-            "10.0.110.0/23",
-            "10.0.112.0/23",
-            "10.0.114.0/23",
-            "10.0.116.0/23",
-            "10.0.118.0/23",
-            "10.0.120.0/23",
-            "10.0.122.0/23",
-            "10.0.124.0/23",
-            "10.0.126.0/23",
-        ]
-        .iter()
-        .map(|ip| format!("\"{}\"", ip))
-        .collect::<Vec<_>>();
-
-        let rds_zone_a_subnet_blocks = [
-            "10.0.214.0/23",
-            "10.0.216.0/23",
-            "10.0.218.0/23",
-            "10.0.220.0/23",
-            "10.0.222.0/23",
-            "10.0.224.0/23",
-        ]
-        .iter()
-        .map(|ip| format!("\"{}\"", ip))
-        .collect::<Vec<_>>();
-
-        let rds_zone_b_subnet_blocks = [
-            "10.0.226.0/23",
-            "10.0.228.0/23",
-            "10.0.230.0/23",
-            "10.0.232.0/23",
-            "10.0.234.0/23",
-            "10.0.236.0/23",
-        ]
-        .iter()
-        .map(|ip| format!("\"{}\"", ip))
-        .collect::<Vec<_>>();
-
-        let rds_zone_c_subnet_blocks = [
-            "10.0.238.0/23",
-            "10.0.240.0/23",
-            "10.0.242.0/23",
-            "10.0.244.0/23",
-            "10.0.246.0/23",
-            "10.0.248.0/23",
-        ]
-        .iter()
-        .map(|ip| format!("\"{}\"", ip))
-        .collect::<Vec<_>>();
-
-        let documentdb_zone_a_subnet_blocks = ["10.0.196.0/23", "10.0.198.0/23", "10.0.200.0/23"]
+        let eks_zone_a_subnet_blocks = self.subnet_blocks.eks_zone_a_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let documentdb_zone_b_subnet_blocks = ["10.0.202.0/23", "10.0.204.0/23", "10.0.206.0/23"]
+        let eks_zone_b_subnet_blocks = self.subnet_blocks.eks_zone_b_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let documentdb_zone_c_subnet_blocks = ["10.0.208.0/23", "10.0.210.0/23", "10.0.212.0/23"]
+        let eks_zone_c_subnet_blocks = self.subnet_blocks.eks_zone_c_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let elasticsearch_zone_a_subnet_blocks = ["10.0.184.0/23", "10.0.186.0/23"]
+        let rds_zone_a_subnet_blocks = self.subnet_blocks.rds_zone_a_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let elasticsearch_zone_b_subnet_blocks = ["10.0.188.0/23", "10.0.190.0/23"]
+        let rds_zone_b_subnet_blocks = self.subnet_blocks.rds_zone_b_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let elasticsearch_zone_c_subnet_blocks = ["10.0.192.0/23", "10.0.194.0/23"]
+        let rds_zone_c_subnet_blocks = self.subnet_blocks.rds_zone_c_subnet_blocks
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let documentdb_zone_a_subnet_blocks = self.subnet_blocks.documentdb_zone_a_subnet_blocks
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let documentdb_zone_b_subnet_blocks = self.subnet_blocks.documentdb_zone_b_subnet_blocks
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let documentdb_zone_c_subnet_blocks = self.subnet_blocks.documentdb_zone_c_subnet_blocks
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let elasticsearch_zone_a_subnet_blocks = self.subnet_blocks.elasticsearch_zone_a_subnet_blocks
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let elasticsearch_zone_b_subnet_blocks = self.subnet_blocks.elasticsearch_zone_b_subnet_blocks
+            .iter()
+            .map(|ip| format!("\"{}\"", ip))
+            .collect::<Vec<_>>();
+
+        let elasticsearch_zone_c_subnet_blocks = self.subnet_blocks.elasticsearch_zone_c_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
@@ -238,7 +218,7 @@ impl<'a> EKS<'a> {
         let rds_cidr_subnet = "23";
         let documentdb_cidr_subnet = "23";
         let elasticsearch_cidr_subnet = "23";
-        let managed_dns = ["qoveyr.io"];
+        let managed_dns = ["qovery.io"];
         let managed_dns_helm_format = managed_dns
             .iter()
             .map(|name| format!("\"{}\"", name))
@@ -265,13 +245,16 @@ impl<'a> EKS<'a> {
             "managed_dns_terraform_format",
             &managed_dns_terraform_format,
         );
-        context.insert("external_dns_provider", "cloudflare");
-        context.insert(
-            "cloudflare_api_token",
-            "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7",
-        );
-        context.insert("cloudflare_email", "dns@qovery.com");
-        context.insert("dns_email_report", "dns@qovery.com");
+
+        match self.dns_provider.kind() {
+            Kind::CLOUDFLARE(x) => {
+                context.insert("external_dns_provider", "cloudflare");
+                context.insert("cloudflare_api_token", self.dns_provider.password());
+                context.insert("cloudflare_email", self.dns_provider.account());
+            }
+        };
+
+        context.insert("dns_email_report", "dns@qovery.com"); // Pierre suggested renaming to tls_email_report
 
         // AWS
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
@@ -362,6 +345,14 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
         self.cloud_provider
+    }
+
+    fn dns_provider(&self) -> &dyn DnsProvider {
+        self.dns_provider
+    }
+
+    fn options(&self) -> Value {
+        self.raw_options.clone()
     }
 
     fn is_valid(&self) -> Result<(), KubernetesError> {

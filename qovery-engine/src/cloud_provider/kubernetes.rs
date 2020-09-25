@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::process::ExitStatus;
 use std::rc::Rc;
+use crate::dns_provider::DnsProvider;
+use serde_json::Value;
 
 pub trait Kubernetes {
     fn context(&self) -> &Context;
@@ -16,6 +18,8 @@ pub trait Kubernetes {
     fn version(&self) -> &str;
     fn region(&self) -> &str;
     fn cloud_provider(&self) -> &dyn CloudProvider;
+    fn dns_provider(&self) -> &dyn DnsProvider;
+    fn options(&self) -> Value;
     fn is_valid(&self) -> Result<(), KubernetesError>;
     fn add_listener(&mut self, listener: Listener);
     fn listeners(&self) -> &Listeners;
