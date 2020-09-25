@@ -1,5 +1,6 @@
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::databases::utilities;
 use crate::cloud_provider::aws::kubernetes::EKS;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -8,17 +9,11 @@ use crate::cloud_provider::service::{
     Action, Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service,
     ServiceError, ServiceType, StatefulService, Upgrade,
 };
-<<<<<<< HEAD
-use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::{
+    kubectl_exec_create_namespace, kubectl_exec_delete_namespace, kubectl_exec_delete_secret,
+};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
-=======
-use crate::cloud_provider::aws::databases::utilities;
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::models::Context;
-use crate::cloud_provider::aws::kubernetes::EKS;
-use crate::cmd::{kubectl_exec_delete_namespace, kubectl_exec_create_namespace,kubectl_exec_delete_secret};
->>>>>>> origin/kube-tfstate-storage
 
 pub struct MySQL {
     context: Context,
@@ -92,11 +87,11 @@ impl MySQL {
                     .downcast_ref::<AWS>()
                     .unwrap();
 
-                utilities::create_namespace(&environment.namespace(), kube_config.as_str(),aws);
-                }
-            Err(e) => error!("Failed to generate the kubernetes config file path: {}",e)
+                utilities::create_namespace(&environment.namespace(), kube_config.as_str(), aws);
+            }
+            Err(e) => error!("Failed to generate the kubernetes config file path: {}", e),
         }
-        context.insert("namespace",environment.namespace());
+        context.insert("namespace", environment.namespace());
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
@@ -154,13 +149,17 @@ impl MySQL {
 
                 match crate::cmd::terraform_exec_with_init_validate_plan_destroy(
                     workspace_dir.as_str(),
-                ){
+                ) {
                     Ok(o) => {
                         info!("Deleting secrets containing tfstates");
-                        utilities::delete_terraform_tfstate_secret(*kubernetes,environment,self.workspace_directory().as_str());
-                   }
+                        utilities::delete_terraform_tfstate_secret(
+                            *kubernetes,
+                            environment,
+                            self.workspace_directory().as_str(),
+                        );
+                    }
                     //TODO: find a way to raise the error
-                    Err(e) => error!("Error while destroying infrastructure {}",e)
+                    Err(e) => error!("Error while destroying infrastructure {}", e),
                 }
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
