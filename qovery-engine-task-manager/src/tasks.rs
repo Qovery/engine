@@ -73,7 +73,7 @@ impl Task for InfrastructureTask {
         (self.pre_run_callback)(self)
     }
 
-    fn run(&self, sender: Sender<Message>) -> Result<(), std::io::Error> {
+    fn run(&self, sender: Sender<Message>) {
         info!(
             "infrastructure task {} started with infrastructure id {}",
             self.id(),
@@ -223,8 +223,6 @@ impl Task for InfrastructureTask {
         };
 
         info!("infrastructure task {} finished", self.id());
-
-        Ok(())
     }
 }
 
@@ -273,7 +271,7 @@ impl Task for EnvironmentTask {
         (self.pre_run_callback)(self)
     }
 
-    fn run(&self, sender: Sender<Message>) -> Result<(), std::io::Error> {
+    fn run(&self, sender: Sender<Message>) {
         info!("environment task {} started", self.id());
 
         let progress_step = match self.request.action {
@@ -446,8 +444,6 @@ impl Task for EnvironmentTask {
         };
 
         info!("environment task {} finished", self.id());
-
-        Ok(())
     }
 }
 

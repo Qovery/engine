@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::iter::Map;
 use std::mem::ManuallyDrop;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
-use std::thread::{sleep, spawn, JoinHandle};
+use std::thread::{current, sleep, spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
@@ -14,6 +14,7 @@ use qovery_engine::cloud_provider::service::ServiceError;
 use qovery_engine::models::{ProgressLevel, ProgressScope, ProgressStep};
 
 use crate::models::Request;
+use qovery_engine::error::ConfigurationError;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -148,16 +149,61 @@ impl TaskManager {
                     if internal_task.task.pre_run() {
                         let start_time = Instant::now();
                         // run task
-                        let task_id = internal_task.task.id();
-
+                        let task_id = String::from(internal_task.task.id());
+                        let i_task = Arc::new(Mutex::new(internal_task));
+                        let thread_task = i_task.clone();
+                        let thread_tx_run_msg = tx_run_msg.clone();
                         // prevent exec failure - run task in another thread
-                        let join_handle =
-                            thread::spawn(move || internal_task.task.run(tx_run_msg.clone()));
+                        // TODO: return an appropriate error, compatible with dyn std::error::Error + 'static.
+                        //       This should make error reporting easier
+                        let join_handle = thread::spawn(move || {
+                            thread_task
+                                .lock()
+                                .expect("Could not lock task for execution!")
+                                .task
+                                .run(thread_tx_run_msg);
+                        });
 
                         let join_handle_result = join_handle.join();
                         match join_handle_result {
-                            Ok(r) => unimplemented!(),    // task ok or handled error
-                            Err(err) => unimplemented!(), // task with unhandled error - good luck,
+                            Ok(r) => {} /*
+                            match r {
+                            Ok(ok) => {}
+                            Err(err) => {
+                            unimplemented!();
+                            }
+                            }    // task ok or handled error */
+                            Err(err) => {
+                                error!("A task caused a panic while executing!");
+                                match i_task.lock() {
+                                    Ok(it) => {
+                                        it.task.update_status(
+                                            &tx_run_msg,
+                                            Status::TerminatedWithError {
+                                                message: Some(format!(
+                                                    "task caused a panic!: {:?}",
+                                                    err
+                                                )),
+                                                context: ActionContext::new(
+                                                    // TODO: create a more appropriate scope?
+                                                    ProgressScope::Queued,
+                                                    ProgressStep::Final,
+                                                    ProgressLevel::Error,
+                                                    task_id,
+                                                ),
+                                            },
+                                        );
+                                    }
+                                    Err(e) => {
+                                        // Mutex poisoning is rare, but let's be carefull
+                                        error!("==== /!\\ ==== /!\\ ====   Manual action required  ==== /!\\ ==== /!\\ ====");
+                                        error!("==== /!\\ Could not lock a task (which previously caused a panic) /!\\ ====");
+                                        error!("==== /!\\     so that we could report failure to the core!        /!\\ ====");
+                                    }
+                                }
+
+                                return;
+                            } // task with unhandled error - good luck,
                         };
 
                         info!(
@@ -269,7 +315,7 @@ pub trait Task: Send {
     /// return true if you want to run it now, or false if you want to run this task later.
     /// this function is called just before `run()` is called.
     fn pre_run(&self) -> bool;
-    fn run(&self, sender: Sender<Message>) -> Result<(), std::io::Error>;
+    fn run(&self, sender: Sender<Message>);
 }
 
 pub struct InternalTask {
