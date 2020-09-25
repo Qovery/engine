@@ -1,7 +1,9 @@
 use crate::models::Context;
+use serde::{Deserialize, Serialize};
 
 pub mod cloudflare;
 
+#[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
     CLOUDFLARE
 }

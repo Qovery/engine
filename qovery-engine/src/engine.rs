@@ -49,6 +49,9 @@ impl<'a> Engine {
     pub fn cloud_provider(&self) -> &dyn CloudProvider {
         self.cloud_provider.borrow()
     }
+    pub fn dns_provider(&self) -> &dyn DnsProvider {
+        self.dns_provider.borrow()
+    }
 
     pub fn is_valid(&self) -> Result<(), ConfigurationError> {
         match self.build_platform.is_valid() {
