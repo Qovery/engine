@@ -1,16 +1,16 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::{AWS, common};
-use crate::cloud_provider::DeploymentTarget;
+use crate::cloud_provider::aws::kubernetes::EKS;
+use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
     Action, Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service,
     ServiceError, ServiceType, StatefulService, Upgrade,
 };
+use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
-use crate::cloud_provider::aws::kubernetes::EKS;
 
 pub struct MySQL {
     context: Context,
@@ -64,7 +64,11 @@ impl MySQL {
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
         // FIXME: is there an other way than downcast a pointer?
-        let cp = kubernetes.cloud_provider().as_any().downcast_ref::<AWS>().expect("Could not downcast kubernetes.cloud_provider() to AWS");
+        let cp = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<AWS>()
+            .expect("Could not downcast kubernetes.cloud_provider() to AWS");
         // we need the kubernetes config file to store tfstates file in kube secrets
         let aws = kubernetes
             .cloud_provider()
@@ -90,7 +94,7 @@ impl MySQL {
         context.insert("aws_secret_key", &cp.secret_access_key);
         match kubernetes_config_file_path {
             Ok(out) => context.insert("kubeconfig_path", &out.as_str()),
-            _ => error!("Error while generating kubernetes config file")
+            _ => error!("Error while generating kubernetes config file"),
         }
         context.insert("eks_cluster_id", kubernetes.id());
         context.insert("eks_cluster_name", kubernetes.name());
@@ -108,7 +112,6 @@ impl MySQL {
         context.insert("database_total_cpus", &self.total_cpus); // TODO customizable
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
-        context.insert("kubernetes_namespace", kubernetes.)
 
         context
     }
@@ -128,7 +131,7 @@ impl MySQL {
                 crate::template::generate_and_copy_all_files_into_dir(
                     format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
                     &workspace_dir,
-                    &context
+                    &context,
                 )?;
                 crate::template::generate_and_copy_all_files_into_dir(
                     format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
@@ -136,15 +139,16 @@ impl MySQL {
                     &context,
                 )?;
                 crate::template::generate_and_copy_all_files_into_dir(
-                    format!("{}/aws/charts/external-name-svc", self.context.lib_root_dir()).as_str(),
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
 
-
-                crate::cmd::terraform_exec_with_init_validate_plan_destroy(
-                    workspace_dir.as_str(),
-                )?;
+                crate::cmd::terraform_exec_with_init_validate_plan_destroy(workspace_dir.as_str())?;
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 let helm_release_name = self.helm_release_name();
@@ -230,7 +234,7 @@ impl Create for MySQL {
                 crate::template::generate_and_copy_all_files_into_dir(
                     format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
                     &workspace_dir,
-                    &context
+                    &context,
                 )?;
                 crate::template::generate_and_copy_all_files_into_dir(
                     format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
