@@ -9,6 +9,7 @@ use crate::cloud_provider::service::{
     Action, Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service,
     ServiceError, ServiceType, StatefulService, Upgrade,
 };
+use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::{
     kubectl_exec_create_namespace, kubectl_exec_delete_namespace, kubectl_exec_delete_secret,
 };
