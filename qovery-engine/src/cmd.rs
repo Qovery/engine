@@ -676,16 +676,32 @@ where
     Ok(())
 }
 
-/*pub fn is_contains_terraform_tfstate(
+pub fn is_contains_terraform_tfstate<P>(
     kubernetes_config: P,
     namespace: &str,
-    envs: Vec<(&str, &str)>,
-) -> bool
+    envs: &Vec<(&str, &str)>,
+) ->  Result<bool, CmdError>
     where
         P: AsRef<Path>,
-){
-
-}*/
+{
+let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+    let mut exist = true;
+    let _ = kubectl_exec_with_output(
+        vec!["describe", "secrets/tfstate-default-state","--namespace",namespace],
+        _envs,
+        |out| match out {
+            Ok(line) => exist = true,
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => {},
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+    Ok(exist)
+}
 
 pub fn kubectl_exec_delete_namespace<P>(
     kubernetes_config: P,
@@ -695,14 +711,17 @@ pub fn kubectl_exec_delete_namespace<P>(
 where
     P: AsRef<Path>,
 {
-/*    match is_contains_terraform_tfstate(&kubernetes_config,&namespace,&envs){
-        true => return Err(CmdError::Io(Error::new(
-            std::io::ErrorKind::Other,
-            "Namespace contains terraform tfates in secret, can't delete it !"
-        ))),
-        false => info!("Namespace {} doesn't contains tfstate, safe to delete", namespace),
-        _ => {}
-    }*/
+    match is_contains_terraform_tfstate(&kubernetes_config,&namespace,&envs){
+        Ok(exist) => {
+            match exist {
+                true => {
+                    return Err(CmdError::Io(Error::new(std::io::ErrorKind::Other, "Namespace contains terraform tfates in secret, can't delete it !")));
+                }
+                false => info!("Namespace {} doesn't contain any tfstates, able to delete it", namespace),
+            }
+        }
+        Err(e) => error!("Unable to execute describe on secrets: {}",e)
+    }
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
