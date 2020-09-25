@@ -3,7 +3,7 @@ use std::iter::Map;
 use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::thread::{sleep, JoinHandle};
+use std::thread::{sleep, spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
@@ -139,7 +139,9 @@ impl TaskManager {
 
         let _ = thread::spawn(move || loop {
             // TODO: Handle lock failure
-            let self_it_receiver = self_it_receiver.lock().expect("Could not lock internal task receiver");
+            let self_it_receiver = self_it_receiver
+                .lock()
+                .expect("Could not lock internal task receiver");
             let _ = match self_it_receiver.try_recv() {
                 Ok(internal_task) => {
                     let start_time = Instant::now();
@@ -147,11 +149,21 @@ impl TaskManager {
                     // does the task is validated to be run?
                     if internal_task.task.pre_run() {
                         // run task
-                        internal_task.task.run(tx_run_msg.clone());
+                        let task_id = internal_task.task.id();
+
+                        // prevent exec failure - run task in another thread
+                        let join_handle =
+                            thread::spawn(move || internal_task.task.run(tx_run_msg.clone()));
+
+                        let join_handle_result = join_handle.join();
+                        match join_handle_result {
+                            Ok(r) => unimplemented!(),    // task ok or handled error
+                            Err(err) => unimplemented!(), // task with unhandled error - good luck,
+                        };
 
                         info!(
                             "task {} took {:?} to be executed",
-                            internal_task.task.id(),
+                            task_id,
                             start_time.elapsed()
                         );
 
@@ -258,7 +270,7 @@ pub trait Task: Send {
     /// return true if you want to run it now, or false if you want to run this task later.
     /// this function is called just before `run()` is called.
     fn pre_run(&self) -> bool;
-    fn run(&self, sender: Sender<Message>);
+    fn run(&self, sender: Sender<Message>) -> Result<(), std::io::Error>;
 }
 
 pub struct InternalTask {
