@@ -166,13 +166,7 @@ impl TaskManager {
 
                         let join_handle_result = join_handle.join();
                         match join_handle_result {
-                            Ok(r) => {} /*
-                            match r {
-                            Ok(ok) => {}
-                            Err(err) => {
-                            unimplemented!();
-                            }
-                            }    // task ok or handled error */
+                            Ok(r) => {}
                             Err(err) => {
                                 error!("A task caused a panic while executing!");
                                 match i_task.lock() {
