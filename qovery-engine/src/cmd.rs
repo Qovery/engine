@@ -676,6 +676,17 @@ where
     Ok(())
 }
 
+/*pub fn is_contains_terraform_tfstate(
+    kubernetes_config: P,
+    namespace: &str,
+    envs: Vec<(&str, &str)>,
+) -> bool
+    where
+        P: AsRef<Path>,
+){
+
+}*/
+
 pub fn kubectl_exec_delete_namespace<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -684,10 +695,14 @@ pub fn kubectl_exec_delete_namespace<P>(
 where
     P: AsRef<Path>,
 {
-    // TODO: before delete namespace , we should be sure that no left tfstate ressources in secrets
-    // get secret
-    // if secret contains tfstate-default-state
-    // do nothing and raise alert
+/*    match is_contains_terraform_tfstate(&kubernetes_config,&namespace,&envs){
+        true => return Err(CmdError::Io(Error::new(
+            std::io::ErrorKind::Other,
+            "Namespace contains terraform tfates in secret, can't delete it !"
+        ))),
+        false => info!("Namespace {} doesn't contains tfstate, safe to delete", namespace),
+        _ => {}
+    }*/
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));

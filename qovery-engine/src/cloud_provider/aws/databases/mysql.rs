@@ -8,6 +8,7 @@ use crate::cloud_provider::service::{
     Action, Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service,
     ServiceError, ServiceType, StatefulService, Upgrade,
 };
+use crate::cloud_provider::aws::databases::utilities;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
 use crate::cloud_provider::aws::kubernetes::EKS;
@@ -66,35 +67,25 @@ impl MySQL {
         let mut context = self.default_tera_context(kubernetes, environment);
         // FIXME: is there an other way than downcast a pointer?
         let cp = kubernetes.cloud_provider().as_any().downcast_ref::<AWS>().expect("Could not downcast kubernetes.cloud_provider() to AWS");
-        // we need the kubernetes config file to store tfstates file in kube secrets
-        let aws = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .unwrap();
 
-        let aws_credentials_envs = vec![
-            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-        ];
-        let kubernetes_config_file_path = common::kubernetes_config_path(
+        // we need the kubernetes config file to store tfstates file in kube secrets
+        let kubernetes_config_file_path = utilities::get_kubernetes_config_path(
             self.workspace_directory().as_str(),
-            environment.organization_id.as_str(),
-            kubernetes.id(),
-            aws.access_key_id.as_str(),
-            aws.secret_access_key.as_str(),
-            kubernetes.region(),
+            kubernetes,
+            environment,
         );
         match kubernetes_config_file_path {
-            Ok(out) => { context.insert("kubeconfig_path", &out.as_str());
-                //create the namespace to insert the tfstate in secrets
-                kubectl_exec_create_namespace(
-                out,
-                &environment.namespace(),
-                aws_credentials_envs);
+            Ok(kube_config) => {
+                context.insert("kubeconfig_path", &kube_config.as_str());
+                let aws = kubernetes
+                    .cloud_provider()
+                    .as_any()
+                    .downcast_ref::<AWS>()
+                    .unwrap();
+
+                utilities::create_namespace(&environment.namespace(), kube_config.as_str(),aws);
                 }
             Err(e) => error!("Failed to generate the kubernetes config file path: {}",e)
-
         }
         context.insert("namespace",environment.namespace());
 
@@ -147,37 +138,8 @@ impl MySQL {
                 ){
                     Ok(o) => {
                         info!("Deleting secrets containing tfstates");
-                        // make it works
-                        let aws = kubernetes
-                            .cloud_provider()
-                            .as_any()
-                            .downcast_ref::<AWS>()
-                            .unwrap();
-                        let aws_credentials_envs = vec![
-                            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-                            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-                        ];
-                        let kubernetes_config_file_path = common::kubernetes_config_path(
-                            self.workspace_directory().as_str(),
-                            environment.organization_id.as_str(),
-                            kubernetes.id(),
-                            aws.access_key_id.as_str(),
-                            aws.secret_access_key.as_str(),
-                            kubernetes.region(),
-                        );
-                        match kubernetes_config_file_path {
-                            Ok(o) => {
-                                //create the namespace to insert the tfstate in secrets
-                                kubectl_exec_delete_secret(
-                                    kubernetes_config_file_path.clone(),
-                                    "tfstate-default-state",
-                                    aws_credentials_envs);
-                            }
-                            Err(e) => error!("Failed to generate the kubernetes config file path: {}",e)
-
-                        }
-
-                    }
+                        utilities::delete_terraform_tfstate_secret(*kubernetes,environment,self.workspace_directory().as_str());
+                   }
                     Err(e) => error!("Error while destroying infrastructure {}",e)
                 }
             }
