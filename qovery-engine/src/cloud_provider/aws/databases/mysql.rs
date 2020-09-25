@@ -8,9 +8,17 @@ use crate::cloud_provider::service::{
     Action, Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service,
     ServiceError, ServiceType, StatefulService, Upgrade,
 };
+<<<<<<< HEAD
 use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
+=======
+use crate::cloud_provider::aws::databases::utilities;
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::models::Context;
+use crate::cloud_provider::aws::kubernetes::EKS;
+use crate::cmd::{kubectl_exec_delete_namespace, kubectl_exec_create_namespace,kubectl_exec_delete_secret};
+>>>>>>> origin/kube-tfstate-storage
 
 pub struct MySQL {
     context: Context,
@@ -70,32 +78,28 @@ impl MySQL {
             .downcast_ref::<AWS>()
             .expect("Could not downcast kubernetes.cloud_provider() to AWS");
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let aws = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .unwrap();
-
-        let aws_credentials_envs = vec![
-            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-        ];
-
-        let kubernetes_config_file_path = common::kubernetes_config_path(
+        let kubernetes_config_file_path = utilities::get_kubernetes_config_path(
             self.workspace_directory().as_str(),
-            environment.organization_id.as_str(),
-            kubernetes.id(),
-            aws.access_key_id.as_str(),
-            aws.secret_access_key.as_str(),
-            kubernetes.region(),
+            kubernetes,
+            environment,
         );
+        match kubernetes_config_file_path {
+            Ok(kube_config) => {
+                context.insert("kubeconfig_path", &kube_config.as_str());
+                let aws = kubernetes
+                    .cloud_provider()
+                    .as_any()
+                    .downcast_ref::<AWS>()
+                    .unwrap();
+
+                utilities::create_namespace(&environment.namespace(), kube_config.as_str(),aws);
+                }
+            Err(e) => error!("Failed to generate the kubernetes config file path: {}",e)
+        }
+        context.insert("namespace",environment.namespace());
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
-        match kubernetes_config_file_path {
-            Ok(out) => context.insert("kubeconfig_path", &out.as_str()),
-            _ => error!("Error while generating kubernetes config file"),
-        }
         context.insert("eks_cluster_id", kubernetes.id());
         context.insert("eks_cluster_name", kubernetes.name());
 
@@ -148,7 +152,16 @@ impl MySQL {
                     &context,
                 )?;
 
-                crate::cmd::terraform_exec_with_init_validate_plan_destroy(workspace_dir.as_str())?;
+                match crate::cmd::terraform_exec_with_init_validate_plan_destroy(
+                    workspace_dir.as_str(),
+                ){
+                    Ok(o) => {
+                        info!("Deleting secrets containing tfstates");
+                        utilities::delete_terraform_tfstate_secret(*kubernetes,environment,self.workspace_directory().as_str());
+                   }
+                    //TODO: find a way to raise the error
+                    Err(e) => error!("Error while destroying infrastructure {}",e)
+                }
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 let helm_release_name = self.helm_release_name();
@@ -227,8 +240,8 @@ impl Create for MySQL {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy MySQL on AWS RDS for {}", self.name());
-
                 let context = self.tera_context(*kubernetes, *environment);
+
                 let workspace_dir = self.workspace_directory();
 
                 crate::template::generate_and_copy_all_files_into_dir(

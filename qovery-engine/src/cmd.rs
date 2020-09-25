@@ -218,7 +218,7 @@ pub fn terraform_exec_with_init_validate_plan_destroy(root_dir: &str) -> Result<
     terraform_exec_with_init_validate_plan(root_dir, false);
 
     // terraform destroy
-    terraform_exec(root_dir, vec!["destroy", "-auto-approve"]);
+    terraform_exec(root_dir, vec!["destroy", "-auto-approve"])?;
 
     Ok(())
 }
@@ -387,7 +387,7 @@ where
         },
     ) {
         Ok(_) => info!("Helm history success for release name: {}", release_name),
-        Err(_) => info!("Helm history found for release name: {}",release_name),
+        Err(_) => info!("Helm history found for release name: {}", release_name),
     };
     // TODO better check, release not found
 
@@ -676,9 +676,85 @@ where
     Ok(())
 }
 
+pub fn is_contains_terraform_tfstate<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    envs: &Vec<(&str, &str)>,
+) -> Result<bool, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+    let mut exist = true;
+    let _ = kubectl_exec_with_output(
+        vec![
+            "describe",
+            "secrets/tfstate-default-state",
+            "--namespace",
+            namespace,
+        ],
+        _envs,
+        |out| match out {
+            Ok(line) => exist = true,
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => {}
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+    Ok(exist)
+}
+
 pub fn kubectl_exec_delete_namespace<P>(
     kubernetes_config: P,
     namespace: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), CmdError>
+where
+    P: AsRef<Path>,
+{
+    match is_contains_terraform_tfstate(&kubernetes_config, &namespace, &envs) {
+        Ok(exist) => match exist {
+            true => {
+                return Err(CmdError::Io(Error::new(
+                    std::io::ErrorKind::Other,
+                    "Namespace contains terraform tfates in secret, can't delete it !",
+                )));
+            }
+            false => info!(
+                "Namespace {} doesn't contain any tfstates, able to delete it",
+                namespace
+            ),
+        },
+        Err(e) => error!("Unable to execute describe on secrets: {}", e),
+    }
+
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let _ = kubectl_exec_with_output(
+        vec!["delete", "namespace", namespace],
+        _envs,
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+
+    Ok(())
+}
+
+pub fn kubectl_exec_delete_secret<P>(
+    kubernetes_config: P,
+    secret: &str,
     envs: Vec<(&str, &str)>,
 ) -> Result<(), CmdError>
 where
@@ -689,7 +765,7 @@ where
     _envs.extend(envs);
 
     let _ = kubectl_exec_with_output(
-        vec!["delete", "namespace", namespace],
+        vec!["delete", "secret", secret],
         _envs,
         |out| match out {
             Ok(line) => info!("{}", line),
