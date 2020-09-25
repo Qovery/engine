@@ -47,7 +47,7 @@ impl DnsProvider for Cloudflare {
     }
 
     fn is_valid(&self) -> Result<(), DnsProviderError> {
-        if &self.cloudflare_api_token.is_empty() || &self.cloudflare_email.is_empty() {
+        if self.cloudflare_api_token.is_empty() || self.cloudflare_email.is_empty() {
             Err(DnsProviderError::Credentials)
         } else {
             Ok(())

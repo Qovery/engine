@@ -141,6 +141,7 @@ impl Task for InfrastructureTask {
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             engine.context(),
             engine.cloud_provider(),
+            engine.dns_provider(),
             nodes.borrow(),
         );
 
@@ -344,6 +345,7 @@ impl Task for EnvironmentTask {
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             engine.context(),
             engine.cloud_provider(),
+            engine.dns_provider(),
             nodes.borrow(),
         );
 

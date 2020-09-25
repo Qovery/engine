@@ -9,9 +9,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tera::Context as TeraContext;
 
-use syntax::util::map_in_place::MapInPlace;
-
-use crate::{dynamo_db, s3};
+use crate::dns_provider::Kind::CLOUDFLARE;
+use crate::{dynamo_db, s3, dns_provider};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cloud_provider::aws::{AWS, common};
 use crate::cloud_provider::aws::common::do_stateless_service_cleanup;
@@ -80,14 +79,14 @@ impl SubnetBlocks {
     }
 }
 
-fn get_string_array(val: &Value, key: &str) -> Vec<String> {
+fn get_string_array<'a>(val: &'a Value, key: &'a str) -> Vec<String> {
     // TODO unwraps
-    val.get(key).unwrap().as_array().unwrap().iter().map(|it| it.as_str()).collect()
+    val.get(key).unwrap().as_array().unwrap().iter().map(|it| it.as_str().unwrap().to_owned()).collect()
 }
 
-fn get_str(val: &Value, key: &str) -> &str {
+fn get_string(val: &Value, key: &str) -> String {
     // TODO unwraps
-    val.get(key).unwrap().as_str().unwrap()
+    val.get(key).unwrap().as_str().unwrap().to_string()
 }
 
 pub struct EKS<'a> {
@@ -201,9 +200,9 @@ impl<'a> EKS<'a> {
             .collect::<Vec<_>>();
 
         let region_cluster_id = format!("{}-{}", self.region(), self.id());
-        let vpc_cidr_block = get_str(&self.options(), "vpc_cidr_block");
+        let vpc_cidr_block = get_string(&self.options(), "vpc_cidr_block");
         let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", self.id());
-        let eks_cidr_subnet = get_str(&self.options(), "eks_cidr_subnet");
+        let eks_cidr_subnet = get_string(&self.options(), "eks_cidr_subnet");
         let worker_nodes = self
             .nodes
             .iter()
@@ -219,10 +218,10 @@ impl<'a> EKS<'a> {
             .collect::<Vec<WorkerNodeDataTemplate>>();
         let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.cloud_provider.organization_id());
         let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
-        let qovery_api_url = get_str(&self.options(), "qovery_api_url");
-        let rds_cidr_subnet = get_str(&self.options(), "rds_cidr_subnet");
-        let documentdb_cidr_subnet = get_str(&self.options(), "documentdb_cidr_subnet");
-        let elasticsearch_cidr_subnet = get_str(&self.options(), "elasticsearch_cidr_subnet");
+        let qovery_api_url = get_string(&self.options(), "qovery_api_url");
+        let rds_cidr_subnet = get_string(&self.options(), "rds_cidr_subnet");
+        let documentdb_cidr_subnet = get_string(&self.options(), "documentdb_cidr_subnet");
+        let elasticsearch_cidr_subnet = get_string(&self.options(), "elasticsearch_cidr_subnet");
         let managed_dns = get_string_array(&self.options(), "managed_dns");
         let managed_dns_helm_format = managed_dns
             .iter()
@@ -252,7 +251,7 @@ impl<'a> EKS<'a> {
         );
 
         match self.dns_provider.kind() {
-            Kind::CLOUDFLARE(x) => {
+            dns_provider::Kind::CLOUDFLARE => {
                 context.insert("external_dns_provider", "cloudflare");
                 context.insert("cloudflare_api_token", self.dns_provider.password());
                 context.insert("cloudflare_email", self.dns_provider.account());
@@ -267,11 +266,11 @@ impl<'a> EKS<'a> {
         context.insert("aws_region", &self.region.name());
         context.insert("aws_terraform_backend_bucket", &self.bucket_name());
         context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
-        context.insert("vpc_cidr_block", &vpc_cidr_block);
+        context.insert("vpc_cidr_block", &vpc_cidr_block.clone());
         context.insert("s3_kubeconfig_bucket", &s3_kubeconfig_bucket);
 
         // AWS - EKS
-        context.insert("eks_cidr_subnet", &eks_cidr_subnet);
+        context.insert("eks_cidr_subnet", &eks_cidr_subnet.clone());
         context.insert("eks_cluster_name", &self.name());
         context.insert("eks_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
@@ -305,7 +304,7 @@ impl<'a> EKS<'a> {
         );
 
         // AWS - Elasticsearch
-        context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet);
+        context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet.clone());
         context.insert(
             "elasticsearch_zone_a_subnet_blocks",
             &elasticsearch_zone_a_subnet_blocks,

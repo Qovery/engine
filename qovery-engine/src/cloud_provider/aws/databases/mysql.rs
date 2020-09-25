@@ -36,7 +36,7 @@ impl MySQL {
         fqdn_id: &str,
         total_cpus: String,
         total_ram_in_mib: u32,
-        database_instance_type: String,
+        database_instance_type: &str,
         options: DatabaseOptions,
     ) -> Self {
         Self {
@@ -49,7 +49,7 @@ impl MySQL {
             fqdn_id: fqdn_id.to_string(),
             total_cpus,
             total_ram_in_mib,
-            database_instance_type,
+            database_instance_type: database_instance_type.to_string(),
             options,
         }
     }

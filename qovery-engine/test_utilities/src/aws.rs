@@ -1,5 +1,7 @@
 use chrono::Utc;
 use dirs::home_dir;
+use serde_json::Value;
+
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::build_platform::BuildPlatform;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
@@ -19,6 +21,7 @@ use std::borrow::Borrow;
 
 use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
+use qovery_engine::dns_provider::cloudflare::Cloudflare;
 
 pub const AWS_KEY_ID: &str = "AKIAZ4KMLSYJLRGNNFNI";
 pub const AWS_ACCESS_KEY: &str = "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/";
@@ -89,9 +92,14 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
     )
 }
 
+pub fn dns_provider_cloudflare(context: &Context) -> Cloudflare {
+    Cloudflare::new(context.clone(), "abc".to_string(), "default".to_string(), "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7".to_string(), "dns@qovery.com".to_string())
+}
+
 pub fn aws_kubernetes_eks<'a>(
     context: &Context,
     cloud_provider: &'a AWS,
+    dns_provider: &'a Cloudflare,
     nodes: Vec<Node>,
 ) -> EKS<'a> {
     EKS::<'a>::new(
@@ -101,6 +109,8 @@ pub fn aws_kubernetes_eks<'a>(
         AWS_KUBERNETES_VERSION,
         "us-east-2",
         cloud_provider,
+        dns_provider,
+        ,
         nodes,
     )
 }
@@ -115,11 +125,14 @@ pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
     // use AWS
     let cloud_provider = Box::new(cloud_provider_aws(context));
 
+    let dns_provider = Box::new(dns_provider_cloudflare(context));
+
     Engine::new(
         context.clone(),
         build_platform,
         container_registry,
         cloud_provider,
+        dns_provider
     )
 }
 
@@ -262,6 +275,8 @@ pub fn working_environment(context: &Context) -> Environment {
                 total_cpus: "256m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
+                database_instance_type: "db.t2.micro".to_string(),
+                database_disk_type: "gp2".to_string()
             }, /*,
                Database {
                    kind: DatabaseKind::MySQL,
