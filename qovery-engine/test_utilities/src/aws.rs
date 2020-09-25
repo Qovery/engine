@@ -1,7 +1,6 @@
 use chrono::Utc;
 use dirs::home_dir;
-use serde_json::Value;
-
+use serde_json::value::Value;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::build_platform::BuildPlatform;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
@@ -110,7 +109,7 @@ pub fn aws_kubernetes_eks<'a>(
         "us-east-2",
         cloud_provider,
         dns_provider,
-        ,
+        &Value::Null,
         nodes,
     )
 }
