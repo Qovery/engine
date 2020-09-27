@@ -1,21 +1,20 @@
 extern crate test_utilities;
 use serde_json::value::Value;
 
+use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::init;
-use test_utilities::aws::dns_provider_cloudflare;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::{Kubernetes, KubernetesError};
 use qovery_engine::cloud_provider::CloudProvider;
-use qovery_engine::transaction::TransactionResult;
-use std::borrow::Borrow;
-use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::models::Clone2;
+use qovery_engine::transaction::TransactionResult;
+use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{BufReader, Read};
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use test_utilities::aws::AWS_KUBERNETES_VERSION;
 
 //
 // #[test]
@@ -56,13 +55,12 @@ use self::test_utilities::cloudflare::dns_provider_cloudflare;
 //
 
 pub fn read_file(filepath: &str) -> String {
-    let file = File::open(filepath)
-        .expect("could not open file");
+    let file = File::open(filepath).expect("could not open file");
     let mut buffered_reader = BufReader::new(file);
     let mut contents = String::new();
     let _number_of_bytes: usize = match buffered_reader.read_to_string(&mut contents) {
         Ok(number_of_bytes) => number_of_bytes,
-        Err(_err) => 0
+        Err(_err) => 0,
     };
 
     contents
@@ -75,43 +73,45 @@ fn create_eks_cluster_in_eu_west_3() {
 
     let context = test_utilities::aws::context();
 
-     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
-     let session = engine.session().unwrap();
-     let mut tx = session.transaction();
+    let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
 
-     let aws = test_utilities::aws::cloud_provider_aws(&context);
-     let nodes = test_utilities::aws::aws_kubernetes_nodes();
+    let aws = test_utilities::aws::cloud_provider_aws(&context);
+    let nodes = test_utilities::aws::aws_kubernetes_nodes();
 
     let cloudflare = dns_provider_cloudflare(&context);
-    let dns_provider = Box::new(cloudflare);
 
     let mut file = File::open("tests/assets/eks-options.json").unwrap();
     let mut read_buf = String::new();
-    file.read_to_string(&mut buff).unwrap();
-    let json: serde_jon::Value = serde_json::from_str(read_buf.as_str());
+    file.read_to_string(&mut read_buf).unwrap();
 
-     let kubernetes = EKS::new(
-         context.clone(),
+    let options_result = serde_json::from_str::<
+        qovery_engine::cloud_provider::aws::kubernetes::Options,
+    >(read_buf.as_str());
+
+    let kubernetes = EKS::new(
+        context.clone(),
         "my-eks-on-eu-west-3",
-         "my-eks-eu-west-3",
-         AWS_KUBERNETES_VERSION,
-         "eu-west-3",
-         &aws,
-         &dns_provider,
-         json,
-         nodes,
-     );
+        "my-eks-eu-west-3",
+        AWS_KUBERNETES_VERSION,
+        "eu-west-3",
+        &aws,
+        &cloudflare,
+        options_result.expect("Oh my god an error in test... Options options options"),
+        nodes,
+    );
 
-     match tx.create_kubernetes(&kubernetes) {
-         Err(err) => panic!("{:?}", err),
-         _ => {}
-     }
+    match tx.create_kubernetes(&kubernetes) {
+        Err(err) => panic!("{:?}", err),
+        _ => {}
+    }
 
-     let _ = match tx.commit() {
-         TransactionResult::Ok => assert!(true),
-         TransactionResult::Rollback(_) => assert!(false),
-         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-     };
+    let _ = match tx.commit() {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 }
 //
 // #[test]
