@@ -9,119 +9,50 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tera::Context as TeraContext;
 
-use crate::dns_provider::Kind::CLOUDFLARE;
-use crate::{dynamo_db, s3, dns_provider};
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
-use crate::cloud_provider::aws::{AWS, common};
 use crate::cloud_provider::aws::common::do_stateless_service_cleanup;
 use crate::cloud_provider::aws::kubernetes::node::Node;
+use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
 use crate::cloud_provider::service::{Service, ServiceType};
+use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
 use crate::cmd::kubectl_exec_delete_namespace;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::dns_provider::cloudflare::Cloudflare;
 use crate::dns_provider::DnsProvider;
+use crate::dns_provider::Kind::CLOUDFLARE;
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope, ProgressStep,
 };
-use crate::dns_provider::cloudflare::cloudflare::Cloudflare;
+use crate::{dns_provider, dynamo_db, s3};
 
 pub mod node;
 
-pub struct SubnetBlocks {
-    eks_zone_a_subnet_blocks: Vec<String>,
-    eks_zone_b_subnet_blocks: Vec<String>,
-    eks_zone_c_subnet_blocks: Vec<String>,
-    rds_zone_a_subnet_blocks: Vec<String>,
-    rds_zone_b_subnet_blocks: Vec<String>,
-    rds_zone_c_subnet_blocks: Vec<String>,
-    documentdb_zone_a_subnet_blocks: Vec<String>,
-    documentdb_zone_b_subnet_blocks: Vec<String>,
-    documentdb_zone_c_subnet_blocks: Vec<String>,
-    elasticsearch_zone_a_subnet_blocks: Vec<String>,
-    elasticsearch_zone_b_subnet_blocks: Vec<String>,
-    elasticsearch_zone_c_subnet_blocks: Vec<String>,
-}
-
-impl SubnetBlocks {
-    pub fn new(
-        options: CorePayload
-    ) -> Self {
-        let eks_zone_a_subnet_blocks = options.eks_zone_a_subnet_blocks;
-        let eks_zone_b_subnet_blocks = options.eks_zone_b_subnet_blocks;
-        let eks_zone_c_subnet_blocks= options.eks_zone_c_subnet_blocks;
-        let rds_zone_a_subnet_blocks = options.rds_zone_a_subnet_blocks;
-        let rds_zone_b_subnet_blocks = options.rds_zone_b_subnet_blocks;
-        let rds_zone_c_subnet_blocks= options.rds_zone_c_subnet_blocks;
-        let documentdb_zone_a_subnet_blocks= options.documentdb_zone_a_subnet_blocks;
-        let documentdb_zone_b_subnet_blocks = options.documentdb_zone_b_subnet_blocks;
-        let documentdb_zone_c_subnet_blocks = options.documentdb_zone_c_subnet_blocks;
-        let elasticsearch_zone_a_subnet_blocks = options.elasticsearch_zone_a_subnet_blocks;
-        let elasticsearch_zone_b_subnet_blocks = options.elasticsearch_zone_b_subnet_blocks;
-        let elasticsearch_zone_c_subnet_blocks = options.elasticsearch_zone_c_subnet_blocks;
-
-        SubnetBlocks {
-            eks_zone_a_subnet_blocks,
-            eks_zone_b_subnet_blocks,
-            eks_zone_c_subnet_blocks,
-            rds_zone_a_subnet_blocks,
-            rds_zone_b_subnet_blocks,
-            rds_zone_c_subnet_blocks,
-            documentdb_zone_a_subnet_blocks,
-            documentdb_zone_b_subnet_blocks,
-            documentdb_zone_c_subnet_blocks,
-            elasticsearch_zone_a_subnet_blocks,
-            elasticsearch_zone_b_subnet_blocks,
-            elasticsearch_zone_c_subnet_blocks,
-        }
-    }
-}
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CorePayload {
-    #[serde(rename = "eks_zone_a_subnet_blocks")]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Options {
     pub eks_zone_a_subnet_blocks: Vec<String>,
-    #[serde(rename = "eks_zone_b_subnet_blocks")]
     pub eks_zone_b_subnet_blocks: Vec<String>,
-    #[serde(rename = "eks_zone_c_subnet_blocks")]
     pub eks_zone_c_subnet_blocks: Vec<String>,
-    #[serde(rename = "rds_zone_a_subnet_blocks")]
     pub rds_zone_a_subnet_blocks: Vec<String>,
-    #[serde(rename = "rds_zone_b_subnet_blocks")]
     pub rds_zone_b_subnet_blocks: Vec<String>,
-    #[serde(rename = "rds_zone_c_subnet_blocks")]
     pub rds_zone_c_subnet_blocks: Vec<String>,
-    #[serde(rename = "documentdb_zone_a_subnet_blocks")]
     pub documentdb_zone_a_subnet_blocks: Vec<String>,
-    #[serde(rename = "documentdb_zone_b_subnet_blocks")]
     pub documentdb_zone_b_subnet_blocks: Vec<String>,
-    #[serde(rename = "documentdb_zone_c_subnet_blocks")]
     pub documentdb_zone_c_subnet_blocks: Vec<String>,
-    #[serde(rename = "elasticsearch_zone_a_subnet_blocks")]
     pub elasticsearch_zone_a_subnet_blocks: Vec<String>,
-    #[serde(rename = "elasticsearch_zone_b_subnet_blocks")]
     pub elasticsearch_zone_b_subnet_blocks: Vec<String>,
-    #[serde(rename = "elasticsearch_zone_c_subnet_blocks")]
     pub elasticsearch_zone_c_subnet_blocks: Vec<String>,
-    #[serde(rename = "vpc_cidr_block")]
     pub vpc_cidr_block: String,
-    #[serde(rename = "eks_cidr_subnet")]
     pub eks_cidr_subnet: String,
-    #[serde(rename = "qovery_api_url")]
     pub qovery_api_url: String,
-    #[serde(rename = "rds_cidr_subnet")]
     pub rds_cidr_subnet: String,
-    #[serde(rename = "documentdb_cidr_subnet")]
     pub documentdb_cidr_subnet: String,
-    #[serde(rename = "elasticsearch_cidr_subnet")]
     pub elasticsearch_cidr_subnet: String,
-    #[serde(rename = "managed_dns")]
     pub managed_dns: Vec<String>,
 }
-
 
 pub struct EKS<'a> {
     context: Context,
@@ -133,8 +64,7 @@ pub struct EKS<'a> {
     dns_provider: &'a DnsProvider,
     nodes: Vec<Node>,
     template_directory: String,
-    subnet_blocks: SubnetBlocks,
-    raw_options: CorePayload,
+    options: Options,
     listeners: Listeners,
 }
 
@@ -146,8 +76,8 @@ impl<'a> EKS<'a> {
         version: &str,
         region: &str,
         cloud_provider: &'a AWS,
-        dns_provider: &'a Cloudflare,
-        options: &CorePayload,
+        dns_provider: &'a DnsProvider,
+        options: Options,
         nodes: Vec<Node>,
     ) -> Self {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
@@ -160,8 +90,7 @@ impl<'a> EKS<'a> {
             region: Region::from_str(region).unwrap(),
             cloud_provider,
             dns_provider,
-            subnet_blocks: SubnetBlocks::new(options.clone()),
-            raw_options: options.clone(),
+            options,
             nodes,
             template_directory,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
@@ -173,70 +102,94 @@ impl<'a> EKS<'a> {
     }
 
     fn tera_context(&self) -> TeraContext {
-        let eks_zone_a_subnet_blocks = self.subnet_blocks.eks_zone_a_subnet_blocks
+        let eks_zone_a_subnet_blocks = self
+            .options
+            .eks_zone_a_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let eks_zone_b_subnet_blocks = self.subnet_blocks.eks_zone_b_subnet_blocks
+        let eks_zone_b_subnet_blocks = self
+            .options
+            .eks_zone_b_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let eks_zone_c_subnet_blocks = self.subnet_blocks.eks_zone_c_subnet_blocks
+        let eks_zone_c_subnet_blocks = self
+            .options
+            .eks_zone_c_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let rds_zone_a_subnet_blocks = self.subnet_blocks.rds_zone_a_subnet_blocks
+        let rds_zone_a_subnet_blocks = self
+            .options
+            .rds_zone_a_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let rds_zone_b_subnet_blocks = self.subnet_blocks.rds_zone_b_subnet_blocks
+        let rds_zone_b_subnet_blocks = self
+            .options
+            .rds_zone_b_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let rds_zone_c_subnet_blocks = self.subnet_blocks.rds_zone_c_subnet_blocks
+        let rds_zone_c_subnet_blocks = self
+            .options
+            .rds_zone_c_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let documentdb_zone_a_subnet_blocks = self.subnet_blocks.documentdb_zone_a_subnet_blocks
+        let documentdb_zone_a_subnet_blocks = self
+            .options
+            .documentdb_zone_a_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let documentdb_zone_b_subnet_blocks = self.subnet_blocks.documentdb_zone_b_subnet_blocks
+        let documentdb_zone_b_subnet_blocks = self
+            .options
+            .documentdb_zone_b_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let documentdb_zone_c_subnet_blocks = self.subnet_blocks.documentdb_zone_c_subnet_blocks
+        let documentdb_zone_c_subnet_blocks = self
+            .options
+            .documentdb_zone_c_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let elasticsearch_zone_a_subnet_blocks = self.subnet_blocks.elasticsearch_zone_a_subnet_blocks
+        let elasticsearch_zone_a_subnet_blocks = self
+            .options
+            .elasticsearch_zone_a_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let elasticsearch_zone_b_subnet_blocks = self.subnet_blocks.elasticsearch_zone_b_subnet_blocks
+        let elasticsearch_zone_b_subnet_blocks = self
+            .options
+            .elasticsearch_zone_b_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
-        let elasticsearch_zone_c_subnet_blocks = self.subnet_blocks.elasticsearch_zone_c_subnet_blocks
+        let elasticsearch_zone_c_subnet_blocks = self
+            .options
+            .elasticsearch_zone_c_subnet_blocks
             .iter()
             .map(|ip| format!("\"{}\"", ip))
             .collect::<Vec<_>>();
 
         let region_cluster_id = format!("{}-{}", self.region(), self.id());
-        let vpc_cidr_block = self.raw_options.vpc_cidr_block.clone();
+        let vpc_cidr_block = self.options.vpc_cidr_block.clone();
         let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", self.id());
-        let eks_cidr_subnet = self.raw_options.eks_cidr_subnet.clone();
+        let eks_cidr_subnet = self.options.eks_cidr_subnet.clone();
         let worker_nodes = self
             .nodes
             .iter()
@@ -252,11 +205,11 @@ impl<'a> EKS<'a> {
             .collect::<Vec<WorkerNodeDataTemplate>>();
         let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.cloud_provider.organization_id());
         let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
-        let qovery_api_url = self.raw_options.qovery_api_url.clone();
-        let rds_cidr_subnet = self.raw_options.rds_cidr_subnet.clone();
-        let documentdb_cidr_subnet = self.raw_options.documentdb_cidr_subnet.clone();
-        let elasticsearch_cidr_subnet = self.raw_options.elasticsearch_cidr_subnet.clone();
-        let managed_dns = self.raw_options.managed_dns.clone();
+        let qovery_api_url = self.options.qovery_api_url.clone();
+        let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
+        let documentdb_cidr_subnet = self.options.documentdb_cidr_subnet.clone();
+        let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
+        let managed_dns = self.options.managed_dns.clone();
         let managed_dns_helm_format = managed_dns
             .iter()
             .map(|name| format!("\"{}\"", name))
@@ -287,7 +240,7 @@ impl<'a> EKS<'a> {
         match self.dns_provider.kind() {
             dns_provider::Kind::CLOUDFLARE => {
                 context.insert("external_dns_provider", "cloudflare");
-                context.insert("cloudflare_api_token", self.dns_provider.password());
+                context.insert("cloudflare_api_token", self.dns_provider.token());
                 context.insert("cloudflare_email", self.dns_provider.account());
             }
         };
@@ -338,7 +291,10 @@ impl<'a> EKS<'a> {
         );
 
         // AWS - Elasticsearch
-        context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet.clone());
+        context.insert(
+            "elasticsearch_cidr_subnet",
+            &elasticsearch_cidr_subnet.clone(),
+        );
         context.insert(
             "elasticsearch_zone_a_subnet_blocks",
             &elasticsearch_zone_a_subnet_blocks,
@@ -387,10 +343,6 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn dns_provider(&self) -> &dyn DnsProvider {
         self.dns_provider
-    }
-
-    fn options(&self) ->  CorePayload {
-        self.raw_options
     }
 
     fn is_valid(&self) -> Result<(), KubernetesError> {

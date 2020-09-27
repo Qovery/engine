@@ -12,8 +12,10 @@ use qovery_engine::transaction::TransactionResult;
 use test_utilities::aws::context;
 use test_utilities::utilities::init;
 
+use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::generate_id;
 use test_utilities::aws::dns_provider_cloudflare;
+
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
 // it permit you to create several different workspaces for each steps
@@ -62,7 +64,7 @@ fn pause_environment(
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
     let dns_provider = dns_provider_cloudflare(context);
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp,&dns_provider, nodes);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
     tx.pause_environment(&k, &environment_action);
 
@@ -80,7 +82,7 @@ fn delete_environment(
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
     let dns_provider = dns_provider_cloudflare(context);
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp,&dns_provider, nodes);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
     tx.delete_environment(&k, &environment_action);
 
@@ -358,7 +360,7 @@ fn deploy_a_working_environment_with_postgresql() {
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
         database_instance_type: "db.t2.micro".to_string(),
-        database_disk_type: "gp2".to_string()
+        database_disk_type: "gp2".to_string(),
     }];
     environment.applications = environment
         .applications
@@ -442,7 +444,7 @@ fn deploy_a_working_environment_with_mysql() {
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
         database_instance_type: "db.t2.micro".to_string(),
-        database_disk_type: "gp2".to_string()
+        database_disk_type: "gp2".to_string(),
     }];
     environment.applications = environment
         .applications
@@ -476,19 +478,23 @@ fn deploy_a_working_environment_with_mysql() {
             app
         })
         .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers = environment.routers.into_iter().map(
-        |mut router| {
-            router.routes = router.routes.into_iter().map(
-                |mut route| {
+    environment.routers = environment
+        .routers
+        .into_iter()
+        .map(|mut router| {
+            router.routes = router
+                .routes
+                .into_iter()
+                .map(|mut route| {
                     if route.application_name == "simple-app" {
                         route.application_name = "mysql-app".to_string();
                     }
                     route
-                }
-            ).collect::<Vec<qovery_engine::models::Route>>();
+                })
+                .collect::<Vec<qovery_engine::models::Route>>();
             router
-        }
-    ).collect::<Vec<qovery_engine::models::Router>>();
+        })
+        .collect::<Vec<qovery_engine::models::Router>>();
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
