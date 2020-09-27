@@ -18,6 +18,7 @@ pub trait DnsProvider {
     fn is_valid(&self) -> Result<(), DnsProviderError>;
 }
 
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum DnsProviderError {
     Credentials,

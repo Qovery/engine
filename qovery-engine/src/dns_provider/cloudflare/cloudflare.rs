@@ -10,7 +10,13 @@ pub struct Cloudflare {
 }
 
 impl Cloudflare {
-    pub fn new(context: Context, id: String, name: String, cloudflare_api_token: String, cloudflare_email: String) -> Self {
+    pub fn new(
+        context: Context,
+        id: String,
+        name: String,
+        cloudflare_api_token: String,
+        cloudflare_email: String
+    ) -> Self {
         Cloudflare {
             context,
             id,
