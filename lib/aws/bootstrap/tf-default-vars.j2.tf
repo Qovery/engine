@@ -108,7 +108,7 @@ variable "ec2_ssh_default_key" {
   description = "Default SSH key"
   default = {
     "key_name" = "{{ eks_cluster_id }}-qovery"
-    "public_key" = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCnsfaJtod3fuSnE2zqfw+I6l696ipy18utqXpQOTzw0lT4y+CQCyVrR3og54RGwERoOT7KnoneyWzJMEzC+58mXDqe7oM7HgVgYOlEwYuFPO7EZBGaDWFoKMMzgFgdVyEVkoKE/s/2ClOqLvBt7Qq+Z8yQWrxjlluHncXSE6aNoog+Ard2qQhhZOGzwS2uGarkNj11x7e5qQ6kZcwQz+1LSJzTHfn6yK8RhvTDwhmYBy6kYfG+IYacUqToeqkFOiTbdmhntFYRf7J+0N3tVt8s3VUoLAg3uD2ycEqRG48WybAj+VLJHLC31iBrqvNRQqPfubM2ss7Qhv96nOnqMhNh pmavro@deb-pmavro"
+    "public_key" = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDN5AylaONAOt684AVqNL+jtOspRnwAXF3VmHYl02bmsFcxaAcbVal89o/lXrfg787J1D+5wR9thYDCctlvccrHgiTotBFA8HPafDeIvzGLXsCCGCmr9ctN1qtO7BhfwpyGrGJD6I5XmW67R7yhNlawsF2RtwJbQA+Jz/FdvBu/JZHuOaG3dh556Am89wfGyp/Lep5/Hph6iiDP2yujz206zoiRVNyaIYbzaQISU8Jwg39EKJ2YaDTG2Vb4EJ6hjRGguZPZSW0o77CV5CPICFCtMWMb8DGAxd4BTGP1tZmTnDP9mWSFD/5WPkudiwFKSsN2ZKAomOfPB8bZXi7mgmQKTrzsDEkWdz8CUC7TUW1mmIbXDfoFdaTMuZpsox2v9970554PyiSyez3SZ6GiJPy1VQifWeQlLraAgFoXICRiQwYUhszzM9dfuQE9RDM3r5K/mXRfiuzkEK/TH6I+gi08ZZzh6TsyGQhaX2bgYID6TFBFcnLpL/PGckrt2Ub50TU= qovery"
   }
   type = map(string)
 }
