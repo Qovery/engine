@@ -470,6 +470,7 @@ pub struct ExternalService {
     pub on_create_dockerfile_path: String,
     pub on_pause_dockerfile_path: String,
     pub on_delete_dockerfile_path: String,
+    pub environment_variables: Vec<EnvironmentVariable>,
 }
 
 impl ExternalService {
@@ -497,7 +498,14 @@ impl ExternalService {
                 registry_url: None,
             },
             options: BuildOptions {
-                environment_variables: vec![],
+                environment_variables: self
+                    .environment_variables
+                    .iter()
+                    .map(|ev| crate::build_platform::EnvironmentVariable {
+                        key: ev.key.clone(),
+                        value: ev.value.clone(),
+                    })
+                    .collect::<Vec<_>>(),
             },
         }
     }
