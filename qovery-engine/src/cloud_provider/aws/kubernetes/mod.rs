@@ -48,20 +48,20 @@ pub struct SubnetBlocks {
 
 impl SubnetBlocks {
     pub fn new(
-        options: &Value
+        options: CorePayload
     ) -> Self {
-        let eks_zone_a_subnet_blocks: Vec<String> = get_string_array(&options, "eks_zone_a_subnet_blocks");
-        let eks_zone_b_subnet_blocks: Vec<String> = get_string_array(&options, "eks_zone_b_subnet_blocks");
-        let eks_zone_c_subnet_blocks: Vec<String> = get_string_array(&options, "eks_zone_c_subnet_blocks");
-        let rds_zone_a_subnet_blocks: Vec<String> = get_string_array(&options, "rds_zone_a_subnet_blocks");
-        let rds_zone_b_subnet_blocks: Vec<String> = get_string_array(&options, "rds_zone_b_subnet_blocks");
-        let rds_zone_c_subnet_blocks: Vec<String> = get_string_array(&options, "rds_zone_c_subnet_blocks");
-        let documentdb_zone_a_subnet_blocks: Vec<String> = get_string_array(&options, "documentdb_zone_a_subnet_blocks");
-        let documentdb_zone_b_subnet_blocks: Vec<String> = get_string_array(&options, "documentdb_zone_b_subnet_blocks");
-        let documentdb_zone_c_subnet_blocks: Vec<String> = get_string_array(&options, "documentdb_zone_c_subnet_blocks");
-        let elasticsearch_zone_a_subnet_blocks: Vec<String> = get_string_array(&options, "elasticsearch_zone_a_subnet_blocks");
-        let elasticsearch_zone_b_subnet_blocks: Vec<String> = get_string_array(&options, "elasticsearch_zone_b_subnet_blocks");
-        let elasticsearch_zone_c_subnet_blocks: Vec<String> = get_string_array(&options, "elasticsearch_zone_c_subnet_blocks");
+        let eks_zone_a_subnet_blocks = options.eks_zone_a_subnet_blocks;
+        let eks_zone_b_subnet_blocks = options.eks_zone_b_subnet_blocks;
+        let eks_zone_c_subnet_blocks= options.eks_zone_c_subnet_blocks;
+        let rds_zone_a_subnet_blocks = options.rds_zone_a_subnet_blocks;
+        let rds_zone_b_subnet_blocks = options.rds_zone_b_subnet_blocks;
+        let rds_zone_c_subnet_blocks= options.rds_zone_c_subnet_blocks;
+        let documentdb_zone_a_subnet_blocks= options.documentdb_zone_a_subnet_blocks;
+        let documentdb_zone_b_subnet_blocks = options.documentdb_zone_b_subnet_blocks;
+        let documentdb_zone_c_subnet_blocks = options.documentdb_zone_c_subnet_blocks;
+        let elasticsearch_zone_a_subnet_blocks = options.elasticsearch_zone_a_subnet_blocks;
+        let elasticsearch_zone_b_subnet_blocks = options.elasticsearch_zone_b_subnet_blocks;
+        let elasticsearch_zone_c_subnet_blocks = options.elasticsearch_zone_c_subnet_blocks;
 
         SubnetBlocks {
             eks_zone_a_subnet_blocks,
@@ -123,16 +123,6 @@ pub struct CorePayload {
 }
 
 
-fn get_string_array<'a>(val: &'a Value, key: &'a str) -> Vec<String> {
-    // TODO unwraps
-    val.get(key).unwrap().as_array().unwrap().iter().map(|it| it.as_str().unwrap().to_owned()).collect()
-}
-
-fn get_string(val: &Value, key: &str) -> String {
-    // TODO unwraps
-    val.get(key).unwrap().as_str().unwrap().to_string()
-}
-
 pub struct EKS<'a> {
     context: Context,
     id: String,
@@ -157,7 +147,7 @@ impl<'a> EKS<'a> {
         region: &str,
         cloud_provider: &'a AWS,
         dns_provider: &'a Cloudflare,
-        options: &PayloadOptions,
+        options: &CorePayload,
         nodes: Vec<Node>,
     ) -> Self {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
@@ -170,7 +160,7 @@ impl<'a> EKS<'a> {
             region: Region::from_str(region).unwrap(),
             cloud_provider,
             dns_provider,
-            subnet_blocks: SubnetBlocks::new(&options),
+            subnet_blocks: SubnetBlocks::new(options.clone()),
             raw_options: options.clone(),
             nodes,
             template_directory,
@@ -244,9 +234,9 @@ impl<'a> EKS<'a> {
             .collect::<Vec<_>>();
 
         let region_cluster_id = format!("{}-{}", self.region(), self.id());
-        let vpc_cidr_block = get_string(&self.options(), "vpc_cidr_block");
+        let vpc_cidr_block = self.raw_options.vpc_cidr_block.clone();
         let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", self.id());
-        let eks_cidr_subnet = get_string(&self.options(), "eks_cidr_subnet");
+        let eks_cidr_subnet = self.raw_options.eks_cidr_subnet.clone();
         let worker_nodes = self
             .nodes
             .iter()
@@ -262,11 +252,11 @@ impl<'a> EKS<'a> {
             .collect::<Vec<WorkerNodeDataTemplate>>();
         let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.cloud_provider.organization_id());
         let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
-        let qovery_api_url = get_string(&self.options(), "qovery_api_url");
-        let rds_cidr_subnet = get_string(&self.options(), "rds_cidr_subnet");
-        let documentdb_cidr_subnet = get_string(&self.options(), "documentdb_cidr_subnet");
-        let elasticsearch_cidr_subnet = get_string(&self.options(), "elasticsearch_cidr_subnet");
-        let managed_dns = get_string_array(&self.options(), "managed_dns");
+        let qovery_api_url = self.raw_options.qovery_api_url.clone();
+        let rds_cidr_subnet = self.raw_options.rds_cidr_subnet.clone();
+        let documentdb_cidr_subnet = self.raw_options.documentdb_cidr_subnet.clone();
+        let elasticsearch_cidr_subnet = self.raw_options.elasticsearch_cidr_subnet.clone();
+        let managed_dns = self.raw_options.managed_dns.clone();
         let managed_dns_helm_format = managed_dns
             .iter()
             .map(|name| format!("\"{}\"", name))
@@ -399,8 +389,8 @@ impl<'a> Kubernetes for EKS<'a> {
         self.dns_provider
     }
 
-    fn options(&self) -> Value {
-        self.raw_options.clone()
+    fn options(&self) ->  CorePayload {
+        self.raw_options
     }
 
     fn is_valid(&self) -> Result<(), KubernetesError> {
