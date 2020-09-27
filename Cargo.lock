@@ -1981,6 +1981,7 @@ dependencies = [
  "rusoto_sts",
  "rust-crypto",
  "serde",
+ "serde_derive",
  "serde_json",
  "tar",
  "tera",
