@@ -5,7 +5,7 @@ pub mod cloudflare;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
-    CLOUDFLARE
+    CLOUDFLARE,
 }
 
 pub trait DnsProvider {
@@ -14,10 +14,9 @@ pub trait DnsProvider {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn account(&self) -> &str;
-    fn password(&self) -> &str;
+    fn token(&self) -> &str;
     fn is_valid(&self) -> Result<(), DnsProviderError>;
 }
-
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum DnsProviderError {

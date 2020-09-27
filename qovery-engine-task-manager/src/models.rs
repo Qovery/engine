@@ -6,17 +6,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::dns_provider::cloudflare::Cloudflare;
-use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
+use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::gcp::GCP;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
+use qovery_engine::dns_provider::cloudflare::Cloudflare;
+use qovery_engine::dns_provider::Kind::CLOUDFLARE;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, ProgressListener};
-use qovery_engine::dns_provider::Kind::CLOUDFLARE;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -57,7 +57,7 @@ impl Request {
             build_platform,
             container_registry,
             cloud_provider,
-            dns_provider
+            dns_provider,
         )
     }
 
@@ -171,7 +171,10 @@ impl Kubernetes {
                 self.region.as_str(),
                 cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
                 dns_provider,
-                &self.options,
+                serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(
+                    self.options.clone(),
+                )
+                .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 nodes
                     .into_iter()
                     .map(|x| {

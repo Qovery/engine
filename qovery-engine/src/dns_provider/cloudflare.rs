@@ -15,14 +15,14 @@ impl Cloudflare {
         id: String,
         name: String,
         cloudflare_api_token: String,
-        cloudflare_email: String
+        cloudflare_email: String,
     ) -> Self {
         Cloudflare {
             context,
             id,
             name,
             cloudflare_api_token,
-            cloudflare_email
+            cloudflare_email,
         }
     }
 }
@@ -48,7 +48,7 @@ impl DnsProvider for Cloudflare {
         &self.cloudflare_email
     }
 
-    fn password(&self) -> &str {
+    fn token(&self) -> &str {
         &self.cloudflare_api_token
     }
 

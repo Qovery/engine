@@ -1,6 +1,5 @@
 use chrono::Utc;
 use dirs::home_dir;
-use serde_json::value::Value;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::build_platform::BuildPlatform;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
@@ -16,18 +15,20 @@ use qovery_engine::models::{
     EnvironmentVariable, GitCredentials, Kind, Route, Router, Storage, StorageType,
 };
 use qovery_engine::session::Session;
+use serde_json::value::Value;
 use std::borrow::Borrow;
 
 use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
 use serde_json::map::Values;
-extern crate serde_derive;
 extern crate serde;
+extern crate serde_derive;
+use crate::cloudflare::dns_provider_cloudflare;
+use qovery_engine::dns_provider::cloudflare::cloudflare::Cloudflare;
+use qovery_engine::dns_provider::DnsProvider;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
-use qovery_engine::dns_provider::cloudflare::cloudflare::Cloudflare;
-use crate::cloudflare::dns_provider_cloudflare;
 
 pub const AWS_KEY_ID: &str = "AKIAZ4KMLSYJLRGNNFNI";
 pub const AWS_ACCESS_KEY: &str = "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/";
@@ -98,18 +99,14 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
     )
 }
 
-
-
-
 pub fn aws_kubernetes_eks<'a>(
     context: &Context,
     cloud_provider: &'a AWS,
-    dns_provider: &'a Cloudflare,
+    dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
 ) -> EKS<'a> {
     let mut file = File::open("tests/assets/eks-options.json").expect("file not found");
-    let mut buff = String::new();
-    let options_values : CorePayload = serde_json::from_reader(file).expect("JSON was not well-formatted");;
+    let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
         context.clone(),
         "my-eks-on-us-east-2",
@@ -140,7 +137,7 @@ pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
         build_platform,
         container_registry,
         cloud_provider,
-        dns_provider
+        dns_provider,
     )
 }
 
@@ -155,7 +152,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: format!("{}-{}","simple-app".to_string(),generate_id()),
+            name: format!("{}-{}", "simple-app".to_string(), generate_id()),
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: "Dockerfile".to_string(),
@@ -201,7 +198,7 @@ pub fn working_environment(context: &Context) -> Environment {
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: format!("{}-{}","simple-app".to_string(),generate_id()),
+            name: format!("{}-{}", "simple-app".to_string(), generate_id()),
             git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
                 .to_string(),
             commit_id: "f400e2f199e6a7eb446690b6f2df1017dbbae518".to_string(),
@@ -284,7 +281,7 @@ pub fn working_environment(context: &Context) -> Environment {
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
                 database_instance_type: "db.t2.micro".to_string(),
-                database_disk_type: "gp2".to_string()
+                database_disk_type: "gp2".to_string(),
             }, /*,
                Database {
                    kind: DatabaseKind::MySQL,
