@@ -1,16 +1,16 @@
 use std::hash::Hash;
 use std::rc::Rc;
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
-use crate::cloud_provider::aws::databases::{PostgreSQL, MySQL};
+use crate::cloud_provider::aws::databases::{MySQL, PostgreSQL};
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
+use chrono::{DateTime, Utc};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -33,6 +33,7 @@ pub struct Environment {
     pub applications: Vec<Application>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
+    pub external_services: Vec<ExternalService>,
     pub clone_from_environment_id: Option<String>,
 }
 
@@ -415,7 +416,7 @@ impl Database {
                     ));
 
                     Some(db)
-                },
+                }
                 DatabaseKind::Mysql => {
                     let db: Box<dyn StatefulService> = Box::new(MySQL::new(
                         context.clone(),
@@ -437,7 +438,7 @@ impl Database {
                     ));
 
                     Some(db)
-                },
+                }
                 _ => None,
             },
             CPKind::GCP => None,
@@ -453,6 +454,53 @@ pub enum DatabaseKind {
     Postgresql,
     Mysql,
     Mongodb,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct ExternalService {
+    pub action: Action,
+    pub id: String,
+    pub name: String,
+    pub total_cpus: String,
+    pub total_ram_in_mib: u32,
+    pub git_url: String,
+    pub git_credentials: GitCredentials,
+    pub branch: String,
+    pub commit_id: String,
+    pub on_create_dockerfile_path: String,
+    pub on_pause_dockerfile_path: String,
+    pub on_delete_dockerfile_path: String,
+}
+
+impl ExternalService {
+    pub fn to_build(&self) -> Build {
+        Build {
+            git_repository: GitRepository {
+                url: self.git_url.clone(),
+                credentials: Some(Credentials {
+                    login: self.git_credentials.login.clone(),
+                    password: self.git_credentials.access_token.clone(),
+                }),
+                commit_id: self.commit_id.clone(),
+                dockerfile_path: match self.action {
+                    Action::Create => self.on_create_dockerfile_path.clone(),
+                    Action::Pause => self.on_pause_dockerfile_path.clone(),
+                    Action::Delete => self.on_delete_dockerfile_path.clone(),
+                    Action::Nothing => self.on_create_dockerfile_path.clone(),
+                },
+            },
+            image: Image {
+                application_id: self.id.clone(),
+                name: self.name.clone(),
+                tag: self.commit_id.clone(),
+                commit_id: self.commit_id.clone(),
+                registry_url: None,
+            },
+            options: BuildOptions {
+                environment_variables: vec![],
+            },
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -585,11 +633,11 @@ pub trait Clone2 {
 impl Clone2 for Context {
     fn clone_not_same_execution_id(&self) -> Context {
         let mut new = self.clone();
-        let suffixe= rand::thread_rng()
+        let suffixe = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(10)
             .collect::<String>();
-        new.execution_id = format!("{}-{}",self.execution_id,suffixe);
+        new.execution_id = format!("{}-{}", self.execution_id, suffixe);
         new
     }
 }
