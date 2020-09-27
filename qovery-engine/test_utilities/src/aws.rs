@@ -24,7 +24,7 @@ use serde_json::map::Values;
 extern crate serde;
 extern crate serde_derive;
 use crate::cloudflare::dns_provider_cloudflare;
-use qovery_engine::dns_provider::cloudflare::cloudflare::Cloudflare;
+use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::dns_provider::DnsProvider;
 use std::fs::File;
 use std::io::Read;

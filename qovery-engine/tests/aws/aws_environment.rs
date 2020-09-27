@@ -14,7 +14,6 @@ use test_utilities::utilities::init;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::generate_id;
-use test_utilities::aws::dns_provider_cloudflare;
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
