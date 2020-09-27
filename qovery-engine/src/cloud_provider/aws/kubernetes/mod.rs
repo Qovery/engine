@@ -79,6 +79,49 @@ impl SubnetBlocks {
         }
     }
 }
+#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorePayload {
+    #[serde(rename = "eks_zone_a_subnet_blocks")]
+    pub eks_zone_a_subnet_blocks: Vec<String>,
+    #[serde(rename = "eks_zone_b_subnet_blocks")]
+    pub eks_zone_b_subnet_blocks: Vec<String>,
+    #[serde(rename = "eks_zone_c_subnet_blocks")]
+    pub eks_zone_c_subnet_blocks: Vec<String>,
+    #[serde(rename = "rds_zone_a_subnet_blocks")]
+    pub rds_zone_a_subnet_blocks: Vec<String>,
+    #[serde(rename = "rds_zone_b_subnet_blocks")]
+    pub rds_zone_b_subnet_blocks: Vec<String>,
+    #[serde(rename = "rds_zone_c_subnet_blocks")]
+    pub rds_zone_c_subnet_blocks: Vec<String>,
+    #[serde(rename = "documentdb_zone_a_subnet_blocks")]
+    pub documentdb_zone_a_subnet_blocks: Vec<String>,
+    #[serde(rename = "documentdb_zone_b_subnet_blocks")]
+    pub documentdb_zone_b_subnet_blocks: Vec<String>,
+    #[serde(rename = "documentdb_zone_c_subnet_blocks")]
+    pub documentdb_zone_c_subnet_blocks: Vec<String>,
+    #[serde(rename = "elasticsearch_zone_a_subnet_blocks")]
+    pub elasticsearch_zone_a_subnet_blocks: Vec<String>,
+    #[serde(rename = "elasticsearch_zone_b_subnet_blocks")]
+    pub elasticsearch_zone_b_subnet_blocks: Vec<String>,
+    #[serde(rename = "elasticsearch_zone_c_subnet_blocks")]
+    pub elasticsearch_zone_c_subnet_blocks: Vec<String>,
+    #[serde(rename = "vpc_cidr_block")]
+    pub vpc_cidr_block: String,
+    #[serde(rename = "eks_cidr_subnet")]
+    pub eks_cidr_subnet: String,
+    #[serde(rename = "qovery_api_url")]
+    pub qovery_api_url: String,
+    #[serde(rename = "rds_cidr_subnet")]
+    pub rds_cidr_subnet: String,
+    #[serde(rename = "documentdb_cidr_subnet")]
+    pub documentdb_cidr_subnet: String,
+    #[serde(rename = "elasticsearch_cidr_subnet")]
+    pub elasticsearch_cidr_subnet: String,
+    #[serde(rename = "managed_dns")]
+    pub managed_dns: Vec<String>,
+}
+
 
 fn get_string_array<'a>(val: &'a Value, key: &'a str) -> Vec<String> {
     // TODO unwraps
@@ -101,7 +144,7 @@ pub struct EKS<'a> {
     nodes: Vec<Node>,
     template_directory: String,
     subnet_blocks: SubnetBlocks,
-    raw_options: Value,
+    raw_options: CorePayload,
     listeners: Listeners,
 }
 
@@ -114,7 +157,7 @@ impl<'a> EKS<'a> {
         region: &str,
         cloud_provider: &'a AWS,
         dns_provider: &'a Cloudflare,
-        options: &Value,
+        options: &PayloadOptions,
         nodes: Vec<Node>,
     ) -> Self {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());

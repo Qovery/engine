@@ -12,8 +12,9 @@ chrono = "0.4.11"
 dirs = "3.0.1"
 env_logger = "0.7.1"
 rand = "0.7.3"
-serde = "1.0.114"
+serde = "1.0"
 serde_json = "1.0.57"
+serde_derive = "1.0"
 
 
 # Digital Ocean Deps

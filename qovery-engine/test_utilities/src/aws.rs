@@ -21,6 +21,8 @@ use std::borrow::Borrow;
 use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
 use serde_json::map::Values;
+extern crate serde_derive;
+extern crate serde;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
@@ -98,16 +100,16 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
 
 
 
+
 pub fn aws_kubernetes_eks<'a>(
     context: &Context,
     cloud_provider: &'a AWS,
     dns_provider: &'a Cloudflare,
     nodes: Vec<Node>,
 ) -> EKS<'a> {
-    let mut file = File::open("tests/assets/eks-options.json").unwrap();
+    let mut file = File::open("tests/assets/eks-options.json").expect("file not found");
     let mut buff = String::new();
-    file.read_to_string(&mut buff).unwrap();
-    let options_values = serde_json::from_str(buff.as_str()).expect("JSON was not well-formatted");;
+    let options_values : CorePayload = serde_json::from_reader(file).expect("JSON was not well-formatted");;
     EKS::<'a>::new(
         context.clone(),
         "my-eks-on-us-east-2",
