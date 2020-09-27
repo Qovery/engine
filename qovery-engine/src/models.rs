@@ -48,6 +48,24 @@ impl Environment {
         built_applications: &Vec<Box<dyn crate::cloud_provider::service::Application>>,
         cloud_provider: &dyn CloudProvider,
     ) -> crate::cloud_provider::environment::Environment {
+        let external_services = self
+            .external_services
+            .iter()
+            .map(|x| {
+                x.to_stateless_service(
+                    context,
+                    built_applications
+                        .iter()
+                        .find(|y| x.id.as_str() == y.id())
+                        .unwrap()
+                        .image(), // FIXME not safe
+                    cloud_provider,
+                )
+            })
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+
         let applications = self
             .applications
             .iter()
@@ -74,7 +92,8 @@ impl Environment {
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
-        let mut stateless_services = routers;
+        let mut stateless_services = external_services;
+        stateless_services.extend(routers);
         stateless_services.extend(applications);
 
         let databases = self
@@ -172,7 +191,7 @@ impl Application {
                         .collect::<Vec<_>>(),
                     self.environment_variables
                         .iter()
-                        .map(|ev| ev.to_aws_environment_variable())
+                        .map(|ev| ev.to_aws_application_environment_variable())
                         .collect::<Vec<_>>(),
                 ),
             )),
@@ -206,7 +225,7 @@ impl Application {
                         .collect::<Vec<_>>(),
                     self.environment_variables
                         .iter()
-                        .map(|ev| ev.to_aws_environment_variable())
+                        .map(|ev| ev.to_aws_application_environment_variable())
                         .collect::<Vec<_>>(),
                 ),
             )),
@@ -255,10 +274,19 @@ pub struct EnvironmentVariable {
 }
 
 impl EnvironmentVariable {
-    pub fn to_aws_environment_variable(
+    pub fn to_aws_application_environment_variable(
         &self,
     ) -> crate::cloud_provider::aws::application::EnvironmentVariable {
         crate::cloud_provider::aws::application::EnvironmentVariable {
+            key: self.key.clone(),
+            value: self.value.clone(),
+        }
+    }
+
+    pub fn to_aws_external_service_environment_variable(
+        &self,
+    ) -> crate::cloud_provider::aws::external_service::EnvironmentVariable {
+        crate::cloud_provider::aws::external_service::EnvironmentVariable {
             key: self.key.clone(),
             value: self.value.clone(),
         }
@@ -474,6 +502,62 @@ pub struct ExternalService {
 }
 
 impl ExternalService {
+    pub fn to_application<'a>(
+        &self,
+        context: &Context,
+        image: &Image,
+        cloud_provider: &dyn CloudProvider,
+    ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
+        match cloud_provider.kind() {
+            CPKind::AWS => Some(Box::new(
+                crate::cloud_provider::aws::external_service::ExternalService::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    image.clone(),
+                    self.environment_variables
+                        .iter()
+                        .map(|ev| ev.to_aws_external_service_environment_variable())
+                        .collect::<Vec<_>>(),
+                ),
+            )),
+            CPKind::GCP => None,
+            _ => None,
+            //TODO to implement
+        }
+    }
+
+    pub fn to_stateless_service<'a>(
+        &self,
+        context: &Context,
+        image: &Image,
+        cloud_provider: &dyn CloudProvider,
+    ) -> Option<Box<(dyn crate::cloud_provider::service::StatelessService)>> {
+        match cloud_provider.kind() {
+            CPKind::AWS => Some(Box::new(
+                crate::cloud_provider::aws::external_service::ExternalService::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    image.clone(),
+                    self.environment_variables
+                        .iter()
+                        .map(|ev| ev.to_aws_external_service_environment_variable())
+                        .collect::<Vec<_>>(),
+                ),
+            )),
+            CPKind::GCP => None,
+            _ => None,
+            //TODO to implement
+        }
+    }
+
     pub fn to_build(&self) -> Build {
         Build {
             git_repository: GitRepository {
@@ -554,6 +638,7 @@ pub enum ProgressScope {
     Infrastructure { execution_id: String },
     Database { id: String },
     Application { id: String },
+    ExternalService { id: String },
     Router { id: String },
     Environment { id: String },
 }

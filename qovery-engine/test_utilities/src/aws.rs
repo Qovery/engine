@@ -134,7 +134,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: format!("{}-{}","simple-app".to_string(),generate_id()),
+            name: format!("{}-{}", "simple-app".to_string(), generate_id()),
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: "Dockerfile".to_string(),
@@ -165,6 +165,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             }],
         }],
         databases: vec![],
+        external_services: vec![],
         clone_from_environment_id: None,
     }
 }
@@ -180,7 +181,7 @@ pub fn working_environment(context: &Context) -> Environment {
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: format!("{}-{}","simple-app".to_string(),generate_id()),
+            name: format!("{}-{}", "simple-app".to_string(), generate_id()),
             git_url: "https://github.com/Qovery/simple-example-node-with-postgresql.git"
                 .to_string(),
             commit_id: "f400e2f199e6a7eb446690b6f2df1017dbbae518".to_string(),
@@ -294,6 +295,7 @@ pub fn working_environment(context: &Context) -> Environment {
                    disk_size_in_gib: 10,
                },*/
         ],
+        external_services: vec![],
         clone_from_environment_id: None,
     }
 }

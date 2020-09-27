@@ -84,6 +84,7 @@ pub trait Service {
 
         match self.service_type() {
             ServiceType::Application => ProgressScope::Application { id },
+            ServiceType::ExternalService => ProgressScope::ExternalService { id },
             ServiceType::Database(_) => ProgressScope::Database { id },
             ServiceType::Router => ProgressScope::Router { id },
         }
@@ -118,6 +119,8 @@ pub trait Application: StatelessService {
     fn image(&self) -> &Image;
     fn set_image(&mut self, image: Image);
 }
+
+pub trait ExternalService: Application {}
 
 pub trait Router: StatelessService {
     fn check_domains(&self) -> Result<(), ServiceError>;
@@ -198,6 +201,7 @@ pub enum DatabaseType<'a> {
 #[derive(Eq, PartialEq)]
 pub enum ServiceType<'a> {
     Application,
+    ExternalService,
     Database(DatabaseType<'a>),
     Router,
 }
@@ -206,6 +210,7 @@ impl<'a> ServiceType<'a> {
     pub fn name(&self) -> &str {
         match self {
             ServiceType::Application => "Application",
+            ServiceType::ExternalService => "ExternalService",
             ServiceType::Database(_) => "Database",
             ServiceType::Router => "Router",
         }

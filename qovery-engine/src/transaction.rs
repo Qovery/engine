@@ -236,9 +236,9 @@ impl<'a> Transaction<'a> {
             match result {
                 Ok(tuple) => results.push(tuple),
                 Err(err) => {
-                    error!("error pushing docker image {:?}",err);
+                    error!("error pushing docker image {:?}", err);
                     return Err(err);
-                },
+                }
             }
         }
 
@@ -315,12 +315,28 @@ impl<'a> Transaction<'a> {
         environment_action: &EnvironmentAction,
     ) -> Result<(), RollbackError> {
         let qe_environment = |environment: &Environment| {
-            let mut _applications = Vec::with_capacity(environment.applications.len());
+            let mut _applications = Vec::with_capacity(
+                // ExternalService impl Application (which is a StatelessService)
+                environment.applications.len() + environment.external_services.len(),
+            );
 
             for application in environment.applications.iter() {
                 let build = application.to_build();
 
                 match application.to_application(
+                    self.engine.context(),
+                    &build.image,
+                    self.engine.cloud_provider(),
+                ) {
+                    Some(x) => _applications.push(x),
+                    None => {}
+                }
+            }
+
+            for external_service in environment.external_services.iter() {
+                let build = external_service.to_build();
+
+                match external_service.to_application(
                     self.engine.context(),
                     &build.image,
                     self.engine.cloud_provider(),

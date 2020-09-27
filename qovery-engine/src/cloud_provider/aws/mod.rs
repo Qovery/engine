@@ -13,9 +13,9 @@ mod common;
 
 pub mod application;
 pub mod databases;
-pub mod router;
-
+pub mod external_service;
 pub mod kubernetes;
+pub mod router;
 
 pub struct AWS {
     context: Context,
