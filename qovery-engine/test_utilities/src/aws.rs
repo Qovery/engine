@@ -20,11 +20,12 @@ use std::borrow::Borrow;
 
 use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
-use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use serde_json::map::Values;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
+use qovery_engine::dns_provider::cloudflare::cloudflare::Cloudflare;
+use crate::cloudflare::dns_provider_cloudflare;
 
 pub const AWS_KEY_ID: &str = "AKIAZ4KMLSYJLRGNNFNI";
 pub const AWS_ACCESS_KEY: &str = "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/";
@@ -95,9 +96,7 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
     )
 }
 
-pub fn dns_provider_cloudflare(context: &Context) -> Cloudflare {
-    Cloudflare::new(context.clone(), "abc".to_string(), "default".to_string(), "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7".to_string(), "dns@qovery.com".to_string())
-}
+
 
 pub fn aws_kubernetes_eks<'a>(
     context: &Context,
@@ -108,6 +107,7 @@ pub fn aws_kubernetes_eks<'a>(
     let mut file = File::open("tests/assets/eks-options.json").unwrap();
     let mut buff = String::new();
     file.read_to_string(&mut buff).unwrap();
+    let options_values = serde_json::from_str(buff.as_str()).expect("JSON was not well-formatted");;
     EKS::<'a>::new(
         context.clone(),
         "my-eks-on-us-east-2",
@@ -116,7 +116,7 @@ pub fn aws_kubernetes_eks<'a>(
         "us-east-2",
         cloud_provider,
         dns_provider,
-        &Value::from_str(buff.as_str()).unwrap(),
+        options_values,
         nodes,
     )
 }
