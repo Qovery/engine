@@ -203,7 +203,7 @@ impl<'a> EKS<'a> {
                 min_size: nodes.len().to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
-        let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.cloud_provider.organization_id());
+        let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.id);
         let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
         let qovery_api_url = self.options.qovery_api_url.clone();
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
