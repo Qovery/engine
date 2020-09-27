@@ -97,7 +97,7 @@ fn create_eks_cluster_in_eu_west_3() {
          AWS_KUBERNETES_VERSION,
          "eu-west-3",
          &aws,
-         dns_provider,
+         &dns_provider,
          json,
          nodes,
      );
