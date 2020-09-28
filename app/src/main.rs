@@ -5,13 +5,13 @@ extern crate serde;
 
 use std::borrow::Borrow;
 use std::fs::File;
-use std::{fs, process, io};
-use std::io::{Error, Read, Write, BufRead};
+use std::io::{BufRead, Error, Read, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, thread};
+use std::{fs, io, process};
 
 use chrono::{DateTime, Utc};
 use crossbeam_channel::{unbounded, Sender};
@@ -29,8 +29,8 @@ use qovery_engine_task_manager::task_manager::{InternalTask, Status, Task, TaskM
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::constants::ASCII_BANNER;
-use crate::TaskSelector::{Environment, Infrastructure};
 use crate::custom_error::{EngineInitError, ErrorKind};
+use crate::TaskSelector::{Environment, Infrastructure};
 use qovery_engine::cmd;
 
 mod constants;
@@ -279,10 +279,10 @@ pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
             match is_empty {
                 true => {
                     return Err(EngineInitError::Regular(ErrorKind::LibsDirEmpty));
-                },
+                }
                 false => Ok(()),
             }
-        },
+        }
         Err(e) => return Err(EngineInitError::Regular(ErrorKind::LibsPathsMissing)),
     }
 }
@@ -296,32 +296,37 @@ fn check_if_file_exist(path: &String) -> bool {
 // will assert an error if used version installed is not not the same than written in file
 fn check_versions_from(path: String) -> Result<(), EngineInitError> {
     // please append this vector if you want to test more binaries
-        let bin_to_check = ["terraform"];
-        // read line by line the version file
-        if let Ok(lines) = read_lines(path) {
-            for line in lines {
-                if let Ok(bin) = line {
-                    // put in lowercase and split the BINARY_VERSION to BINARY
-                    let lowercase = bin.to_lowercase();
-                    let binary_name = lowercase.split("_").next()
-                        .unwrap_or("");
-                    // check if the binary need to be tested
-                    if bin_to_check.contains(&binary_name) {
-                        let result_cmd = cmd::run_version_command_for(&binary_name);
-                        let version = lowercase.split("=").last().unwrap_or("").replace("\"", "");
-                        match result_cmd.contains(&version) {
-                            false => return Err(EngineInitError::Regular(ErrorKind::BinVersion)),
-                            _ => info!("{} is on right version {}",binary_name.to_string(),version)
-                        };
-                    }
+    let bin_to_check = ["terraform"];
+    // read line by line the version file
+    if let Ok(lines) = read_lines(path) {
+        for line in lines {
+            if let Ok(bin) = line {
+                // put in lowercase and split the BINARY_VERSION to BINARY
+                let lowercase = bin.to_lowercase();
+                let binary_name = lowercase.split("_").next().unwrap_or("");
+                // check if the binary need to be tested
+                if bin_to_check.contains(&binary_name) {
+                    let result_cmd = cmd::run_version_command_for(&binary_name);
+                    let version = lowercase.split("=").last().unwrap_or("").replace("\"", "");
+                    match result_cmd.contains(&version) {
+                        false => return Err(EngineInitError::Regular(ErrorKind::BinVersion)),
+                        _ => info!(
+                            "{} is on right version {}",
+                            binary_name.to_string(),
+                            version
+                        ),
+                    };
                 }
             }
         }
-    Ok(())
     }
+    Ok(())
+}
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-    where P: AsRef<Path>, {
+where
+    P: AsRef<Path>,
+{
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }
@@ -350,15 +355,15 @@ pub fn main() -> Result<(), Error> {
     info!("lib root dir: {}/", lib_root_dir.as_str());
     info!("workspace root dir: {}", workspace_root_dir.as_str());
 
-    match check_libs_directory(lib_root_dir.clone()){
+    match check_libs_directory(lib_root_dir.clone()) {
         Ok(e) => info!("Libs directory is not empty"),
         Err(e) => {
-            error!("Error while initializing the Engine {}",e);
+            error!("Error while initializing the Engine {}", e);
             process::exit(1);
         }
     }
     //checking if version file exist
-    match check_if_file_exist(&version_file){
+    match check_if_file_exist(&version_file) {
         true => info!("Version file is accessible"),
         _ => {
             error!("Error while initializing the Engine, version file is not accessible");
@@ -367,10 +372,10 @@ pub fn main() -> Result<(), Error> {
     }
 
     // check all binaries version from version file
-    match check_versions_from(version_file){
+    match check_versions_from(version_file) {
         Ok(()) => info!("Binaries versions are checked"),
         Err(e) => {
-            error!("Error while initializing the Engine {}",e);
+            error!("Error while initializing the Engine {}", e);
             process::exit(1);
         }
     }
