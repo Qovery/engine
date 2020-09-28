@@ -12,6 +12,7 @@ use qovery_engine::transaction::TransactionResult;
 use test_utilities::aws::context;
 use test_utilities::utilities::init;
 
+use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::generate_id;
 use qovery_engine::models::Kind::Production;
 
@@ -44,8 +45,8 @@ fn deploy_environment(
 
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
-
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
+    let dns_provider = dns_provider_cloudflare(context);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
     tx.deploy_environment(&k, &environment_action);
 
@@ -62,8 +63,8 @@ fn pause_environment(
 
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
-
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
+    let dns_provider = dns_provider_cloudflare(context);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
     tx.pause_environment(&k, &environment_action);
 
@@ -80,8 +81,8 @@ fn delete_environment(
 
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
-
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
+    let dns_provider = dns_provider_cloudflare(context);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
     tx.delete_environment(&k, &environment_action);
 
@@ -358,6 +359,8 @@ fn deploy_a_working_environment_with_postgresql() {
         total_cpus: "500m".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
+        database_instance_type: "db.t2.micro".to_string(),
+        database_disk_type: "gp2".to_string(),
     }];
     environment.applications = environment
         .applications
@@ -440,6 +443,8 @@ fn deploy_a_working_environment_with_mysql() {
         total_cpus: "500m".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
+        database_instance_type: "db.t2.micro".to_string(),
+        database_disk_type: "gp2".to_string(),
     }];
     environment.applications = environment
         .applications
@@ -528,6 +533,8 @@ fn deploy_a_working_production_environment_with_mysql() {
         total_cpus: "500m".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
+        database_instance_type: "db.t2.micro".to_string(),
+        database_disk_type: "gp2".to_string(),
     }];
     environment.applications = Vec::new();
     /*environment.applications = environment

@@ -8,6 +8,7 @@ pub mod cmd;
 mod constants;
 pub mod container_registry;
 mod crypto;
+pub mod dns_provider;
 mod dynamo_db;
 pub mod engine;
 pub mod error;

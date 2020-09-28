@@ -1,16 +1,16 @@
 use std::hash::Hash;
 use std::rc::Rc;
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
-use crate::cloud_provider::aws::databases::{PostgreSQL, MySQL};
+use crate::cloud_provider::aws::databases::{MySQL, PostgreSQL};
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
+use chrono::{DateTime, Utc};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -384,6 +384,8 @@ pub struct Database {
     pub total_cpus: String,
     pub total_ram_in_mib: u32,
     pub disk_size_in_gib: u32,
+    pub database_instance_type: String,
+    pub database_disk_type: String,
 }
 
 impl Database {
@@ -405,17 +407,19 @@ impl Database {
                         self.fqdn_id.as_str(),
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
                         DatabaseOptions {
                             login: self.username.clone(),
                             password: self.password.clone(),
                             host: self.fqdn.clone(),
                             port: self.port,
                             disk_size_in_gib: self.disk_size_in_gib,
+                            database_disk_type: self.database_disk_type.clone(),
                         },
                     ));
 
                     Some(db)
-                },
+                }
                 DatabaseKind::Mysql => {
                     let db: Box<dyn StatefulService> = Box::new(MySQL::new(
                         context.clone(),
@@ -427,17 +431,19 @@ impl Database {
                         self.fqdn_id.as_str(),
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
                         DatabaseOptions {
                             login: self.username.clone(),
                             password: self.password.clone(),
                             host: self.fqdn.clone(),
                             port: self.port,
                             disk_size_in_gib: self.disk_size_in_gib,
+                            database_disk_type: self.database_disk_type.clone(),
                         },
                     ));
 
                     Some(db)
-                },
+                }
                 _ => None,
             },
             CPKind::GCP => None,
@@ -585,11 +591,11 @@ pub trait Clone2 {
 impl Clone2 for Context {
     fn clone_not_same_execution_id(&self) -> Context {
         let mut new = self.clone();
-        let suffixe= rand::thread_rng()
+        let suffixe = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(10)
             .collect::<String>();
-        new.execution_id = format!("{}-{}",self.execution_id,suffixe);
+        new.execution_id = format!("{}-{}", self.execution_id, suffixe);
         new
     }
 }

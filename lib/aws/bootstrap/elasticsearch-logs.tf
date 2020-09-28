@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 resource "aws_elasticsearch_domain" "qovery_eks_logs" {
   domain_name           = var.elasticsearch_q_logs_domain_name
   elasticsearch_version = "7.4"
@@ -31,7 +33,7 @@ resource "aws_elasticsearch_domain" "qovery_eks_logs" {
         "AWS": "*"
       },
       "Action": "es:*",
-      "Resource": "arn:aws:es:${var.region}:283389881690:domain/qlogs-${var.eks_cluster_id}/*"
+      "Resource": "arn:aws:es:${var.region}:${data.aws_caller_identity.current.account_id}:domain/${var.elasticsearch_q_logs_domain_name}/*"
     },
     {
       "Effect": "Allow",
@@ -39,7 +41,7 @@ resource "aws_elasticsearch_domain" "qovery_eks_logs" {
         "AWS": "arn:aws:iam::283389881690:user/fluentbit-forward2es"
       },
       "Action": "es:*",
-      "Resource": "arn:aws:es:${var.region}:283389881690:domain/qlogs-${var.eks_cluster_id}/*"
+      "Resource": "arn:aws:es:${var.region}:${data.aws_caller_identity.current.account_id}:domain/${var.elasticsearch_q_logs_domain_name}/*"
     }
   ]
 }

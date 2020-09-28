@@ -452,6 +452,23 @@ where
 
     Ok(())
 }
+// return the output of "binary_name" --version
+pub fn run_version_command_for(binary_name: &str) -> String {
+    let mut output_from_cmd = String::new();
+    exec_with_output(
+        binary_name,
+        vec!["--version"],
+        |r_out| match r_out {
+            Ok(s) => output_from_cmd.push_str(&s.to_owned()),
+            Err(e) => error!("Error while getting stdout from {} {}", binary_name, e),
+        },
+        |r_err| match r_err {
+            Ok(s) => error!("Error executing {}", binary_name),
+            Err(e) => error!("Error while getting stderr from {} {}", binary_name, e),
+        },
+    );
+    output_from_cmd
+}
 
 pub fn does_binary_exist<S>(binary: S) -> bool
 where

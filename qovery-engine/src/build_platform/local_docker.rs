@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use crate::build_platform::error::BuildPlatformError;
-use std::path::Path;
 use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image, Kind};
 use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
@@ -9,8 +8,9 @@ use crate::models::{
     Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope, ProgressStep,
 };
-use crate::{cmd, git};
 use crate::transaction::CommitError::BuildImage;
+use crate::{cmd, git};
+use std::path::Path;
 
 /// use Docker in local
 pub struct LocalDocker {
@@ -132,7 +132,7 @@ impl BuildPlatform for LocalDocker {
             dockerfile_root_path => format!("{}/{}/.", into_dir.as_str(), dockerfile_root_path),
         };
 
-        let exist =  Path::new(dockerfile_dir.as_str()).exists();
+        let exist = Path::new(dockerfile_dir.as_str()).exists();
         match exist {
             false => {
                 error!("Unable to find Dockerfile path {}", dockerfile_dir.as_str());

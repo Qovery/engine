@@ -1,5 +1,5 @@
-mod postgres;
 mod mysql;
+mod postgres;
 mod utilities;
 
 pub use mysql::MySQL;

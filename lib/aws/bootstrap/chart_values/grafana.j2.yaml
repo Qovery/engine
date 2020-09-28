@@ -318,13 +318,31 @@ datasources:
         url: "http://prometheus-operator-prometheus:9090"
         access: proxy
         isDefault: true
+      - name: PromLoki
+        type: prometheus
+        url: "http://loki.logging.svc:3100/loki"
+        access: proxy
+        isDefault: false
+      - name: Loki
+        type: loki
+        url: "http://loki.logging.svc:3100"
 
 ## Configure notifiers
 ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
 ##
-notifiers: {}
-#  notifiers.yaml:
-#    notifiers:
+notifiers:
+  notifiers.yaml:
+    notifiers:
+      - name: "Interrupt alerts"
+        type: discord
+        uid: qovery_discord_interrupt
+        is_default: true
+        send_reminder: true
+        frequency: 2h
+        disable_resolve_message: false
+        settings:
+          content: "{{ eks_cluster_id }}"
+          url: "https://discordapp.com/api/webhooks/758971034547388447/IScxN6NDHDsWZ0rIVBD3g4R-ecgmS_kzqvaxRmfEEAmYJ9_wFCQKXegTHSMNJ7ZLlRl6"
 #    - name: email-notifier
 #      type: email
 #      uid: email1
@@ -374,9 +392,11 @@ dashboards:
     detailed-pods-resources:
       file: dashboards/detailed-pods-resources.json
     client-pod-usage:
-      file: client_pod_usage.json
+      file: dashboards/client_pod_usage.json
     kubernetes-capacity-planning:
-      file: kubernetes-capacity-planning.json
+      file: dashboards/kubernetes-capacity-planning.json
+    engine:
+      file: dashboards/engine.json
   #  node-exporter:
   #    gnetId: 18785
   #    revision: 22
@@ -467,8 +487,8 @@ smtp:
   # `existingSecret` is a reference to an existing secret containing the smtp configuration
   # for Grafana.
   existingSecret: ""
-  userKey: "user"
-  passwordKey: "password"
+  userKey: "qovery"
+  passwordKey: "meiWaeph7ImohWee"
 
 ## Sidecars that collect the configmaps with specified label and stores the included files them into the respective folders
 ## Requires at least Grafana 5 to work and can't be used together with parameters dashboardProviders, datasources and dashboards

@@ -1,5 +1,6 @@
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::databases::utilities;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -21,6 +22,7 @@ pub struct PostgreSQL {
     fqdn_id: String,
     total_cpus: String,
     total_ram_in_mib: u32,
+    database_instance_type: String,
     options: DatabaseOptions,
 }
 
@@ -35,6 +37,7 @@ impl PostgreSQL {
         fqdn_id: &str,
         total_cpus: String,
         total_ram_in_mib: u32,
+        database_instance_type: &str,
         options: DatabaseOptions,
     ) -> Self {
         PostgreSQL {
@@ -47,6 +50,7 @@ impl PostgreSQL {
             fqdn_id: fqdn_id.to_string(),
             total_cpus,
             total_ram_in_mib,
+            database_instance_type: database_instance_type.to_string(),
             options,
         }
     }
@@ -104,10 +108,10 @@ impl PostgreSQL {
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
-        context.insert("database_instance_type", "db.t2.micro"); // TODO customizable
-        context.insert("database_disk_type", "gp2"); // TODO customizable
-        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib); // TODO customizable
-        context.insert("database_total_cpus", &self.total_cpus); // TODO customizable
+        context.insert("database_instance_type", &self.database_instance_type);
+        context.insert("database_disk_type", &self.options.database_disk_type);
+        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
+        context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
 

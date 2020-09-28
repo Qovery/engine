@@ -5,7 +5,9 @@ use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 
+use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::build_platform_local_docker;
+use qovery_engine::dns_provider::cloudflare::Cloudflare;
 
 //TODO: should be environment var
 pub const DIGITAL_OCEAN_TOKEN: &str =
@@ -23,11 +25,15 @@ pub fn docker_cr_do_engine(context: &Context) -> Engine {
     let build_platform = Box::new(build_platform_local_docker(context));
     // use Digital Ocean
     let cloud_provider = Box::new(cloud_provider_digitalocean(context));
+
+    let dns_provider = Box::new(dns_provider_cloudflare(context));
+
     Engine::new(
         context.clone(),
         build_platform,
         container_registry,
         cloud_provider,
+        dns_provider,
     )
 }
 

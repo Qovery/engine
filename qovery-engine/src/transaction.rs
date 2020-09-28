@@ -235,7 +235,10 @@ impl<'a> Transaction<'a> {
         for result in application_and_push_results.into_iter() {
             match result {
                 Ok(tuple) => results.push(tuple),
-                Err(err) => return Err(err), // stop on error // TODO add error! log message here
+                Err(err) => {
+                    error!("error pushing docker image {:?}", err);
+                    return Err(err);
+                }
             }
         }
 

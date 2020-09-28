@@ -1981,6 +1981,7 @@ dependencies = [
  "rusoto_sts",
  "rust-crypto",
  "serde",
+ "serde_derive",
  "serde_json",
  "tar",
  "tera",
@@ -2965,6 +2966,9 @@ dependencies = [
  "env_logger",
  "qovery-engine",
  "rand 0.7.3",
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
