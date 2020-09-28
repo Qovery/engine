@@ -59,12 +59,12 @@ resource "helm_release" "qovery_engine_resources" {
   # Limits
   set {
     name = "resources.limits.cpu"
-    value = "200m"
+    value = "1"
   }
 
   set {
     name = "resources.requests.cpu"
-    value = "200m"
+    value = "500m"
   }
 
   set {
