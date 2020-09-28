@@ -35,7 +35,7 @@ data "aws_iam_role" "rds_enhanced_monitoring" {
 resource "helm_release" "mysql_instance_external_name" {
   name = "${aws_db_instance.mysql_instance.id}-externalname"
   chart = "external-name-svc"
-  namespace = "tbd"
+  namespace = "{{namespace}}"
   atomic = true
   max_history = 50
 
@@ -46,6 +46,10 @@ resource "helm_release" "mysql_instance_external_name" {
   set {
     name = "source_fqdn"
     value = "{{database_fqdn}}"
+  }
+  set {
+    name = "app_id"
+    value = "{{database_id}}"
   }
 
   depends_on = [

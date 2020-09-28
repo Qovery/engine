@@ -738,7 +738,7 @@ where
             true => {
                 return Err(CmdError::Io(Error::new(
                     std::io::ErrorKind::Other,
-                    "Namespace contains terraform tfates in secret, can't delete it !",
+                    "Namespace contains terraform tfstates in secret, can't delete it !",
                 )));
             }
             false => info!(
@@ -746,8 +746,11 @@ where
                 namespace
             ),
         },
-        Err(e) => error!("Unable to execute describe on secrets: {}", e),
-    }
+        Err(e) => warn!(
+            "Unable to execute describe on secrets: {}. it may not exist anymore?",
+            e
+        ),
+    }?;
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -890,7 +893,12 @@ pub enum CmdError {
 
 impl Display for CmdError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CmdError: {}", self.to_string())
+        let s = match self {
+            CmdError::Exec(status) => format!("CmdError: Exec({})", status),
+            CmdError::Io(io) => format!("CmdError: IO: {}", io),
+            CmdError::Unexpected(s) => format!("CmdError: Unexpected: {}", s),
+        };
+        write!(f, "{}", s)
     }
 }
 impl std::error::Error for CmdError {}
