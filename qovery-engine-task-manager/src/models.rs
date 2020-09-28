@@ -28,7 +28,9 @@ pub struct Request {
     pub cloud_provider: CloudProvider,
     pub dns_provider: DnsProvider,
     pub container_registry: ContainerRegistry,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_environment: Option<Environment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub failover_environment: Option<Environment>,
 }
 

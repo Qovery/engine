@@ -5,7 +5,7 @@ extern crate serde;
 
 use std::borrow::Borrow;
 use std::fs::File;
-use std::io::{BufRead, Error, Read, Write};
+use std::io::{BufRead, BufReader, Error, Read, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -346,6 +346,11 @@ pub fn main() -> Result<(), Error> {
         "{}/.qovery-workspace",
         home_dir().unwrap().to_str().unwrap()
     ));
+    let deploy_from_file;
+    match env::var("DEPLOY_FROM_FILE") {
+        Ok(val) => deploy_from_file = val,
+        Err(_e) => deploy_from_file = "".to_string(),
+    }
 
     info!(
         "running from current directory: {}",
@@ -400,6 +405,80 @@ pub fn main() -> Result<(), Error> {
         Mode::Local
     };
 
+    match deploy_from_file.len() {
+        0 => using_nats_server(
+            nats_server,
+            workspace_root_dir,
+            lib_root_dir,
+            docker_host,
+            mode,
+        ),
+        _ => using_json_path_parameter(
+            deploy_from_file,
+            workspace_root_dir,
+            lib_root_dir,
+            docker_host,
+            mode,
+        ),
+    }
+}
+
+// the engine can be launch using a json file given in parameter
+pub fn using_json_path_parameter(
+    deploy_from_file: String,
+    workspace_root_dir: String,
+    lib_root_dir: String,
+    docker_host: Option<String>,
+    mode: Mode,
+) -> Result<(), Error> {
+    let pre_run_callback = Box::new(|task: &dyn Task| true);
+
+    // check if file json config file exist
+    match check_if_file_exist(&deploy_from_file) {
+        false => {
+            error!("{} : No such file or directory", deploy_from_file);
+            process::exit(1);
+        }
+        true => info! {"Using {} configuration file", deploy_from_file},
+    }
+    let (tx_task, rx_task) = unbounded::<Box<dyn Task>>();
+    let task_manager = Arc::new(Mutex::new(TaskManager::new()));
+    let file = File::open(deploy_from_file)?;
+    let reader = BufReader::new(file);
+    let json_from_file: Result<Request, _> = serde_json::from_reader(reader);
+    match json_from_file {
+        Ok(req) => {
+            let context = Context::new(
+                req.id.as_str(),
+                workspace_root_dir.as_str(),
+                lib_root_dir.as_str(),
+                docker_host,
+            );
+
+            tx_task.send(Box::new(InfrastructureTask::new(
+                context,
+                req,
+                pre_run_callback,
+            )));
+        }
+        _ => error!("Error parsing the json conf file given in parameter"),
+    }
+    loop {
+        let task = rx_task.recv().unwrap();
+        task_manager.lock().unwrap().add_task(task);
+        task_manager.lock().unwrap().run();
+    }
+    Ok(())
+}
+
+// the engine can be autonomous using the nats server to receive actions
+pub fn using_nats_server(
+    nats_server: String,
+    workspace_root_dir: String,
+    lib_root_dir: String,
+    docker_host: Option<String>,
+    mode: Mode,
+) -> Result<(), Error> {
     info!("NATS server: {}", nats_server.as_str());
 
     let name = match &mode {

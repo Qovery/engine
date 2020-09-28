@@ -19,6 +19,15 @@
       "region": "us-east-2"
     }
   },
+  "dns_provider": {
+    "kind": "CLOUDFLARE",
+    "id": "qoverycloudflar5",
+    "name": "Qovery Cloudflare",
+    "options": {
+      "cloudflare_email": "dns@qovery.com",
+      "cloudflare_api_token": "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7"
+    }
+  },
   "cloud_provider": {
     "kind": "AWS",
     "id": "my-aws-id-123",
@@ -30,33 +39,25 @@
     "kubernetes": {
       "kind": "EKS",
       "id": "my-eks-on-us-east-2",
-      "name": "my-default-eks",
+      "name": "my-eks-us-east-2",
       "version": "1.16",
       "region": "us-east-2",
       "nodes": [
         {
-          "cpu": 1,
-          "memory_in_gib": 2
-        },
-        {
-          "cpu": 1,
-          "memory_in_gib": 2
-        },
-        {
-          "cpu": 1,
-          "memory_in_gib": 2
+          "cpu": 2,
+          "memory_in_gib": 16
         },
         {
           "cpu": 2,
-          "memory_in_gib": 4
+          "memory_in_gib": 16
         },
         {
           "cpu": 2,
-          "memory_in_gib": 4
+          "memory_in_gib": 16
         },
         {
           "cpu": 2,
-          "memory_in_gib": 4
+          "memory_in_gib": 16
         }
       ],
       "options": {
@@ -187,7 +188,7 @@
         "documentdb_cidr_subnet": "23",
         "elasticsearch_cidr_subnet": "23",
         "managed_dns": [
-          "qovery.io"
+          "oom.sh"
         ]
       }
     }
