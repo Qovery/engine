@@ -58,7 +58,7 @@ resource "helm_release" "loki" {
 
   set {
     name = "config.storage_config.aws.s3"
-    value = "s3://${aws_iam_access_key.iam_eks_loki.id}:${aws_iam_access_key.iam_eks_loki.secret}@${var.region}/${aws_s3_bucket.loki_bucket.bucket}"
+    value = "s3://${urlencode(aws_iam_access_key.iam_eks_loki.id)}:${urlencode(aws_iam_access_key.iam_eks_loki.secret)}@${var.region}/${aws_s3_bucket.loki_bucket.bucket}"
   }
 
   set {
