@@ -1,7 +1,7 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: {{}}
+  name: db-dns-{{.Values.app_id}}
   labels:
     appId: 
   annotations:

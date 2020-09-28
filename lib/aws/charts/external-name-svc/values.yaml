@@ -1,2 +1,3 @@
-target_hostname: ""
-source_fqdn: ""
+target_hostname: "{{}}"
+source_fqdn: "{{fqdn}}"
+app_id: "{{database_id}}"

@@ -144,6 +144,15 @@ impl MySQL {
                         self.context.lib_root_dir()
                     )
                     .as_str(),
+                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
@@ -252,6 +261,15 @@ impl Create for MySQL {
                 crate::template::generate_and_copy_all_files_into_dir(
                     format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
                     workspace_dir.as_str(),
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
+                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
                     &context,
                 )?;
 

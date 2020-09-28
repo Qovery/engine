@@ -65,6 +65,37 @@ impl PostgreSQL {
 
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
+        // FIXME: is there an other way than downcast a pointer?
+        let cp = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<AWS>()
+            .expect("Could not downcast kubernetes.cloud_provider() to AWS");
+        // we need the kubernetes config file to store tfstates file in kube secrets
+        let kubernetes_config_file_path = utilities::get_kubernetes_config_path(
+            self.workspace_directory().as_str(),
+            kubernetes,
+            environment,
+        );
+        match kubernetes_config_file_path {
+            Ok(kube_config) => {
+                context.insert("kubeconfig_path", &kube_config.as_str());
+                let aws = kubernetes
+                    .cloud_provider()
+                    .as_any()
+                    .downcast_ref::<AWS>()
+                    .unwrap();
+
+                utilities::create_namespace(&environment.namespace(), kube_config.as_str(), aws);
+            }
+            Err(e) => error!("Failed to generate the kubernetes config file path: {}", e),
+        }
+        context.insert("namespace", environment.namespace());
+
+        context.insert("aws_access_key", &cp.access_key_id);
+        context.insert("aws_secret_key", &cp.secret_access_key);
+        context.insert("eks_cluster_id", kubernetes.id());
+        context.insert("eks_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
@@ -78,6 +109,7 @@ impl PostgreSQL {
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib); // TODO customizable
         context.insert("database_total_cpus", &self.total_cpus); // TODO customizable
         context.insert("database_fqdn", &self.options.host.as_str());
+        context.insert("database_id", &self.id());
 
         context
     }
@@ -94,16 +126,49 @@ impl PostgreSQL {
 
                 let context = self.tera_context(*kubernetes, *environment);
 
-                let from_dir = format!("{}/aws/services/postgresql", self.context.lib_root_dir());
-                let _ = crate::template::generate_and_copy_all_files_into_dir(
-                    from_dir.as_str(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                    &workspace_dir,
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/postgres", self.context.lib_root_dir()).as_str(),
+                    workspace_dir.as_str(),
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
+                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
 
-                let _ = crate::cmd::terraform_exec_with_init_validate_plan_destroy(
+                match crate::cmd::terraform_exec_with_init_validate_plan_destroy(
                     workspace_dir.as_str(),
-                )?;
+                ) {
+                    Ok(o) => {
+                        info!("Deleting secrets containing tfstates");
+                        utilities::delete_terraform_tfstate_secret(
+                            *kubernetes,
+                            environment,
+                            self.workspace_directory().as_str(),
+                        );
+                    }
+                    //TODO: find a way to raise the error
+                    Err(e) => error!("Error while destroying infrastructure {}", e),
+                }
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 let helm_release_name = self.helm_release_name();
