@@ -1,4 +1,4 @@
-{%- if routes|length > 1  %}
+{%- if routes|length >= 1  %}
 {%- for custom_domain in custom_domains %}
 {%- if custom_domain.target_domain %}
 ---
