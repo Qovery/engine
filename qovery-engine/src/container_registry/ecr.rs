@@ -1,12 +1,12 @@
 use std::rc::Rc;
 use std::str::FromStr;
 
-use rusoto_core::{Client, HttpClient, Region};
+use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesRequest, Ecr, EcrClient,
-    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest,
-    Repository,
+    CreateRepositoryError, CreateRepositoryRequest, DescribeImagesRequest,
+    DescribeRepositoriesRequest, Ecr, EcrClient, GetAuthorizationTokenRequest, ImageDetail,
+    ImageIdentifier, PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -152,7 +152,10 @@ impl ECR {
 
         let r = async_run(self.ecr_client().create_repository(crr));
         match r {
-            Err(err) => return Err(ContainerRegistryError::from(err)),
+            Err(err) => match err {
+                RusotoError::Service(ref err) => info!("{:?}", err),
+                _ => return Err(ContainerRegistryError::from(err)),
+            },
             _ => {}
         }
 

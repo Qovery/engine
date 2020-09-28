@@ -127,15 +127,22 @@ impl BuildPlatform for LocalDocker {
         // git checkout submodules
         checkout_submodules(&repo);
 
-        let dockerfile_dir = match build.git_repository.dockerfile_path.trim() {
-            "" | "." | "/" | "/." | "./" => format!("{}/.", into_dir.as_str()),
-            dockerfile_root_path => format!("{}/{}", into_dir.as_str(), dockerfile_root_path),
+        let into_dir_docker_style = format!("{}/.", into_dir.as_str());
+
+        let dockerfile_relative_path = match build.git_repository.dockerfile_path.trim() {
+            "" | "." | "/" | "/." | "./" => "Dockerfile",
+            dockerfile_root_path => dockerfile_root_path,
         };
 
-        let exist = Path::new(dockerfile_dir.as_str()).exists();
-        match exist {
+        let dockerfile_complete_path =
+            format!("{}/{}", into_dir.as_str(), dockerfile_relative_path);
+
+        match Path::new(dockerfile_complete_path.as_str()).exists() {
             false => {
-                error!("Unable to find Dockerfile path {}", dockerfile_dir.as_str());
+                error!(
+                    "Unable to find Dockerfile path {}",
+                    dockerfile_complete_path.as_str()
+                );
                 return Err(BuildError::Error);
             }
             _ => {}
@@ -149,17 +156,16 @@ impl BuildPlatform for LocalDocker {
             .collect::<Vec<_>>();
 
         let name_with_tag = build.image.name_with_tag();
-        let mut args = vec![
+        let mut docker_args = vec![
             "build",
             "-f",
-            dockerfile_dir.as_str(),
+            dockerfile_complete_path.as_str(),
             "-t",
             name_with_tag.as_str(),
-            ".",
         ];
 
-        let final_args = if env_var_args.is_empty() {
-            args
+        let mut docker_args = if env_var_args.is_empty() {
+            docker_args
         } else {
             let mut build_args = vec![];
             env_var_args.iter().for_each(|x| {
@@ -167,9 +173,11 @@ impl BuildPlatform for LocalDocker {
                 build_args.push(x.as_str());
             });
 
-            args.extend(build_args);
-            args
+            docker_args.extend(build_args);
+            docker_args
         };
+
+        docker_args.push(into_dir_docker_style.as_str());
 
         let envs = match self.context.docker_tcp_socket() {
             Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
@@ -179,7 +187,7 @@ impl BuildPlatform for LocalDocker {
         // docker build
         let exit_status = cmd::exec_with_envs_and_output(
             "docker",
-            final_args,
+            docker_args,
             envs,
             |line| {
                 let line_string = line.unwrap();

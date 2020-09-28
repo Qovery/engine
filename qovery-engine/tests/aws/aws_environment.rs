@@ -9,7 +9,7 @@ use qovery_engine::models::{
     Action, Clone2, Context, CustomDomain, Database, DatabaseKind, Environment, EnvironmentAction,
     EnvironmentVariable, ExternalService, GitCredentials, Kind, Storage, StorageType,
 };
-use qovery_engine::transaction::TransactionResult;
+use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::aws::context;
 use test_utilities::utilities::init;
 
@@ -47,7 +47,14 @@ fn deploy_environment(
 
     let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
 
-    tx.deploy_environment(&k, &environment_action);
+    tx.deploy_environment_with_options(
+        &k,
+        &environment_action,
+        DeploymentOption {
+            force_build: true,
+            force_push: true,
+        },
+    );
 
     tx.commit()
 }

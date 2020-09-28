@@ -684,8 +684,8 @@ impl<'a> Transaction<'a> {
 
 #[derive(Clone)]
 pub struct DeploymentOption {
-    force_build: bool,
-    force_push: bool,
+    pub force_build: bool,
+    pub force_push: bool,
 }
 
 enum Step<'a> {
