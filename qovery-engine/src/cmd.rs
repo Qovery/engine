@@ -1068,7 +1068,6 @@ struct KubernetesPodStatus {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "camelCase")]
 enum KubernetesPodStatusPhase {
     Pending,
     Running,
