@@ -1,29 +1,41 @@
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version    = "~> 2.63"
+    }
+    external = {
+      source = "hashicorp/external"
+      version = "~> 1.2"
+    }
+    helm = {
+      source = "hashicorp/helm"
+      version = "~> 1.2"
+    }
+    local = {
+      source = "hashicorp/local"
+      version = "~> 1.4"
+    }
+    null = {
+      source = "hashicorp/null"
+      version = "~> 2.1"
+    }
+    random = {
+      source = "hashicorp/random"
+      version = "~> 2.3"
+    }
+  }
+  required_version = ">= 0.13"
+}
+
 provider "aws" {
   profile    = "default"
   access_key = "{{ aws_access_key }}"
   secret_key = "{{ aws_secret_key }}"
   region     = "{{ aws_region }}"
-  version    = "~> 2.63"
-}
-
-provider "local" {
-  version = "~> 1.4"
-}
-
-provider "external" {
-  version = "~> 1.2"
-}
-
-provider "null" {
-  version = "~> 2.1"
-}
-
-provider "random" {
-  version = "~> 2.3"
 }
 
 provider "helm" {
-  version = "~> 1.2"
   kubernetes {
     host = aws_eks_cluster.eks_cluster.endpoint
     cluster_ca_certificate = base64decode(aws_eks_cluster.eks_cluster.certificate_authority.0.data)
