@@ -559,7 +559,7 @@ where
     ))
 }
 
-pub fn kubectl_exec_is_application_ready_with_retry<P>(
+pub fn kubectl_exec_is_pod_ready_with_retry<P>(
     kubernetes_config: P,
     namespace: &str,
     selector: &str,
@@ -570,7 +570,7 @@ where
 {
     // TODO check this
     let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
-        let r = crate::cmd::kubectl_exec_is_application_ready(
+        let r = crate::cmd::kubectl_exec_is_pod_ready(
             kubernetes_config.as_ref(),
             namespace,
             selector,
@@ -581,7 +581,7 @@ where
             Ok(is_ready) => match is_ready {
                 Some(true) => OperationResult::Ok(true),
                 _ => {
-                    let t = format!("application with selector: {} is not ready yet", selector);
+                    let t = format!("pod with selector: {} is not ready yet", selector);
                     info!("{}", t.as_str());
                     OperationResult::Retry(t)
                 }
@@ -603,7 +603,7 @@ where
     }
 }
 
-pub fn kubectl_exec_is_application_ready<P>(
+pub fn kubectl_exec_is_pod_ready<P>(
     kubernetes_config: P,
     namespace: &str,
     selector: &str,
@@ -658,11 +658,105 @@ where
     }
 
     let first_item = result.items.first().unwrap();
-    let container_statuses = &first_item.status.container_statuses;
 
-    let is_ready = container_statuses.iter().find(|cs| !cs.ready).is_none();
+    let is_ready = match first_item.status.phase {
+        KubernetesPodStatusPhase::Running => true,
+        _ => false,
+    };
 
     Ok(Some(is_ready))
+}
+
+pub fn kubectl_exec_is_job_ready_with_retry<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    job_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<bool>, CmdError>
+where
+    P: AsRef<Path>,
+{
+    // TODO check this
+    let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
+        let r = crate::cmd::kubectl_exec_is_job_ready(
+            kubernetes_config.as_ref(),
+            namespace,
+            job_name,
+            envs.clone(),
+        );
+
+        match r {
+            Ok(is_ready) => match is_ready {
+                Some(true) => OperationResult::Ok(true),
+                _ => {
+                    let t = format!("job {} is not ready yet", job_name);
+                    info!("{}", t.as_str());
+                    OperationResult::Retry(t)
+                }
+            },
+            Err(err) => OperationResult::Err(format!("command error: {:?}", err)),
+        }
+    });
+
+    match result {
+        Err(err) => match err {
+            retry::Error::Operation {
+                error: _,
+                total_delay: _,
+                tries: _,
+            } => Ok(Some(false)),
+            retry::Error::Internal(err) => Err(CmdError::Unexpected(err)),
+        },
+        Ok(_) => Ok(Some(true)),
+    }
+}
+
+pub fn kubectl_exec_is_job_ready<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    job_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<bool>, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let mut output_vec: Vec<String> = Vec::with_capacity(20);
+    let _ = kubectl_exec_with_output(
+        vec!["get", "job", "-o", "json", "-n", namespace, job_name],
+        _envs,
+        |out| match out {
+            Ok(line) => output_vec.push(line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+
+    let output_string: String = output_vec.join("");
+
+    let result = match serde_json::from_str::<KubernetesJob>(output_string.as_str()) {
+        Ok(x) => x,
+        Err(err) => {
+            error!("{:?}", err);
+            error!("{}", output_string.as_str());
+            return Err(CmdError::Io(Error::new(
+                std::io::ErrorKind::InvalidData,
+                output_string,
+            )));
+        }
+    };
+
+    if result.status.succeeded > 0 {
+        return Ok(Some(true));
+    }
+
+    Ok(Some(false))
 }
 
 pub fn kubectl_exec_create_namespace<P>(
@@ -693,7 +787,7 @@ where
     Ok(())
 }
 
-pub fn is_contains_terraform_tfstate<P>(
+pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: &Vec<(&str, &str)>,
@@ -714,11 +808,11 @@ where
         ],
         _envs,
         |out| match out {
-            Ok(line) => exist = true,
+            Ok(_line) => exist = true,
             Err(err) => error!("{:?}", err),
         },
         |out| match out {
-            Ok(line) => {}
+            Ok(_line) => {}
             Err(err) => error!("{:?}", err),
         },
     )?;
@@ -733,7 +827,7 @@ pub fn kubectl_exec_delete_namespace<P>(
 where
     P: AsRef<Path>,
 {
-    match is_contains_terraform_tfstate(&kubernetes_config, &namespace, &envs) {
+    match does_contain_terraform_tfstate(&kubernetes_config, &namespace, &envs) {
         Ok(exist) => match exist {
             true => {
                 return Err(CmdError::Io(Error::new(
@@ -968,10 +1062,35 @@ struct KubernetesPod {
 #[serde(rename_all = "camelCase")]
 struct KubernetesPodStatus {
     pub container_statuses: Vec<KubernetesPodContainerStatus>,
+    // read the doc: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/
+    // phase can be Pending, Running, Succeeded, Failed, Unknown
+    pub phase: KubernetesPodStatusPhase,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+enum KubernetesPodStatusPhase {
+    Pending,
+    Running,
+    Succeeded,
+    Failed,
+    Unknown,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
 struct KubernetesPodContainerStatus {
     pub ready: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+struct KubernetesJob {
+    pub status: KubernetesJobStatus,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+struct KubernetesJobStatus {
+    pub succeeded: u32,
 }

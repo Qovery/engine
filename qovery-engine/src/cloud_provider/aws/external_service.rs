@@ -239,12 +239,10 @@ impl Create for ExternalService {
         }
 
         // check job status
-        let selector = format!("app={}", self.name());
-
-        match crate::cmd::kubectl_exec_is_application_ready_with_retry(
+        match crate::cmd::kubectl_exec_is_job_ready_with_retry(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
-            selector.as_str(),
+            self.name.as_str(),
             aws_credentials_envs,
         ) {
             Ok(Some(true)) => {}

@@ -267,7 +267,7 @@ impl Create for Application {
         // check app status
         let selector = format!("app={}", self.name());
 
-        match crate::cmd::kubectl_exec_is_application_ready_with_retry(
+        match crate::cmd::kubectl_exec_is_pod_ready_with_retry(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             selector.as_str(),
