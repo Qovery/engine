@@ -750,7 +750,7 @@ where
             "Unable to execute describe on secrets: {}. it may not exist anymore?",
             e
         ),
-    }?;
+    };
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));

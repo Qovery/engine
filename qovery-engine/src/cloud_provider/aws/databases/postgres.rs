@@ -136,7 +136,7 @@ impl PostgreSQL {
                     &context,
                 )?;
                 crate::template::generate_and_copy_all_files_into_dir(
-                    format!("{}/aws/services/postgres", self.context.lib_root_dir()).as_str(),
+                    format!("{}/aws/services/postgresql", self.context.lib_root_dir()).as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
@@ -256,18 +256,32 @@ impl Create for PostgreSQL {
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
-                info!("deploy PostgreSQL on AWS RDS for {}", self.name());
-
+                info!("deploy postgresql on AWS RDS for {}", self.name());
                 let context = self.tera_context(*kubernetes, *environment);
 
-                let from_dir = format!("{}/aws/services/postgresql", self.context.lib_root_dir());
-                let _ = crate::template::generate_and_copy_all_files_into_dir(
-                    from_dir.as_str(),
+                let workspace_dir = self.workspace_directory();
+
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                    &workspace_dir,
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/postgresql", self.context.lib_root_dir()).as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
+                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
+                    &context,
+                )?;
 
-                let _ = crate::cmd::terraform_exec_with_init_validate_plan_apply(
+                crate::cmd::terraform_exec_with_init_validate_plan_apply(
                     workspace_dir.as_str(),
                     false,
                 )?;

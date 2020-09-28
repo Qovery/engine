@@ -32,6 +32,37 @@ data "aws_iam_role" "rds_enhanced_monitoring" {
   name = "${var.region}-${var.cluster_name}-rds-enhanced-monitoring"
 }
 
+
+data "aws_iam_role" "rds_enhanced_monitoring" {
+  name = "rds-enhanced-monitoring-${var.eks_cluster_id}"
+}
+
+resource "helm_release" "postgres_instance_external_name" {
+  name = "${aws_db_instance.postgres_instance.id}-externalname"
+  chart = "external-name-svc"
+  namespace = "{{namespace}}"
+  atomic = true
+  max_history = 50
+
+  set {
+    name = "target_hostname"
+    value = aws_db_instance.postgres_instance.address
+  }
+  set {
+    name = "source_fqdn"
+    value = "{{database_fqdn}}"
+  }
+  set {
+    name = "app_id"
+    value = "{{database_id}}"
+  }
+
+  depends_on = [
+    aws_db_instance.postgres_instance
+  ]
+}
+
+
 # Non snapshoted version
 resource "aws_db_instance" "postgresql_instance" {
   identifier = var.postgresql_identifier
@@ -43,7 +74,7 @@ resource "aws_db_instance" "postgresql_instance" {
     q_environment_id = var.q_environment_id
     q_project_id = var.q_project_id
     database_identifier = var.postgresql_identifier
-    {% if service_info["snapshot"]["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
+    {% if snapshot and snapshot["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
   }
 
   # Postgres instance basics
@@ -55,7 +86,7 @@ resource "aws_db_instance" "postgresql_instance" {
     delete = "60m"
   }
   password = var.password
-  {%- if service_info["snapshot"]["snapshot_id"] %}
+  {%- if snapshot and snapshot["snapshot_id"] %}
   # Snapshot
   snapshot_identifier = var.snapshot_identifier
   {%- else %}
