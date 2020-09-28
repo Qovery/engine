@@ -183,7 +183,7 @@ fn terraform_exec_with_init_validate_plan(
 ) -> Result<(), CmdError> {
     // terraform init
     let init_args = if first_time_init_terraform {
-        vec!["init", "-backend-config=backend.tf"]
+        vec!["init"]
     } else {
         vec!["init"]
     };
