@@ -188,7 +188,7 @@ pub struct DatabaseOptions {
     pub host: String,
     pub port: u16,
     pub disk_size_in_gib: u32,
-    // TODO add others fields
+    pub database_disk_type: String,
 }
 
 #[derive(Eq, PartialEq)]

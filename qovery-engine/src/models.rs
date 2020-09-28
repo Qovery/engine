@@ -413,6 +413,8 @@ pub struct Database {
     pub total_cpus: String,
     pub total_ram_in_mib: u32,
     pub disk_size_in_gib: u32,
+    pub database_instance_type: String,
+    pub database_disk_type: String,
 }
 
 impl Database {
@@ -434,12 +436,14 @@ impl Database {
                         self.fqdn_id.as_str(),
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
                         DatabaseOptions {
                             login: self.username.clone(),
                             password: self.password.clone(),
                             host: self.fqdn.clone(),
                             port: self.port,
                             disk_size_in_gib: self.disk_size_in_gib,
+                            database_disk_type: self.database_disk_type.clone(),
                         },
                     ));
 
@@ -456,12 +460,14 @@ impl Database {
                         self.fqdn_id.as_str(),
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
                         DatabaseOptions {
                             login: self.username.clone(),
                             password: self.password.clone(),
                             host: self.fqdn.clone(),
                             port: self.port,
                             disk_size_in_gib: self.disk_size_in_gib,
+                            database_disk_type: self.database_disk_type.clone(),
                         },
                     ));
 

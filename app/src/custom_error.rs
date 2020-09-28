@@ -1,11 +1,10 @@
 use std::error::Error;
-use std::fmt::Display;
 use std::fmt;
-
+use std::fmt::Display;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum EngineInitError {
-    Regular(ErrorKind)
+    Regular(ErrorKind),
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

@@ -218,13 +218,13 @@ pub fn terraform_exec_with_init_validate_plan_destroy(root_dir: &str) -> Result<
     terraform_exec_with_init_validate_plan(root_dir, false);
 
     // terraform destroy
-    terraform_exec(root_dir, vec!["destroy", "-auto-approve"]);
+    terraform_exec(root_dir, vec!["destroy", "-auto-approve"])?;
 
     Ok(())
 }
 
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
-    let home_dir = home_dir().unwrap();
+    let home_dir = home_dir().expect("Could not find $HOME");
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
 
     match exec_with_envs_and_output(
@@ -387,7 +387,7 @@ where
         },
     ) {
         Ok(_) => info!("Helm history success for release name: {}", release_name),
-        Err(_) => info!("Helm history found for release name: {}",release_name),
+        Err(_) => info!("Helm history found for release name: {}", release_name),
     };
     // TODO better check, release not found
 
@@ -454,18 +454,17 @@ where
 }
 // return the output of "binary_name" --version
 pub fn run_version_command_for(binary_name: &str) -> String {
-
     let mut output_from_cmd = String::new();
     exec_with_output(
         binary_name,
         vec!["--version"],
         |r_out| match r_out {
             Ok(s) => output_from_cmd.push_str(&s.to_owned()),
-            Err(e) => error!("Error while getting stdout from {} {}",binary_name, e),
+            Err(e) => error!("Error while getting stdout from {} {}", binary_name, e),
         },
         |r_err| match r_err {
-            Ok(s) => error!("Error executing {}",binary_name),
-            Err(e) => error!("Error while getting stderr from {} {}",binary_name, e),
+            Ok(s) => error!("Error executing {}", binary_name),
+            Err(e) => error!("Error while getting stderr from {} {}", binary_name, e),
         },
     );
     output_from_cmd
@@ -694,9 +693,88 @@ where
     Ok(())
 }
 
+pub fn is_contains_terraform_tfstate<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    envs: &Vec<(&str, &str)>,
+) -> Result<bool, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+    let mut exist = true;
+    let _ = kubectl_exec_with_output(
+        vec![
+            "describe",
+            "secrets/tfstate-default-state",
+            "--namespace",
+            namespace,
+        ],
+        _envs,
+        |out| match out {
+            Ok(line) => exist = true,
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => {}
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+    Ok(exist)
+}
+
 pub fn kubectl_exec_delete_namespace<P>(
     kubernetes_config: P,
     namespace: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), CmdError>
+where
+    P: AsRef<Path>,
+{
+    match is_contains_terraform_tfstate(&kubernetes_config, &namespace, &envs) {
+        Ok(exist) => match exist {
+            true => {
+                return Err(CmdError::Io(Error::new(
+                    std::io::ErrorKind::Other,
+                    "Namespace contains terraform tfstates in secret, can't delete it !",
+                )));
+            }
+            false => info!(
+                "Namespace {} doesn't contain any tfstates, able to delete it",
+                namespace
+            ),
+        },
+        Err(e) => warn!(
+            "Unable to execute describe on secrets: {}. it may not exist anymore?",
+            e
+        ),
+    };
+
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let _ = kubectl_exec_with_output(
+        vec!["delete", "namespace", namespace],
+        _envs,
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+
+    Ok(())
+}
+
+pub fn kubectl_exec_delete_secret<P>(
+    kubernetes_config: P,
+    secret: &str,
     envs: Vec<(&str, &str)>,
 ) -> Result<(), CmdError>
 where
@@ -707,7 +785,7 @@ where
     _envs.extend(envs);
 
     let _ = kubectl_exec_with_output(
-        vec!["delete", "namespace", namespace],
+        vec!["delete", "secret", secret],
         _envs,
         |out| match out {
             Ok(line) => info!("{}", line),
@@ -815,7 +893,12 @@ pub enum CmdError {
 
 impl Display for CmdError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CmdError: {}", self.to_string())
+        let s = match self {
+            CmdError::Exec(status) => format!("CmdError: Exec({})", status),
+            CmdError::Io(io) => format!("CmdError: IO: {}", io),
+            CmdError::Unexpected(s) => format!("CmdError: Unexpected: {}", s),
+        };
+        write!(f, "{}", s)
     }
 }
 impl std::error::Error for CmdError {}

@@ -1,10 +1,7 @@
-
 use std::fs;
 use std::fs::{create_dir_all, File};
-use std::io::{Error};
+use std::io::Error;
 use std::path::Path;
-
-
 
 use flate2::write::GzEncoder;
 use flate2::Compression;

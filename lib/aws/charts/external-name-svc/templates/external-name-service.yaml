@@ -1,0 +1,11 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: db-dns-{{.Values.app_id}}
+  labels:
+    appId: {{.Values.app_id}}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.target_hostname }}
+spec:
+  type: ExternalName
+  externalName: {{ .Values.source_fqdn }}

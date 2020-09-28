@@ -1,12 +1,17 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::{AWS, common};
-use crate::cloud_provider::DeploymentTarget;
+use crate::cloud_provider::aws::databases::utilities;
+use crate::cloud_provider::aws::kubernetes::EKS;
+use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
     Action, Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service,
     ServiceError, ServiceType, StatefulService, Upgrade,
+};
+use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::{
+    kubectl_exec_create_namespace, kubectl_exec_delete_namespace, kubectl_exec_delete_secret,
 };
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::Context;
@@ -21,6 +26,7 @@ pub struct MySQL {
     fqdn_id: String,
     total_cpus: String,
     total_ram_in_mib: u32,
+    database_instance_type: String,
     options: DatabaseOptions,
 }
 
@@ -35,6 +41,7 @@ impl MySQL {
         fqdn_id: &str,
         total_cpus: String,
         total_ram_in_mib: u32,
+        database_instance_type: &str,
         options: DatabaseOptions,
     ) -> Self {
         Self {
@@ -47,6 +54,7 @@ impl MySQL {
             fqdn_id: fqdn_id.to_string(),
             total_cpus,
             total_ram_in_mib,
+            database_instance_type: database_instance_type.to_string(),
             options,
         }
     }
@@ -62,6 +70,37 @@ impl MySQL {
     }
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
+        // FIXME: is there an other way than downcast a pointer?
+        let cp = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<AWS>()
+            .expect("Could not downcast kubernetes.cloud_provider() to AWS");
+        // we need the kubernetes config file to store tfstates file in kube secrets
+        let kubernetes_config_file_path = utilities::get_kubernetes_config_path(
+            self.workspace_directory().as_str(),
+            kubernetes,
+            environment,
+        );
+        match kubernetes_config_file_path {
+            Ok(kube_config) => {
+                context.insert("kubeconfig_path", &kube_config.as_str());
+                let aws = kubernetes
+                    .cloud_provider()
+                    .as_any()
+                    .downcast_ref::<AWS>()
+                    .unwrap();
+
+                utilities::create_namespace(&environment.namespace(), kube_config.as_str(), aws);
+            }
+            Err(e) => error!("Failed to generate the kubernetes config file path: {}", e),
+        }
+        context.insert("namespace", environment.namespace());
+
+        context.insert("aws_access_key", &cp.access_key_id);
+        context.insert("aws_secret_key", &cp.secret_access_key);
+        context.insert("eks_cluster_id", kubernetes.id());
+        context.insert("eks_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
@@ -70,11 +109,12 @@ impl MySQL {
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
-        context.insert("database_instance_type", "db.t2.micro"); // TODO customizable
-        context.insert("database_disk_type", "gp2"); // TODO customizable
-        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib); // TODO customizable
-        context.insert("database_total_cpus", &self.total_cpus); // TODO customizable
+        context.insert("database_instance_type", &self.database_instance_type);
+        context.insert("database_disk_type", &self.options.database_disk_type);
+        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
+        context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
+        context.insert("database_id", &self.id());
 
         context
     }
@@ -91,16 +131,49 @@ impl MySQL {
 
                 let context = self.tera_context(*kubernetes, *environment);
 
-                let from_dir = format!("{}/aws/services/mysql", self.context.lib_root_dir());
-                let _ = crate::template::generate_and_copy_all_files_into_dir(
-                    from_dir.as_str(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                    &workspace_dir,
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
+                    workspace_dir.as_str(),
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
+                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
 
-                let _ = crate::cmd::terraform_exec_with_init_validate_plan_destroy(
+                match crate::cmd::terraform_exec_with_init_validate_plan_destroy(
                     workspace_dir.as_str(),
-                )?;
+                ) {
+                    Ok(o) => {
+                        info!("Deleting secrets containing tfstates");
+                        utilities::delete_terraform_tfstate_secret(
+                            *kubernetes,
+                            environment,
+                            self.workspace_directory().as_str(),
+                        );
+                    }
+                    //TODO: find a way to raise the error
+                    Err(e) => error!("Error while destroying infrastructure {}", e),
+                }
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 let helm_release_name = self.helm_release_name();
@@ -179,18 +252,31 @@ impl Create for MySQL {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy MySQL on AWS RDS for {}", self.name());
-
                 let context = self.tera_context(*kubernetes, *environment);
+
                 let workspace_dir = self.workspace_directory();
 
-                let from_dir = format!("{}/aws/services/mysql", self.context.lib_root_dir());
-                let _ = crate::template::generate_and_copy_all_files_into_dir(
-                    from_dir.as_str(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                    &workspace_dir,
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
                     workspace_dir.as_str(),
                     &context,
                 )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
+                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
+                    &context,
+                )?;
 
-                let _ = crate::cmd::terraform_exec_with_init_validate_plan_apply(
+                crate::cmd::terraform_exec_with_init_validate_plan_apply(
                     workspace_dir.as_str(),
                     false,
                 )?;

@@ -1,7 +1,9 @@
 use std::borrow::Borrow;
+use std::rc::Rc;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
@@ -11,9 +13,10 @@ use qovery_engine::cloud_provider::gcp::GCP;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
+use qovery_engine::dns_provider::cloudflare::Cloudflare;
+use qovery_engine::dns_provider::Kind::CLOUDFLARE;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, ProgressListener};
-use std::rc::Rc;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -23,6 +26,7 @@ pub struct Request {
     pub action: Action,
     pub build_platform: BuildPlatform,
     pub cloud_provider: CloudProvider,
+    pub dns_provider: DnsProvider,
     pub container_registry: ContainerRegistry,
     pub target_environment: Option<Environment>,
     pub failover_environment: Option<Environment>,
@@ -46,11 +50,14 @@ impl Request {
 
         container_registry.add_listener(progress_listener.clone());
 
+        let dns_provider = self.dns_provider.to_engine_dns_provider(context);
+
         Engine::new(
             context.clone(),
             build_platform,
             container_registry,
             cloud_provider,
+            dns_provider,
         )
     }
 
@@ -143,6 +150,7 @@ pub struct Kubernetes {
     pub name: String,
     pub version: String,
     pub region: String,
+    pub options: Value,
     pub nodes: Vec<Node>,
 }
 
@@ -151,6 +159,7 @@ impl Kubernetes {
         &self,
         context: &Context,
         cloud_provider: &'a dyn qovery_engine::cloud_provider::CloudProvider,
+        dns_provider: &'a dyn qovery_engine::dns_provider::DnsProvider,
         nodes: &Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>>,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a> {
         match self.kind {
@@ -160,10 +169,12 @@ impl Kubernetes {
                 self.name.as_str(),
                 self.version.as_str(),
                 self.region.as_str(),
-                cloud_provider
-                    .as_any()
-                    .downcast_ref::<AWS>()
-                    .expect("Could not downcast CloudProvider to type AWS"),
+                cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
+                dns_provider,
+                serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(
+                    self.options.clone(),
+                )
+                .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 nodes
                     .into_iter()
                     .map(|x| {
@@ -248,6 +259,33 @@ impl ContainerRegistry {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct DnsProvider {
+    pub kind: qovery_engine::dns_provider::Kind,
+    pub id: String,
+    pub name: String,
+    pub options: Value,
+}
+
+impl DnsProvider {
+    pub fn to_engine_dns_provider(
+        &self,
+        context: &Context,
+    ) -> Box<dyn qovery_engine::dns_provider::DnsProvider> {
+        let token = self.options.get("cloudflare_api_token");
+        let email = self.options.get("cloudflare_email");
+        match self.kind {
+            qovery_engine::dns_provider::Kind::CLOUDFLARE => Box::new(Cloudflare::new(
+                context.clone(),
+                self.id.clone(),
+                self.name.clone(),
+                token.unwrap().as_str().unwrap().parse().unwrap(),
+                email.unwrap().as_str().unwrap().parse().unwrap(),
+            )),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Options {
     login: Option<String>,
     password: Option<String>,
@@ -271,7 +309,7 @@ impl Response {
     }
 
     pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).expect("Could not convert self to JSON")
+        serde_json::to_string(self).unwrap()
     }
 }
 
@@ -286,6 +324,6 @@ impl CheckTask {
     }
 
     pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).expect("Could not convert self to JSON")
+        serde_json::to_string(self).unwrap()
     }
 }

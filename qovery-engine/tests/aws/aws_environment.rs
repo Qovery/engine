@@ -13,7 +13,9 @@ use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::aws::context;
 use test_utilities::utilities::init;
 
+use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::generate_id;
+use qovery_engine::models::Kind::Production;
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
@@ -44,8 +46,8 @@ fn deploy_environment(
 
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
-
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
+    let dns_provider = dns_provider_cloudflare(context);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
     tx.deploy_environment_with_options(
         &k,
@@ -69,8 +71,8 @@ fn pause_environment(
 
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
-
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
+    let dns_provider = dns_provider_cloudflare(context);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
     tx.pause_environment(&k, &environment_action);
 
@@ -87,8 +89,8 @@ fn delete_environment(
 
     let cp = test_utilities::aws::cloud_provider_aws(&context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
-
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, nodes);
+    let dns_provider = dns_provider_cloudflare(context);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
     tx.delete_environment(&k, &environment_action);
 
@@ -365,6 +367,8 @@ fn deploy_a_working_environment_with_postgresql() {
         total_cpus: "500m".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
+        database_instance_type: "db.t2.micro".to_string(),
+        database_disk_type: "gp2".to_string(),
     }];
     environment.applications = environment
         .applications
@@ -500,6 +504,8 @@ fn deploy_a_working_environment_with_mysql() {
         total_cpus: "500m".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
+        database_instance_type: "db.t2.micro".to_string(),
+        database_disk_type: "gp2".to_string(),
     }];
     environment.applications = environment
         .applications
@@ -533,6 +539,98 @@ fn deploy_a_working_environment_with_mysql() {
             app
         })
         .collect::<Vec<qovery_engine::models::Application>>();
+    environment.routers[0].routes[0].application_name = "mysql-app".to_string();
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // todo: check the database disk is here and with correct size
+
+    match delete_environment(&deletion_context, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    //Todo: remove the namespace (or project)
+}
+
+#[test]
+#[ignore]
+/// Tests the creation of a simple environment on AWS, with the DB provisioned on RDS.
+fn deploy_a_working_production_environment_with_mysql() {
+    init();
+
+    let context = context();
+    let deletion_context = context.clone_not_same_execution_id();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    environment.kind = Production;
+
+    let database_host = "mysql-app-".to_string() + generate_id().as_str() + "-svc.oom.sh"; // External access check
+    let database_port = 3306;
+    let database_db_name = "mysql-app-db".to_string();
+    let database_username = "superuser".to_string();
+    let database_password = generate_id();
+    environment.databases = vec![Database {
+        kind: DatabaseKind::Mysql,
+        action: Action::Create,
+        id: generate_id(),
+        name: database_db_name.clone(),
+        version: "5.7.30".to_string(),
+        fqdn_id: "mysql-".to_string() + generate_id().as_str(),
+        fqdn: database_host.clone(),
+        port: database_port.clone(),
+        username: database_username.clone(),
+        password: database_password.clone(),
+        total_cpus: "500m".to_string(),
+        total_ram_in_mib: 512,
+        disk_size_in_gib: 10,
+        database_instance_type: "db.t2.micro".to_string(),
+        database_disk_type: "gp2".to_string(),
+    }];
+    environment.applications = Vec::new();
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.branch = "mysql-app".to_string();
+            app.commit_id = "222295112d58d78227c21060d3a707687302e86f".to_string();
+            app.private_port = Some(1234);
+            app.environment_variables = vec![
+                EnvironmentVariable {
+                    key: "MYSQL_HOST".to_string(),
+                    value: database_host.clone(),
+                },
+                EnvironmentVariable {
+                    key: "MYSQL_PORT".to_string(),
+                    value: database_port.clone().to_string(),
+                },
+                EnvironmentVariable {
+                    key: "MYSQL_DBNAME".to_string(),
+                    value: database_db_name.clone(),
+                },
+                EnvironmentVariable {
+                    key: "MYSQL_USERNAME".to_string(),
+                    value: database_username.clone(),
+                },
+                EnvironmentVariable {
+                    key: "MYSQL_PASSWORD".to_string(),
+                    value: database_password.clone(),
+                },
+            ];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+    environment.routers[0].routes[0].application_name = "mysql-app".to_string();
     environment.routers = environment
         .routers
         .into_iter()

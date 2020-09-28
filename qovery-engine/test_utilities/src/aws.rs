@@ -15,10 +15,20 @@ use qovery_engine::models::{
     EnvironmentVariable, GitCredentials, Kind, Route, Router, Storage, StorageType,
 };
 use qovery_engine::session::Session;
+use serde_json::value::Value;
 use std::borrow::Borrow;
 
 use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
+use serde_json::map::Values;
+extern crate serde;
+extern crate serde_derive;
+use crate::cloudflare::dns_provider_cloudflare;
+use qovery_engine::dns_provider::cloudflare::Cloudflare;
+use qovery_engine::dns_provider::DnsProvider;
+use std::fs::File;
+use std::io::Read;
+use std::str::FromStr;
 
 pub const AWS_KEY_ID: &str = "AKIAZ4KMLSYJLRGNNFNI";
 pub const AWS_ACCESS_KEY: &str = "8dRLHmIbK1BiZhaz0pLc38MRPQomee0bF5Hz8eG/";
@@ -92,8 +102,11 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
 pub fn aws_kubernetes_eks<'a>(
     context: &Context,
     cloud_provider: &'a AWS,
+    dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
 ) -> EKS<'a> {
+    let mut file = File::open("tests/assets/eks-options.json").expect("file not found");
+    let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
         context.clone(),
         "my-eks-on-us-east-2",
@@ -101,6 +114,8 @@ pub fn aws_kubernetes_eks<'a>(
         AWS_KUBERNETES_VERSION,
         "us-east-2",
         cloud_provider,
+        dns_provider,
+        options_values,
         nodes,
     )
 }
@@ -115,11 +130,14 @@ pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
     // use AWS
     let cloud_provider = Box::new(cloud_provider_aws(context));
 
+    let dns_provider = Box::new(dns_provider_cloudflare(context));
+
     Engine::new(
         context.clone(),
         build_platform,
         container_registry,
         cloud_provider,
+        dns_provider,
     )
 }
 
@@ -263,6 +281,8 @@ pub fn working_environment(context: &Context) -> Environment {
                 total_cpus: "256m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
+                database_instance_type: "db.t2.micro".to_string(),
+                database_disk_type: "gp2".to_string(),
             }, /*,
                Database {
                    kind: DatabaseKind::MySQL,
