@@ -150,6 +150,7 @@ impl TaskManager {
                         let start_time = Instant::now();
                         // run task
                         let task_id = String::from(internal_task.task.id());
+                        let task_id_2 = task_id.clone();
                         let i_task = Arc::new(Mutex::new(internal_task));
                         let thread_task = i_task.clone();
                         let thread_tx_run_msg = tx_run_msg.clone();
@@ -168,7 +169,7 @@ impl TaskManager {
                         match join_handle_result {
                             Ok(r) => {}
                             Err(err) => {
-                                error!("A task caused a panic while executing!");
+                                warn!("The task {} caused a panic while executing! This error happened: {:?}", &task_id, err);
                                 match i_task.lock() {
                                     Ok(it) => {
                                         it.task.update_status(
@@ -189,20 +190,35 @@ impl TaskManager {
                                         );
                                     }
                                     Err(e) => {
-                                        // Mutex poisoning is rare, but let's be carefull
-                                        error!("==== /!\\ ==== /!\\ ====   Manual action required  ==== /!\\ ==== /!\\ ====");
-                                        error!("==== /!\\ Could not lock a task (which previously caused a panic) /!\\ ====");
-                                        error!("==== /!\\     so that we could report failure to the core!        /!\\ ====");
+                                        // Mutex poisoning is rare, but let's be careful
+                                        warn!(
+                                            "Could not lock a task (which panicked previously), \
+                                                attempting recovery by sending status to the core"
+                                        );
+                                        e.into_inner().task.update_status(
+                                            &tx_run_msg,
+                                            Status::TerminatedWithError {
+                                                message: Some(format!(
+                                                    "task caused a panic!: {:?}",
+                                                    err
+                                                )),
+                                                context: ActionContext::new(
+                                                    // TODO: create a more appropriate scope?
+                                                    ProgressScope::Queued,
+                                                    ProgressStep::Final,
+                                                    ProgressLevel::Error,
+                                                    task_id,
+                                                ),
+                                            },
+                                        );
                                     }
                                 }
-
-                                return;
-                            } // task with unhandled error - good luck,
+                            }
                         };
 
                         info!(
                             "task {} took {:?} to be executed",
-                            task_id,
+                            task_id_2,
                             start_time.elapsed()
                         );
 
