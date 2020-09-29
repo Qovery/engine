@@ -8,6 +8,7 @@ stages:
   - build
   - release
   - set_ga
+  - deploy_to_qovery_prod
 
 before_script:
   - test -z $KUBERNETES_PORT || export DOCKER_HOST=tcp://127.0.0.1:2375
@@ -21,6 +22,9 @@ wip-fast-tests:
     refs:
       - dev
       - master
+    variables:
+      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
 
 wip-full-tests:
   stage: tests
@@ -32,6 +36,9 @@ wip-full-tests:
     refs:
       - dev
       - master
+    variables:
+      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
 
 dev-full-tests:
   stage: tests
@@ -64,7 +71,7 @@ dev-release:
 
 master-build:
   stage: build
-  retry: 0
+  retry: 1
   script:
     - ./helper.sh build_image
   only:
@@ -85,6 +92,16 @@ master-set-ga:
   retry: 2
   script:
     - ./helper.sh set_release_ga
+  when: manual
+  only:
+    refs:
+      - master
+
+wip-deploy_engine:
+  stage: deploy_to_qovery_prod
+  retry: 0
+  script:
+    - ./helper.sh release_to_prod
   when: manual
   only:
     refs:

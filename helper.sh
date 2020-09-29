@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 #set -x
+set -u
 
 awk=awk
 sed=sed
@@ -99,8 +100,8 @@ function s3_upload_resources() { ## Upload Qovery Engine resources (lib) to S3
   check_untracked_files
   set -e
   generate_tmp_libs_tar
-  export AWS_ACCESS_KEY_ID="$S3_RES_ACCESS_KEY_ID"
-  export AWS_SECRET_ACCESS_KEY="$S3_RES_SECRET_KEY_ID"
+  export AWS_ACCESS_KEY_ID="$AWS_PROD_DEPLOY_ACCESS_KEY"
+  export AWS_SECRET_ACCESS_KEY="$AWS_PROD_DEPLOY_SECRET_KEY"
 
   bucket=prod-qengine-resources
   file_prefix=$(get_commit_id)
@@ -145,6 +146,27 @@ function get_release_ga() { ## Get globally available release version
   curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"
 }
 
+function release_to_prod() { ## Release GA to prod
+  tag=$(get_commit_id)
+  AWS_ACCESS_KEY_ID=$AWS_PROD_DEPLOY_ACCESS_KEY \
+  AWS_SECRET_ACCESS_KEY=$AWS_PROD_DEPLOY_SECRET_KEY \
+  AWS_DEFAULT_REGION=eu-west-3 \
+  helm upgrade --kubeconfig $AWS_PROD_KUBECONFIG --install --history-max 50 --wait --namespace qovery qovery-engine \
+   lib/common/bootstrap/charts/qovery-engine --set \
+image.tag="$tag",\
+environmentVariables.ENGINE_RES_URL="https://prod-qengine-resources.s3.eu-west-3.amazonaws.com/${tag}-lib-with-bootstrap.tgz",\
+environmentVariables.NATS_SERVER="panic.qovery.com:4242",\
+environmentVariables.CLOUD_PROVIDER="aws",\
+environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
+environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
+environmentVariables.RUST_LOG="debug",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+resources.limits.cpu="1",\
+resources.limits.memory="2Gi",\
+resources.requests.cpu="500m",\
+resources.requests.memory="2Gi"
+}
+
 function fast_tests() { # Run fast tests only on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
@@ -185,6 +207,9 @@ push_ci_image)
   ;;
 set_release_ga)
   set_release_ga
+  ;;
+release_to_prod)
+  release_to_prod
   ;;
 get_release_ga)
   get_release_ga
