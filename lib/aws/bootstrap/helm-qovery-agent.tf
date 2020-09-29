@@ -27,7 +27,7 @@ resource "helm_release" "qovery_agent_resources" {
 
   set {
     name = "image.tag"
-    value = "f93fd6b12e509e5ea919a7878b9b1f6e0a480ddb"
+    value = "f82326cdddaa5758249bd46e81343fc99dc5782"
   }
 
   set {
