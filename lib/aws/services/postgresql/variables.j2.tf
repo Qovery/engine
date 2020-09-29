@@ -12,6 +12,12 @@ variable "region" {
   type        = string
 }
 
+variable "eks_cluster_id" {
+  description = "Kubernetes cluster name with region"
+  default     = "{{ eks_cluster_id }}"
+  type        = string
+}
+
 variable "region_cluster_name" {
   description = "AWS region to store terraform state and lock"
   default     = "{{ region }}-{{ cluster_name }}"
@@ -130,7 +136,7 @@ variable "performance_insights_enabled" {
 
 variable "performance_insights_enabled_retention" {
   description = "The amount of time in days to retain Performance Insights data"
-  default = 14
+  default = 7
   type = number
 }
 

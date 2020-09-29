@@ -1,15 +1,15 @@
 data "aws_vpc" "selected" {
   filter {
-    name = "tag:RegionClusterName"
-    values = [var.region_cluster_name]
+    name = "tag:ClusterId"
+    values = [var.eks_cluster_id]
   }
 }
 
 data "aws_subnet_ids" "k8s_subnet_ids" {
   vpc_id = data.aws_vpc.selected.id
   filter {
-    name = "tag:RegionClusterName"
-    values = [var.region_cluster_name]
+    name = "tag:ClusterId"
+    values = [var.eks_cluster_id]
   }
   filter {
     name = "tag:Service"
@@ -20,10 +20,10 @@ data "aws_subnet_ids" "k8s_subnet_ids" {
 data "aws_security_group" "selected" {
   filter {
     name = "tag:Name"
-    values = ["${var.region_cluster_name}-workers"]
+    values = ["eks-workers"]
   }
   filter {
-    name   = "tag:kubernetes.io/cluster/${var.region_cluster_name}"
+    name   = "tag:kubernetes.io/cluster/${var.eks_cluster_id}"
     values = ["owned"]
   }
 }
@@ -33,7 +33,7 @@ data "aws_iam_role" "rds_enhanced_monitoring" {
 }
 
 resource "helm_release" "postgres_instance_external_name" {
-  name = "${aws_db_instance.postgres_instance.id}-externalname"
+  name = "${aws_db_instance.postgresql_instance.id}-externalname"
   chart = "external-name-svc"
   namespace = "{{namespace}}"
   atomic = true
@@ -41,7 +41,7 @@ resource "helm_release" "postgres_instance_external_name" {
 
   set {
     name = "target_hostname"
-    value = aws_db_instance.postgres_instance.address
+    value = aws_db_instance.postgresql_instance.address
   }
   set {
     name = "source_fqdn"
@@ -53,7 +53,7 @@ resource "helm_release" "postgres_instance_external_name" {
   }
 
   depends_on = [
-    aws_db_instance.postgres_instance
+    aws_db_instance.postgresql_instance
   ]
 }
 

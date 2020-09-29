@@ -748,6 +748,95 @@ fn deploy_a_working_production_environment_with_mysql() {
 
 #[test]
 #[ignore]
+/// Postgres on RDS
+fn deploy_a_working_production_environment_with_postgresql() {
+    init();
+
+    let context = context();
+    let context_for_delete = context.clone_not_same_execution_id();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    environment.kind = Kind::Production;
+
+    let database_host = "postgresql-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
+    let database_port = 5432;
+    let database_db_name = "my-postgres".to_string();
+    let database_username = "superuser".to_string();
+    let database_password = generate_id();
+    environment.databases = vec![Database {
+        kind: DatabaseKind::Postgresql,
+        action: Action::Create,
+        id: generate_id(),
+        name: database_db_name.clone(),
+        version: "12.4".to_string(),
+        fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
+        fqdn: database_host.clone(),
+        port: database_port.clone(),
+        username: database_username.clone(),
+        password: database_password.clone(),
+        total_cpus: "500m".to_string(),
+        total_ram_in_mib: 512,
+        disk_size_in_gib: 10,
+        database_instance_type: "db.t2.micro".to_string(),
+        database_disk_type: "gp2".to_string(),
+    }];
+    environment.applications = Vec::new();
+    /*environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.branch = "postgres-app".to_string();
+            app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
+            app.private_port = Some(1234);
+            app.environment_variables = vec![
+                EnvironmentVariable {
+                    key: "PG_HOST".to_string(),
+                    value: database_host.clone(),
+                },
+                EnvironmentVariable {
+                    key: "PG_PORT".to_string(),
+                    value: database_port.clone().to_string(),
+                },
+                EnvironmentVariable {
+                    key: "PG_DBNAME".to_string(),
+                    value: database_db_name.clone(),
+                },
+                EnvironmentVariable {
+                    key: "PG_USERNAME".to_string(),
+                    value: database_username.clone(),
+                },
+                EnvironmentVariable {
+                    key: "PG_PASSWORD".to_string(),
+                    value: database_password.clone(),
+                },
+            ];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+    */
+    environment.routers[0].routes[0].application_name = "postgres-app".to_string();
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // todo: check the database disk is here and with correct size
+
+    match delete_environment(&context_for_delete, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
+}
+
+#[test]
+#[ignore]
 fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
     init();
 
