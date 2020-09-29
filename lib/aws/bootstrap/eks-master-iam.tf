@@ -3,7 +3,7 @@
 #######
 
 resource "aws_iam_role" "eks_cluster" {
-  name = "eks-${var.eks_cluster_id}"
+  name = "qovery-eks-${var.eks_cluster_id}"
 
   tags = local.tags_eks
 

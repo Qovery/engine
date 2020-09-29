@@ -1,5 +1,5 @@
 resource "aws_iam_user" "fluent_bit" {
-  name = "fluent-bit-${var.eks_cluster_id}"
+  name = "qovery-fluent-bit-${var.eks_cluster_id}"
 }
 
 resource "aws_iam_access_key" "fluent_bit" {

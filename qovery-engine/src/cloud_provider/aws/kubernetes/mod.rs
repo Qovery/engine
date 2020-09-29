@@ -96,10 +96,6 @@ impl<'a> EKS<'a> {
         }
     }
 
-    fn bucket_name(&self) -> String {
-        format!("{}-{}-qovery-terraform", self.region.name(), self.id())
-    }
-
     fn tera_context(&self) -> TeraContext {
         let eks_zone_a_subnet_blocks = self
             .options
@@ -202,7 +198,7 @@ impl<'a> EKS<'a> {
                 min_size: nodes.len().to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
-        let s3_kubeconfig_bucket = format!("kubeconfigs-{}", self.id);
+        let s3_kubeconfig_bucket = format!("qovery-kubeconfigs-{}", self.id);
         let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
         let qovery_api_url = self.options.qovery_api_url.clone();
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
@@ -386,22 +382,6 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
         );
-
-        // create S3 bucket
-        let _ = s3::create_bucket(
-            self.cloud_provider.access_key_id.as_str(),
-            self.cloud_provider.secret_access_key.as_str(),
-            self.region.borrow(),
-            self.bucket_name().as_str(),
-        )?;
-
-        // create dynamo db table
-        let _ = dynamo_db::create_terraform_table(
-            self.cloud_provider.access_key_id.as_str(),
-            self.cloud_provider.secret_access_key.as_str(),
-            self.region.borrow(),
-            self.bucket_name().as_str(), // bucket name and DynamoDB are the same
-        )?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context();

@@ -3,7 +3,7 @@
 ##############################
 
 resource "aws_security_group" "eks_cluster_workers" {
-  name        = "eks-workers-${var.eks_cluster_id}"
+  name        = "qovery-eks-workers-${var.eks_cluster_id}"
   description = "Security group for all nodes in the cluster"
   vpc_id      = aws_vpc.eks.id
 
@@ -17,7 +17,7 @@ resource "aws_security_group" "eks_cluster_workers" {
   tags = merge(
     local.tags_eks,
     {
-      Name = "eks-workers",
+      Name = "qovery-eks-workers",
       "kubernetes.io/cluster/${var.eks_cluster_id}" = "owned",
     }
   )

@@ -25,7 +25,7 @@ users:
       args:
         - "token"
         - "-i"
-        - "${var.eks_cluster_id}"
+        - "${aws_eks_cluster.eks_cluster.name}"
 KUBECONFIG
 }
 

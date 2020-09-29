@@ -72,7 +72,7 @@ variable "eks_cluster_id" {
 
 variable "eks_cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "{{ eks_cluster_name }}"
+  default     = "qovery-{{ eks_cluster_name }}"
   type        = string
 }
 
@@ -84,7 +84,7 @@ variable "eks_access_cidr_blocks" {
 
 variable "eks_cloudwatch_log_group" {
   description = "AWS cloudwatch log group for EKS"
-  default = "{{ eks_cloudwatch_log_group }}"
+  default = "qovery-{{ eks_cloudwatch_log_group }}"
   type = string
 }
 
@@ -107,7 +107,7 @@ variable "s3_bucket_qengine_resources" {
 variable "ec2_ssh_default_key" {
   description = "Default SSH key"
   default = {
-    "key_name" = "{{ eks_cluster_id }}-qovery"
+    "key_name" = "qovery-{{ eks_cluster_id }}"
     "public_key" = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDN5AylaONAOt684AVqNL+jtOspRnwAXF3VmHYl02bmsFcxaAcbVal89o/lXrfg787J1D+5wR9thYDCctlvccrHgiTotBFA8HPafDeIvzGLXsCCGCmr9ctN1qtO7BhfwpyGrGJD6I5XmW67R7yhNlawsF2RtwJbQA+Jz/FdvBu/JZHuOaG3dh556Am89wfGyp/Lep5/Hph6iiDP2yujz206zoiRVNyaIYbzaQISU8Jwg39EKJ2YaDTG2Vb4EJ6hjRGguZPZSW0o77CV5CPICFCtMWMb8DGAxd4BTGP1tZmTnDP9mWSFD/5WPkudiwFKSsN2ZKAomOfPB8bZXi7mgmQKTrzsDEkWdz8CUC7TUW1mmIbXDfoFdaTMuZpsox2v9970554PyiSyez3SZ6GiJPy1VQifWeQlLraAgFoXICRiQwYUhszzM9dfuQE9RDM3r5K/mXRfiuzkEK/TH6I+gi08ZZzh6TsyGQhaX2bgYID6TFBFcnLpL/PGckrt2Ub50TU= qovery"
   }
   type = map(string)
@@ -190,7 +190,7 @@ variable "documentdb_cidr_subnet" {
 # Valid characters are a-z (lowercase letters), 0-9, and - (hyphen).
 variable "elasticsearch_q_logs_domain_name" {
   description = "ES domain name"
-  default = "{{ eks_cluster_id }}-q-logs"
+  default = "qovery-{{ eks_cluster_id }}"
   type = string
 }
 

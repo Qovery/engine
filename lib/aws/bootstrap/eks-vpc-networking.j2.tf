@@ -4,8 +4,8 @@ locals {
   tags_eks_vpc = merge(
     local.tags_eks,
     {
-      Name = "eks-workers",
-      "kubernetes.io/cluster/${var.eks_cluster_id}" = "shared",
+      Name = "qovery-eks-workers",
+      "kubernetes.io/cluster/qovery-${var.eks_cluster_id}" = "shared",
       "kubernetes.io/role/elb" = 1,
     }
   )

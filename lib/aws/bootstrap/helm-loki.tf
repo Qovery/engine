@@ -1,5 +1,5 @@
 resource "aws_iam_user" "iam_eks_loki" {
-  name = "loki-${var.eks_cluster_id}"
+  name = "qovery-logs-${var.eks_cluster_id}"
 }
 
 resource "aws_iam_access_key" "iam_eks_loki" {
@@ -7,7 +7,7 @@ resource "aws_iam_access_key" "iam_eks_loki" {
 }
 
 resource "aws_iam_policy" "loki_s3_policy" {
-  name = "logs-${var.eks_cluster_id}"
+  name = aws_iam_user.iam_eks_loki.name
   description = "Policy for logs storage"
 
   policy = <<POLICY
@@ -31,7 +31,7 @@ resource "aws_iam_user_policy_attachment" "s3_loki_attachment" {
 
 // S3 bucket to store indexes and logs
 resource "aws_s3_bucket" "loki_bucket" {
-  bucket = "logs-${var.eks_cluster_id}"
+  bucket = aws_iam_user.iam_eks_loki.name
   acl    = "private"
   region = var.region
   versioning {
