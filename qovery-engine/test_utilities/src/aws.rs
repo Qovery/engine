@@ -32,8 +32,8 @@ use std::str::FromStr;
 
 pub const AWS_KEY_ID: &str = "AKIA4IVG73IUSORT5AJ6"; // AWS username: infra-test-deploy
 pub const AWS_ACCESS_KEY: &str = "W0oTrSpwRZd9XYRDuP90eGeR7G8glAmAFu2yL0Sw";
-pub const AWS_DEFAULT_REGION: &str = "us-east-2";
-pub const ORGANIZATION_ID: &str = "adwopakdpo221";
+pub const AWS_DEFAULT_REGION: &str = "eu-west-3";
+pub const ORGANIZATION_ID: &str = "azerl1aowkdoiqjdoiwjqdioqj";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
 
 pub fn execution_id() -> String {
@@ -91,9 +91,9 @@ pub fn aws_kubernetes_nodes() -> Vec<Node> {
 pub fn cloud_provider_aws(context: &Context) -> AWS {
     AWS::new(
         context.clone(),
-        "my-aws-id-123",
+        "aws-provider-1",
         ORGANIZATION_ID,
-        "my-default-aws",
+        "aws-provider-name",
         AWS_KEY_ID,
         AWS_ACCESS_KEY,
     )
@@ -109,10 +109,10 @@ pub fn aws_kubernetes_eks<'a>(
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
         context.clone(),
-        "my-eks-on-us-east-2",
-        "my-default-eks",
+        "main-eks-cluster-test",
+        "main-eks-cluster-test",
         AWS_KUBERNETES_VERSION,
-        "us-east-2",
+        "eu-west-3",
         cloud_provider,
         dns_provider,
         options_values,
