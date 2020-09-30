@@ -35,6 +35,14 @@ provider "aws" {
   region     = "{{ aws_region }}"
 }
 
+provider "aws" {
+  alias = "tfstates"
+  access_key = "{{ aws_access_key_tfstates_account }}"
+  secret_key = "{{ aws_secret_key_tfstates_account }}"
+  region = "{{ aws_region_tfstates_account }}"
+}
+
+
 provider "helm" {
   kubernetes {
     host = aws_eks_cluster.eks_cluster.endpoint

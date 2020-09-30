@@ -244,6 +244,14 @@ impl<'a> EKS<'a> {
         // AWS
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
+        // AWS S3 tfstate storage
+        context.insert("aws_access_key_tfstates_account", "AKIAUD622NVNHD6P2S4Z");
+        context.insert(
+            "aws_secret_key_tfstates_account",
+            "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",
+        );
+        context.insert("aws_region_tfstates_account", "us-east-2");
+
         context.insert("aws_region", &self.region.name());
         context.insert("aws_terraform_backend_bucket", &self.bucket_name());
         context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
