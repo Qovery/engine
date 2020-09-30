@@ -210,9 +210,9 @@ impl<'a> EKS<'a> {
         let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
 
         let managed_dns_list = vec![self.dns_provider.name()]; // FIXME remove the list
-        let managed_dns_helm_format = vec![format!("\"{}\"", self.dns_provider.name())]; // FIXME why multiple domains?? -- remove the list?
+        let managed_dns_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
         let managed_dns_terraform_format =
-            vec![format!("{{{}}}", self.dns_provider.name())].join(","); // FIXME same here
+            vec![format!("{{{}}}", self.dns_provider.domain())].join(",");
 
         let mut context = TeraContext::new();
         // Qovery
