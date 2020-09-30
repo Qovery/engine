@@ -1,21 +1,21 @@
 {
-  "id": "blabl1aowkdoiqjdoiwjqdioqj",
-  "organization_id": "adwopakdpo221",
+  "id": "azerl1aowkdoiqjdoiwjqdioqj",
+  "organization_id": "bdwopakdpo221",
   "created_at": "2020-07-05T22:07:28Z",
   "action": "CREATE",
   "build_platform": {
     "kind": "LOCAL_DOCKER",
-    "id": "my-local-docker-id-123",
-    "name": "my-default-local-docker",
+    "id": "local-docker-test",
+    "name": "local-docker-test-name",
     "options": {}
   },
   "container_registry": {
     "kind": "ECR",
-    "id": "my-ecr-id-123",
-    "name": "my-default-ecr",
+    "id": "ecr-test-id",
+    "name": "ecr-test-name",
     "options": {
-      "access_key_id": "AKIAZ4KMLSYJLRGNNFNI",
-      "secret_access_key": "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",
+      "access_key_id": "AKIA4IVG73IU4FEGXIW4",
+      "secret_access_key": "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",
       "region": "us-east-2"
     }
   },
@@ -23,25 +23,26 @@
     "kind": "CLOUDFLARE",
     "id": "qoverycloudflar5",
     "name": "Qovery Cloudflare",
+    "domain": "oom.sh",
     "options": {
       "cloudflare_email": "dns@qovery.com",
-      "cloudflare_api_token": "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7"
+      "cloudflare_api_token": "NJa2zDf603SU2Mveamf5INnFWsPZj3adPTxvjLlo"
     }
   },
   "cloud_provider": {
     "kind": "AWS",
-    "id": "my-aws-id-123",
-    "name": "my-default-aws",
+    "id": "aws-provider-1",
+    "name": "aws-provider-name",
     "options": {
-      "access_key_id": "AKIAZ4KMLSYJLRGNNFNI",
-      "secret_access_key": "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"
+      "access_key_id": "AKIA4IVG73IU4FEGXIW4",
+      "secret_access_key": "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"
     },
     "kubernetes": {
       "kind": "EKS",
-      "id": "my-eks-on-us-east-2",
-      "name": "my-eks-us-east-2",
+      "id": "main-eks-cluster-test",
+      "name": "main-eks-cluster-test",
       "version": "1.16",
-      "region": "us-east-2",
+      "region": "eu-west-3",
       "nodes": [
         {
           "cpu": 2,

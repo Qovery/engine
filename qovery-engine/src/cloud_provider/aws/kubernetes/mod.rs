@@ -250,7 +250,7 @@ impl<'a> EKS<'a> {
             "aws_secret_key_tfstates_account",
             "W7Ic1QcXAJ3Y4cEd0NVz9McWfbk90BLOjztoHM9T",
         );
-        context.insert("aws_region_tfstates_account", "us-east-2");
+        context.insert("aws_region_tfstates_account", "eu-west-3");
         // TODO URGENT change the behavior of self.bucket_name()
         context.insert("aws_region", &self.region.name());
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
