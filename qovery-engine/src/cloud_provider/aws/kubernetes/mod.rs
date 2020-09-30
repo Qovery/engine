@@ -251,10 +251,13 @@ impl<'a> EKS<'a> {
             "W7Ic1QcXAJ3Y4cEd0NVz9McWfbk90BLOjztoHM9T",
         );
         context.insert("aws_region_tfstates_account", "us-east-2");
-
+        // TODO URGENT change the behavior of self.bucket_name()
         context.insert("aws_region", &self.region.name());
-        context.insert("aws_terraform_backend_bucket", &self.bucket_name());
-        context.insert("aws_terraform_backend_dynamodb_table", &self.bucket_name());
+        context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
+        context.insert(
+            "aws_terraform_backend_dynamodb_table",
+            "qovery-terrafom-tfstates",
+        );
         context.insert("vpc_cidr_block", &vpc_cidr_block.clone());
         context.insert("s3_kubeconfig_bucket", &s3_kubeconfig_bucket);
 
