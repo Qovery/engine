@@ -9,6 +9,7 @@ pub fn dns_provider_cloudflare(context: &Context) -> Cloudflare {
         context.clone(),
         "abc".to_string(),
         "default".to_string(),
+        "qovery.io".to_string(),
         "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7".to_string(),
         "dns@qovery.com".to_string(),
     )

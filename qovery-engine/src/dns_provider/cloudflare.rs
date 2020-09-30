@@ -5,6 +5,7 @@ pub struct Cloudflare {
     context: Context,
     id: String,
     name: String,
+    domain: String,
     cloudflare_api_token: String,
     cloudflare_email: String,
 }
@@ -14,6 +15,7 @@ impl Cloudflare {
         context: Context,
         id: String,
         name: String,
+        domain: String,
         cloudflare_api_token: String,
         cloudflare_email: String,
     ) -> Self {
@@ -21,6 +23,7 @@ impl Cloudflare {
             context,
             id,
             name,
+            domain,
             cloudflare_api_token,
             cloudflare_email,
         }
@@ -50,6 +53,10 @@ impl DnsProvider for Cloudflare {
 
     fn token(&self) -> &str {
         &self.cloudflare_api_token
+    }
+
+    fn domain(&self) -> &str {
+        self.domain.as_str()
     }
 
     fn is_valid(&self) -> Result<(), DnsProviderError> {

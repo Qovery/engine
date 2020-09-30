@@ -15,6 +15,7 @@ pub trait DnsProvider {
     fn name(&self) -> &str;
     fn account(&self) -> &str;
     fn token(&self) -> &str;
+    fn domain(&self) -> &str;
     fn is_valid(&self) -> Result<(), DnsProviderError>;
 }
 

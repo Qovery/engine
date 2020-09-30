@@ -51,7 +51,6 @@ pub struct Options {
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticsearch_cidr_subnet: String,
-    pub managed_dns: Vec<String>,
 }
 
 pub struct EKS<'a> {
@@ -209,16 +208,11 @@ impl<'a> EKS<'a> {
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
         let documentdb_cidr_subnet = self.options.documentdb_cidr_subnet.clone();
         let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
-        let managed_dns = self.options.managed_dns.clone();
-        let managed_dns_helm_format = managed_dns
-            .iter()
-            .map(|name| format!("\"{}\"", name))
-            .collect::<Vec<_>>(); // Todo: make it customizable
-        let managed_dns_terraform_format = managed_dns
-            .iter()
-            .map(|name| format!("{{{}}}", name))
-            .collect::<Vec<_>>()
-            .join(",");
+
+        let managed_dns_list = vec![self.dns_provider.name()]; // FIXME remove the list
+        let managed_dns_helm_format = vec![format!("\"{}\"", self.dns_provider.name())]; // FIXME why multiple domains?? -- remove the list?
+        let managed_dns_terraform_format =
+            vec![format!("{{{}}}", self.dns_provider.name())].join(","); // FIXME same here
 
         let mut context = TeraContext::new();
         // Qovery
@@ -230,7 +224,7 @@ impl<'a> EKS<'a> {
         );
 
         // DNS configuration
-        context.insert("managed_dns", &managed_dns);
+        context.insert("managed_dns", &managed_dns_list);
         context.insert("managed_dns_helm_format", &managed_dns_helm_format);
         context.insert(
             "managed_dns_terraform_format",

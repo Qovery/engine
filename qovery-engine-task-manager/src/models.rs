@@ -265,6 +265,7 @@ pub struct DnsProvider {
     pub kind: qovery_engine::dns_provider::Kind,
     pub id: String,
     pub name: String,
+    pub domain: String,
     pub options: Value,
 }
 
@@ -273,16 +274,20 @@ impl DnsProvider {
         &self,
         context: &Context,
     ) -> Box<dyn qovery_engine::dns_provider::DnsProvider> {
-        let token = self.options.get("cloudflare_api_token");
-        let email = self.options.get("cloudflare_email");
         match self.kind {
-            qovery_engine::dns_provider::Kind::CLOUDFLARE => Box::new(Cloudflare::new(
-                context.clone(),
-                self.id.clone(),
-                self.name.clone(),
-                token.unwrap().as_str().unwrap().parse().unwrap(),
-                email.unwrap().as_str().unwrap().parse().unwrap(),
-            )),
+            qovery_engine::dns_provider::Kind::CLOUDFLARE => {
+                let token = self.options.get("cloudflare_api_token");
+                let email = self.options.get("cloudflare_email");
+
+                Box::new(Cloudflare::new(
+                    context.clone(),
+                    self.id.clone(),
+                    self.name.clone(),
+                    self.domain.clone(),
+                    token.unwrap().as_str().unwrap().parse().unwrap(),
+                    email.unwrap().as_str().unwrap().parse().unwrap(),
+                ))
+            }
         }
     }
 }
