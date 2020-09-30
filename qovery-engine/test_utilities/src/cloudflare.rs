@@ -10,7 +10,7 @@ pub fn dns_provider_cloudflare(context: &Context) -> Cloudflare {
         "abc".to_string(),
         "default".to_string(),
         "qovery.io".to_string(),
-        "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7".to_string(),
+        "CxfpqLdpbAoP_B7AdZrq-TdiJV-988NfFS7QJoXA".to_string(), // Cloudflare name: Qovery test
         "dns@qovery.com".to_string(),
     )
 }
