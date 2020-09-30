@@ -61,8 +61,8 @@ pub fn context() -> Context {
 pub fn container_registry_ecr(context: &Context) -> ECR {
     ECR::new(
         context.clone(),
-        "my-ecr-id-123",
-        "my-default-ecr",
+        "ecr-test-id",
+        "ecr-test-name",
         AWS_KEY_ID,
         AWS_ACCESS_KEY,
         AWS_DEFAULT_REGION,
