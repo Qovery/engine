@@ -181,51 +181,57 @@ fn listen_for_events(
     let nc = nc.clone();
     let sub_1 = sub.clone();
     let mode = mode.clone();
+    let ts_str = match task_selector {
+        Infrastructure(_) => "infrastructure",
+        Environment(_) => "environment",
+    };
 
-    thread::spawn(move || {
-        let nc = nc.clone();
+    thread::Builder::new()
+        .name(format!("nats-event-reciever-{}", ts_str))
+        .spawn(move || {
+            let nc = nc.clone();
 
-        loop {
-            for msg in sub.next() {
-                debug!("{}", msg);
+            loop {
+                for msg in sub.next() {
+                    debug!("{}", msg);
 
-                let nc_1 = nc.clone();
-                let mode = mode.clone();
-                let pre_run_callback = Box::new(move |task: &dyn Task| {
-                    !is_the_same_task_running(task, nc_1.clone(), mode.clone())
-                });
+                    let nc_1 = nc.clone();
+                    let mode = mode.clone();
+                    let pre_run_callback = Box::new(move |task: &dyn Task| {
+                        !is_the_same_task_running(task, nc_1.clone(), mode.clone())
+                    });
 
-                match serde_json::from_slice::<Request>(msg.data.as_slice()) {
-                    Ok(req) => {
-                        let context = Context::new(
-                            req.id.as_str(),
-                            workspace_root_dir.as_str(),
-                            lib_root_dir.as_str(),
-                            docker_tcp_socket.clone(),
-                        );
+                    match serde_json::from_slice::<Request>(msg.data.as_slice()) {
+                        Ok(req) => {
+                            let context = Context::new(
+                                req.id.as_str(),
+                                workspace_root_dir.as_str(),
+                                lib_root_dir.as_str(),
+                                docker_tcp_socket.clone(),
+                            );
 
-                        tx.send(match task_selector {
-                            TaskSelector::Infrastructure(_) => {
-                                Box::new(InfrastructureTask::new(context, req, pre_run_callback))
-                            }
-                            TaskSelector::Environment(_) => {
-                                Box::new(EnvironmentTask::new(context, req, pre_run_callback))
-                            }
-                        });
-                        msg.respond(Response::new(None).as_json_string());
-                    }
-                    Err(err) => {
-                        error!("{}", msg);
-                        error!(
-                            "receiving request but JSON decoding error occurred: {:?}",
-                            err
-                        );
-                        msg.respond(Response::new(Some(err.to_string())).as_json_string());
-                    }
-                };
+                            tx.send(match task_selector {
+                                TaskSelector::Infrastructure(_) => Box::new(
+                                    InfrastructureTask::new(context, req, pre_run_callback),
+                                ),
+                                TaskSelector::Environment(_) => {
+                                    Box::new(EnvironmentTask::new(context, req, pre_run_callback))
+                                }
+                            });
+                            msg.respond(Response::new(None).as_json_string());
+                        }
+                        Err(err) => {
+                            error!("{}", msg);
+                            error!(
+                                "receiving request but JSON decoding error occurred: {:?}",
+                                err
+                            );
+                            msg.respond(Response::new(Some(err.to_string())).as_json_string());
+                        }
+                    };
+                }
             }
-        }
-    });
+        });
 
     Ok(sub_1)
 }
@@ -234,7 +240,7 @@ fn listen_for_events(
 /// if the server does not respond - then retry 10 times (with fibonacci retry) -
 /// if it does not respond after all attempts, then gracefully restart the service.
 fn watchdog(name: String, nc: Connection, sig_term_tx: Sender<bool>) {
-    thread::spawn(move || {
+    thread::Builder::new().name("watchdog".to_string()).spawn(move || {
         let engine_started_at = Utc::now();
 
         loop {
@@ -514,47 +520,53 @@ pub fn using_nats_server(
     let task_manager = Arc::new(Mutex::new(TaskManager::new()));
     let t1_task_manager = task_manager.clone();
 
-    thread::spawn(move || {
-        let rx_status = t1_task_manager.lock().unwrap().run();
+    thread::Builder::new()
+        .name("tm-task-adder".to_string())
+        .spawn(move || {
+            let rx_status = t1_task_manager.lock().unwrap().run();
 
-        thread::spawn(move || {
-            let rx_status = rx_status.unwrap();
-            let nc = nc_1;
+            thread::Builder::new()
+                .name("t-status-core-updater".to_string())
+                .spawn(move || {
+                    let rx_status = rx_status.unwrap();
+                    let nc = nc_1;
+
+                    loop {
+                        // send back the message to a topic: E.g core.task.status
+                        // json: {"status": {"kind": "Failed", "message": "blablabla"}, "id": "abc", "created_at": "<datetime>"}
+                        match rx_status.recv().unwrap() {
+                            Ok(internal_task) => {
+                                let sr = StatusResponse::new(
+                                    internal_task.task.id().to_string(),
+                                    internal_task.status,
+                                );
+
+                                let json_result = serde_json::to_string(&sr);
+                                let json = json_result.unwrap();
+
+                                debug!("send through NATS StatusResponse: {}", json.as_str());
+                                let _ = nc.publish(CORE_TASK_STATUS_SUBJECT, json.as_bytes());
+                            }
+                            Err(err) => error!("{:?}", err),
+                        };
+                    }
+                });
+
+            let task_manager_is_terminated_rx = t1_task_manager.lock().unwrap().is_terminated();
+
+            thread::Builder::new()
+                .name("tm-ta-quit-handler".to_string())
+                .spawn(move || {
+                    // waiting for sig term to quit gracefully by waiting that there is no remaining tasks to execute.
+                    let _ = task_manager_is_terminated_rx.recv();
+                    tx_quit.send(true);
+                });
 
             loop {
-                // send back the message to a topic: E.g core.task.status
-                // json: {"status": {"kind": "Failed", "message": "blablabla"}, "id": "abc", "created_at": "<datetime>"}
-                match rx_status.recv().unwrap() {
-                    Ok(internal_task) => {
-                        let sr = StatusResponse::new(
-                            internal_task.task.id().to_string(),
-                            internal_task.status,
-                        );
-
-                        let json_result = serde_json::to_string(&sr);
-                        let json = json_result.unwrap();
-
-                        debug!("send through NATS StatusResponse: {}", json.as_str());
-                        let _ = nc.publish(CORE_TASK_STATUS_SUBJECT, json.as_bytes());
-                    }
-                    Err(err) => error!("{:?}", err),
-                };
+                let task = rx_task.recv().unwrap();
+                t1_task_manager.lock().unwrap().add_task(task);
             }
         });
-
-        let task_manager_is_terminated_rx = t1_task_manager.lock().unwrap().is_terminated();
-
-        thread::spawn(move || {
-            // waiting for sig term to quit gracefully by waiting that there is no remaining tasks to execute.
-            let _ = task_manager_is_terminated_rx.recv();
-            tx_quit.send(true);
-        });
-
-        loop {
-            let task = rx_task.recv().unwrap();
-            t1_task_manager.lock().unwrap().add_task(task);
-        }
-    });
 
     let _ = listen_for_task_running_check_events(task_manager.clone(), &nc, &mode)?;
 
@@ -583,18 +595,20 @@ pub fn using_nats_server(
     // ping pong
     watchdog(name.clone(), nc.clone(), sig_term_tx.clone());
 
-    thread::spawn(move || {
-        let _ = sig_term_rx.recv();
-        warn!("Termination signal received - graceful termination in progress...");
-        // unsubscribe listeners
-        // do not unsubscribe "task_running_check_sub - it must be alive during the whole tasks completion"
-        let _ = infrastructure_sub.unsubscribe();
-        info!("unsubscribe from infrastructure subject");
-        let _ = environment_sub.unsubscribe();
-        info!("unsubscribe from environment subject");
-        task_manager.lock().unwrap().stop();
-        info!("request to TaskManager to stop receiving new tasks");
-    });
+    thread::Builder::new()
+        .name("sigterm-dispatcher".to_string())
+        .spawn(move || {
+            let _ = sig_term_rx.recv();
+            warn!("Termination signal received - graceful termination in progress...");
+            // unsubscribe listeners
+            // do not unsubscribe "task_running_check_sub - it must be alive during the whole tasks completion"
+            let _ = infrastructure_sub.unsubscribe();
+            info!("unsubscribe from infrastructure subject");
+            let _ = environment_sub.unsubscribe();
+            info!("unsubscribe from environment subject");
+            task_manager.lock().unwrap().stop();
+            info!("request to TaskManager to stop receiving new tasks");
+        });
 
     ctrlc::set_handler(move || {
         sig_term_tx.send(true);
