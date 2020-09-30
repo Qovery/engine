@@ -331,7 +331,7 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
-pub fn main() -> Result<(), Error> {
+pub fn main() -> io::Result<()> {
     println!("{}", ASCII_BANNER);
     env_logger::init();
 
@@ -346,11 +346,6 @@ pub fn main() -> Result<(), Error> {
         "{}/.qovery-workspace",
         home_dir().unwrap().to_str().unwrap()
     ));
-    let deploy_from_file;
-    match env::var("DEPLOY_FROM_FILE") {
-        Ok(val) => deploy_from_file = val,
-        Err(_e) => deploy_from_file = "".to_string(),
-    }
 
     info!(
         "running from current directory: {}",
@@ -405,15 +400,15 @@ pub fn main() -> Result<(), Error> {
         Mode::Local
     };
 
-    match deploy_from_file.len() {
-        0 => using_nats_server(
+    match env::var("DEPLOY_FROM_FILE") {
+        Err(_) => using_nats_server(
             nats_server,
             workspace_root_dir,
             lib_root_dir,
             docker_host,
             mode,
         ),
-        _ => using_json_path_parameter(
+        Ok(deploy_from_file) => using_json_path_parameter(
             deploy_from_file,
             workspace_root_dir,
             lib_root_dir,
