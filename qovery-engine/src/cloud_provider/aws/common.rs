@@ -16,7 +16,7 @@ pub fn kubernetes_config_path(
     secret_access_key: &str,
     region: &str,
 ) -> Result<String, Error> {
-    let kubernetes_config_bucket_name = format!("kubeconfigs-{}", kubernetes_cluster_id);
+    let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", kubernetes_cluster_id);
     let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
 
     let kubernetes_config_file_path = format!(

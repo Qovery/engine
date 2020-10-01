@@ -30,9 +30,9 @@ use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
 
-pub const AWS_KEY_ID: &str = "AKIA4IVG73IUSORT5AJ6"; // AWS username: infra-test-deploy
-pub const AWS_ACCESS_KEY: &str = "W0oTrSpwRZd9XYRDuP90eGeR7G8glAmAFu2yL0Sw";
-pub const AWS_DEFAULT_REGION: &str = "eu-west-3";
+pub const AWS_KEY_ID: &str = "AKIA4IVG73IUU5NNVN5Q"; // AWS username: infra-test-deploy
+pub const AWS_ACCESS_KEY: &str = "E9Ugsvv7MI3vCaHtn1qoxXU8KwNJeTWn3GfVLNYN";
+pub const AWS_DEFAULT_REGION: &str = "us-east-2";
 pub const ORGANIZATION_ID: &str = "azerl1aowkdoiqjdoiwjqdioqj";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
 
