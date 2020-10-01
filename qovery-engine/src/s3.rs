@@ -151,8 +151,20 @@ pub fn get_object(
                     }
                 },
                 RusotoError::Unknown(r) => {
-                    error!("{}", r.body_as_str());
-                    Err(_err)
+                    let r_from_aws_cli = get_object_via_aws_cli(
+                        access_key_id,
+                        secret_access_key,
+                        region,
+                        bucket_name,
+                        object_key,
+                    );
+                    match r_from_aws_cli {
+                        Ok(..) => Ok(r_from_aws_cli.unwrap()),
+                        Err(err) => {
+                            error!("{}", err);
+                            Err(_err)
+                        }
+                    }
                 }
                 _ => Err(_err),
             };
