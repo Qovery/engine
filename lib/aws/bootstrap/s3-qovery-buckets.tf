@@ -2,7 +2,6 @@
 resource "aws_s3_bucket" "kubeconfigs_bucket" {
   bucket = var.s3_bucket_kubeconfig
   acl    = "private"
-  region = var.region
   versioning {
     enabled = true
   }

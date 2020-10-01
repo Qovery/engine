@@ -33,7 +33,6 @@ resource "aws_iam_user_policy_attachment" "s3_loki_attachment" {
 resource "aws_s3_bucket" "loki_bucket" {
   bucket = aws_iam_user.iam_eks_loki.name
   acl    = "private"
-  region = var.region
   versioning {
     enabled = false
   }

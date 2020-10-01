@@ -8,17 +8,18 @@ rules:
   - apiGroups:
       - crd.k8s.amazonaws.com
     resources:
-      - "*"
-      - namespaces
-    verbs:
-      - "*"
+      - eniconfigs
+    verbs: ["list", "watch", "get"]
   - apiGroups: [""]
     resources:
       - pods
-      - nodes
       - namespaces
     verbs: ["list", "watch", "get"]
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs: ["list", "watch", "get", "update"]
   - apiGroups: ["extensions"]
     resources:
-      - daemonsets
+      - '*'
     verbs: ["list", "watch"]

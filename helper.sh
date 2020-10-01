@@ -87,7 +87,7 @@ function generate_tmp_libs_tar() {
   file_prefix=$(get_commit_id)
   file="${file_prefix}-lib.tgz"
   file_with_bootstrap="${file_prefix}-lib-with-bootstrap.tgz"
-  tar czf $file --exclude='*/bootstrap' lib
+  tar czf $file --exclude='*/bootstrap' --exclude='helm-freeze.yaml' lib
   tar czf $file_with_bootstrap lib
   mkdir -p $TMP_LIB_DIR
   mv $file $TMP_LIB_DIR/$file

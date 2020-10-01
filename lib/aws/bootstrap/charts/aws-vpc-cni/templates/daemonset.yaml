@@ -42,6 +42,7 @@ spec:
                     operator: In
                     values:
                       - amd64
+                      - arm64
                   - key: "eks.amazonaws.com/compute-type"
                     operator: NotIn
                     values:
@@ -55,13 +56,28 @@ spec:
                     operator: In
                     values:
                       - amd64
+                      - arm64
                   - key: "eks.amazonaws.com/compute-type"
                     operator: NotIn
                     values:
                       - fargate
       serviceAccountName: {{ template "aws-vpc-cni.serviceAccountName" . }}
-      automountServiceAccountToken: true
       hostNetwork: true
+      initContainers:
+      - name: aws-vpc-cni-init
+        image: "{{- if .Values.init.image.override }}{{- .Values.init.image.override }}{{- else }}602401143452.dkr.ecr.{{- .Values.init.image.region }}.amazonaws.com/amazon-k8s-cni-init:{{- .Values.init.image.tag }}{{- end}}"
+        imagePullPolicy: {{ .Values.init.image.pullPolicy }}
+        env:
+{{- range $key, $value := .Values.init.env }}
+          - name: {{ $key }}
+            value: {{ $value | quote }}
+{{- end }}
+        securityContext:
+          {{- toYaml .Values.init.securityContext | nindent 12 }}
+        volumeMounts:
+          - mountPath: /host/opt/cni/bin
+            name: cni-bin-dir
+      terminationGracePeriodSeconds: 10
       tolerations:
         - operator: Exists
     {{- with .Values.imagePullSecrets }}
@@ -77,14 +93,10 @@ spec:
           ports:
             - containerPort: 61678
               name: metrics
-          readinessProbe:
-            exec:
-              command: ["/app/grpc-health-probe", "-addr=:50051"]
-            initialDelaySeconds: 35
           livenessProbe:
-            exec:
-              command: ["/app/grpc-health-probe", "-addr=:50051"]
-            initialDelaySeconds: 35
+{{ toYaml .Values.livenessProbe | indent 12 }}
+          readinessProbe:
+{{ toYaml .Values.readinessProbe | indent 12 }}
           env:
 {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
@@ -99,33 +111,39 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           volumeMounts:
-            - mountPath: /host/opt/cni/bin
-              name: cni-bin-dir
-            - mountPath: /host/etc/cni/net.d
-              name: cni-net-dir
-            - mountPath: /host/var/log
-              name: log-dir
-            - mountPath: /var/run/docker.sock
-              name: dockersock
-            - mountPath: /var/run/dockershim.sock
-              name: dockershim
+          - mountPath: /host/opt/cni/bin
+            name: cni-bin-dir
+          - mountPath: /host/etc/cni/net.d
+            name: cni-net-dir
+          - mountPath: /host/var/log/aws-routed-eni
+            name: log-dir
+          - mountPath: /var/run/dockershim.sock
+            name: dockershim
+          - mountPath: /var/run/aws-node
+            name: run-dir
+          - mountPath: /run/xtables.lock
+            name: xtables-lock
       volumes:
-        - name: cni-bin-dir
-          hostPath:
-            path: /opt/cni/bin
-        - name: cni-net-dir
-          hostPath:
-            path: /etc/cni/net.d
-        - name: log-dir
-          hostPath:
-            path: /var/log
-        - name: dockersock
-          hostPath:
-            path: /var/run/docker.sock
-        - name: dockershim
-          hostPath:
-            path: /var/run/dockershim.sock
-
+      - name: cni-bin-dir
+        hostPath:
+          path: /opt/cni/bin
+      - name: cni-net-dir
+        hostPath:
+          path: /etc/cni/net.d
+      - name: dockershim
+        hostPath:
+          path: /var/run/dockershim.sock
+      - name: log-dir
+        hostPath:
+          path: /var/log/aws-routed-eni
+          type: DirectoryOrCreate
+      - name: run-dir
+        hostPath:
+          path: /var/run/aws-node
+          type: DirectoryOrCreate
+      - name: xtables-lock
+        hostPath:
+          path: /run/xtables.lock
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

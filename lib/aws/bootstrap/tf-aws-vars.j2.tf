@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source = "hashicorp/aws"
-      version    = "~> 2.63"
+      version    = "~> 3.8.0"
     }
     external = {
       source = "hashicorp/external"
@@ -51,7 +51,7 @@ provider "helm" {
     exec {
       api_version = "client.authentication.k8s.io/v1alpha1"
       command = "aws-iam-authenticator"
-      args = ["token", "-i", var.eks_cluster_id]
+      args = ["token", "-i", aws_eks_cluster.eks_cluster.name]
       env = {
         AWS_ACCESS_KEY_ID = "{{ aws_access_key }}"
         AWS_SECRET_ACCESS_KEY = "{{ aws_secret_key }}"
