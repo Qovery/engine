@@ -112,7 +112,7 @@ pub fn aws_kubernetes_eks<'a>(
         "main-eks-cluster-test",
         "main-eks-cluster-test",
         AWS_KUBERNETES_VERSION,
-        "eu-west-3",
+        AWS_DEFAULT_REGION,
         cloud_provider,
         dns_provider,
         options_values,

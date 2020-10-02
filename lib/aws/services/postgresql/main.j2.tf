@@ -29,11 +29,6 @@ data "aws_security_group" "selected" {
 }
 
 data "aws_iam_role" "rds_enhanced_monitoring" {
-  name = "${var.region}-${var.cluster_name}-rds-enhanced-monitoring"
-}
-
-
-data "aws_iam_role" "rds_enhanced_monitoring" {
   name = "rds-enhanced-monitoring-${var.eks_cluster_id}"
 }
 
