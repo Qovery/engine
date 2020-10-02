@@ -5,6 +5,7 @@ use rusoto_core::region::Region::Custom;
 
 use qovery_engine::cloud_provider::service::Router;
 use qovery_engine::cmd;
+use qovery_engine::models::Kind::Production;
 use qovery_engine::models::{
     Action, Clone2, Context, CustomDomain, Database, DatabaseKind, Environment, EnvironmentAction,
     EnvironmentVariable, ExternalService, GitCredentials, Kind, Storage, StorageType,
@@ -15,7 +16,6 @@ use test_utilities::utilities::init;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::generate_id;
-use qovery_engine::models::Kind::Production;
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
@@ -457,40 +457,39 @@ fn deploy_a_working_production_environment_with_postgresql() {
         database_instance_type: "db.t2.micro".to_string(),
         database_disk_type: "gp2".to_string(),
     }];
-    environment.applications = vec![]; /*environment
-                                           .applications
-                                           .into_iter()
-                                           .map(|mut app| {
-                                               app.branch = "postgres-app".to_string();
-                                               app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
-                                               app.private_port = Some(1234);
-                                               app.environment_variables = vec![
-                                                   EnvironmentVariable {
-                                                       key: "PG_HOST".to_string(),
-                                                       value: database_host.clone(),
-                                                   },
-                                                   EnvironmentVariable {
-                                                       key: "PG_PORT".to_string(),
-                                                       value: database_port.clone().to_string(),
-                                                   },
-                                                   EnvironmentVariable {
-                                                       key: "PG_DBNAME".to_string(),
-                                                       value: database_db_name.clone(),
-                                                   },
-                                                   EnvironmentVariable {
-                                                       key: "PG_USERNAME".to_string(),
-                                                       value: database_username.clone(),
-                                                   },
-                                                   EnvironmentVariable {
-                                                       key: "PG_PASSWORD".to_string(),
-                                                       value: database_password.clone(),
-                                                   },
-                                               ];
-                                               app
-                                           })
-                                           .collect::<Vec<qovery_engine::models::Application>>();
-                                       environment.routers[0].routes[0].application_name = "postgres-app".to_string();
-                                       */
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.branch = "postgres-app".to_string();
+            app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
+            app.private_port = Some(1234);
+            app.environment_variables = vec![
+                EnvironmentVariable {
+                    key: "PG_HOST".to_string(),
+                    value: database_host.clone(),
+                },
+                EnvironmentVariable {
+                    key: "PG_PORT".to_string(),
+                    value: database_port.clone().to_string(),
+                },
+                EnvironmentVariable {
+                    key: "PG_DBNAME".to_string(),
+                    value: database_db_name.clone(),
+                },
+                EnvironmentVariable {
+                    key: "PG_USERNAME".to_string(),
+                    value: database_username.clone(),
+                },
+                EnvironmentVariable {
+                    key: "PG_PASSWORD".to_string(),
+                    value: database_password.clone(),
+                },
+            ];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+    environment.routers[0].routes[0].application_name = "postgres-app".to_string();
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
