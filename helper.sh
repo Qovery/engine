@@ -185,10 +185,10 @@ function all_tests() { # Run all tests on qovery-engine
 
 case $1 in
 build_image)
-  build_image $2
+  build_image
   ;;
 build_ci_image)
-  build_ci_image $2
+  build_ci_image
   ;;
 generate_tmp_libs_tar)
   generate_tmp_libs_tar
