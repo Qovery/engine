@@ -13,6 +13,7 @@ use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo,
     ProgressLevel, ProgressScope, ProgressStep,
 };
+use std::thread;
 
 pub struct Transaction<'a> {
     engine: &'a Engine,
@@ -643,6 +644,11 @@ impl<'a> Transaction<'a> {
                 execution_id,
             )
         };
+
+        // 100 ms sleep to avoid race condition on last service status update
+        // Otherwise, the last status sent to the CORE is (sometimes) not the right one.
+        // Even by storing data at the micro seconds precision
+        thread::sleep(std::time::Duration::from_millis(100));
 
         let _ = match action_fn(&qe_environment) {
             Err(err) => {
