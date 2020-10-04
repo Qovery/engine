@@ -18,10 +18,9 @@ wip-fast-tests:
   retry: 0
   script:
     - ./helper.sh fast_tests
+  only:
+  - merge_requests
   except:
-    refs:
-      - dev
-      - master
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
@@ -32,10 +31,9 @@ wip-full-tests:
   script:
     - ./helper.sh all_tests
   when: manual
+  only:
+    - merge_requests
   except:
-    refs:
-      - dev
-      - master
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
