@@ -245,6 +245,50 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     Ok(())
 }
 
+pub fn helm_exec_with_upgrade_history_with_override<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    release_name: &str,
+    chart_root_dir: P,
+    override_file: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<HelmHistoryRow>, CmdError>
+where
+    P: AsRef<Path>,
+{
+    // do exec helm upgrade
+    info!(
+        "exec helm upgrade for namespace {} and chart {}",
+        namespace,
+        chart_root_dir.as_ref().to_str().unwrap()
+    );
+
+    let _ = helm_exec_upgrade_with_override_file(
+        kubernetes_config.as_ref(),
+        namespace,
+        release_name,
+        chart_root_dir.as_ref(),
+        override_file,
+        envs.clone(),
+    )?;
+
+    // list helm history
+    info!(
+        "exec helm history for namespace {} and chart {}",
+        namespace,
+        chart_root_dir.as_ref().to_str().unwrap()
+    );
+
+    let helm_history_rows =
+        helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+
+    // take the last deployment from helm history - or return none if there is no history
+    Ok(match helm_history_rows.first() {
+        Some(helm_history_row) => Some(helm_history_row.clone()),
+        None => None,
+    })
+}
+
 pub fn helm_exec_with_upgrade_history<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -285,6 +329,46 @@ where
         Some(helm_history_row) => Some(helm_history_row.clone()),
         None => None,
     })
+}
+
+pub fn helm_exec_upgrade_with_override_file<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    release_name: &str,
+    chart_root_dir: P,
+    override_file: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), CmdError>
+where
+    P: AsRef<Path>,
+{
+    helm_exec_with_output(
+        vec![
+            "upgrade",
+            "--kubeconfig",
+            kubernetes_config.as_ref().to_str().unwrap(),
+            "--create-namespace",
+            "--install",
+            "--history-max",
+            "50",
+            "--wait",
+            "--namespace",
+            namespace,
+            release_name,
+            chart_root_dir.as_ref().to_str().unwrap(),
+            "-f",
+            override_file,
+        ],
+        envs,
+        |out| match out {
+            Ok(line) => info!("{}", line.as_str()),
+            Err(err) => error!("{}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line.as_str()),
+            Err(err) => error!("{}", err),
+        },
+    )
 }
 
 pub fn helm_exec_upgrade<P>(

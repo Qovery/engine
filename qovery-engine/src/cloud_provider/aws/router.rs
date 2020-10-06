@@ -75,6 +75,7 @@ impl Router {
             .iter()
             .map(|cd| {
                 let domain_hash = crate::crypto::to_sha1_truncate_16(cd.domain.as_str());
+                //context.insert("target_hostname", cd.domain.clone());
                 CustomDomainDataTemplate {
                     domain: cd.domain.clone(),
                     domain_hash,
@@ -162,8 +163,12 @@ impl Router {
                     match external_ingress_hostname_custom {
                         Ok(external_ingress_hostname_custom) => {
                             match external_ingress_hostname_custom {
-                                Some(hostname) => context
-                                    .insert("external_ingress_hostname_custom", hostname.as_str()),
+                                Some(hostname) => {
+                                    context.insert(
+                                        "external_ingress_hostname_custom",
+                                        hostname.as_str(),
+                                    );
+                                }
                                 None => {
                                     warn!("unable to get external_ingress_hostname_custom - what's wrong? This must never happened");
                                 }
@@ -174,6 +179,7 @@ impl Router {
                             warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
                         }
                     }
+                    context.insert("app_id", kubernetes.id());
                 }
             }
             Err(_) => error!(
@@ -320,6 +326,10 @@ impl Create for Router {
             kubernetes.region(),
         )?;
 
+        // respect order - getting the context here and not before is mandatory
+        // the nginx-ingress must be available to get the external dns target if necessary
+        let mut context = self.tera_context(kubernetes, environment);
+
         if !self.custom_domains.is_empty() {
             // custom domains? create an NGINX ingress
             info!("setup NGINX ingress for custom domains");
@@ -330,23 +340,27 @@ impl Create for Router {
                 "routers/nginx-ingress",
             );
 
-            // copy nginx-ingress files, there is no templates so do not generate anything and
-            // simply copy/paste files into our working dir
+            let from_dir = format!("{}/common/chart_values", self.context.lib_root_dir());
+            let _ = crate::template::generate_and_copy_all_files_into_dir(
+                from_dir.as_str(),
+                into_dir.as_str(),
+                &context,
+            )?;
+
             let _ = crate::template::copy_non_template_files(
                 format!(
-                    "{}/common/bootstrap/charts/nginx-ingress",
+                    "{}/common/charts/nginx-ingress",
                     self.context().lib_root_dir()
                 ),
                 into_dir.as_str(),
             )?;
-
-            // TODO exec helm to apply
             // do exec helm upgrade and return the last deployment status
-            let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
+            let helm_history_row = crate::cmd::helm_exec_with_upgrade_history_with_override(
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
-                helm_release_name.as_str(), // FIXME change helm release name?
+                format!("custom-{}", helm_release_name).as_str(),
                 into_dir.as_str(),
+                format!("{}/nginx-ingress.yaml", into_dir.as_str()).as_str(),
                 self.aws_credentials_envs(aws).to_vec(),
             )?;
 
@@ -354,12 +368,36 @@ impl Create for Router {
             if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
                 return Err(ServiceError::OnCreateFailed);
             }
+            // waiting for the nlb, it should be deploy to get fqdn
+            let external_ingress_hostname_custom_result =
+                retry::retry(Fibonacci::from_millis(3000).take(10), || {
+                    let external_ingress_hostname_custom =
+                        crate::cmd::kubectl_exec_get_external_ingress_hostname(
+                            kubernetes_config_file_path.as_str(),
+                            environment.namespace(),
+                            "app=nginx-ingress,component=controller",
+                            self.aws_credentials_envs(aws).to_vec(),
+                        );
+                    match external_ingress_hostname_custom {
+                        Ok(external_ingress_hostname_custom) => {
+                            OperationResult::Ok(external_ingress_hostname_custom)
+                        }
+                        Err(err) => {
+                            error!(
+                                "Waiting NLB endpoint to be available to be able to configure TLS"
+                            );
+                            OperationResult::Retry(err)
+                        }
+                    }
+                });
+            match external_ingress_hostname_custom_result {
+                Ok(elb) => {
+                    //put it in the context
+                    context.insert("nlb_ingress_hostname", &elb);
+                }
+                Err(e) => error!("Error getting the NLB endpoint to be able to configure TLS"),
+            }
         }
-
-        // respect order - getting the context here and not before is mandatory
-        // the nginx-ingress must be available to get the external dns target if necessary
-        let context = self.tera_context(kubernetes, environment);
-
         let from_dir = format!("{}/aws/charts/q-ingress-tls", self.context.lib_root_dir());
         let _ = crate::template::generate_and_copy_all_files_into_dir(
             from_dir.as_str(),
@@ -376,7 +414,6 @@ impl Create for Router {
             self.aws_credentials_envs(aws).to_vec(),
         )?;
 
-        // check deployment status
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
             return Err(ServiceError::OnCreateFailed);
         }
