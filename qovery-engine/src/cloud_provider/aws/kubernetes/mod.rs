@@ -946,6 +946,7 @@ impl<'a> Kubernetes for EKS<'a> {
         info!("EKS.delete_environment() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
+        // TODO use listeners_helper !!!! Don't be so shy Marc + Pierre
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {

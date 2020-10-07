@@ -54,8 +54,10 @@ impl Environment {
             .iter()
             .map(
                 |x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
-                    Some(app) => x.to_stateless_service(context, app.image(), cloud_provider),
-                    _ => None,
+                    Some(app) => {
+                        x.to_stateless_service(context, app.image().clone(), cloud_provider)
+                    }
+                    _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
                 },
             )
             .filter(|x| x.is_some())
@@ -67,8 +69,10 @@ impl Environment {
             .iter()
             .map(
                 |x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
-                    Some(app) => x.to_stateless_service(context, app.image(), cloud_provider),
-                    _ => None,
+                    Some(app) => {
+                        x.to_stateless_service(context, app.image().clone(), cloud_provider)
+                    }
+                    _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
                 },
             )
             .filter(|x| x.is_some())
@@ -195,7 +199,7 @@ impl Application {
     pub fn to_stateless_service(
         &self,
         context: &Context,
-        image: &Image,
+        image: Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
         match cloud_provider.kind() {
@@ -209,7 +213,7 @@ impl Application {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     self.total_instances,
-                    image.clone(),
+                    image,
                     self.storage
                         .iter()
                         .map(|s| s.to_aws_storage())
@@ -226,6 +230,16 @@ impl Application {
         }
     }
 
+    pub fn to_image(&self) -> Image {
+        Image {
+            application_id: self.id.clone(),
+            name: self.name.clone(),
+            tag: self.commit_id.clone(),
+            commit_id: self.commit_id.clone(),
+            registry_url: None,
+        }
+    }
+
     pub fn to_build(&self) -> Build {
         Build {
             git_repository: GitRepository {
@@ -237,13 +251,7 @@ impl Application {
                 commit_id: self.commit_id.clone(),
                 dockerfile_path: ".".to_string(),
             },
-            image: Image {
-                application_id: self.id.clone(),
-                name: self.name.clone(),
-                tag: self.commit_id.clone(),
-                commit_id: self.commit_id.clone(),
-                registry_url: None,
-            },
+            image: self.to_image(),
             options: BuildOptions {
                 environment_variables: self
                     .environment_variables
@@ -530,7 +538,7 @@ impl ExternalService {
     pub fn to_stateless_service<'a>(
         &self,
         context: &Context,
-        image: &Image,
+        image: Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<(dyn crate::cloud_provider::service::StatelessService)>> {
         match cloud_provider.kind() {
@@ -542,7 +550,7 @@ impl ExternalService {
                     self.name.as_str(),
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
-                    image.clone(),
+                    image,
                     self.environment_variables
                         .iter()
                         .map(|ev| ev.to_aws_external_service_environment_variable())
@@ -552,6 +560,16 @@ impl ExternalService {
             CPKind::GCP => None,
             _ => None,
             //TODO to implement
+        }
+    }
+
+    pub fn to_image(&self) -> Image {
+        Image {
+            application_id: self.id.clone(),
+            name: self.name.clone(),
+            tag: self.commit_id.clone(),
+            commit_id: self.commit_id.clone(),
+            registry_url: None,
         }
     }
 
@@ -571,13 +589,7 @@ impl ExternalService {
                     Action::Nothing => self.on_create_dockerfile_path.clone(),
                 },
             },
-            image: Image {
-                application_id: self.id.clone(),
-                name: self.name.clone(),
-                tag: self.commit_id.clone(),
-                commit_id: self.commit_id.clone(),
-                registry_url: None,
-            },
+            image: self.to_image(),
             options: BuildOptions {
                 environment_variables: self
                     .environment_variables
