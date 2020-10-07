@@ -70,7 +70,7 @@ impl Task for InfrastructureTask {
         self.request.id.as_str()
     }
 
-    fn update_status(&self, sender: &Sender<Message>, status: Status) {
+    fn send_status(&self, sender: &Sender<Message>, status: Status) {
         let it = InternalTask {
             task: Box::new(self.clone()),
             status,
@@ -89,12 +89,14 @@ impl Task for InfrastructureTask {
             self.infrastructure_id()
         );
 
-        self.update_status(
+        send_progress(
+            self,
+            &self.request,
             &sender,
-            Status::StartInProgress {
-                message: None,
-                context: self.action_context(ProgressLevel::Info),
-            },
+            self.action_context(ProgressLevel::Info),
+            None,
+            false,
+            false,
         );
 
         let my_progress_listener: Rc<Box<dyn ProgressListener>> =
@@ -108,12 +110,14 @@ impl Task for InfrastructureTask {
         let session = match engine.session() {
             Ok(session) => session,
             Err(err) => {
-                self.update_status(
+                send_progress(
+                    self,
+                    &self.request,
                     &sender,
-                    Status::StartError {
-                        message: Some(format!("failed to get engine session {:?}", err)),
-                        context: self.action_context(ProgressLevel::Error),
-                    },
+                    self.action_context(ProgressLevel::Error),
+                    Some(format!("failed to get engine session {:?}", err)),
+                    true,
+                    false,
                 );
 
                 return;
@@ -145,33 +149,39 @@ impl Task for InfrastructureTask {
 
         match tx.commit() {
             TransactionResult::Ok => {
-                self.update_status(
+                send_progress(
+                    self,
+                    &self.request,
                     &sender,
-                    Status::Started {
-                        message: None,
-                        context: self.action_context(ProgressLevel::Info),
-                    },
+                    self.action_context(ProgressLevel::Info),
+                    None,
+                    false,
+                    true,
                 );
             }
             TransactionResult::Rollback(commit_err) => {
-                self.update_status(
+                send_progress(
+                    self,
+                    &self.request,
                     &sender,
-                    Status::StartError {
-                        message: Some(format!("rollback error - commit error: {:?}", commit_err)),
-                        context: self.action_context(ProgressLevel::Warn),
-                    },
+                    self.action_context(ProgressLevel::Warn),
+                    Some(format!("rollback error - commit error: {:?}", commit_err)),
+                    true,
+                    true,
                 );
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
-                self.update_status(
+                send_progress(
+                    self,
+                    &self.request,
                     &sender,
-                    Status::StartError {
-                        message: Some(format!(
-                            "unrecoverable error - commit error: {:?} - rollback error: {:?}",
-                            commit_err, rollback_err
-                        )),
-                        context: self.action_context(ProgressLevel::Error),
-                    },
+                    self.action_context(ProgressLevel::Error),
+                    Some(format!(
+                        "unrecoverable error - commit error: {:?} - rollback error: {:?}",
+                        commit_err, rollback_err
+                    )),
+                    true,
+                    true,
                 );
             }
         }
@@ -211,6 +221,24 @@ impl EnvironmentTask {
             pre_run_callback: Arc::new(pre_run_callback),
         }
     }
+
+    fn action_context(&self, level: ProgressLevel) -> ActionContext {
+        let target_environment_id = self
+            .request
+            .target_environment
+            .as_ref()
+            .unwrap()
+            .id
+            .to_string();
+
+        ActionContext::new(
+            ProgressScope::Environment {
+                id: target_environment_id,
+            },
+            level,
+            self.id().to_string(),
+        )
+    }
 }
 
 impl Task for EnvironmentTask {
@@ -222,7 +250,7 @@ impl Task for EnvironmentTask {
         self.request.id.as_str()
     }
 
-    fn update_status(&self, sender: &Sender<Message>, status: Status) {
+    fn send_status(&self, sender: &Sender<Message>, status: Status) {
         let it = InternalTask {
             task: Box::new(self.clone()),
             status,
@@ -238,26 +266,14 @@ impl Task for EnvironmentTask {
     fn run(&self, sender: Sender<Message>) {
         info!("environment task {} started", self.id());
 
-        let target_environment_id = self
-            .request
-            .target_environment
-            .as_ref()
-            .unwrap()
-            .id
-            .to_string();
-
-        self.update_status(
+        send_progress(
+            self,
+            &self.request,
             &sender,
-            Status::StartInProgress {
-                message: None,
-                context: ActionContext::new(
-                    ProgressScope::Environment {
-                        id: target_environment_id.clone(),
-                    },
-                    ProgressLevel::Info,
-                    self.id().to_string(),
-                ),
-            },
+            self.action_context(ProgressLevel::Info),
+            None,
+            false,
+            false,
         );
 
         let my_progress_listener: Rc<Box<dyn ProgressListener>> =
@@ -272,19 +288,14 @@ impl Task for EnvironmentTask {
         let session = match engine.session() {
             Ok(session) => session,
             Err(err) => {
-                // FIXME return error message
-                self.update_status(
+                send_progress(
+                    self,
+                    &self.request,
                     &sender,
-                    Status::StartError {
-                        message: Some(format!("failed to get engine session {:?}", err)),
-                        context: ActionContext::new(
-                            ProgressScope::Environment {
-                                id: target_environment_id.clone(),
-                            },
-                            ProgressLevel::Info,
-                            self.id().to_string(),
-                        ),
-                    },
+                    self.action_context(ProgressLevel::Error),
+                    Some(format!("failed to get engine session {:?}", err)),
+                    true,
+                    true,
                 );
 
                 return;
@@ -308,17 +319,15 @@ impl Task for EnvironmentTask {
 
         let environment_action = match self.request.environment_action() {
             None => {
-                self.update_status(&sender,
-                                   Status::Error {
-                                       message: Some("failed to get environment action, self.request.environment_action() returned None variant".to_string()),
-                                       context: ActionContext::new(
-                                           ProgressScope::Environment {
-                                               id: target_environment_id.clone()
-                                           },
-                                           ProgressLevel::Error,
-                                           self.id().to_string(),
-                                       ),
-                                   });
+                send_progress(
+                    self,
+                    &self.request,
+                    &sender,
+                    self.action_context(ProgressLevel::Error),
+                    Some("failed to get environment action, self.request.environment_action() returned None variant".to_string()),
+                    true,
+                    false,
+                );
                 return;
             }
             Some(ea) => ea,
@@ -332,55 +341,39 @@ impl Task for EnvironmentTask {
 
         match tx.commit() {
             TransactionResult::Ok => {
-                self.update_status(
+                send_progress(
+                    self,
+                    &self.request,
                     &sender,
-                    Status::Started {
-                        message: None,
-                        context: ActionContext::new(
-                            ProgressScope::Environment {
-                                id: target_environment_id.clone(),
-                            },
-                            ProgressLevel::Info,
-                            self.id().to_string(),
-                        ),
-                    },
+                    self.action_context(ProgressLevel::Info),
+                    None,
+                    false,
+                    true,
                 );
             }
             TransactionResult::Rollback(commit_err) => {
-                let ac = ActionContext::new(
-                    ProgressScope::Environment {
-                        id: target_environment_id.clone(),
-                    },
-                    ProgressLevel::Warn,
-                    self.id().to_string(),
-                );
-
-                self.update_status(
+                send_progress(
+                    self,
+                    &self.request,
                     &sender,
-                    Status::StartError {
-                        message: Some(format!("rollback error - commit error: {:?}", commit_err)),
-                        context: ac,
-                    },
+                    self.action_context(ProgressLevel::Warn),
+                    Some(format!("rollback error - commit error: {:?}", commit_err)),
+                    true,
+                    true,
                 );
             }
             TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
-                let ac = ActionContext::new(
-                    ProgressScope::Environment {
-                        id: target_environment_id.clone(),
-                    },
-                    ProgressLevel::Error,
-                    self.id().to_string(),
-                );
-
-                self.update_status(
+                send_progress(
+                    self,
+                    &self.request,
                     &sender,
-                    Status::StartError {
-                        message: Some(format!(
-                            "unrecoverable error - commit error: {:?} - rollback error: {:?}",
-                            commit_err, rollback_err
-                        )),
-                        context: ac,
-                    },
+                    self.action_context(ProgressLevel::Error),
+                    Some(format!(
+                        "unrecoverable error - commit error: {:?} - rollback error: {:?}",
+                        commit_err, rollback_err
+                    )),
+                    true,
+                    true,
                 );
             }
         }
@@ -435,7 +428,7 @@ where
     T: Task + Clone + 'static,
 {
     fn start_in_progress(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::StartInProgress {
+        let it = self.get_internal_task(Status::DeploymentInProgress {
             message: info.message.clone(),
             context: self.action_context(info),
         });
@@ -471,7 +464,7 @@ where
     }
 
     fn started(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::Started {
+        let it = self.get_internal_task(Status::Deployed {
             message: info.message.clone(),
             context: self.action_context(info),
         });
@@ -498,7 +491,7 @@ where
     }
 
     fn start_error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::StartError {
+        let it = self.get_internal_task(Status::DeploymentError {
             message: info.message.clone(),
             context: self.action_context(info),
         });
@@ -523,4 +516,36 @@ where
 
         self.send(it);
     }
+}
+
+fn send_progress(
+    task: &dyn Task,
+    request: &Request,
+    sender: &Sender<Message>,
+    context: ActionContext,
+    message: Option<String>,
+    is_error: bool,
+    is_final: bool,
+) {
+    let status = if is_error {
+        match request.action {
+            Action::Create => Status::DeploymentError { message, context },
+            Action::Pause => Status::PauseError { message, context },
+            Action::Delete => Status::DeleteError { message, context },
+        }
+    } else if is_final {
+        match request.action {
+            Action::Create => Status::Deployed { message, context },
+            Action::Pause => Status::Paused { message, context },
+            Action::Delete => Status::Deleted { message, context },
+        }
+    } else {
+        match request.action {
+            Action::Create => Status::DeploymentInProgress { message, context },
+            Action::Pause => Status::PauseInProgress { message, context },
+            Action::Delete => Status::DeleteInProgress { message, context },
+        }
+    };
+
+    task.send_status(sender, status);
 }

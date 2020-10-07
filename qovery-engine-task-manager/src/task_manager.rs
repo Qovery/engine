@@ -172,9 +172,9 @@ impl TaskManager {
                                 warn!("The task {} caused a panic while executing! This error happened: {:?}", &task_id, err);
                                 match i_task.lock() {
                                     Ok(it) => {
-                                        it.task.update_status(
+                                        it.task.send_status(
                                             &tx_run_msg,
-                                            Status::StartError {
+                                            Status::DeploymentError {
                                                 message: Some(format!(
                                                     "task caused a panic!: {:?}",
                                                     err
@@ -194,9 +194,9 @@ impl TaskManager {
                                             "Could not lock a task (which panicked previously), \
                                                 attempting recovery by sending status to the core"
                                         );
-                                        e.into_inner().task.update_status(
+                                        e.into_inner().task.send_status(
                                             &tx_run_msg,
-                                            Status::StartError {
+                                            Status::DeploymentError {
                                                 message: Some(format!(
                                                     "task caused a panic!: {:?}",
                                                     err
@@ -317,7 +317,7 @@ fn add_task(
 pub trait Task: Send {
     fn group_id(&self) -> &str;
     fn id(&self) -> &str;
-    fn update_status(&self, sender: &Sender<Message>, status: Status);
+    fn send_status(&self, sender: &Sender<Message>, status: Status);
     /// return true if you want to run it now, or false if you want to run this task later.
     /// this function is called just before `run()` is called.
     fn pre_run(&self) -> bool;
@@ -353,7 +353,7 @@ pub enum Status {
         message: Option<String>,
         context: ActionContext,
     },
-    StartInProgress {
+    DeploymentInProgress {
         message: Option<String>,
         context: ActionContext,
     },
@@ -369,7 +369,7 @@ pub enum Status {
         message: Option<String>,
         context: ActionContext,
     },
-    Started {
+    Deployed {
         message: Option<String>,
         context: ActionContext,
     },
@@ -381,7 +381,7 @@ pub enum Status {
         message: Option<String>,
         context: ActionContext,
     },
-    StartError {
+    DeploymentError {
         message: Option<String>,
         context: ActionContext,
     },

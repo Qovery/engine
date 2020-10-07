@@ -97,15 +97,6 @@ impl<'a> Transaction<'a> {
     ) -> Result<(), EnvironmentError> {
         let _ = self.check_environment_action(environment_action)?;
 
-        // add build step
-        self.steps.push(Step::BuildEnvironment(
-            environment_action,
-            DeploymentOption {
-                force_build: false,
-                force_push: false,
-            },
-        ));
-
         self.steps
             .push(Step::PauseEnvironment(kubernetes, environment_action));
         Ok(())
@@ -117,15 +108,6 @@ impl<'a> Transaction<'a> {
         environment_action: &'a EnvironmentAction,
     ) -> Result<(), EnvironmentError> {
         let _ = self.check_environment_action(environment_action)?;
-
-        // add build step
-        self.steps.push(Step::BuildEnvironment(
-            environment_action,
-            DeploymentOption {
-                force_build: false,
-                force_push: false,
-            },
-        ));
 
         self.steps
             .push(Step::DeleteEnvironment(kubernetes, environment_action));
@@ -615,7 +597,11 @@ impl<'a> Transaction<'a> {
             EnvironmentAction::EnvironmentWithFailover(te, _) => te,
         };
 
-        let built_applications = applications_by_environment.get(target_environment).unwrap(); // FIXME unsafe?
+        let empty_vec = Vec::with_capacity(0);
+        let built_applications = match applications_by_environment.get(target_environment) {
+            Some(applications) => applications,
+            None => &empty_vec,
+        };
 
         let qe_environment = target_environment.to_qe_environment(
             self.engine.context(),
@@ -661,7 +647,7 @@ impl<'a> Transaction<'a> {
                     Action::Create => lh.started(progress_info),
                     Action::Pause => lh.paused(progress_info),
                     Action::Delete => lh.deleted(progress_info),
-                    Action::Nothing => {}
+                    Action::Nothing => {} // nothing to do here?
                 };
                 return;
             }
@@ -670,7 +656,7 @@ impl<'a> Transaction<'a> {
                 Action::Create => lh.start_error(progress_info),
                 Action::Pause => lh.pause_error(progress_info),
                 Action::Delete => lh.delete_error(progress_info),
-                Action::Nothing => {}
+                Action::Nothing => {} // nothing to do here?
             };
         }
 

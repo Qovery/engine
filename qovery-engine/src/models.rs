@@ -52,17 +52,12 @@ impl Environment {
         let external_services = self
             .external_services
             .iter()
-            .map(|x| {
-                x.to_stateless_service(
-                    context,
-                    built_applications
-                        .iter()
-                        .find(|y| x.id.as_str() == y.id())
-                        .unwrap()
-                        .image(), // FIXME not safe
-                    cloud_provider,
-                )
-            })
+            .map(
+                |x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
+                    Some(app) => x.to_stateless_service(context, app.image(), cloud_provider),
+                    _ => None,
+                },
+            )
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -70,17 +65,12 @@ impl Environment {
         let applications = self
             .applications
             .iter()
-            .map(|x| {
-                x.to_stateless_service(
-                    context,
-                    built_applications
-                        .iter()
-                        .find(|y| x.id.as_str() == y.id())
-                        .unwrap()
-                        .image(), // FIXME not safe
-                    cloud_provider,
-                )
-            })
+            .map(
+                |x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
+                    Some(app) => x.to_stateless_service(context, app.image(), cloud_provider),
+                    _ => None,
+                },
+            )
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
