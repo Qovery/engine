@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 #set -x
-set -u
 
 awk=awk
 sed=sed
@@ -16,6 +15,12 @@ ARGS_NUM=$#
 # Note: this is the dev version for the moment as the prod one is not released yet
 QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
+
+function print_help() {
+  echo "Usage: $0 <option>"
+  $grep '##' $0 | $grep -v grep | $sed -r "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | $awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
+  exit 1
+}
 
 function check_num_args() {
   desired_number=$1
@@ -53,9 +58,15 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   tag=$(get_commit_id)
   cp docker/load.sh docker/engine/load.sh
   cp docker/bin_versions bin_versions
+  # copy providers files to download required binaries
+  rm -f docker/engine/providers/*
+  set -e
+  find lib/ -name "tf-providers*" -exec cp {} docker/engine/providers/ \;
+  $sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/*
   docker build -t qoveryrd/engine:${tag} .
   rm -f docker/engine/load.sh
   rm -f bin_versions
+  rm -f docker/engine/providers/*
 }
 
 function build_ci_image() { ## Build CI image locally. Args: <tag_version>
@@ -183,6 +194,11 @@ function all_tests() { # Run all tests on qovery-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
 }
 
+if [ $ARGS_NUM -eq 0 ] ; then
+  print_help
+fi
+set -u
+
 case $1 in
 build_image)
   build_image
@@ -227,8 +243,6 @@ all_tests-seq)
   all_tests 1
   ;;
 *)
-  echo "Usage: $0 <option>"
-  $grep '##' $0 | $grep -v grep | $sed -r "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | $awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
-  exit 1
+  print_help
   ;;
 esac

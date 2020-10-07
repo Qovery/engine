@@ -1,5 +1,6 @@
 # Naming convention
 
+* providers: providers files should be named tf-providers-<cloud-provider-name>
 * variables: should be named with _, never with - (in the tf-default-vars.j2.tf)
 * variables should start with the name of the service associated (ex: eks_, rds_...)
 * tf filenames: filenames should never contain _ or they may not be interpreted

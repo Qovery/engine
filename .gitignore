@@ -8,3 +8,4 @@ docker/ci/load.sh
 app/.qovery-workspace
 .terraform/
 NOTES.txt
+docker/engine/providers/

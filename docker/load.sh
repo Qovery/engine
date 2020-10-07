@@ -18,6 +18,8 @@ function check_num_args() {
 source bin_versions
 
 function download() { ## Download prerequisites binaries for the engine
+  echo "Downloading binaries"
+
   mkdir -p $TMP_FOLDER && cd $TMP_FOLDER
   mkdir $BIN_DEST_FOLDER
   # terraform
@@ -46,10 +48,17 @@ function download() { ## Download prerequisites binaries for the engine
   curl -sLo doctl https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-${SYSTEM}-${ARCH}.tar.gz
   mv doctl $BIN_DEST_FOLDER/doctl${DOCTL_VERSION}
 
+  # Clean
   chmod 755 $BIN_DEST_FOLDER/*
-
   rm -Rf $TMP_FOLDER
   cd ~
+}
+
+function download_terraform_plugins() {
+  echo "Downloading Terraform plugins"
+  cd docker/engine/providers
+  terraform init
+  cd -
 }
 
 function install() { ## Make symlinks to install binaries in default PATH
@@ -72,6 +81,9 @@ download)
 install)
   check_num_args 2
   install $2
+  ;;
+download_terraform_plugins)
+  download_terraform_plugins
   ;;
 *)
   echo "Usage: $0 <option>"

@@ -5,16 +5,19 @@ FROM rust:1.45-slim-buster as build
 
 ARG BIN_DEST_FOLDER
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
+ENV BIN_DIR=/root/binaries
+ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
 
 RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip
 WORKDIR /usr/src/app
 ADD . .
 
-# run tests
-#RUN cargo test --workspace
 # run release build
-RUN cargo build --release
+RUN mkdir -p $TF_PLUGIN_CACHE_DIR
 RUN ./docker/load.sh download
+RUN ./docker/load.sh install $BIN_DEST_FOLDER
+RUN ./docker/load.sh download_terraform_plugins
+RUN cargo build --release
 
 # Final image
 FROM debian:buster-slim as run
@@ -23,19 +26,23 @@ ARG BIN_DEST_FOLDER
 
 ENV HOME_DIR="/home/qovery"
 ENV BIN_DIR=$HOME_DIR/binaries
+ENV TF_PLUGIN_CACHE_DIR=$HOME_DIR/.terraform.d/plugin-cache
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 
 RUN apt-get update && \
-    apt-get -y install curl docker.io && \
+    apt-get -y install curl docker.io vim && \
     apt-get clean &&\
     groupadd -g 1000 qovery && \
-    useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery
+    useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery && \
+    mkdir $HOME_DIR/.terraform.d/ && \
+    chown -Rf 1000:1000 $HOME_DIR/.terraform.d
 
 WORKDIR $HOME_DIR
 COPY --from=build /usr/src/app/target/release/app .
 COPY --from=build /usr/src/app/docker/engine/load.sh .
 COPY --from=build /usr/src/app/docker/engine/run.sh .
 COPY --from=build /usr/src/app/bin_versions .
+COPY --from=build /root/.terraform.d/plugin-cache $HOME_DIR/.terraform.d/plugin-cache
 COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
 RUN ./load.sh install $BIN_DIR && \
