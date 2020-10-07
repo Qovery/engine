@@ -233,8 +233,10 @@ fn deploy_a_working_environment_with_custom_domain() {
         .into_iter()
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
-                domain: "my-custom.oom.sh".to_string(),
-                target_domain: "my-custom.oom.sh".to_string(),
+                // should be the client domain
+                domain: "test-domain.qvy.io".to_string(),
+                // should be our domain
+                target_domain: "target-domain.oom.sh".to_string(),
             }];
             router
         })
@@ -247,8 +249,10 @@ fn deploy_a_working_environment_with_custom_domain() {
         .into_iter()
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
-                domain: "my-custom.oom.sh".to_string(),
-                target_domain: "my-custom.oom.sh".to_string(),
+                // should be the client domain
+                domain: "test-domain.qvy.io".to_string(),
+                // should be our domain
+                target_domain: "target-domain.oom.sh".to_string(),
             }];
             router
         })
@@ -265,11 +269,11 @@ fn deploy_a_working_environment_with_custom_domain() {
 
     // Todo: check the domain is ready and setup one if needed
 
-    match delete_environment(&context_for_delete, &ea_delete) {
+    /*    match delete_environment(&context_for_delete, &ea_delete) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+    };*/
 
     //Todo: remove the namespace (or project)
 }

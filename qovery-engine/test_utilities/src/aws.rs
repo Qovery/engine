@@ -142,6 +142,7 @@ pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
 }
 
 pub fn working_minimal_environment(context: &Context) -> Environment {
+    let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
@@ -152,7 +153,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: format!("{}-{}", "simple-app".to_string(), generate_id()),
+            name: format!("{}-{}", "simple-app".to_string(), &suffix),
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: "Dockerfile".to_string(),
@@ -179,7 +180,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: "simple-app".to_string(),
+                application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
             }],
         }],
         databases: vec![],

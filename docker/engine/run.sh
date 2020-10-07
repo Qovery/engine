@@ -39,4 +39,4 @@ tar -xzf lib.tgz
 rm -f lib.tgz
 
 # Run
-dumb-init ./app
+exec dumb-init ./app

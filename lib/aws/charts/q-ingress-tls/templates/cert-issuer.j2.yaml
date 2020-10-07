@@ -18,5 +18,5 @@ spec:
     solvers:
       - http01:
           ingress:
-            class: nginx-{{ project_id }}
+            class: "{{ id }}"
 {%- endfor %}

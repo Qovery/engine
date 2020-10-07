@@ -1,6 +1,7 @@
 kind: Service
 apiVersion: v1
 metadata:
+  # TODO: dns should not be here
   name: db-dns-{{.Values.app_id}}
   labels:
     appId: {{.Values.app_id}}
