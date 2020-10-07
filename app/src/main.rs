@@ -151,7 +151,7 @@ fn listen_for_task_running_check_events(
             .get_task_status_by_group_id(&group_id)
         {
             Some(status) => match status {
-                Status::Running { .. } => true,
+                Status::StartInProgress { .. } => true,
                 _ => false,
             },
             None => false,

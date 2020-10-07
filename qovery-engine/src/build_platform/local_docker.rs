@@ -6,7 +6,7 @@ use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
 use crate::models::{
     Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
-    ProgressScope, ProgressStep,
+    ProgressScope,
 };
 use crate::transaction::CommitError::BuildImage;
 use crate::{cmd, git};
@@ -193,11 +193,10 @@ impl BuildPlatform for LocalDocker {
                 let line_string = line.unwrap();
                 info!("{}", line_string.as_str());
 
-                listeners_helper.on_progress(ProgressInfo::new(
+                listeners_helper.start_in_progress(ProgressInfo::new(
                     ProgressScope::Application {
                         id: build.image.application_id.clone(),
                     },
-                    ProgressStep::Build,
                     ProgressLevel::Info,
                     Some(line_string.as_str()),
                     self.context.execution_id(),
@@ -207,11 +206,10 @@ impl BuildPlatform for LocalDocker {
                 let line_string = line.unwrap();
                 error!("{}", line_string.as_str());
 
-                listeners_helper.on_error(ProgressInfo::new(
+                listeners_helper.error(ProgressInfo::new(
                     ProgressScope::Application {
                         id: build.image.application_id.clone(),
                     },
-                    ProgressStep::Build,
                     ProgressLevel::Error,
                     Some(line_string.as_str()),
                     self.context.execution_id(),
@@ -224,11 +222,10 @@ impl BuildPlatform for LocalDocker {
             Err(_) => return Err(BuildError::Error),
         }
 
-        listeners_helper.on_progress(ProgressInfo::new(
+        listeners_helper.start_in_progress(ProgressInfo::new(
             ProgressScope::Application {
                 id: build.image.application_id.clone(),
             },
-            ProgressStep::Build,
             ProgressLevel::Info,
             Some("build is done ✔"),
             self.context.execution_id(),
@@ -241,11 +238,10 @@ impl BuildPlatform for LocalDocker {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
         let listener_helper = ListenersHelper::new(&self.listeners);
-        listener_helper.on_error(ProgressInfo::new(
+        listener_helper.error(ProgressInfo::new(
             ProgressScope::Application {
                 id: build.image.application_id,
             },
-            ProgressStep::Build,
             ProgressLevel::Error,
             Some("something goes wrong (not implemented)"),
             self.context.execution_id(),

@@ -11,10 +11,10 @@ use evmap::{ReadHandle, WriteHandle};
 use serde::{Deserialize, Serialize};
 
 use qovery_engine::cloud_provider::service::ServiceError;
-use qovery_engine::models::{ProgressLevel, ProgressScope, ProgressStep};
+use qovery_engine::error::ConfigurationError;
+use qovery_engine::models::{ProgressLevel, ProgressScope};
 
 use crate::models::Request;
-use qovery_engine::error::ConfigurationError;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -174,7 +174,7 @@ impl TaskManager {
                                     Ok(it) => {
                                         it.task.update_status(
                                             &tx_run_msg,
-                                            Status::TerminatedWithError {
+                                            Status::StartError {
                                                 message: Some(format!(
                                                     "task caused a panic!: {:?}",
                                                     err
@@ -182,7 +182,6 @@ impl TaskManager {
                                                 context: ActionContext::new(
                                                     // TODO: create a more appropriate scope?
                                                     ProgressScope::Queued,
-                                                    ProgressStep::Final,
                                                     ProgressLevel::Error,
                                                     task_id,
                                                 ),
@@ -197,7 +196,7 @@ impl TaskManager {
                                         );
                                         e.into_inner().task.update_status(
                                             &tx_run_msg,
-                                            Status::TerminatedWithError {
+                                            Status::StartError {
                                                 message: Some(format!(
                                                     "task caused a panic!: {:?}",
                                                     err
@@ -205,7 +204,6 @@ impl TaskManager {
                                                 context: ActionContext::new(
                                                     // TODO: create a more appropriate scope?
                                                     ProgressScope::Queued,
-                                                    ProgressStep::Final,
                                                     ProgressLevel::Error,
                                                     task_id,
                                                 ),
@@ -296,7 +294,6 @@ fn add_task(
                 message: None,
                 context: ActionContext::new(
                     ProgressScope::Queued,
-                    ProgressStep::Init,
                     ProgressLevel::Info,
                     task_id.to_string(),
                 ),
@@ -310,7 +307,6 @@ fn add_task(
             message: None,
             context: ActionContext::new(
                 ProgressScope::Queued,
-                ProgressStep::Init,
                 ProgressLevel::Info,
                 task_id.to_string(),
             ),
@@ -336,21 +332,14 @@ pub struct InternalTask {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ActionContext {
     pub scope: ProgressScope,
-    pub step: ProgressStep,
     pub level: ProgressLevel,
     pub execution_id: String,
 }
 
 impl ActionContext {
-    pub fn new(
-        scope: ProgressScope,
-        step: ProgressStep,
-        level: ProgressLevel,
-        execution_id: String,
-    ) -> Self {
+    pub fn new(scope: ProgressScope, level: ProgressLevel, execution_id: String) -> Self {
         ActionContext {
             scope,
-            step,
             level,
             execution_id,
         }
@@ -364,7 +353,15 @@ pub enum Status {
         message: Option<String>,
         context: ActionContext,
     },
-    Running {
+    StartInProgress {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    PauseInProgress {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    DeleteInProgress {
         message: Option<String>,
         context: ActionContext,
     },
@@ -372,11 +369,27 @@ pub enum Status {
         message: Option<String>,
         context: ActionContext,
     },
-    Terminated {
+    Started {
         message: Option<String>,
         context: ActionContext,
     },
-    TerminatedWithError {
+    Paused {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    Deleted {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    StartError {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    PauseError {
+        message: Option<String>,
+        context: ActionContext,
+    },
+    DeleteError {
         message: Option<String>,
         context: ActionContext,
     },

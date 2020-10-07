@@ -11,7 +11,7 @@ use crate::container_registry::{PushError, PushResult};
 use crate::engine::Engine;
 use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo,
-    ProgressLevel, ProgressScope, ProgressStep,
+    ProgressLevel, ProgressScope,
 };
 use std::thread;
 
@@ -628,7 +628,6 @@ impl<'a> Transaction<'a> {
             err => return err, // which it means that an error occurred
         };
 
-        let lh = ListenersHelper::new(kubernetes.listeners());
         let execution_id = self.engine.context().execution_id();
 
         // inner function - I use it instead of closure because of ?Sized
@@ -638,12 +637,42 @@ impl<'a> Transaction<'a> {
         {
             ProgressInfo::new(
                 service.progress_scope(),
-                ProgressStep::Final,
                 ProgressLevel::Info,
                 None::<&str>,
                 execution_id,
             )
         };
+
+        // send the back the right progress status
+        fn send_progress<T>(
+            kubernetes: &dyn Kubernetes,
+            action: &Action,
+            service: &Box<T>,
+            execution_id: &str,
+            is_error: bool,
+        ) where
+            T: Service + ?Sized,
+        {
+            let lh = ListenersHelper::new(kubernetes.listeners());
+            let progress_info = get_final_progress_info(service, execution_id);
+
+            if !is_error {
+                match action {
+                    Action::Create => lh.started(progress_info),
+                    Action::Pause => lh.paused(progress_info),
+                    Action::Delete => lh.deleted(progress_info),
+                    Action::Nothing => {}
+                };
+                return;
+            }
+
+            match action {
+                Action::Create => lh.start_error(progress_info),
+                Action::Pause => lh.pause_error(progress_info),
+                Action::Delete => lh.delete_error(progress_info),
+                Action::Nothing => {}
+            };
+        }
 
         // 100 ms sleep to avoid race condition on last service status update
         // Otherwise, the last status sent to the CORE is (sometimes) not the right one.
@@ -663,11 +692,23 @@ impl<'a> Transaction<'a> {
                 // !!! don't change the order
                 // terminal update
                 for service in &qe_environment.stateful_services {
-                    lh.on_complete_with_error(get_final_progress_info(service, execution_id));
+                    send_progress(
+                        kubernetes,
+                        &target_environment.action,
+                        service,
+                        execution_id,
+                        true,
+                    );
                 }
 
                 for service in &qe_environment.stateless_services {
-                    lh.on_complete_with_error(get_final_progress_info(service, execution_id));
+                    send_progress(
+                        kubernetes,
+                        &target_environment.action,
+                        service,
+                        execution_id,
+                        true,
+                    );
                 }
 
                 return rollback_result;
@@ -675,11 +716,23 @@ impl<'a> Transaction<'a> {
             _ => {
                 // terminal update
                 for service in &qe_environment.stateful_services {
-                    lh.on_complete(get_final_progress_info(service, execution_id));
+                    send_progress(
+                        kubernetes,
+                        &target_environment.action,
+                        service,
+                        execution_id,
+                        false,
+                    );
                 }
 
                 for service in &qe_environment.stateless_services {
-                    lh.on_complete(get_final_progress_info(service, execution_id));
+                    send_progress(
+                        kubernetes,
+                        &target_environment.action,
+                        service,
+                        execution_id,
+                        false,
+                    );
                 }
             }
         };

@@ -25,7 +25,7 @@ use crate::dns_provider::Kind::CLOUDFLARE;
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
-    ProgressScope, ProgressStep,
+    ProgressScope,
 };
 use crate::{dns_provider, dynamo_db, s3};
 
@@ -363,11 +363,10 @@ impl<'a> Kubernetes for EKS<'a> {
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        listeners_helper.on_progress(ProgressInfo::new(
+        listeners_helper.start_in_progress(ProgressInfo::new(
             ProgressScope::Infrastructure {
                 execution_id: self.context.execution_id().to_string(),
             },
-            ProgressStep::Create,
             ProgressLevel::Info,
             Some(format!(
                 "start to delete EKS cluster {} with id {}",
@@ -435,11 +434,10 @@ impl<'a> Kubernetes for EKS<'a> {
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        listeners_helper.on_progress(ProgressInfo::new(
+        listeners_helper.delete_in_progress(ProgressInfo::new(
             ProgressScope::Infrastructure {
                 execution_id: self.context.execution_id().to_string(),
             },
-            ProgressStep::Delete,
             ProgressLevel::Warn,
             Some(format!(
                 "start to delete EKS cluster {} with id {}",
@@ -505,9 +503,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for service in &environment.stateful_services {
             let progress_scope = service.progress_scope();
 
-            listeners_helper.on_progress(ProgressInfo::new(
+            listeners_helper.start_in_progress(ProgressInfo::new(
                 progress_scope.clone(),
-                ProgressStep::Deploy,
                 ProgressLevel::Info,
                 Some(format!(
                     "let's deploy {} {}",
@@ -526,9 +523,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.error(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Error,
                         Some(format!(
                             "error while deploying {} {} : error => {:?}",
@@ -542,9 +538,8 @@ impl<'a> Kubernetes for EKS<'a> {
                     return Err(KubernetesError::Deploy(err));
                 }
                 _ => {
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.start_in_progress(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Info,
                         Some(format!(
                             "deployment succeeded for {} {}",
@@ -563,9 +558,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for service in &environment.stateless_services {
             let progress_scope = service.progress_scope();
 
-            listeners_helper.on_progress(ProgressInfo::new(
+            listeners_helper.start_in_progress(ProgressInfo::new(
                 progress_scope.clone(),
-                ProgressStep::Deploy,
                 ProgressLevel::Info,
                 Some(format!(
                     "let's deploy {} {}",
@@ -584,9 +578,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.error(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Error,
                         Some(format!(
                             "error while deploying {} {} : error => {:?}",
@@ -600,9 +593,8 @@ impl<'a> Kubernetes for EKS<'a> {
                     return Err(KubernetesError::Deploy(err));
                 }
                 _ => {
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.start_in_progress(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Info,
                         Some(format!(
                             "deployment succeeded for {} {}",
@@ -619,9 +611,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for service in &environment.stateful_services {
             let progress_scope = service.progress_scope();
 
-            listeners_helper.on_progress(ProgressInfo::new(
+            listeners_helper.start_in_progress(ProgressInfo::new(
                 progress_scope.clone(),
-                ProgressStep::Deploy,
                 ProgressLevel::Info,
                 Some(format!(
                     "check {} {}",
@@ -640,9 +631,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.error(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Error,
                         Some(format!(
                             "error while checking {} {} : error => {:?}",
@@ -656,9 +646,8 @@ impl<'a> Kubernetes for EKS<'a> {
                     return Err(KubernetesError::Deploy(err));
                 }
                 _ => {
-                    listeners_helper.on_complete(ProgressInfo::new(
+                    listeners_helper.started(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Info,
                         Some(format!(
                             "{} {} is up and running",
@@ -674,9 +663,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for service in &environment.stateless_services {
             let progress_scope = service.progress_scope();
 
-            listeners_helper.on_progress(ProgressInfo::new(
+            listeners_helper.start_in_progress(ProgressInfo::new(
                 progress_scope.clone(),
-                ProgressStep::Deploy,
                 ProgressLevel::Info,
                 Some(format!(
                     "check {} {}",
@@ -695,9 +683,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.error(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Error,
                         Some(format!(
                             "error while checking {} {} : error => {:?}",
@@ -711,9 +698,8 @@ impl<'a> Kubernetes for EKS<'a> {
                     return Err(KubernetesError::Deploy(err));
                 }
                 _ => {
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.start_in_progress(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Info,
                         Some(format!(
                             "{} {} is up and running",
@@ -734,11 +720,10 @@ impl<'a> Kubernetes for EKS<'a> {
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        listeners_helper.on_progress(ProgressInfo::new(
+        listeners_helper.start_in_progress(ProgressInfo::new(
             ProgressScope::Environment {
                 id: self.context.execution_id().to_string(),
             },
-            ProgressStep::Deploy,
             ProgressLevel::Warn,
             Some(
                 "An error occurred while trying to deploy the environment, so let's revert changes",
@@ -759,9 +744,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for service in &environment.stateful_services {
             let progress_scope = service.progress_scope();
 
-            listeners_helper.on_progress(ProgressInfo::new(
+            listeners_helper.start_in_progress(ProgressInfo::new(
                 progress_scope.clone(),
-                ProgressStep::Deploy,
                 ProgressLevel::Info,
                 Some(format!(
                     "reverting changes for {} {}",
@@ -780,9 +764,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.error(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Error,
                         Some(format!(
                             "error while reverting changes for {} {} : error => {:?}",
@@ -796,9 +779,8 @@ impl<'a> Kubernetes for EKS<'a> {
                     return Err(KubernetesError::Deploy(err));
                 }
                 _ => {
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.start_in_progress(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Info,
                         Some(format!(
                             "reverting changes succeeded for {} {}",
@@ -817,9 +799,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for service in &environment.stateless_services {
             let progress_scope = service.progress_scope();
 
-            listeners_helper.on_progress(ProgressInfo::new(
+            listeners_helper.start_in_progress(ProgressInfo::new(
                 progress_scope.clone(),
-                ProgressStep::Deploy,
                 ProgressLevel::Info,
                 Some(format!(
                     "reverting changes for {} {}",
@@ -838,9 +819,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    listeners_helper.on_error(ProgressInfo::new(
+                    listeners_helper.error(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Error,
                         Some(format!(
                             "error while reverting changes for {} {} : error => {:?}",
@@ -854,9 +834,8 @@ impl<'a> Kubernetes for EKS<'a> {
                     return Err(KubernetesError::Deploy(err));
                 }
                 _ => {
-                    listeners_helper.on_progress(ProgressInfo::new(
+                    listeners_helper.start_in_progress(ProgressInfo::new(
                         progress_scope,
-                        ProgressStep::Deploy,
                         ProgressLevel::Info,
                         Some(format!(
                             "reverting changes succeeded for {} {}",

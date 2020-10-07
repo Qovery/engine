@@ -18,7 +18,7 @@ use crate::container_registry::{
 };
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
-    ProgressScope, ProgressStep,
+    ProgressScope,
 };
 use crate::runtime::async_run;
 
@@ -334,11 +334,10 @@ impl ContainerRegistry for ECR {
 
             info!("{}", info_message.as_str());
 
-            listeners_helper.on_progress(ProgressInfo::new(
+            listeners_helper.start_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
                     id: image.application_id.clone(),
                 },
-                ProgressStep::Push,
                 ProgressLevel::Info,
                 Some(info_message),
                 self.context.execution_id(),
@@ -358,11 +357,10 @@ impl ContainerRegistry for ECR {
 
         info!("{}", info_message.as_str());
 
-        listeners_helper.on_progress(ProgressInfo::new(
+        listeners_helper.start_in_progress(ProgressInfo::new(
             ProgressScope::Application {
                 id: image.application_id.clone(),
             },
-            ProgressStep::Push,
             ProgressLevel::Info,
             Some(info_message),
             self.context.execution_id(),
@@ -371,7 +369,10 @@ impl ContainerRegistry for ECR {
         self.push_image(dest, image)
     }
 
-    fn push_error(&self, _image: &Image) -> Result<PushResult, PushError> {
-        unimplemented!()
+    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
+        // TODO change this
+        Ok(PushResult {
+            image: image.clone(),
+        })
     }
 }

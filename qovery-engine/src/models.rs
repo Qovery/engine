@@ -1,16 +1,17 @@
 use std::hash::Hash;
 use std::rc::Rc;
 
+use chrono::{DateTime, Utc};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
+use serde::{Deserialize, Serialize};
+
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
 use crate::cloud_provider::aws::databases::{MySQL, PostgreSQL};
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
-use chrono::{DateTime, Utc};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -609,7 +610,6 @@ pub enum EnvironmentError {}
 pub struct ProgressInfo {
     pub created_at: DateTime<Utc>,
     pub scope: ProgressScope,
-    pub step: ProgressStep,
     pub level: ProgressLevel,
     pub message: Option<String>,
     pub execution_id: String,
@@ -618,7 +618,6 @@ pub struct ProgressInfo {
 impl ProgressInfo {
     pub fn new<T: Into<String>, X: Into<String>>(
         scope: ProgressScope,
-        step: ProgressStep,
         level: ProgressLevel,
         message: Option<T>,
         execution_id: X,
@@ -626,7 +625,6 @@ impl ProgressInfo {
         ProgressInfo {
             created_at: Utc::now(),
             scope,
-            step,
             level,
             message: match message {
                 Some(msg) => Some(msg.into()),
@@ -651,20 +649,6 @@ pub enum ProgressScope {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ProgressStep {
-    Init,
-    Create,
-    Build,
-    Push,
-    Deploy,
-    Start,
-    Pause,
-    Delete,
-    Final,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProgressLevel {
     Debug,
     Info,
@@ -673,10 +657,16 @@ pub enum ProgressLevel {
 }
 
 pub trait ProgressListener {
-    fn on_progress(&self, info: ProgressInfo);
-    fn on_error(&self, info: ProgressInfo);
-    fn on_complete(&self, info: ProgressInfo);
-    fn on_complete_with_error(&self, info: ProgressInfo);
+    fn start_in_progress(&self, info: ProgressInfo);
+    fn pause_in_progress(&self, info: ProgressInfo);
+    fn delete_in_progress(&self, info: ProgressInfo);
+    fn error(&self, info: ProgressInfo);
+    fn started(&self, info: ProgressInfo);
+    fn paused(&self, info: ProgressInfo);
+    fn deleted(&self, info: ProgressInfo);
+    fn start_error(&self, info: ProgressInfo);
+    fn pause_error(&self, info: ProgressInfo);
+    fn delete_error(&self, info: ProgressInfo);
 }
 
 pub type Listener = Rc<Box<dyn ProgressListener>>;
@@ -691,26 +681,56 @@ impl<'a> ListenersHelper<'a> {
         ListenersHelper { listeners }
     }
 
-    pub fn on_progress(&self, info: ProgressInfo) {
+    pub fn start_in_progress(&self, info: ProgressInfo) {
         self.listeners
             .iter()
-            .for_each(|l| l.on_progress(info.clone()));
+            .for_each(|l| l.start_in_progress(info.clone()));
     }
 
-    pub fn on_error(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.on_error(info.clone()));
-    }
-
-    pub fn on_complete(&self, info: ProgressInfo) {
+    pub fn pause_in_progress(&self, info: ProgressInfo) {
         self.listeners
             .iter()
-            .for_each(|l| l.on_complete(info.clone()));
+            .for_each(|l| l.pause_in_progress(info.clone()));
     }
 
-    pub fn on_complete_with_error(&self, info: ProgressInfo) {
+    pub fn delete_in_progress(&self, info: ProgressInfo) {
         self.listeners
             .iter()
-            .for_each(|l| l.on_complete_with_error(info.clone()));
+            .for_each(|l| l.delete_in_progress(info.clone()));
+    }
+
+    pub fn error(&self, info: ProgressInfo) {
+        self.listeners.iter().for_each(|l| l.error(info.clone()));
+    }
+
+    pub fn started(&self, info: ProgressInfo) {
+        self.listeners.iter().for_each(|l| l.started(info.clone()));
+    }
+
+    pub fn paused(&self, info: ProgressInfo) {
+        self.listeners.iter().for_each(|l| l.paused(info.clone()));
+    }
+
+    pub fn deleted(&self, info: ProgressInfo) {
+        self.listeners.iter().for_each(|l| l.deleted(info.clone()));
+    }
+
+    pub fn start_error(&self, info: ProgressInfo) {
+        self.listeners
+            .iter()
+            .for_each(|l| l.start_error(info.clone()));
+    }
+
+    pub fn pause_error(&self, info: ProgressInfo) {
+        self.listeners
+            .iter()
+            .for_each(|l| l.pause_error(info.clone()));
+    }
+
+    pub fn delete_error(&self, info: ProgressInfo) {
+        self.listeners
+            .iter()
+            .for_each(|l| l.delete_error(info.clone()));
     }
 }
 
@@ -727,6 +747,7 @@ pub struct Context {
 pub trait Clone2 {
     fn clone_not_same_execution_id(&self) -> Self;
 }
+
 // for test we need to clone context but to change the directory workspace used
 // to to this we just have to suffix the execution id in tests
 impl Clone2 for Context {
