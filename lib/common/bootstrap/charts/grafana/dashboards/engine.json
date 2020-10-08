@@ -15,9 +15,23 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 6,
+  "id": 7,
   "links": [],
   "panels": [
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 9,
+      "panels": [],
+      "title": "Errors",
+      "type": "row"
+    },
     {
       "alert": {
         "alertRuleTags": {},
@@ -25,7 +39,7 @@
           {
             "evaluator": {
               "params": [
-                1
+                0
               ],
               "type": "gt"
             },
@@ -50,29 +64,45 @@
         "for": "5m",
         "frequency": "1m",
         "handler": 1,
-        "message": "One error has been raised",
+        "message": "One error has been raised on the engine:\nRequest: {container=\"qovery-engine\"} |= \"ERROR\" != \"build error\" != \"BuildImage(Error)\" != \"qovery_engine::build_platform::local_docker\"",
         "name": "Errors",
-        "noDataState": "no_data",
+        "noDataState": "ok",
         "notifications": []
       },
-      "aliasColors": {},
-      "bars": false,
+      "aliasColors": {
+        "Errors": "red"
+      },
+      "bars": true,
       "dashLength": 10,
       "dashes": false,
       "datasource": "PromLoki",
       "fieldConfig": {
         "defaults": {
-          "custom": {}
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
         },
         "overrides": []
       },
       "fill": 1,
       "fillGradient": 2,
       "gridPos": {
-        "h": 9,
-        "w": 12,
+        "h": 7,
+        "w": 24,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "hiddenSeries": false,
       "id": 2,
@@ -87,13 +117,14 @@
         "total": false,
         "values": true
       },
-      "lines": true,
+      "lines": false,
       "linewidth": 2,
       "nullPointMode": "null",
       "options": {
         "dataLinks": []
       },
       "percentage": false,
+      "pluginVersion": "7.0.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -103,7 +134,8 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "count_over_time(({container=\"qovery-engine\"})[5m])",
+          "expr": "sum(rate(({container=\"qovery-engine\"})[5m] |= \"ERROR\" != \"build error\" != \"BuildImage(Error)\" != \"qovery_engine::build_platform::local_docker\"))",
+          "hide": false,
           "interval": "",
           "legendFormat": "Errors",
           "refId": "A"
@@ -111,13 +143,11 @@
       ],
       "thresholds": [
         {
-          "$$hashKey": "object:378",
           "colorMode": "critical",
           "fill": true,
           "line": true,
           "op": "gt",
-          "value": 1,
-          "yaxis": "left"
+          "value": 0
         }
       ],
       "timeFrom": null,
@@ -163,13 +193,299 @@
       }
     },
     {
+      "datasource": "Loki",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": null
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "7.0.3",
+      "targets": [
+        {
+          "expr": "{container=\"qovery-engine\"} |= \"ERROR\" != \"build error\" != \"BuildImage(Error)\" != \"qovery_engine::build_platform::local_docker\"",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Errors logs",
+      "type": "logs"
+    },
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
+      "id": 11,
+      "panels": [],
+      "title": "Panics",
+      "type": "row"
+    },
+    {
       "alert": {
         "alertRuleTags": {},
         "conditions": [
           {
             "evaluator": {
               "params": [
-                1
+                0
+              ],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "params": [],
+              "type": "avg"
+            },
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "for": "5m",
+        "frequency": "1m",
+        "handler": 1,
+        "message": "Panics have been detected",
+        "name": "Panics alert",
+        "noDataState": "ok",
+        "notifications": []
+      },
+      "aliasColors": {
+        "Errors": "red"
+      },
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "PromLoki",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 2,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "hiddenSeries": false,
+      "id": 6,
+      "legend": {
+        "alignAsTable": true,
+        "avg": false,
+        "current": true,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": false,
+      "linewidth": 2,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pluginVersion": "7.0.3",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(rate(({container=\"qovery-engine\"})[5m] |= \"panicked\"))",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Panics",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [
+        {
+          "colorMode": "critical",
+          "fill": true,
+          "line": true,
+          "op": "gt",
+          "value": 0
+        }
+      ],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Panics",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:336",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:337",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "datasource": "Loki",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": null
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 14,
+      "options": {
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "7.0.3",
+      "targets": [
+        {
+          "expr": "{container=\"qovery-engine\"} |= \"panicked\"",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Panics logs",
+      "type": "logs"
+    },
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 13,
+      "panels": [],
+      "title": "Waiting conditions",
+      "type": "row"
+    },
+    {
+      "alert": {
+        "alertRuleTags": {},
+        "conditions": [
+          {
+            "evaluator": {
+              "params": [
+                0
               ],
               "type": "gt"
             },
@@ -194,18 +510,35 @@
         "for": "5m",
         "frequency": "1m",
         "handler": 1,
+        "message": "Kubernetes is waiting for condition",
         "name": "Fatal alert",
-        "noDataState": "no_data",
+        "noDataState": "ok",
         "notifications": []
       },
-      "aliasColors": {},
+      "aliasColors": {
+        "Errors": "yellow"
+      },
       "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "PromLoki",
       "fieldConfig": {
         "defaults": {
-          "custom": {}
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
         },
         "overrides": []
       },
@@ -214,8 +547,8 @@
       "gridPos": {
         "h": 9,
         "w": 12,
-        "x": 12,
-        "y": 0
+        "x": 0,
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 3,
@@ -237,6 +570,7 @@
         "dataLinks": []
       },
       "percentage": false,
+      "pluginVersion": "7.0.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -246,27 +580,25 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "count_over_time(({container=\"qovery-engine\"})[5m] |= \"A task caused a panic while executing!\")",
+          "expr": "sum(count_over_time({container=\"qovery-engine\"} |= \"timed out waiting for the condition\" [5m]))",
           "interval": "",
-          "legendFormat": "Errors",
+          "legendFormat": "Waiting",
           "refId": "A"
         }
       ],
       "thresholds": [
         {
-          "$$hashKey": "object:495",
           "colorMode": "critical",
           "fill": true,
           "line": true,
           "op": "gt",
-          "value": 1,
-          "yaxis": "left"
+          "value": 0
         }
       ],
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Panic",
+      "title": "K8s waiting for condition",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -330,12 +662,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 15,
-        "w": 24,
-        "x": 0,
-        "y": 9
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 40
       },
-      "id": 5,
+      "id": 7,
       "options": {
         "showLabels": false,
         "showTime": false,
@@ -345,16 +677,17 @@
       "pluginVersion": "7.0.3",
       "targets": [
         {
-          "expr": "{container=\"qovery-engine\"}",
+          "expr": "{container=\"qovery-engine\"} |= \"timed out waiting for the condition\"",
           "refId": "A"
         }
       ],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Logs",
+      "title": "Waiting for conditions logs",
       "type": "logs"
     }
   ],
+  "refresh": false,
   "schemaVersion": 25,
   "style": "dark",
   "tags": [],
@@ -362,7 +695,7 @@
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-12h",
     "to": "now"
   },
   "timepicker": {
@@ -381,5 +714,5 @@
   "timezone": "",
   "title": "Engine",
   "uid": "xVPlLnFMk",
-  "version": 4
+  "version": 1
 }
