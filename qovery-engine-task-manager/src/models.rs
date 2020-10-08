@@ -27,6 +27,8 @@ pub struct Request {
     pub build_platform: BuildPlatform,
     pub cloud_provider: CloudProvider,
     pub dns_provider: DnsProvider,
+    #[serde(default = "test_cluster::false")]
+    pub test_cluster: bool,
     pub container_registry: ContainerRegistry,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_environment: Option<Environment>,
@@ -152,6 +154,7 @@ pub struct Kubernetes {
     pub name: String,
     pub version: String,
     pub region: String,
+    pub test_cluster: bool,
     pub options: Value,
     pub nodes: Vec<Node>,
 }
@@ -173,6 +176,7 @@ impl Kubernetes {
                 self.region.as_str(),
                 cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
                 dns_provider,
+                self.test_cluster,
                 serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(
                     self.options.clone(),
                 )

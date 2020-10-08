@@ -15,7 +15,7 @@
 // use std::fs::File;
 // use std::io::{BufReader, Read};
 // use test_utilities::aws::AWS_KUBERNETES_VERSION;
-//
+// use test_utilities::aws::TEST_CLUSTER;
 //
 // #[test]
 // #[ignore]
@@ -49,6 +49,7 @@
 //         "us-east-2",
 //         &aws,
 //         &cloudflare,
+//         TEST_CLUSTER,
 //         options_result.expect("Oh my god an error in test... Options options options"),
 //         nodes,
 //     );
@@ -64,7 +65,6 @@
 //         TransactionResult::UnrecoverableError(_, _) => assert!(false),
 //     };
 // }
-//
 //
 // pub fn read_file(filepath: &str) -> String {
 //     let file = File::open(filepath).expect("could not open file");
@@ -110,6 +110,7 @@
 //         "eu-west-3",
 //         &aws,
 //         &cloudflare,
+//         TEST_CLUSTER,
 //         options_result.expect("Oh my god an error in test... Options options options"),
 //         nodes,
 //     );
@@ -125,75 +126,75 @@
 //         TransactionResult::UnrecoverableError(_, _) => assert!(false),
 //     };
 // }
-// //
-// // #[test]
-// // #[ignore]
-// // fn delete_eks_cluster_in_us_east_2() {
-// //     init();
-// //
-// //     let context = test_utilities::aws::context();
-// //
-// //     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
-// //     let session = engine.session().unwrap();
-// //     let mut tx = session.transaction();
-// //
-// //     let aws = test_utilities::aws::cloud_provider_aws(&context);
-// //     let nodes = test_utilities::aws::aws_kubernetes_nodes();
-// //
-// //     let kubernetes = EKS::new(
-// //         context,
-// //         "my-eks-on-us-east-2",
-// //         "my-eks-us-east-2",
-// //         AWS_KUBERNETES_VERSION,
-// //         "us-east-2",
-// //         &aws,
-// //         nodes,
-// //     );
-// //
-// //     match tx.delete_kubernetes(&kubernetes) {
-// //         Err(err) => panic!("{:?}", err),
-// //         _ => {}
-// //     }
-// //
-// //     let _ = match tx.commit() {
-// //         TransactionResult::Ok => assert!(true),
-// //         TransactionResult::Rollback(_) => assert!(false),
-// //         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-// //     };
-// // }
-// //
-// // #[test]
-// // #[ignore]
-// // fn delete_eks_cluster_in_eu_west_3() {
-// //     init();
-// //
-// //     let context = test_utilities::aws::context();
-// //
-// //     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
-// //     let session = engine.session().unwrap();
-// //     let mut tx = session.transaction();
-// //
-// //     let aws = test_utilities::aws::cloud_provider_aws(&context);
-// //     let nodes = test_utilities::aws::aws_kubernetes_nodes();
-// //
-// //     let kubernetes = EKS::new(
-// //         context,
-// //         "my-eks-on-eu-west-3",
-// //         "my-eks-eu-west-3",
-// //         AWS_KUBERNETES_VERSION,
-// //         "eu-west-3",
-// //         &aws,
-// //         nodes,
-// //     );
-// //
-// //     match tx.delete_kubernetes(&kubernetes) {
-// //         Err(err) => panic!("{:?}", err),
-// //         _ => {}
-// //     }
-// //
-// //     let _ = match tx.commit() {
-// //         TransactionResult::Ok => assert!(true),
-// //         TransactionResult::Rollback(_) => assert!(false),
-// //         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-// //     };
-// // }
+//
+// #[test]
+// #[ignore]
+// fn delete_eks_cluster_in_us_east_2() {
+//     init();
+//
+//     let context = test_utilities::aws::context();
+//
+//     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+//     let session = engine.session().unwrap();
+//     let mut tx = session.transaction();
+//
+//     let aws = test_utilities::aws::cloud_provider_aws(&context);
+//     let nodes = test_utilities::aws::aws_kubernetes_nodes();
+//
+//     let kubernetes = EKS::new(
+//         context,
+//         "my-eks-on-us-east-2",
+//         "my-eks-us-east-2",
+//         AWS_KUBERNETES_VERSION,
+//         "us-east-2",
+//         &aws,
+//         nodes,
+//     );
+//
+//     match tx.delete_kubernetes(&kubernetes) {
+//         Err(err) => panic!("{:?}", err),
+//         _ => {}
+//     }
+//
+//     let _ = match tx.commit() {
+//         TransactionResult::Ok => assert!(true),
+//         TransactionResult::Rollback(_) => assert!(false),
+//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//     };
+// }
+//
+// #[test]
+// #[ignore]
+// fn delete_eks_cluster_in_eu_west_3() {
+//     init();
+//
+//     let context = test_utilities::aws::context();
+//
+//     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+//     let session = engine.session().unwrap();
+//     let mut tx = session.transaction();
+//
+//     let aws = test_utilities::aws::cloud_provider_aws(&context);
+//     let nodes = test_utilities::aws::aws_kubernetes_nodes();
+//
+//     let kubernetes = EKS::new(
+//         context,
+//         "my-eks-on-eu-west-3",
+//         "my-eks-eu-west-3",
+//         AWS_KUBERNETES_VERSION,
+//         "eu-west-3",
+//         &aws,
+//         nodes,
+//     );
+//
+//     match tx.delete_kubernetes(&kubernetes) {
+//         Err(err) => panic!("{:?}", err),
+//         _ => {}
+//     }
+//
+//     let _ = match tx.commit() {
+//         TransactionResult::Ok => assert!(true),
+//         TransactionResult::Rollback(_) => assert!(false),
+//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//     };
+// }

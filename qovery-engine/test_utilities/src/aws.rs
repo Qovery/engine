@@ -35,6 +35,7 @@ pub const AWS_ACCESS_KEY: &str = "E9Ugsvv7MI3vCaHtn1qoxXU8KwNJeTWn3GfVLNYN";
 pub const AWS_DEFAULT_REGION: &str = "us-east-2";
 pub const ORGANIZATION_ID: &str = "azerl1aowkdoiqjdoiwjqdioqj";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
+pub const TEST_CLUSTER: bool = true;
 
 pub fn execution_id() -> String {
     Utc::now()
@@ -115,6 +116,7 @@ pub fn aws_kubernetes_eks<'a>(
         AWS_DEFAULT_REGION,
         cloud_provider,
         dns_provider,
+        TEST_CLUSTER,
         options_values,
         nodes,
     )

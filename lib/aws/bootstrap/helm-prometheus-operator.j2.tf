@@ -107,6 +107,13 @@ resource "helm_release" "prometheus_operator" {
     value = "1Gi"
   }
 
+{% if test_cluster %}
+  set {
+    name = "defaultRules.config"
+    value = "{}"
+  }
+{% endif %}
+
   depends_on = [
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,

@@ -61,6 +61,7 @@ pub struct EKS<'a> {
     region: Region,
     cloud_provider: &'a AWS,
     dns_provider: &'a DnsProvider,
+    test_cluster: bool,
     nodes: Vec<Node>,
     template_directory: String,
     options: Options,
@@ -76,6 +77,7 @@ impl<'a> EKS<'a> {
         region: &str,
         cloud_provider: &'a AWS,
         dns_provider: &'a DnsProvider,
+        test_cluster: bool,
         options: Options,
         nodes: Vec<Node>,
     ) -> Self {
@@ -89,6 +91,7 @@ impl<'a> EKS<'a> {
             region: Region::from_str(region).unwrap(),
             cloud_provider,
             dns_provider,
+            test_cluster,
             options,
             nodes,
             template_directory,
@@ -218,6 +221,7 @@ impl<'a> EKS<'a> {
             "engine_version_controller_token",
             &engine_version_controller_token,
         );
+        context.insert("test_cluster", &self.test_cluster);
 
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);

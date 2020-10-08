@@ -330,6 +330,10 @@ datasources:
 ## Configure notifiers
 ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
 ##
+
+{% if test_cluster %}
+notifiers: {}
+{% else %}
 notifiers:
   notifiers.yaml:
     notifiers:
@@ -354,6 +358,7 @@ notifiers:
 #      settings:
 #        addresses: an_email_address@example.com
 #    delete_notifiers:
+{% endif %}
 
 ## Configure grafana dashboard providers
 ## ref: http://docs.grafana.org/administration/provisioning/#dashboards
