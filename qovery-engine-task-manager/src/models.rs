@@ -27,13 +27,17 @@ pub struct Request {
     pub build_platform: BuildPlatform,
     pub cloud_provider: CloudProvider,
     pub dns_provider: DnsProvider,
-    #[serde(default = "test_cluster::false")]
+    #[serde(default = "default_test_cluster")]
     pub test_cluster: bool,
     pub container_registry: ContainerRegistry,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_environment: Option<Environment>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failover_environment: Option<Environment>,
+}
+
+fn default_test_cluster() -> bool {
+    false
 }
 
 impl Request {
