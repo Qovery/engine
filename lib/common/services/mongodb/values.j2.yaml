@@ -20,7 +20,7 @@ image:
   ## Bitnami MongoDB image tag
   ## ref: https://hub.docker.com/r/bitnami/mongodb/tags/
   ##
-  tag:  "{{ databases[database_index]['version'] }}"
+  tag: "{{ version }}"
   ## Specify a imagePullPolicy
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
   ##
@@ -40,12 +40,12 @@ image:
 ## String to partially override mongodb.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
+nameOverride: {{ name }}
 
 ## String to fully override mongodb.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: {{ databases[database_index]['id'] }}-{{ environment_id }}
+fullnameOverride: {{ name }}
 
 serviceAccount:
   # Specifies whether a ServiceAccount should be created
@@ -73,7 +73,11 @@ volumePermissions:
     ##
     # pullSecrets:
     #   - myRegistryKeySecretName
-  resources: {}
+  resources:
+    limits: {}
+    requests:
+      cpu: "{{ database_total_cpus }}"
+      memory: "{{ database_ram_size_in_mib }}Mi"
 
 ## Enable authentication
 ## ref: https://docs.mongodb.com/manual/tutorial/enable-authentication/
@@ -84,14 +88,14 @@ usePassword: true
 ## MongoDB admin password
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#setting-the-root-password-on-first-run
 ##
-mongodbRootPassword: {{ databases[database_index]['password'] }}
+mongodbRootPassword: {{ database_password }}
 
 ## MongoDB custom user and database
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#creating-a-user-and-database-on-first-run
 ##
-mongodbUsername: {{ databases[database_index]['username'] }}
-mongodbPassword: {{ databases[database_index]['password'] }}
-mongodbDatabase: {{ databases[database_index]['name'] }}
+mongodbUsername: {{ database_login }}
+mongodbPassword: {{ database_password }}
+mongodbDatabase: {{ name }}
 
 ## Whether enable/disable IPv6 on MongoDB
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#enabling/disabling-ipv6
@@ -136,12 +140,12 @@ service:
   ## The value is evaluated as a template, so, for example, the value can depend on .Release or .Chart
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-    external-dns.alpha.kubernetes.io/hostname: "{{ databases[database_index]['fqdn'] }}"
+    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
 
   type: LoadBalancer
   # clusterIP: None
-  port: {{ databases[database_index]['port'] }}
+  port: {{ port }}
 
   ## Specify the nodePort value for the LoadBalancer and NodePort service types.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
@@ -202,7 +206,8 @@ annotations: {}
 labels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
-  databaseId: {{ databases[database_index]['name'] }}
+  databaseId: {{ id }}
+  databaseName: {{ name }}
 
 # Annotations to be added to MongoDB pods
 podAnnotations: {}
@@ -332,11 +337,12 @@ persistence:
   storageClass: "aws-ebs-gp2-0"
   accessModes:
     - ReadWriteOnce
-  size: {{ databases[database_index]['disk_size_in_mb'] }}Mi
+  size: {{ database_disk_size_in_gib }}Gi
   annotations:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
-    databaseId: {{ databases[database_index]['name'] }}
+    databaseId: {{ id }}
+    databaseName: {{ name }}
 
 ## Configure the ingress resource that allows you to access the
 ## MongoDB installation. Set up the URL

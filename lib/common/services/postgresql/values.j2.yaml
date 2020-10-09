@@ -264,14 +264,15 @@ persistence:
   ##
   subPath: ""
 
-  storageClass: "aws-ebs-gp2-0" # TODO customizable?
+  storageClass: "aws-ebs-gp2-0"
   accessModes:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
   annotations:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
-    databaseId: {{ name }}
+    databaseId: {{ id }}
+    databaseName: {{ name }}
 
 ## updateStrategy for PostgreSQL StatefulSet and its slaves StatefulSets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies

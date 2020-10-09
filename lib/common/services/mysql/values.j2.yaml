@@ -46,7 +46,8 @@ clusterDomain: cluster.local
 labels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
-  databaseId: {{ name }}
+  databaseId: {{ id }}
+  databaseName: {{ name }}
 
 ## Init containers parameters:
 ## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
@@ -316,7 +317,8 @@ master:
     annotations:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
-      databaseId: {{ name }}
+      databaseId: {{ id }}
+      databaseName: {{ name }}
 
     ## Persistent Volume Access Mode
     ##
