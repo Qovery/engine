@@ -33,7 +33,7 @@ use std::str::FromStr;
 pub const AWS_KEY_ID: &str = "AKIA4IVG73IUU5NNVN5Q"; // AWS username: infra-test-deploy
 pub const AWS_ACCESS_KEY: &str = "E9Ugsvv7MI3vCaHtn1qoxXU8KwNJeTWn3GfVLNYN";
 pub const AWS_DEFAULT_REGION: &str = "us-east-2";
-pub const ORGANIZATION_ID: &str = "azerl1aowkdoiqjdoiwjqdioqj";
+pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
 pub const TEST_CLUSTER: bool = true;
 
@@ -62,8 +62,8 @@ pub fn context() -> Context {
 pub fn container_registry_ecr(context: &Context) -> ECR {
     ECR::new(
         context.clone(),
-        "ecr-test-id",
-        "ecr-test-name",
+        "default-ecr-registry-Qovery Test",
+        "ea59qe62xaw3wjai",
         AWS_KEY_ID,
         AWS_ACCESS_KEY,
         AWS_DEFAULT_REGION,
@@ -92,9 +92,9 @@ pub fn aws_kubernetes_nodes() -> Vec<Node> {
 pub fn cloud_provider_aws(context: &Context) -> AWS {
     AWS::new(
         context.clone(),
-        "aws-provider-1",
+        "u8nb94c7fwxzr2jt",
         ORGANIZATION_ID,
-        "aws-provider-name",
+        "QoveryTest",
         AWS_KEY_ID,
         AWS_ACCESS_KEY,
     )
@@ -110,8 +110,8 @@ pub fn aws_kubernetes_eks<'a>(
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
         context.clone(),
-        "main-eks-cluster-test",
-        "main-eks-cluster-test",
+        "dmubm9agk7sr8a8r",
+        "production-QoveryTest",
         AWS_KUBERNETES_VERSION,
         AWS_DEFAULT_REGION,
         cloud_provider,
