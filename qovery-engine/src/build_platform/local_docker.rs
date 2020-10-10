@@ -125,7 +125,8 @@ impl BuildPlatform for LocalDocker {
         }
 
         // git checkout submodules
-        checkout_submodules(&repo);
+        let _ = checkout_submodules(&repo);
+        // TODO what if we can't checkout submodules? Today we ignore it
 
         let into_dir_docker_style = format!("{}/.", into_dir.as_str());
 

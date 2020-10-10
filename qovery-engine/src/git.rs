@@ -77,17 +77,24 @@ pub fn checkout(repo: &Repository, commit_id: &str, repo_url: &str) -> Result<()
 }
 
 pub fn checkout_submodules(repo: &Repository) -> Result<(), Error> {
-    for mut submodule in repo.submodules().unwrap() {
-        info!(
-            "getting submodule {:?} from {:?}",
-            submodule.name().unwrap(),
-            submodule.url().unwrap()
-        );
-        match submodule.update(true, None) {
-            Err(e) => return Err(e),
-            _ => (),
+    match repo.submodules() {
+        Ok(submodules) => {
+            for mut submodule in submodules {
+                info!(
+                    "getting submodule {:?} from {:?}",
+                    submodule.name(),
+                    submodule.url()
+                );
+
+                match submodule.update(true, None) {
+                    Err(e) => return Err(e),
+                    _ => (),
+                }
+            }
         }
+        Err(err) => return Err(err),
     }
+
     Ok(())
 }
 
