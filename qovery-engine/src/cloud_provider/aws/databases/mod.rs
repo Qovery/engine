@@ -1,6 +1,7 @@
+mod mongodb;
 mod mysql;
-mod postgres;
+mod postgresql;
 mod utilities;
 
 pub use mysql::MySQL;
-pub use postgres::PostgreSQL;
+pub use postgresql::PostgreSQL;

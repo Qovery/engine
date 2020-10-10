@@ -2,45 +2,45 @@
 
 variable "cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "{{ cluster_name }}"
-  type        = string
+  default = "{{ cluster_name }}"
+  type = string
 }
 
 variable "region" {
   description = "AWS region to store terraform state and lock"
-  default     = "{{ region }}"
-  type        = string
+  default = "{{ region }}"
+  type = string
 }
 
 variable "region_cluster_name" {
   description = "AWS region to store terraform state and lock"
-  default     = "{{ region }}-{{ cluster_name }}"
-  type        = string
+  default = "{{ region }}-{{ cluster_name }}"
+  type = string
 }
 
 variable "q_project_id" {
   description = "Qovery project ID"
-  default     = "{{ project_id }}"
-  type        = string
+  default = "{{ project_id }}"
+  type = string
 }
 
 variable "q_customer_id" {
   description = "Qovery customer ID"
-  default     = "{{ owner_id }}"
-  type        = string
+  default = "{{ owner_id }}"
+  type = string
 }
 
 variable "q_environment_id" {
   description = "Qovery client environment"
-  default     = "{{ environment_id }}"
-  type        = string
+  default = "{{ environment_id }}"
+  type = string
 }
 
 # documentdb instance basics
 
 variable "documentdb_identifier" {
   description = "Documentdb cluster name (Cluster identifier)"
-  default = "{{ service_info['fqdn_id'] }}"
+  default = "{{ fqdn_id }}"
   type = string
 }
 
@@ -52,7 +52,11 @@ variable "documentdb_instances_number" {
 
 variable "port" {
   description = "Documentdb instance port"
-  default = {{ service_info["port"] }}
+  default = {
+  {
+    database_port
+  }
+  }
   type = number
 }
 
@@ -64,13 +68,13 @@ variable "instance_class" {
 
 variable "username" {
   description = "Admin username for the master DB user"
-  default = "{{ service_info['username'] }}"
+  default = "{{ database_login }}"
   type = string
 }
 
 variable "password" {
   description = "Admin password for the master DB user"
-  default = "{{ service_info['password'] }}"
+  default = "{{ database_password }}"
   type = string
 }
 
@@ -108,10 +112,11 @@ variable "preferred_backup_window" {
   type = string
 }
 
+{% if snapshot is defined %}
 # Snapshots
-
 variable "snapshot_identifier" {
-  description = "Snapshot ID to restore"
-  default = "{%- if service_info['snapshot'] %}{{ service_info['snapshot']['snapshot_id'] }}{%- endif %}"
-  type = string
+description = "Snapshot ID to restore"
+default = "{%- if service_info['snapshot'] %}{{ service_info['snapshot']['snapshot_id'] }}{%- endif %}"
+type = string
 }
+{% endif %}
