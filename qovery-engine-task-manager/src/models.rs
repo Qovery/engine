@@ -32,6 +32,7 @@ pub struct Request {
     pub target_environment: Option<Environment>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failover_environment: Option<Environment>,
+    pub metadata: Option<Metadata>,
 }
 
 impl Request {
@@ -75,6 +76,13 @@ impl Request {
             None => EnvironmentAction::Environment(environment),
         })
     }
+}
+
+/// put everything you want here that is required to change the behaviour of the request.
+/// E.g you can indicate that this request is a test, then you can adapt the behaviour as you want.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Metadata {
+    pub test: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
