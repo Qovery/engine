@@ -60,6 +60,7 @@ pub trait Service {
         context.insert("id", self.id());
         context.insert("owner_id", environment.owner_id.as_str());
         context.insert("project_id", environment.project_id.as_str());
+        context.insert("organization_id", environment.organization_id.as_str());
         context.insert("environment_id", environment.id.as_str());
         context.insert("region", kubernetes.region());
         context.insert("name", self.name());

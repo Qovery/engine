@@ -7,11 +7,12 @@ use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
-use crate::cloud_provider::aws::databases::{MySQL, PostgreSQL};
+use crate::cloud_provider::aws::databases::{MongoDB, MySQL, PostgreSQL};
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
+use crate::models::DatabaseKind::Mongodb;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -422,6 +423,15 @@ impl Database {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatefulService>> {
+        let database_options = DatabaseOptions {
+            login: self.username.clone(),
+            password: self.password.clone(),
+            host: self.fqdn.clone(),
+            port: self.port,
+            disk_size_in_gib: self.disk_size_in_gib,
+            database_disk_type: self.database_disk_type.clone(),
+        };
+
         match cloud_provider.kind() {
             CPKind::AWS => match self.kind {
                 DatabaseKind::Postgresql => {
@@ -436,14 +446,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         self.database_instance_type.as_str(),
-                        DatabaseOptions {
-                            login: self.username.clone(),
-                            password: self.password.clone(),
-                            host: self.fqdn.clone(),
-                            port: self.port,
-                            disk_size_in_gib: self.disk_size_in_gib,
-                            database_disk_type: self.database_disk_type.clone(),
-                        },
+                        database_options,
                     ));
 
                     Some(db)
@@ -460,14 +463,24 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         self.database_instance_type.as_str(),
-                        DatabaseOptions {
-                            login: self.username.clone(),
-                            password: self.password.clone(),
-                            host: self.fqdn.clone(),
-                            port: self.port,
-                            disk_size_in_gib: self.disk_size_in_gib,
-                            database_disk_type: self.database_disk_type.clone(),
-                        },
+                        database_options,
+                    ));
+
+                    Some(db)
+                }
+                DatabaseKind::Mongodb => {
+                    let db: Box<dyn StatefulService> = Box::new(MongoDB::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options,
                     ));
 
                     Some(db)
