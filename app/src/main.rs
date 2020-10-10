@@ -421,7 +421,6 @@ pub fn main() -> io::Result<()> {
             workspace_root_dir,
             lib_root_dir,
             docker_host,
-            mode,
         ),
     }
 }
@@ -432,7 +431,6 @@ pub fn using_json_path_parameter(
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_host: Option<String>,
-    mode: Mode,
 ) -> Result<(), Error> {
     let pre_run_callback = Box::new(|task: &dyn Task| true);
 
