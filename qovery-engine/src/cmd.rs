@@ -377,6 +377,8 @@ where
             Err(err) => error!("{}", err),
         },
         |out| match out {
+            // don't crash errors if releases are not found
+            Ok(line) if line.contains("Error: release: not found") => info!("{}", line.as_str()),
             Ok(line) => error!("{}", line.as_str()),
             Err(err) => error!("{}", err),
         },
@@ -876,6 +878,10 @@ where
             Err(err) => error!("{:?}", err),
         },
         |out| match out {
+            // do not through errors if the namespace already exists
+            Ok(line) if line.contains("Error from server (AlreadyExists): namespaces") => {
+                info!("{}", line)
+            }
             Ok(line) => error!("{}", line),
             Err(err) => error!("{:?}", err),
         },
