@@ -148,6 +148,7 @@ impl<'a> EKS<'a> {
                 min_size: nodes.len().to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
+
         let s3_kubeconfig_bucket = format!("qovery-kubeconfigs-{}", self.id);
         let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
         let qovery_api_url = self.options.qovery_api_url.clone();
@@ -191,13 +192,31 @@ impl<'a> EKS<'a> {
         // AWS
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
+
         // AWS S3 tfstate storage
-        context.insert("aws_access_key_tfstates_account", "AKIAUD622NVNHD6P2S4Z");
+        context.insert(
+            "aws_access_key_tfstates_account",
+            self.cloud_provider()
+                .terraform_state_credentials()
+                .access_key_id
+                .as_str(),
+        );
+
         context.insert(
             "aws_secret_key_tfstates_account",
-            "W7Ic1QcXAJ3Y4cEd0NVz9McWfbk90BLOjztoHM9T",
+            self.cloud_provider()
+                .terraform_state_credentials()
+                .secret_access_key
+                .as_str(),
         );
-        context.insert("aws_region_tfstates_account", "eu-west-3");
+        context.insert(
+            "aws_region_tfstates_account",
+            self.cloud_provider()
+                .terraform_state_credentials()
+                .region
+                .as_str(),
+        );
+
         // TODO URGENT change the behavior of self.bucket_name()
         context.insert("aws_region", &self.region.name());
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");

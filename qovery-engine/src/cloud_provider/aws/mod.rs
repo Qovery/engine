@@ -4,7 +4,7 @@ use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
-use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
 use crate::models::{Context, Listener, Listeners, ProgressListener};
 use crate::runtime::async_run;
 use std::rc::Rc;
@@ -24,6 +24,7 @@ pub struct AWS {
     name: String,
     pub access_key_id: String,
     pub secret_access_key: String,
+    terraform_state_credentials: TerraformStateCredentials,
     listeners: Listeners,
 }
 
@@ -35,6 +36,7 @@ impl AWS {
         name: &str,
         access_key_id: &str,
         secret_access_key: &str,
+        terraform_state_credentials: TerraformStateCredentials,
     ) -> Self {
         AWS {
             context,
@@ -43,6 +45,7 @@ impl AWS {
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
+            terraform_state_credentials,
             listeners: vec![],
         }
     }
@@ -94,6 +97,10 @@ impl CloudProvider for AWS {
 
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
+    }
+
+    fn terraform_state_credentials(&self) -> &TerraformStateCredentials {
+        &self.terraform_state_credentials
     }
 
     fn as_any(&self) -> &dyn Any {

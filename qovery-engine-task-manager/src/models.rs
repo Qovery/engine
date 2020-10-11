@@ -121,6 +121,7 @@ pub struct CloudProvider {
     pub name: String,
     pub options: Options,
     pub kubernetes: Kubernetes,
+    pub terraform_state_credentials: TerraformStateCredentials,
 }
 
 impl CloudProvider {
@@ -129,6 +130,13 @@ impl CloudProvider {
         context: &Context,
         organization_id: &str,
     ) -> Box<dyn qovery_engine::cloud_provider::CloudProvider> {
+        let terraform_state_credentials =
+            qovery_engine::cloud_provider::TerraformStateCredentials {
+                access_key_id: self.terraform_state_credentials.access_key_id.clone(),
+                secret_access_key: self.terraform_state_credentials.secret_access_key.clone(),
+                region: self.terraform_state_credentials.region.clone(),
+            };
+
         match self.kind {
             qovery_engine::cloud_provider::Kind::AWS => Box::new(AWS::new(
                 context.clone(),
@@ -137,6 +145,7 @@ impl CloudProvider {
                 self.name.as_str(),
                 self.options.access_key_id.as_ref().unwrap().as_str(),
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
+                terraform_state_credentials,
             )),
             qovery_engine::cloud_provider::Kind::GCP => Box::new(GCP::new(
                 context.clone(),
@@ -151,6 +160,13 @@ impl CloudProvider {
             )),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TerraformStateCredentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub region: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

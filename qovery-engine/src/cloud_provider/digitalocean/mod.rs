@@ -1,5 +1,5 @@
 extern crate digitalocean;
-use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
 use crate::models::{Context, Listener, ProgressListener};
 use digitalocean::DigitalOcean;
 use std::any::Any;
@@ -51,6 +51,10 @@ impl CloudProvider for DO {
     }
 
     fn add_listener(&mut self, _listener: Listener) {
+        unimplemented!()
+    }
+
+    fn terraform_state_credentials(&self) -> &TerraformStateCredentials {
         unimplemented!()
     }
 

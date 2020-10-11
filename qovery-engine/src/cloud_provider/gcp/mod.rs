@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind};
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
 use crate::models::{Context, Listener, ProgressListener};
 
 pub struct GCP {
@@ -49,6 +49,10 @@ impl<'x> CloudProvider for GCP {
 
     fn add_listener(&mut self, _listener: Listener) {
         // TODO
+    }
+
+    fn terraform_state_credentials(&self) -> &TerraformStateCredentials {
+        unimplemented!()
     }
 
     fn as_any(&self) -> &dyn Any {

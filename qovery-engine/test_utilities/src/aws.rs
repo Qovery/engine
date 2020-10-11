@@ -5,7 +5,7 @@ use qovery_engine::build_platform::BuildPlatform;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::CloudProvider;
+use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::ContainerRegistry;
@@ -97,6 +97,11 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
         "aws-provider-name",
         AWS_KEY_ID,
         AWS_ACCESS_KEY,
+        TerraformStateCredentials {
+            access_key_id: "AKIAUD622NVNHD6P2S4Z".to_string(),
+            secret_access_key: "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".to_string(),
+            region: "eu-west-3".to_string(),
+        },
     )
 }
 

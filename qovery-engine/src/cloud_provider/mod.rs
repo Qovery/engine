@@ -23,6 +23,7 @@ pub trait CloudProvider {
     fn name(&self) -> &str;
     fn is_valid(&self) -> Result<(), CloudProviderError>;
     fn add_listener(&mut self, listener: Listener);
+    fn terraform_state_credentials(&self) -> &TerraformStateCredentials;
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -69,6 +70,12 @@ pub enum Kind {
     AWS,
     GCP,
     DO,
+}
+
+pub struct TerraformStateCredentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub region: String,
 }
 
 pub enum DeploymentTarget<'a> {
