@@ -768,11 +768,11 @@ pub trait Clone2 {
 impl Clone2 for Context {
     fn clone_not_same_execution_id(&self) -> Context {
         let mut new = self.clone();
-        let suffixe = rand::thread_rng()
+        let suffix = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(10)
             .collect::<String>();
-        new.execution_id = format!("{}-{}", self.execution_id, suffixe);
+        new.execution_id = format!("{}-{}", self.execution_id, suffix);
         new
     }
 }
