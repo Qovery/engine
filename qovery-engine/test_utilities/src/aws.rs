@@ -115,8 +115,8 @@ pub fn aws_kubernetes_eks<'a>(
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
         context.clone(),
-        "main-eks-cluster-test",
-        "main-eks-cluster-test",
+        "dmubm9agk7sr8a8r",
+        "dmubm9agk7sr8a8r",
         AWS_KUBERNETES_VERSION,
         AWS_DEFAULT_REGION,
         cloud_provider,
