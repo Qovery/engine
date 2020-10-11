@@ -100,89 +100,36 @@ impl<'a> EKS<'a> {
     }
 
     fn tera_context(&self) -> TeraContext {
-        let eks_zone_a_subnet_blocks = self
-            .options
-            .eks_zone_a_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
+        let format_ips = |ips: &Vec<String>| -> Vec<String> {
+            ips.iter()
+                .map(|ip| format!("\"{}\"", ip))
+                .collect::<Vec<_>>()
+        };
 
-        let eks_zone_b_subnet_blocks = self
-            .options
-            .eks_zone_b_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
+        let eks_zone_a_subnet_blocks = format_ips(&self.options.eks_zone_a_subnet_blocks);
+        let eks_zone_b_subnet_blocks = format_ips(&self.options.eks_zone_b_subnet_blocks);
+        let eks_zone_c_subnet_blocks = format_ips(&self.options.eks_zone_c_subnet_blocks);
+        let rds_zone_a_subnet_blocks = format_ips(&self.options.rds_zone_a_subnet_blocks);
+        let rds_zone_b_subnet_blocks = format_ips(&self.options.rds_zone_b_subnet_blocks);
+        let rds_zone_c_subnet_blocks = format_ips(&self.options.rds_zone_c_subnet_blocks);
 
-        let eks_zone_c_subnet_blocks = self
-            .options
-            .eks_zone_c_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
+        let documentdb_zone_a_subnet_blocks =
+            format_ips(&self.options.documentdb_zone_a_subnet_blocks);
 
-        let rds_zone_a_subnet_blocks = self
-            .options
-            .rds_zone_a_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
+        let documentdb_zone_b_subnet_blocks =
+            format_ips(&self.options.documentdb_zone_b_subnet_blocks);
 
-        let rds_zone_b_subnet_blocks = self
-            .options
-            .rds_zone_b_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
+        let documentdb_zone_c_subnet_blocks =
+            format_ips(&self.options.documentdb_zone_c_subnet_blocks);
 
-        let rds_zone_c_subnet_blocks = self
-            .options
-            .rds_zone_c_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
+        let elasticsearch_zone_a_subnet_blocks =
+            format_ips(&self.options.elasticsearch_zone_a_subnet_blocks);
 
-        let documentdb_zone_a_subnet_blocks = self
-            .options
-            .documentdb_zone_a_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
+        let elasticsearch_zone_b_subnet_blocks =
+            format_ips(&self.options.elasticsearch_zone_b_subnet_blocks);
 
-        let documentdb_zone_b_subnet_blocks = self
-            .options
-            .documentdb_zone_b_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
-
-        let documentdb_zone_c_subnet_blocks = self
-            .options
-            .documentdb_zone_c_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
-
-        let elasticsearch_zone_a_subnet_blocks = self
-            .options
-            .elasticsearch_zone_a_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
-
-        let elasticsearch_zone_b_subnet_blocks = self
-            .options
-            .elasticsearch_zone_b_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
-
-        let elasticsearch_zone_c_subnet_blocks = self
-            .options
-            .elasticsearch_zone_c_subnet_blocks
-            .iter()
-            .map(|ip| format!("\"{}\"", ip))
-            .collect::<Vec<_>>();
+        let elasticsearch_zone_c_subnet_blocks =
+            format_ips(&self.options.elasticsearch_zone_c_subnet_blocks);
 
         let region_cluster_id = format!("{}-{}", self.region(), self.id());
         let vpc_cidr_block = self.options.vpc_cidr_block.clone();
