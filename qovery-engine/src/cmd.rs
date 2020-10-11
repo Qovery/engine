@@ -39,12 +39,12 @@ where
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    if current_dir.is_some() {
-        cmd.current_dir(current_dir.unwrap());
+    if let Some(current_dir) = current_dir {
+        cmd.current_dir(current_dir);
     }
 
-    if envs.is_some() {
-        envs.unwrap().into_iter().for_each(|(k, v)| {
+    if let Some(envs) = envs {
+        envs.into_iter().for_each(|(k, v)| {
             cmd.env(k, v);
         });
     }
@@ -59,7 +59,12 @@ where
     let command_string = command_to_string(binary.as_ref(), &args);
     info!("command: {}", command_string.as_str());
 
-    let exit_status = match command(binary, args, None).spawn().unwrap().wait() {
+    let mut child = match command(binary, args, None).spawn() {
+        Ok(child) => child,
+        Err(err) => return Err(CmdError::Io(err)),
+    };
+
+    let exit_status = match child.wait() {
         Ok(x) => x,
         Err(err) => return Err(CmdError::Io(err)),
     };
@@ -82,7 +87,12 @@ where
     let command_string = command_with_envs_to_string(binary.as_ref(), &args, &envs);
     info!("command: {}", command_string.as_str());
 
-    let exit_status = match command(binary, args, Some(envs)).spawn().unwrap().wait() {
+    let mut child = match command(binary, args, Some(envs)).spawn() {
+        Ok(child) => child,
+        Err(err) => return Err(CmdError::Io(err)),
+    };
+
+    let exit_status = match child.wait() {
         Ok(x) => x,
         Err(err) => return Err(CmdError::Io(err)),
     };
@@ -126,11 +136,12 @@ where
     let command_string = command_to_string(binary.as_ref(), &args);
     info!("command: {}", command_string.as_str());
 
-    let mut child = _with_output(
-        command(binary, args, None).spawn().unwrap(),
-        stdout_output,
-        stderr_output,
-    );
+    let mut child = match command(binary, args, None).spawn() {
+        Ok(child) => child,
+        Err(err) => return Err(CmdError::Io(err)),
+    };
+
+    let mut child = _with_output(child, stdout_output, stderr_output);
 
     let exit_status = match child.wait() {
         Ok(x) => x,
@@ -159,11 +170,12 @@ where
     let command_string = command_with_envs_to_string(binary.as_ref(), &args, &envs);
     info!("command: {}", command_string.as_str());
 
-    let mut child = _with_output(
-        command(binary, args, Some(envs)).spawn().unwrap(),
-        stdout_output,
-        stderr_output,
-    );
+    let mut child = match command(binary, args, Some(envs)).spawn() {
+        Ok(child) => child,
+        Err(err) => return Err(CmdError::Io(err)),
+    };
+
+    let mut child = _with_output(child, stdout_output, stderr_output);
 
     let exit_status = match child.wait() {
         Ok(x) => x,
@@ -536,6 +548,7 @@ where
 
     Ok(())
 }
+
 // return the output of "binary_name" --version
 pub fn run_version_command_for(binary_name: &str) -> String {
     let mut output_from_cmd = String::new();
@@ -1079,6 +1092,7 @@ impl Display for CmdError {
         write!(f, "{}", s)
     }
 }
+
 impl std::error::Error for CmdError {}
 
 impl From<std::io::Error> for CmdError {
@@ -1086,6 +1100,7 @@ impl From<std::io::Error> for CmdError {
         CmdError::Io(err)
     }
 }
+
 impl From<CmdError> for std::io::Error {
     fn from(e: CmdError) -> Self {
         std::io::Error::new(std::io::ErrorKind::Other, e)
