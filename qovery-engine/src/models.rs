@@ -250,7 +250,7 @@ impl Application {
                     password: self.git_credentials.access_token.clone(),
                 }),
                 commit_id: self.commit_id.clone(),
-                dockerfile_path: ".".to_string(),
+                dockerfile_path: self.dockerfile_path.clone(),
             },
             image: self.to_image(),
             options: BuildOptions {

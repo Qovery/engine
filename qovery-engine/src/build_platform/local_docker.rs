@@ -131,7 +131,7 @@ impl BuildPlatform for LocalDocker {
         let into_dir_docker_style = format!("{}/.", into_dir.as_str());
 
         let dockerfile_relative_path = match build.git_repository.dockerfile_path.trim() {
-            "" | "." | "/" | "/." | "./" => "Dockerfile",
+            "" | "." | "/" | "/." | "./" | "Dockerfile" => "Dockerfile",
             dockerfile_root_path => dockerfile_root_path,
         };
 
