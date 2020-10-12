@@ -525,6 +525,10 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
     let database_db_name = "my-mongodb".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
+    let database_uri = format!(
+        "mongodb://{}:{}@{}:{}/{}",
+        database_username, database_password, database_host, database_port, database_db_name
+    );
     environment.databases = vec![Database {
         kind: DatabaseKind::Mongodb,
         action: Action::Create,
@@ -547,15 +551,28 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
         .into_iter()
         .map(|mut app| {
             app.branch = "mongodb-app".to_string();
-            app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
+            app.commit_id = "890521e0e496388f248ed02708010133c0fb46f0".to_string();
             app.private_port = Some(1234);
+            app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
                 EnvironmentVariable {
-                    key: "MONGODB_HOST".to_string(),
+                    key: "ENABLE_DEBUG".to_string(),
+                    value: "true".to_string(),
+                },
+                // EnvironmentVariable {
+                //     key: "DEBUG_PAUSE".to_string(),
+                //     value: "true".to_string(),
+                // },
+                EnvironmentVariable {
+                    key: "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string(),
                     value: database_host.clone(),
                 },
                 EnvironmentVariable {
-                    key: "MONGODB_PORT".to_string(),
+                    key: "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string(),
+                    value: database_uri.clone(),
+                },
+                EnvironmentVariable {
+                    key: "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string(),
                     value: database_port.clone().to_string(),
                 },
                 EnvironmentVariable {
@@ -563,11 +580,11 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
                     value: database_db_name.clone(),
                 },
                 EnvironmentVariable {
-                    key: "MONGODB_USERNAME".to_string(),
+                    key: "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string(),
                     value: database_username.clone(),
                 },
                 EnvironmentVariable {
-                    key: "MONGODB_PASSWORD".to_string(),
+                    key: "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string(),
                     value: database_password.clone(),
                 },
             ];
@@ -598,6 +615,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 
 /// test mongodb v3.6 with development environment
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_mongodb_v3_6() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -607,6 +625,7 @@ fn deploy_a_working_environment_with_mongodb_v3_6() {
 
 /// test mongodb v4.2 with development environment
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_mongodb_v4_2() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -616,6 +635,7 @@ fn deploy_a_working_environment_with_mongodb_v4_2() {
 
 /// test mongodb v4.4 with development environment
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_mongodb_v4_4() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -625,6 +645,7 @@ fn deploy_a_working_environment_with_mongodb_v4_4() {
 
 /// test mongodb v3.6 with production environment
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_production_mongodb_v3_6() {
     let context = context();
 
@@ -690,6 +711,7 @@ fn deploy_a_working_environment_with_external_service() {
 }
 
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_mysql() {
     init();
 
