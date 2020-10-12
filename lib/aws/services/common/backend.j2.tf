@@ -10,7 +10,7 @@ terraform {
       args = [
         "token",
         "-i",
-      "{{eks_cluster_id}}"]
+        "qovery-{{eks_cluster_id}}"]
       env = {
         AWS_ACCESS_KEY_ID     = "{{ aws_access_key }}"
         AWS_SECRET_ACCESS_KEY = "{{ aws_secret_key }}"

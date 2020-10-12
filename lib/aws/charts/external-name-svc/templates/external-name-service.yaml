@@ -3,7 +3,7 @@ apiVersion: v1
 metadata:
   # This service is used for deployed services that do not have ingress like database
   # It is used to provide to the end user a endpoint with desired name
-  name: dns-{{.Values.app_id}}
+  name: {{.Values.app_id}}-dns
   labels:
     appId: {{.Values.app_id}}
   annotations:

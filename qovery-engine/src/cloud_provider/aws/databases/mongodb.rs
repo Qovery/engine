@@ -59,6 +59,10 @@ impl MongoDB {
         crate::string::cut(format!("mongodb-{}", self.id()), 50)
     }
 
+    fn helm_release_external_dns(&self) -> String {
+        format!("{}-dns", self.helm_release_name())
+    }
+
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(
             self.context.workspace_root_dir(),
@@ -258,7 +262,6 @@ impl Create for MongoDB {
                 // use terraform
                 info!("deploy mongodb on AWS DocumentDB for {}", self.name());
                 let context = self.tera_context(*kubernetes, *environment);
-
                 let workspace_dir = self.workspace_directory();
 
                 crate::template::generate_and_copy_all_files_into_dir(
@@ -281,6 +284,7 @@ impl Create for MongoDB {
                     &context,
                 )?;
 
+                // deploy database + external DNS
                 crate::cmd::terraform_exec_with_init_validate_plan_apply(
                     workspace_dir.as_str(),
                     false,
@@ -289,7 +293,6 @@ impl Create for MongoDB {
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 // use helm
                 info!("deploy MongoDB on Kubernetes for {}", self.name());
-
                 let context = self.tera_context(*kubernetes, *environment);
 
                 let aws = kubernetes

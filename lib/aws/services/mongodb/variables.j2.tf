@@ -12,6 +12,12 @@ variable "region" {
   type = string
 }
 
+variable "eks_cluster_id" {
+  description = "Kubernetes cluster name with region"
+  default     = "{{ eks_cluster_id }}"
+  type        = string
+}
+
 variable "region_cluster_name" {
   description = "AWS region to store terraform state and lock"
   default = "{{ region }}-{{ cluster_name }}"
@@ -52,17 +58,13 @@ variable "documentdb_instances_number" {
 
 variable "port" {
   description = "Documentdb instance port"
-  default = {
-  {
-    database_port
-  }
-  }
+  default = {{ database_port }}
   type = number
 }
 
 variable "instance_class" {
   description = "Type of instance: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html"
-  default = "db.r5.large"
+  default = "{{database_instance_type}}"
   type = string
 }
 
@@ -115,8 +117,8 @@ variable "preferred_backup_window" {
 {% if snapshot is defined %}
 # Snapshots
 variable "snapshot_identifier" {
-description = "Snapshot ID to restore"
-default = "{%- if service_info['snapshot'] %}{{ service_info['snapshot']['snapshot_id'] }}{%- endif %}"
-type = string
+  description = "Snapshot ID to restore"
+  default = "{{ snapshot['snapshot_id']}}"
+  type = string
 }
 {% endif %}

@@ -529,6 +529,12 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
         "mongodb://{}:{}@{}:{}/{}",
         database_username, database_password, database_host, database_port, database_db_name
     );
+    // while waiting the info to be given directly in the database info, we're using this
+    let is_documentdb = match environment.kind {
+        Kind::Production => true,
+        Kind::Development => false,
+    };
+
     environment.databases = vec![Database {
         kind: DatabaseKind::Mongodb,
         action: Action::Create,
@@ -543,7 +549,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
         total_cpus: "500m".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
-        database_instance_type: "db.t2.micro".to_string(),
+        database_instance_type: "db.t3.medium".to_string(),
         database_disk_type: "gp2".to_string(),
     }];
     environment.applications = environment
@@ -551,18 +557,22 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
         .into_iter()
         .map(|mut app| {
             app.branch = "mongodb-app".to_string();
-            app.commit_id = "890521e0e496388f248ed02708010133c0fb46f0".to_string();
+            app.commit_id = "831efa096e88c09feab04a706f300c1ac76ec560".to_string();
             app.private_port = Some(1234);
             app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
-                EnvironmentVariable {
-                    key: "ENABLE_DEBUG".to_string(),
-                    value: "true".to_string(),
-                },
+                // EnvironmentVariable {
+                //     key: "ENABLE_DEBUG".to_string(),
+                //     value: "true".to_string(),
+                // },
                 // EnvironmentVariable {
                 //     key: "DEBUG_PAUSE".to_string(),
                 //     value: "true".to_string(),
                 // },
+                EnvironmentVariable {
+                    key: "IS_DOCUMENTDB".to_string(),
+                    value: is_documentdb.to_string(),
+                },
                 EnvironmentVariable {
                     key: "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string(),
                     value: database_host.clone(),
@@ -615,12 +625,18 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 
 /// test mongodb v3.6 with development environment
 #[test]
-#[ignore]
 fn deploy_a_working_environment_with_mongodb_v3_6() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "3.6");
-    // TODO check the running version?
+}
+
+#[test]
+#[ignore]
+fn deploy_a_working_environment_with_mongodb_v4_0() {
+    let context = context();
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    test_mongodb_configuration(context, environment, "4.0");
 }
 
 /// test mongodb v4.2 with development environment
@@ -630,20 +646,17 @@ fn deploy_a_working_environment_with_mongodb_v4_2() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.2");
-    // TODO check the running version?
 }
 
 /// test mongodb v4.4 with development environment
 #[test]
-#[ignore]
 fn deploy_a_working_environment_with_mongodb_v4_4() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.4");
-    // TODO check the running version?
 }
 
-/// test mongodb v3.6 with production environment
+/// test mongodb v3.6 with production environment (DocumentDB)
 #[test]
 #[ignore]
 fn deploy_a_working_environment_with_production_mongodb_v3_6() {
@@ -653,8 +666,6 @@ fn deploy_a_working_environment_with_production_mongodb_v3_6() {
     environment.kind = Kind::Production;
 
     test_mongodb_configuration(context, environment, "3.6");
-
-    // TODO check the running version?
 }
 
 #[test]
