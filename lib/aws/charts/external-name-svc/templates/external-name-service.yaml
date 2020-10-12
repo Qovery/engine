@@ -7,7 +7,7 @@ metadata:
   labels:
     appId: {{.Values.app_id}}
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: {{ .Values.target_hostname }}
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.source_fqdn }}
 spec:
   type: ExternalName
-  externalName: {{ .Values.source_fqdn }}
+  externalName: {{ .Values.target_hostname }}
