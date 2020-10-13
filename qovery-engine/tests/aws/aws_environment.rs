@@ -557,7 +557,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
         .into_iter()
         .map(|mut app| {
             app.branch = "mongodb-app".to_string();
-            app.commit_id = "831efa096e88c09feab04a706f300c1ac76ec560".to_string();
+            app.commit_id = "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string();
             app.private_port = Some(1234);
             app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
