@@ -823,7 +823,7 @@ fn deploy_a_working_production_environment_with_mysql() {
 
     let database_host = "mysql-app-".to_string() + generate_id().as_str() + "-svc.oom.sh"; // External access check
     let database_port = 3306;
-    let database_db_name = "mysql-app-db".to_string();
+    let database_db_name = "mysql".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
     environment.databases = vec![Database {
@@ -843,7 +843,6 @@ fn deploy_a_working_production_environment_with_mysql() {
         database_instance_type: "db.t2.micro".to_string(),
         database_disk_type: "gp2".to_string(),
     }];
-    environment.applications = Vec::new();
     environment.applications = environment
         .applications
         .into_iter()
@@ -896,8 +895,6 @@ fn deploy_a_working_production_environment_with_mysql() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
-
-    //Todo: remove the namespace (or project)
 }
 
 #[test]
