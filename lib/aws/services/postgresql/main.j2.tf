@@ -20,7 +20,7 @@ data "aws_subnet_ids" "k8s_subnet_ids" {
 data "aws_security_group" "selected" {
   filter {
     name = "tag:Name"
-    values = ["eks-workers"]
+    values = ["qovery-eks-workers"]
   }
   filter {
     name   = "tag:kubernetes.io/cluster/${var.eks_cluster_id}"
@@ -29,7 +29,7 @@ data "aws_security_group" "selected" {
 }
 
 data "aws_iam_role" "rds_enhanced_monitoring" {
-  name = "rds-enhanced-monitoring-${var.eks_cluster_id}"
+  name = "qovery-rds-enhanced-monitoring-${var.eks_cluster_id}"
 }
 
 resource "helm_release" "postgres_instance_external_name" {

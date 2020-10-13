@@ -441,7 +441,7 @@ fn deploy_a_working_production_environment_with_postgresql() {
 
     let database_host = "postgresql-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
     let database_port = 5432;
-    let database_db_name = "my-postgres".to_string();
+    let database_db_name = "postgres".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
     environment.databases = vec![Database {
@@ -449,7 +449,7 @@ fn deploy_a_working_production_environment_with_postgresql() {
         action: Action::Create,
         id: generate_id(),
         name: database_db_name.clone(),
-        version: "11.8.0".to_string(),
+        version: "12.4".to_string(),
         fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
         fqdn: database_host.clone(),
         port: database_port.clone(),
