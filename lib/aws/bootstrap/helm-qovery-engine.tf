@@ -43,7 +43,7 @@ resource "helm_release" "qovery_engine_resources" {
 
   set {
     name = "environmentVariables.RUST_LOG"
-    value = "DEBUG"
+    value = "DEBUG,rusoto_core::request=info,hyper=info"
   }
 
   set {
