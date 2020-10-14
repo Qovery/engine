@@ -210,6 +210,7 @@ fn listen_for_events(
                                 workspace_root_dir.as_str(),
                                 lib_root_dir.as_str(),
                                 docker_tcp_socket.clone(),
+                                req.metadata.clone(),
                             );
 
                             tx.send(match task_selector {
@@ -454,6 +455,7 @@ pub fn using_json_path_parameter(
                 workspace_root_dir.as_str(),
                 lib_root_dir.as_str(),
                 docker_host,
+                req.metadata.clone(),
             );
 
             tx_task.send(Box::new(InfrastructureTask::new(

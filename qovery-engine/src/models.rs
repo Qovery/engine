@@ -758,6 +758,7 @@ pub struct Context {
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_host: Option<String>,
+    metadata: Option<Metadata>,
 }
 
 // trait used to reimplement clone without same fields
@@ -786,12 +787,14 @@ impl Context {
         workspace_root_dir: &str,
         lib_root_dir: &str,
         docker_host: Option<String>,
+        metadata: Option<Metadata>,
     ) -> Self {
         Context {
             execution_id: execution_id.to_string(),
             workspace_root_dir: workspace_root_dir.to_string(),
             lib_root_dir: lib_root_dir.to_string(),
             docker_host,
+            metadata,
         }
     }
 
@@ -807,7 +810,24 @@ impl Context {
         self.lib_root_dir.as_str()
     }
 
-    pub fn docker_tcp_socket(&self) -> &Option<String> {
-        &self.docker_host
+    pub fn docker_tcp_socket(&self) -> Option<&String> {
+        self.docker_host.as_ref()
+    }
+
+    pub fn metadata(&self) -> Option<&Metadata> {
+        self.metadata.as_ref()
+    }
+}
+
+/// put everything you want here that is required to change the behaviour of the request.
+/// E.g you can indicate that this request is a test, then you can adapt the behaviour as you want.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct Metadata {
+    pub test: Option<bool>,
+}
+
+impl Metadata {
+    pub fn new(test: Option<bool>) -> Self {
+        Metadata { test }
     }
 }

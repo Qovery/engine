@@ -16,7 +16,9 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::dns_provider::Kind::CLOUDFLARE;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, ProgressListener};
+use qovery_engine::models::{
+    Context, Environment, EnvironmentAction, Listener, Metadata, ProgressListener,
+};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -28,9 +30,7 @@ pub struct Request {
     pub cloud_provider: CloudProvider,
     pub dns_provider: DnsProvider,
     pub container_registry: ContainerRegistry,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_environment: Option<Environment>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub failover_environment: Option<Environment>,
     pub metadata: Option<Metadata>,
 }
@@ -76,13 +76,6 @@ impl Request {
             None => EnvironmentAction::Environment(environment),
         })
     }
-}
-
-/// put everything you want here that is required to change the behaviour of the request.
-/// E.g you can indicate that this request is a test, then you can adapt the behaviour as you want.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Metadata {
-    pub test: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
