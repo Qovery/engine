@@ -139,10 +139,18 @@ alertmanager:
       repeat_interval: 3h
       receiver: 'discord_webhook'
       routes:
-        - receiver: 'discord_webhook'
+        - receiver: 'null'
           match:
             alertname: Watchdog
+        - receiver: 'null'
+          match:
+            alertname: KubeDeploymentReplicasMismatch
+        - receiver: 'null'
+          match:
+            alertname: CPUThrottlingHigh
+        - receiver: 'discord_webhook'
     receivers:
+      - name: 'null'
       - name: 'discord_webhook'
         webhook_configs:
           - url: 'http://alertmanager-discord.prometheus.svc:9095'
