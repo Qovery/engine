@@ -1,5 +1,7 @@
+use curl::easy::Easy;
+use curl::Error;
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::models::Context;
+use qovery_engine::models::{Context, Environment};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
@@ -26,6 +28,33 @@ pub fn generate_id() -> String {
             break;
         }
     }
-
     uuid
+}
+
+pub fn check_all_connections(env: &Environment) -> Vec<bool> {
+    let mut checking: Vec<bool> = Vec::with_capacity(env.routers.len());
+
+    for router_to_test in &env.routers {
+        let path_to_test = format!(
+            "https://{}{}",
+            &router_to_test.default_domain, &router_to_test.routes[0].path
+        );
+
+        checking.push(curl_path(path_to_test.as_str()));
+    }
+    return checking;
+}
+
+fn curl_path(path: &str) -> bool {
+    let mut easy = Easy::new();
+    easy.url(path).unwrap();
+    let res = easy.perform();
+    match res {
+        Ok(out) => return true,
+
+        Err(e) => {
+            println!("TEST Error : while trying to call {}", e);
+            return false;
+        }
+    }
 }

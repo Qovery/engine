@@ -188,6 +188,40 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     //Todo: remove the namespace (or project)
 }
 
+// to check overload between several databases and apps
+#[test]
+#[ignore]
+fn deploy_an_environment_with_3_databases_and_3_apps() {
+    init();
+    let context = context();
+    let context_for_deletion = context.clone_not_same_execution_id();
+    let mut environment = test_utilities::aws::environment_3_apps_3_routers_3_databases(&context);
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // TODO: should be uncommented as soon as cert-manager is fixed
+    // for the moment this assert report a SSL issue on the second router, so it's works well
+    /*    let connections = test_utilities::utilities::check_all_connections(&env_to_check);
+    for con in connections {
+        assert_eq!(con, true);
+    }*/
+
+    match delete_environment(&context_for_deletion, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+}
+
 #[test]
 #[ignore]
 fn deploy_a_working_environment_with_domain() {
@@ -214,8 +248,6 @@ fn deploy_a_working_environment_with_domain() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
-
-    //Todo: remove the namespace (or project)
 }
 
 #[test]
@@ -266,16 +298,11 @@ fn deploy_a_working_environment_with_custom_domain() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
-
-    // Todo: check the domain is ready and setup one if needed
-
-    /*    match delete_environment(&context_for_delete, &ea_delete) {
+    match delete_environment(&context_for_delete, &ea_delete) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };*/
-
-    //Todo: remove the namespace (or project)
+    };
 }
 
 #[test]
@@ -899,14 +926,17 @@ fn deploy_a_working_production_environment_with_mysql() {
 
 #[test]
 #[ignore]
-fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
+fn deploy_a_working_development_environment_with_all_options_and_psql() {
     init();
 
     let context = context();
     let context_for_deletion = context.clone_not_same_execution_id();
 
-    let mut environment = test_utilities::aws::working_environment(&context);
-    let mut environment_delete = test_utilities::aws::working_environment(&context_for_deletion);
+    let mut environment = test_utilities::aws::environnement_2_app_2_routers_1_psql(&context);
+    let mut env_to_check = environment.clone();
+    let mut environment_delete =
+        test_utilities::aws::environnement_2_app_2_routers_1_psql(&context_for_deletion);
+
     environment.kind = Kind::Development;
     environment_delete.kind = Kind::Development;
     environment_delete.action = Action::Delete;
@@ -919,6 +949,12 @@ fn deploy_a_working_development_environment_with_all_options_on_aws_eks() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+    // TODO: should be uncommented as soon as cert-manager is fixed
+    // for the moment this assert report a SSL issue on the second router, so it's works well
+    /*    let connections = test_utilities::utilities::check_all_connections(&env_to_check);
+    for con in connections {
+        assert_eq!(con, true);
+    }*/
 
     match delete_environment(&context_for_deletion, &ea_for_deletion) {
         TransactionResult::Ok => assert!(true),
@@ -1119,10 +1155,10 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     let context = context();
 
     let mut environment = test_utilities::aws::non_working_environment(&context);
-    let mut failover_environment = test_utilities::aws::working_environment(&context);
+    let mut failover_environment = test_utilities::aws::working_minimal_environment(&context);
     // context for deletion
     let context_deletion = context.clone_not_same_execution_id();
-    let mut delete_env = test_utilities::aws::working_environment(&context_deletion);
+    let mut delete_env = test_utilities::aws::working_minimal_environment(&context_deletion);
     delete_env.action = Action::Delete;
     let ea_delete = EnvironmentAction::Environment(delete_env);
     let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
