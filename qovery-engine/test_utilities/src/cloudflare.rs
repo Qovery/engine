@@ -7,10 +7,10 @@ pub const CLOUDFLARE_TOKEN: &str = "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7";
 pub fn dns_provider_cloudflare(context: &Context) -> Cloudflare {
     Cloudflare::new(
         context.clone(),
-        "abc".to_string(),
-        "default".to_string(),
-        "qovery.io".to_string(),
-        "CxfpqLdpbAoP_B7AdZrq-TdiJV-988NfFS7QJoXA".to_string(), // Cloudflare name: Qovery test
+        "qoverytestdnsclo".to_string(),
+        "Qovery Test Cloudflare".to_string(),
+        "oom.sh".to_string(),
+        "NJa2zDf603SU2Mveamf5INnFWsPZj3adPTxvjLlo".to_string(), // Cloudflare name: Qovery test
         "dns@qovery.com".to_string(),
     )
 }

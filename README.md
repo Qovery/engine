@@ -43,6 +43,7 @@ https://gitlab.com/qovery/qovery-engine/-/jobs
 At the end of the job, the image and tag will be shown. Replace the Terraform "qovery_engine_version" variable with the
 image tag and push.
 
+
 ## Supported connectors
 ### Build Platforms
 TODO
@@ -72,6 +73,31 @@ RUST_LOG=info LIB_ROOT_DIR=~/qovery-engine/lib WORKSPACE_ROOT_DIR=~/.qovery-work
 ## Add a new test
 
 How to add a test in a fast or long process? Simply add "#[ignore]" as a test annotation (I know it's not really convenient to get it, but it's how it works in Rust). If the annotation is missing, it will be considered as a fast test.
+
+## How to deploy new test cluster
+
+```
+token=$(cat ~/.qovery/access_token)
+curl --request POST \
+     --url https://api.qovery.com/api/v1/infrastructure/init \
+     --header "authorization: Bearer $token" \
+     --header 'content-type: application/json' \
+     --data '{
+       "build_platform": {
+           "id": "oxqlm3r99vwcmvuj"
+       },
+       "container_registry": {
+           "id": "ea59qe62xaw3wjai"
+       },
+       "kubernetes": {
+           "id": "dmubm9agk7sr8a8r"
+       },
+       "dns_provider": {
+           "id": "qoverytestdnsclo"
+       }
+   }'
+
+```
 
 ## Contribute
 

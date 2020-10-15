@@ -4,11 +4,7 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
-    LocalDocker::new(
-        context.clone(),
-        "my-local-docker-id-123",
-        "my-default-local-docker",
-    )
+    LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
 }
 
 pub fn init() {
