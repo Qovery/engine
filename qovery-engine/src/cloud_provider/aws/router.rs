@@ -7,7 +7,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::models::Context;
+use crate::models::{Context, Metadata};
 use dns_lookup::lookup_host;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
@@ -202,11 +202,15 @@ impl Router {
             "metadata_annotations_cert_manager_cluster_issuer",
             "letsencrypt-qovery",
         );
-        context.insert(
-            "spec_acme_server",
-            //"https://acme-v02.api.letsencrypt.org/directory", TODO use in production only
-            "https://acme-staging-v02.api.letsencrypt.org/directory",
-        );
+
+        let lets_encrypt_url = match self.context.metadata() {
+            Some(meta) => match meta.test {
+                Some(true) => "https://acme-staging-v02.api.letsencrypt.org/directory",
+                _ => "https://acme-v02.api.letsencrypt.org/directory",
+            },
+            _ => "https://acme-v02.api.letsencrypt.org/directory",
+        };
+        context.insert("spec_acme_server", lets_encrypt_url);
 
         context
     }

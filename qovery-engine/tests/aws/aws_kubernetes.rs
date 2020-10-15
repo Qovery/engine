@@ -15,7 +15,6 @@
 // use std::fs::File;
 // use std::io::{BufReader, Read};
 // use test_utilities::aws::AWS_KUBERNETES_VERSION;
-// use test_utilities::aws::TEST_CLUSTER;
 //
 // #[test]
 // #[ignore]
@@ -49,7 +48,6 @@
 //         "us-east-2",
 //         &aws,
 //         &cloudflare,
-//         TEST_CLUSTER,
 //         options_result.expect("Oh my god an error in test... Options options options"),
 //         nodes,
 //     );
@@ -110,7 +108,6 @@
 //         "eu-west-3",
 //         &aws,
 //         &cloudflare,
-//         TEST_CLUSTER,
 //         options_result.expect("Oh my god an error in test... Options options options"),
 //         nodes,
 //     );
@@ -141,13 +138,25 @@
 //     let aws = test_utilities::aws::cloud_provider_aws(&context);
 //     let nodes = test_utilities::aws::aws_kubernetes_nodes();
 //
+//     let cloudflare = dns_provider_cloudflare(&context);
+//
+//     let mut file = File::open("tests/assets/eks-options.json").unwrap();
+//     let mut read_buf = String::new();
+//     file.read_to_string(&mut read_buf).unwrap();
+//
+//     let options_result = serde_json::from_str::<
+//         qovery_engine::cloud_provider::aws::kubernetes::Options,
+//     >(read_buf.as_str());
+//
 //     let kubernetes = EKS::new(
-//         context,
-//         "my-eks-on-us-east-2",
-//         "my-eks-us-east-2",
+//         context.clone(),
+//         "my-eks-on-eu-west-3",
+//         "my-eks-eu-west-3",
 //         AWS_KUBERNETES_VERSION,
-//         "us-east-2",
+//         "eu-west-3",
 //         &aws,
+//         &cloudflare,
+//         options_result.expect("Oh my god an error in test... Options options options"),
 //         nodes,
 //     );
 //
@@ -177,13 +186,25 @@
 //     let aws = test_utilities::aws::cloud_provider_aws(&context);
 //     let nodes = test_utilities::aws::aws_kubernetes_nodes();
 //
+//     let cloudflare = dns_provider_cloudflare(&context);
+//
+//     let mut file = File::open("tests/assets/eks-options.json").unwrap();
+//     let mut read_buf = String::new();
+//     file.read_to_string(&mut read_buf).unwrap();
+//
+//     let options_result = serde_json::from_str::<
+//         qovery_engine::cloud_provider::aws::kubernetes::Options,
+//     >(read_buf.as_str());
+//
 //     let kubernetes = EKS::new(
-//         context,
+//         context.clone(),
 //         "my-eks-on-eu-west-3",
 //         "my-eks-eu-west-3",
 //         AWS_KUBERNETES_VERSION,
 //         "eu-west-3",
 //         &aws,
+//         &cloudflare,
+//         options_result.expect("Oh my god an error in test... Options options options"),
 //         nodes,
 //     );
 //

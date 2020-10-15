@@ -190,7 +190,6 @@ impl Kubernetes {
                 self.region.as_str(),
                 cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
                 dns_provider,
-                false, // TODO Romaric: do you really want to expose this? If yes please come to see me
                 serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(
                     self.options.clone(),
                 )

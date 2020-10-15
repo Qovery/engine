@@ -61,7 +61,6 @@ pub struct EKS<'a> {
     region: Region,
     cloud_provider: &'a AWS,
     dns_provider: &'a DnsProvider,
-    test_cluster: bool,
     nodes: Vec<Node>,
     template_directory: String,
     options: Options,
@@ -77,7 +76,6 @@ impl<'a> EKS<'a> {
         region: &str,
         cloud_provider: &'a AWS,
         dns_provider: &'a DnsProvider,
-        test_cluster: bool,
         options: Options,
         nodes: Vec<Node>,
     ) -> Self {
@@ -91,7 +89,6 @@ impl<'a> EKS<'a> {
             region: Region::from_str(region).unwrap(),
             cloud_provider,
             dns_provider,
-            test_cluster,
             options,
             nodes,
             template_directory,
@@ -169,7 +166,6 @@ impl<'a> EKS<'a> {
             "engine_version_controller_token",
             &engine_version_controller_token,
         );
-        context.insert("test_cluster", &self.test_cluster);
 
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);
@@ -188,6 +184,16 @@ impl<'a> EKS<'a> {
         };
 
         context.insert("dns_email_report", "dns@qovery.com"); // Pierre suggested renaming to tls_email_report
+
+        // TLS
+        let lets_encrypt_url = match self.context.metadata() {
+            Some(meta) => match meta.test {
+                Some(true) => "https://acme-staging-v02.api.letsencrypt.org/directory",
+                _ => "https://acme-v02.api.letsencrypt.org/directory",
+            },
+            _ => "https://acme-v02.api.letsencrypt.org/directory",
+        };
+        context.insert("acme_server_url", lets_encrypt_url);
 
         // AWS
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);

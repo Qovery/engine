@@ -134,8 +134,13 @@ resource "helm_release" "cert_manager_config" {
   }
 
   set {
-    name = "emailReport"
-    value = "{{ dns_email_report }}" // Todo: customize it with client address?
+    name = "acme.letsEncrypt.emailReport"
+    value = "{{ dns_email_report }}"
+  }
+
+  set {
+    name = "acme.letsEncrypt.acmeUrl"
+    value = "{{ acme_server_url }}"
   }
 
   set {

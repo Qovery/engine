@@ -16,7 +16,5 @@ provider:
 # Let's encrypt info
 acme:
   letsEncrypt:
-    isTest: false
     emailReport: ""
-    stagingUrl: "https://acme-staging-v02.api.letsencrypt.org/directory"
-    productionUrl: "https://acme-v02.api.letsencrypt.org/directory"
+    acmeUrl: ""

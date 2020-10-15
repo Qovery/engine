@@ -12,7 +12,7 @@ use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{
     Action, Application, Context, CustomDomain, Database, DatabaseKind, Environment,
-    EnvironmentVariable, GitCredentials, Kind, Route, Router, Storage, StorageType,
+    EnvironmentVariable, GitCredentials, Kind, Metadata, Route, Router, Storage, StorageType,
 };
 use qovery_engine::session::Session;
 use serde_json::value::Value;
@@ -35,7 +35,6 @@ pub const AWS_ACCESS_KEY: &str = "E9Ugsvv7MI3vCaHtn1qoxXU8KwNJeTWn3GfVLNYN";
 pub const AWS_DEFAULT_REGION: &str = "us-east-2";
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
-pub const TEST_CLUSTER: bool = true;
 
 pub fn execution_id() -> String {
     Utc::now()
@@ -50,13 +49,16 @@ pub fn context() -> Context {
     let home_dir = std::env::var("WORKSPACE_ROOT_DIR")
         .unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+    let metadata = Metadata {
+        test: Option::from(true),
+    };
 
     Context::new(
         execution_id.as_str(),
         home_dir.as_str(),
         lib_root_dir.as_str(),
         None,
-        None,
+        Option::from(metadata),
     )
 }
 
@@ -122,7 +124,6 @@ pub fn aws_kubernetes_eks<'a>(
         AWS_DEFAULT_REGION,
         cloud_provider,
         dns_provider,
-        TEST_CLUSTER,
         options_values,
         nodes,
     )
