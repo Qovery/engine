@@ -695,58 +695,58 @@ fn deploy_a_working_environment_with_production_mongodb_v3_6() {
     test_mongodb_configuration(context, environment, "3.6");
 }
 
-#[test]
-fn deploy_a_working_environment_with_external_service() {
-    init();
-
-    let context = context();
-    let deletion_context = context.clone_not_same_execution_id();
-
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
-
-    // no apps
-    environment.applications = vec![];
-
-    environment.external_services = vec![ExternalService {
-        id: generate_id(),
-        action: Action::Create,
-        name: "my-external-service".to_string(),
-        total_cpus: "500m".to_string(),
-        total_ram_in_mib: 512,
-        git_url: "https://github.com/evoxmusic/qovery-external-service-example.git".to_string(),
-        git_credentials: GitCredentials {
-            login: "x-access-token".to_string(),
-            access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(), // fake one
-            expired_at: Utc::now(),
-        },
-        branch: "master".to_string(),
-        commit_id: "db322f2f4ac70933f16e8a422ea9f72e1e14df22".to_string(),
-        on_create_dockerfile_path: "extsvc/Dockerfile.on-create".to_string(),
-        on_pause_dockerfile_path: "extsvc/Dockerfile.on-pause".to_string(),
-        on_delete_dockerfile_path: "extsvc/Dockerfile.on-delete".to_string(),
-        environment_variables: vec![],
-    }];
-
-    let mut environment_delete = environment.clone();
-    environment_delete.action = Action::Delete;
-
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    match delete_environment(&deletion_context, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    // TODO: remove the namespace (or project)
-}
+// #[test]
+// fn deploy_a_working_environment_with_external_service() {
+//     init();
+//
+//     let context = context();
+//     let deletion_context = context.clone_not_same_execution_id();
+//
+//     let mut environment = test_utilities::aws::working_minimal_environment(&context);
+//
+//     // no apps
+//     environment.applications = vec![];
+//
+//     environment.external_services = vec![ExternalService {
+//         id: generate_id(),
+//         action: Action::Create,
+//         name: "my-external-service".to_string(),
+//         total_cpus: "500m".to_string(),
+//         total_ram_in_mib: 512,
+//         git_url: "https://github.com/evoxmusic/qovery-external-service-example.git".to_string(),
+//         git_credentials: GitCredentials {
+//             login: "x-access-token".to_string(),
+//             access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(), // fake one
+//             expired_at: Utc::now(),
+//         },
+//         branch: "master".to_string(),
+//         commit_id: "db322f2f4ac70933f16e8a422ea9f72e1e14df22".to_string(),
+//         on_create_dockerfile_path: "extsvc/Dockerfile.on-create".to_string(),
+//         on_pause_dockerfile_path: "extsvc/Dockerfile.on-pause".to_string(),
+//         on_delete_dockerfile_path: "extsvc/Dockerfile.on-delete".to_string(),
+//         environment_variables: vec![],
+//     }];
+//
+//     let mut environment_delete = environment.clone();
+//     environment_delete.action = Action::Delete;
+//
+//     let ea = EnvironmentAction::Environment(environment);
+//     let ea_delete = EnvironmentAction::Environment(environment_delete);
+//
+//     match deploy_environment(&context, &ea) {
+//         TransactionResult::Ok => assert!(true),
+//         TransactionResult::Rollback(_) => assert!(false),
+//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//     };
+//
+//     match delete_environment(&deletion_context, &ea_delete) {
+//         TransactionResult::Ok => assert!(true),
+//         TransactionResult::Rollback(_) => assert!(false),
+//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//     };
+//
+//     // TODO: remove the namespace (or project)
+// }
 
 #[test]
 #[ignore]
