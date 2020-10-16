@@ -242,7 +242,9 @@ controller:
 
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: nlb
-    labels: {}
+    labels:
+      app_id : "{{ id }}"
+
     ## Deprecated, instead simply do not provide a clusterIP value
     omitClusterIP: false
     # clusterIP: ""

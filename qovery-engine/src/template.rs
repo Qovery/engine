@@ -77,7 +77,8 @@ pub fn generate_j2_template_files<P>(
 where
     P: AsRef<Path>,
 {
-    debug!("context: {:?}", context);
+    //TODO: sort on fly context should be implemented to optimize reading
+    debug!("context: {:#?}", context);
     let root_dir_str = root_dir.as_ref().to_str().unwrap();
     let tera_template_string = format!("{}/**/*.j2.*", root_dir_str);
 

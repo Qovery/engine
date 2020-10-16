@@ -379,7 +379,11 @@ impl Create for Router {
                         crate::cmd::kubectl_exec_get_external_ingress_hostname(
                             kubernetes_config_file_path.as_str(),
                             environment.namespace(),
-                            "app=nginx-ingress,component=controller",
+                            format!(
+                                "app=nginx-ingress,component=controller,release=custom-{}",
+                                helm_release_name
+                            )
+                            .as_str(),
                             self.aws_credentials_envs(aws).to_vec(),
                         );
                     match external_ingress_hostname_custom {
