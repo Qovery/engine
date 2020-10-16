@@ -242,7 +242,7 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     let result = retry::retry(Fibonacci::from_millis(3000).take(3), || {
         let exec = exec_with_envs_and_output(
             format!("{} terraform", root_dir).as_str(),
-            args,
+            args.clone(),
             vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
             |line: Result<String, std::io::Error>| {
                 info!("{}", line.unwrap());
@@ -255,16 +255,22 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
         match exec {
             Ok(exec) => OperationResult::Ok(exec),
             Err(e) => {
-                warn!("Terraform Command failed. Retrying it {}",e);
+                warn!("Terraform Command failed. Retrying it {}", e);
                 OperationResult::Retry(e)
             }
         }
     });
 
     match result {
-        Err(err) => error!("while executing terraform command {}",err),
+        Err(err) => {
+            error!("while executing terraform command {}", err);
+            return Err(CmdError::Io(Error::new(
+                std::io::ErrorKind::InvalidData,
+                err,
+            )));
+        }
         _ => {}
-    }
+    };
 
     Ok(())
 }
