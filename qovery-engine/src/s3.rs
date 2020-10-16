@@ -219,14 +219,13 @@ where
     };
 
     let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
-        let file_content = crate::s3::get_object(
+        let file_content = crate::s3::get_object_via_aws_cli(
             access_key_id,
             secret_access_key,
             region,
             kubernetes_config_bucket_name,
             kubernetes_config_object_key,
         );
-
         match file_content {
             Ok(file_content) => OperationResult::Ok(file_content),
             Err(err) => {
