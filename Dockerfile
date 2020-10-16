@@ -42,7 +42,7 @@ COPY --from=build /usr/src/app/target/release/app .
 COPY --from=build /usr/src/app/docker/engine/load.sh .
 COPY --from=build /usr/src/app/docker/engine/run.sh .
 COPY --from=build /usr/src/app/bin_versions .
-COPY --from=build /root/.terraform.d/plugin-cache $HOME_DIR/.terraform.d/plugin-cache
+COPY --from=build /root/.terraform.d $HOME_DIR/.terraform.d
 COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
 RUN ./load.sh install $BIN_DIR && \

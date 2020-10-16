@@ -59,7 +59,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   cp docker/load.sh docker/engine/load.sh
   cp docker/bin_versions bin_versions
   # copy providers files to download required binaries
-  rm -f docker/engine/providers/*
+  rm -Rf docker/engine/providers/*
   set -e
   find lib/ -name "tf-providers*" -exec cp {} docker/engine/providers/ \;
   $sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/*
