@@ -239,20 +239,42 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     let home_dir = home_dir().expect("Could not find $HOME");
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
 
-    match exec_with_envs_and_output(
-        format!("{} terraform", root_dir).as_str(),
-        args,
-        vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
-        |line: Result<String, std::io::Error>| {
-            info!("{}", line.unwrap());
-        },
-        |line: Result<String, std::io::Error>| {
-            error!("{}", line.unwrap());
-        },
-    ) {
-        Err(err) => return Err(err),
+    // match exec_with_envs_and_output(
+    //     format!("{} terraform", root_dir).as_str(),
+    //     args,
+    //     vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
+    //     |line: Result<String, std::io::Error>| {
+    //         info!("{}", line.unwrap());
+    //     },
+    //     |line: Result<String, std::io::Error>| {
+    //         error!("{}", line.unwrap());
+    //     },
+    // ) {
+    //     Err(err) => return Err(err),
+    //     _ => {}
+    // };
+
+    let result = retry::retry(Fibonacci::from_millis(3000).take(3), || {
+        match exec_with_envs_and_output(
+            format!("{} terraform", root_dir).as_str(),
+            args,
+            vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
+            |line: Result<String, std::io::Error>| {
+                info!("{}", line.unwrap());
+            },
+            |line: Result<String, std::io::Error>| {
+                error!("{}", line.unwrap());
+            },
+        ) {
+            Err(..) => OperationResult::Retry(..),
+            _ => OperationResult::Ok(()),
+        };
+    });
+
+    match result {
+        Err(_) => return Err(result.unwrap()),
         _ => {}
-    };
+    }
 
     Ok(())
 }
