@@ -42,11 +42,6 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   set {
-    name = "environmentVariables.RUST_LOG"
-    value = "DEBUG,rusoto_core::request=info,hyper=info"
-  }
-
-  set {
     name = "environmentVariables.LIB_ROOT_DIR"
     value = "/home/qovery/lib"
   }

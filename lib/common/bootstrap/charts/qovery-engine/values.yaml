@@ -17,6 +17,7 @@ labels:
   app: qovery-engine
 
 environmentVariables:
+  RUST_LOG: DEBUG,rusoto_core::request=info,hyper=info
   #ENGINE_RES_URL: ""
   #NATS_SERVER: ""
   #ORGANIZATION: ""

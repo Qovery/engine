@@ -170,7 +170,7 @@ environmentVariables.NATS_SERVER="panic.qovery.com:4242",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
-environmentVariables.RUST_LOG="debug",\
+environmentVariables.RUST_LOG="DEBUG,rusoto_core::request=info,hyper=info",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 resources.limits.cpu="1",\
 resources.limits.memory="2Gi",\
