@@ -380,10 +380,8 @@ impl<'a> Kubernetes for EKS<'a> {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let nodes = cmd::kubectl::kubectl_exec_describe_node(
-            kubernetes_config_file_path,
-            aws_credentials_envs,
-        )?;
+        let nodes =
+            cmd::kubectl::kubectl_exec_get_node(kubernetes_config_file_path, aws_credentials_envs)?;
 
         let mut resources = Resources {
             free_cpu: 0.0,

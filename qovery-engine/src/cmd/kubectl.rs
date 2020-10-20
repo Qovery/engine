@@ -586,7 +586,7 @@ where
     Ok(output_vec.join("\n"))
 }
 
-pub fn kubectl_exec_describe_node<P>(
+pub fn kubectl_exec_get_node<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
 ) -> Result<KubernetesList<KubernetesNode>, CmdError>
@@ -599,7 +599,7 @@ where
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
     let _ = kubectl_exec_with_output(
-        vec!["describe", "node", "-o", "json"],
+        vec!["get", "node", "-o", "json"],
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),

@@ -69,7 +69,7 @@ pub fn get_stateless_resource_information(
     ];
 
     // exec describe pod...
-    let describe = match crate::cmd::kubectl::kubectl_exec_describe(
+    let describe = match crate::cmd::kubectl::kubectl_exec_describe_pod(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         selector,

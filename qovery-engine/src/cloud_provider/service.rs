@@ -224,6 +224,7 @@ pub enum ServiceError {
     CheckFailed,
     Cmd(CmdError),
     Io(Error),
+    NotEnoughResources(String),
     Unexpected(String),
 }
 

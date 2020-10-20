@@ -1,4 +1,5 @@
 use crate::cloud_provider::service::{ServiceError, StatefulService, StatelessService};
+use crate::unit_conversion::cpu_string_to_float;
 
 pub struct Environment {
     namespace: String,
@@ -54,9 +55,46 @@ impl Environment {
 
         Ok(())
     }
+
+    /// compute the required resources for this environment from
+    /// applications, external services, routers, and databases
+    /// Note: Even if external services don't run on the targeted Kubernetes cluster, it requires CPU and memory resources to run the container(s)
+    pub fn required_resources(&self) -> EnvironmentResources {
+        let mut total_cpu_for_stateless_services: f32 = 0.0;
+        let mut total_ram_in_mib_for_stateless_services: u32 = 0;
+
+        for service in &self.stateless_services {
+            total_cpu_for_stateless_services += cpu_string_to_float(&service.total_cpus());
+            total_ram_in_mib_for_stateless_services += &service.total_ram_in_mib();
+        }
+
+        let mut total_cpu_for_stateful_services: f32 = 0.0;
+        let mut total_ram_in_mib_for_stateful_services: u32 = 0;
+        match self.kind {
+            Kind::Development => {
+                // development means databases are running on Kubernetes
+                for service in &self.stateful_services {
+                    total_cpu_for_stateful_services += cpu_string_to_float(&service.total_cpus());
+                    total_ram_in_mib_for_stateful_services += &service.total_ram_in_mib();
+                }
+            }
+            Kind::Production => {} // production means databases are running on managed services - so it consumes 0 cpu
+        };
+
+        EnvironmentResources {
+            cpu: total_cpu_for_stateless_services + total_cpu_for_stateful_services,
+            ram_in_mib: total_ram_in_mib_for_stateless_services
+                + total_ram_in_mib_for_stateless_services,
+        }
+    }
 }
 
 pub enum Kind {
     Production,
     Development,
+}
+
+pub struct EnvironmentResources {
+    pub cpu: f32,
+    pub ram_in_mib: u32,
 }
