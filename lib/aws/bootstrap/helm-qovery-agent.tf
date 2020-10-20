@@ -20,6 +20,12 @@ resource "helm_release" "qovery_agent_resources" {
   max_history = 50
   force_update = true
 
+  // make a fake arg to avoid TF to validate update on failure because of the atomic option
+  set {
+    name = "fake"
+    value = timestamp()
+  }
+
 //  set {
 //    name = "image.tag"
 //    value = data.external.get_engine_version_to_use.result.version

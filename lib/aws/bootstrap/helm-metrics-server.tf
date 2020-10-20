@@ -5,6 +5,11 @@ resource "helm_release" "metrics_server" {
   atomic = true
   max_history = 50
 
+  // make a fake arg to avoid TF to validate update on failure because of the atomic option
+  set {
+    name = "fake"
+    value = timestamp()
+  }
 
   set {
     name = "resources.limits.cpu"

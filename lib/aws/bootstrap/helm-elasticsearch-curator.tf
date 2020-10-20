@@ -8,6 +8,12 @@ resource "helm_release" "elasticsearch_curator" {
 
   values = [file("chart_values/elasticsearch-curator.yaml")]
 
+  // make a fake arg to avoid TF to validate update on failure because of the atomic option
+  set {
+    name = "fake"
+    value = timestamp()
+  }
+
   set {
     name = "image.repository"
     value = "qoveryrd/curator"

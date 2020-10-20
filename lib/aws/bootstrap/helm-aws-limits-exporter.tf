@@ -38,6 +38,13 @@ resource "helm_release" "iam_aws_limits_exporter" {
   atomic = true
   max_history = 50
 
+  // We can't activate it now until we got the support info into metadata field
+  // make a fake arg to avoid TF to validate update on failure because of the atomic option
+//  set {
+//    name = "fake"
+//    value = timestamp()
+//  }
+
   set {
     name = "awsCredentials.awsAccessKey"
     value = aws_iam_access_key.iam_aws_limits_exporter.id

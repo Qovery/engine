@@ -6,6 +6,12 @@ resource "helm_release" "alertmanager_discord" {
   atomic = true
   max_history = 50
 
+  // make a fake arg to avoid TF to validate update on failure because of the atomic option
+  set {
+    name = "fake"
+    value = timestamp()
+  }
+
   set {
     name = "replicaCount"
     value = "1"

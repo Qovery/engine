@@ -10,7 +10,7 @@ terraform {
     }
     helm = {
       source = "hashicorp/helm"
-      version = "~> 1.2"
+      version = "~> 1.3.2"
     }
     local = {
       source = "hashicorp/local"

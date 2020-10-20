@@ -8,6 +8,12 @@ resource "helm_release" "prometheus_operator" {
 
   values = [file("chart_values/prometheus_operator.yaml")]
 
+  // make a fake arg to avoid TF to validate update on failure because of the atomic option
+  set {
+    name = "fake"
+    value = timestamp()
+  }
+
   set {
     name = "nameOverride"
     value = "prometheus-operator"
