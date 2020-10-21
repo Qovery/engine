@@ -29,13 +29,33 @@ resource "aws_iam_user_policy_attachment" "s3_loki_attachment" {
   policy_arn = aws_iam_policy.loki_s3_policy.arn
 }
 
+resource "aws_kms_key" "s3_logs_kms_encryption" {
+  description             = "s3 logs encryption"
+  tags = merge(
+    local.tags_eks,
+    {
+      "Name" = "Encryption logs"
+    }
+  )
+}
+
 // S3 bucket to store indexes and logs
 resource "aws_s3_bucket" "loki_bucket" {
   bucket = aws_iam_user.iam_eks_loki.name
-  acl    = "private"
+  acl = "private"
   versioning {
     enabled = false
   }
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        kms_master_key_id = aws_kms_key.s3_kms_encryption.arn
+        sse_algorithm = "aws:kms"
+      }
+    }
+  }
+}
 
   tags = merge(
     local.tags_eks,
@@ -79,6 +99,10 @@ resource "helm_release" "loki" {
   set {
     name = "config.storage_config.aws.secret_access_key"
     value = aws_iam_access_key.iam_eks_loki.secret
+  }
+  set {
+    name = "config.storage_config.sse_encryption"
+    value = "true"
   }
 
   set {
