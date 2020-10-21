@@ -15,12 +15,6 @@ resource "helm_release" "fluent_bit" {
   max_history = 50
   force_update = true
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   # Enable Prometheus exporter
   set {
     name = "metrics.enabled"
