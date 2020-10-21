@@ -9,7 +9,7 @@
 
 
 <p align="center">
-    <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_kubernetes_cloudproviders.svg" height="350px" alt="Qovery stack on top of Kubernetes and Cloud providers" />
+    <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_kubernetes_cloudproviders.svg" height="450px" alt="Qovery stack on top of Kubernetes and Cloud providers" />
 </p>
 
 Qovery engine is an open-source abstraction layer product that makes deployment on **AWS**, **GCP**, **Azure** and others Cloud providers easy to do. The engine is coded in **Rust** and take advantage of **Terraform** and **Helm** to manage resources.
