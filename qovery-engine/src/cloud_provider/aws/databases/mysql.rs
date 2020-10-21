@@ -10,7 +10,7 @@ use crate::cloud_provider::service::{
     ServiceError, ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::{
+use crate::cmd::kubectl::{
     kubectl_exec_create_namespace, kubectl_exec_delete_namespace, kubectl_exec_delete_secret,
 };
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
@@ -160,7 +160,7 @@ impl MySQL {
                     &context,
                 )?;
 
-                match crate::cmd::terraform_exec_with_init_validate_plan_destroy(
+                match crate::cmd::terraform::terraform_exec_with_init_validate_destroy(
                     workspace_dir.as_str(),
                 ) {
                     Ok(o) => {
@@ -276,7 +276,7 @@ impl Create for MySQL {
                     &context,
                 )?;
 
-                crate::cmd::terraform_exec_with_init_validate_plan_apply(
+                crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
                     workspace_dir.as_str(),
                     false,
                 )?;
@@ -319,7 +319,7 @@ impl Create for MySQL {
                 ];
 
                 // do exec helm upgrade and return the last deployment status
-                let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
+                let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     helm_release_name.as_str(),
@@ -337,7 +337,7 @@ impl Create for MySQL {
                 // check app status
                 let selector = format!("app={}", self.name());
 
-                match crate::cmd::kubectl_exec_is_pod_ready_with_retry(
+                match crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     selector.as_str(),

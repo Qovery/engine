@@ -315,7 +315,7 @@ fn check_versions_from(path: String) -> Result<(), EngineInitError> {
                 let binary_name = lowercase.split("_").next().unwrap_or("");
                 // check if the binary need to be tested
                 if bin_to_check.contains(&binary_name) {
-                    let result_cmd = cmd::run_version_command_for(&binary_name);
+                    let result_cmd = cmd::utilities::run_version_command_for(&binary_name);
                     let version = lowercase.split("=").last().unwrap_or("").replace("\"", "");
                     match result_cmd.contains(&version) {
                         false => return Err(EngineInitError::Regular(ErrorKind::BinVersion)),

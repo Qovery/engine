@@ -12,7 +12,7 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
 use crate::cmd;
-use crate::cmd::CmdError;
+use crate::cmd::utilities::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
@@ -116,7 +116,7 @@ impl ECR {
         // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
         // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
 
-        match cmd::exec_with_envs(
+        match cmd::utilities::exec_with_envs(
             "docker",
             vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
             self.docker_envs(),
@@ -130,7 +130,11 @@ impl ECR {
         };
 
         // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
-        match cmd::exec_with_envs("docker", vec!["push", dest.as_str()], self.docker_envs()) {
+        match cmd::utilities::exec_with_envs(
+            "docker",
+            vec!["push", dest.as_str()],
+            self.docker_envs(),
+        ) {
             Err(err) => match err {
                 CmdError::Exec(_exit_status) => return Err(PushError::ImagePushFailed),
                 CmdError::Io(err) => return Err(PushError::IoError(err)),
@@ -296,7 +300,7 @@ impl ContainerRegistry for ECR {
             _ => return Err(PushError::RepositoryInitFailure),
         };
 
-        match cmd::exec_with_envs(
+        match cmd::utilities::exec_with_envs(
             "docker",
             vec![
                 "login",

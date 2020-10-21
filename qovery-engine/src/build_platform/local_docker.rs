@@ -37,7 +37,7 @@ impl LocalDocker {
         };
 
         Ok(
-            match crate::cmd::exec_with_envs(
+            match crate::cmd::utilities::exec_with_envs(
                 "docker",
                 vec!["image", "inspect", image.name_with_tag().as_str()],
                 envs,
@@ -67,7 +67,7 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn is_valid(&self) -> Result<(), BuildPlatformError> {
-        if !crate::cmd::does_binary_exist("docker") {
+        if !crate::cmd::utilities::does_binary_exist("docker") {
             return Err(BuildPlatformError::Unexpected(
                 "docker binary not found".to_string(),
             ));
@@ -186,7 +186,7 @@ impl BuildPlatform for LocalDocker {
         };
 
         // docker build
-        let exit_status = cmd::exec_with_envs_and_output(
+        let exit_status = cmd::utilities::exec_with_envs_and_output(
             "docker",
             docker_args,
             envs,

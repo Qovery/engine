@@ -2,7 +2,7 @@ use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::ServiceError;
-use crate::cmd::CmdError;
+use crate::cmd::utilities::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use rusoto_core::Region;
 use std::io::Error;
@@ -69,7 +69,7 @@ pub fn get_stateless_resource_information(
     ];
 
     // exec describe pod...
-    let describe = match crate::cmd::kubectl_exec_describe(
+    let describe = match crate::cmd::kubectl::kubectl_exec_describe(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         selector,
@@ -86,7 +86,7 @@ pub fn get_stateless_resource_information(
     };
 
     // exec logs...
-    let logs = match crate::cmd::kubectl_exec_logs(
+    let logs = match crate::cmd::kubectl::kubectl_exec_logs(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         selector,
@@ -131,7 +131,7 @@ pub fn do_stateless_service_cleanup(
         (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
     ];
 
-    let history_rows = crate::cmd::helm_exec_history(
+    let history_rows = crate::cmd::helm::helm_exec_history(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         helm_release_name,
@@ -142,7 +142,7 @@ pub fn do_stateless_service_cleanup(
     let first_valid_history_row = history_rows.iter().find(|x| x.is_successfully_deployed());
 
     if first_valid_history_row.is_some() {
-        crate::cmd::helm_exec_uninstall(
+        crate::cmd::helm::helm_exec_uninstall(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name,

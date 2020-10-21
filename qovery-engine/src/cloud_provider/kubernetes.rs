@@ -1,7 +1,7 @@
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::ServiceError;
 use crate::cloud_provider::CloudProvider;
-use crate::cmd::CmdError;
+use crate::cmd::utilities::CmdError;
 use crate::dns_provider::DnsProvider;
 use crate::models::{Context, Listener, Listeners, ProgressListener};
 use serde::{Deserialize, Serialize};

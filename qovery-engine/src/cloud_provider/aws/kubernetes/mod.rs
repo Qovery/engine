@@ -7,9 +7,10 @@ use itertools::Itertools;
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::iter::FromIterator;
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::common::do_stateless_service_cleanup;
+use crate::cloud_provider::aws::common::{do_stateless_service_cleanup, kubernetes_config_path};
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -17,8 +18,11 @@ use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, Kuber
 use crate::cloud_provider::service::{Service, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
-use crate::cmd::kubectl_exec_delete_namespace;
+use crate::cmd::helm::helm_uninstall_list;
+use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
+use crate::cmd::utilities::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::cloudflare::Cloudflare;
 use crate::dns_provider::DnsProvider;
 use crate::dns_provider::Kind::CLOUDFLARE;
@@ -28,6 +32,7 @@ use crate::models::{
     ProgressScope,
 };
 use crate::{dns_provider, dynamo_db, s3};
+use std::ops::Deref;
 
 pub mod node;
 
@@ -146,7 +151,8 @@ impl<'a> EKS<'a> {
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
 
-        let s3_kubeconfig_bucket = format!("qovery-kubeconfigs-{}", self.id);
+        let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
+
         let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d";
         let qovery_api_url = self.options.qovery_api_url.clone();
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
@@ -374,7 +380,10 @@ impl<'a> Kubernetes for EKS<'a> {
             common_charts_temp_dir.as_str(),
         )?;
 
-        let _ = crate::cmd::terraform_exec_with_init_validate_plan_apply(temp_dir.as_str(), true)?;
+        let _ = crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+            temp_dir.as_str(),
+            true,
+        )?;
 
         Ok(())
     }
@@ -407,9 +416,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn on_delete(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_delete() called for {}", self.name());
-
         let listeners_helper = ListenersHelper::new(&self.listeners);
-
         listeners_helper.delete_in_progress(ProgressInfo::new(
             ProgressScope::Infrastructure {
                 execution_id: self.context.execution_id().to_string(),
@@ -444,11 +451,123 @@ impl<'a> Kubernetes for EKS<'a> {
             format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
             common_charts_temp_dir.as_str(),
         )?;
+        let aws_credentials_envs = vec![
+            (
+                AWS_ACCESS_KEY_ID,
+                self.cloud_provider.access_key_id.as_str(),
+            ),
+            (
+                AWS_SECRET_ACCESS_KEY,
+                &self.cloud_provider.secret_access_key.as_str(),
+            ),
+        ];
 
-        let _ = crate::cmd::terraform_exec_with_init_validate_plan_destroy(temp_dir.as_str())?;
+        let kubernetes_config_file_path = kubernetes_config_path(
+            self.context.workspace_root_dir(),
+            self.cloud_provider.organization_id.as_str(),
+            self.id(),
+            self.cloud_provider.access_key_id.as_str(),
+            self.cloud_provider.secret_access_key.as_str(),
+            self.region(),
+        )?;
+        let all_namespaces = kubectl_exec_get_all_namespaces(
+            kubernetes_config_file_path,
+            aws_credentials_envs.clone(),
+        );
 
-        // TODO: delete s3 bucket
-        // TODO: delete dynamodb table
+        // should make the diff between all namespaces and qovery managed namespaces
+        match all_namespaces {
+            Ok(namespace_vec) => {
+                let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
+                let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
+                info!("Deleting non Qovery Namespaces");
+                for namespace_to_delete in namespaces_to_delete.iter() {
+                    let kubernetes_config_file_path0 = kubernetes_config_path(
+                        self.context.workspace_root_dir(),
+                        self.cloud_provider.organization_id.as_str(),
+                        self.id(),
+                        self.cloud_provider.access_key_id.as_str(),
+                        self.cloud_provider.secret_access_key.as_str(),
+                        self.region(),
+                    )?;
+
+                    let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+                        &kubernetes_config_file_path0,
+                        namespace_to_delete,
+                        aws_credentials_envs.clone(),
+                    );
+                    match deletion {
+                        Ok(out) => info!("Namespace {} is deleted", namespace_to_delete),
+                        Err(e) => {
+                            error!(
+                                "Can't delete the namespace {}, quiting now",
+                                namespace_to_delete
+                            );
+                        }
+                    }
+                }
+            }
+            Err(e) => error!("Error while getting all namespaces {}", e),
+        }
+        info!("Deleting Qovery managed Namespaces");
+        let kubernetes_config_file_path2 = kubernetes_config_path(
+            self.context.workspace_root_dir(),
+            self.cloud_provider.organization_id.as_str(),
+            self.id(),
+            self.cloud_provider.access_key_id.as_str(),
+            self.cloud_provider.secret_access_key.as_str(),
+            self.region(),
+        )?;
+        // TODO use label instead fixed names
+        let mut qovery_namespaces = get_qovery_managed_namespaces();
+        for qovery_namespace in qovery_namespaces.iter() {
+            let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+                &kubernetes_config_file_path2,
+                qovery_namespace,
+                aws_credentials_envs.clone(),
+            );
+            match deletion {
+                Ok(out) => info!("Namespace {} is fully deleted", qovery_namespace),
+                Err(e) => {
+                    error!(
+                        "Can't delete the namespace {}, quiting now",
+                        qovery_namespace
+                    );
+                }
+            }
+        }
+        info!("Delete all remaining deployed helm applications");
+
+        match cmd::helm::helm_list(&kubernetes_config_file_path2, aws_credentials_envs.clone()) {
+            Ok(helm_list) => {
+                cmd::helm::helm_uninstall_list(
+                    &kubernetes_config_file_path2,
+                    helm_list,
+                    aws_credentials_envs.clone(),
+                );
+            }
+            Err(e) => error!("Unable to get helm list"),
+        }
+        info!("Running Terraform destroy");
+        let terraform_result =
+            cmd::terraform::terraform_exec_with_init_validate_destroy(temp_dir.as_str())?;
+        // we should delete the bucket containing the kubeconfig after
+        // to prevent to loose connection from terraform to kube cluster
+        match terraform_result {
+            () => {
+                info!("Deleting S3 Bucket containing Kubeconfig");
+                let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
+                let _region = Region::from_str(self.region()).unwrap();
+                s3::delete_bucket(
+                    self.cloud_provider.access_key_id.as_str(),
+                    self.cloud_provider.secret_access_key.as_str(),
+                    s3_kubeconfig_bucket.clone().as_str(),
+                );
+            }
+            _ => {
+                error!("Something is wrong with terraform destroy, Kubeconfig S3 location will not be deleting preventing to loose kube accessibility");
+            }
+        }
 
         Ok(())
     }
@@ -1035,6 +1154,10 @@ impl<'a> Kubernetes for EKS<'a> {
         warn!("EKS.delete_environment_error() called for {}", self.name());
         Ok(())
     }
+}
+
+fn get_s3_kubeconfig_bucket_name(id: String) -> String {
+    format!("qovery-kubeconfigs-{}", id)
 }
 
 #[derive(Serialize, Deserialize)]

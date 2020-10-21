@@ -127,7 +127,7 @@ impl Router {
             Ok(kubernetes_config_file_path_string) => {
                 // Default domain
                 let external_ingress_hostname_default =
-                    crate::cmd::kubectl_exec_get_external_ingress_hostname(
+                    crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
                         kubernetes_config_file_path_string.as_str(),
                         "nginx-ingress",
                         "app=nginx-ingress,component=controller",
@@ -153,7 +153,7 @@ impl Router {
                 // Check if there is a custom domain first
                 if !self.custom_domains.is_empty() {
                     let external_ingress_hostname_custom =
-                        crate::cmd::kubectl_exec_get_external_ingress_hostname(
+                        crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
                             kubernetes_config_file_path_string.as_str(),
                             environment.namespace(),
                             "app=nginx-ingress,component=controller",
@@ -359,7 +359,7 @@ impl Create for Router {
                 into_dir.as_str(),
             )?;
             // do exec helm upgrade and return the last deployment status
-            let helm_history_row = crate::cmd::helm_exec_with_upgrade_history_with_override(
+            let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history_with_override(
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 format!("custom-{}", helm_release_name).as_str(),
@@ -376,7 +376,7 @@ impl Create for Router {
             let external_ingress_hostname_custom_result =
                 retry::retry(Fibonacci::from_millis(3000).take(10), || {
                     let external_ingress_hostname_custom =
-                        crate::cmd::kubectl_exec_get_external_ingress_hostname(
+                        crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
                             kubernetes_config_file_path.as_str(),
                             environment.namespace(),
                             format!(
@@ -414,7 +414,7 @@ impl Create for Router {
         )?;
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
+        let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),

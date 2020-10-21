@@ -8,7 +8,7 @@ use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::CmdError;
+use crate::cmd::utilities::CmdError;
 use crate::models::{Context, ProgressScope};
 use crate::transaction::CommitError;
 
@@ -39,7 +39,7 @@ pub trait Service {
         let binaries = ["kubectl", "helm", "terraform", "aws-iam-authenticator"];
 
         for binary in binaries.iter() {
-            if !crate::cmd::does_binary_exist(binary) {
+            if !crate::cmd::utilities::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
                 return Err(ServiceError::Unexpected(err));
             }

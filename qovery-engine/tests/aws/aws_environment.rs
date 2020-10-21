@@ -482,7 +482,7 @@ fn deploy_a_working_production_environment_with_postgresql() {
         port: database_port.clone(),
         username: database_username.clone(),
         password: database_password.clone(),
-        total_cpus: "500m".to_string(),
+        total_cpus: "100m".to_string(),
         total_ram_in_mib: 512,
         disk_size_in_gib: 10,
         database_instance_type: "db.t2.micro".to_string(),

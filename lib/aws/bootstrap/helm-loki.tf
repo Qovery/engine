@@ -42,7 +42,8 @@ resource "aws_kms_key" "s3_logs_kms_encryption" {
 // S3 bucket to store indexes and logs
 resource "aws_s3_bucket" "loki_bucket" {
   bucket = aws_iam_user.iam_eks_loki.name
-  acl = "private"
+  acl    = "private"
+  force_destroy = true
   versioning {
     enabled = false
   }

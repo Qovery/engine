@@ -1,6 +1,6 @@
 use crate::build_platform::Image;
 use crate::cmd;
-use crate::cmd::CmdError;
+use crate::cmd::utilities::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
@@ -33,7 +33,7 @@ impl DOCR {
     }
 
     pub fn create_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
-        match cmd::exec(
+        match cmd::utilities::exec(
             "doctl",
             vec![
                 "registry",
@@ -54,7 +54,7 @@ impl DOCR {
     }
 
     pub fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, PushError> {
-        match cmd::exec(
+        match cmd::utilities::exec(
             "docker",
             vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
         ) {
@@ -66,7 +66,7 @@ impl DOCR {
             _ => {}
         };
 
-        match cmd::exec("docker", vec!["push", dest.as_str()]) {
+        match cmd::utilities::exec("docker", vec!["push", dest.as_str()]) {
             Err(err) => match err {
                 CmdError::Exec(_exit_status) => return Err(PushError::ImagePushFailed),
                 CmdError::Io(err) => return Err(PushError::IoError(err)),
@@ -87,7 +87,7 @@ impl DOCR {
     }
 
     fn delete_repository(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
-        match cmd::exec(
+        match cmd::utilities::exec(
             "doctl",
             vec![
                 "registry",
@@ -159,7 +159,7 @@ impl ContainerRegistry for DOCR {
         let image = image.clone();
         //TODO instead use get_or_create_repository
         self.create_repository(&image);
-        match cmd::exec(
+        match cmd::utilities::exec(
             "doctl",
             vec![
                 "registry",

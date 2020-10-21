@@ -224,7 +224,7 @@ impl Create for ExternalService {
         )?;
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
+        let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
@@ -239,7 +239,7 @@ impl Create for ExternalService {
         }
 
         // check job status
-        match crate::cmd::kubectl_exec_is_job_ready_with_retry(
+        match crate::cmd::kubectl::kubectl_exec_is_job_ready_with_retry(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             self.name.as_str(),
@@ -290,7 +290,7 @@ impl Create for ExternalService {
 
         let helm_release_name = self.helm_release_name();
 
-        let history_rows = crate::cmd::helm_exec_history(
+        let history_rows = crate::cmd::helm::helm_exec_history(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
@@ -298,7 +298,7 @@ impl Create for ExternalService {
         )?;
 
         if history_rows.len() == 1 {
-            crate::cmd::helm_exec_uninstall(
+            crate::cmd::helm::helm_exec_uninstall(
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 helm_release_name.as_str(),

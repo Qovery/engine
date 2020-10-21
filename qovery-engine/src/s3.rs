@@ -10,81 +10,28 @@ use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, GetObjectError,
-    GetObjectRequest, PutBucketVersioningRequest, S3Client, VersioningConfiguration, S3,
+    GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request, PutBucketVersioningRequest,
+    S3Client, VersioningConfiguration, S3,
 };
+pub const AWS_REGION_FOR_S3_US: &str = "ap-south-1";
 
-use crate::cmd::{exec_with_envs, CmdError};
+use crate::cmd::utilities::{exec_with_envs, CmdError};
 use crate::runtime::async_run;
+use std::str::FromStr;
 
 pub fn create_bucket(
     access_key_id: &str,
     secret_access_key: &str,
-    region: &Region,
     bucket_name: &str,
-) -> Result<(), Error> {
-    let access_key_id = access_key_id.to_string();
-    let secret_access_key = secret_access_key.to_string();
-    let bucket_name = bucket_name.to_string();
-
-    let credentials = StaticProvider::new(access_key_id, secret_access_key, None, None);
-    let client = Client::new_with(credentials, HttpClient::new().unwrap());
-    let s3_client = S3Client::new_with_client(client, region.clone());
-
-    let mut bc = CreateBucketRequest::default();
-    bc.acl = Some("private".to_string());
-    bc.bucket = bucket_name;
-    bc.create_bucket_configuration = Some(CreateBucketConfiguration {
-        location_constraint: Some(region.name().to_string()),
-    });
-
-    let create_bucket_output = s3_client.create_bucket(bc.clone());
-    let r = async_run(create_bucket_output);
-
-    match r {
-        Err(err) => match err {
-            RusotoError::Service(s) => match s {
-                CreateBucketError::BucketAlreadyExists(_) => info!("bucket already exists"),
-                CreateBucketError::BucketAlreadyOwnedByYou(x) => info!("{}", x),
-            },
-            RusotoError::Unknown(r) => error!("{}", r.body_as_str()),
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    "something goes wrong while creating the S3 bucket",
-                ));
-            }
-        },
-        _ => {}
-    };
-
-    let bucket_versioning_output = s3_client.put_bucket_versioning(PutBucketVersioningRequest {
-        bucket: bc.bucket.clone(),
-        mfa: None,
-        versioning_configuration: VersioningConfiguration {
-            mfa_delete: None,
-            //https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketVersioning.html
-            status: Some("Enabled".to_string()),
-        },
-    });
-
-    let r = async_run(bucket_versioning_output);
-
-    // FIXME: return a custom S3Error?
-    match r {
-        Err(err) => match err {
-            RusotoError::Unknown(r) => {
-                error!("{}", r.body_as_str());
-                Err(Error::new(ErrorKind::Other, r.body_as_str()))
-            }
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    "something goes wrong while versioning the S3 bucket",
-                ));
-            }
-        },
-        Ok(x) => Ok(x),
-    }
+) -> Result<(), CmdError> {
+    exec_with_envs(
+        "aws",
+        vec!["s3api", "create-bucket", "--bucket", &bucket_name],
+        vec![
+            ("AWS_ACCESS_KEY_ID", &access_key_id),
+            ("AWS_SECRET_ACCESS_KEY", &secret_access_key),
+        ],
+    )
 }
 
 pub type FileContent = String;
@@ -131,7 +78,6 @@ pub fn get_object(
                 let r_from_aws_cli = get_object_via_aws_cli(
                     access_key_id,
                     secret_access_key,
-                    region,
                     bucket_name,
                     object_key,
                 )?;
@@ -154,10 +100,10 @@ pub fn get_object(
                     let r_from_aws_cli = get_object_via_aws_cli(
                         access_key_id,
                         secret_access_key,
-                        region,
                         bucket_name,
                         object_key,
                     );
+
                     match r_from_aws_cli {
                         Ok(..) => Ok(r_from_aws_cli.unwrap()),
                         Err(err) => {
@@ -177,14 +123,11 @@ pub fn get_object(
 fn get_object_via_aws_cli(
     access_key_id: &str,
     secret_access_key: &str,
-    region: &Region,
     bucket_name: &str,
     object_key: &str,
 ) -> Result<FileContent, Error> {
     let s3_url = format!("s3://{}/{}", bucket_name, object_key);
     let local_path = format!("/tmp/{}", object_key);
-
-    // FIXME: use generic way to get tmp dir
     let r = exec_with_envs(
         "aws",
         vec!["s3", "cp", &s3_url, &local_path],
@@ -222,7 +165,6 @@ where
         let file_content = crate::s3::get_object_via_aws_cli(
             access_key_id,
             secret_access_key,
-            region,
             kubernetes_config_bucket_name,
             kubernetes_config_object_key,
         );
@@ -252,4 +194,62 @@ where
     let _ = kubernetes_config_file.write(file_content.as_bytes())?;
 
     Ok(kubernetes_config_file)
+}
+
+pub fn list_objects_in(
+    access_key_id: &str,
+    secret_access_key: &str,
+    bucket_name: &str,
+) -> Result<ListObjectsV2Output, Error> {
+    let credentials = StaticProvider::new(
+        access_key_id.to_string(),
+        secret_access_key.to_string(),
+        None,
+        None,
+    );
+    let client = Client::new_with(credentials, HttpClient::new().unwrap());
+    let s3_client = S3Client::new_with_client(client, get_default_region_for_us());
+    let mut list_request = ListObjectsV2Request::default();
+    list_request.bucket = bucket_name.to_string();
+    let lis_object = s3_client.list_objects_v2(list_request);
+    let objects_in = async_run(lis_object);
+    match objects_in {
+        Ok(objects) => Ok(objects),
+        Err(err) => Err(Error::new(ErrorKind::Other, err)),
+    }
+}
+
+// delete bucket implement by default objects deletion
+pub fn delete_bucket(
+    access_key_id: &str,
+    secret_access_key: &str,
+    bucket_name: &str,
+) -> Result<(), CmdError> {
+    info!("Deleting S3 Bucket {}", bucket_name.clone());
+    match exec_with_envs(
+        "aws",
+        vec![
+            "s3",
+            "rb",
+            "--force",
+            "--bucket",
+            format!("s3://{}", bucket_name).as_str(),
+        ],
+        vec![
+            ("AWS_ACCESS_KEY_ID", &access_key_id),
+            ("AWS_SECRET_ACCESS_KEY", &secret_access_key),
+        ],
+    ) {
+        Ok(o) => {
+            info!("Successfuly delete bucket");
+            return Ok(o);
+        }
+        Err(e) => {
+            error!("while deleting bucket {}", e);
+            return Err(e);
+        }
+    }
+}
+pub fn get_default_region_for_us() -> Region {
+    Region::from_str(AWS_REGION_FOR_S3_US).unwrap()
 }

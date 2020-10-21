@@ -2,6 +2,7 @@
 resource "aws_s3_bucket" "kubeconfigs_bucket" {
   bucket = var.s3_bucket_kubeconfig
   acl    = "private"
+  force_destroy = true
   versioning {
     enabled = true
   }

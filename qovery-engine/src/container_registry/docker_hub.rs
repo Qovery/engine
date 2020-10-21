@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::build_platform::Image;
 use crate::cmd;
-use crate::cmd::CmdError;
+use crate::cmd::utilities::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
@@ -50,7 +50,7 @@ impl ContainerRegistry for DockerHub {
     fn is_valid(&self) -> Result<(), ContainerRegistryError> {
         // check the version of docker and print it as info
         let mut output_from_cmd = String::new();
-        cmd::exec_with_output(
+        cmd::utilities::exec_with_output(
             "docker",
             vec!["--version"],
             |r_out| match r_out {
@@ -93,7 +93,7 @@ impl ContainerRegistry for DockerHub {
         };
 
         // login into docker hub
-        match cmd::exec_with_envs(
+        match cmd::utilities::exec_with_envs(
             "docker",
             vec![
                 "login",
@@ -130,7 +130,7 @@ impl ContainerRegistry for DockerHub {
         let mut exist_stdoud: bool = false;
         let mut exist_stderr: bool = true;
 
-        cmd::exec_with_envs_and_output(
+        cmd::utilities::exec_with_envs_and_output(
             "curl",
             vec!["--silent", "-f", "-lSL", &curl_path],
             envs.clone(),
@@ -152,7 +152,7 @@ impl ContainerRegistry for DockerHub {
             None => vec![],
         };
 
-        match cmd::exec_with_envs(
+        match cmd::utilities::exec_with_envs(
             "docker",
             vec![
                 "login",
@@ -172,7 +172,7 @@ impl ContainerRegistry for DockerHub {
         };
 
         let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
-        match cmd::exec_with_envs(
+        match cmd::utilities::exec_with_envs(
             "docker",
             vec![
                 "tag",
@@ -189,7 +189,7 @@ impl ContainerRegistry for DockerHub {
             _ => {}
         };
 
-        match cmd::exec_with_envs("docker", vec!["push", dest.as_str()], envs) {
+        match cmd::utilities::exec_with_envs("docker", vec!["push", dest.as_str()], envs) {
             Err(err) => match err {
                 CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
                 CmdError::Io(err) => return Err(PushError::IoError(err)),

@@ -163,7 +163,7 @@ impl MongoDB {
                     &context,
                 )?;
 
-                match crate::cmd::terraform_exec_with_init_validate_plan_destroy(
+                match crate::cmd::terraform::terraform_exec_with_init_validate_destroy(
                     workspace_dir.as_str(),
                 ) {
                     Ok(o) => {
@@ -285,7 +285,7 @@ impl Create for MongoDB {
                 )?;
 
                 // deploy database + external DNS
-                crate::cmd::terraform_exec_with_init_validate_plan_apply(
+                crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
                     workspace_dir.as_str(),
                     false,
                 )?;
@@ -326,7 +326,7 @@ impl Create for MongoDB {
                 ];
 
                 // do exec helm upgrade and return the last deployment status
-                let helm_history_row = crate::cmd::helm_exec_with_upgrade_history(
+                let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     helm_release_name.as_str(),
@@ -344,7 +344,7 @@ impl Create for MongoDB {
                 // check app status
                 let selector = format!("app={}", self.name());
 
-                match crate::cmd::kubectl_exec_is_pod_ready_with_retry(
+                match crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     selector.as_str(),
