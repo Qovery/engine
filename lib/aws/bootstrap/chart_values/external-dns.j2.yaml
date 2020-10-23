@@ -335,7 +335,7 @@ vinyldns:
 
 ## Limit possible target zones by domain suffixes (optional)
 ##
-domainFilters: {{ managed_dns_helm_format }}
+domainFilters: {{ managed_dns_domains_helm_format }}
 ## Exclude subdomains (optional)
 ##
 excludeDomains: []

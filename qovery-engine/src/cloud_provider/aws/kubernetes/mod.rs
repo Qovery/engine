@@ -31,6 +31,7 @@ use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope,
 };
+use crate::string::terraform_list_format;
 use crate::{dns_provider, dynamo_db, s3};
 use std::ops::Deref;
 
@@ -159,10 +160,17 @@ impl<'a> EKS<'a> {
         let documentdb_cidr_subnet = self.options.documentdb_cidr_subnet.clone();
         let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
 
-        let managed_dns_list = vec![self.dns_provider.name()]; // FIXME remove the list
-        let managed_dns_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
-        let managed_dns_terraform_format =
-            vec![format!("{{{}}}", self.dns_provider.domain())].join(",");
+        let managed_dns_list = vec![self.dns_provider.name()];
+        let managed_dns_domains_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
+        let managed_dns_domains_terraform_format =
+            terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+        let managed_dns_resolvers: Vec<String> = self
+            .dns_provider
+            .resolvers()
+            .iter()
+            .map(|x| format!("{}", x.clone().to_string()))
+            .collect();
+        let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
 
         let mut context = TeraContext::new();
         // Qovery
@@ -175,10 +183,17 @@ impl<'a> EKS<'a> {
 
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);
-        context.insert("managed_dns_helm_format", &managed_dns_helm_format);
         context.insert(
-            "managed_dns_terraform_format",
-            &managed_dns_terraform_format,
+            "managed_dns_domains_helm_format",
+            &managed_dns_domains_helm_format,
+        );
+        context.insert(
+            "managed_dns_domains_terraform_format",
+            &managed_dns_domains_terraform_format,
+        );
+        context.insert(
+            "managed_dns_resolvers_terraform_format",
+            &managed_dns_resolvers_terraform_format,
         );
 
         match self.dns_provider.kind() {

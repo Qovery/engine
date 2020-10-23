@@ -51,12 +51,11 @@ resource "aws_s3_bucket" "loki_bucket" {
   server_side_encryption_configuration {
     rule {
       apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.s3_kms_encryption.arn
+        kms_master_key_id = aws_kms_key.s3_logs_kms_encryption.arn
         sse_algorithm = "aws:kms"
       }
     }
   }
-}
 
   tags = merge(
     local.tags_eks,
@@ -102,7 +101,7 @@ resource "helm_release" "loki" {
     value = aws_iam_access_key.iam_eks_loki.secret
   }
   set {
-    name = "config.storage_config.sse_encryption"
+    name = "config.storage_config.aws.sse_encryption"
     value = "true"
   }
 

@@ -1,5 +1,6 @@
 use crate::dns_provider::{DnsProvider, DnsProviderError, Kind};
 use crate::models::Context;
+use std::net::Ipv4Addr;
 
 pub struct Cloudflare {
     context: Context,
@@ -57,6 +58,10 @@ impl DnsProvider for Cloudflare {
 
     fn domain(&self) -> &str {
         self.domain.as_str()
+    }
+
+    fn resolvers(&self) -> Vec<Ipv4Addr> {
+        vec![Ipv4Addr::new(1, 1, 1, 1), Ipv4Addr::new(1, 0, 0, 1)]
     }
 
     fn is_valid(&self) -> Result<(), DnsProviderError> {

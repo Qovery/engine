@@ -152,7 +152,7 @@ resource "helm_release" "cert_manager_config" {
 
   set {
     name = "managedDns"
-    value = "{{ managed_dns_terraform_format }}"
+    value = "{{ managed_dns_domains_terraform_format }}"
   }
 
 {% if external_dns_provider == "cloudflare" %}

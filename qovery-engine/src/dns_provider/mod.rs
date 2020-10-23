@@ -1,5 +1,6 @@
 use crate::models::Context;
 use serde::{Deserialize, Serialize};
+use std::net::Ipv4Addr;
 
 pub mod cloudflare;
 
@@ -16,6 +17,7 @@ pub trait DnsProvider {
     fn account(&self) -> &str;
     fn token(&self) -> &str;
     fn domain(&self) -> &str;
+    fn resolvers(&self) -> Vec<Ipv4Addr>;
     fn is_valid(&self) -> Result<(), DnsProviderError>;
 }
 
