@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
@@ -5,7 +7,6 @@ use crate::dns_provider::DnsProvider;
 use crate::error::ConfigurationError;
 use crate::models::Context;
 use crate::session::Session;
-use std::borrow::Borrow;
 
 pub struct Engine {
     context: Context,

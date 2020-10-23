@@ -1,3 +1,9 @@
+use dns_lookup::lookup_host;
+use retry::delay::Fibonacci;
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
+use tera::Context as TeraContext;
+
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -8,11 +14,6 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::models::{Context, Metadata};
-use dns_lookup::lookup_host;
-use retry::delay::Fibonacci;
-use retry::OperationResult;
-use serde::{Deserialize, Serialize};
-use tera::Context as TeraContext;
 
 pub struct Router {
     context: Context,
@@ -197,7 +198,7 @@ impl Router {
         );
         context.insert("custom_domains", &custom_domain_data_templates);
         context.insert("routes", &route_data_templates);
-        context.insert("spec_acme_email", "tls@qovery.com");
+        context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
         context.insert(
             "metadata_annotations_cert_manager_cluster_issuer",
             "letsencrypt-qovery",

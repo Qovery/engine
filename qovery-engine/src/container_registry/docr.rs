@@ -1,15 +1,16 @@
+extern crate digitalocean;
+
+use std::rc::Rc;
+
+use digitalocean::DigitalOcean;
+
 use crate::build_platform::Image;
 use crate::cmd;
 use crate::cmd::utilities::CmdError;
 use crate::container_registry::{
     ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
 };
-
-extern crate digitalocean;
-
 use crate::models::{Context, Listener, ProgressListener};
-use digitalocean::DigitalOcean;
-use std::rc::Rc;
 
 // TODO : use --output json
 // see https://www.digitalocean.com/community/tutorials/how-to-use-doctl-the-official-digitalocean-command-line-client

@@ -1,9 +1,10 @@
 use curl::easy::Easy;
 use curl::Error;
-use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::models::{Context, Environment};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
+
+use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::models::{Context, Environment};
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")

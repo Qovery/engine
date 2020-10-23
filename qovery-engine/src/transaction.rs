@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::thread;
 
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +14,6 @@ use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo,
     ProgressLevel, ProgressScope,
 };
-use std::thread;
 
 pub struct Transaction<'a> {
     engine: &'a Engine,

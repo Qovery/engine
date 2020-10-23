@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::rc::Rc;
 
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
@@ -7,7 +8,6 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
 use crate::models::{Context, Listener, Listeners, ProgressListener};
 use crate::runtime::async_run;
-use std::rc::Rc;
 
 mod common;
 

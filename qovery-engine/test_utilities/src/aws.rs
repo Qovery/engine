@@ -1,5 +1,16 @@
+extern crate serde;
+extern crate serde_derive;
+
+use std::borrow::Borrow;
+use std::fs::File;
+use std::io::Read;
+use std::str::FromStr;
+
 use chrono::Utc;
 use dirs::home_dir;
+use serde_json::map::Values;
+use serde_json::value::Value;
+
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::build_platform::BuildPlatform;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
@@ -9,29 +20,21 @@ use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::ContainerRegistry;
+use qovery_engine::dns_provider::cloudflare::Cloudflare;
+use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{
     Action, Application, Context, CustomDomain, Database, DatabaseKind, Environment,
     EnvironmentVariable, GitCredentials, Kind, Metadata, Route, Router, Storage, StorageType,
 };
 use qovery_engine::session::Session;
-use serde_json::value::Value;
-use std::borrow::Borrow;
 
+use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
-use serde_json::map::Values;
-extern crate serde;
-extern crate serde_derive;
-use crate::cloudflare::dns_provider_cloudflare;
-use qovery_engine::dns_provider::cloudflare::Cloudflare;
-use qovery_engine::dns_provider::DnsProvider;
-use std::fs::File;
-use std::io::Read;
-use std::str::FromStr;
 
-pub const AWS_KEY_ID: &str = "AKIA4IVG73IUU5NNVN5Q"; // AWS username: infra-test-deploy
-pub const AWS_ACCESS_KEY: &str = "E9Ugsvv7MI3vCaHtn1qoxXU8KwNJeTWn3GfVLNYN";
+pub const AWS_KEY_ID: &str = "CHANGE ME";
+pub const AWS_ACCESS_KEY: &str = "CHANGE ME";
 pub const AWS_DEFAULT_REGION: &str = "us-east-2";
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-1";
@@ -204,7 +207,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
+                    access_token: "CHANGE ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -253,7 +256,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
+                    access_token: "CHANGE ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -302,7 +305,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
+                    access_token: "CHANGE ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -466,7 +469,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             action: Action::Create,
             git_credentials: GitCredentials {
                 login: "x-access-token".to_string(),
-                access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
+                access_token: "CHANGE ME".to_string(),
                 expired_at: Utc::now(),
             },
             storage: vec![],
@@ -543,7 +546,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
+                    access_token: "CHANGE ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -592,7 +595,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(),
+                    access_token: "CHANGE ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {

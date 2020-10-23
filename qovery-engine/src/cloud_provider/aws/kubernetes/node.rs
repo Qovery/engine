@@ -1,5 +1,6 @@
-use crate::cloud_provider::kubernetes::KubernetesNode;
 use std::any::Any;
+
+use crate::cloud_provider::kubernetes::KubernetesNode;
 
 pub struct Node {
     total_cpu: u8,
@@ -27,6 +28,7 @@ impl Node {
             (2, 8, "t2.large"),
             (4, 16, "t2.xlarge"),
             (8, 32, "t2.2xlarge"),
+            // TODO add other instance types
         ];
 
         Node {

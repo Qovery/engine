@@ -1,4 +1,5 @@
 use std::future::Future;
+
 use tokio::runtime::Runtime;
 
 pub fn async_run<F: Future>(future: F) -> F::Output {

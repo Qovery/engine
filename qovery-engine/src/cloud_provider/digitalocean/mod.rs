@@ -1,9 +1,12 @@
 extern crate digitalocean;
-use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
-use crate::models::{Context, Listener, ProgressListener};
-use digitalocean::DigitalOcean;
+
 use std::any::Any;
 use std::rc::Rc;
+
+use digitalocean::DigitalOcean;
+
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
+use crate::models::{Context, Listener, ProgressListener};
 
 pub struct DO {
     context: Context,

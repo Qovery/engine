@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::rc::Rc;
 
 use crate::build_platform::error::BuildPlatformError;
@@ -10,7 +11,6 @@ use crate::models::{
 };
 use crate::transaction::CommitError::BuildImage;
 use crate::{cmd, git};
-use std::path::Path;
 
 /// use Docker in local
 pub struct LocalDocker {

@@ -1,10 +1,11 @@
+use std::error::Error;
+use std::rc::Rc;
+
 use rusoto_core::RusotoError;
+use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
 use crate::models::{Context, Listener, ProgressListener};
-use serde::{Deserialize, Serialize};
-use std::error::Error;
-use std::rc::Rc;
 
 pub mod docker_hub;
 pub mod docr;

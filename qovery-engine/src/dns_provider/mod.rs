@@ -1,6 +1,8 @@
-use crate::models::Context;
-use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
+
+use serde::{Deserialize, Serialize};
+
+use crate::models::Context;
 
 pub mod cloudflare;
 

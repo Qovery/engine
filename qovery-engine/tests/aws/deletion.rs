@@ -1,8 +1,9 @@
+use std::fs::File;
+use std::io::Read;
+
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cmd::kubectl::create_sample_secret_terraform_in_namespace;
 use qovery_engine::transaction::TransactionResult;
-use std::fs::File;
-use std::io::Read;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use test_utilities::cloudflare::dns_provider_cloudflare;
 use test_utilities::utilities::init;

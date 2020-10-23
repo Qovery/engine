@@ -1,12 +1,14 @@
+use std::io::Error;
+use std::str::FromStr;
+
+use rusoto_core::Region;
+
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::ServiceError;
 use crate::cmd::utilities::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use rusoto_core::Region;
-use std::io::Error;
-use std::str::FromStr;
 
 pub fn kubernetes_config_path(
     workspace_directory: &str,

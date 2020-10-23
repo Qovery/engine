@@ -1,11 +1,13 @@
-use crate::runtime::async_run;
+use std::io::{Error, ErrorKind};
+
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_dynamodb::{
     AttributeDefinition, CreateTableError, CreateTableInput, DynamoDb, DynamoDbClient,
     KeySchemaElement,
 };
-use std::io::{Error, ErrorKind};
+
+use crate::runtime::async_run;
 
 pub fn create_terraform_table(
     access_key_id: &str,
@@ -50,14 +52,14 @@ pub fn create_terraform_table(
                     return Err(Error::new(
                         ErrorKind::Other,
                         "something goes wrong while creating terraform DynamoDB table",
-                    ))
+                    ));
                 }
             },
             _ => {
                 return Err(Error::new(
                     ErrorKind::Other,
                     "something goes wrong while creating terraform DynamoDB table",
-                ))
+                ));
             }
         },
         Ok(_x) => Ok(()),

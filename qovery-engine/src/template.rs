@@ -1,10 +1,9 @@
-use std::fs;
-use std::io::{Error, ErrorKind, Write};
-use std::path::Path;
-
 use std::ffi::OsStr;
+use std::fs;
 use std::fs::File;
+use std::io::{Error, ErrorKind, Write};
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 
 use tera::Error as TeraError;
 use tera::{Context, Tera};

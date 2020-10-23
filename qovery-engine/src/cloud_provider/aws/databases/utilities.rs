@@ -1,9 +1,10 @@
+use tokio::io::Error;
+
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_secret};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use tokio::io::Error;
 
 // generate the kubernetes config path
 pub fn get_kubernetes_config_path(

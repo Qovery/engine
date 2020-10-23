@@ -716,7 +716,7 @@ fn deploy_a_working_environment_with_production_mongodb_v3_6() {
 //         git_url: "https://github.com/evoxmusic/qovery-external-service-example.git".to_string(),
 //         git_credentials: GitCredentials {
 //             login: "x-access-token".to_string(),
-//             access_token: "v1.d6b3b7db582eab1b85df90df5f558ac5830624f9".to_string(), // fake one
+//             access_token: "CHANGE ME".to_string(), // fake one
 //             expired_at: Utc::now(),
 //         },
 //         branch: "master".to_string(),
