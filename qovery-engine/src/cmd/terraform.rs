@@ -9,10 +9,10 @@ use dirs::home_dir;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::cmd::utilities::{exec_with_envs_and_output, CmdError};
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
-use serde_json::Value;
 
 fn terraform_exec_with_init_validate(
     root_dir: &str,

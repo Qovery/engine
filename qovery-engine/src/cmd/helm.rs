@@ -5,14 +5,15 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
-use crate::cmd::structs::{Helm, HelmHistoryRow};
-use crate::cmd::utilities::{exec_with_envs_and_output, CmdError};
-use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use dirs::home_dir;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::cmd::structs::{Helm, HelmHistoryRow};
+use crate::cmd::utilities::{exec_with_envs_and_output, CmdError};
+use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 
 pub fn helm_exec_with_upgrade_history<P>(
     kubernetes_config: P,
@@ -208,6 +209,7 @@ where
     };
     Ok(output_vec.join(""))
 }
+
 pub fn helm_exec_upgrade_with_override_file<P>(
     kubernetes_config: P,
     namespace: &str,

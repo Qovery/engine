@@ -14,7 +14,10 @@ use crate::cloud_provider::aws::common::{do_stateless_service_cleanup, kubernete
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesError, KubernetesNode};
+use crate::cloud_provider::kubernetes::{
+    check_kubernetes_has_enough_resources_to_deploy_environment, Kind, Kubernetes, KubernetesError,
+    KubernetesNode, Resources,
+};
 use crate::cloud_provider::service::{Service, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
@@ -32,6 +35,7 @@ use crate::models::{
     ProgressScope,
 };
 use crate::string::terraform_list_format;
+use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
 use crate::{dns_provider, dynamo_db, s3};
 use std::ops::Deref;
 
@@ -355,6 +359,61 @@ impl<'a> Kubernetes for EKS<'a> {
         &self.listeners
     }
 
+    fn resources(&self, environment: &Environment) -> Result<Resources, KubernetesError> {
+        let aws = self
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<AWS>()
+            .unwrap();
+
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            self.context.workspace_root_dir(),
+            environment.organization_id.as_str(),
+            &self.id,
+            aws.access_key_id.as_str(),
+            aws.secret_access_key.as_str(),
+            self.region(),
+        )?;
+
+        let aws_credentials_envs = vec![
+            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
+            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
+        ];
+
+        let nodes = cmd::kubectl::kubectl_exec_describe_node(
+            kubernetes_config_file_path,
+            aws_credentials_envs,
+        )?;
+
+        let mut resources = Resources {
+            free_cpu: 0.0,
+            max_cpu: 0.0,
+            free_ram_in_mib: 0,
+            max_ram_in_mib: 0,
+            free_pods: 0,
+            max_pods: 0,
+            running_nodes: 0,
+        };
+
+        for node in nodes.items {
+            resources.free_cpu += cpu_string_to_float(node.status.allocatable.cpu);
+            resources.max_cpu += cpu_string_to_float(node.status.capacity.cpu);
+            resources.free_ram_in_mib += ki_to_mi(node.status.allocatable.memory);
+            resources.max_ram_in_mib += ki_to_mi(node.status.capacity.memory);
+            resources.free_pods = match node.status.allocatable.pods.parse::<u16>() {
+                Ok(v) => v,
+                _ => 0,
+            };
+            resources.max_pods = match node.status.capacity.pods.parse::<u16>() {
+                Ok(v) => v,
+                _ => 0,
+            };
+            resources.running_nodes += 1;
+        }
+
+        Ok(resources)
+    }
+
     fn on_create(&self) -> Result<(), KubernetesError> {
         info!("EKS.on_create() called for {}", self.name());
 
@@ -608,6 +667,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 DeploymentTarget::SelfHosted(self, environment)
             }
         };
+
+        // do not deploy if there is not enough resources
+        check_kubernetes_has_enough_resources_to_deploy_environment(self, environment)?;
 
         // create all stateful services (database)
         for service in &environment.stateful_services {

@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct KubernetesList<T> {
+pub struct KubernetesList<T> {
     pub items: Vec<T>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct KubernetesService {
+pub struct KubernetesService {
     pub status: KubernetesServiceStatus,
 }
 
@@ -78,7 +78,7 @@ pub struct KubernetesServiceStatusLoadBalancerIngress {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct KubernetesPod {
+pub struct KubernetesPod {
     pub status: KubernetesPodStatus,
 }
 
@@ -108,7 +108,7 @@ pub struct KubernetesPodContainerStatus {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct KubernetesJob {
+pub struct KubernetesJob {
     pub status: KubernetesJobStatus,
 }
 
@@ -116,6 +116,27 @@ pub(crate) struct KubernetesJob {
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesJobStatus {
     pub succeeded: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesNode {
+    pub status: KubernetesNodeStatus,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesNodeStatus {
+    pub allocatable: KubernetesNodeStatusResources,
+    pub capacity: KubernetesNodeStatusResources,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesNodeStatusResources {
+    pub cpu: String,
+    pub memory: String,
+    pub pods: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]

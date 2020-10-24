@@ -9,9 +9,9 @@ use dirs::home_dir;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
-use serde_json::Value;
 
 fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
 where
@@ -256,6 +256,7 @@ impl Display for CmdError {
         write!(f, "{}", s)
     }
 }
+
 impl std::error::Error for CmdError {}
 
 impl From<std::io::Error> for CmdError {
@@ -263,6 +264,7 @@ impl From<std::io::Error> for CmdError {
         CmdError::Io(err)
     }
 }
+
 impl From<CmdError> for std::io::Error {
     fn from(e: CmdError) -> Self {
         std::io::Error::new(std::io::ErrorKind::Other, e)

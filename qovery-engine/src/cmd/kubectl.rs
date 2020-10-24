@@ -5,16 +5,18 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
-use crate::cmd::structs::{
-    Item, KubernetesJob, KubernetesList, KubernetesPod, KubernetesPodStatusPhase, KubernetesService,
-};
-use crate::cmd::utilities::{exec_with_envs_and_output, CmdError};
-use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use dirs::home_dir;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::cmd::structs::{
+    Item, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
+    KubernetesService,
+};
+use crate::cmd::utilities::{exec_with_envs_and_output, CmdError};
+use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
@@ -554,7 +556,7 @@ where
     Ok(output_vec.join("\n"))
 }
 
-pub fn kubectl_exec_describe<P>(
+pub fn kubectl_exec_describe_pod<P>(
     kubernetes_config: P,
     namespace: &str,
     selector: &str,
@@ -582,4 +584,47 @@ where
     )?;
 
     Ok(output_vec.join("\n"))
+}
+
+pub fn kubectl_exec_describe_node<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesNode>, CmdError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let mut output_vec: Vec<String> = Vec::with_capacity(50);
+    let _ = kubectl_exec_with_output(
+        vec!["describe", "node", "-o", "json"],
+        _envs,
+        |out| match out {
+            Ok(line) => output_vec.push(line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+
+    let output_string: String = output_vec.join("");
+
+    let result =
+        match serde_json::from_str::<KubernetesList<KubernetesNode>>(output_string.as_str()) {
+            Ok(x) => x,
+            Err(err) => {
+                error!("{:?}", err);
+                error!("{}", output_string.as_str());
+                return Err(CmdError::Io(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    output_string,
+                )));
+            }
+        };
+
+    Ok(result)
 }
