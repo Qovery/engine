@@ -30,7 +30,7 @@ ENV TF_PLUGIN_CACHE_DIR=$HOME_DIR/.terraform.d/plugin-cache
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 
 RUN apt-get update && \
-    apt-get -y install curl docker.io vim awscli && \
+    apt-get -y install curl docker.io vim awscli procps netcat-openbsd iproute2 && \
     apt-get clean &&\
     groupadd -g 1000 qovery && \
     useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery && \
