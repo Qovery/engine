@@ -20,7 +20,7 @@ use qovery_engine::s3;
 use qovery_engine::transaction::{CommitError, TransactionResult};
 
 use crate::models::{Action, Request};
-use crate::task_manager::{ActionContext, InternalTask, Message, Status, Task};
+use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, Status, Task};
 use qovery_engine::cmd::utilities::CmdError;
 use std::path::Path;
 
@@ -28,14 +28,14 @@ use std::path::Path;
 pub struct InfrastructureTask {
     context: Context,
     request: Request,
-    pre_run_callback: Arc<Box<dyn Fn(&dyn Task) -> bool + Send + Sync>>,
+    pre_run_callback: Arc<Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>>,
 }
 
 impl InfrastructureTask {
     pub fn new(
         context: Context,
         request: Request,
-        pre_run_callback: Box<dyn Fn(&dyn Task) -> bool + Send + Sync>,
+        pre_run_callback: Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>,
     ) -> Self {
         InfrastructureTask {
             context,
@@ -81,7 +81,7 @@ impl Task for InfrastructureTask {
         let _ = sender.send(Ok(it));
     }
 
-    fn pre_run(&self) -> bool {
+    fn pre_run(&self) -> PreRun {
         (self.pre_run_callback)(self)
     }
 
@@ -232,14 +232,14 @@ pub struct EnvironmentTask {
     group_id: String,
     context: Context,
     request: Request,
-    pre_run_callback: Arc<Box<dyn Fn(&dyn Task) -> bool + Send + Sync>>,
+    pre_run_callback: Arc<Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>>,
 }
 
 impl EnvironmentTask {
     pub fn new(
         context: Context,
         request: Request,
-        pre_run_callback: Box<dyn Fn(&dyn Task) -> bool + Send + Sync>,
+        pre_run_callback: Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>,
     ) -> Self {
         EnvironmentTask {
             group_id: request.target_environment.as_ref().unwrap().id.clone(),
@@ -286,7 +286,7 @@ impl Task for EnvironmentTask {
         let _ = sender.send(Ok(it));
     }
 
-    fn pre_run(&self) -> bool {
+    fn pre_run(&self) -> PreRun {
         (self.pre_run_callback)(self)
     }
 
