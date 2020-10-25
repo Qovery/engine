@@ -182,6 +182,7 @@ function fast_tests() { # Run fast tests only on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   #export RUST_LOG=info
   nb_treads=$1
+  source .env
   cd qovery-engine
   cargo test --color always -- --color always --test-threads=$nb_treads
 }
@@ -190,6 +191,7 @@ function all_tests() { # Run all tests on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   #export RUST_LOG=info
   nb_treads=$1
+  source .env
   cd qovery-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
 }

@@ -34,7 +34,7 @@ TDOO
 ## Get Started
 
 ### Run locally
-TODO
+Install [EnvFile](https://plugins.jetbrains.com/plugin/7861-envfile) plugin on Intellij, and add `.env` file to your build and run.
 
 ### Generate a new image version
 To generate a new Engine image version, you have to use Gitlab. Simply push on master and run a build job on Gitlab:
