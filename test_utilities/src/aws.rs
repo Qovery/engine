@@ -33,11 +33,22 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
 
-pub const AWS_ACCESS_KEY_ID: &str = "CHANGE ME";
-pub const AWS_SECRET_ACCESS_KEY: &str = "CHANGE ME";
-pub const AWS_DEFAULT_REGION: &str = "us-east-2";
-pub const TERRAFORM_AWS_ACCESS_KEY_ID: &str = "CHANGE ME";
-pub const TERRAFORM_AWS_SECRET_ACCESS_KEY: &str = "CHANGE ME";
+pub const AWS_ACCESS_KEY_ID: String =
+    std::env::var("AWS_ACCESS_KEY_ID").expect("env var AWS_ACCESS_KEY_ID is mandatory");
+
+pub const AWS_SECRET_ACCESS_KEY: String =
+    std::env::var("AWS_SECRET_ACCESS_KEY").expect("env var AWS_SECRET_ACCESS_KEY is mandatory");
+
+pub const AWS_DEFAULT_REGION: String =
+    std::env::var("AWS_DEFAULT_REGION").expect("env var AWS_DEFAULT_REGION is mandatory");
+
+pub const TERRAFORM_AWS_ACCESS_KEY_ID: String = std::env::var("TERRAFORM_AWS_ACCESS_KEY_ID")
+    .expect("env var TERRAFORM_AWS_ACCESS_KEY_ID is mandatory");
+
+pub const TERRAFORM_AWS_SECRET_ACCESS_KEY: String =
+    std::env::var("TERRAFORM_AWS_SECRET_ACCESS_KEY")
+        .expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory");
+
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-1";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
