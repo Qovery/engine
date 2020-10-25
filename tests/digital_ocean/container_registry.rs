@@ -2,7 +2,6 @@ extern crate test_utilities;
 
 use qovery_engine::build_platform::Image;
 use qovery_engine::container_registry::docr::DOCR;
-use test_utilities::digitalocean::DIGITAL_OCEAN_TOKEN;
 
 use self::test_utilities::aws::context;
 use self::test_utilities::digitalocean::docker_cr_do_engine;

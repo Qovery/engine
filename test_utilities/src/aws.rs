@@ -33,25 +33,31 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
 
-pub const AWS_ACCESS_KEY_ID: String =
-    std::env::var("AWS_ACCESS_KEY_ID").expect("env var AWS_ACCESS_KEY_ID is mandatory");
-
-pub const AWS_SECRET_ACCESS_KEY: String =
-    std::env::var("AWS_SECRET_ACCESS_KEY").expect("env var AWS_SECRET_ACCESS_KEY is mandatory");
-
-pub const AWS_DEFAULT_REGION: String =
-    std::env::var("AWS_DEFAULT_REGION").expect("env var AWS_DEFAULT_REGION is mandatory");
-
-pub const TERRAFORM_AWS_ACCESS_KEY_ID: String = std::env::var("TERRAFORM_AWS_ACCESS_KEY_ID")
-    .expect("env var TERRAFORM_AWS_ACCESS_KEY_ID is mandatory");
-
-pub const TERRAFORM_AWS_SECRET_ACCESS_KEY: String =
-    std::env::var("TERRAFORM_AWS_SECRET_ACCESS_KEY")
-        .expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory");
-
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-1";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
+
+pub fn aws_access_key_id() -> String {
+    std::env::var("aws_access_key_id()").expect("env var aws_access_key_id() is mandatory")
+}
+
+pub fn aws_secret_access_key() -> String {
+    std::env::var("aws_secret_access_key()").expect("env var aws_secret_access_key() is mandatory")
+}
+
+pub fn aws_default_region() -> String {
+    std::env::var("aws_default_region()").expect("env var aws_default_region() is mandatory")
+}
+
+pub fn terraform_aws_access_key_id() -> String {
+    std::env::var("terraform_aws_access_key_id()")
+        .expect("env var terraform_aws_access_key_id() is mandatory")
+}
+
+pub fn terraform_aws_secret_access_key() -> String {
+    std::env::var("terraform_aws_secret_access_key()")
+        .expect("env var terraform_aws_secret_access_key() is mandatory")
+}
 
 pub fn execution_id() -> String {
     Utc::now()
@@ -84,9 +90,9 @@ pub fn container_registry_ecr(context: &Context) -> ECR {
         context.clone(),
         "default-ecr-registry-Qovery Test",
         "ea59qe62xaw3wjai",
-        AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY,
-        AWS_DEFAULT_REGION,
+        aws_access_key_id().as_str(),
+        aws_secret_access_key().as_str(),
+        aws_default_region().as_str(),
     )
 }
 
@@ -115,11 +121,11 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
         "u8nb94c7fwxzr2jt",
         ORGANIZATION_ID,
         "QoveryTest",
-        AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY,
+        aws_access_key_id().as_str(),
+        aws_secret_access_key().as_str(),
         TerraformStateCredentials {
-            access_key_id: TERRAFORM_AWS_ACCESS_KEY_ID.to_string(),
-            secret_access_key: TERRAFORM_AWS_SECRET_ACCESS_KEY.to_string(),
+            access_key_id: terraform_aws_access_key_id().to_string(),
+            secret_access_key: terraform_aws_secret_access_key().to_string(),
             region: "eu-west-3".to_string(),
         },
     )
@@ -138,7 +144,7 @@ pub fn aws_kubernetes_eks<'a>(
         "dmubm9agk7sr8a8r",
         "dmubm9agk7sr8a8r",
         AWS_KUBERNETES_VERSION,
-        AWS_DEFAULT_REGION,
+        aws_default_region().as_str(),
         cloud_provider,
         dns_provider,
         options_values,

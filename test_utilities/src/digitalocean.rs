@@ -10,15 +10,18 @@ use qovery_engine::models::Context;
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::build_platform_local_docker;
 
-//TODO: should be environment var
-pub const DIGITAL_OCEAN_TOKEN: String =
-    std::env::var("DIGITAL_OCEAN_TOKEN").expect("env var DIGITAL_OCEAN_TOKEN is mandatory");
-
 pub const DIGITAL_OCEAN_URL: &str = "https://api.digitalocean.com/v2/";
 
+pub fn digital_ocean_token() -> String {
+    std::env::var("DIGITAL_OCEAN_TOKEN").expect("env var DIGITAL_OCEAN_TOKEN is mandatory")
+}
+
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
-    let token = DIGITAL_OCEAN_TOKEN.clone();
-    DOCR::new(context.clone(), "qovery-registry", token.as_str())
+    DOCR::new(
+        context.clone(),
+        "qovery-registry",
+        digital_ocean_token().as_str(),
+    )
 }
 
 pub fn docker_cr_do_engine(context: &Context) -> Engine {
@@ -41,5 +44,5 @@ pub fn docker_cr_do_engine(context: &Context) -> Engine {
 }
 
 pub fn cloud_provider_digitalocean(context: &Context) -> DO {
-    DO::new(context.clone(), "test", DIGITAL_OCEAN_TOKEN)
+    DO::new(context.clone(), "test", digital_ocean_token().as_str())
 }
