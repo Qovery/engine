@@ -1,5 +1,8 @@
 image: qoveryrd/ci:f6bf8e0099d208789027d571b783e466d0b3f1e8
 
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
 services:
   - docker:dind
 
