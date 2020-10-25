@@ -58,9 +58,11 @@ pub struct Options {
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
     pub qovery_api_url: String,
+    pub tls_email_report: String,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticsearch_cidr_subnet: String,
+    pub engine_version_controller_token: String,
 }
 
 pub struct EKS<'a> {
@@ -158,7 +160,6 @@ impl<'a> EKS<'a> {
 
         let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
 
-        let engine_version_controller_token = "3b408f660674cac1494869dec61da35982c1e94d"; // TODO CHANGE ME
         let qovery_api_url = self.options.qovery_api_url.clone();
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
         let documentdb_cidr_subnet = self.options.documentdb_cidr_subnet.clone();
@@ -182,7 +183,7 @@ impl<'a> EKS<'a> {
         context.insert("qovery_api_url", &qovery_api_url);
         context.insert(
             "engine_version_controller_token",
-            &engine_version_controller_token,
+            &self.options.engine_version_controller_token,
         );
 
         // DNS configuration
@@ -208,7 +209,7 @@ impl<'a> EKS<'a> {
             }
         };
 
-        context.insert("dns_email_report", "dns@qovery.com"); // Pierre suggested renaming to tls_email_report
+        context.insert("dns_email_report", &self.options.tls_email_report); // Pierre suggested renaming to tls_email_report
 
         // TLS
         let lets_encrypt_url = match self.context.metadata() {
