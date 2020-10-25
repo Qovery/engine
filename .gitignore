@@ -1,0 +1,11 @@
+/target
+qovery-engine/Cargo.lock
+docker/ci/bin_versions
+docker/ci/load.sh
+*.iml
+.idea
+.qovery-workspace
+app/.qovery-workspace
+.terraform/
+NOTES.txt
+docker/engine/providers/

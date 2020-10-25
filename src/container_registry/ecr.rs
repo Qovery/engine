@@ -1,0 +1,382 @@
+use std::rc::Rc;
+use std::str::FromStr;
+
+use rusoto_core::{Client, HttpClient, Region, RusotoError};
+use rusoto_credential::StaticProvider;
+use rusoto_ecr::{
+    CreateRepositoryError, CreateRepositoryRequest, DescribeImagesRequest,
+    DescribeRepositoriesRequest, Ecr, EcrClient, GetAuthorizationTokenRequest, ImageDetail,
+    ImageIdentifier, PutLifecyclePolicyRequest, Repository,
+};
+use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
+
+use crate::build_platform::Image;
+use crate::cmd;
+use crate::cmd::utilities::CmdError;
+use crate::container_registry::{
+    ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
+};
+use crate::models::{
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
+    ProgressScope,
+};
+use crate::runtime::async_run;
+
+pub struct ECR {
+    context: Context,
+    id: String,
+    name: String,
+    access_key_id: String,
+    secret_access_key: String,
+    region: Region,
+    listeners: Listeners,
+}
+
+impl ECR {
+    pub fn new(
+        context: Context,
+        id: &str,
+        name: &str,
+        access_key_id: &str,
+        secret_access_key: &str,
+        region: &str,
+    ) -> Self {
+        ECR {
+            context,
+            id: id.to_string(),
+            name: name.to_string(),
+            access_key_id: access_key_id.to_string(),
+            secret_access_key: secret_access_key.to_string(),
+            region: Region::from_str(region).unwrap(),
+            listeners: vec![],
+        }
+    }
+
+    pub fn credentials(&self) -> StaticProvider {
+        StaticProvider::new(
+            self.access_key_id.to_string(),
+            self.secret_access_key.to_string(),
+            None,
+            None,
+        )
+    }
+
+    pub fn client(&self) -> Client {
+        Client::new_with(self.credentials(), HttpClient::new().unwrap())
+    }
+
+    pub fn ecr_client(&self) -> EcrClient {
+        EcrClient::new_with_client(self.client(), self.region.clone())
+    }
+
+    fn get_repository(&self, image: &Image) -> Option<Repository> {
+        let mut drr = DescribeRepositoriesRequest::default();
+        drr.repository_names = Some(vec![image.name.to_string()]);
+
+        let r = async_run(self.ecr_client().describe_repositories(drr));
+
+        match r {
+            Err(_) => None,
+            Ok(res) => match res.repositories {
+                // assume there is only one repository returned - why? Because we set only one repository_names above
+                Some(repositories) => repositories.into_iter().next(),
+                _ => None,
+            },
+        }
+    }
+
+    fn get_image(&self, image: &Image) -> Option<ImageDetail> {
+        let mut dir = DescribeImagesRequest::default();
+        dir.repository_name = image.name.to_string();
+
+        let mut image_identifier = ImageIdentifier::default();
+        image_identifier.image_tag = Some(image.tag.to_string());
+        dir.image_ids = Some(vec![image_identifier]);
+
+        let r = async_run(self.ecr_client().describe_images(dir));
+
+        match r {
+            Err(_) => None,
+            Ok(res) => match res.image_details {
+                // assume there is only one repository returned - why? Because we set only one repository_names above
+                Some(image_details) => image_details.into_iter().next(),
+                _ => None,
+            },
+        }
+    }
+
+    fn docker_envs(&self) -> Vec<(&str, &str)> {
+        match self.context.docker_tcp_socket() {
+            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
+            None => vec![],
+        }
+    }
+
+    fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, PushError> {
+        // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
+        // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
+
+        match cmd::utilities::exec_with_envs(
+            "docker",
+            vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
+            self.docker_envs(),
+        ) {
+            Err(err) => match err {
+                CmdError::Exec(_exit_status) => return Err(PushError::ImageTagFailed),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
+            },
+            _ => {}
+        };
+
+        // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
+        match cmd::utilities::exec_with_envs(
+            "docker",
+            vec!["push", dest.as_str()],
+            self.docker_envs(),
+        ) {
+            Err(err) => match err {
+                CmdError::Exec(_exit_status) => return Err(PushError::ImagePushFailed),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
+            },
+            _ => {}
+        };
+
+        let mut image = image.clone();
+        image.registry_url = Some(dest);
+
+        Ok(PushResult { image })
+    }
+
+    fn create_repository(&self, image: &Image) -> Result<Repository, ContainerRegistryError> {
+        info!("ECR create repository {}", image.name.as_str());
+        let mut crr = CreateRepositoryRequest::default();
+        crr.repository_name = image.name.clone();
+
+        let r = async_run(self.ecr_client().create_repository(crr));
+        match r {
+            Err(err) => match err {
+                RusotoError::Service(ref err) => info!("{:?}", err),
+                _ => return Err(ContainerRegistryError::from(err)),
+            },
+            _ => {}
+        }
+
+        let mut plp = PutLifecyclePolicyRequest::default();
+        plp.repository_name = image.name.clone();
+
+        let ecr_policy = r#"
+        {
+          "rules": [
+            {
+              "action": {
+                "type": "expire"
+              },
+              "selection": {
+                "countType": "sinceImagePushed",
+                "countUnit": "days",
+                "countNumber": 1,
+                "tagStatus": "any"
+              },
+              "description": "Remove unit test images",
+              "rulePriority": 1
+            }
+          ]
+        }
+        "#;
+
+        plp.lifecycle_policy_text = ecr_policy.to_string();
+
+        let r = async_run(self.ecr_client().put_lifecycle_policy(plp));
+
+        match r {
+            Err(err) => Err(ContainerRegistryError::from(err)),
+            _ => Ok(self.get_repository(&image).unwrap()),
+        }
+    }
+
+    fn get_or_create_repository(
+        &self,
+        image: &Image,
+    ) -> Result<Repository, ContainerRegistryError> {
+        // check if the repository already exists
+        let repository = self.get_repository(&image);
+        if repository.is_some() {
+            info!("ECR repository {} already exists", image.name.as_str());
+            return Ok(repository.unwrap());
+        }
+
+        self.create_repository(&image)
+    }
+}
+
+impl ContainerRegistry for ECR {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn kind(&self) -> Kind {
+        Kind::ECR
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn is_valid(&self) -> Result<(), ContainerRegistryError> {
+        let client = StsClient::new_with_client(self.client(), Region::default());
+        let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
+
+        match s {
+            Ok(_x) => Ok(()),
+            Err(err) => Err(ContainerRegistryError::from(err)),
+        }
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
+    }
+
+    fn on_create(&self) -> Result<(), ContainerRegistryError> {
+        info!("ECR.on_create() called");
+        Ok(())
+    }
+
+    fn on_create_error(&self) -> Result<(), ContainerRegistryError> {
+        unimplemented!()
+    }
+
+    fn on_delete(&self) -> Result<(), ContainerRegistryError> {
+        unimplemented!()
+    }
+
+    fn on_delete_error(&self) -> Result<(), ContainerRegistryError> {
+        unimplemented!()
+    }
+
+    fn does_image_exists(&self, image: &Image) -> bool {
+        self.get_repository(&image).is_some()
+    }
+
+    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {
+        let r = async_run(
+            self.ecr_client()
+                .get_authorization_token(GetAuthorizationTokenRequest::default()),
+        );
+
+        let (access_token, password, endpoint_url) = match r {
+            Ok(t) => match t.authorization_data {
+                Some(authorization_data) => {
+                    let ad = authorization_data.first().unwrap();
+                    let b64_token = ad.authorization_token.as_ref().unwrap();
+
+                    let decoded_token = base64::decode(b64_token).unwrap();
+                    let token = std::str::from_utf8(decoded_token.as_slice()).unwrap();
+
+                    let s_token: Vec<&str> = token.split(":").collect::<Vec<_>>();
+
+                    (
+                        s_token.first().unwrap().to_string(),
+                        s_token.get(1).unwrap().to_string(),
+                        ad.clone().proxy_endpoint.unwrap(),
+                    )
+                }
+                None => return Err(PushError::RepositoryInitFailure),
+            },
+            _ => return Err(PushError::RepositoryInitFailure),
+        };
+
+        let repository = match if force_push {
+            self.create_repository(&image)
+        } else {
+            self.get_or_create_repository(&image)
+        } {
+            Ok(r) => r,
+            _ => return Err(PushError::RepositoryInitFailure),
+        };
+
+        match cmd::utilities::exec_with_envs(
+            "docker",
+            vec![
+                "login",
+                "-u",
+                access_token.as_str(),
+                "-p",
+                password.as_str(),
+                endpoint_url.as_str(),
+            ],
+            self.docker_envs(),
+        ) {
+            Err(err) => match err {
+                CmdError::Exec(_exit_status) => return Err(PushError::CredentialsError),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
+            },
+            _ => {}
+        };
+
+        let dest = format!(
+            "{}:{}",
+            repository.repository_uri.unwrap(),
+            image.tag.as_str()
+        );
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        if !force_push && self.get_image(image).is_some() {
+            // check if image does exist - if yes, do not upload it again
+            let info_message = format!(
+                "image {:?} does already exist into ECR {} repository - no need to upload it",
+                image,
+                self.name()
+            );
+
+            info!("{}", info_message.as_str());
+
+            listeners_helper.start_in_progress(ProgressInfo::new(
+                ProgressScope::Application {
+                    id: image.application_id.clone(),
+                },
+                ProgressLevel::Info,
+                Some(info_message),
+                self.context.execution_id(),
+            ));
+
+            let mut image = image.clone();
+            image.registry_url = Some(dest);
+
+            return Ok(PushResult { image });
+        }
+
+        let info_message = format!(
+            "image {:?} does not exist into ECR {} repository - let's upload it",
+            image,
+            self.name()
+        );
+
+        info!("{}", info_message.as_str());
+
+        listeners_helper.start_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
+
+        self.push_image(dest, image)
+    }
+
+    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
+        // TODO change this
+        Ok(PushResult {
+            image: image.clone(),
+        })
+    }
+}
