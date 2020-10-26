@@ -78,6 +78,16 @@ pub struct TerraformStateCredentials {
     pub region: String,
 }
 
+impl TerraformStateCredentials {
+    pub fn new(access_key_id: &str, secret_access_key: &str, region: &str) -> Self {
+        TerraformStateCredentials {
+            access_key_id: access_key_id.to_string(),
+            secret_access_key: secret_access_key.to_string(),
+            region: region.to_string(),
+        }
+    }
+}
+
 pub enum DeploymentTarget<'a> {
     // ManagedService = Managed by the Cloud Provider (eg. RDS, DynamoDB...)
     ManagedServices(&'a dyn Kubernetes, &'a Environment),

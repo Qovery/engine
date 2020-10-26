@@ -16,10 +16,10 @@ pub fn cloudflare_domain() -> String {
 pub fn dns_provider_cloudflare(context: &Context) -> Cloudflare {
     Cloudflare::new(
         context.clone(),
-        "qoverytestdnsclo".to_string(),
-        "Qovery Test Cloudflare".to_string(),
-        cloudflare_domain(),
-        cloudflare_token(), // Cloudflare name: Qovery test
-        cloudflare_id(),
+        "qoverytestdnsclo",
+        "Qovery Test Cloudflare",
+        cloudflare_domain().as_str(),
+        cloudflare_token().as_str(), // Cloudflare name: Qovery test
+        cloudflare_id().as_str(),
     )
 }

@@ -56,14 +56,54 @@ TODO
 TODO
 
 #### Rust lib
-Initialize Kubernetes on AWS 
+Initialize EKS (AWS Kubernetes) and ECR (AWS container registry) on AWS 
 ```rust
-let x = "TODO";
+let engine = Engine::new(
+    context,
+    local_docker,
+    ecr,
+    aws,
+    cloudflare,
+);
+
+let session = match engine.session() {
+    Ok(session) => session,
+    Err(config_error) => panic!("configuration error {:?}", config_error),
+};
+
+let mut tx = session.transaction();
+tx.create_kubernetes(&eks);
+
+match tx.commit() {
+    TransactionResult::Ok => println!("OK"),
+    TransactionResult::Rollback(commit_err) => println!("ERROR but rollback OK"), 
+    TransactionResult::UnrecoverableError(commit_err, rollback_err) => println!("FATAL ERROR")
+};
 ```
 
 Deploy an app on AWS
 ```rust
-let y = "TODO";
+let engine = Engine::new(
+    context,
+    local_docker,
+    ecr,
+    aws,
+    cloudflare,
+);
+
+let session = match engine.session() {
+    Ok(session) => session,
+    Err(config_error) => panic!("configuration error {:?}", config_error),
+};
+
+let mut tx = session.transaction();
+tx.create_kubernetes(&eks);
+
+match tx.commit() {
+    TransactionResult::Ok => println!("OK"),
+    TransactionResult::Rollback(commit_err) => println!("ERROR but rollback OK"), 
+    TransactionResult::UnrecoverableError(commit_err, rollback_err) => println!("FATAL ERROR")
+};
 ```
 
 ## Documentation

@@ -15,19 +15,19 @@ pub struct Cloudflare {
 impl Cloudflare {
     pub fn new(
         context: Context,
-        id: String,
-        name: String,
-        domain: String,
-        cloudflare_api_token: String,
-        cloudflare_email: String,
+        id: &str,
+        name: &str,
+        domain: &str,
+        cloudflare_api_token: &str,
+        cloudflare_email: &str,
     ) -> Self {
         Cloudflare {
             context,
-            id,
-            name,
-            domain,
-            cloudflare_api_token,
-            cloudflare_email,
+            id: id.to_string(),
+            name: name.to_string(),
+            domain: domain.to_string(),
+            cloudflare_api_token: cloudflare_api_token.to_string(),
+            cloudflare_email: cloudflare_email.to_string(),
         }
     }
 }
