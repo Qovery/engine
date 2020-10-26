@@ -10,7 +10,7 @@ use rusoto_s3::{
 
 use qovery_engine::s3;
 use qovery_engine::s3::{delete_bucket, get_default_region_for_us};
-use test_utilities::aws::{AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION, AWS_ACCESS_KEY_ID, AWS_REGION_FOR_S3};
+use test_utilities::aws::{aws_access_key_id, aws_secret_access_key, AWS_REGION_FOR_S3};
 use test_utilities::utilities::init;
 
 #[test]
@@ -18,19 +18,27 @@ fn delete_s3_bucket() {
     init();
     let bucket_name = "my-test-bucket";
     let credentials = StaticProvider::new(
-        AWS_ACCESS_KEY_ID.to_string(),
-        AWS_SECRET_ACCESS_KEY.to_string(),
+        aws_access_key_id().to_string(),
+        aws_secret_access_key().to_string(),
         None,
         None,
     );
 
-    let creation = s3::create_bucket(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, bucket_name);
+    let creation = s3::create_bucket(
+        aws_access_key_id().as_str(),
+        aws_secret_access_key().as_str(),
+        bucket_name,
+    );
     match creation {
         Ok(out) => println!("Yippee Ki Yay"),
         Err(e) => println!("While creating the bucket {}", e),
     }
 
-    let delete = delete_bucket(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, bucket_name);
+    let delete = delete_bucket(
+        aws_access_key_id().as_str(),
+        aws_secret_access_key().as_str(),
+        bucket_name,
+    );
     match delete {
         Ok(out) => println!("Yippee Ki Yay"),
         Err(e) => println!("While deleting the bucket {}", e),

@@ -293,16 +293,16 @@ impl DnsProvider {
     ) -> Box<dyn qovery_engine::dns_provider::DnsProvider> {
         match self.kind {
             qovery_engine::dns_provider::Kind::CLOUDFLARE => {
-                let token = self.options.get("cloudflare_api_token");
-                let email = self.options.get("cloudflare_email");
+                let token = self.options.get("cloudflare_api_token").unwrap();
+                let email = self.options.get("cloudflare_email").unwrap();
 
                 Box::new(Cloudflare::new(
                     context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
                     self.domain.as_str(),
-                    token.unwrap().as_str().unwrap().parse().unwrap(),
-                    email.unwrap().as_str().unwrap().parse().unwrap(),
+                    token.as_str().unwrap(),
+                    email.as_str().unwrap(),
                 ))
             }
         }
