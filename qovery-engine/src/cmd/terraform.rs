@@ -82,20 +82,31 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     let home_dir = home_dir().expect("Could not find $HOME");
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
 
-    match exec_with_envs_and_output(
-        format!("{} terraform", root_dir).as_str(),
-        args,
-        vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
-        |line: Result<String, std::io::Error>| {
-            info!("{}", line.unwrap());
-        },
-        |line: Result<String, std::io::Error>| {
-            error!("{}", line.unwrap());
-        },
-    ) {
-        Err(err) => return Err(err),
-        _ => {}
-    };
+    let result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
+        let r = exec_with_envs_and_output(
+            format!("{} terraform", root_dir).as_str(),
+            args.clone(),
+            vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
+            |line: Result<String, std::io::Error>| {
+                info!("{}", line.unwrap());
+            },
+            |line: Result<String, std::io::Error>| {
+                error!("{}", line.unwrap());
+            },
+        );
+        match r {
+            Ok(terra_well) => OperationResult::Ok(terra_well),
+            Err(terra_nok) => OperationResult::Err(format!("command error: {:?}", terra_nok)),
+        }
+    });
 
-    Ok(())
+    match result {
+        Err(err) => {
+            return Err(CmdError::Unexpected(
+                "Unable to make Terraform command works despite of multiple attemps".to_string(),
+            ));
+        }
+
+        Ok(_) => Ok(()),
+    }
 }
