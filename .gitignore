@@ -9,3 +9,4 @@ app/.qovery-workspace
 .terraform/
 NOTES.txt
 docker/engine/providers/
+venv
