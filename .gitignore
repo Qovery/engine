@@ -10,3 +10,4 @@ app/.qovery-workspace
 NOTES.txt
 docker/engine/providers/
 venv
+qovery-engine/results.xml

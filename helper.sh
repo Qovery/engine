@@ -184,7 +184,8 @@ function fast_tests() { # Run fast tests only on qovery-engine
   nb_treads=$1
   source .env
   cd qovery-engine
-  cargo test --color always -- --color always --test-threads=$nb_treads
+  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
+  cat results.json | cargo2junit > results.xml
 }
 
 function all_tests() { # Run all tests on qovery-engine

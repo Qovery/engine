@@ -1,9 +1,8 @@
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
-use std::io;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::path::Path;
-use std::str::FromStr;
+use std::{fs, io};
 
 use retry::delay::Fibonacci;
 use retry::OperationResult;
@@ -14,11 +13,11 @@ use rusoto_s3::{
     GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request, PutBucketVersioningRequest,
     S3Client, VersioningConfiguration, S3,
 };
+pub const AWS_REGION_FOR_S3_US: &str = "ap-south-1";
 
 use crate::cmd::utilities::{exec_with_envs, CmdError};
 use crate::runtime::async_run;
-
-pub const AWS_REGION_FOR_S3_US: &str = "ap-south-1";
+use std::str::FromStr;
 
 pub fn create_bucket(
     access_key_id: &str,
@@ -193,7 +192,11 @@ where
 
     let mut kubernetes_config_file = File::create(file_path.as_ref())?;
     let _ = kubernetes_config_file.write(file_content.as_bytes())?;
-
+    // removes warning kubeconfig is (world/group) readable
+    let metadata = kubernetes_config_file.metadata()?;
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(0o400);
+    fs::set_permissions(file_path.as_ref(), permissions)?;
     Ok(kubernetes_config_file)
 }
 
