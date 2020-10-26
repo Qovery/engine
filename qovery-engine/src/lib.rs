@@ -14,7 +14,7 @@ mod dynamo_db;
 pub mod engine;
 pub mod error;
 pub mod fs;
-mod git;
+pub mod git;
 pub mod models;
 mod runtime;
 pub mod s3;
