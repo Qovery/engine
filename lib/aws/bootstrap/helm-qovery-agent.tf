@@ -52,8 +52,8 @@ resource "helm_release" "qovery_agent_resources" {
   }
 
   set {
-    name = "environmentVariables.ES_HOST_URL"
-    value = "https://${aws_elasticsearch_domain.qovery_eks_logs.endpoint}"
+    name = "environmentVariables.LOKI_URL"
+    value = "http://loki.logging.svc.cluster.local:3100"
   }
 
   set {
