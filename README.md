@@ -20,7 +20,8 @@
 
 - Website: https://www.qovery.com
 - Full doc: https://docs.qovery.com
-- Engine doc: *coming soon*
+- Qovery Engine doc: *coming soon*
+- Community: [Join us](https://discord.qovery.com) on Discord
 
 **Please note**: We take Qovery's security and our users' trust very seriously. If you believe you have found a security issue in Qovery, please responsibly disclose by contacting us at security@qovery.com.
 
@@ -86,7 +87,7 @@ Check out our [roadmap](https://roadmap.qovery.com) to get informed of the lates
 ### Why Qovery exists?
 TODO
 
-### What is the difference between Qovery and Qovery Engine?
+### What is the difference between `Qovery` and `Qovery Engine`?
 TODO
 
 ### Why the Qovery Engine is made in Rust?

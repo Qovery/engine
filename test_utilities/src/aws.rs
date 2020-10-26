@@ -38,25 +38,25 @@ pub const AWS_REGION_FOR_S3: &str = "us-east-1";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
 
 pub fn aws_access_key_id() -> String {
-    std::env::var("aws_access_key_id()").expect("env var aws_access_key_id() is mandatory")
+    std::env::var("AWS_ACCESS_KEY_ID").expect("env var AWS_ACCESS_KEY_ID is mandatory")
 }
 
 pub fn aws_secret_access_key() -> String {
-    std::env::var("aws_secret_access_key()").expect("env var aws_secret_access_key() is mandatory")
+    std::env::var("AWS_SECRET_ACCESS_KEY").expect("env var AWS_SECRET_ACCESS_KEY is mandatory")
 }
 
 pub fn aws_default_region() -> String {
-    std::env::var("aws_default_region()").expect("env var aws_default_region() is mandatory")
+    std::env::var("AWS_DEFAULT_REGION").expect("env var AWS_DEFAULT_REGION is mandatory")
 }
 
 pub fn terraform_aws_access_key_id() -> String {
-    std::env::var("terraform_aws_access_key_id()")
-        .expect("env var terraform_aws_access_key_id() is mandatory")
+    std::env::var("TERRAFORM_AWS_ACCESS_KEY_ID")
+        .expect("env var TERRAFORM_AWS_ACCESS_KEY_ID is mandatory")
 }
 
 pub fn terraform_aws_secret_access_key() -> String {
-    std::env::var("terraform_aws_secret_access_key()")
-        .expect("env var terraform_aws_secret_access_key() is mandatory")
+    std::env::var("TERRAFORM_AWS_SECRET_ACCESS_KEY")
+        .expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory")
 }
 
 pub fn execution_id() -> String {
