@@ -255,3 +255,39 @@ pub fn delete_bucket(
 pub fn get_default_region_for_us() -> Region {
     Region::from_str(AWS_REGION_FOR_S3_US).unwrap()
 }
+
+pub fn push_object(
+    access_key_id: &str,
+    secret_access_key: &str,
+    bucket_name: &str,
+    object_key: &str,
+    local_file_path: &str,
+) -> Result<(), CmdError> {
+    info!(
+        "Pushing object {} to bucket {}",
+        local_file_path.clone(),
+        bucket_name.clone()
+    );
+    match exec_with_envs(
+        "aws",
+        vec![
+            "s3",
+            "cp",
+            local_file_path,
+            format!("s3://{}/{}", bucket_name, object_key).as_str(),
+        ],
+        vec![
+            ("AWS_ACCESS_KEY_ID", &access_key_id),
+            ("AWS_SECRET_ACCESS_KEY", &secret_access_key),
+        ],
+    ) {
+        Ok(o) => {
+            info!("Successfully uploading the object on bucket");
+            return Ok(o);
+        }
+        Err(e) => {
+            error!("While uploading object {}", e);
+            return Err(e);
+        }
+    }
+}

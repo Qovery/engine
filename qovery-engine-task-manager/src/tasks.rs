@@ -16,10 +16,13 @@ use qovery_engine::error::ConfigurationError;
 use qovery_engine::models::{
     Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
 };
+use qovery_engine::s3;
 use qovery_engine::transaction::{CommitError, TransactionResult};
 
 use crate::models::{Action, Request};
 use crate::task_manager::{ActionContext, InternalTask, Message, Status, Task};
+use qovery_engine::cmd::utilities::CmdError;
+use std::path::Path;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -191,7 +194,31 @@ impl Task for InfrastructureTask {
             engine.context().execution_id(),
         ) {
             Ok(file) => {
-                // TODO upload archive
+                let secrets_key = self
+                    .request
+                    .cloud_provider
+                    .terraform_state_credentials
+                    .secret_access_key
+                    .clone();
+                let access_key = self
+                    .request
+                    .cloud_provider
+                    .terraform_state_credentials
+                    .access_key_id
+                    .clone();
+                let organization_id = self.request.organization_id.clone();
+                let bucket_name = "qovery-terrafom-tfstates";
+                let s3_status = s3::push_object(
+                    &access_key,
+                    &secrets_key,
+                    bucket_name,
+                    format!("archives/{}/{}", organization_id, file).as_str(),
+                    file.as_str(),
+                );
+                match s3_status {
+                    Ok(_) => info!("Archive successfully pushed to Qovery S3"),
+                    Err(e) => warn!("While pushing archive to s3, {:}", e),
+                }
             }
             Err(err) => error!("{:?}", err),
         };
@@ -383,7 +410,31 @@ impl Task for EnvironmentTask {
             engine.context().execution_id(),
         ) {
             Ok(file) => {
-                // TODO upload archive
+                let secrets_key = self
+                    .request
+                    .cloud_provider
+                    .terraform_state_credentials
+                    .secret_access_key
+                    .clone();
+                let access_key = self
+                    .request
+                    .cloud_provider
+                    .terraform_state_credentials
+                    .access_key_id
+                    .clone();
+                let organization_id = self.request.organization_id.clone();
+                let bucket_name = "qovery-terrafom-tfstates";
+                let s3_status = s3::push_object(
+                    &access_key,
+                    &secrets_key,
+                    bucket_name,
+                    format!("archives/{}/{}", organization_id, file).as_str(),
+                    file.as_str(),
+                );
+                match s3_status {
+                    Ok(_) => info!("Archive successfully pushed to Qovery S3"),
+                    Err(e) => warn!("While pushing archive to s3, {:}", e),
+                }
             }
             Err(err) => error!("{:?}", err),
         };
