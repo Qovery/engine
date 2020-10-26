@@ -298,9 +298,9 @@ impl DnsProvider {
 
                 Box::new(Cloudflare::new(
                     context.clone(),
-                    self.id.clone(),
-                    self.name.clone(),
-                    self.domain.clone(),
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    self.domain.as_str(),
                     token.unwrap().as_str().unwrap().parse().unwrap(),
                     email.unwrap().as_str().unwrap().parse().unwrap(),
                 ))
