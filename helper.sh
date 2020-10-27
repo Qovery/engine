@@ -182,7 +182,7 @@ function fast_tests() { # Run fast tests only on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   #export RUST_LOG=info
   nb_treads=$1
-  source .env
+  export_env
   cd qovery-engine
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
   cat results.json | cargo2junit > results.xml
@@ -192,9 +192,16 @@ function all_tests() { # Run all tests on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   #export RUST_LOG=info
   nb_treads=$1
-  source .env
+  export_env
   cd qovery-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
+}
+
+function export_env() {
+  for line in $(cat .env)
+  do
+    export $line
+  done
 }
 
 if [ $ARGS_NUM -eq 0 ] ; then

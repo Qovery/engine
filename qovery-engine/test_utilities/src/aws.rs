@@ -226,7 +226,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE ME".to_string(),
+                    access_token: "CHANGE-ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -275,7 +275,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE ME".to_string(),
+                    access_token: "CHANGE-ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -324,7 +324,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE ME".to_string(),
+                    access_token: "CHANGE-ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -488,7 +488,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             action: Action::Create,
             git_credentials: GitCredentials {
                 login: "x-access-token".to_string(),
-                access_token: "CHANGE ME".to_string(),
+                access_token: "CHANGE-ME".to_string(),
                 expired_at: Utc::now(),
             },
             storage: vec![],
@@ -565,7 +565,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE ME".to_string(),
+                    access_token: "CHANGE-ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -614,7 +614,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE ME".to_string(),
+                    access_token: "CHANGE-ME".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
