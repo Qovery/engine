@@ -16,7 +16,7 @@
     <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_kubernetes_cloudproviders.svg" height="450px" alt="Qovery stack on top of Kubernetes and Cloud providers" />
 </p>
 
-**Qovery Engine** is an open-source abstraction layer product that makes apps deployment on **AWS**, **GCP**, **Azure** and others Cloud providers easy to do. The engine is coded in [Rust](https://www.rust-lang.org) and take advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), [Docker](https://www.docker.com) to manage resources.
+**Qovery Engine** is an open-source abstraction layer product that turns easy apps deployment on **AWS**, **GCP**, **Azure** and others Cloud providers. The Qovery Engine is coded in [Rust](https://www.rust-lang.org) and takes advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), [Docker](https://www.docker.com) to manage resources.
 
 - Website: https://www.qovery.com
 - Full doc: https://docs.qovery.com
@@ -45,36 +45,37 @@ Qovery engine supports a number of build methods and target Cloud providers out 
 **[See more on our website](https://www.qovery.com)**.
 
 ## Getting Started
-TODO
-
 ### Installation
-TODO
+Use the Qovery Engine as a Cargo dependency.
+```toml
+qovery-engine = { git = "https://github.com/Qovery/engine", branch="main" }
+```
 
 ### Usage
-
-#### CLI
-TODO
 
 #### Rust lib
 Initialize EKS (AWS Kubernetes) and ECR (AWS container registry) on AWS 
 ```rust
 let engine = Engine::new(
-    context,
-    local_docker,
-    ecr,
-    aws,
-    cloudflare,
+    context, // parameters
+    local_docker, // initialize Docker as a Build Platform
+    ecr, // initialize Elastic Container Registry
+    aws, // initialize AWS account
+    cloudflare, // initialize Cloudflare as DNS Nameservers
 );
 
 let session = match engine.session() {
-    Ok(session) => session,
+    Ok(session) => session, // get the session
     Err(config_error) => panic!("configuration error {:?}", config_error),
 };
 
 let mut tx = session.transaction();
+
+// create EKS (AWS managed Kubernetes cluster)
 tx.create_kubernetes(&eks);
 
-match tx.commit() {
+// create the infrastructure and wait for the result
+match tx.commit() { 
     TransactionResult::Ok => println!("OK"),
     TransactionResult::Rollback(commit_err) => println!("ERROR but rollback OK"), 
     TransactionResult::UnrecoverableError(commit_err, rollback_err) => println!("FATAL ERROR")
@@ -83,27 +84,7 @@ match tx.commit() {
 
 Deploy an app on AWS
 ```rust
-let engine = Engine::new(
-    context,
-    local_docker,
-    ecr,
-    aws,
-    cloudflare,
-);
-
-let session = match engine.session() {
-    Ok(session) => session,
-    Err(config_error) => panic!("configuration error {:?}", config_error),
-};
-
-let mut tx = session.transaction();
-tx.create_kubernetes(&eks);
-
-match tx.commit() {
-    TransactionResult::Ok => println!("OK"),
-    TransactionResult::Rollback(commit_err) => println!("ERROR but rollback OK"), 
-    TransactionResult::UnrecoverableError(commit_err, rollback_err) => println!("FATAL ERROR")
-};
+// TODO
 ```
 
 ## Documentation
@@ -125,16 +106,18 @@ Check out our [roadmap](https://roadmap.qovery.com) to get informed of the lates
 
 ## FAQ
 ### Why Qovery exists?
-TODO
+At Qovery, we believe that the Cloud musts be simple than what it is today. Our goal is to consolidate the Cloud ecosystem and makes it accessible to any developer, DevOps, company. Helping people to focus on what they build instead of wasting time doing plumbing stuff.
 
 ### What is the difference between `Qovery` and `Qovery Engine`?
-TODO
+[Qovery](https://www.qovery.com) is a Container as a Service platform for developers. It combines the simplicity of Heroku, the reliability of AWS, and the power of Kubernetes. It makes the developer and DevOps life easier to deploy complex applications. 
+
+**Qovery Engine** is the Open Source abstraction layer used by Qovery to abstract the deployment of containers and databases on any Cloud provider.
 
 ### Why the Qovery Engine is made in Rust?
-TODO
+Rust is underrated in the Cloud industry. At Qovery, we believe that Rust can help in building resilient, efficient, and performant products. Qovery wants to contribute to make Rust being a significant player in the Cloud industry for the next 10 years.
 
 ### Why do you use Terraform, Helm and Kubectl binaries?
-TODO
+TODO 
 
 ## License
 
