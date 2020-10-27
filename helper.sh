@@ -180,7 +180,7 @@ resources.requests.memory="2Gi"
 
 function fast_tests() { # Run fast tests only on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
-  #export RUST_LOG=info
+  export RUST_LOG=info
   nb_treads=$1
   export_env
   cd qovery-engine
@@ -190,7 +190,7 @@ function fast_tests() { # Run fast tests only on qovery-engine
 
 function all_tests() { # Run all tests on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
-  #export RUST_LOG=info
+  export RUST_LOG=info
   nb_treads=$1
   export_env
   cd qovery-engine
