@@ -1,10 +1,3 @@
-use std::fmt::Display;
-use std::fs::{read_to_string, File};
-use std::io;
-use std::io::{Error, ErrorKind, Read, Write};
-use std::path::Path;
-use std::str::FromStr;
-
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
@@ -14,11 +7,17 @@ use rusoto_s3::{
     GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request, PutBucketVersioningRequest,
     S3Client, VersioningConfiguration, S3,
 };
+use std::fmt::Display;
+use std::fs::{read_to_string, File};
+use std::io::{Error, ErrorKind, Read, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::{fs, io};
+pub const AWS_REGION_FOR_S3_US: &str = "ap-south-1";
 
 use crate::cmd::utilities::{exec_with_envs, CmdError};
 use crate::runtime::async_run;
-
-pub const AWS_REGION_FOR_S3_US: &str = "ap-south-1";
+use std::str::FromStr;
 
 pub fn create_bucket(
     access_key_id: &str,
@@ -193,7 +192,11 @@ where
 
     let mut kubernetes_config_file = File::create(file_path.as_ref())?;
     let _ = kubernetes_config_file.write(file_content.as_bytes())?;
-
+    // removes warning kubeconfig is (world/group) readable
+    let metadata = kubernetes_config_file.metadata()?;
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(0o400);
+    fs::set_permissions(file_path.as_ref(), permissions)?;
     Ok(kubernetes_config_file)
 }
 
@@ -254,4 +257,40 @@ pub fn delete_bucket(
 
 pub fn get_default_region_for_us() -> Region {
     Region::from_str(AWS_REGION_FOR_S3_US).unwrap()
+}
+
+pub fn push_object(
+    access_key_id: &str,
+    secret_access_key: &str,
+    bucket_name: &str,
+    object_key: &str,
+    local_file_path: &str,
+) -> Result<(), CmdError> {
+    info!(
+        "Pushing object {} to bucket {}",
+        local_file_path.clone(),
+        bucket_name.clone()
+    );
+    match exec_with_envs(
+        "aws",
+        vec![
+            "s3",
+            "cp",
+            local_file_path,
+            format!("s3://{}/{}", bucket_name, object_key).as_str(),
+        ],
+        vec![
+            ("AWS_ACCESS_KEY_ID", &access_key_id),
+            ("AWS_SECRET_ACCESS_KEY", &secret_access_key),
+        ],
+    ) {
+        Ok(o) => {
+            info!("Successfully uploading the object on bucket");
+            return Ok(o);
+        }
+        Err(e) => {
+            error!("While uploading object {}", e);
+            return Err(e);
+        }
+    }
 }

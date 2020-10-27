@@ -76,7 +76,7 @@ where
 fn archive_workspace_directory(
     working_root_dir: &str,
     execution_id: &str,
-) -> Result<File, std::io::Error> {
+) -> Result<String, std::io::Error> {
     let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id);
 
     let tar_gz_file_path = format!(
@@ -90,7 +90,7 @@ fn archive_workspace_directory(
     let mut tar = tar::Builder::new(enc);
     tar.append_dir_all(execution_id, workspace_dir)?;
 
-    Ok(File::open(tar_gz_file_path).unwrap())
+    Ok(tar_gz_file_path)
 }
 
 pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) {
@@ -101,7 +101,7 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) {
 pub fn create_workspace_archive(
     working_root_dir: &str,
     execution_id: &str,
-) -> Result<File, std::io::Error> {
+) -> Result<String, std::io::Error> {
     info!("archive workspace directory in progress");
 
     match archive_workspace_directory(working_root_dir, execution_id) {

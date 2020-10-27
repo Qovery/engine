@@ -1,9 +1,3 @@
-use dns_lookup::lookup_host;
-use retry::delay::Fibonacci;
-use retry::OperationResult;
-use serde::{Deserialize, Serialize};
-use tera::Context as TeraContext;
-
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -13,7 +7,14 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::models::{Context, Metadata};
+use crate::models::{
+    Context, Listeners, ListenersHelper, Metadata, ProgressInfo, ProgressLevel, ProgressScope,
+};
+use dns_lookup::lookup_host;
+use retry::delay::{Fibonacci, Fixed};
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
+use tera::Context as TeraContext;
 
 pub struct Router {
     context: Context,
@@ -22,6 +23,7 @@ pub struct Router {
     default_domain: String,
     custom_domains: Vec<CustomDomain>,
     routes: Vec<Route>,
+    listeners: Listeners,
 }
 
 impl Router {
@@ -40,6 +42,7 @@ impl Router {
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,
+            listeners: vec![],
         }
     }
 
@@ -431,9 +434,35 @@ impl Create for Router {
     }
 
     fn on_create_check(&self) -> Result<(), ServiceError> {
-        // Todo: manage it properly to avoid timeouts
-        //self.check_domains()
-        Ok(())
+        let check_result = retry::retry(Fixed::from_millis(3000).take(60), || {
+            let rs_ips = lookup_host(self.default_domain.as_str());
+            match rs_ips {
+                Ok(ips) => {
+                    info!("Records from DNS are successfully retrieved.");
+                    OperationResult::Ok(ips)
+                }
+                Err(e) => {
+                    warn!("Failed to retrieve record from DNS, retrying");
+                    OperationResult::Retry(e)
+                }
+            }
+        });
+        match check_result {
+            Ok(out) => Ok(()),
+            Err(e) => {
+                error!("While checking the DNS propagation");
+                let listeners_helper = ListenersHelper::new(&self.listeners);
+                listeners_helper.error(ProgressInfo::new(
+                    ProgressScope::Router {
+                        id: self.id.to_string(),
+                    },
+                    ProgressLevel::Error,
+                    Some("DNS propagation goes wrong."),
+                    self.context.execution_id(),
+                ));
+                Err(ServiceError::CheckFailed)
+            }
+        }
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
