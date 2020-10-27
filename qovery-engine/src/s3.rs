@@ -1,9 +1,3 @@
-use std::fmt::Display;
-use std::fs::{read_to_string, File};
-use std::io::{Error, ErrorKind, Read, Write};
-use std::path::Path;
-use std::{fs, io};
-
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
@@ -13,6 +7,12 @@ use rusoto_s3::{
     GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request, PutBucketVersioningRequest,
     S3Client, VersioningConfiguration, S3,
 };
+use std::fmt::Display;
+use std::fs::{read_to_string, File};
+use std::io::{Error, ErrorKind, Read, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::{fs, io};
 pub const AWS_REGION_FOR_S3_US: &str = "ap-south-1";
 
 use crate::cmd::utilities::{exec_with_envs, CmdError};
