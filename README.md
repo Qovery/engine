@@ -82,10 +82,48 @@ match tx.commit() {
 };
 ```
 
-Deploy an app on AWS
+Deploy an app from a Github repository on AWS
 ```rust
-// TODO
+// create a session before
+//------------------------
+
+let mut environment = Environment {...};
+
+let app = Application {
+    id: "app-id-1".to_string(),
+    name: "app-name-1".to_string(),
+    action: Action::Create, // create the application, you can also do other actions
+    git_url: "https://github.com/Qovery/node-simple-example.git".to_string(),
+    git_credentials: GitCredentials {
+        login: "github-login".to_string(), // if the repository is a private one, then use credentials
+        access_token: "github-access-token".to_string(),
+        expired_at: Utc::now(), // it's provided by the Github API
+    },
+    branch: "main".to_string(),
+    commit_id: "238f7f0454783defa4946613bc17ebbf4ccc514a".to_string(),
+    dockerfile_path: "Dockerfile".to_string(),
+    private_port: Some(3000),
+    total_cpus: "1".to_string(),
+    cpu_burst: "1.5".to_string(),
+    total_ram_in_mib: 256,
+    total_instances: 1,
+    storage: vec![], // you can add persistent storage here
+    environment_variables: vec![], // you can include env var here
+};
+
+// add the app to the environment that we want to deploy
+environment.applications.push(app);
+
+// open a transaction
+let mut tx = session.transaction();
+
+// request to deploy the environment
+tx.deploy_environment(&EnvironmentAction::Environment(environment));
+
+// commit and deploy the environment
+tx.commit();
 ```
+*Note: the repository needs to have a Dockerfile at the root.*
 
 ## Documentation
 Full, comprehensive documentation is available on the Qovery website: https://docs.qovery.com
@@ -117,7 +155,7 @@ At Qovery, we believe that the Cloud musts be simple than what it is today. Our 
 Rust is underrated in the Cloud industry. At Qovery, we believe that Rust can help in building resilient, efficient, and performant products. Qovery wants to contribute to make Rust being a significant player in the Cloud industry for the next 10 years.
 
 ### Why do you use Terraform, Helm and Kubectl binaries?
-TODO 
+The Qovery Engine is designed to operate as an administrator and takes decisions on the output of binaries, service, API, etc. Qovery uses the most efficient tools available in the market to manage resources.
 
 ## License
 
