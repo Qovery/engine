@@ -5,3 +5,5 @@
 .terraform/
 NOTES.txt
 .env
+results.xml
+results.json
