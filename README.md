@@ -16,7 +16,7 @@
     <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_kubernetes_cloudproviders.svg" height="450px" alt="Qovery stack on top of Kubernetes and Cloud providers" />
 </p>
 
-**Qovery Engine** is an open-source abstraction layer product that makes apps deployment on **AWS**, **GCP**, **Azure** and others Cloud providers easy to do. The engine is coded in [Rust](https://www.rust-lang.org) and take advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), [Docker](https://www.docker.com) to manage resources.
+**Qovery Engine** is an open-source abstraction layer product that turns easy apps deployment on **AWS**, **GCP**, **Azure** and others Cloud providers. The Qovery Engine is coded in [Rust](https://www.rust-lang.org) and takes advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), [Docker](https://www.docker.com) to manage resources.
 
 - Website: https://www.qovery.com
 - Full doc: https://docs.qovery.com
@@ -35,7 +35,11 @@
 - **Web Interface:** Qovery provides a web interface through [qovery.com](https://www.qovery.com)
 
 ### 🔌 Plugins
-Qovery engine supports a number of build methods and target Cloud providers out of the box and more can be easily added:
+<p align="center">
+    <img src="https://docs.qovery.com/img/policy-complete-flow.png" width="800px" alt="Qovery engine workflow" />
+</p>
+
+Qovery engine supports a number of different plugins to compose your own deployment flow:
 - **Cloud providers:** [AWS](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/amazon-web-services/), Digital Ocean ([in progress](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/digital-ocean/)), Azure ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/azure/)), GCP ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/google-cloud-platform/)), Scaleway ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/scaleway/))
 - **Build platforms:** [Qovery CI](https://docs.qovery.com/docs/using-qovery/configuration/business/build-platform/qovery-ci/), Circle CI ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/build-platform/circle-ci/)), Gitlab CI ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/build-platform/gitlab-ci/)), Github Actions ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/build-platform/github-actions/))
 - **Container registries:** [ECR](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/elastic-container-registry/), [DockerHub](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/docker-hub/), DOCR ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/digital-ocean-container-registry/)), ACR ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/azure-container-registry/)), SCR ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/scaleway-container-registry/))
@@ -45,66 +49,85 @@ Qovery engine supports a number of build methods and target Cloud providers out 
 **[See more on our website](https://www.qovery.com)**.
 
 ## Getting Started
-TODO
-
 ### Installation
-TODO
+Use the Qovery Engine as a Cargo dependency.
+```toml
+qovery-engine = { git = "https://github.com/Qovery/engine", branch="main" }
+```
 
 ### Usage
-
-#### CLI
-TODO
 
 #### Rust lib
 Initialize EKS (AWS Kubernetes) and ECR (AWS container registry) on AWS 
 ```rust
 let engine = Engine::new(
-    context,
-    local_docker,
-    ecr,
-    aws,
-    cloudflare,
+    context, // parameters
+    local_docker, // initialize Docker as a Build Platform
+    ecr, // initialize Elastic Container Registry
+    aws, // initialize AWS account
+    cloudflare, // initialize Cloudflare as DNS Nameservers
 );
 
 let session = match engine.session() {
-    Ok(session) => session,
+    Ok(session) => session, // get the session
     Err(config_error) => panic!("configuration error {:?}", config_error),
 };
 
 let mut tx = session.transaction();
+
+// create EKS (AWS managed Kubernetes cluster)
 tx.create_kubernetes(&eks);
 
-match tx.commit() {
+// create the infrastructure and wait for the result
+match tx.commit() { 
     TransactionResult::Ok => println!("OK"),
     TransactionResult::Rollback(commit_err) => println!("ERROR but rollback OK"), 
     TransactionResult::UnrecoverableError(commit_err, rollback_err) => println!("FATAL ERROR")
 };
 ```
 
-Deploy an app on AWS
+Deploy an app from a Github repository on AWS
 ```rust
-let engine = Engine::new(
-    context,
-    local_docker,
-    ecr,
-    aws,
-    cloudflare,
-);
+// create a session before
+//------------------------
 
-let session = match engine.session() {
-    Ok(session) => session,
-    Err(config_error) => panic!("configuration error {:?}", config_error),
+let mut environment = Environment {...};
+
+let app = Application {
+    id: "app-id-1".to_string(),
+    name: "app-name-1".to_string(),
+    action: Action::Create, // create the application, you can also do other actions
+    git_url: "https://github.com/Qovery/node-simple-example.git".to_string(),
+    git_credentials: GitCredentials {
+        login: "github-login".to_string(), // if the repository is a private one, then use credentials
+        access_token: "github-access-token".to_string(),
+        expired_at: Utc::now(), // it's provided by the Github API
+    },
+    branch: "main".to_string(),
+    commit_id: "238f7f0454783defa4946613bc17ebbf4ccc514a".to_string(),
+    dockerfile_path: "Dockerfile".to_string(),
+    private_port: Some(3000),
+    total_cpus: "1".to_string(),
+    cpu_burst: "1.5".to_string(),
+    total_ram_in_mib: 256,
+    total_instances: 1,
+    storage: vec![], // you can add persistent storage here
+    environment_variables: vec![], // you can include env var here
 };
 
+// add the app to the environment that we want to deploy
+environment.applications.push(app);
+
+// open a transaction
 let mut tx = session.transaction();
-tx.create_kubernetes(&eks);
 
-match tx.commit() {
-    TransactionResult::Ok => println!("OK"),
-    TransactionResult::Rollback(commit_err) => println!("ERROR but rollback OK"), 
-    TransactionResult::UnrecoverableError(commit_err, rollback_err) => println!("FATAL ERROR")
-};
+// request to deploy the environment
+tx.deploy_environment(&EnvironmentAction::Environment(environment));
+
+// commit and deploy the environment
+tx.commit();
 ```
+*Note: the repository needs to have a Dockerfile at the root.*
 
 ## Documentation
 Full, comprehensive documentation is available on the Qovery website: https://docs.qovery.com
@@ -125,16 +148,18 @@ Check out our [roadmap](https://roadmap.qovery.com) to get informed of the lates
 
 ## FAQ
 ### Why Qovery exists?
-TODO
+At Qovery, we believe that the Cloud musts be simple than what it is today. Our goal is to consolidate the Cloud ecosystem and makes it accessible to any developer, DevOps, company. Helping people to focus on what they build instead of wasting time doing plumbing stuff.
 
 ### What is the difference between `Qovery` and `Qovery Engine`?
-TODO
+[Qovery](https://www.qovery.com) is a Container as a Service platform for developers. It combines the simplicity of Heroku, the reliability of AWS, and the power of Kubernetes. It makes the developer and DevOps life easier to deploy complex applications. 
+
+**Qovery Engine** is the Open Source abstraction layer used by Qovery to abstract the deployment of containers and databases on any Cloud provider.
 
 ### Why the Qovery Engine is made in Rust?
-TODO
+Rust is underrated in the Cloud industry. At Qovery, we believe that Rust can help in building resilient, efficient, and performant products. Qovery wants to contribute to make Rust being a significant player in the Cloud industry for the next 10 years.
 
 ### Why do you use Terraform, Helm and Kubectl binaries?
-TODO
+The Qovery Engine is designed to operate as an administrator and takes decisions on the output of binaries, service, API, etc. Qovery uses the most efficient tools available in the market to manage resources.
 
 ## License
 
