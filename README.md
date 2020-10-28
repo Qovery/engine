@@ -35,7 +35,11 @@
 - **Web Interface:** Qovery provides a web interface through [qovery.com](https://www.qovery.com)
 
 ### 🔌 Plugins
-Qovery engine supports a number of build methods and target Cloud providers out of the box and more can be easily added:
+<p align="center">
+    <img src="https://docs.qovery.com/img/policy-complete-flow.png" width="800px" alt="Qovery engine workflow" />
+</p>
+
+Qovery engine supports a number of different plugins to compose your own deployment flow:
 - **Cloud providers:** [AWS](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/amazon-web-services/), Digital Ocean ([in progress](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/digital-ocean/)), Azure ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/azure/)), GCP ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/google-cloud-platform/)), Scaleway ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/cloud-account/scaleway/))
 - **Build platforms:** [Qovery CI](https://docs.qovery.com/docs/using-qovery/configuration/business/build-platform/qovery-ci/), Circle CI ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/build-platform/circle-ci/)), Gitlab CI ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/build-platform/gitlab-ci/)), Github Actions ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/build-platform/github-actions/))
 - **Container registries:** [ECR](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/elastic-container-registry/), [DockerHub](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/docker-hub/), DOCR ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/digital-ocean-container-registry/)), ACR ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/azure-container-registry/)), SCR ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/scaleway-container-registry/))
