@@ -677,6 +677,7 @@ pub fn using_nats_server(
         });
 
     let _ = listen_for_task_running_check_events(task_manager.clone(), &nc, &mode)?;
+    let _ = listen_for_task_order_execution_check(task_manager.clone(), &nc, &mode)?;
 
     let infrastructure_sub = listen_for_events(
         workspace_root_dir.clone(),
