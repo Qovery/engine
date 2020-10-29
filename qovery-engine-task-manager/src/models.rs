@@ -338,13 +338,51 @@ impl Response {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct CheckTask {
+pub struct CheckTaskRunningResponse {
     pub is_running: bool,
 }
 
-impl CheckTask {
+impl CheckTaskRunningResponse {
     pub fn new(is_running: bool) -> Self {
-        CheckTask { is_running }
+        CheckTaskRunningResponse {
+            is_running: is_running,
+        }
+    }
+
+    pub fn as_json_string(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CheckTaskOrderRequest {
+    pub group_id: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl CheckTaskOrderRequest {
+    pub fn new(group_id: String, created_at: DateTime<Utc>) -> Self {
+        CheckTaskOrderRequest {
+            group_id,
+            created_at,
+        }
+    }
+
+    pub fn as_json_string(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CheckTaskOrderResponse {
+    pub is_first_place: bool,
+}
+
+impl CheckTaskOrderResponse {
+    pub fn new(is_first_place: bool) -> Self {
+        CheckTaskOrderResponse {
+            is_first_place: is_first_place,
+        }
     }
 
     pub fn as_json_string(&self) -> String {
