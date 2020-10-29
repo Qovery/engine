@@ -7,7 +7,7 @@ use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error, Read, Write};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, thread};
@@ -26,7 +26,9 @@ use qovery_engine::cmd;
 use qovery_engine::models::Context;
 use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::{CheckTask, Request, Response};
-use qovery_engine_task_manager::task_manager::{InternalTask, PreRun, Status, Task, TaskManager};
+use qovery_engine_task_manager::task_manager::{
+    InternalTask, PreRun, State, Status, Task, TaskManager,
+};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::constants::ASCII_BANNER;
@@ -130,6 +132,7 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> PreR
         task.group_id(),
         task.id()
     );
+
     PreRun::Yes
 }
 
@@ -150,10 +153,10 @@ fn listen_for_task_running_check_events(
             .unwrap()
             .get_task_status_by_group_id(&group_id)
         {
-            Some(status) => match status {
-                Status::DeploymentInProgress { .. }
-                | Status::PauseInProgress { .. }
-                | Status::DeleteInProgress { .. } => true,
+            Some(status) => match status.status {
+                State::DeploymentInProgress | State::PauseInProgress | State::DeleteInProgress => {
+                    true
+                }
                 _ => false,
             },
             None => false,
@@ -170,7 +173,23 @@ fn listen_for_task_running_check_events(
 /// check if the current task is the next one to run
 /// ask to other Engine if they have a task that must be launched sooner
 /// personal note: this is a way to lazily order tasks  
-fn is_the_next_task_to_run(task: &dyn Task, nc: Connection, mode: Mode) -> PreRun {
+fn is_the_next_task_to_run(
+    task_manager: Arc<Mutex<TaskManager>>,
+    task: &dyn Task,
+    nc: Connection,
+    mode: Mode,
+) -> PreRun {
+    match task_manager.lock() {
+        Ok(tm) => {
+            // compare the date of the current task to other tasks with the same group id.
+            // if the current task has lower date than other tasks with same group id, it means that it is good to be run 👍
+            // if the current task has higher date than other tasks with same group id, it means that it is not good to be run 👎
+        }
+        Err(_) => {
+            // if there is a lock error, we prefer to delay the deployment to not take any risk
+        }
+    }
+
     PreRun::Yes
 }
 
@@ -182,6 +201,7 @@ fn listen_for_events(
     nc: &Connection,
     mode: &Mode,
     tx: Sender<Box<dyn Task>>,
+    task_manager: Arc<Mutex<TaskManager>>,
 ) -> Result<Subscription, Error> {
     let subject_name = subject_name(mode, &task_selector);
     let sub = nc.queue_subscribe(subject_name.as_str(), subject_name.as_str())?;
@@ -196,9 +216,10 @@ fn listen_for_events(
     };
 
     thread::Builder::new()
-        .name(format!("nats-event-reciever-{}", ts_str))
+        .name(format!("nats-event-receiver-{}", ts_str))
         .spawn(move || {
             let nc = nc.clone();
+            let task_manager = task_manager;
 
             loop {
                 for msg in sub.next() {
@@ -206,9 +227,18 @@ fn listen_for_events(
 
                     let nc_1 = nc.clone();
                     let mode = mode.clone();
+                    let task_manager = task_manager.clone();
+
+                    // call before to run the current task to check that the same task is not running on another engine app
+                    // check is_the_same_task_running and is_the_next_task_to_run functions to know more about the details
                     let pre_run_callback = Box::new(move |task: &dyn Task| {
-                        is_the_same_task_running(task, nc_1.clone(), mode.clone())
-                            && is_the_next_task_to_run(task, nc_1.clone(), mode.clone())
+                        let nc_1 = nc_1.clone();
+                        let task_manager = task_manager.clone();
+
+                        PreRun::add(
+                            is_the_same_task_running(task, nc_1.clone(), mode.clone()),
+                            is_the_next_task_to_run(task_manager, task, nc_1.clone(), mode.clone()),
+                        )
                     });
 
                     match serde_json::from_slice::<Request>(msg.data.as_slice()) {
@@ -442,7 +472,7 @@ pub fn using_json_path_parameter(
     lib_root_dir: String,
     docker_host: Option<String>,
 ) -> Result<(), Error> {
-    let pre_run_callback = Box::new(|task: &dyn Task| true);
+    let pre_run_callback = Box::new(|task: &dyn Task| PreRun::Yes);
 
     // check if file json config file exist
     match check_if_file_exist(&deploy_from_file) {
@@ -589,6 +619,7 @@ pub fn using_nats_server(
         &nc,
         &mode,
         tx_task.clone(),
+        task_manager.clone(),
     )?;
 
     let environment_sub = listen_for_events(
@@ -599,6 +630,7 @@ pub fn using_nats_server(
         &nc,
         &mode,
         tx_task.clone(),
+        task_manager.clone(),
     )?;
 
     let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
