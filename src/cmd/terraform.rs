@@ -94,7 +94,7 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
         },
     ) {
         Err(err) => return Err(err),
-        _ => {}
+        Ok(out) => Ok(out),
     };
 
     Ok(())
