@@ -1,0 +1,45 @@
+name: functionnal-tests
+
+on:
+  push:
+    branches-ignore: [ main ]
+  pull_request:
+    branches-ignore: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --all-features
+#  fast-tests:
+#    #if: contains(!github.event.pull_request.labels.*.name, 'full-tests')
+#    #needs: build
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v2
+#      - name: Run a multi-line script
+#        env:
+#          GITHUB_CONTEXT: ${{ toJson(github) }}
+#        timeout-minutes: 30
+#        run: |
+#          env
+#          echo "$GITHUB_CONTEXT"
+#          ./helper.sh fast_tests
+  full-tests:
+    #if: contains(github.event.pull_request.labels.*.name, 'full-tests')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run a multi-line script
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        timeout-minutes: 120
+        run: ./helper.sh full_tests

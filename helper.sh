@@ -11,80 +11,92 @@ if [ "$(uname)" == "Darwin" ] ; then
   sed='gsed'
 fi
 
-ARGS_NUM=$#
-
-function print_help() {
-  echo "Usage: $0 <option>"
-  $grep '##' $0 | $grep -v grep | $sed -r "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | $awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
-  exit 1
-}
-
-function check_num_args() {
-  desired_number=$1
-  if [ $ARGS_NUM -ne ${desired_number} ]; then
-    echo "Illegal number of parameters, required $desired_number"
-    exit 1
-  fi
-}
-
-function fast_tests() { # Run fast tests only on qovery-engine
-  export LIB_ROOT_DIR=$(pwd)/lib
-  #export RUST_LOG=info
-  nb_treads=$1
-  check_env
-  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
-  cat results.json | cargo2junit > results.xml
-}
-
-function all_tests() { # Run all tests on qovery-engine
-  export LIB_ROOT_DIR=$(pwd)/lib
-  #export RUST_LOG=info
-  nb_treads=$1
-  check_env
-  cargo test --color always -- --ignored --test-threads=$nb_treads
-}
-
 function variable_not_found() {
   echo "Required variable not found: $1"
   exit 1
 }
 
-function check_env() {
-  if [ -f .env ] ; then
-    for line in $(cat .env) ; do
-      export $line
-    done
+function run_tests() {
+  TESTS_TYPE=$1
+  test -z $GITLAB_PROJECT_ID && variable_not_found "GITLAB_PROJECT_ID"
+  test -z $GITLAB_TOKEN && variable_not_found "GITLAB_TOKEN"
+  test -z $GITLAB_PERSONAL_TOKEN && variable_not_found "GITLAB_PERSONAL_TOKEN"
+  GITLAB_REF="dev"
+
+  echo "Requesting Gitlab pipeline"
+  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$(echo $GITHUB_CONTEXT | jq --raw-output '.ref')" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
+  if [ $(echo $pipeline_id | egrep -c '^[0-9]+$') -eq 0 ] ; then
+    echo "Pipeline ID is not correct, we expected a number and got: $pipeline_id"
+    exit 1
   fi
-  test -z $AWS_ACCESS_KEY_ID && variable_not_found "AWS_ACCESS_KEY_ID"
-  test -z $AWS_SECRET_ACCESS_KEY && variable_not_found "AWS_SECRET_ACCESS_KEY"
-  test -z $AWS_DEFAULT_REGION && variable_not_found "AWS_DEFAULT_REGION"
-  test -z $TERRAFORM_AWS_ACCESS_KEY_ID && variable_not_found "TERRAFORM_AWS_ACCESS_KEY_ID"
-  test -z $TERRAFORM_AWS_SECRET_ACCESS_KEY && variable_not_found "TERRAFORM_AWS_SECRET_ACCESS_KEY"
-  test -z $CLOUDFLARE_ID && variable_not_found "CLOUDFLARE_ID"
-  test -z $CLOUDFLARE_TOKEN && variable_not_found "CLOUDFLARE_TOKEN"
-  test -z $CLOUDFLARE_DOMAIN && variable_not_found "CLOUDFLARE_DOMAIN"
-  test -z $DIGITAL_OCEAN_TOKEN && variable_not_found "DIGITAL_OCEAN_TOKEN"
+  sleep 2
+
+  pipeline_status=''
+  counter=0
+  max_unexpected_status=5
+  while [ $counter -le $max_unexpected_status ] ; do
+    current_status=$(curl -s -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$pipeline_id | jq --raw-output '.detailed_status.text')
+    echo "Current pipeline status: $current_status"
+    case $current_status in
+      "created")
+        ((counter=$counter+1))
+      ;;
+      "waiting_for_resource")
+        ((counter=$counter+1))
+      ;;
+      "preparing")
+        ((counter=$counter+1))
+      ;;
+      "pending")
+        ((counter=$counter+1))
+      ;;
+      "running")
+        counter=0
+      ;;
+      "success")
+        echo "Results: Congrats, functional tests succeeded!!!"
+        exit 0
+      ;;
+      "failed")
+        echo "Results: Functional $TESTS_TYPE tests failed"
+        exit 1
+      ;;
+      "canceled")
+        exit 1
+      ;;
+      "skipped")
+        exit 1
+      ;;
+      "manual")
+        exit 1
+      ;;
+      "scheduled")
+        ((counter=$counter+1))
+      ;;
+      "null")
+        ((counter=$counter+1))
+      ;;
+    esac
+
+    sleep 10
+  done
+
+  echo "Results: functional tests failed due to a too high number ($max_unexpected_status) of unexpected status."
+  exit 1
 }
 
-if [ $ARGS_NUM -eq 0 ] ; then
-  print_help
-fi
 set -u
 
 case $1 in
 fast_tests)
-  fast_tests 8
+  run_tests fast
   ;;
-fast_tests-seq)
-  fast_tests 1
-  ;;
-all_tests)
-  all_tests 8
-  ;;
-all_tests-seq)
-  all_tests 1
+full_tests)
+  run_tests full
   ;;
 *)
-  print_help
+  echo "Usage:"
+  echo "$0 fast_tests: run fast tests"
+  echo "$0 full_tests: run fast tests (with cloud providers check)"
   ;;
 esac
