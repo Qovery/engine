@@ -1,0 +1,36 @@
+{%- if routes|length >= 1  %}
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: {{ name }}
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    routerId: {{ name }}
+    envId: {{ environment_id }}
+    fqdn: "{{ router_default_domain }}"
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ router_default_domain }}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    external-dns.alpha.kubernetes.io/target: "{{ external_ingress_hostname_default }}"
+    kubernetes.io/tls-acme: "true"
+    cert-manager.io/cluster-issuer: {{ metadata_annotations_cert_manager_cluster_issuer }}
+    kubernetes.io/ingress.class: "nginx-qovery"
+    ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+    - hosts:
+        - "{{ router_default_domain }}"
+      secretName: le-{{ router_default_domain_hash }}-qovery-cert
+  rules:
+    - host: "{{ router_default_domain }}"
+      http:
+        paths:
+        {%- for route in routes %}
+        - path: "{{ route.path }}"
+          backend:
+            serviceName: "{{ route.application_name }}"
+            servicePort: {{ route.application_port }}
+        {%- endfor %}
+{%- endif %}

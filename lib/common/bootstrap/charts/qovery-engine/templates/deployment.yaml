@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qovery-engine
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "qovery-engine.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "qovery-engine.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+    {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        {{- include "qovery-engine.selectorLabels" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "qovery-engine.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: qovery-engine
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{ range $key, $value := .Values.environmentVariables -}}
+            - name: "{{ $key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: qovery-engine
+                  key: {{ $key }}
+            {{ end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        - name: docker-build
+          image: "{{ .Values.buildContainer.image }}:{{ .Values.buildContainer.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+            {{ range $key, $value := .Values.environmentVariables -}}
+            - name: "{{ $key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: qovery-engine
+                  key: {{ $key }}
+            {{ end }}
+          livenessProbe:
+            exec:
+              command: [ "docker", "info" ]
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: docker-graph-storage
+              mountPath: /var/lib/docker
+      dnsPolicy: "None"
+      dnsConfig:
+        nameservers:
+          - 1.1.1.1
+          - 8.8.8.8
+        searches:
+          - cluster.local
+          - svc.cluster.local
+        options:
+          - name: ndots
+            value: "3"
+          - name: edns0
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+      - name: docker-graph-storage
+        emptyDir: {}

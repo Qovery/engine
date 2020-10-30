@@ -1,0 +1,14 @@
+{{ if gt .Values.replicaCount 1.0 }}
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: qovery-engine
+  namespace: qovery
+  labels:
+    app: qovery-engine
+spec:
+  minAvailable: "50%"
+  selector:
+    matchLabels:
+      app: qovery-engine
+{{ end }}

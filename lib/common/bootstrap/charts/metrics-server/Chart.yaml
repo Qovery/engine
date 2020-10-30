@@ -1,0 +1,20 @@
+annotations:
+  category: Analytics
+apiVersion: v1
+appVersion: 0.3.7
+description: Metrics Server is a cluster-wide aggregator of resource usage data. Metrics
+  Server collects metrics from the Summary API, exposed by Kubelet on each node.
+engine: gotpl
+home: https://github.com/kubernetes-incubator/metrics-server
+icon: https://bitnami.com/assets/stacks/metrics-server/img/metrics-server-stack-110x117.png
+keywords:
+- metrics-server
+- cluster
+- metrics
+maintainers:
+- email: containers@bitnami.com
+  name: Bitnami
+name: metrics-server
+sources:
+- https://github.com/bitnami/bitnami-docker-metrics-server
+version: 4.3.1

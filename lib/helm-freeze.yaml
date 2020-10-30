@@ -1,0 +1,78 @@
+charts:
+  - name: cert-manager
+    version: v0.16.0
+    repo_name: jetstack
+  - name: external-dns
+    repo_name: bitnami
+    version: 3.4.0
+  - name: grafana
+    version: 5.3.4
+    no_sync: true
+    comment: |
+      Dashboard have been set into it as the chart suggest but it's a problem with helm-freeze
+      Need to look if we can move them out of this repo
+  - name: nginx-ingress
+    version: 1.35.0
+  - name: prometheus-operator
+    version: 8.15.12
+  - name: aws-node-termination-handler
+    repo_name: aws
+    dest: aws-bootstrap
+    version: 0.8.0
+  - name: aws-vpc-cni
+    repo_name: aws
+    dest: aws-bootstrap
+    version: 1.1.0
+  - name: aws-calico
+    repo_name: aws
+    dest: aws-bootstrap
+    version: 0.3.1
+  - name: metrics-server
+    repo_name: bitnami
+    version: 4.3.1
+  - name: loki
+    repo_name: loki
+    version: 0.31.1
+    comment: https://github.com/grafana/loki/tree/master/production/helm
+  - name: promtail
+    repo_name: loki
+    version: 0.24.0
+    comment: https://github.com/grafana/loki/tree/master/production/helm
+  - name: mongodb
+    repo_name: bitnami
+    version: 7.14.5
+    dest: services
+  - name: mysql
+    repo_name: bitnami
+    version: 6.14.2
+    dest: services
+  - name: postgresql
+    repo_name: bitnami
+    version: 8.9.8
+    dest: services
+  - name: redis
+    repo_name: bitnami
+    version: 10.6.17
+    dest: services
+
+repos:
+  - name: stable
+    url: https://kubernetes-charts.storage.googleapis.com
+  - name: jetstack
+    url: https://charts.jetstack.io
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+  - name: lifen
+    url: https://honestica.github.io/lifen-charts
+  - name: aws
+    url: https://aws.github.io/eks-charts
+  - name: loki
+    url: https://grafana.github.io/loki/charts
+
+destinations:
+  - name: default
+    path: common/bootstrap/charts
+  - name: aws-bootstrap
+    path: aws/bootstrap/charts
+  - name: services
+    path: aws/services
