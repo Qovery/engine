@@ -186,6 +186,11 @@ variable "documentdb_cidr_subnet" {
 
 # Elasticsearch
 
+variable "enable_elastic_search" {
+  default = false
+  type = bool
+  description = "option that create elasticsearch stack for logs, logs could use loki as well"
+}
 # Must start with a lowercase alphabet and be at least 3 and no more than 28 characters long.
 # Valid characters are a-z (lowercase letters), 0-9, and - (hyphen).
 variable "elasticsearch_q_logs_domain_name" {

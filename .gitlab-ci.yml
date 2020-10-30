@@ -8,6 +8,8 @@ services:
 
 stages:
   - tests
+  - all-test-remote-lib
+  - fast-test-remote-lib
   - build
   - release
   - set_ga
@@ -111,3 +113,19 @@ wip-deploy_engine:
   only:
     refs:
       - master
+
+all-test-from-github:
+  stage: all-test-remote-lib
+  retry: 0
+  script:
+    - ./helper.sh all-test-remote-lib $LIB_COMMIT_ID
+  rules:
+    - if: '$TEST_TYPE == "full"'
+
+fast-test-from-github:
+  stage: fast-test-remote-lib
+  retry: 0
+  script:
+    - ./helper.sh fast-test-remote-lib $LIB_COMMIT_ID
+  rules:
+    - if: '$TEST_TYPE == "fast"'

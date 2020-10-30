@@ -241,14 +241,15 @@ initChownData:
 
 
 # Administrator credentials when not using an existing secret (see below)
-adminUser: "admin"
-adminPassword: "password"
+adminUser: {{ grafana-admin-user }}
+adminPassword: {{ grafana-admin-password }}
 
 # Use an existing secret for the admin user.
 admin:
   existingSecret: ""
   userKey: admin-user
   passwordKey: admin-password
+
 
 ## Define command to be executed at startup by grafana container
 ## Needed if using `vault-env` to manage secrets (ref: https://banzaicloud.com/blog/inject-secrets-into-pods-vault/)
@@ -346,7 +347,7 @@ notifiers:
         disable_resolve_message: false
         settings:
           content: "{{ eks_cluster_id }}"
-          url: "https://discordapp.com/api/webhooks/758971034547388447/IScxN6NDHDsWZ0rIVBD3g4R-ecgmS_kzqvaxRmfEEAmYJ9_wFCQKXegTHSMNJ7ZLlRl6"
+          url: "{{ discord_api_key }}"
 #    - name: email-notifier
 #      type: email
 #      uid: email1
