@@ -1,7 +1,7 @@
 ARG BIN_DEST_FOLDER="/binaries"
 
 # docker build stage
-FROM rust:1.45-slim-buster as build
+FROM rust:1.47-slim-buster as build
 
 ARG BIN_DEST_FOLDER
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
