@@ -1,4 +1,4 @@
-FROM docker:19.03.12-dind
+FROM docker:19.03.13-dind
 
 ARG BIN_DEST_FOLDER="/binaries"
 ENV BIN_DIR=$BIN_DEST_FOLDER
