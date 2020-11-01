@@ -9,8 +9,6 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use evmap::{ReadHandle, WriteHandle};
-use qovery_engine::cloud_provider::service::ServiceError;
-use qovery_engine::error::ConfigurationError;
 
 use qovery_engine::models::{ProgressLevel, ProgressScope};
 use serde::{Deserialize, Serialize};

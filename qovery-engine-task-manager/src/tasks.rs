@@ -19,7 +19,6 @@ use qovery_engine::transaction::{RollbackError, TransactionResult};
 use crate::models::{Action, Request};
 use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task};
 use chrono::{DateTime, Utc};
-use qovery_engine::cmd::utilities::CmdError;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
