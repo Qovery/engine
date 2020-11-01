@@ -22,16 +22,16 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
+use qovery_engine::cmd;
 use qovery_engine::models::Context;
 use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::{CheckTask, Request, Response};
-use qovery_engine_task_manager::task_manager::{InternalTask, Status, Task, TaskManager};
+use qovery_engine_task_manager::task_manager::{InternalTask, PreRun, Status, Task, TaskManager};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::{EngineInitError, ErrorKind};
 use crate::TaskSelector::{Environment, Infrastructure};
-use qovery_engine::cmd;
 
 mod constants;
 mod custom_error;
@@ -92,7 +92,7 @@ fn subject_name(mode: &Mode, task_selector: &TaskSelector) -> String {
 
 /// check that the same task is not running on another instance of Q-engine.
 /// we use the task.group_id() to determine if it is the case
-fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> bool {
+fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> PreRun {
     let subject_name = subject(&mode, ENGINE_TASK_RUNNING_CHECK_SUBJECT);
     let sub = match nc.request_multi(subject_name.as_str(), task.group_id()) {
         Ok(sub) => sub,
@@ -103,7 +103,7 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> bool
                 task.id(),
                 task.group_id()
             );
-            return true;
+            return PreRun::NoAndQueueTail;
         }
     };
 
@@ -121,7 +121,7 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> bool
                 task.group_id(),
                 task.id()
             );
-            return true;
+            return PreRun::NoAndQueueTail;
         }
     }
 
@@ -130,7 +130,7 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> bool
         task.group_id(),
         task.id()
     );
-    false
+    PreRun::Yes
 }
 
 fn listen_for_task_running_check_events(
@@ -167,6 +167,13 @@ fn listen_for_task_running_check_events(
     Ok(sub)
 }
 
+/// check if the current task is the next one to run
+/// ask to other Engine if they have a task that must be launched sooner
+/// personal note: this is a way to lazily order tasks  
+fn is_the_next_task_to_run(task: &dyn Task, nc: Connection, mode: Mode) -> PreRun {
+    PreRun::Yes
+}
+
 fn listen_for_events(
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -200,7 +207,8 @@ fn listen_for_events(
                     let nc_1 = nc.clone();
                     let mode = mode.clone();
                     let pre_run_callback = Box::new(move |task: &dyn Task| {
-                        !is_the_same_task_running(task, nc_1.clone(), mode.clone())
+                        is_the_same_task_running(task, nc_1.clone(), mode.clone())
+                            && is_the_next_task_to_run(task, nc_1.clone(), mode.clone())
                     });
 
                     match serde_json::from_slice::<Request>(msg.data.as_slice()) {
@@ -281,6 +289,7 @@ fn watchdog(name: String, nc: Connection, sig_term_tx: Sender<bool>) {
         }
     });
 }
+
 pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
     match fs::read_dir(path) {
         Ok(out) => {

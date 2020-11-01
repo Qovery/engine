@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use qovery_engine::models::{ProgressLevel, ProgressScope};
 
 use crate::models::Request;
+use std::ops::Add;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -318,13 +319,23 @@ pub trait Task: Send {
     fn send_status(&self, sender: &Sender<Message>, status: Status);
     /// return true if you want to run it now, or false if you want to run this task later.
     /// this function is called just before `run()` is called.
-    fn pre_run(&self) -> bool;
+    fn pre_run(&self) -> PreRun;
     fn run(&self, sender: Sender<Message>);
 }
 
 pub struct InternalTask {
     pub task: Box<dyn Task>,
     pub status: Status,
+}
+
+pub enum PreRun {
+    Yes,
+    NoAndQueueTail,
+    NoAndRemove,
+}
+
+impl PreRun {
+    pub fn add(pr: PreRun) -> Self {}
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
