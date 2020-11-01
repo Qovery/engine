@@ -7,7 +7,7 @@ use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error, Read, Write};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, thread};
@@ -25,8 +25,12 @@ use serde::{Deserialize, Serialize};
 use qovery_engine::cmd;
 use qovery_engine::models::Context;
 use qovery_engine_shared::{subject, Mode};
-use qovery_engine_task_manager::models::{CheckTask, Request, Response};
-use qovery_engine_task_manager::task_manager::{InternalTask, PreRun, Status, Task, TaskManager};
+use qovery_engine_task_manager::models::{
+    CheckTaskOrderRequest, CheckTaskOrderResponse, CheckTaskRunningResponse, Request, Response,
+};
+use qovery_engine_task_manager::task_manager::{
+    InternalTask, PreRun, State, Status, Task, TaskManager,
+};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::constants::ASCII_BANNER;
@@ -39,6 +43,7 @@ mod custom_error;
 const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";
 const CORE_PING_SUBJECT: &str = "core.ping";
 const ENGINE_TASK_RUNNING_CHECK_SUBJECT: &str = "engine.task_running_check";
+const ENGINE_TASK_ORDER_EXECUTION_CHECK_SUBJECT: &str = "engine.task_order_execution_check";
 
 enum TaskSelector {
     Infrastructure(&'static str),
@@ -108,10 +113,11 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> PreR
     };
 
     for msg in sub.next() {
-        let is_task_running = match serde_json::from_slice::<CheckTask>(msg.data.as_slice()) {
-            Ok(check_task) => check_task.is_running,
-            Err(err) => panic!(err),
-        };
+        let is_task_running =
+            match serde_json::from_slice::<CheckTaskRunningResponse>(msg.data.as_slice()) {
+                Ok(check_task) => check_task.is_running,
+                Err(err) => panic!(err),
+            };
 
         msg.respond(Response::new(None).as_json_string());
 
@@ -130,6 +136,7 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> PreR
         task.group_id(),
         task.id()
     );
+
     PreRun::Yes
 }
 
@@ -145,21 +152,23 @@ fn listen_for_task_running_check_events(
     sub.clone().with_handler(move |msg| {
         let group_id = String::from_utf8(msg.data.clone()).unwrap();
 
-        let is_running = match task_manager
-            .lock()
-            .unwrap()
-            .get_task_status_by_group_id(&group_id)
-        {
-            Some(status) => match status {
-                Status::DeploymentInProgress { .. }
-                | Status::PauseInProgress { .. }
-                | Status::DeleteInProgress { .. } => true,
-                _ => false,
+        let is_running = match task_manager.lock() {
+            Ok(tm) => match tm.get_task_status_by_group_id(&group_id) {
+                Some(status) => match status.status {
+                    State::DeploymentInProgress
+                    | State::PauseInProgress
+                    | State::DeleteInProgress => true,
+                    _ => false,
+                },
+                None => false,
             },
-            None => false,
+            Err(_) => {
+                // if there is a lock error, we prefer to delay the deployment to not take any risk
+                true
+            }
         };
 
-        let _ = msg.respond(CheckTask::new(is_running).as_json_string());
+        let _ = msg.respond(CheckTaskRunningResponse::new(is_running).as_json_string());
 
         Ok(())
     });
@@ -169,9 +178,92 @@ fn listen_for_task_running_check_events(
 
 /// check if the current task is the next one to run
 /// ask to other Engine if they have a task that must be launched sooner
-/// personal note: this is a way to lazily order tasks  
+/// this is a way to lazily order tasks  
 fn is_the_next_task_to_run(task: &dyn Task, nc: Connection, mode: Mode) -> PreRun {
+    let subject_name = subject(&mode, ENGINE_TASK_ORDER_EXECUTION_CHECK_SUBJECT);
+    let request =
+        CheckTaskOrderRequest::new(task.group_id().to_string(), task.created_at().clone());
+    let sub = match nc.request_multi(subject_name.as_str(), request.as_json_string()) {
+        Ok(sub) => sub,
+        Err(_) => {
+            error!(
+                "can't check that the task '{}' with group id '{}' is the next task or not,\
+             then act like it was not the next task to prevent critical outage",
+                task.id(),
+                task.group_id()
+            );
+            return PreRun::NoAndQueueTail;
+        }
+    };
+
+    for msg in sub.next() {
+        let is_first_place =
+            match serde_json::from_slice::<CheckTaskOrderResponse>(msg.data.as_slice()) {
+                Ok(check_task) => check_task.is_first_place,
+                Err(err) => panic!(err),
+            };
+
+        msg.respond(Response::new(None).as_json_string());
+
+        if !is_first_place {
+            warn!(
+                "task with group id {} and id {} is not at the first place",
+                task.group_id(),
+                task.id()
+            );
+            return PreRun::NoAndQueueTail;
+        }
+    }
+
+    info!(
+        "task with group id {} and id {} is at the first place",
+        task.group_id(),
+        task.id()
+    );
+
     PreRun::Yes
+}
+
+fn listen_for_task_order_execution_check(
+    task_manager: Arc<Mutex<TaskManager>>,
+    nc: &Connection,
+    mode: &Mode,
+) -> Result<Subscription, Error> {
+    let subject_name = subject(&mode, ENGINE_TASK_ORDER_EXECUTION_CHECK_SUBJECT);
+    let sub = nc.subscribe(subject_name.as_str())?;
+    info!("subscribe to {}", subject_name.as_str());
+
+    sub.clone().with_handler(move |msg| {
+        let req = match serde_json::from_slice::<CheckTaskOrderRequest>(msg.data.as_slice()) {
+            Ok(req) => req,
+            Err(err) => {
+                error!("{:?}", err);
+                return Ok(());
+            }
+        };
+
+        let is_first_place = match task_manager.lock() {
+            Ok(tm) => {
+                // compare the date of the current task to other tasks with the same group id.
+                // if the current task has lower date than other tasks with same group id, it means that it is good to be run 👍
+                // if the current task has higher date than other tasks with same group id, it means that it is not good to be run 👎
+                match tm.get_task_status_by_group_id(&req.group_id) {
+                    Some(status) => &req.created_at < &status.context.task_created_at,
+                    None => true,
+                }
+            }
+            Err(_) => {
+                // if there is a lock error, we prefer to delay the deployment to not take any risk
+                false
+            }
+        };
+
+        let _ = msg.respond(CheckTaskOrderResponse::new(is_first_place).as_json_string());
+
+        Ok(())
+    });
+
+    Ok(sub)
 }
 
 fn listen_for_events(
@@ -196,7 +288,7 @@ fn listen_for_events(
     };
 
     thread::Builder::new()
-        .name(format!("nats-event-reciever-{}", ts_str))
+        .name(format!("nats-event-receiver-{}", ts_str))
         .spawn(move || {
             let nc = nc.clone();
 
@@ -206,9 +298,14 @@ fn listen_for_events(
 
                     let nc_1 = nc.clone();
                     let mode = mode.clone();
+
+                    // call before to run the current task to check that the same task is not running on another engine app
+                    // check is_the_same_task_running and is_the_next_task_to_run functions to know more about the details
                     let pre_run_callback = Box::new(move |task: &dyn Task| {
-                        is_the_same_task_running(task, nc_1.clone(), mode.clone())
-                            && is_the_next_task_to_run(task, nc_1.clone(), mode.clone())
+                        PreRun::add(
+                            is_the_same_task_running(task, nc_1.clone(), mode.clone()),
+                            is_the_next_task_to_run(task, nc_1.clone(), mode.clone()),
+                        )
                     });
 
                     match serde_json::from_slice::<Request>(msg.data.as_slice()) {
@@ -442,7 +539,7 @@ pub fn using_json_path_parameter(
     lib_root_dir: String,
     docker_host: Option<String>,
 ) -> Result<(), Error> {
-    let pre_run_callback = Box::new(|task: &dyn Task| true);
+    let pre_run_callback = Box::new(|task: &dyn Task| PreRun::Yes);
 
     // check if file json config file exist
     match check_if_file_exist(&deploy_from_file) {
@@ -580,6 +677,7 @@ pub fn using_nats_server(
         });
 
     let _ = listen_for_task_running_check_events(task_manager.clone(), &nc, &mode)?;
+    let _ = listen_for_task_order_execution_check(task_manager.clone(), &nc, &mode)?;
 
     let infrastructure_sub = listen_for_events(
         workspace_root_dir.clone(),

@@ -3,7 +3,6 @@
 
 use std::any::Any;
 use std::borrow::Borrow;
-use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -17,7 +16,9 @@ use qovery_engine::s3;
 use qovery_engine::transaction::{RollbackError, TransactionResult};
 
 use crate::models::{Action, Request};
-use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, Status, Task};
+use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task};
+use chrono::{DateTime, Utc};
+use std::path::Path;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -46,6 +47,7 @@ impl InfrastructureTask {
             },
             level,
             self.id().to_string(),
+            self.created_at().clone(),
         )
     }
 
@@ -60,6 +62,10 @@ impl InfrastructureTask {
 }
 
 impl Task for InfrastructureTask {
+    fn created_at(&self) -> &DateTime<Utc> {
+        &self.request.created_at
+    }
+
     fn group_id(&self) -> &str {
         self.request.organization_id.as_str()
     }
@@ -213,11 +219,16 @@ impl EnvironmentTask {
             },
             level,
             self.id().to_string(),
+            self.created_at().clone(),
         )
     }
 }
 
 impl Task for EnvironmentTask {
+    fn created_at(&self) -> &DateTime<Utc> {
+        &self.request.created_at
+    }
+
     fn group_id(&self) -> &str {
         self.group_id.as_str()
     }
@@ -375,7 +386,12 @@ where
     }
 
     fn action_context(&self, info: ProgressInfo) -> ActionContext {
-        ActionContext::new(info.scope, info.level, info.execution_id.to_string())
+        ActionContext::new(
+            info.scope,
+            info.level,
+            info.execution_id.to_string(),
+            self.task.created_at().clone(),
+        )
     }
 }
 
@@ -384,91 +400,101 @@ where
     T: Task + Clone + 'static,
 {
     fn start_in_progress(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::DeploymentInProgress {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::DeploymentInProgress,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
 
     fn pause_in_progress(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::PauseInProgress {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::PauseInProgress,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
 
     fn delete_in_progress(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::DeleteInProgress {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::DeleteInProgress,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
 
     fn error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::Error {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::Error,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
 
     fn started(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::Deployed {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::Deployed,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
 
     fn paused(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::Paused {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::Paused,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
 
     fn deleted(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::Deleted {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::Deleted,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
 
     fn start_error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::DeploymentError {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::DeploymentError,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
 
     fn pause_error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::PauseError {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::PauseError,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
 
     fn delete_error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::DeleteError {
-            message: info.message.clone(),
-            context: self.action_context(info),
-        });
+        let it = self.get_internal_task(Status::new(
+            State::DeleteError,
+            info.message.clone(),
+            self.action_context(info),
+        ));
 
         self.send(it);
     }
@@ -485,21 +511,21 @@ fn send_progress(
 ) {
     let status = if is_error {
         match request.action {
-            Action::Create => Status::DeploymentError { message, context },
-            Action::Pause => Status::PauseError { message, context },
-            Action::Delete => Status::DeleteError { message, context },
+            Action::Create => Status::new(State::DeploymentError, message, context),
+            Action::Pause => Status::new(State::PauseError, message, context),
+            Action::Delete => Status::new(State::DeleteError, message, context),
         }
     } else if is_final {
         match request.action {
-            Action::Create => Status::Deployed { message, context },
-            Action::Pause => Status::Paused { message, context },
-            Action::Delete => Status::Deleted { message, context },
+            Action::Create => Status::new(State::Deployed, message, context),
+            Action::Pause => Status::new(State::Paused, message, context),
+            Action::Delete => Status::new(State::Deleted, message, context),
         }
     } else {
         match request.action {
-            Action::Create => Status::DeploymentInProgress { message, context },
-            Action::Pause => Status::PauseInProgress { message, context },
-            Action::Delete => Status::DeleteInProgress { message, context },
+            Action::Create => Status::new(State::DeploymentInProgress, message, context),
+            Action::Pause => Status::new(State::PauseInProgress, message, context),
+            Action::Delete => Status::new(State::DeleteInProgress, message, context),
         }
     };
 
