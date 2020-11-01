@@ -147,15 +147,15 @@ For general help using Qovery Engine, please refer to [the official Qovery Engin
 Check out our [roadmap](https://roadmap.qovery.com) to get informed of the latest features released and the upcoming ones. You may also give us insights and vote for a specific feature.
 
 ## FAQ
-### Why Qovery exists?
-At Qovery, we believe that the Cloud musts be simple than what it is today. Our goal is to consolidate the Cloud ecosystem and makes it accessible to any developer, DevOps, company. Helping people to focus on what they build instead of wasting time doing plumbing stuff.
+### Why does Qovery exists?
+At Qovery, we believe that the Cloud must be simpler than what it is today. Our goal is to consolidate the Cloud ecosystem and makes it accessible to any developer, DevOps, and company. Qovery helps people to focus on what they build instead of wasting time doing plumbing stuff.
 
 ### What is the difference between `Qovery` and `Qovery Engine`?
 [Qovery](https://www.qovery.com) is a Container as a Service platform for developers. It combines the simplicity of Heroku, the reliability of AWS, and the power of Kubernetes. It makes the developer and DevOps life easier to deploy complex applications. 
 
 **Qovery Engine** is the Open Source abstraction layer used by Qovery to abstract the deployment of containers and databases on any Cloud provider.
 
-### Why the Qovery Engine is made in Rust?
+### Why is the Qovery Engine written in Rust?
 Rust is underrated in the Cloud industry. At Qovery, we believe that Rust can help in building resilient, efficient, and performant products. Qovery wants to contribute to make Rust being a significant player in the Cloud industry for the next 10 years.
 
 ### Why do you use Terraform, Helm and Kubectl binaries?
