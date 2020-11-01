@@ -3,27 +3,23 @@
 
 use std::any::Any;
 use std::borrow::Borrow;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Sender;
-
-use qovery_engine::cloud_provider::kubernetes::KubernetesError;
-use qovery_engine::cloud_provider::service::ServiceError;
-use qovery_engine::cloud_provider::CloudProviderError;
 use qovery_engine::engine::Engine;
-use qovery_engine::error::ConfigurationError;
+use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::models::{
     Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
 };
 use qovery_engine::s3;
-use qovery_engine::transaction::{CommitError, TransactionResult};
+use qovery_engine::transaction::{RollbackError, TransactionResult};
 
 use crate::models::{Action, Request};
 use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task};
 use chrono::{DateTime, Utc};
 use qovery_engine::cmd::utilities::CmdError;
-use std::path::Path;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -154,78 +150,32 @@ impl Task for InfrastructureTask {
             Action::Delete => tx.delete_kubernetes(kubernetes.borrow()),
         };
 
-        // TODO implement on_progress callback and send status update in real time
-
-        match tx.commit() {
-            TransactionResult::Ok => {
-                send_progress(
-                    self,
-                    &self.request,
-                    &sender,
-                    self.action_context(ProgressLevel::Info),
-                    None,
-                    false,
-                    true,
-                );
-            }
-            TransactionResult::Rollback(commit_err) => {
-                send_progress(
-                    self,
-                    &self.request,
-                    &sender,
-                    self.action_context(ProgressLevel::Warn),
-                    Some(format!("rollback error - commit error: {:?}", commit_err)),
-                    true,
-                    true,
-                );
-            }
-            TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
-                send_progress(
-                    self,
-                    &self.request,
-                    &sender,
-                    self.action_context(ProgressLevel::Error),
-                    Some(format!(
-                        "unrecoverable error - commit error: {:?} - rollback error: {:?}",
-                        commit_err, rollback_err
-                    )),
-                    true,
-                    true,
-                );
-            }
-        }
+        handle_transaction_result(
+            tx.commit(),
+            self,
+            &self.request,
+            self.action_context(ProgressLevel::Info),
+            &sender,
+        );
 
         match qovery_engine::fs::create_workspace_archive(
             engine.context().workspace_root_dir(),
             engine.context().execution_id(),
         ) {
-            Ok(file) => {
-                let secrets_key = self
-                    .request
+            Ok(file) => upload_s3_file(
+                self.request.organization_id.as_str(),
+                file.as_str(),
+                self.request
                     .cloud_provider
                     .terraform_state_credentials
                     .secret_access_key
-                    .clone();
-                let access_key = self
-                    .request
+                    .as_str(),
+                self.request
                     .cloud_provider
                     .terraform_state_credentials
                     .access_key_id
-                    .clone();
-                let organization_id = self.request.organization_id.clone();
-                let bucket_name = "qovery-terrafom-tfstates";
-                let s3_status = s3::push_object(
-                    &access_key,
-                    &secrets_key,
-                    bucket_name,
-                    format!("archives/{}/{}", organization_id, file).as_str(),
-                    file.as_str(),
-                );
-                match s3_status {
-                    Ok(_) => info!("Archive successfully pushed to Qovery S3"),
-                    Err(e) => warn!("While pushing archive to s3, {:}", e),
-                }
-            }
+                    .as_str(),
+            ),
             Err(err) => error!("{:?}", err),
         };
 
@@ -377,76 +327,32 @@ impl Task for EnvironmentTask {
             Action::Delete => tx.delete_environment(kubernetes.borrow(), &environment_action),
         };
 
-        match tx.commit() {
-            TransactionResult::Ok => {
-                send_progress(
-                    self,
-                    &self.request,
-                    &sender,
-                    self.action_context(ProgressLevel::Info),
-                    None,
-                    false,
-                    true,
-                );
-            }
-            TransactionResult::Rollback(commit_err) => {
-                send_progress(
-                    self,
-                    &self.request,
-                    &sender,
-                    self.action_context(ProgressLevel::Warn),
-                    Some(format!("rollback error - commit error: {:?}", commit_err)),
-                    true,
-                    true,
-                );
-            }
-            TransactionResult::UnrecoverableError(commit_err, rollback_err) => {
-                send_progress(
-                    self,
-                    &self.request,
-                    &sender,
-                    self.action_context(ProgressLevel::Error),
-                    Some(format!(
-                        "unrecoverable error - commit error: {:?} - rollback error: {:?}",
-                        commit_err, rollback_err
-                    )),
-                    true,
-                    true,
-                );
-            }
-        }
+        handle_transaction_result(
+            tx.commit(),
+            self,
+            &self.request,
+            self.action_context(ProgressLevel::Info),
+            &sender,
+        );
 
         match qovery_engine::fs::create_workspace_archive(
             engine.context().workspace_root_dir(),
             engine.context().execution_id(),
         ) {
-            Ok(file) => {
-                let secrets_key = self
-                    .request
+            Ok(file) => upload_s3_file(
+                self.request.organization_id.as_str(),
+                file.as_str(),
+                self.request
                     .cloud_provider
                     .terraform_state_credentials
                     .secret_access_key
-                    .clone();
-                let access_key = self
-                    .request
+                    .as_str(),
+                self.request
                     .cloud_provider
                     .terraform_state_credentials
                     .access_key_id
-                    .clone();
-                let organization_id = self.request.organization_id.clone();
-                let bucket_name = "qovery-terrafom-tfstates";
-                let s3_status = s3::push_object(
-                    &access_key,
-                    &secrets_key,
-                    bucket_name,
-                    format!("archives/{}/{}", organization_id, file).as_str(),
-                    file.as_str(),
-                );
-                match s3_status {
-                    Ok(_) => info!("Archive successfully pushed to Qovery S3"),
-                    Err(e) => warn!("While pushing archive to s3, {:}", e),
-                }
-            }
+                    .as_str(),
+            ),
             Err(err) => error!("{:?}", err),
         };
 
@@ -625,4 +531,159 @@ fn send_progress(
     };
 
     task.send_status(sender, status);
+}
+
+fn handle_transaction_result(
+    transaction_result: TransactionResult,
+    task: &dyn Task,
+    request: &Request,
+    mut action_context: ActionContext,
+    sender: &Sender<Message>,
+) {
+    match transaction_result {
+        TransactionResult::Ok => {
+            action_context.level = ProgressLevel::Info;
+
+            send_progress(task, request, sender, action_context, None, false, true);
+        }
+        TransactionResult::Rollback(engine_error) => {
+            action_context.level = ProgressLevel::Warn;
+
+            send_progress(
+                task,
+                request,
+                sender,
+                action_context,
+                Some(format_engine_error_output(engine_error, None)),
+                true,
+                false,
+            );
+        }
+        TransactionResult::UnrecoverableError(engine_error, rollback_err) => {
+            action_context.level = ProgressLevel::Error;
+
+            send_progress(
+                task,
+                request,
+                sender,
+                action_context,
+                Some(format_engine_error_output(engine_error, Some(rollback_err))),
+                true,
+                false,
+            );
+        }
+    }
+}
+
+fn format_engine_error_output(
+    engine_error: EngineError,
+    rollback_error: Option<RollbackError>,
+) -> String {
+    let scope = match engine_error.scope {
+        EngineErrorScope::Engine => String::from("Engine"),
+        EngineErrorScope::BuildPlatform(id, name) => {
+            format!("Build platform '{}' with id '{}'", name, id)
+        }
+        EngineErrorScope::ContainerRegistry(id, name) => {
+            format!("Container registry '{}' with id '{}'", name, id)
+        }
+        EngineErrorScope::CloudProvider(id, name) => {
+            format!("Cloud provider '{}' with id '{}'", name, id)
+        }
+        EngineErrorScope::Kubernetes(id, name) => format!("Kubernetes '{}' with id '{}'", name, id),
+        EngineErrorScope::DnsProvider(id, name) => {
+            format!("DNS provider '{}' with id '{}'", name, id)
+        }
+        EngineErrorScope::Environment(id, name) => {
+            format!("Environment '{}' with id '{}'", name, id)
+        }
+        EngineErrorScope::Database(id, type_, name) => {
+            format!("Database '{}' with id '{}'", name, id)
+        }
+        EngineErrorScope::Application(id, name) => {
+            format!("Application '{}' with id '{}'", name, id)
+        }
+        EngineErrorScope::Router(id, name) => format!("Router '{}' with id '{}'", name, id),
+        EngineErrorScope::ExternalService(id, name) => {
+            format!("External service '{}' with id '{}'", name, id)
+        }
+    };
+
+    let rollback_engine_error_message = match rollback_error {
+        Some(rollback_error) => match rollback_error {
+            RollbackError::CommitError(rollback_engine_error) => {
+                if let Some(message) = rollback_engine_error.message {
+                    Some(format!(
+                        "{} (scope: {:?} | cause: {:?})",
+                        message, rollback_engine_error.scope, rollback_engine_error.cause
+                    ))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        },
+        _ => None,
+    };
+
+    let rollback_message = match rollback_engine_error_message {
+        Some(error_message) => format!("Rollback error: {}", error_message),
+        None => String::new(),
+    };
+
+    match engine_error.cause {
+        EngineErrorCause::Internal => format!(
+            r#"
+        ~~ THIS IS AN INTERNAL ERROR, THE SUPPORT TEAM HAS BEEN ALERTED ~~
+
+        Execution ID: {}
+        Scope: {}
+        {}
+
+        Error: {}
+
+        You can join us on Discord (https://discord.qovery.com) to have more info and retry later the time that the support team handle the issue.
+        "#,
+            engine_error.execution_id,
+            scope,
+            rollback_message,
+            engine_error.message.unwrap_or("<no error message>".into())
+        ),
+        EngineErrorCause::User(hint) => format!(
+            r#"
+        Execution ID: {}
+        Scope: {}
+        {}
+
+        Error: {}
+
+        Hint: {}
+
+        Join us on Discord (https://discord.qovery.com) if you need support
+        "#,
+            engine_error.execution_id,
+            scope,
+            rollback_message,
+            engine_error.message.unwrap_or("<no error message>".into()),
+            hint
+        ),
+    }
+}
+
+fn upload_s3_file(
+    organization_id: &str,
+    file_path: &str,
+    secrets_access_key: &str,
+    access_key_id: &str,
+) {
+    match s3::push_object(
+        secrets_access_key,
+        access_key_id,
+        "qovery-terrafom-tfstates",
+        format!("archives/{}/{}", organization_id, file_path).as_str(),
+        file_path,
+    ) {
+        Ok(_) => info!("Archive successfully pushed to Qovery S3"),
+        Err(e) => warn!("Error while pushing archive to s3, {:?}", e),
+    };
 }

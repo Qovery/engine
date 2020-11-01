@@ -5,13 +5,6 @@ charts:
   - name: external-dns
     repo_name: bitnami
     version: 3.4.0
-  - name: fluent-bit
-    repo_name: lifen
-    version: 2.8.0
-    no_sync: true
-    comment: |
-      Fluent bit should be removed in favor to loki stack
-      Custom stuff have been made to be able to support ES managed by AWS
   - name: grafana
     version: 5.3.4
     no_sync: true
@@ -22,8 +15,6 @@ charts:
     version: 1.35.0
   - name: prometheus-operator
     version: 8.15.12
-  - name: elasticsearch-curator
-    version: 2.1.5
   - name: aws-node-termination-handler
     repo_name: aws
     dest: aws-bootstrap
@@ -47,6 +38,22 @@ charts:
     repo_name: loki
     version: 0.24.0
     comment: https://github.com/grafana/loki/tree/master/production/helm
+  - name: mongodb
+    repo_name: bitnami
+    version: 7.14.5
+    dest: services
+  - name: mysql
+    repo_name: bitnami
+    version: 6.14.2
+    dest: services
+  - name: postgresql
+    repo_name: bitnami
+    version: 8.9.8
+    dest: services
+  - name: redis
+    repo_name: bitnami
+    version: 10.6.17
+    dest: services
 
 repos:
   - name: stable
@@ -67,8 +74,5 @@ destinations:
     path: common/bootstrap/charts
   - name: aws-bootstrap
     path: aws/bootstrap/charts
-
-#charts:
-#  - name: aws-limits-exporter
-#    repo_name:
-#    version:
+  - name: services
+    path: aws/services

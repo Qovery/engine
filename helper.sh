@@ -204,6 +204,28 @@ function export_env() {
   done
 }
 
+function all-test-remote-lib(){
+  GITHUB_ENGINE_BRANCH_NAME=$1
+  sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
+  export LIB_ROOT_DIR=$(pwd)/lib
+  export RUST_LOG=info
+  nb_treads=8
+  export_env
+  cd qovery-engine
+  cargo test --color always -- --ignored --test-threads=$nb_treads
+}
+
+function fast-test-remote-lib(){
+  GITHUB_ENGINE_BRANCH_NAME=$1
+  sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
+  export LIB_ROOT_DIR=$(pwd)/lib
+  export RUST_LOG=info
+  nb_treads=8
+  export_env
+  cd qovery-engine
+  cargo test --color always -- --ignored --test-threads=$nb_treads
+}
+
 if [ $ARGS_NUM -eq 0 ] ; then
   print_help
 fi
@@ -251,6 +273,12 @@ all_tests)
   ;;
 all_tests-seq)
   all_tests 1
+  ;;
+fast-test-remote-lib)
+  fast-test-remote-lib $GITHUB_ENGINE_BRANCH_NAME
+  ;;
+all-test-remote-lib)
+  all-test-remote-lib $GITHUB_ENGINE_BRANCH_NAME
   ;;
 *)
   print_help
