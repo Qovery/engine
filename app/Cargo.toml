@@ -19,7 +19,7 @@ chrono = "0.4.13"
 ctrlc = { version = "3.1.4", features = ["termination"] } # sig term handler wrapper
 retry = "1.0.0"
 dirs = "3.0.1"
-openssl = { version = "0.10.30", features = ["vendored"] }
+openssl = { version = "0.10", features = ["vendored"] }
 
 # logger
 env_logger = "0.7.1"
