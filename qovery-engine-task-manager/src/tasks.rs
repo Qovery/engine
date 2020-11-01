@@ -1,13 +1,11 @@
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 
-use std::any::Any;
 use std::borrow::Borrow;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crossbeam_channel::Sender;
-use qovery_engine::engine::Engine;
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::models::{
     Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
@@ -18,7 +16,6 @@ use qovery_engine::transaction::{RollbackError, TransactionResult};
 use crate::models::{Action, Request};
 use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task};
 use chrono::{DateTime, Utc};
-use std::path::Path;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {

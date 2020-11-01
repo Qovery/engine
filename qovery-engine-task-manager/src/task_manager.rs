@@ -1,10 +1,7 @@
-use std::collections::HashMap;
-use std::iter::Map;
 use std::mem::ManuallyDrop;
-use std::ops::Add;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::thread;
-use std::thread::{current, sleep, spawn, JoinHandle};
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
@@ -12,7 +9,6 @@ use evmap::{ReadHandle, WriteHandle};
 use qovery_engine::models::{ProgressLevel, ProgressScope};
 use serde::{Deserialize, Serialize};
 
-use crate::models::Request;
 use chrono::{DateTime, Utc};
 
 pub type Id = String;

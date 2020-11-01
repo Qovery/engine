@@ -1,6 +1,3 @@
-use std::borrow::Borrow;
-use std::rc::Rc;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -14,11 +11,8 @@ use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
-use qovery_engine::dns_provider::Kind::CLOUDFLARE;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::{
-    Context, Environment, EnvironmentAction, Listener, Metadata, ProgressListener,
-};
+use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, Metadata};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
