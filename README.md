@@ -3,7 +3,7 @@
     <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_logo.svg" width="318px" alt="Qovery logo" />
   </a>
 </p>
-<h3 align="center">Deploy complex application, seamlessly</h3>
+<h3 align="center">Deploy any complex application, seamlessly</h3>
 <p align="center">Deploy your apps on any Cloud providers in just a few seconds ⚡</p>
 
 <p align="center">
@@ -16,7 +16,7 @@
     <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_kubernetes_cloudproviders.svg" height="450px" alt="Qovery stack on top of Kubernetes and Cloud providers" />
 </p>
 
-**Qovery Engine** is an open-source abstraction layer library that turns easy apps deployment on **AWS**, **GCP**, **Azure**, and other Cloud providers. The Qovery Engine is coded in [Rust](https://www.rust-lang.org) and takes advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), [Docker](https://www.docker.com) to manage resources.
+**Qovery Engine** is an open-source abstraction layer library that turns easy apps deployment on **AWS**, **GCP**, **Azure**, and other Cloud providers in just a few minutes. The Qovery Engine is written in [Rust](https://www.rust-lang.org) and takes advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), and [Docker](https://www.docker.com) to manage resources.
 
 - Website: https://www.qovery.com
 - Full doc: https://docs.qovery.com
