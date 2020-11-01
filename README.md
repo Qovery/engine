@@ -3,7 +3,7 @@
     <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_logo.svg" width="318px" alt="Qovery logo" />
   </a>
 </p>
-<h3 align="center">Deploy complex application, seamlessly</h3>
+<h3 align="center">Deploy any complex application, seamlessly</h3>
 <p align="center">Deploy your apps on any Cloud providers in just a few seconds ⚡</p>
 
 <p align="center">
@@ -16,7 +16,7 @@
     <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_kubernetes_cloudproviders.svg" height="450px" alt="Qovery stack on top of Kubernetes and Cloud providers" />
 </p>
 
-**Qovery Engine** is an open-source abstraction layer library that turns easy apps deployment on **AWS**, **GCP**, **Azure**, and other Cloud providers. The Qovery Engine is coded in [Rust](https://www.rust-lang.org) and takes advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), [Docker](https://www.docker.com) to manage resources.
+**Qovery Engine** is an open-source abstraction layer library that turns easy apps deployment on **AWS**, **GCP**, **Azure**, and other Cloud providers in just a few minutes. The Qovery Engine is written in [Rust](https://www.rust-lang.org) and takes advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), and [Docker](https://www.docker.com) to manage resources.
 
 - Website: https://www.qovery.com
 - Full doc: https://docs.qovery.com
@@ -27,11 +27,11 @@
 
 ## ✨ Features
 
-- **Zero infrastructure management:** Qovery Engine initialized, configure and manage your Cloud account for you.
-- **Multi Cloud:** Qovery Engine is built to work on AWS, GCP, Azure and any kind of Cloud provider.
+- **Zero infrastructure management:** Qovery Engine initialized, configure, and manage your Cloud account for you.
+- **Multi Cloud:** Qovery Engine is built to work on AWS, GCP, Azure and any Cloud provider.
 - **On top of Kubernetes:** Qovery Engine takes advantage of the power of Kubernetes at a higher level of abstraction.
 - **Terraform and Helm:** Qovery Engine uses Terraform and Helm files to manage the infrastructure and app deployment.
-- **Powerful CLI:** Use the provided Qovery Engine CLI to seamlessly deploy your app on your Cloud account.  
+- **Powerful CLI:** Use the provided Qovery Engine CLI to deploy your app on your Cloud account seamlessly.  
 - **Web Interface:** Qovery provides a web interface through [qovery.com](https://www.qovery.com)
 
 ### 🔌 Plugins
@@ -147,15 +147,15 @@ For general help using Qovery Engine, please refer to [the official Qovery Engin
 Check out our [roadmap](https://roadmap.qovery.com) to get informed of the latest features released and the upcoming ones. You may also give us insights and vote for a specific feature.
 
 ## FAQ
-### Why Qovery exists?
-At Qovery, we believe that the Cloud musts be simple than what it is today. Our goal is to consolidate the Cloud ecosystem and makes it accessible to any developer, DevOps, company. Helping people to focus on what they build instead of wasting time doing plumbing stuff.
+### Why does Qovery exists?
+At Qovery, we believe that the Cloud must be simpler than what it is today. Our goal is to consolidate the Cloud ecosystem and makes it accessible to any developer, DevOps, and company. Qovery helps people to focus on what they build instead of wasting time doing plumbing stuff.
 
 ### What is the difference between `Qovery` and `Qovery Engine`?
 [Qovery](https://www.qovery.com) is a Container as a Service platform for developers. It combines the simplicity of Heroku, the reliability of AWS, and the power of Kubernetes. It makes the developer and DevOps life easier to deploy complex applications. 
 
 **Qovery Engine** is the Open Source abstraction layer used by Qovery to abstract the deployment of containers and databases on any Cloud provider.
 
-### Why the Qovery Engine is made in Rust?
+### Why is the Qovery Engine written in Rust?
 Rust is underrated in the Cloud industry. At Qovery, we believe that Rust can help in building resilient, efficient, and performant products. Qovery wants to contribute to make Rust being a significant player in the Cloud industry for the next 10 years.
 
 ### Why do you use Terraform, Helm and Kubectl binaries?
