@@ -5,7 +5,8 @@ use std::rc::Rc;
 
 use digitalocean::DigitalOcean;
 
-use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
+use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
+use crate::error::EngineError;
 use crate::models::{Context, Listener, ProgressListener};
 
 pub struct DO {
@@ -49,7 +50,7 @@ impl CloudProvider for DO {
         unimplemented!()
     }
 
-    fn is_valid(&self) -> Result<(), CloudProviderError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         unimplemented!()
     }
 

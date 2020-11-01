@@ -1,15 +1,15 @@
 use chrono::Utc;
 
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::aws::kubernetes::{EKS, Options};
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
+use qovery_engine::cloud_provider::aws::kubernetes::{Options, EKS};
 use qovery_engine::cloud_provider::aws::router::Router;
+use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
-use qovery_engine::error::ConfigurationError;
+use qovery_engine::error::EngineError;
 use qovery_engine::models::{
     Action, Application, Context, Environment, EnvironmentAction, GitCredentials, Kind,
 };
@@ -83,10 +83,10 @@ fn main() {
     let session = match engine.session() {
         Ok(session) => session,
         Err(config_error) => match config_error {
-            ConfigurationError::BuildPlatform(_) => panic!("build platform config error"),
-            ConfigurationError::ContainerRegistry(_) => panic!("container registry config error"),
-            ConfigurationError::CloudProvider(_) => panic!("cloud provider config error"),
-            ConfigurationError::DnsProvider(_) => panic!("dns provider config error"),
+            EngineError::BuildPlatform(_) => panic!("build platform config error"),
+            EngineError::ContainerRegistry(_) => panic!("container registry config error"),
+            EngineError::CloudProvider(_) => panic!("cloud provider config error"),
+            EngineError::DnsProvider(_) => panic!("dns provider config error"),
         },
     };
 

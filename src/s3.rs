@@ -1,3 +1,11 @@
+use std::fmt::Display;
+use std::fs::{read_to_string, File};
+use std::io::{Error, ErrorKind, Read, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::str::FromStr;
+use std::{fs, io};
+
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
@@ -7,23 +15,20 @@ use rusoto_s3::{
     GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request, PutBucketVersioningRequest,
     S3Client, VersioningConfiguration, S3,
 };
-use std::fmt::Display;
-use std::fs::{read_to_string, File};
-use std::io::{Error, ErrorKind, Read, Write};
-use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
-use std::{fs, io};
+
+use crate::cmd::utilities::exec_with_envs;
+use crate::error::{SimpleError, SimpleErrorKind};
+use crate::runtime::async_run;
+
 pub const AWS_REGION_FOR_S3_US: &str = "ap-south-1";
 
-use crate::cmd::utilities::{exec_with_envs, CmdError};
-use crate::runtime::async_run;
-use std::str::FromStr;
+pub type FileContent = String;
 
 pub fn create_bucket(
     access_key_id: &str,
     secret_access_key: &str,
     bucket_name: &str,
-) -> Result<(), CmdError> {
+) -> Result<(), SimpleError> {
     exec_with_envs(
         "aws",
         vec!["s3api", "create-bucket", "--bucket", &bucket_name],
@@ -34,15 +39,13 @@ pub fn create_bucket(
     )
 }
 
-pub type FileContent = String;
-
 pub fn get_object(
     access_key_id: &str,
     secret_access_key: &str,
     region: &Region,
     bucket_name: &str,
     object_key: &str,
-) -> Result<FileContent, Error> {
+) -> Result<FileContent, SimpleError> {
     let credentials = StaticProvider::new(
         access_key_id.to_string(),
         secret_access_key.to_string(),
@@ -59,12 +62,12 @@ pub fn get_object(
     let get_object_output = s3_client.get_object(or);
     let r = async_run(get_object_output);
 
-    let _err = Error::new(
-        ErrorKind::Other,
-        format!(
+    let _err = SimpleError::new(
+        SimpleErrorKind::Other,
+        Some(format!(
             "something goes wrong while getting object {} in the S3 bucket {}",
             object_key, bucket_name
-        ),
+        )),
     );
 
     match r {
@@ -90,9 +93,9 @@ pub fn get_object(
                 RusotoError::Service(s) => match s {
                     GetObjectError::NoSuchKey(x) => {
                         info!("no such key '{}': {}", object_key, x.as_str());
-                        Err(Error::new(
-                            ErrorKind::NotFound,
-                            format!("no such key '{}': {}", object_key, x.as_str()),
+                        Err(SimpleError::new(
+                            SimpleErrorKind::Other,
+                            Some(format!("no such key '{}': {}", object_key, x.as_str())),
                         ))
                     }
                 },
@@ -107,7 +110,10 @@ pub fn get_object(
                     match r_from_aws_cli {
                         Ok(..) => Ok(r_from_aws_cli.unwrap()),
                         Err(err) => {
-                            error!("{}", err);
+                            if let Some(message) = err.message {
+                                error!("{}", message);
+                            }
+
                             Err(_err)
                         }
                     }
@@ -125,21 +131,19 @@ fn get_object_via_aws_cli(
     secret_access_key: &str,
     bucket_name: &str,
     object_key: &str,
-) -> Result<FileContent, Error> {
+) -> Result<FileContent, SimpleError> {
     let s3_url = format!("s3://{}/{}", bucket_name, object_key);
     let local_path = format!("/tmp/{}", object_key);
-    let r = exec_with_envs(
+
+    exec_with_envs(
         "aws",
         vec!["s3", "cp", &s3_url, &local_path],
         vec![
             ("AWS_ACCESS_KEY_ID", &access_key_id),
             ("AWS_SECRET_ACCESS_KEY", &secret_access_key),
         ],
-    );
-    match r {
-        Err(e) => return Err(Error::new(ErrorKind::Other, e)),
-        _ => {}
-    };
+    )?;
+
     let s = read_to_string(&local_path)?;
     Ok(s)
 }
@@ -151,7 +155,7 @@ pub fn get_kubernetes_config_file<P>(
     kubernetes_config_bucket_name: &str,
     kubernetes_config_object_key: &str,
     file_path: P,
-) -> Result<File, Error>
+) -> Result<File, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -183,9 +187,9 @@ where
     let file_content = match file_content_result {
         Ok(file_content) => file_content,
         Err(_) => {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                "file content is empty (retry failed multiple times) - which is not the expected content - what's wrong?",
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some("file content is empty (retry failed multiple times) - which is not the expected content - what's wrong?"),
             ));
         }
     };
@@ -204,7 +208,7 @@ pub fn list_objects_in(
     access_key_id: &str,
     secret_access_key: &str,
     bucket_name: &str,
-) -> Result<ListObjectsV2Output, Error> {
+) -> Result<ListObjectsV2Output, SimpleError> {
     let credentials = StaticProvider::new(
         access_key_id.to_string(),
         secret_access_key.to_string(),
@@ -213,13 +217,19 @@ pub fn list_objects_in(
     );
     let client = Client::new_with(credentials, HttpClient::new().unwrap());
     let s3_client = S3Client::new_with_client(client, get_default_region_for_us());
+
     let mut list_request = ListObjectsV2Request::default();
     list_request.bucket = bucket_name.to_string();
+
     let lis_object = s3_client.list_objects_v2(list_request);
     let objects_in = async_run(lis_object);
+
     match objects_in {
         Ok(objects) => Ok(objects),
-        Err(err) => Err(Error::new(ErrorKind::Other, err)),
+        Err(err) => Err(SimpleError::new(
+            SimpleErrorKind::Other,
+            Some(format!("error listing objects from s3 {:?}", err)),
+        )),
     }
 }
 
@@ -228,7 +238,7 @@ pub fn delete_bucket(
     access_key_id: &str,
     secret_access_key: &str,
     bucket_name: &str,
-) -> Result<(), CmdError> {
+) -> Result<(), SimpleError> {
     info!("Deleting S3 Bucket {}", bucket_name.clone());
     match exec_with_envs(
         "aws",
@@ -249,7 +259,10 @@ pub fn delete_bucket(
             return Ok(o);
         }
         Err(e) => {
-            error!("while deleting bucket {}", e);
+            error!(
+                "while deleting bucket {}",
+                e.message.as_ref().unwrap_or(&"".into())
+            );
             return Err(e);
         }
     }
@@ -265,7 +278,7 @@ pub fn push_object(
     bucket_name: &str,
     object_key: &str,
     local_file_path: &str,
-) -> Result<(), CmdError> {
+) -> Result<(), SimpleError> {
     info!(
         "Pushing object {} to bucket {}",
         local_file_path.clone(),
@@ -289,7 +302,10 @@ pub fn push_object(
             return Ok(o);
         }
         Err(e) => {
-            error!("While uploading object {}", e);
+            error!(
+                "While uploading object {}",
+                e.message.as_ref().unwrap_or(&"".into())
+            );
             return Err(e);
         }
     }

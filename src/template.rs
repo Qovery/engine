@@ -5,6 +5,7 @@ use std::io::{Error, ErrorKind, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
+use crate::error::{SimpleError, SimpleErrorKind};
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
@@ -13,7 +14,7 @@ pub fn generate_and_copy_all_files_into_dir<S, P>(
     from_dir: S,
     to_dir: P,
     context: &Context,
-) -> Result<(), Error>
+) -> Result<(), SimpleError>
 where
     S: AsRef<Path> + Copy,
     P: AsRef<Path> + Copy,
@@ -49,7 +50,7 @@ where
             };
 
             error!("{}", error_msg.as_str());
-            return Err(Error::new(ErrorKind::InvalidData, error_msg));
+            return Err(SimpleError::new(SimpleErrorKind::Other, Some(error_msg)));
         }
     };
 
@@ -61,12 +62,15 @@ where
     Ok(())
 }
 
-pub fn copy_non_template_files<S, P>(from: S, to: P) -> Result<(), Error>
+pub fn copy_non_template_files<S, P>(from: S, to: P) -> Result<(), SimpleError>
 where
     S: AsRef<Path>,
     P: AsRef<Path>,
 {
-    crate::fs::copy_files(from.as_ref(), to.as_ref(), true)
+    match crate::fs::copy_files(from.as_ref(), to.as_ref(), true) {
+        Err(err) => Err(SimpleError::from(err)),
+        Ok(x) => Ok(x),
+    }
 }
 
 pub fn generate_j2_template_files<P>(
@@ -117,7 +121,7 @@ where
 pub fn write_rendered_templates(
     rendered_templates: &[RenderedTemplate],
     into: &Path,
-) -> Result<(), Error> {
+) -> Result<(), SimpleError> {
     for rt in rendered_templates {
         let dest = format!("{}/{}", into.to_str().unwrap(), rt.path_and_file_name());
 

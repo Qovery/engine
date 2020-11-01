@@ -6,10 +6,13 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
     Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause,
-    Service, ServiceError, ServiceType, StatefulService, Upgrade,
+    Service, ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::error::{
+    from_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+};
 use crate::models::Context;
 
 pub struct PostgreSQL {
@@ -69,18 +72,21 @@ impl PostgreSQL {
 
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
+
         // FIXME: is there an other way than downcast a pointer?
         let cp = kubernetes
             .cloud_provider()
             .as_any()
             .downcast_ref::<AWS>()
             .expect("Could not downcast kubernetes.cloud_provider() to AWS");
+
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kubernetes_config_file_path = utilities::get_kubernetes_config_path(
             self.workspace_directory().as_str(),
             kubernetes,
             environment,
         );
+
         match kubernetes_config_file_path {
             Ok(kube_config) => {
                 context.insert("kubeconfig_path", &kube_config.as_str());
@@ -92,8 +98,12 @@ impl PostgreSQL {
 
                 utilities::create_namespace(&environment.namespace(), kube_config.as_str(), aws);
             }
-            Err(e) => error!("Failed to generate the kubernetes config file path: {}", e),
+            Err(e) => error!(
+                "Failed to generate the kubernetes config file path: {:?}",
+                e
+            ),
         }
+
         context.insert("namespace", environment.namespace());
 
         context.insert("aws_access_key", &cp.access_key_id);
@@ -118,7 +128,7 @@ impl PostgreSQL {
         context
     }
 
-    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), ServiceError> {
+    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), EngineError> {
         let workspace_dir = self.workspace_directory();
 
         match target {
@@ -130,39 +140,58 @@ impl PostgreSQL {
 
                 let context = self.tera_context(*kubernetes, *environment);
 
-                crate::template::generate_and_copy_all_files_into_dir(
-                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
-                    &workspace_dir,
-                    &context,
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                        &workspace_dir,
+                        &context,
+                    ),
                 )?;
-                crate::template::generate_and_copy_all_files_into_dir(
-                    format!("{}/aws/services/postgresql", self.context.lib_root_dir()).as_str(),
-                    workspace_dir.as_str(),
-                    &context,
+
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        format!("{}/aws/services/postgresql", self.context.lib_root_dir()).as_str(),
+                        workspace_dir.as_str(),
+                        &context,
+                    ),
                 )?;
-                crate::template::generate_and_copy_all_files_into_dir(
-                    format!(
-                        "{}/aws/charts/external-name-svc",
-                        self.context.lib_root_dir()
-                    )
-                    .as_str(),
-                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
-                    &context,
+
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        format!(
+                            "{}/aws/charts/external-name-svc",
+                            self.context.lib_root_dir()
+                        )
+                        .as_str(),
+                        format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
+                        &context,
+                    ),
                 )?;
-                crate::template::generate_and_copy_all_files_into_dir(
-                    format!(
-                        "{}/aws/charts/external-name-svc",
-                        self.context.lib_root_dir()
-                    )
-                    .as_str(),
-                    workspace_dir.as_str(),
-                    &context,
+
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        format!(
+                            "{}/aws/charts/external-name-svc",
+                            self.context.lib_root_dir()
+                        )
+                        .as_str(),
+                        workspace_dir.as_str(),
+                        &context,
+                    ),
                 )?;
 
                 match crate::cmd::terraform::terraform_exec_with_init_validate_destroy(
                     workspace_dir.as_str(),
                 ) {
-                    Ok(o) => {
+                    Ok(_) => {
                         info!("Deleting secrets containing tfstates");
                         utilities::delete_terraform_tfstate_secret(
                             *kubernetes,
@@ -170,8 +199,16 @@ impl PostgreSQL {
                             self.workspace_directory().as_str(),
                         );
                     }
-                    //TODO: find a way to raise the error
-                    Err(e) => error!("Error while destroying infrastructure {}", e),
+                    Err(e) => {
+                        let message = format!(
+                            "Error while destroying infrastructure {}",
+                            e.message.unwrap_or("".into())
+                        );
+
+                        error!("{}", message);
+
+                        return Err(self.engine_error(EngineErrorCause::Internal, message));
+                    }
                 }
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
@@ -179,20 +216,28 @@ impl PostgreSQL {
                 let selector = format!("app={}", self.name());
 
                 if is_error {
-                    let _ = common::get_stateless_resource_information(
-                        *kubernetes,
-                        *environment,
-                        workspace_dir.as_str(),
-                        selector.as_str(),
+                    let _ = from_simple_error_to_engine_error(
+                        self.engine_error_scope(),
+                        self.context.execution_id(),
+                        common::get_stateless_resource_information(
+                            *kubernetes,
+                            *environment,
+                            workspace_dir.as_str(),
+                            selector.as_str(),
+                        ),
                     )?;
                 }
 
                 // clean the resource
-                let _ = common::do_stateless_service_cleanup(
-                    *kubernetes,
-                    *environment,
-                    workspace_dir.as_str(),
-                    helm_release_name.as_str(),
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    common::do_stateless_service_cleanup(
+                        *kubernetes,
+                        *environment,
+                        workspace_dir.as_str(),
+                        helm_release_name.as_str(),
+                    ),
                 )?;
             }
         }
@@ -248,7 +293,7 @@ impl Service for PostgreSQL {
 impl Database for PostgreSQL {}
 
 impl Create for PostgreSQL {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.PostgreSQL.on_create() called for {}", self.name());
 
         let workspace_dir = self.workspace_directory();
@@ -261,29 +306,47 @@ impl Create for PostgreSQL {
 
                 let workspace_dir = self.workspace_directory();
 
-                crate::template::generate_and_copy_all_files_into_dir(
-                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
-                    &workspace_dir,
-                    &context,
-                )?;
-                crate::template::generate_and_copy_all_files_into_dir(
-                    format!("{}/aws/services/postgresql", self.context.lib_root_dir()).as_str(),
-                    workspace_dir.as_str(),
-                    &context,
-                )?;
-                crate::template::generate_and_copy_all_files_into_dir(
-                    format!(
-                        "{}/aws/charts/external-name-svc",
-                        self.context.lib_root_dir()
-                    )
-                    .as_str(),
-                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
-                    &context,
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                        &workspace_dir,
+                        &context,
+                    ),
                 )?;
 
-                crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
-                    workspace_dir.as_str(),
-                    false,
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        format!("{}/aws/services/postgresql", self.context.lib_root_dir()).as_str(),
+                        workspace_dir.as_str(),
+                        &context,
+                    ),
+                )?;
+
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        format!(
+                            "{}/aws/charts/external-name-svc",
+                            self.context.lib_root_dir()
+                        )
+                        .as_str(),
+                        format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
+                        &context,
+                    ),
+                )?;
+
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+                        workspace_dir.as_str(),
+                        false,
+                    ),
                 )?;
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
@@ -298,22 +361,30 @@ impl Create for PostgreSQL {
                     .downcast_ref::<AWS>()
                     .unwrap();
 
-                let kubernetes_config_file_path = common::kubernetes_config_path(
-                    workspace_dir.as_str(),
-                    environment.organization_id.as_str(),
-                    kubernetes.id(),
-                    aws.access_key_id.as_str(),
-                    aws.secret_access_key.as_str(),
-                    kubernetes.region(),
+                let kubernetes_config_file_path = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    common::kubernetes_config_path(
+                        workspace_dir.as_str(),
+                        environment.organization_id.as_str(),
+                        kubernetes.id(),
+                        aws.access_key_id.as_str(),
+                        aws.secret_access_key.as_str(),
+                        kubernetes.region(),
+                    ),
                 )?;
 
                 let from_dir =
                     format!("{}/common/services/postgresql", self.context.lib_root_dir());
 
-                let _ = crate::template::generate_and_copy_all_files_into_dir(
-                    from_dir.as_str(),
-                    workspace_dir.as_str(),
-                    &context,
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        from_dir.as_str(),
+                        workspace_dir.as_str(),
+                        &context,
+                    ),
                 )?;
 
                 // render templates
@@ -324,19 +395,26 @@ impl Create for PostgreSQL {
                 ];
 
                 // do exec helm upgrade and return the last deployment status
-                let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
-                    kubernetes_config_file_path.as_str(),
-                    environment.namespace(),
-                    helm_release_name.as_str(),
-                    workspace_dir.as_str(),
-                    aws_credentials_envs.clone(),
+                let helm_history_row = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::cmd::helm::helm_exec_with_upgrade_history(
+                        kubernetes_config_file_path.as_str(),
+                        environment.namespace(),
+                        helm_release_name.as_str(),
+                        workspace_dir.as_str(),
+                        aws_credentials_envs.clone(),
+                    ),
                 )?;
 
                 // check deployment status
                 if helm_history_row.is_none()
                     || !helm_history_row.unwrap().is_successfully_deployed()
                 {
-                    return Err(ServiceError::OnCreateFailed);
+                    return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        "PostgreSQL database fails to be deployed (before start)".into(),
+                    ));
                 }
 
                 // check app status
@@ -349,7 +427,16 @@ impl Create for PostgreSQL {
                     aws_credentials_envs,
                 ) {
                     Ok(Some(true)) => {}
-                    _ => return Err(ServiceError::OnCreateFailed),
+                    _ => {
+                        return Err(self.engine_error(
+                            EngineErrorCause::Internal,
+                            format!(
+                                "PostgreSQL database {} with id {} failed to start after several retries",
+                                self.name(),
+                                self.id()
+                            ),
+                        ));
+                    }
                 }
             }
         }
@@ -357,11 +444,11 @@ impl Create for PostgreSQL {
         Ok(())
     }
 
-    fn on_create_check(&self) -> Result<(), ServiceError> {
+    fn on_create_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!(
             "AWS.PostgreSQL.on_create_error() called for {}",
             self.name()
@@ -372,7 +459,7 @@ impl Create for PostgreSQL {
 }
 
 impl Pause for PostgreSQL {
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.PostgreSQL.on_pause() called for {}", self.name());
 
         // TODO how to pause production? - the goal is to reduce cost, but it is possible to pause a production env?
@@ -381,11 +468,11 @@ impl Pause for PostgreSQL {
         Ok(())
     }
 
-    fn on_pause_check(&self) -> Result<(), ServiceError> {
+    fn on_pause_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.PostgreSQL.on_pause_error() called for {}", self.name());
 
         // TODO what to do if there is a pause error?
@@ -395,16 +482,16 @@ impl Pause for PostgreSQL {
 }
 
 impl Delete for PostgreSQL {
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.PostgreSQL.on_delete() called for {}", self.name());
         self.delete(target, false)
     }
 
-    fn on_delete_check(&self) -> Result<(), ServiceError> {
+    fn on_delete_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!(
             "AWS.PostgreSQL.on_create_error() called for {}",
             self.name()
@@ -414,69 +501,69 @@ impl Delete for PostgreSQL {
 }
 
 impl crate::cloud_provider::service::Clone for PostgreSQL {
-    fn on_clone(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_clone(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_clone_check(&self) -> Result<(), ServiceError> {
+    fn on_clone_check(&self) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_clone_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_clone_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 }
 
 impl Upgrade for PostgreSQL {
-    fn on_upgrade(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_upgrade(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_upgrade_check(&self) -> Result<(), ServiceError> {
+    fn on_upgrade_check(&self) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_upgrade_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_upgrade_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 }
 
 impl Downgrade for PostgreSQL {
-    fn on_downgrade(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_downgrade(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_downgrade_check(&self) -> Result<(), ServiceError> {
+    fn on_downgrade_check(&self) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_downgrade_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_downgrade_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 }
 
 impl Backup for PostgreSQL {
-    fn on_backup(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_backup(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_backup_check(&self) -> Result<(), ServiceError> {
+    fn on_backup_check(&self) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_backup_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_backup_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_restore(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_restore(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_restore_check(&self) -> Result<(), ServiceError> {
+    fn on_restore_check(&self) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
+    fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 }

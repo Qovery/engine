@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
+use crate::error::{SimpleError, SimpleErrorKind};
 
 fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
 where
@@ -53,7 +54,7 @@ where
     cmd
 }
 
-pub fn exec<P>(binary: P, args: Vec<&str>) -> Result<(), CmdError>
+pub fn exec<P>(binary: P, args: Vec<&str>) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -62,21 +63,24 @@ where
 
     let exit_status = match command(binary, args, None).spawn().unwrap().wait() {
         Ok(x) => x,
-        Err(err) => return Err(CmdError::Io(err)),
+        Err(err) => return Err(SimpleError::from(err)),
     };
 
     if exit_status.success() {
         return Ok(());
     }
 
-    Err(CmdError::Exec(exit_status))
+    Err(SimpleError::new::<&str>(
+        SimpleErrorKind::Command(exit_status),
+        None,
+    ))
 }
 
 pub fn exec_with_envs<P>(
     binary: P,
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<(), CmdError>
+) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -85,14 +89,17 @@ where
 
     let exit_status = match command(binary, args, Some(envs)).spawn().unwrap().wait() {
         Ok(x) => x,
-        Err(err) => return Err(CmdError::Io(err)),
+        Err(err) => return Err(SimpleError::from(err)),
     };
 
     if exit_status.success() {
         return Ok(());
     }
 
-    Err(CmdError::Exec(exit_status))
+    Err(SimpleError::new::<String>(
+        SimpleErrorKind::Command(exit_status),
+        None,
+    ))
 }
 
 fn _with_output<F, X>(mut child: Child, mut stdout_output: F, mut stderr_output: X) -> Child
@@ -118,7 +125,7 @@ pub fn exec_with_output<P, F, X>(
     args: Vec<&str>,
     stdout_output: F,
     stderr_output: X,
-) -> Result<(), CmdError>
+) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
     F: FnMut(Result<String, Error>),
@@ -135,14 +142,17 @@ where
 
     let exit_status = match child.wait() {
         Ok(x) => x,
-        Err(err) => return Err(CmdError::Io(err)),
+        Err(err) => return Err(SimpleError::from(err)),
     };
 
     if exit_status.success() {
         return Ok(());
     }
 
-    Err(CmdError::Exec(exit_status))
+    Err(SimpleError::new(
+        SimpleErrorKind::Command(exit_status),
+        Some(command_string),
+    ))
 }
 
 pub fn exec_with_envs_and_output<P, F, X>(
@@ -151,7 +161,7 @@ pub fn exec_with_envs_and_output<P, F, X>(
     envs: Vec<(&str, &str)>,
     stdout_output: F,
     stderr_output: X,
-) -> Result<(), CmdError>
+) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
     F: FnMut(Result<String, Error>),
@@ -168,14 +178,17 @@ where
 
     let exit_status = match child.wait() {
         Ok(x) => x,
-        Err(err) => return Err(CmdError::Io(err)),
+        Err(err) => return Err(SimpleError::from(err)),
     };
 
     if exit_status.success() {
         return Ok(());
     }
 
-    Err(CmdError::Exec(exit_status))
+    Err(SimpleError::new(
+        SimpleErrorKind::Command(exit_status),
+        Some(command_string),
+    ))
 }
 
 // return the output of "binary_name" --version
@@ -237,36 +250,4 @@ where
         binary.as_ref().to_str().unwrap(),
         args.join(" ")
     )
-}
-
-#[derive(Debug)]
-pub enum CmdError {
-    Exec(ExitStatus),
-    Io(Error),
-    Unexpected(String),
-}
-
-impl Display for CmdError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            CmdError::Exec(status) => format!("CmdError: Exec({})", status),
-            CmdError::Io(io) => format!("CmdError: IO: {}", io),
-            CmdError::Unexpected(s) => format!("CmdError: Unexpected: {}", s),
-        };
-        write!(f, "{}", s)
-    }
-}
-
-impl std::error::Error for CmdError {}
-
-impl From<std::io::Error> for CmdError {
-    fn from(err: Error) -> Self {
-        CmdError::Io(err)
-    }
-}
-
-impl From<CmdError> for std::io::Error {
-    fn from(e: CmdError) -> Self {
-        std::io::Error::new(std::io::ErrorKind::Other, e)
-    }
 }

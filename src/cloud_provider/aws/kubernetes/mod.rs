@@ -16,20 +16,20 @@ use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{
-    check_kubernetes_has_enough_resources_to_deploy_environment, Kind, Kubernetes, KubernetesError,
-    KubernetesNode, Resources,
+    check_kubernetes_has_enough_resources_to_deploy_environment, Kind, Kubernetes, KubernetesNode,
+    Resources,
 };
 use crate::cloud_provider::service::{Service, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
 use crate::cmd::helm::helm_uninstall_list;
 use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
-use crate::cmd::utilities::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::cloudflare::Cloudflare;
 use crate::dns_provider::DnsProvider;
 use crate::dns_provider::Kind::CLOUDFLARE;
+use crate::error::{from_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
@@ -348,7 +348,7 @@ impl<'a> Kubernetes for EKS<'a> {
         self.dns_provider
     }
 
-    fn is_valid(&self) -> Result<(), KubernetesError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
@@ -360,20 +360,24 @@ impl<'a> Kubernetes for EKS<'a> {
         &self.listeners
     }
 
-    fn resources(&self, environment: &Environment) -> Result<Resources, KubernetesError> {
+    fn resources(&self, environment: &Environment) -> Result<Resources, EngineError> {
         let aws = self
             .cloud_provider()
             .as_any()
             .downcast_ref::<AWS>()
             .unwrap();
 
-        let kubernetes_config_file_path = common::kubernetes_config_path(
-            self.context.workspace_root_dir(),
-            environment.organization_id.as_str(),
-            &self.id,
-            aws.access_key_id.as_str(),
-            aws.secret_access_key.as_str(),
-            self.region(),
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            common::kubernetes_config_path(
+                self.context.workspace_root_dir(),
+                environment.organization_id.as_str(),
+                &self.id,
+                aws.access_key_id.as_str(),
+                aws.secret_access_key.as_str(),
+                self.region(),
+            ),
         )?;
 
         let aws_credentials_envs = vec![
@@ -381,8 +385,11 @@ impl<'a> Kubernetes for EKS<'a> {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let nodes =
-            cmd::kubectl::kubectl_exec_get_node(kubernetes_config_file_path, aws_credentials_envs)?;
+        let nodes = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            cmd::kubectl::kubectl_exec_get_node(kubernetes_config_file_path, aws_credentials_envs),
+        )?;
 
         let mut resources = Resources {
             free_cpu: 0.0,
@@ -413,7 +420,7 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(resources)
     }
 
-    fn on_create(&self) -> Result<(), KubernetesError> {
+    fn on_create(&self) -> Result<(), EngineError> {
         info!("EKS.on_create() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
@@ -439,57 +446,78 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context();
-        let _ = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            &context,
+
+        let _ = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
         )?;
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = crate::template::copy_non_template_files(
-            format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-            common_charts_temp_dir.as_str(),
+        let _ = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
         )?;
 
-        let _ = crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
-            temp_dir.as_str(),
-            true,
+        let _ = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+                temp_dir.as_str(),
+                true,
+            ),
         )?;
 
         Ok(())
     }
 
-    fn on_create_error(&self) -> Result<(), KubernetesError> {
+    fn on_create_error(&self) -> Result<(), EngineError> {
         warn!("EKS.on_create_error() called for {}", self.name());
         // FIXME
-        Err(KubernetesError::Error)
+        Err(self.engine_error(
+            EngineErrorCause::Internal,
+            format!(
+                "{} Kubernetes cluster rollback not implemented",
+                self.name()
+            ),
+        ))
     }
 
-    fn on_upgrade(&self) -> Result<(), KubernetesError> {
+    fn on_upgrade(&self) -> Result<(), EngineError> {
         info!("EKS.on_upgrade() called for {}", self.name());
         unimplemented!()
     }
 
-    fn on_upgrade_error(&self) -> Result<(), KubernetesError> {
+    fn on_upgrade_error(&self) -> Result<(), EngineError> {
         warn!("EKS.on_upgrade_error() called for {}", self.name());
         unimplemented!()
     }
 
-    fn on_downgrade(&self) -> Result<(), KubernetesError> {
+    fn on_downgrade(&self) -> Result<(), EngineError> {
         info!("EKS.on_downgrade() called for {}", self.name());
         unimplemented!()
     }
 
-    fn on_downgrade_error(&self) -> Result<(), KubernetesError> {
+    fn on_downgrade_error(&self) -> Result<(), EngineError> {
         warn!("EKS.on_downgrade_error() called for {}", self.name());
         unimplemented!()
     }
 
-    fn on_delete(&self) -> Result<(), KubernetesError> {
+    fn on_delete(&self) -> Result<(), EngineError> {
         info!("EKS.on_delete() called for {}", self.name());
+
         let listeners_helper = ListenersHelper::new(&self.listeners);
+
         listeners_helper.delete_in_progress(ProgressInfo::new(
             ProgressScope::Infrastructure {
                 execution_id: self.context.execution_id().to_string(),
@@ -511,19 +539,30 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context();
-        let _ = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            &context,
+
+        let _ = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
         )?;
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = crate::template::copy_non_template_files(
-            format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-            common_charts_temp_dir.as_str(),
+
+        let _ = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
         )?;
+
         let aws_credentials_envs = vec![
             (
                 AWS_ACCESS_KEY_ID,
@@ -535,14 +574,19 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         ];
 
-        let kubernetes_config_file_path = kubernetes_config_path(
-            self.context.workspace_root_dir(),
-            self.cloud_provider.organization_id.as_str(),
-            self.id(),
-            self.cloud_provider.access_key_id.as_str(),
-            self.cloud_provider.secret_access_key.as_str(),
-            self.region(),
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            kubernetes_config_path(
+                self.context.workspace_root_dir(),
+                self.cloud_provider.organization_id.as_str(),
+                self.id(),
+                self.cloud_provider.access_key_id.as_str(),
+                self.cloud_provider.secret_access_key.as_str(),
+                self.region(),
+            ),
         )?;
+
         let all_namespaces = kubectl_exec_get_all_namespaces(
             kubernetes_config_file_path,
             aws_credentials_envs.clone(),
@@ -553,15 +597,20 @@ impl<'a> Kubernetes for EKS<'a> {
             Ok(namespace_vec) => {
                 let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
                 let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
+
                 info!("Deleting non Qovery Namespaces");
                 for namespace_to_delete in namespaces_to_delete.iter() {
-                    let kubernetes_config_file_path0 = kubernetes_config_path(
-                        self.context.workspace_root_dir(),
-                        self.cloud_provider.organization_id.as_str(),
-                        self.id(),
-                        self.cloud_provider.access_key_id.as_str(),
-                        self.cloud_provider.secret_access_key.as_str(),
-                        self.region(),
+                    let kubernetes_config_file_path0 = from_simple_error_to_engine_error(
+                        self.engine_error_scope(),
+                        self.context.execution_id(),
+                        kubernetes_config_path(
+                            self.context.workspace_root_dir(),
+                            self.cloud_provider.organization_id.as_str(),
+                            self.id(),
+                            self.cloud_provider.access_key_id.as_str(),
+                            self.cloud_provider.secret_access_key.as_str(),
+                            self.region(),
+                        ),
                     )?;
 
                     let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
@@ -569,9 +618,10 @@ impl<'a> Kubernetes for EKS<'a> {
                         namespace_to_delete,
                         aws_credentials_envs.clone(),
                     );
+
                     match deletion {
-                        Ok(out) => info!("Namespace {} is deleted", namespace_to_delete),
-                        Err(e) => {
+                        Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
+                        Err(_) => {
                             error!(
                                 "Can't delete the namespace {}, quiting now",
                                 namespace_to_delete
@@ -580,17 +630,29 @@ impl<'a> Kubernetes for EKS<'a> {
                     }
                 }
             }
-            Err(e) => error!("Error while getting all namespaces {}", e),
+
+            Err(e) => error!(
+                "Error while getting all namespaces for Kubernetes cluster {}: error {:?}",
+                self.name_with_id(),
+                e.message
+            ),
         }
+
         info!("Deleting Qovery managed Namespaces");
-        let kubernetes_config_file_path2 = kubernetes_config_path(
-            self.context.workspace_root_dir(),
-            self.cloud_provider.organization_id.as_str(),
-            self.id(),
-            self.cloud_provider.access_key_id.as_str(),
-            self.cloud_provider.secret_access_key.as_str(),
-            self.region(),
+
+        let kubernetes_config_file_path2 = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            kubernetes_config_path(
+                self.context.workspace_root_dir(),
+                self.cloud_provider.organization_id.as_str(),
+                self.id(),
+                self.cloud_provider.access_key_id.as_str(),
+                self.cloud_provider.secret_access_key.as_str(),
+                self.region(),
+            ),
         )?;
+
         // TODO use label instead fixed names
         let mut qovery_namespaces = get_qovery_managed_namespaces();
         for qovery_namespace in qovery_namespaces.iter() {
@@ -600,8 +662,8 @@ impl<'a> Kubernetes for EKS<'a> {
                 aws_credentials_envs.clone(),
             );
             match deletion {
-                Ok(out) => info!("Namespace {} is fully deleted", qovery_namespace),
-                Err(e) => {
+                Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
+                Err(_) => {
                     error!(
                         "Can't delete the namespace {}, quiting now",
                         qovery_namespace
@@ -609,6 +671,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 }
             }
         }
+
         info!("Delete all remaining deployed helm applications");
 
         match cmd::helm::helm_list(&kubernetes_config_file_path2, aws_credentials_envs.clone()) {
@@ -619,15 +682,20 @@ impl<'a> Kubernetes for EKS<'a> {
                     aws_credentials_envs.clone(),
                 );
             }
-            Err(e) => error!("Unable to get helm list"),
+            Err(_) => error!("Unable to get helm list"),
         }
+
         info!("Running Terraform destroy");
-        let terraform_result =
-            cmd::terraform::terraform_exec_with_init_validate_destroy(temp_dir.as_str())?;
+        let terraform_result = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            cmd::terraform::terraform_exec_with_init_validate_destroy(temp_dir.as_str()),
+        );
+
         // we should delete the bucket containing the kubeconfig after
         // to prevent to loose connection from terraform to kube cluster
         match terraform_result {
-            () => {
+            Ok(_) => {
                 info!("Deleting S3 Bucket containing Kubeconfig");
                 let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
                 let _region = Region::from_str(self.region()).unwrap();
@@ -645,7 +713,7 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn on_delete_error(&self) -> Result<(), KubernetesError> {
+    fn on_delete_error(&self) -> Result<(), EngineError> {
         warn!("EKS.on_delete_error() called for {}", self.name());
 
         // FIXME What should we do if something goes wrong while deleting the cluster?
@@ -653,7 +721,7 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn deploy_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
+    fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.deploy_environment() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
@@ -706,7 +774,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         self.context.execution_id(),
                     ));
 
-                    return Err(KubernetesError::Deploy(err));
+                    return Err(err);
                 }
                 _ => {
                     listeners_helper.start_in_progress(ProgressInfo::new(
@@ -761,7 +829,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         self.context.execution_id(),
                     ));
 
-                    return Err(KubernetesError::Deploy(err));
+                    return Err(err);
                 }
                 _ => {
                     listeners_helper.start_in_progress(ProgressInfo::new(
@@ -814,7 +882,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         self.context.execution_id(),
                     ));
 
-                    return Err(KubernetesError::Deploy(err));
+                    return Err(err);
                 }
                 _ => {
                     listeners_helper.started(ProgressInfo::new(
@@ -866,7 +934,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         self.context.execution_id(),
                     ));
 
-                    return Err(KubernetesError::Deploy(err));
+                    return Err(err);
                 }
                 _ => {
                     listeners_helper.start_in_progress(ProgressInfo::new(
@@ -886,7 +954,7 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), KubernetesError> {
+    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
         warn!("EKS.deploy_environment_error() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
@@ -947,7 +1015,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         self.context.execution_id(),
                     ));
 
-                    return Err(KubernetesError::Deploy(err));
+                    return Err(err);
                 }
                 _ => {
                     listeners_helper.start_in_progress(ProgressInfo::new(
@@ -1002,7 +1070,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         self.context.execution_id(),
                     ));
 
-                    return Err(KubernetesError::Deploy(err));
+                    return Err(err);
                 }
                 _ => {
                     listeners_helper.start_in_progress(ProgressInfo::new(
@@ -1022,7 +1090,7 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn pause_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
+    fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.pause_environment() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
@@ -1047,7 +1115,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Pause(err));
+                    return Err(err);
                 }
                 _ => {}
             }
@@ -1066,7 +1134,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Pause(err));
+                    return Err(err);
                 }
                 _ => {}
             }
@@ -1083,7 +1151,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Pause(err));
+                    return Err(err);
                 }
                 _ => {}
             }
@@ -1099,7 +1167,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Pause(err));
+                    return Err(err);
                 }
                 _ => {}
             }
@@ -1108,12 +1176,12 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn pause_environment_error(&self, _environment: &Environment) -> Result<(), KubernetesError> {
+    fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
         warn!("EKS.pause_environment_error() called for {}", self.name());
         Ok(())
     }
 
-    fn delete_environment(&self, environment: &Environment) -> Result<(), KubernetesError> {
+    fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.delete_environment() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
@@ -1139,7 +1207,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Delete(err));
+                    return Err(err);
                 }
                 _ => {}
             }
@@ -1158,7 +1226,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Delete(err));
+                    return Err(err);
                 }
                 _ => {}
             }
@@ -1175,7 +1243,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Delete(err));
+                    return Err(err);
                 }
                 _ => {}
             }
@@ -1191,7 +1259,7 @@ impl<'a> Kubernetes for EKS<'a> {
                         err
                     );
 
-                    return Err(KubernetesError::Delete(err));
+                    return Err(err);
                 }
                 _ => {}
             }
@@ -1208,13 +1276,17 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         ];
 
-        let kubernetes_config_file_path = common::kubernetes_config_path(
-            &self.context.workspace_root_dir(),
-            &environment.organization_id.as_str(),
-            &self.id,
-            &self.cloud_provider.access_key_id.as_str(),
-            &self.cloud_provider.secret_access_key.as_str(),
-            &self.region.name(),
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            common::kubernetes_config_path(
+                &self.context.workspace_root_dir(),
+                &environment.organization_id.as_str(),
+                &self.id,
+                &self.cloud_provider.access_key_id.as_str(),
+                &self.cloud_provider.secret_access_key.as_str(),
+                &self.region.name(),
+            ),
         )?;
 
         kubectl_exec_delete_namespace(
@@ -1226,7 +1298,7 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn delete_environment_error(&self, _environment: &Environment) -> Result<(), KubernetesError> {
+    fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
         warn!("EKS.delete_environment_error() called for {}", self.name());
         Ok(())
     }

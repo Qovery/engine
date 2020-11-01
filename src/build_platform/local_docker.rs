@@ -1,15 +1,16 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use crate::build_platform::error::BuildPlatformError;
-use crate::build_platform::{Build, BuildError, BuildPlatform, BuildResult, Image, Kind};
+use git2::Error;
+
+use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
 use crate::models::{
     Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope,
 };
-use crate::transaction::CommitError::BuildImage;
 use crate::{cmd, git};
 
 /// use Docker in local
@@ -30,7 +31,7 @@ impl LocalDocker {
         }
     }
 
-    fn image_does_exist(&self, image: &Image) -> Result<bool, BuildError> {
+    fn image_does_exist(&self, image: &Image) -> Result<bool, EngineError> {
         let envs = match self.context.docker_tcp_socket() {
             Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
             None => vec![],
@@ -66,10 +67,11 @@ impl BuildPlatform for LocalDocker {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), BuildPlatformError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         if !crate::cmd::utilities::does_binary_exist("docker") {
-            return Err(BuildPlatformError::Unexpected(
-                "docker binary not found".to_string(),
+            return Err(self.engine_error(
+                EngineErrorCause::Internal,
+                String::from("docker binary not found"),
             ));
         }
 
@@ -80,7 +82,7 @@ impl BuildPlatform for LocalDocker {
         self.listeners.push(listener);
     }
 
-    fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, BuildError> {
+    fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError> {
         info!("LocalDocker.build() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
@@ -111,8 +113,14 @@ impl BuildPlatform for LocalDocker {
         match git_clone {
             Ok(_) => {}
             Err(err) => {
-                error! {"Error while trying to clone repository {}", build.git_repository.url}
-                return Err(BuildError::Git(err));
+                let message = format!(
+                    "Error while cloning repository {}. Error: {:?}",
+                    &build.git_repository.url, err
+                );
+
+                error!("{}", message);
+
+                return Err(self.engine_error(EngineErrorCause::Internal, message));
             }
         }
 
@@ -121,12 +129,32 @@ impl BuildPlatform for LocalDocker {
         let commit_id = &build.git_repository.commit_id;
         match git::checkout(&repo, &commit_id, build.git_repository.url.as_str()) {
             Ok(_) => {}
-            Err(err) => return Err(BuildError::Git(err)),
+            Err(err) => {
+                let message = format!(
+                    "Error while git checkout repository {} with commit id {}. Error: {:?}",
+                    &build.git_repository.url, commit_id, err
+                );
+
+                error!("{}", message);
+
+                return Err(self.engine_error(EngineErrorCause::Internal, message));
+            }
         }
 
         // git checkout submodules
-        let _ = checkout_submodules(&repo);
-        // TODO what if we can't checkout submodules? Today we ignore it
+        match checkout_submodules(repo) {
+            Ok(_) => {}
+            Err(err) => {
+                let message = format!(
+                    "Error while checkout submodules from repository {}. Error: {:?}",
+                    &build.git_repository.url, err
+                );
+
+                error!("{}", message);
+
+                return Err(self.engine_error(EngineErrorCause::Internal, message));
+            }
+        }
 
         let into_dir_docker_style = format!("{}/.", into_dir.as_str());
 
@@ -140,11 +168,14 @@ impl BuildPlatform for LocalDocker {
 
         match Path::new(dockerfile_complete_path.as_str()).exists() {
             false => {
-                error!(
+                let message = format!(
                     "Unable to find Dockerfile path {}",
                     dockerfile_complete_path.as_str()
                 );
-                return Err(BuildError::Error);
+
+                error!("{}", &message);
+
+                return Err(self.engine_error(EngineErrorCause::Internal, message));
             }
             _ => {}
         }
@@ -220,7 +251,19 @@ impl BuildPlatform for LocalDocker {
 
         match exit_status {
             Ok(_) => {}
-            Err(_) => return Err(BuildError::Error),
+            Err(err) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "It looks like your Dockerfile is wrong. Did you consider building \
+                        your container locally using `qovery run` or `docker build`?",
+                    ),
+                    format!(
+                        "error while building container image {}. Error: {:?}",
+                        self.name_with_id(),
+                        err
+                    ),
+                ));
+            }
         }
 
         listeners_helper.start_in_progress(ProgressInfo::new(
@@ -228,27 +271,34 @@ impl BuildPlatform for LocalDocker {
                 id: build.image.application_id.clone(),
             },
             ProgressLevel::Info,
-            Some("build is done ✔"),
+            Some(format!(
+                "container build is done for {} ✔",
+                self.name_with_id()
+            )),
             self.context.execution_id(),
         ));
 
         Ok(BuildResult { build })
     }
 
-    fn build_error(&self, build: Build) -> Result<BuildResult, BuildError> {
+    fn build_error(&self, build: Build) -> Result<BuildResult, EngineError> {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
         let listener_helper = ListenersHelper::new(&self.listeners);
+
+        // FIXME
+        let message = String::from("something goes wrong (not implemented)");
+
         listener_helper.error(ProgressInfo::new(
             ProgressScope::Application {
                 id: build.image.application_id,
             },
             ProgressLevel::Error,
-            Some("something goes wrong (not implemented)"),
+            Some(message.as_str()),
             self.context.execution_id(),
         ));
 
         // FIXME
-        Err(BuildError::Error)
+        Err(self.engine_error(EngineErrorCause::Internal, message))
     }
 }

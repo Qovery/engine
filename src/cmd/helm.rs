@@ -12,8 +12,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::cmd::structs::{Helm, HelmHistoryRow};
-use crate::cmd::utilities::{exec_with_envs_and_output, CmdError};
+use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
+use crate::error::{SimpleError, SimpleErrorKind};
 
 pub fn helm_exec_with_upgrade_history<P>(
     kubernetes_config: P,
@@ -21,7 +22,7 @@ pub fn helm_exec_with_upgrade_history<P>(
     release_name: &str,
     chart_root_dir: P,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<HelmHistoryRow>, CmdError>
+) -> Result<Option<HelmHistoryRow>, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -63,7 +64,7 @@ pub fn helm_exec_upgrade<P>(
     release_name: &str,
     chart_root_dir: P,
     envs: Vec<(&str, &str)>,
-) -> Result<(), CmdError>
+) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -99,7 +100,7 @@ pub fn helm_exec_uninstall<P>(
     namespace: &str,
     release_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), CmdError>
+) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -129,7 +130,7 @@ pub fn helm_exec_history<P>(
     namespace: &str,
     release_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Vec<HelmHistoryRow>, CmdError>
+) -> Result<Vec<HelmHistoryRow>, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -178,7 +179,7 @@ pub fn helm_uninstall_list<P>(
     kubernetes_config: P,
     helmlist: Vec<String>,
     envs: Vec<(&str, &str)>,
-) -> Result<String, CmdError>
+) -> Result<String, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -217,7 +218,7 @@ pub fn helm_exec_upgrade_with_override_file<P>(
     chart_root_dir: P,
     override_file: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), CmdError>
+) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -259,7 +260,7 @@ pub fn helm_exec_with_upgrade_history_with_override<P>(
     chart_root_dir: P,
     override_file: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<HelmHistoryRow>, CmdError>
+) -> Result<Option<HelmHistoryRow>, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -296,7 +297,10 @@ where
     })
 }
 
-pub fn helm_list<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<Vec<String>, CmdError>
+pub fn helm_list<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<Vec<String>, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -330,14 +334,15 @@ where
             }
         }
         Err(e) => {
-            error!("Error while deserializing all helms names {}", e);
-            return Err(CmdError::Io(Error::new(std::io::ErrorKind::InvalidData, e)));
+            let message = format!("Error while deserializing all helms names {}", e);
+            error!("{}", message.as_str());
+            return Err(SimpleError::new(SimpleErrorKind::Other, Some(message)));
         }
     }
     Ok(helms_name)
 }
 
-pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CmdError> {
+pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
     helm_exec_with_output(
         args,
         envs,
@@ -355,7 +360,7 @@ pub fn helm_exec_with_output<F, X>(
     envs: Vec<(&str, &str)>,
     stdout_output: F,
     stderr_output: X,
-) -> Result<(), CmdError>
+) -> Result<(), SimpleError>
 where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),
@@ -373,7 +378,7 @@ pub fn kubectl_exec_with_output<F, X>(
     envs: Vec<(&str, &str)>,
     stdout_output: F,
     stderr_output: X,
-) -> Result<(), CmdError>
+) -> Result<(), SimpleError>
 where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),

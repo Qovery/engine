@@ -2,10 +2,8 @@ use std::rc::Rc;
 
 use crate::build_platform::Image;
 use crate::cmd;
-use crate::cmd::utilities::CmdError;
-use crate::container_registry::{
-    ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
-};
+use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
+use crate::error::EngineErrorCause;
 use crate::models::{Context, Listener, Listeners, ProgressListener};
 
 pub struct DockerHub {
@@ -47,7 +45,7 @@ impl ContainerRegistry for DockerHub {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), ContainerRegistryError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         // check the version of docker and print it as info
         let mut output_from_cmd = String::new();
         cmd::utilities::exec_with_output(
@@ -70,19 +68,19 @@ impl ContainerRegistry for DockerHub {
         self.listeners.push(listener);
     }
 
-    fn on_create(&self) -> Result<(), ContainerRegistryError> {
+    fn on_create(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_create_error(&self) -> Result<(), ContainerRegistryError> {
+    fn on_create_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_delete(&self) -> Result<(), ContainerRegistryError> {
+    fn on_delete(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_delete_error(&self) -> Result<(), ContainerRegistryError> {
+    fn on_delete_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
@@ -104,20 +102,13 @@ impl ContainerRegistry for DockerHub {
             ],
             envs.clone(),
         ) {
-            Err(err) => match err {
-                CmdError::Exec(exit_status) => {
-                    error!("Cannot login into dockerhub");
-                    return false;
-                }
-                CmdError::Io(err) => {
-                    error!("IO error on dockerhub login: {}", err);
-                    return false;
-                }
-                CmdError::Unexpected(err) => {
-                    error!("Unexpected error on dockerhub login: {}", err);
-                    return false;
-                }
-            },
+            Err(err) => {
+                if let Some(message) = err.message {
+                    error!("{}", message);
+                };
+
+                return false;
+            }
             _ => {}
         };
 
@@ -130,23 +121,24 @@ impl ContainerRegistry for DockerHub {
         let mut exist_stdoud: bool = false;
         let mut exist_stderr: bool = true;
 
+        // TODO Change this by using curl lib
         cmd::utilities::exec_with_envs_and_output(
             "curl",
             vec!["--silent", "-f", "-lSL", &curl_path],
             envs.clone(),
             |r_out| match r_out {
-                Ok(s) => exist_stdoud = true,
+                Ok(_) => exist_stdoud = true,
                 Err(e) => error!("Error while getting stdout from curl {}", e),
             },
             |r_err| match r_err {
-                Ok(s) => exist_stderr = true,
+                Ok(_) => exist_stderr = true,
                 Err(e) => error!("Error while getting stderr from curl {}", e),
             },
         );
         exist_stdoud
     }
 
-    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {
+    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
         let envs = match self.context.docker_tcp_socket() {
             Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
             None => vec![],
@@ -163,11 +155,14 @@ impl ContainerRegistry for DockerHub {
             ],
             envs.clone(),
         ) {
-            Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::CredentialsError),
-                CmdError::Io(err) => return Err(PushError::IoError(err)),
-                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
-            },
+            Err(_) => {
+                return Err(
+                    self.engine_error(
+                        EngineErrorCause::User("Your DockerHub account seems to be no longer valid (bad Credentials). \
+                    Please contact your Organization administrator to fix or change the Credentials."),
+                        format!("failed to login to DockerHub {}", self.name_with_id()))
+                );
+            }
             _ => {}
         };
 
@@ -181,20 +176,30 @@ impl ContainerRegistry for DockerHub {
             ],
             envs.clone(),
         ) {
-            Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::ImageTagFailed),
-                CmdError::Io(err) => return Err(PushError::IoError(err)),
-                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
-            },
+            Err(_) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "failed to tag image ({}) {:?}",
+                        image.name_with_tag(),
+                        image,
+                    ),
+                ));
+            }
             _ => {}
         };
 
         match cmd::utilities::exec_with_envs("docker", vec!["push", dest.as_str()], envs) {
-            Err(err) => match err {
-                CmdError::Exec(exit_status) => return Err(PushError::ImagePushFailed),
-                CmdError::Io(err) => return Err(PushError::IoError(err)),
-                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
-            },
+            Err(_) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "failed to push image {:?} into DockerHub {}",
+                        image,
+                        self.name_with_id(),
+                    ),
+                ));
+            }
             _ => {}
         };
 
@@ -204,7 +209,7 @@ impl ContainerRegistry for DockerHub {
         Ok(PushResult { image })
     }
 
-    fn push_error(&self, _image: &Image) -> Result<PushResult, PushError> {
+    fn push_error(&self, _image: &Image) -> Result<PushResult, EngineError> {
         unimplemented!()
     }
 }

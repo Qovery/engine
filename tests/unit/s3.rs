@@ -30,8 +30,8 @@ fn delete_s3_bucket() {
         bucket_name,
     );
     match creation {
-        Ok(out) => println!("Yippee Ki Yay"),
-        Err(e) => println!("While creating the bucket {}", e),
+        Ok(_) => println!("Yippee Ki Yay"),
+        Err(e) => println!("While creating the bucket {}", e.message.unwrap()),
     }
 
     let delete = delete_bucket(
@@ -41,6 +41,6 @@ fn delete_s3_bucket() {
     );
     match delete {
         Ok(out) => println!("Yippee Ki Yay"),
-        Err(e) => println!("While deleting the bucket {}", e),
+        Err(e) => println!("While deleting the bucket {}", e.message.unwrap()),
     }
 }
