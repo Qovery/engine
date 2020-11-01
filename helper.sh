@@ -183,7 +183,7 @@ function fast_tests() { # Run fast tests only on qovery-engine
   export RUST_LOG=info
   nb_treads=$1
   export_env
-  cd qovery-engine
+  #cd qovery-engine
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
   cat results.json | cargo2junit > results.xml
 }
@@ -193,7 +193,7 @@ function all_tests() { # Run all tests on qovery-engine
   export RUST_LOG=info
   nb_treads=$1
   export_env
-  cd qovery-engine
+  #cd qovery-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
 }
 
@@ -206,23 +206,23 @@ function export_env() {
 
 function all-test-remote-lib(){
   GITHUB_ENGINE_BRANCH_NAME=$1
-  sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
+  #sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
   export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   nb_treads=8
   export_env
-  cd qovery-engine
+  #cd qovery-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
 }
 
 function fast-test-remote-lib(){
   GITHUB_ENGINE_BRANCH_NAME=$1
-  sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
+  #sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
   export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   nb_treads=8
   export_env
-  cd qovery-engine
+  #cd qovery-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
 }
 
