@@ -27,11 +27,11 @@
 
 ## ✨ Features
 
-- **Zero infrastructure management:** Qovery Engine initialized, configure and manage your Cloud account for you.
-- **Multi Cloud:** Qovery Engine is built to work on AWS, GCP, Azure and any kind of Cloud provider.
+- **Zero infrastructure management:** Qovery Engine initialized, configure, and manage your Cloud account for you.
+- **Multi Cloud:** Qovery Engine is built to work on AWS, GCP, Azure and any Cloud provider.
 - **On top of Kubernetes:** Qovery Engine takes advantage of the power of Kubernetes at a higher level of abstraction.
 - **Terraform and Helm:** Qovery Engine uses Terraform and Helm files to manage the infrastructure and app deployment.
-- **Powerful CLI:** Use the provided Qovery Engine CLI to seamlessly deploy your app on your Cloud account.  
+- **Powerful CLI:** Use the provided Qovery Engine CLI to deploy your app on your Cloud account seamlessly.  
 - **Web Interface:** Qovery provides a web interface through [qovery.com](https://www.qovery.com)
 
 ### 🔌 Plugins
