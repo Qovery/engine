@@ -181,9 +181,7 @@ resources.requests.memory="2Gi"
 function prepare_tests() {
     if [ -e cloned-engine ] ; then
       echo "Found a symlink for the engine, going to use it"
-      return
-    fi
-    if [ ! -d cloned-engine ] ; then
+    elif [ ! -d cloned-engine ] ; then
       git clone https://github.com/Qovery/engine.git cloned-engine
       if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
         git checkout $GITHUB_ENGINE_BRANCH_NAME
