@@ -57,12 +57,18 @@ pub struct Options {
     pub elasticsearch_zone_c_subnet_blocks: Vec<String>,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
+    pub eks_access_cidr_blocks: Vec<String>,
     pub qovery_api_url: String,
     pub tls_email_report: String,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticsearch_cidr_subnet: String,
     pub engine_version_controller_token: String,
+    pub grafana_admin_user: String,
+    pub grafana_admin_password: String,
+    pub discord_api_key: String,
+    pub qovery_nats_url: String,
+    pub qovery_ssh_key: String,
 }
 
 pub struct EKS<'a> {
@@ -72,7 +78,7 @@ pub struct EKS<'a> {
     version: String,
     region: Region,
     cloud_provider: &'a AWS,
-    dns_provider: &'a DnsProvider,
+    dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
     template_directory: String,
     options: Options,
@@ -87,7 +93,7 @@ impl<'a> EKS<'a> {
         version: &str,
         region: &str,
         cloud_provider: &'a AWS,
-        dns_provider: &'a DnsProvider,
+        dns_provider: &'a dyn DnsProvider,
         options: Options,
         nodes: Vec<Node>,
     ) -> Self {
@@ -144,6 +150,9 @@ impl<'a> EKS<'a> {
         let vpc_cidr_block = self.options.vpc_cidr_block.clone();
         let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", self.id());
         let eks_cidr_subnet = self.options.eks_cidr_subnet.clone();
+
+        let eks_access_cidr_blocks = format_ips(&self.options.eks_access_cidr_blocks);
+
         let worker_nodes = self
             .nodes
             .iter()
@@ -271,6 +280,7 @@ impl<'a> EKS<'a> {
         context.insert("eks_masters_version", &self.version());
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
+        context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
 
         // AWS - RDS
         context.insert("rds_cidr_subnet", &rds_cidr_subnet);
@@ -288,6 +298,7 @@ impl<'a> EKS<'a> {
             "documentdb_zone_b_subnet_blocks",
             &documentdb_zone_b_subnet_blocks,
         );
+
         context.insert(
             "documentdb_zone_c_subnet_blocks",
             &documentdb_zone_c_subnet_blocks,
@@ -298,18 +309,38 @@ impl<'a> EKS<'a> {
             "elasticsearch_cidr_subnet",
             &elasticsearch_cidr_subnet.clone(),
         );
+
         context.insert(
             "elasticsearch_zone_a_subnet_blocks",
             &elasticsearch_zone_a_subnet_blocks,
         );
+
         context.insert(
             "elasticsearch_zone_b_subnet_blocks",
             &elasticsearch_zone_b_subnet_blocks,
         );
+
         context.insert(
             "elasticsearch_zone_c_subnet_blocks",
             &elasticsearch_zone_c_subnet_blocks,
         );
+
+        // grafana credentials
+        context.insert(
+            "grafana_admin_user",
+            self.options.grafana_admin_user.as_str(),
+        );
+
+        context.insert(
+            "grafana_admin_password",
+            self.options.grafana_admin_password.as_str(),
+        );
+
+        // qovery
+        context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
+        context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
+        context.insert("qovery_ssh_key", self.options.qovery_ssh_key.as_str());
+        context.insert("discord_api_key", self.options.discord_api_key.as_str());
 
         context
     }
