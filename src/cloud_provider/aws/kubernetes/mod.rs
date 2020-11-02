@@ -57,6 +57,7 @@ pub struct Options {
     pub elasticsearch_zone_c_subnet_blocks: Vec<String>,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
+    pub eks_access_cidr_blocks: Vec<String>,
     pub qovery_api_url: String,
     pub tls_email_report: String,
     pub rds_cidr_subnet: String,
@@ -68,7 +69,6 @@ pub struct Options {
     pub discord_api_key: String,
     pub qovery_nats_url: String,
     pub qovery_ssh_key: String,
-    pub eks_access_cidr_blocks: String,
 }
 
 pub struct EKS<'a> {
@@ -150,6 +150,9 @@ impl<'a> EKS<'a> {
         let vpc_cidr_block = self.options.vpc_cidr_block.clone();
         let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", self.id());
         let eks_cidr_subnet = self.options.eks_cidr_subnet.clone();
+
+        let eks_access_cidr_blocks = format_ips(&self.options.eks_access_cidr_blocks);
+
         let worker_nodes = self
             .nodes
             .iter()
@@ -277,10 +280,7 @@ impl<'a> EKS<'a> {
         context.insert("eks_masters_version", &self.version());
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
-        context.insert(
-            "eks_access_cidr_blocks",
-            self.options.eks_access_cidr_blocks.as_str(),
-        );
+        context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
 
         // AWS - RDS
         context.insert("rds_cidr_subnet", &rds_cidr_subnet);
