@@ -2000,7 +2000,7 @@ dependencies = [
 [[package]]
 name = "qovery-engine"
 version = "0.1.0"
-source = "git+https://github.com/Qovery/engine?branch=chore/improve_user_log_messages#20b0d99ac0c359b6f00f9b33d39fdbad9a5fc295"
+source = "git+https://github.com/Qovery/engine?branch=main#f01a25660fbe97e8b8a7deec912f655152d4a5c0"
 dependencies = [
  "base64 0.12.3",
  "chrono",
