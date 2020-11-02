@@ -85,7 +85,7 @@ function run_tests() {
   exit 1
 }
 
-set -u
+#set -u
 
 case $1 in
 fast_tests)
