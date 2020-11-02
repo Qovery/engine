@@ -8,7 +8,7 @@ ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
 
-RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip
+RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config openssl-dev
 WORKDIR /usr/src/app
 ADD . .
 
