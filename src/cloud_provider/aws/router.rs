@@ -487,7 +487,10 @@ impl Create for Router {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        let check_result = retry::retry(Fixed::from_millis(3000).take(60), || {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        // Todo: inform the client about the fact we're going to check for a certain amount of time
+
+        let check_result = retry::retry(Fixed::from_millis(3000).take(100), || {
             let rs_ips = lookup_host(self.default_domain.as_str());
             match rs_ips {
                 Ok(ips) => {
@@ -495,7 +498,10 @@ impl Create for Router {
                     OperationResult::Ok(ips)
                 }
                 Err(e) => {
-                    warn!("Failed to retrieve record from DNS, retrying");
+                    warn!(
+                        "Failed to retrieve record from DNS '{}', retrying...",
+                        self.default_domain.as_str()
+                    );
                     OperationResult::Retry(e)
                 }
             }
@@ -504,10 +510,8 @@ impl Create for Router {
         match check_result {
             Ok(_) => Ok(()),
             Err(_) => {
-                let message = "While checking the DNS propagation";
+                let message = format!("Wasn't able to check DNS availability '{}', can be due to a too long DNS propagation. Please retry and contact your administrator if the problem persists", self.default_domain.as_str());
                 error!("{}", message);
-
-                let listeners_helper = ListenersHelper::new(&self.listeners);
 
                 listeners_helper.error(ProgressInfo::new(
                     ProgressScope::Router {
