@@ -162,6 +162,7 @@ pub struct Application {
     pub cpu_burst: String,
     pub total_ram_in_mib: u32,
     pub total_instances: u16,
+    pub start_timeout_in_seconds: u32,
     pub storage: Vec<Storage>,
     pub environment_variables: Vec<EnvironmentVariable>,
 }
@@ -185,6 +186,7 @@ impl Application {
                     self.cpu_burst.clone(),
                     self.total_ram_in_mib,
                     self.total_instances,
+                    self.start_timeout_in_seconds,
                     image.clone(),
                     self.storage
                         .iter()
@@ -220,6 +222,7 @@ impl Application {
                     self.cpu_burst.clone(),
                     self.total_ram_in_mib,
                     self.total_instances,
+                    self.start_timeout_in_seconds,
                     image,
                     self.storage
                         .iter()

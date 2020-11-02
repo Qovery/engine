@@ -265,6 +265,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
             Application {
                 id: generate_id(),
@@ -314,6 +315,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
             Application {
                 id: generate_id(),
@@ -371,6 +373,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
         ],
         routers: vec![
@@ -499,6 +502,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             total_ram_in_mib: 256,
             total_instances: 2,
             cpu_burst: "100m".to_string(),
+            start_timeout_in_seconds: 60,
         }],
         routers: vec![Router {
             id: generate_id(),
@@ -604,6 +608,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
             Application {
                 id: generate_id(),
@@ -653,6 +658,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
         ],
         routers: vec![
