@@ -72,7 +72,7 @@ pub struct EKS<'a> {
     version: String,
     region: Region,
     cloud_provider: &'a AWS,
-    dns_provider: &'a DnsProvider,
+    dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
     template_directory: String,
     options: Options,
@@ -87,7 +87,7 @@ impl<'a> EKS<'a> {
         version: &str,
         region: &str,
         cloud_provider: &'a AWS,
-        dns_provider: &'a DnsProvider,
+        dns_provider: &'a dyn DnsProvider,
         options: Options,
         nodes: Vec<Node>,
     ) -> Self {
