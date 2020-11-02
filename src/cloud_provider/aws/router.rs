@@ -487,7 +487,7 @@ impl Create for Router {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         // Todo: inform the client about the fact we're going to check for a certain amount of time
 
-        let check_result = retry::retry(Fixed::from_millis(3000).take(100), || {
+        let check_result = retry::retry(Fixed::from_millis(3000).take(200), || {
             let rs_ips = lookup_host(self.default_domain.as_str());
             match rs_ips {
                 Ok(ips) => {
