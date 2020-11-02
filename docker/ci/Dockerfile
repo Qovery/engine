@@ -6,7 +6,7 @@ ENV BIN_DIR=$BIN_DEST_FOLDER
 ### Qovery
 
 #RUN apk add -U --no-cache git bash aws-cli curl cargo pkgconfig openssl-dev
-RUN apt-get update && apt-get install -y docker.io awscli curl cargo libssh-dev pkg-config unzip
+RUN apt-get update && apt-get install -y docker.io awscli curl cargo libssh-dev pkg-config unzip make
 RUN cargo install cargo2junit
 ENV PATH="/root/.cargo/bin/:${PATH}"
 
