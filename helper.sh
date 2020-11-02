@@ -178,12 +178,26 @@ resources.requests.cpu="500m",\
 resources.requests.memory="2Gi"
 }
 
+function prepare_tests() {
+    if [ -e cloned-engine ] ; then
+      echo "Found a symlink for the engine, going to use it"
+      return
+    fi
+    if [ ! -d cloned-engine ] ; then
+      git clone https://github.com/Qovery/engine.git cloned-engine
+      if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
+        git checkout $GITHUB_ENGINE_BRANCH_NAME
+      fi
+    fi
+}
+
 function fast_tests() { # Run fast tests only on qovery-engine
   export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   nb_treads=$1
   export_env
-  #cd qovery-engine
+  prepare_tests
+  cd cloned-engine
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
   cat results.json | cargo2junit > results.xml
 }
@@ -193,7 +207,8 @@ function all_tests() { # Run all tests on qovery-engine
   export RUST_LOG=info
   nb_treads=$1
   export_env
-  #cd qovery-engine
+  prepare_tests
+  cd cloned-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
 }
 
@@ -211,7 +226,8 @@ function all-test-remote-lib(){
   export RUST_LOG=info
   nb_treads=8
   export_env
-  #cd qovery-engine
+  prepare_tests
+  cd cloned-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
 }
 
@@ -222,14 +238,15 @@ function fast-test-remote-lib(){
   export RUST_LOG=info
   nb_treads=8
   export_env
-  #cd qovery-engine
+  prepare_tests
+  cd cloned-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
 }
 
 if [ $ARGS_NUM -eq 0 ] ; then
   print_help
 fi
-set -u
+#set -u
 
 case $1 in
 build_image)
