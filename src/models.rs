@@ -88,9 +88,12 @@ impl Environment {
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
+        // orders is important, first external services, then applications and then routers.
         let mut stateless_services = external_services;
-        stateless_services.extend(routers);
         stateless_services.extend(applications);
+        // routers are deployed lastly to avoid to be blacklisted if we request TLS certificates
+        // while an app does not start for some reason.
+        stateless_services.extend(routers);
 
         let databases = self
             .databases
