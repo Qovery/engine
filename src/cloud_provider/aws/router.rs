@@ -313,7 +313,7 @@ impl crate::cloud_provider::service::Router for Router {
                         "domain {} is still not ready after several retries",
                         self.default_domain.as_str()
                     ),
-                ))
+                ));
             }
         }
 
@@ -497,12 +497,13 @@ impl Create for Router {
                     info!("Records from DNS are successfully retrieved.");
                     OperationResult::Ok(ips)
                 }
-                Err(e) => {
+                Err(err) => {
                     warn!(
                         "Failed to retrieve record from DNS '{}', retrying...",
                         self.default_domain.as_str()
                     );
-                    OperationResult::Retry(e)
+                    warn!("DNS lookup error: {:?}", err);
+                    OperationResult::Retry(err)
                 }
             }
         });
