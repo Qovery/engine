@@ -142,12 +142,14 @@ function prepare_engine() {
       echo "Found a symlink for the engine, going to use it"
     elif [ ! -d $ENGINE_DIR ] ; then
       git clone https://github.com/Qovery/engine.git $ENGINE_DIR
-      cd $ENGINE_DIR
-      if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
-        git checkout $GITHUB_ENGINE_BRANCH_NAME
-      fi
-      cd -
     fi
+
+    cd $ENGINE_DIR
+    if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
+      git checkout $GITHUB_ENGINE_BRANCH_NAME
+      git log -1
+    fi
+    cd -
 }
 
 function fast_tests() { # Run fast tests only on qovery-engine
