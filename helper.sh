@@ -16,7 +16,7 @@ ARGS_NUM=$#
 QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=cloned-engine
-LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
+export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
 
 function print_help() {
   echo "Usage: $0 <option>"
@@ -202,7 +202,6 @@ function all-test-remote-lib(){
 function fast-test-remote-lib(){
   GITHUB_ENGINE_BRANCH_NAME=$1
   #sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
-  export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   nb_treads=8
   export_env
