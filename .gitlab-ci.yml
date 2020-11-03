@@ -76,6 +76,16 @@ dev-full-tests-sequential:
     refs:
       - dev
 
+tmp-single-test:
+  stage: tests
+  retry: 1
+  script:
+    - ./helper.sh single_test aws::aws_environment::deploy_a_working_environment_with_domain
+  when: manual
+  only:
+    refs:
+      - dev
+
 dev-build:
   stage: build
   retry: 1
@@ -91,16 +101,6 @@ dev-release:
   retry: 1
   script:
     - ./helper.sh new_release
-  when: manual
-  only:
-    refs:
-      - dev
-
-tmp-single-test:
-  stage: release
-  retry: 1
-  script:
-    - ./helper.sh single_test aws::aws_environment::deploy_a_working_environment_with_domain
   when: manual
   only:
     refs:
