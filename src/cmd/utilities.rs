@@ -63,7 +63,12 @@ where
 
     let exit_status = match command(binary, args, None).spawn().unwrap().wait() {
         Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
+        Err(_) => {
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some("error while executing an internal command"),
+            ));
+        }
     };
 
     if exit_status.success() {
@@ -89,7 +94,12 @@ where
 
     let exit_status = match command(binary, args, Some(envs)).spawn().unwrap().wait() {
         Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
+        Err(_) => {
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some("error while executing an internal command"),
+            ));
+        }
     };
 
     if exit_status.success() {
@@ -142,7 +152,12 @@ where
 
     let exit_status = match child.wait() {
         Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
+        Err(_) => {
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some("error while executing an internal command"),
+            ));
+        }
     };
 
     if exit_status.success() {
@@ -178,7 +193,12 @@ where
 
     let exit_status = match child.wait() {
         Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
+        Err(_) => {
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some("error while executing an internal command"),
+            ));
+        }
     };
 
     if exit_status.success() {
