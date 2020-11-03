@@ -63,21 +63,16 @@ where
 
     let exit_status = match command(binary, args, None).spawn().unwrap().wait() {
         Ok(x) => x,
-        Err(_) => {
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("error while executing an internal command"),
-            ));
-        }
+        Err(err) => return Err(SimpleError::from(err)),
     };
 
     if exit_status.success() {
         return Ok(());
     }
 
-    Err(SimpleError::new::<&str>(
+    Err(SimpleError::new(
         SimpleErrorKind::Command(exit_status),
-        None,
+        Some("error while executing an internal command"),
     ))
 }
 
@@ -94,21 +89,16 @@ where
 
     let exit_status = match command(binary, args, Some(envs)).spawn().unwrap().wait() {
         Ok(x) => x,
-        Err(_) => {
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("error while executing an internal command"),
-            ));
-        }
+        Err(err) => return Err(SimpleError::from(err)),
     };
 
     if exit_status.success() {
         return Ok(());
     }
 
-    Err(SimpleError::new::<String>(
+    Err(SimpleError::new(
         SimpleErrorKind::Command(exit_status),
-        None,
+        Some("error while executing an internal command"),
     ))
 }
 
@@ -152,12 +142,7 @@ where
 
     let exit_status = match child.wait() {
         Ok(x) => x,
-        Err(_) => {
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("error while executing an internal command"),
-            ));
-        }
+        Err(err) => return Err(SimpleError::from(err)),
     };
 
     if exit_status.success() {
@@ -166,7 +151,7 @@ where
 
     Err(SimpleError::new(
         SimpleErrorKind::Command(exit_status),
-        Some(command_string),
+        Some("error while executing an internal command"),
     ))
 }
 
@@ -193,12 +178,7 @@ where
 
     let exit_status = match child.wait() {
         Ok(x) => x,
-        Err(_) => {
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("error while executing an internal command"),
-            ));
-        }
+        Err(err) => return Err(SimpleError::from(err)),
     };
 
     if exit_status.success() {
@@ -207,7 +187,7 @@ where
 
     Err(SimpleError::new(
         SimpleErrorKind::Command(exit_status),
-        Some(command_string),
+        Some("error while executing an internal command"),
     ))
 }
 
