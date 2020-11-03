@@ -25,7 +25,7 @@ function run_tests() {
   GITLAB_REF="dev"
 
   echo "Requesting Gitlab pipeline"
-  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
+  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
   if [ $(echo $pipeline_id | egrep -c '^[0-9]+$') -eq 0 ] ; then
     echo "Pipeline ID is not correct, we expected a number and got: $pipeline_id"
     exit 1
