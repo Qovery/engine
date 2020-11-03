@@ -56,6 +56,26 @@ dev-full-tests:
     refs:
       - dev
 
+dev-fast-tests-sequential:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh fast_tests_seq
+  when: manual
+  only:
+    refs:
+      - dev
+
+dev-full-tests-sequential:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh all_tests_seq
+  when: manual
+  only:
+    refs:
+      - dev
+
 dev-build:
   stage: build
   retry: 1

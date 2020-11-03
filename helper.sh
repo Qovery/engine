@@ -282,13 +282,13 @@ get_release_ga)
 fast_tests)
   fast_tests 8
   ;;
-fast_tests-seq)
+fast_tests_seq)
   fast_tests 1
   ;;
 all_tests)
   all_tests 8
   ;;
-all_tests-seq)
+all_tests_seq)
   all_tests 1
   ;;
 fast-test-remote-lib)
