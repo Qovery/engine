@@ -15,9 +15,229 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 7,
   "links": [],
   "panels": [
+    {
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 19,
+      "title": "Critical errors",
+      "type": "row"
+    },
+    {
+      "alert": {
+        "alertRuleTags": {},
+        "conditions": [
+          {
+            "evaluator": {
+              "params": [
+                0
+              ],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "params": [],
+              "type": "avg"
+            },
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "for": "5m",
+        "frequency": "1m",
+        "handler": 1,
+        "message": "THIS IS AN INTERNAL ERROR, THE SUPPORT TEAM HAS BEEN ALERTED",
+        "name": "Critical alert",
+        "noDataState": "ok",
+        "notifications": []
+      },
+      "aliasColors": {
+        "Errors": "red"
+      },
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "PromLoki",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 2,
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "hiddenSeries": false,
+      "id": 20,
+      "legend": {
+        "alignAsTable": true,
+        "avg": false,
+        "current": true,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": false,
+      "linewidth": 2,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pluginVersion": "7.0.3",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(rate(({job=\"qovery/qovery-engine\"}[2m] |= \"~~ THIS IS AN INTERNAL ERROR, THE SUPPORT TEAM HAS BEEN ALERTED ~~\")))",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Errors",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [
+        {
+          "colorMode": "critical",
+          "fill": true,
+          "line": true,
+          "op": "gt",
+          "value": 0
+        }
+      ],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Internal errors",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:336",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:337",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "datasource": "Loki",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": null
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 17,
+      "options": {
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "7.0.3",
+      "targets": [
+        {
+          "expr": "{job=\"qovery/qovery-engine\"} |= \"~~ THIS IS AN INTERNAL ERROR, THE SUPPORT TEAM HAS BEEN ALERTED ~~\"",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Internal logs errors",
+      "type": "logs"
+    },
     {
       "collapsed": false,
       "datasource": null,
@@ -25,7 +245,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 19
       },
       "id": 9,
       "panels": [],
@@ -102,7 +322,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 1
+        "y": 20
       },
       "hiddenSeries": false,
       "id": 2,
@@ -220,7 +440,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 27
       },
       "id": 5,
       "options": {
@@ -248,7 +468,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 38
       },
       "id": 11,
       "panels": [],
@@ -325,7 +545,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 39
       },
       "hiddenSeries": false,
       "id": 6,
@@ -443,7 +663,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 47
       },
       "id": 14,
       "options": {
@@ -471,7 +691,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 58
       },
       "id": 13,
       "panels": [],
@@ -548,7 +768,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 59
       },
       "hiddenSeries": false,
       "id": 3,
@@ -665,7 +885,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 59
       },
       "id": 7,
       "options": {
@@ -695,7 +915,7 @@
     "list": []
   },
   "time": {
-    "from": "now-12h",
+    "from": "now-3h",
     "to": "now"
   },
   "timepicker": {
@@ -714,5 +934,5 @@
   "timezone": "",
   "title": "Engine",
   "uid": "xVPlLnFMk",
-  "version": 1
+  "version": 2
 }
