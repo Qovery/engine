@@ -80,16 +80,6 @@ dev-full-tests-sequential:
     refs:
       - dev
 
-tmp-single-test:
-  stage: tests
-  retry: 1
-  script:
-    - ./helper.sh single_test aws::aws_environment::deploy_a_working_environment_with_domain
-  when: manual
-  only:
-    refs:
-      - dev
-
 dev-build:
   stage: build
   retry: 1

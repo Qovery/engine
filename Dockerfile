@@ -8,7 +8,7 @@ ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
 
-RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config openssl-dev
+RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev
 WORKDIR /usr/src/app
 ADD . .
 
@@ -39,6 +39,7 @@ RUN apt-get update && \
 
 WORKDIR $HOME_DIR
 COPY --from=build /usr/src/app/target/release/app .
+ADD cloned-engine/lib lib
 COPY --from=build /usr/src/app/docker/engine/load.sh .
 COPY --from=build /usr/src/app/docker/engine/run.sh .
 COPY --from=build /usr/src/app/bin_versions .
@@ -56,7 +57,7 @@ USER qovery
 VOLUME /qovery_libs
 ENV LOCAL_DEPLOY false
 
-ENV PATH="/home/qovery/binaries:${PATH}"
+ENV PATH="$HOME_DIR/binaries:${PATH}"
 ENV BIN_VERSION_FILE="$HOME_DIR/bin_versions"
 
 CMD ["./run.sh"]
