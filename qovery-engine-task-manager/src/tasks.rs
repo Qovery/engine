@@ -630,15 +630,16 @@ fn format_engine_error_output(
     match engine_error.cause {
         EngineErrorCause::Internal => format!(
             r#"
-        ~~ THIS IS AN INTERNAL ERROR, THE SUPPORT TEAM HAS BEEN ALERTED ~~
 
-        Execution ID: {}
-        Scope: {}
-        {}
+~~ THIS IS AN INTERNAL ERROR, THE SUPPORT TEAM HAS BEEN ALERTED ~~
 
-        Error: {}
+Execution ID: {}
+Scope: {}
+{}
 
-        You can join us on Discord (https://discord.qovery.com) to have more info and retry later the time that the support team handle the issue.
+Error: {}
+
+Join us on Discord (https://discord.qovery.com) to have more info and retry later the time that the support team handle the issue.
         "#,
             engine_error.execution_id,
             scope,
@@ -647,15 +648,16 @@ fn format_engine_error_output(
         ),
         EngineErrorCause::User(hint) => format!(
             r#"
-        Execution ID: {}
-        Scope: {}
-        {}
 
-        Error: {}
+Execution ID: {}
+Scope: {}
+{}
 
-        Hint: {}
+Error: {}
 
-        Join us on Discord (https://discord.qovery.com) if you need support
+Hint: {}
+
+Join us on Discord (https://discord.qovery.com) if you need support
         "#,
             engine_error.execution_id,
             scope,
