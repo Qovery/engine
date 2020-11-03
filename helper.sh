@@ -212,6 +212,16 @@ function all_tests() { # Run all tests on qovery-engine
   cargo test --color always -- --ignored --test-threads=$nb_treads
 }
 
+function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
+  test_name=$1
+  export LIB_ROOT_DIR=$(pwd)/lib
+  export RUST_LOG=info
+  export_env
+  prepare_tests
+  cd cloned-engine
+  cargo test --package qovery-engine --test lib $test_name -- --ignored --exact
+}
+
 function export_env() {
   for line in $(cat .env)
   do
@@ -296,6 +306,10 @@ fast-test-remote-lib)
   ;;
 all-test-remote-lib)
   all-test-remote-lib $GITHUB_ENGINE_BRANCH_NAME
+  ;;
+single_test)
+  check_num_args 2
+  single_test $2
   ;;
 *)
   print_help

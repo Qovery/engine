@@ -96,6 +96,16 @@ dev-release:
     refs:
       - dev
 
+tmp-single-test:
+  stage: release
+  retry: 1
+  script:
+    - ./helper.sh single_test aws::aws_environment::deploy_a_working_environment_with_domain
+  when: manual
+  only:
+    refs:
+      - dev
+
 master-build:
   stage: build
   retry: 1
