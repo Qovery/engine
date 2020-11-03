@@ -145,9 +145,6 @@ function prepare_engine() {
     fi
 
     ENGINE_BRANCH=""
-    if [ ! -z $CI_COMMIT_BRANCH ] ; then
-      ENGINE_BRANCH=$CI_COMMIT_BRANCH
-    fi
     if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
       ENGINE_BRANCH=$GITHUB_ENGINE_BRANCH_NAME
     fi
@@ -156,7 +153,12 @@ function prepare_engine() {
     git checkout $ENGINE_BRANCH
     echo "Latest commit on branch $ENGINE_BRANCH:"
     git log -1
+    commit_id=$(git rev-parse HEAD)
     cd -
+
+    # Update in place the Cargo.toml to ensure consistency between lib folder and engine lib
+    sed -ri "s/(.+github.com\/Qovery\/engine.*rev.*?\")[A-Za-z0-9]+(.+)/\1$commit_id\2/" app/Cargo.toml
+    sed -ri "s/(.+github.com\/Qovery\/engine.*rev.*?\")[A-Za-z0-9]+(.+)/\1$commit_id\2/" qovery-engine-task-manager/Cargo.toml
 }
 
 function fast_tests() { # Run fast tests only on qovery-engine
