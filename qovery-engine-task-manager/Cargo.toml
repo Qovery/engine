@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-qovery-engine = { git = "https://github.com/Qovery/engine", rev = "d083dfa1afb95b894b1240243d04c5b51a0555b2" }
+qovery-engine = { git = "https://github.com/Qovery/engine", rev = "43ea01f35c0d6e27a611a4e0398686222f3eba26" }
 crossbeam-channel = "0.4.4"
 evmap = "11.0.0-alpha.1"
 serde = { version = "1.0", features = ["derive"] }
