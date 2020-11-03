@@ -3,10 +3,11 @@ use std::rc::Rc;
 use git2::Error;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use crate::build_platform::error::BuildPlatformError;
 use crate::git::Credentials;
 use crate::models::{Context, ProgressListener};
 
+pub mod error;
 pub mod local_docker;
 
 pub trait BuildPlatform {
@@ -14,24 +15,10 @@ pub trait BuildPlatform {
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
-    fn name_with_id(&self) -> String {
-        format!("{} ({})", self.name(), self.id())
-    }
-    fn is_valid(&self) -> Result<(), EngineError>;
+    fn is_valid(&self) -> Result<(), BuildPlatformError>;
     fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>);
-    fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError>;
-    fn build_error(&self, build: Build) -> Result<BuildResult, EngineError>;
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::BuildPlatform(self.id().to_string(), self.name().to_string())
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
-        )
-    }
+    fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, BuildError>;
+    fn build_error(&self, build: Build) -> Result<BuildResult, BuildError>;
 }
 
 pub struct Build {
@@ -73,6 +60,12 @@ impl Image {
 
 pub struct BuildResult {
     pub build: Build,
+}
+
+#[derive(Debug)]
+pub enum BuildError {
+    Git(Error),
+    Error,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

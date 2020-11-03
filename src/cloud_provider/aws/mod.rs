@@ -5,8 +5,7 @@ use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
-use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCredentials};
-use crate::error::EngineErrorCause;
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
 use crate::models::{Context, Listener, Listeners, ProgressListener};
 use crate::runtime::async_run;
 
@@ -86,20 +85,13 @@ impl CloudProvider for AWS {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), CloudProviderError> {
         let client = StsClient::new_with_client(self.client(), Region::default());
         let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(_x) => Ok(()),
-            Err(_) => {
-                return Err(
-                    self.engine_error(
-                        EngineErrorCause::User("Your AWS account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials."),
-                        format!("failed to login to AWS {}", self.name_with_id()))
-                );
-            }
+            Err(err) => Err(CloudProviderError::from(err)),
         }
     }
 

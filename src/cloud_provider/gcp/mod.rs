@@ -1,7 +1,7 @@
 use std::any::Any;
+use std::rc::Rc;
 
-use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
-use crate::error::EngineError;
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
 use crate::models::{Context, Listener, ProgressListener};
 
 pub struct GCP {
@@ -43,7 +43,7 @@ impl<'x> CloudProvider for GCP {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), CloudProviderError> {
         Ok(())
     }
 

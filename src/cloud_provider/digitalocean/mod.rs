@@ -1,3 +1,5 @@
+pub mod kubernetes;
+
 extern crate digitalocean;
 
 use std::any::Any;
@@ -5,22 +7,32 @@ use std::rc::Rc;
 
 use digitalocean::DigitalOcean;
 
-use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
-use crate::error::EngineError;
-use crate::models::{Context, Listener, ProgressListener};
+use crate::cloud_provider::{CloudProvider, CloudProviderError, Kind, TerraformStateCredentials};
+use crate::models::{Context, Listener, ProgressListener, Listeners};
 
 pub struct DO {
     context: Context,
     id: String,
+    name: String,
     pub token: String,
+    terraform_state_credentials: TerraformStateCredentials,
+    listeners: Listeners,
 }
 
 impl DO {
-    pub fn new(context: Context, id: &str, token: &str) -> Self {
+    pub fn new(context: Context,
+               id: &str,
+               token: &str,
+               name: &str,
+               terraform_state_credentials: TerraformStateCredentials
+    ) -> Self {
         DO {
             context,
             id: id.to_string(),
+            name: name.to_string(),
             token: token.to_string(),
+            terraform_state_credentials,
+            listeners: vec![],
         }
     }
 
@@ -43,26 +55,29 @@ impl CloudProvider for DO {
     }
 
     fn organization_id(&self) -> &str {
-        unimplemented!()
+        self.id.as_str()
     }
 
     fn name(&self) -> &str {
-        unimplemented!()
+        self.name.as_str() }
+
+    fn is_valid(&self) -> Result<(), CloudProviderError> {
+        let client = DigitalOcean::new(&self.token);
+        match client {
+            Ok(_x) => Ok(()),
+            Err(err)  => Err(CloudProviderError::Error(Box::new(err))),
+        }
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn add_listener(&mut self, _listener: Listener) {
-        unimplemented!()
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener)
     }
 
     fn terraform_state_credentials(&self) -> &TerraformStateCredentials {
-        unimplemented!()
+        &self.terraform_state_credentials
     }
 
     fn as_any(&self) -> &dyn Any {
-        unimplemented!()
+        self
     }
 }

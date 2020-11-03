@@ -6,17 +6,14 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause,
-    Service, ServiceType, StatefulService, Upgrade,
+    Action, Backup, Create, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause, Service,
+    ServiceError, ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::kubectl::{
     kubectl_exec_create_namespace, kubectl_exec_delete_namespace, kubectl_exec_delete_secret,
 };
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{
-    from_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
-};
 use crate::models::Context;
 
 pub struct MySQL {
@@ -61,11 +58,9 @@ impl MySQL {
             options,
         }
     }
-
     fn helm_release_name(&self) -> String {
         crate::string::cut(format!("mysql-{}", self.id()), 50)
     }
-
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(
             self.context.workspace_root_dir(),
@@ -73,24 +68,20 @@ impl MySQL {
             format!("databases/{}", self.name()),
         )
     }
-
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
-
         // FIXME: is there an other way than downcast a pointer?
         let cp = kubernetes
             .cloud_provider()
             .as_any()
             .downcast_ref::<AWS>()
             .expect("Could not downcast kubernetes.cloud_provider() to AWS");
-
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kubernetes_config_file_path = utilities::get_kubernetes_config_path(
             self.workspace_directory().as_str(),
             kubernetes,
             environment,
         );
-
         match kubernetes_config_file_path {
             Ok(kube_config) => {
                 context.insert("kubeconfig_path", &kube_config.as_str());
@@ -102,12 +93,8 @@ impl MySQL {
 
                 utilities::create_namespace(&environment.namespace(), kube_config.as_str(), aws);
             }
-            Err(e) => error!(
-                "Failed to generate the kubernetes config file path: {:?}",
-                e
-            ),
+            Err(e) => error!("Failed to generate the kubernetes config file path: {}", e),
         }
-
         context.insert("namespace", environment.namespace());
 
         context.insert("aws_access_key", &cp.access_key_id);
@@ -132,7 +119,7 @@ impl MySQL {
         context
     }
 
-    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), EngineError> {
+    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), ServiceError> {
         let workspace_dir = self.workspace_directory();
 
         match target {
@@ -144,58 +131,39 @@ impl MySQL {
 
                 let context = self.tera_context(*kubernetes, *environment);
 
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
-                        &workspace_dir,
-                        &context,
-                    ),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                    &workspace_dir,
+                    &context,
                 )?;
-
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
+                    workspace_dir.as_str(),
+                    &context,
                 )?;
-
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!(
-                            "{}/aws/charts/external-name-svc",
-                            self.context.lib_root_dir()
-                        )
-                        .as_str(),
-                        format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
-                        &context,
-                    ),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
+                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
+                    &context,
                 )?;
-
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!(
-                            "{}/aws/charts/external-name-svc",
-                            self.context.lib_root_dir()
-                        )
-                        .as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
+                    workspace_dir.as_str(),
+                    &context,
                 )?;
 
                 match crate::cmd::terraform::terraform_exec_with_init_validate_destroy(
                     workspace_dir.as_str(),
                 ) {
-                    Ok(_) => {
+                    Ok(o) => {
                         info!("Deleting secrets containing tfstates");
                         utilities::delete_terraform_tfstate_secret(
                             *kubernetes,
@@ -203,16 +171,8 @@ impl MySQL {
                             self.workspace_directory().as_str(),
                         );
                     }
-                    Err(e) => {
-                        let message = format!(
-                            "Error while destroying infrastructure {}",
-                            e.message.unwrap_or("".into())
-                        );
-
-                        error!("{}", message);
-
-                        return Err(self.engine_error(EngineErrorCause::Internal, message));
-                    }
+                    //TODO: find a way to raise the error
+                    Err(e) => error!("Error while destroying infrastructure {}", e),
                 }
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
@@ -220,28 +180,20 @@ impl MySQL {
                 let selector = format!("app={}", self.name());
 
                 if is_error {
-                    let _ = from_simple_error_to_engine_error(
-                        self.engine_error_scope(),
-                        self.context.execution_id(),
-                        common::get_stateless_resource_information(
-                            *kubernetes,
-                            *environment,
-                            workspace_dir.as_str(),
-                            selector.as_str(),
-                        ),
+                    let _ = common::get_stateless_resource_information(
+                        *kubernetes,
+                        *environment,
+                        workspace_dir.as_str(),
+                        selector.as_str(),
                     )?;
                 }
 
                 // clean the resource
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    common::do_stateless_service_cleanup(
-                        *kubernetes,
-                        *environment,
-                        workspace_dir.as_str(),
-                        helm_release_name.as_str(),
-                    ),
+                let _ = common::do_stateless_service_cleanup(
+                    *kubernetes,
+                    *environment,
+                    workspace_dir.as_str(),
+                    helm_release_name.as_str(),
                 )?;
             }
         }
@@ -294,10 +246,8 @@ impl Service for MySQL {
     }
 }
 
-impl Database for MySQL {}
-
 impl Create for MySQL {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
@@ -306,47 +256,29 @@ impl Create for MySQL {
 
                 let workspace_dir = self.workspace_directory();
 
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
-                        &workspace_dir,
-                        &context,
-                    ),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
+                    &workspace_dir,
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
+                    workspace_dir.as_str(),
+                    &context,
+                )?;
+                crate::template::generate_and_copy_all_files_into_dir(
+                    format!(
+                        "{}/aws/charts/external-name-svc",
+                        self.context.lib_root_dir()
+                    )
+                    .as_str(),
+                    format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
+                    &context,
                 )?;
 
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!("{}/aws/services/mysql", self.context.lib_root_dir()).as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
-                )?;
-
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!(
-                            "{}/aws/charts/external-name-svc",
-                            self.context.lib_root_dir()
-                        )
-                        .as_str(),
-                        format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
-                        &context,
-                    ),
-                )?;
-
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
-                        workspace_dir.as_str(),
-                        false,
-                    ),
+                crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+                    workspace_dir.as_str(),
+                    false,
                 )?;
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
@@ -362,29 +294,21 @@ impl Create for MySQL {
                     .downcast_ref::<AWS>()
                     .unwrap();
 
-                let kubernetes_config_file_path = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    common::kubernetes_config_path(
-                        workspace_dir.as_str(),
-                        environment.organization_id.as_str(),
-                        kubernetes.id(),
-                        aws.access_key_id.as_str(),
-                        aws.secret_access_key.as_str(),
-                        kubernetes.region(),
-                    ),
+                let kubernetes_config_file_path = common::kubernetes_config_path(
+                    workspace_dir.as_str(),
+                    environment.organization_id.as_str(),
+                    kubernetes.id(),
+                    aws.access_key_id.as_str(),
+                    aws.secret_access_key.as_str(),
+                    kubernetes.region(),
                 )?;
 
                 let from_dir = format!("{}/common/services/mysql", self.context.lib_root_dir());
 
-                let _ = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        from_dir.as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
+                let _ = crate::template::generate_and_copy_all_files_into_dir(
+                    from_dir.as_str(),
+                    workspace_dir.as_str(),
+                    &context,
                 )?;
 
                 // render templates
@@ -395,26 +319,19 @@ impl Create for MySQL {
                 ];
 
                 // do exec helm upgrade and return the last deployment status
-                let helm_history_row = from_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::cmd::helm::helm_exec_with_upgrade_history(
-                        kubernetes_config_file_path.as_str(),
-                        environment.namespace(),
-                        helm_release_name.as_str(),
-                        workspace_dir.as_str(),
-                        aws_credentials_envs.clone(),
-                    ),
+                let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
+                    kubernetes_config_file_path.as_str(),
+                    environment.namespace(),
+                    helm_release_name.as_str(),
+                    workspace_dir.as_str(),
+                    aws_credentials_envs.clone(),
                 )?;
 
                 // check deployment status
                 if helm_history_row.is_none()
                     || !helm_history_row.unwrap().is_successfully_deployed()
                 {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        "MySQL database fails to be deployed (before start)".into(),
-                    ));
+                    return Err(ServiceError::OnCreateFailed);
                 }
 
                 // check app status
@@ -427,16 +344,7 @@ impl Create for MySQL {
                     aws_credentials_envs,
                 ) {
                     Ok(Some(true)) => {}
-                    _ => {
-                        return Err(self.engine_error(
-                            EngineErrorCause::Internal,
-                            format!(
-                                "MySQL database {} with id {} failed to start after several retries",
-                                self.name(),
-                                self.id()
-                            ),
-                        ));
-                    }
+                    _ => return Err(ServiceError::OnCreateFailed),
                 }
             }
         }
@@ -444,12 +352,12 @@ impl Create for MySQL {
         Ok(())
     }
 
-    fn on_create_check(&self) -> Result<(), EngineError> {
+    fn on_create_check(&self) -> Result<(), ServiceError> {
         //FIXME : perform an actual check
         Ok(())
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.MySQL.on_create_error() called for {}", self.name());
 
         self.delete(target, true)
@@ -457,7 +365,7 @@ impl Create for MySQL {
 }
 
 impl Pause for MySQL {
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.MySQL.on_pause() called for {}", self.name());
 
         // TODO how to pause production? - the goal is to reduce cost, but it is possible to pause a production env?
@@ -466,11 +374,11 @@ impl Pause for MySQL {
         Ok(())
     }
 
-    fn on_pause_check(&self) -> Result<(), EngineError> {
+    fn on_pause_check(&self) -> Result<(), ServiceError> {
         Ok(())
     }
 
-    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.MySQL.on_pause_error() called for {}", self.name());
 
         // TODO what to do if there is a pause error?
@@ -480,85 +388,85 @@ impl Pause for MySQL {
 }
 
 impl Delete for MySQL {
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.MySQL.on_delete() called for {}", self.name());
         self.delete(target, false)
     }
 
-    fn on_delete_check(&self) -> Result<(), EngineError> {
+    fn on_delete_check(&self) -> Result<(), ServiceError> {
         Ok(())
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.MySQL.on_create_error() called for {}", self.name());
         self.delete(target, true)
     }
 }
 
 impl crate::cloud_provider::service::Clone for MySQL {
-    fn on_clone(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_clone(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_clone_check(&self) -> Result<(), EngineError> {
+    fn on_clone_check(&self) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_clone_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_clone_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 }
 
 impl Upgrade for MySQL {
-    fn on_upgrade(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_upgrade(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_upgrade_check(&self) -> Result<(), EngineError> {
+    fn on_upgrade_check(&self) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_upgrade_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_upgrade_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 }
 
 impl Downgrade for MySQL {
-    fn on_downgrade(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_downgrade(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_downgrade_check(&self) -> Result<(), EngineError> {
+    fn on_downgrade_check(&self) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_downgrade_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_downgrade_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 }
 
 impl Backup for MySQL {
-    fn on_backup(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_backup(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_backup_check(&self) -> Result<(), EngineError> {
+    fn on_backup_check(&self) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_backup_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_backup_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_restore(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_restore(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_restore_check(&self) -> Result<(), EngineError> {
+    fn on_restore_check(&self) -> Result<(), ServiceError> {
         unimplemented!()
     }
 
-    fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), ServiceError> {
         unimplemented!()
     }
 }

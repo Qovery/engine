@@ -241,8 +241,8 @@ initChownData:
 
 
 # Administrator credentials when not using an existing secret (see below)
-adminUser: {{ grafana_admin_user }}
-adminPassword: {{ grafana_admin_password }}
+adminUser: {{ grafana-admin-user }}
+adminPassword: {{ grafana-admin-password }}
 
 # Use an existing secret for the admin user.
 admin:

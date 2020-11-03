@@ -3,8 +3,8 @@ use std::borrow::Borrow;
 use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
-use crate::dns_provider::DnsProvider;
-use crate::error::EngineError;
+use crate::dns_provider::{DnsProvider, DnsProviderError};
+use crate::error::ConfigurationError;
 use crate::models::Context;
 use crate::session::Session;
 
@@ -50,22 +50,44 @@ impl<'a> Engine {
     pub fn cloud_provider(&self) -> &dyn CloudProvider {
         self.cloud_provider.borrow()
     }
-
     pub fn dns_provider(&self) -> &dyn DnsProvider {
         self.dns_provider.borrow()
     }
 
-    pub fn is_valid(&self) -> Result<(), EngineError> {
-        self.build_platform.is_valid()?;
-        self.container_registry.is_valid()?;
-        self.cloud_provider.is_valid()?;
-        self.dns_provider.is_valid()?;
+    pub fn is_valid(&self) -> Result<(), ConfigurationError> {
+        match self.build_platform.is_valid() {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(ConfigurationError::BuildPlatform(err));
+            }
+        }
+
+        match self.container_registry.is_valid() {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(ConfigurationError::ContainerRegistry(err));
+            }
+        }
+
+        match self.cloud_provider.is_valid() {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(ConfigurationError::CloudProvider(err));
+            }
+        }
+
+        match self.dns_provider.is_valid() {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(ConfigurationError::DnsProvider(err));
+            }
+        }
 
         Ok(())
     }
 
     /// check and init the connection to all the services
-    pub fn session(&'a self) -> Result<Session<'a>, EngineError> {
+    pub fn session(&'a self) -> Result<Session<'a>, ConfigurationError> {
         match self.is_valid() {
             Ok(_) => Ok(Session::<'a> { engine: self }),
             Err(err) => Err(err),

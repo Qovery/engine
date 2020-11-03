@@ -126,14 +126,5 @@
   "documentdb_cidr_subnet": "23",
   "elasticsearch_cidr_subnet": "23",
   "tls_email_report": "CHANGE-ME",
-  "engine_version_controller_token": "fake_token",
-  "grafana_admin_user": "ajdoiawjdiodjidfujij",
-  "grafana_admin_password": "ajdoiawjdiojAWDJawdj",
-  "discord_api_key": "",
-  "qovery_nats_url": "",
-  "qovery_ssh_key": "",
-  "eks_access_cidr_blocks": [
-    "185.162.179.5/32",
-    "78.192.247.93/32"
-  ]
+  "engine_version_controller_token": "fake_token"
 }

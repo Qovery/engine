@@ -1,23 +1,20 @@
+use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::service::{
+    Action, Create, Delete, Pause, Router as RRouter, Service, ServiceError, ServiceType,
+    StatelessService,
+};
+use crate::cloud_provider::DeploymentTarget;
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::models::{
+    Context, Listeners, ListenersHelper, Metadata, ProgressInfo, ProgressLevel, ProgressScope,
+};
 use dns_lookup::lookup_host;
 use retry::delay::{Fibonacci, Fixed};
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
-
-use crate::cloud_provider::aws::{common, AWS};
-use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::{
-    Action, Create, Delete, Pause, Router as RRouter, Service, ServiceType, StatelessService,
-};
-use crate::cloud_provider::DeploymentTarget;
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{
-    from_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError, SimpleErrorKind,
-};
-use crate::models::{
-    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
 
 pub struct Router {
     context: Context,
@@ -222,7 +219,7 @@ impl Router {
         context
     }
 
-    fn delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
@@ -231,15 +228,11 @@ impl Router {
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let _ = from_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::do_stateless_service_cleanup(
-                kubernetes,
-                environment,
-                workspace_dir.as_str(),
-                helm_release_name.as_str(),
-            ),
+        let _ = common::do_stateless_service_cleanup(
+            kubernetes,
+            environment,
+            workspace_dir.as_str(),
+            helm_release_name.as_str(),
         )?;
 
         Ok(())
@@ -289,7 +282,7 @@ impl Service for Router {
 }
 
 impl crate::cloud_provider::service::Router for Router {
-    fn check_domains(&self) -> Result<(), EngineError> {
+    fn check_domains(&self) -> Result<(), ServiceError> {
         let check_result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
             // TODO send information back to the core
             info!("check custom domain {}", self.default_domain.as_str());
@@ -306,15 +299,7 @@ impl crate::cloud_provider::service::Router for Router {
 
         match check_result {
             Ok(_) => {}
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "domain {} is still not ready after several retries",
-                        self.default_domain.as_str()
-                    ),
-                ))
-            }
+            Err(_) => return Err(ServiceError::CheckFailed),
         }
 
         Ok(())
@@ -324,7 +309,7 @@ impl crate::cloud_provider::service::Router for Router {
 impl StatelessService for Router {}
 
 impl Create for Router {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.router.on_create() called for {}", self.name());
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
@@ -340,17 +325,13 @@ impl Create for Router {
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let kubernetes_config_file_path = from_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                environment.organization_id.as_str(),
-                kubernetes.id(),
-                aws.access_key_id.as_str(),
-                aws.secret_access_key.as_str(),
-                kubernetes.region(),
-            ),
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            workspace_dir.as_str(),
+            environment.organization_id.as_str(),
+            kubernetes.id(),
+            aws.access_key_id.as_str(),
+            aws.secret_access_key.as_str(),
+            kubernetes.region(),
         )?;
 
         // respect order - getting the context here and not before is mandatory
@@ -368,50 +349,33 @@ impl Create for Router {
             );
 
             let from_dir = format!("{}/common/chart_values", self.context.lib_root_dir());
-            let _ = from_simple_error_to_engine_error(
-                self.engine_error_scope(),
-                self.context.execution_id(),
-                crate::template::generate_and_copy_all_files_into_dir(
-                    from_dir.as_str(),
-                    into_dir.as_str(),
-                    &context,
-                ),
+            let _ = crate::template::generate_and_copy_all_files_into_dir(
+                from_dir.as_str(),
+                into_dir.as_str(),
+                &context,
             )?;
 
-            let _ = from_simple_error_to_engine_error(
-                self.engine_error_scope(),
-                self.context.execution_id(),
-                crate::template::copy_non_template_files(
-                    format!(
-                        "{}/common/charts/nginx-ingress",
-                        self.context().lib_root_dir()
-                    ),
-                    into_dir.as_str(),
+            let _ = crate::template::copy_non_template_files(
+                format!(
+                    "{}/common/charts/nginx-ingress",
+                    self.context().lib_root_dir()
                 ),
+                into_dir.as_str(),
             )?;
-
             // do exec helm upgrade and return the last deployment status
-            let helm_history_row = from_simple_error_to_engine_error(
-                self.engine_error_scope(),
-                self.context.execution_id(),
-                crate::cmd::helm::helm_exec_with_upgrade_history_with_override(
-                    kubernetes_config_file_path.as_str(),
-                    environment.namespace(),
-                    format!("custom-{}", helm_release_name).as_str(),
-                    into_dir.as_str(),
-                    format!("{}/nginx-ingress.yaml", into_dir.as_str()).as_str(),
-                    self.aws_credentials_envs(aws).to_vec(),
-                ),
+            let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history_with_override(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                format!("custom-{}", helm_release_name).as_str(),
+                into_dir.as_str(),
+                format!("{}/nginx-ingress.yaml", into_dir.as_str()).as_str(),
+                self.aws_credentials_envs(aws).to_vec(),
             )?;
 
             // check deployment status
             if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    "Router has failed to be deployed".into(),
-                ));
+                return Err(ServiceError::OnCreateFailed);
             }
-
             // waiting for the nlb, it should be deploy to get fqdn
             let external_ingress_hostname_custom_result =
                 retry::retry(Fibonacci::from_millis(3000).take(10), || {
@@ -426,7 +390,6 @@ impl Create for Router {
                             .as_str(),
                             self.aws_credentials_envs(aws).to_vec(),
                         );
-
                     match external_ingress_hostname_custom {
                         Ok(external_ingress_hostname_custom) => {
                             OperationResult::Ok(external_ingress_hostname_custom)
@@ -439,51 +402,38 @@ impl Create for Router {
                         }
                     }
                 });
-
             match external_ingress_hostname_custom_result {
                 Ok(elb) => {
                     //put it in the context
                     context.insert("nlb_ingress_hostname", &elb);
                 }
-                Err(_) => error!("Error getting the NLB endpoint to be able to configure TLS"),
+                Err(e) => error!("Error getting the NLB endpoint to be able to configure TLS"),
             }
         }
-
         let from_dir = format!("{}/aws/charts/q-ingress-tls", self.context.lib_root_dir());
-        let _ = from_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                from_dir.as_str(),
-                workspace_dir.as_str(),
-                &context,
-            ),
+        let _ = crate::template::generate_and_copy_all_files_into_dir(
+            from_dir.as_str(),
+            workspace_dir.as_str(),
+            &context,
         )?;
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = from_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::cmd::helm::helm_exec_with_upgrade_history(
-                kubernetes_config_file_path.as_str(),
-                environment.namespace(),
-                helm_release_name.as_str(),
-                workspace_dir.as_str(),
-                self.aws_credentials_envs(aws).to_vec(),
-            ),
+        let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name.as_str(),
+            workspace_dir.as_str(),
+            self.aws_credentials_envs(aws).to_vec(),
         )?;
 
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(self.engine_error(
-                EngineErrorCause::Internal,
-                "Router has failed to be deployed".into(),
-            ));
+            return Err(ServiceError::OnCreateFailed);
         }
 
         Ok(())
     }
 
-    fn on_create_check(&self) -> Result<(), EngineError> {
+    fn on_create_check(&self) -> Result<(), ServiceError> {
         let check_result = retry::retry(Fixed::from_millis(3000).take(60), || {
             let rs_ips = lookup_host(self.default_domain.as_str());
             match rs_ips {
@@ -497,63 +447,58 @@ impl Create for Router {
                 }
             }
         });
-
         match check_result {
-            Ok(_) => Ok(()),
-            Err(_) => {
-                let message = "While checking the DNS propagation";
-                error!("{}", message);
-
+            Ok(out) => Ok(()),
+            Err(e) => {
+                error!("While checking the DNS propagation");
                 let listeners_helper = ListenersHelper::new(&self.listeners);
-
                 listeners_helper.error(ProgressInfo::new(
                     ProgressScope::Router {
-                        id: self.id().into(),
+                        id: self.id.to_string(),
                     },
                     ProgressLevel::Error,
                     Some("DNS propagation goes wrong."),
                     self.context.execution_id(),
                 ));
-
-                Err(self.engine_error(EngineErrorCause::Internal, message.into()))
+                Err(ServiceError::CheckFailed)
             }
         }
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.router.on_create_error() called for {}", self.name());
         self.delete(target)
     }
 }
 
 impl Pause for Router {
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.router.on_pause() called for {}", self.name());
         self.delete(target)
     }
 
-    fn on_pause_check(&self) -> Result<(), EngineError> {
+    fn on_pause_check(&self) -> Result<(), ServiceError> {
         warn!("AWS.router.on_pause_error() called for {}", self.name());
         // TODO check resource has been cleaned?
         Ok(())
     }
 
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         self.delete(target)
     }
 }
 
 impl Delete for Router {
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.router.on_delete() called for {}", self.name());
         self.delete(target)
     }
 
-    fn on_delete_check(&self) -> Result<(), EngineError> {
+    fn on_delete_check(&self) -> Result<(), ServiceError> {
         Ok(())
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!("AWS.router.on_delete_error() called for {}", self.name());
         self.delete(target)
     }

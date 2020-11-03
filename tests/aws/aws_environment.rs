@@ -11,11 +11,10 @@ use qovery_engine::models::{
     EnvironmentVariable, ExternalService, GitCredentials, Kind, Storage, StorageType,
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use test_utilities::aws::context;
 use test_utilities::utilities::init;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::generate_id;
+use self::test_utilities::utilities::{generate_id, context};
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have

@@ -6,12 +6,11 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Action, Application as AApplication, Create, Delete, ExternalService as EExternalService,
-    Pause, Service, ServiceType, StatelessService,
+    Action, Application, Create, Delete, Pause, Service, ServiceError, ServiceType,
+    StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{from_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -93,7 +92,7 @@ impl ExternalService {
         context
     }
 
-    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), EngineError> {
+    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), ServiceError> {
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
@@ -104,28 +103,20 @@ impl ExternalService {
         let selector = format!("app={}", self.name());
 
         if is_error {
-            let _ = from_simple_error_to_engine_error(
-                crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-                self.context.execution_id(),
-                common::get_stateless_resource_information(
-                    kubernetes,
-                    environment,
-                    workspace_dir.as_str(),
-                    selector.as_str(),
-                ),
+            let _ = common::get_stateless_resource_information(
+                kubernetes,
+                environment,
+                workspace_dir.as_str(),
+                selector.as_str(),
             )?;
         }
 
         // clean the resource
-        let _ = from_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            common::do_stateless_service_cleanup(
-                kubernetes,
-                environment,
-                workspace_dir.as_str(),
-                helm_release_name.as_str(),
-            ),
+        let _ = common::do_stateless_service_cleanup(
+            kubernetes,
+            environment,
+            workspace_dir.as_str(),
+            helm_release_name.as_str(),
         )?;
 
         Ok(())
@@ -189,7 +180,7 @@ impl Service for ExternalService {
 }
 
 impl Create for ExternalService {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!(
             "AWS.external_service.on_create() called for {}",
             self.name()
@@ -209,14 +200,10 @@ impl Create for ExternalService {
         let workspace_dir = self.workspace_directory();
 
         let from_dir = format!("{}/common/services/q-job", self.context.lib_root_dir());
-        let _ = from_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                from_dir.as_str(),
-                workspace_dir.as_str(),
-                &context,
-            ),
+        let _ = crate::template::generate_and_copy_all_files_into_dir(
+            from_dir.as_str(),
+            workspace_dir.as_str(),
+            &context,
         )?;
 
         // render
@@ -227,41 +214,28 @@ impl Create for ExternalService {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let kubernetes_config_file_path = from_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                environment.organization_id.as_str(),
-                kubernetes.id(),
-                aws.access_key_id.as_str(),
-                aws.secret_access_key.as_str(),
-                kubernetes.region(),
-            ),
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            workspace_dir.as_str(),
+            environment.organization_id.as_str(),
+            kubernetes.id(),
+            aws.access_key_id.as_str(),
+            aws.secret_access_key.as_str(),
+            kubernetes.region(),
         )?;
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = from_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            crate::cmd::helm::helm_exec_with_upgrade_history(
-                kubernetes_config_file_path.as_str(),
-                environment.namespace(),
-                helm_release_name.as_str(),
-                workspace_dir.as_str(),
-                aws_credentials_envs.clone(),
-            ),
+        let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name.as_str(),
+            workspace_dir.as_str(),
+            aws_credentials_envs.clone(),
         )?;
 
         // check deployment status
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(crate::cloud_provider::service::ExternalService::engine_error(self, EngineErrorCause::User(
-                "Your External Service didn't start for some reason. \
-                Are you sure your External Service is correctly running? You can give a try by running \
-                locally `docker run`. You can also check the External Service log from the web \
-                interface or the CLI with `qovery log`",
-            ), format!("External Service {} has failed to start ⤬", self.name_with_id()),
-            ));
+            // TODO get pod output by using kubectl and return it into the OnCreateFailed
+            return Err(ServiceError::OnCreateFailed);
         }
 
         // check job status
@@ -272,29 +246,17 @@ impl Create for ExternalService {
             aws_credentials_envs,
         ) {
             Ok(Some(true)) => {}
-            _ => {
-                return Err(
-                    crate::cloud_provider::service::ExternalService::engine_error(
-                        self,
-                        EngineErrorCause::Internal,
-                        format!(
-                            "External Service {} with id {} failed to start after several retries",
-                            self.name(),
-                            self.id()
-                        ),
-                    ),
-                );
-            }
+            _ => return Err(ServiceError::OnCreateFailed),
         }
 
         Ok(())
     }
 
-    fn on_create_check(&self) -> Result<(), EngineError> {
+    fn on_create_check(&self) -> Result<(), ServiceError> {
         Ok(())
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!(
             "AWS.external_service.on_create_error() called for {}",
             self.name()
@@ -317,42 +279,30 @@ impl Create for ExternalService {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let kubernetes_config_file_path = from_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                environment.organization_id.as_str(),
-                kubernetes.id(),
-                aws.access_key_id.as_str(),
-                aws.secret_access_key.as_str(),
-                kubernetes.region(),
-            ),
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            workspace_dir.as_str(),
+            environment.organization_id.as_str(),
+            kubernetes.id(),
+            aws.access_key_id.as_str(),
+            aws.secret_access_key.as_str(),
+            kubernetes.region(),
         )?;
 
         let helm_release_name = self.helm_release_name();
 
-        let history_rows = from_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            crate::cmd::helm::helm_exec_history(
+        let history_rows = crate::cmd::helm::helm_exec_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name.as_str(),
+            aws_credentials_envs.clone(),
+        )?;
+
+        if history_rows.len() == 1 {
+            crate::cmd::helm::helm_exec_uninstall(
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 helm_release_name.as_str(),
                 aws_credentials_envs.clone(),
-            ),
-        )?;
-
-        if history_rows.len() == 1 {
-            from_simple_error_to_engine_error(
-                crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-                self.context.execution_id(),
-                crate::cmd::helm::helm_exec_uninstall(
-                    kubernetes_config_file_path.as_str(),
-                    environment.namespace(),
-                    helm_release_name.as_str(),
-                    aws_credentials_envs.clone(),
-                ),
             )?;
         }
 
@@ -361,16 +311,16 @@ impl Create for ExternalService {
 }
 
 impl Pause for ExternalService {
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!("AWS.external_service.on_pause() called for {}", self.name());
         self.delete(target, false)
     }
 
-    fn on_pause_check(&self) -> Result<(), EngineError> {
+    fn on_pause_check(&self) -> Result<(), ServiceError> {
         Ok(())
     }
 
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!(
             "AWS.external_service.on_pause_error() called for {}",
             self.name()
@@ -380,7 +330,7 @@ impl Pause for ExternalService {
 }
 
 impl Delete for ExternalService {
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         info!(
             "AWS.external_service.on_delete() called for {}",
             self.name()
@@ -388,11 +338,11 @@ impl Delete for ExternalService {
         self.delete(target, false)
     }
 
-    fn on_delete_check(&self) -> Result<(), EngineError> {
+    fn on_delete_check(&self) -> Result<(), ServiceError> {
         Ok(())
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError> {
         warn!(
             "AWS.external_service.on_delete_error() called for {}",
             self.name()

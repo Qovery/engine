@@ -6,8 +6,7 @@ use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
 
-use chrono::Utc;
-use dirs::home_dir;
+
 use serde_json::map::Values;
 use serde_json::value::Value;
 
@@ -32,6 +31,7 @@ use qovery_engine::session::Session;
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
+use chrono::Utc;
 
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-1";
@@ -59,31 +59,6 @@ pub fn terraform_aws_secret_access_key() -> String {
         .expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory")
 }
 
-pub fn execution_id() -> String {
-    Utc::now()
-        .to_rfc3339()
-        .replace(":", "-")
-        .replace(".", "-")
-        .replace("+", "-")
-}
-
-pub fn context() -> Context {
-    let execution_id = execution_id();
-    let home_dir = std::env::var("WORKSPACE_ROOT_DIR")
-        .unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
-    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let metadata = Metadata {
-        test: Option::from(true),
-    };
-
-    Context::new(
-        execution_id.as_str(),
-        home_dir.as_str(),
-        lib_root_dir.as_str(),
-        None,
-        Option::from(metadata),
-    )
-}
 
 pub fn container_registry_ecr(context: &Context) -> ECR {
     ECR::new(

@@ -12,8 +12,10 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
 use crate::cmd;
-use crate::container_registry::{ContainerRegistry, Kind, PushResult};
-use crate::error::{EngineError, EngineErrorCause};
+use crate::cmd::utilities::CmdError;
+use crate::container_registry::{
+    ContainerRegistry, ContainerRegistryError, Kind, PushError, PushResult,
+};
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope,
@@ -110,7 +112,7 @@ impl ECR {
         }
     }
 
-    fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, EngineError> {
+    fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, PushError> {
         // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
         // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
 
@@ -119,16 +121,11 @@ impl ECR {
             vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
             self.docker_envs(),
         ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to tag image ({}) {:?}",
-                        image.name_with_tag(),
-                        image,
-                    ),
-                ));
-            }
+            Err(err) => match err {
+                CmdError::Exec(_exit_status) => return Err(PushError::ImageTagFailed),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
+            },
             _ => {}
         };
 
@@ -138,16 +135,11 @@ impl ECR {
             vec!["push", dest.as_str()],
             self.docker_envs(),
         ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to push image {:?} into ECR {}",
-                        image,
-                        self.name_with_id(),
-                    ),
-                ));
-            }
+            Err(err) => match err {
+                CmdError::Exec(_exit_status) => return Err(PushError::ImagePushFailed),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
+            },
             _ => {}
         };
 
@@ -157,7 +149,7 @@ impl ECR {
         Ok(PushResult { image })
     }
 
-    fn create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
+    fn create_repository(&self, image: &Image) -> Result<Repository, ContainerRegistryError> {
         info!("ECR create repository {}", image.name.as_str());
         let mut crr = CreateRepositoryRequest::default();
         crr.repository_name = image.name.clone();
@@ -166,16 +158,7 @@ impl ECR {
         match r {
             Err(err) => match err {
                 RusotoError::Service(ref err) => info!("{:?}", err),
-                _ => {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        format!(
-                            "can't create ECR repository {} for {}",
-                            image.name.as_str(),
-                            self.name_with_id()
-                        ),
-                    ));
-                }
+                _ => return Err(ContainerRegistryError::from(err)),
             },
             _ => {}
         }
@@ -208,19 +191,15 @@ impl ECR {
         let r = async_run(self.ecr_client().put_lifecycle_policy(plp));
 
         match r {
-            Err(err) => Err(self.engine_error(
-                EngineErrorCause::Internal,
-                format!(
-                    "can't set lifecycle policy to ECR repository {} for {}",
-                    image.name.as_str(),
-                    self.name_with_id()
-                ),
-            )),
+            Err(err) => Err(ContainerRegistryError::from(err)),
             _ => Ok(self.get_repository(&image).unwrap()),
         }
     }
 
-    fn get_or_create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
+    fn get_or_create_repository(
+        &self,
+        image: &Image,
+    ) -> Result<Repository, ContainerRegistryError> {
         // check if the repository already exists
         let repository = self.get_repository(&image);
         if repository.is_some() {
@@ -249,19 +228,13 @@ impl ContainerRegistry for ECR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), ContainerRegistryError> {
         let client = StsClient::new_with_client(self.client(), Region::default());
         let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
-            Ok(_) => Ok(()),
-            Err(_) => Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your ECR account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("bad ECR credentials for {}", self.name_with_id()),
-            )),
+            Ok(_x) => Ok(()),
+            Err(err) => Err(ContainerRegistryError::from(err)),
         }
     }
 
@@ -269,28 +242,28 @@ impl ContainerRegistry for ECR {
         self.listeners.push(listener);
     }
 
-    fn on_create(&self) -> Result<(), EngineError> {
+    fn on_create(&self) -> Result<(), ContainerRegistryError> {
         info!("ECR.on_create() called");
         Ok(())
     }
 
-    fn on_create_error(&self) -> Result<(), EngineError> {
+    fn on_create_error(&self) -> Result<(), ContainerRegistryError> {
         unimplemented!()
     }
 
-    fn on_delete(&self) -> Result<(), EngineError> {
+    fn on_delete(&self) -> Result<(), ContainerRegistryError> {
         unimplemented!()
     }
 
-    fn on_delete_error(&self) -> Result<(), EngineError> {
+    fn on_delete_error(&self) -> Result<(), ContainerRegistryError> {
         unimplemented!()
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        self.get_repository(image).is_some()
+        self.get_repository(&image).is_some()
     }
 
-    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
+    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, PushError> {
         let r = async_run(
             self.ecr_client()
                 .get_authorization_token(GetAuthorizationTokenRequest::default()),
@@ -313,43 +286,18 @@ impl ContainerRegistry for ECR {
                         ad.clone().proxy_endpoint.unwrap(),
                     )
                 }
-                None => {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        format!(
-                            "failed to retrieve credentials and endpoint URL from ECR {}",
-                            self.name_with_id(),
-                        ),
-                    ));
-                }
+                None => return Err(PushError::RepositoryInitFailure),
             },
-            _ => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to retrieve credentials and endpoint URL from ECR {}",
-                        self.name_with_id(),
-                    ),
-                ));
-            }
+            _ => return Err(PushError::RepositoryInitFailure),
         };
 
         let repository = match if force_push {
-            self.create_repository(image)
+            self.create_repository(&image)
         } else {
-            self.get_or_create_repository(image)
+            self.get_or_create_repository(&image)
         } {
             Ok(r) => r,
-            _ => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to create ECR repository for {} with image {:?}",
-                        self.name_with_id(),
-                        image,
-                    ),
-                ));
-            }
+            _ => return Err(PushError::RepositoryInitFailure),
         };
 
         match cmd::utilities::exec_with_envs(
@@ -364,12 +312,11 @@ impl ContainerRegistry for ECR {
             ],
             self.docker_envs(),
         ) {
-            Err(_) => return Err(
-                self.engine_error(
-                    EngineErrorCause::User("Your ECR account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials."),
-                    format!("failed to login to ECR {}", self.name_with_id()))
-            ),
+            Err(err) => match err {
+                CmdError::Exec(_exit_status) => return Err(PushError::CredentialsError),
+                CmdError::Io(err) => return Err(PushError::IoError(err)),
+                CmdError::Unexpected(err) => return Err(PushError::Unknown(err)),
+            },
             _ => {}
         };
 
@@ -426,7 +373,7 @@ impl ContainerRegistry for ECR {
         self.push_image(dest, image)
     }
 
-    fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
+    fn push_error(&self, image: &Image) -> Result<PushResult, PushError> {
         // TODO change this
         Ok(PushResult {
             image: image.clone(),

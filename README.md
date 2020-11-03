@@ -48,12 +48,6 @@ Qovery engine supports a number of different plugins to compose your own deploym
 
 **[See more on our website](https://www.qovery.com)**.
 
-## Demo
-
-Here is a demo from [Qovery CLI](https://docs.qovery.com/docs/using-qovery/interface/cli/) from where we use the Qovery Engine. 
-
-[![Qovery CLI](https://asciinema.org/a/370072.svg)](https://asciinema.org/a/370072)
-
 ## Getting Started
 ### Installation
 Use the Qovery Engine as a Cargo dependency.

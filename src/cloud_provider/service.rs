@@ -1,3 +1,4 @@
+use std::io::Error;
 use std::net::TcpStream;
 use std::process::id;
 
@@ -7,17 +8,15 @@ use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use crate::cmd::utilities::CmdError;
 use crate::models::{Context, ProgressScope};
+use crate::transaction::CommitError;
 
 pub trait Service {
     fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
-    fn name_with_id(&self) -> String {
-        format!("{} ({})", self.name(), self.id())
-    }
     fn version(&self) -> &str;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
@@ -36,21 +35,13 @@ pub trait Service {
         }
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), ServiceError> {
         let binaries = ["kubectl", "helm", "terraform", "aws-iam-authenticator"];
 
         for binary in binaries.iter() {
             if !crate::cmd::utilities::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
-
-                let cause = EngineErrorCause::Internal;
-
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    EngineErrorScope::Engine,
-                    self.id(),
-                    Some(err),
-                ));
+                return Err(ServiceError::Unexpected(err));
             }
         }
 
@@ -102,7 +93,7 @@ pub trait Service {
 }
 
 pub trait StatelessService: Service + Create + Pause + Delete {
-    fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), ServiceError> {
         match self.action() {
             crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
             crate::cloud_provider::service::Action::Delete => self.on_delete(deployment_target),
@@ -115,7 +106,7 @@ pub trait StatelessService: Service + Create + Pause + Delete {
 pub trait StatefulService:
     Service + Create + Pause + Delete + Backup + Clone + Upgrade + Downgrade
 {
-    fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), ServiceError> {
         match self.action() {
             crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
             crate::cloud_provider::service::Action::Delete => self.on_delete(deployment_target),
@@ -128,109 +119,59 @@ pub trait StatefulService:
 pub trait Application: StatelessService {
     fn image(&self) -> &Image;
     fn set_image(&mut self, image: Image);
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::Application(self.id().to_string(), self.name().to_string())
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
-        )
-    }
 }
 
-pub trait ExternalService: StatelessService {
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::ExternalService(self.id().to_string(), self.name().to_string())
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
-        )
-    }
-}
+pub trait ExternalService: Application {}
 
 pub trait Router: StatelessService {
-    fn check_domains(&self) -> Result<(), EngineError>;
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::Router(self.id().to_string(), self.name().to_string())
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
-        )
-    }
+    fn check_domains(&self) -> Result<(), ServiceError>;
 }
 
-pub trait Database: StatefulService {
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::Database(
-            self.id().to_string(),
-            self.service_type().name().to_string(),
-            self.name().to_string(),
-        )
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
-        )
-    }
-}
+pub trait Database: StatefulService {}
 
 pub trait Create {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_create_check(&self) -> Result<(), EngineError>;
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_create_check(&self) -> Result<(), ServiceError>;
+    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Pause {
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_pause_check(&self) -> Result<(), EngineError>;
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_pause_check(&self) -> Result<(), ServiceError>;
+    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Delete {
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_delete_check(&self) -> Result<(), EngineError>;
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_delete_check(&self) -> Result<(), ServiceError>;
+    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Backup {
-    fn on_backup(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_backup_check(&self) -> Result<(), EngineError>;
-    fn on_backup_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_restore(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_restore_check(&self) -> Result<(), EngineError>;
-    fn on_restore_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
+    fn on_backup(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_backup_check(&self) -> Result<(), ServiceError>;
+    fn on_backup_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_restore(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_restore_check(&self) -> Result<(), ServiceError>;
+    fn on_restore_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Clone {
-    fn on_clone(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_clone_check(&self) -> Result<(), EngineError>;
-    fn on_clone_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
+    fn on_clone(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_clone_check(&self) -> Result<(), ServiceError>;
+    fn on_clone_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Upgrade {
-    fn on_upgrade(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_upgrade_check(&self) -> Result<(), EngineError>;
-    fn on_upgrade_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
+    fn on_upgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_upgrade_check(&self) -> Result<(), ServiceError>;
+    fn on_upgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 pub trait Downgrade {
-    fn on_downgrade(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_downgrade_check(&self) -> Result<(), EngineError>;
-    fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
+    fn on_downgrade(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
+    fn on_downgrade_check(&self) -> Result<(), ServiceError>;
+    fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), ServiceError>;
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -271,12 +212,44 @@ impl<'a> ServiceType<'a> {
         match self {
             ServiceType::Application => "Application",
             ServiceType::ExternalService => "ExternalService",
-            ServiceType::Database(db_type) => match db_type {
-                DatabaseType::PostgreSQL(_) => "PostgreSQL database",
-                DatabaseType::MongoDB(_) => "MongoDB database",
-                DatabaseType::MySQL(_) => "MySQL database",
-            },
+            ServiceType::Database(_) => "Database",
             ServiceType::Router => "Router",
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum ServiceError {
+    OnCreateFailed,
+    CheckFailed,
+    Cmd(CmdError),
+    Io(Error),
+    NotEnoughResources(String),
+    Unexpected(String),
+}
+
+impl From<std::io::Error> for ServiceError {
+    fn from(err: Error) -> Self {
+        ServiceError::Io(err)
+    }
+}
+
+impl From<CmdError> for ServiceError {
+    fn from(err: CmdError) -> Self {
+        ServiceError::Cmd(err)
+    }
+}
+
+impl From<CommitError> for Option<ServiceError> {
+    fn from(err: CommitError) -> Self {
+        return match err {
+            CommitError::DeleteEnvironment(e)
+            | CommitError::PauseEnvironment(e)
+            | CommitError::DeployEnvironment(e)
+            | CommitError::DeleteKubernetes(e)
+            | CommitError::CreateKubernetes(e) => Option::from(e),
+            CommitError::NotValidService(e) => Option::Some(e),
+            _ => None,
+        };
     }
 }

@@ -6,11 +6,9 @@ use rusoto_core::Region;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::service::ServiceError;
+use crate::cmd::utilities::CmdError;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{EngineError, SimpleError};
-
-pub type Logs = String;
-pub type Describe = String;
 
 pub fn kubernetes_config_path(
     workspace_directory: &str,
@@ -19,7 +17,7 @@ pub fn kubernetes_config_path(
     access_key_id: &str,
     secret_access_key: &str,
     region: &str,
-) -> Result<String, SimpleError> {
+) -> Result<String, Error> {
     let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", kubernetes_cluster_id);
     let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
 
@@ -42,13 +40,16 @@ pub fn kubernetes_config_path(
     Ok(kubernetes_config_file_path)
 }
 
+pub type Logs = String;
+pub type Describe = String;
+
 /// show different output (kubectl describe, log..) for debug purpose
 pub fn get_stateless_resource_information(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     workspace_dir: &str,
     selector: &str,
-) -> Result<(Describe, Logs), SimpleError> {
+) -> Result<(Describe, Logs), CmdError> {
     let aws = kubernetes
         .cloud_provider()
         .as_any()
@@ -111,7 +112,7 @@ pub fn do_stateless_service_cleanup(
     environment: &Environment,
     workspace_dir: &str,
     helm_release_name: &str,
-) -> Result<(), SimpleError> {
+) -> Result<(), ServiceError> {
     let aws = kubernetes
         .cloud_provider()
         .as_any()

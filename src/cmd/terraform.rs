@@ -11,14 +11,13 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::cmd::utilities::{exec_with_envs_and_output, CmdError};
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
-use crate::error::SimpleError;
 
 fn terraform_exec_with_init_validate(
     root_dir: &str,
     first_time_init_terraform: bool,
-) -> Result<(), SimpleError> {
+) -> Result<(), CmdError> {
     // terraform init
     let init_args = if first_time_init_terraform {
         vec!["init"]
@@ -38,7 +37,7 @@ fn terraform_exec_with_init_validate(
 fn terraform_exec_with_init_validate_plan(
     root_dir: &str,
     first_time_init_terraform: bool,
-) -> Result<(), SimpleError> {
+) -> Result<(), CmdError> {
     // terraform init
     let init_args = if first_time_init_terraform {
         vec!["init"]
@@ -61,7 +60,7 @@ fn terraform_exec_with_init_validate_plan(
 pub fn terraform_exec_with_init_validate_plan_apply(
     root_dir: &str,
     first_time_init_terraform: bool,
-) -> Result<(), SimpleError> {
+) -> Result<(), CmdError> {
     // terraform init and plan
     terraform_exec_with_init_validate_plan(root_dir, first_time_init_terraform);
 
@@ -71,7 +70,7 @@ pub fn terraform_exec_with_init_validate_plan_apply(
     Ok(())
 }
 
-pub fn terraform_exec_with_init_validate_destroy(root_dir: &str) -> Result<(), SimpleError> {
+pub fn terraform_exec_with_init_validate_destroy(root_dir: &str) -> Result<(), CmdError> {
     // terraform init and plan
     terraform_exec_with_init_validate(root_dir, false);
 
@@ -79,11 +78,11 @@ pub fn terraform_exec_with_init_validate_destroy(root_dir: &str) -> Result<(), S
     terraform_exec(root_dir, vec!["destroy", "-auto-approve"])
 }
 
-pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), SimpleError> {
+pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), CmdError> {
     let home_dir = home_dir().expect("Could not find $HOME");
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
 
-    exec_with_envs_and_output(
+    match exec_with_envs_and_output(
         format!("{} terraform", root_dir).as_str(),
         args,
         vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
@@ -93,5 +92,10 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), SimpleError
         |line: Result<String, std::io::Error>| {
             error!("{}", line.unwrap());
         },
-    )
+    ) {
+        Err(err) => return Err(err),
+        _ => {},
+    };
+
+    Ok(())
 }

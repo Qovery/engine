@@ -12,7 +12,7 @@ pub fn do_not_delete_cluster_containing_tfstate() {
     init();
     // put some environments here, simulated or not
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();

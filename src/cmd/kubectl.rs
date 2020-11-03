@@ -15,16 +15,15 @@ use crate::cmd::structs::{
     Item, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
     KubernetesService,
 };
-use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::cmd::utilities::{exec_with_envs_and_output, CmdError};
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
-use crate::error::{SimpleError, SimpleErrorKind};
 
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
     stdout_output: F,
     stderr_output: X,
-) -> Result<(), SimpleError>
+) -> Result<(), CmdError>
 where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),
@@ -42,7 +41,7 @@ pub fn kubectl_exec_get_external_ingress_hostname<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<String>, SimpleError>
+) -> Result<Option<String>, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -75,10 +74,10 @@ where
             Err(err) => {
                 error!("{:?}", err);
                 error!("{}", output_string.as_str());
-                return Err(SimpleError::new(
-                    SimpleErrorKind::Other,
-                    Some(output_string),
-                ));
+                return Err(CmdError::Io(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    output_string,
+                )));
             }
         };
 
@@ -116,7 +115,7 @@ pub fn kubectl_exec_is_pod_ready_with_retry<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, SimpleError>
+) -> Result<Option<bool>, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -149,7 +148,7 @@ where
                 total_delay: _,
                 tries: _,
             } => Ok(Some(false)),
-            retry::Error::Internal(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(err))),
+            retry::Error::Internal(err) => Err(CmdError::Unexpected(err)),
         },
         Ok(_) => Ok(Some(true)),
     }
@@ -160,7 +159,7 @@ pub fn kubectl_exec_is_pod_ready<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, SimpleError>
+) -> Result<Option<bool>, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -190,10 +189,10 @@ where
         Err(err) => {
             error!("{:?}", err);
             error!("{}", output_string.as_str());
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(output_string),
-            ));
+            return Err(CmdError::Io(Error::new(
+                std::io::ErrorKind::InvalidData,
+                output_string,
+            )));
         }
     };
 
@@ -224,7 +223,7 @@ pub fn kubectl_exec_is_job_ready_with_retry<P>(
     namespace: &str,
     job_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, SimpleError>
+) -> Result<Option<bool>, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -257,7 +256,7 @@ where
                 total_delay: _,
                 tries: _,
             } => Ok(Some(false)),
-            retry::Error::Internal(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(err))),
+            retry::Error::Internal(err) => Err(CmdError::Unexpected(err)),
         },
         Ok(_) => Ok(Some(true)),
     }
@@ -268,7 +267,7 @@ pub fn kubectl_exec_is_job_ready<P>(
     namespace: &str,
     job_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, SimpleError>
+) -> Result<Option<bool>, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -297,10 +296,10 @@ where
         Err(err) => {
             error!("{:?}", err);
             error!("{}", output_string.as_str());
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(output_string),
-            ));
+            return Err(CmdError::Io(Error::new(
+                std::io::ErrorKind::InvalidData,
+                output_string,
+            )));
         }
     };
 
@@ -315,7 +314,7 @@ pub fn kubectl_exec_create_namespace<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
 {
@@ -345,7 +344,7 @@ pub fn create_sample_secret_terraform_in_namespace<P>(
     kubernetes_config: P,
     namespace_to_override: &str,
     envs: &Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
+) -> Result<String, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -379,7 +378,7 @@ pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: &Vec<(&str, &str)>,
-) -> Result<bool, SimpleError>
+) -> Result<bool, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -410,7 +409,7 @@ where
 pub fn kubectl_exec_get_all_namespaces<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
-) -> Result<Vec<String>, SimpleError>
+) -> Result<Vec<String>, Error>
 where
     P: AsRef<Path>,
 {
@@ -442,15 +441,11 @@ where
             }
         }
         Err(e) => {
-            error!(
-                "Error while deserializing Kubernetes namespaces names {}",
-                e
-            );
-
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(output_string),
-            ));
+            error!("While deserializing Kubernetes namespaces names {}", e);
+            return Err(Error::from(CmdError::Io(Error::new(
+                std::io::ErrorKind::InvalidData,
+                output_string,
+            ))));
         }
     };
     Ok(to_return)
@@ -460,17 +455,17 @@ pub fn kubectl_exec_delete_namespace<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
 {
     match does_contain_terraform_tfstate(&kubernetes_config, &namespace, &envs) {
         Ok(exist) => match exist {
             true => {
-                return Err(SimpleError::new(
-                    SimpleErrorKind::Other,
-                    Some("Namespace contains terraform tfstates in secret, can't delete it !"),
-                ));
+                return Err(CmdError::Io(Error::new(
+                    std::io::ErrorKind::Other,
+                    "Namespace contains terraform tfstates in secret, can't delete it !",
+                )));
             }
             false => info!(
                 "Namespace {} doesn't contain any tfstates, able to delete it",
@@ -479,7 +474,7 @@ where
         },
         Err(e) => warn!(
             "Unable to execute describe on secrets: {}. it may not exist anymore?",
-            e.message.unwrap_or("".into())
+            e
         ),
     };
 
@@ -507,7 +502,7 @@ pub fn kubectl_exec_delete_secret<P>(
     kubernetes_config: P,
     secret: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CmdError>
 where
     P: AsRef<Path>,
 {
@@ -536,7 +531,7 @@ pub fn kubectl_exec_logs<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
+) -> Result<String, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -566,7 +561,7 @@ pub fn kubectl_exec_describe_pod<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
+) -> Result<String, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -594,7 +589,7 @@ where
 pub fn kubectl_exec_get_node<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesNode>, SimpleError>
+) -> Result<KubernetesList<KubernetesNode>, CmdError>
 where
     P: AsRef<Path>,
 {
@@ -624,10 +619,10 @@ where
             Err(err) => {
                 error!("{:?}", err);
                 error!("{}", output_string.as_str());
-                return Err(SimpleError::new(
-                    SimpleErrorKind::Other,
-                    Some(output_string),
-                ));
+                return Err(CmdError::Io(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    output_string,
+                )));
             }
         };
 
