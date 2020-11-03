@@ -376,6 +376,7 @@ impl Create for MySQL {
                     ),
                 )?;
 
+                // TODO @ MARC use /common/chart_values/mysql to replace the /common/services/mysql/values.j2.yaml
                 let from_dir = format!("{}/common/services/mysql", self.context.lib_root_dir());
 
                 let _ = from_simple_error_to_engine_error(
