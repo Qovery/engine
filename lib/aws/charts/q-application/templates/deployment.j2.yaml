@@ -59,12 +59,12 @@ spec:
           readinessProbe:
             tcpSocket:
               port: {{ private_port }}
-            initialDelaySeconds: 5
+            initialDelaySeconds: {{ start_timeout_in_seconds }}
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
               port: {{ private_port }}
-            initialDelaySeconds: 15
+            initialDelaySeconds: {{ start_timeout_in_seconds }}
             periodSeconds: 20
             {%- endif %}
           resources:
