@@ -15,6 +15,7 @@ ARGS_NUM=$#
 # Note: this is the dev version for the moment as the prod one is not released yet
 QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
+export LIB_ROOT_DIR=$(pwd)/cloned-engine/lib
 
 function print_help() {
   echo "Usage: $0 <option>"
@@ -192,7 +193,6 @@ function prepare_tests() {
 }
 
 function fast_tests() { # Run fast tests only on qovery-engine
-  export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   nb_treads=$1
   export_env
@@ -204,7 +204,6 @@ function fast_tests() { # Run fast tests only on qovery-engine
 }
 
 function all_tests() { # Run all tests on qovery-engine
-  export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   nb_treads=$1
   export_env
@@ -216,7 +215,6 @@ function all_tests() { # Run all tests on qovery-engine
 
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
   test_name=$1
-  export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   export_env
   prepare_tests
@@ -234,7 +232,6 @@ function export_env() {
 function all-test-remote-lib(){
   GITHUB_ENGINE_BRANCH_NAME=$1
   #sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
-  export LIB_ROOT_DIR=$(pwd)/lib
   export RUST_LOG=info
   nb_treads=8
   export_env
