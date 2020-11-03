@@ -1,5 +1,0 @@
-apiVersion: v2
-name: q-priorityclass
-description: A Helm chart for Kubernetes
-version: 0.1.0
-appVersion: 0.1
