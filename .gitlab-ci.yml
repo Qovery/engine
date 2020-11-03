@@ -32,7 +32,7 @@ wip-fast-tests:
   artifacts:
     when: always
     reports:
-      junit: qovery-engine/results.xml
+      junit: /builds/qovery/qovery-engine/cloned-engine/results-fast.xml
 
 wip-full-tests:
   stage: tests
@@ -46,6 +46,10 @@ wip-full-tests:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
 
 dev-full-tests:
   stage: tests
@@ -151,6 +155,10 @@ all-test-from-github:
     - ./helper.sh all-test-remote-lib $LIB_COMMIT_ID
   rules:
     - if: '$TEST_TYPE == "full"'
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
 
 fast-test-from-github:
   stage: fast-test-remote-lib
@@ -159,3 +167,7 @@ fast-test-from-github:
     - ./helper.sh fast-test-remote-lib $LIB_COMMIT_ID
   rules:
     - if: '$TEST_TYPE == "fast"'
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results-fast.xml

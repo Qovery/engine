@@ -197,9 +197,10 @@ function fast_tests() { # Run fast tests only on qovery-engine
   nb_treads=$1
   export_env
   prepare_tests
+  pwd
   cd cloned-engine
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
-  cat results.json | cargo2junit > results.xml
+  cat results.json | cargo2junit > results-fast.xml
 }
 
 function all_tests() { # Run all tests on qovery-engine
@@ -209,7 +210,8 @@ function all_tests() { # Run all tests on qovery-engine
   export_env
   prepare_tests
   cd cloned-engine
-  cargo test --color always -- --ignored --test-threads=$nb_treads
+  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results_all.json
+  cat results_all.json | cargo2junit > results-full.xml
 }
 
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
@@ -238,7 +240,8 @@ function all-test-remote-lib(){
   export_env
   prepare_tests
   cd cloned-engine
-  cargo test --color always -- --ignored --test-threads=$nb_treads
+  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results_all.json
+  cat results_all.json | cargo2junit > results-full.xml
 }
 
 function fast-test-remote-lib(){
@@ -250,7 +253,8 @@ function fast-test-remote-lib(){
   export_env
   prepare_tests
   cd cloned-engine
-  cargo test --color always -- --ignored --test-threads=$nb_treads
+  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
+  cat results.json | cargo2junit > results-fast.xml
 }
 
 if [ $ARGS_NUM -eq 0 ] ; then
