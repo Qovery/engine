@@ -54,6 +54,7 @@ where
         }
     };
 
+    // FIXME put this function before the template generation?
     // copy all .tf and .yaml files into our dest directory
     copy_non_template_files(from_dir.as_ref(), to_dir.as_ref())?;
 

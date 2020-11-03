@@ -367,7 +367,11 @@ impl Create for Router {
                 "routers/nginx-ingress",
             );
 
-            let from_dir = format!("{}/common/chart_values", self.context.lib_root_dir());
+            let from_dir = format!(
+                "{}/common/chart_values/nginx-ingress",
+                self.context.lib_root_dir()
+            );
+
             let _ = from_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context.execution_id(),
