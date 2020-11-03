@@ -183,9 +183,11 @@ function prepare_tests() {
       echo "Found a symlink for the engine, going to use it"
     elif [ ! -d cloned-engine ] ; then
       git clone https://github.com/Qovery/engine.git cloned-engine
+      cd cloned-engine
       if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
         git checkout $GITHUB_ENGINE_BRANCH_NAME
       fi
+      cd -
     fi
 }
 
