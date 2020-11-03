@@ -52,7 +52,9 @@ Qovery engine supports a number of different plugins to compose your own deploym
 
 Here is a demo from [Qovery CLI](https://docs.qovery.com/docs/using-qovery/interface/cli/) from where we use the Qovery Engine. 
 
-[![Qovery CLI](https://asciinema.org/a/370072.svg)](https://asciinema.org/a/370072)
+<p align="center">
+    <script id="asciicast-370072" src="https://asciinema.org/a/370072.js" async></script>
+</p>
 
 ## Getting Started
 ### Installation
