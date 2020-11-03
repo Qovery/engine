@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -x
+#set -x
 
 awk=awk
 sed=sed
@@ -154,7 +154,7 @@ function prepare_engine() {
 
     cd $ENGINE_DIR
     git checkout $ENGINE_BRANCH
-    echo "Latest commit on this branch:"
+    echo "Latest commit on branch $ENGINE_BRANCH:"
     git log -1
     cd -
 }
