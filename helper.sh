@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#set -x
+set -x
 
 awk=awk
 sed=sed
@@ -144,11 +144,18 @@ function prepare_engine() {
       git clone https://github.com/Qovery/engine.git $ENGINE_DIR
     fi
 
-    cd $ENGINE_DIR
-    if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
-      git checkout $GITHUB_ENGINE_BRANCH_NAME
-      git log -1
+    ENGINE_BRANCH=""
+    if [ ! -z $CI_COMMIT_BRANCH ] ; then
+      ENGINE_BRANCH=$CI_COMMIT_BRANCH
     fi
+    if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
+      ENGINE_BRANCH=$GITHUB_ENGINE_BRANCH_NAME
+    fi
+
+    cd $ENGINE_DIR
+    git checkout $ENGINE_BRANCH
+    echo "Latest commit on this branch:"
+    git log -1
     cd -
 }
 
