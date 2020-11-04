@@ -490,6 +490,12 @@ impl Create for Router {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
+        // FIXME remove this
+        return Ok(());
+
+        // TODO -------------------------------------------------------------
+        // TODO integration tests required before using DNS propagation check
+        // TODO -------------------------------------------------------------
         let listeners_helper = ListenersHelper::new(&self.listeners);
         // Todo: inform the client about the fact we're going to check for a certain amount of time
 
