@@ -294,6 +294,7 @@ impl<'a> EKS<'a> {
             "documentdb_zone_a_subnet_blocks",
             &documentdb_zone_a_subnet_blocks,
         );
+
         context.insert(
             "documentdb_zone_b_subnet_blocks",
             &documentdb_zone_b_subnet_blocks,
