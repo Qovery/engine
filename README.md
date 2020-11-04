@@ -7,6 +7,7 @@
 <p align="center">Deploy your apps on any Cloud providers in just a few seconds ⚡</p>
 
 <p align="center">
+<img src="https://img.shields.io/badge/stability-work_in_progress-lightgrey.svg?style=flat-square" alt="work in progress badge">
 <a href="https://discord.qovery.com"> <img alt="Discord" src="https://img.shields.io/discord/688766934917185556?label=discord&style=flat-square"> </a>
 </p>
 
