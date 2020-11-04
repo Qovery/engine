@@ -16,11 +16,19 @@ use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use crate::error::{SimpleError, SimpleErrorKind};
 
+const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
+
+pub enum Timeout<T> {
+    Default,
+    Value(T),
+}
+
 pub fn helm_exec_with_upgrade_history<P>(
     kubernetes_config: P,
     namespace: &str,
     release_name: &str,
     chart_root_dir: P,
+    timeout: Timeout<u32>,
     envs: Vec<(&str, &str)>,
 ) -> Result<Option<HelmHistoryRow>, SimpleError>
 where
@@ -38,6 +46,7 @@ where
         namespace,
         release_name,
         chart_root_dir.as_ref(),
+        timeout,
         envs.clone(),
     )?;
 
@@ -63,11 +72,20 @@ pub fn helm_exec_upgrade<P>(
     namespace: &str,
     release_name: &str,
     chart_root_dir: P,
+    timeout: Timeout<u32>,
     envs: Vec<(&str, &str)>,
 ) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
+    let timeout = format!(
+        "{}s",
+        match timeout {
+            Timeout::Value(v) => v + HELM_DEFAULT_TIMEOUT_IN_SECONDS,
+            Timeout::Default => HELM_DEFAULT_TIMEOUT_IN_SECONDS,
+        }
+    );
+
     helm_exec_with_output(
         vec![
             "upgrade",
@@ -77,6 +95,8 @@ where
             "--install",
             "--history-max",
             "50",
+            "--timeout",
+            timeout.as_str(),
             "--wait",
             "--namespace",
             namespace,

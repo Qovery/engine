@@ -10,6 +10,7 @@ use crate::cloud_provider::service::{
     Service, ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::{
     kubectl_exec_create_namespace, kubectl_exec_delete_namespace, kubectl_exec_delete_secret,
 };
@@ -417,6 +418,7 @@ impl Create for MySQL {
                         environment.namespace(),
                         helm_release_name.as_str(),
                         workspace_dir.as_str(),
+                        Timeout::Default,
                         aws_credentials_envs.clone(),
                     ),
                 )?;

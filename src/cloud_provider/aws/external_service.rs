@@ -10,6 +10,7 @@ use crate::cloud_provider::service::{
     Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{from_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
@@ -249,6 +250,7 @@ impl Create for ExternalService {
                 environment.namespace(),
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
+                Timeout::Default,
                 aws_credentials_envs.clone(),
             ),
         )?;

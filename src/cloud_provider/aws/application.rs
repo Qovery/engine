@@ -10,6 +10,7 @@ use crate::cloud_provider::service::{
     StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{
     from_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
@@ -285,6 +286,7 @@ impl Create for Application {
                 environment.namespace(),
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
+                Timeout::Value(self.start_timeout_in_seconds),
                 aws_credentials_envs.clone(),
             ),
         )?;
