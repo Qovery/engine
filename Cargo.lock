@@ -2000,7 +2000,7 @@ dependencies = [
 [[package]]
 name = "qovery-engine"
 version = "0.1.0"
-source = "git+https://github.com/Qovery/engine?rev=433b8266f1b27635411b0eb91436969b5eed44ce#433b8266f1b27635411b0eb91436969b5eed44ce"
+source = "git+https://github.com/Qovery/engine?rev=63acacc2ca2e617e7f61de34c169e97f9f105033#63acacc2ca2e617e7f61de34c169e97f9f105033"
 dependencies = [
  "base64 0.12.3",
  "chrono",
