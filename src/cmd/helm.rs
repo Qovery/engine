@@ -392,21 +392,3 @@ where
 
     Ok(())
 }
-
-pub fn kubectl_exec_with_output<F, X>(
-    args: Vec<&str>,
-    envs: Vec<(&str, &str)>,
-    stdout_output: F,
-    stderr_output: X,
-) -> Result<(), SimpleError>
-where
-    F: FnMut(Result<String, Error>),
-    X: FnMut(Result<String, Error>),
-{
-    match exec_with_envs_and_output("kubectl", args, envs, stdout_output, stderr_output) {
-        Err(err) => return Err(err),
-        _ => {}
-    };
-
-    Ok(())
-}
