@@ -151,6 +151,7 @@ function prepare_engine() {
 
     cd $ENGINE_DIR
     git checkout $ENGINE_BRANCH
+    git pull
     echo "Latest commit on branch $ENGINE_BRANCH:"
     git log -1
     commit_id=$(git rev-parse HEAD)
