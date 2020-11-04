@@ -16,7 +16,7 @@ use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use crate::error::{SimpleError, SimpleErrorKind};
 
-const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
+const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
 
 pub enum Timeout<T> {
     Default,
