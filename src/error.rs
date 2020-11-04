@@ -98,7 +98,7 @@ pub fn from_simple_error_to_engine_error<X, T: Into<String>>(
         Err(simple_error) => {
             let message = match simple_error.kind {
                 SimpleErrorKind::Command(exit_status) => format!(
-                    "{} (exit status: {})",
+                    "{} ({})",
                     simple_error.message.unwrap_or("<no message>".into()),
                     exit_status
                 ),
