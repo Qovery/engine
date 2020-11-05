@@ -3,6 +3,9 @@ extern crate test_utilities;
 use chrono::Utc;
 use rusoto_core::region::Region::Custom;
 
+use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use self::test_utilities::utilities::generate_id;
+use qovery_engine::cloud_provider::aws::common;
 use qovery_engine::cloud_provider::service::Router;
 use qovery_engine::cmd;
 use qovery_engine::models::Kind::Production;
@@ -11,11 +14,8 @@ use qovery_engine::models::{
     EnvironmentVariable, ExternalService, GitCredentials, Kind, Storage, StorageType,
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use test_utilities::aws::context;
-use test_utilities::utilities::init;
-
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::generate_id;
+use test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, context};
+use test_utilities::utilities::{init, is_pod_restarted};
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
@@ -452,6 +452,166 @@ fn deploy_a_working_environment_with_postgresql() {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
+}
+
+#[test]
+fn deploy_a_working_environment_and_redeploy_with_postgresql() {
+    init();
+
+    let context = context();
+    let context_for_redeploy = context.clone_not_same_execution_id();
+    let context_for_delete = context.clone_not_same_execution_id();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+
+    let database_host = "postgresql-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
+    let database_port = 5432;
+    let database_db_name = "my-postgres".to_string();
+    let database_username = "superuser".to_string();
+    let database_password = generate_id();
+    environment.databases = vec![Database {
+        kind: DatabaseKind::Postgresql,
+        action: Action::Create,
+        id: generate_id(),
+        name: database_db_name.clone(),
+        version: "11.8.0".to_string(),
+        fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
+        fqdn: database_host.clone(),
+        port: database_port.clone(),
+        username: database_username.clone(),
+        password: database_password.clone(),
+        total_cpus: "500m".to_string(),
+        total_ram_in_mib: 512,
+        disk_size_in_gib: 10,
+        database_instance_type: "db.t2.micro".to_string(),
+        database_disk_type: "gp2".to_string(),
+    }];
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.branch = "postgres-app".to_string();
+            app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
+            app.private_port = Some(1234);
+            app.environment_variables = vec![
+                EnvironmentVariable {
+                    key: "PG_HOST".to_string(),
+                    value: database_host.clone(),
+                },
+                EnvironmentVariable {
+                    key: "PG_PORT".to_string(),
+                    value: database_port.clone().to_string(),
+                },
+                EnvironmentVariable {
+                    key: "PG_DBNAME".to_string(),
+                    value: database_db_name.clone(),
+                },
+                EnvironmentVariable {
+                    key: "PG_USERNAME".to_string(),
+                    value: database_username.clone(),
+                },
+                EnvironmentVariable {
+                    key: "PG_PASSWORD".to_string(),
+                    value: database_password.clone(),
+                },
+            ];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+    environment.routers[0].routes[0].application_name = "postgres-app".to_string();
+    let mut environment_to_redeploy = environment.clone();
+    let environment_check = environment.clone();
+    let ea_redeploy = EnvironmentAction::Environment(environment_to_redeploy);
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+    match deploy_environment(&context_for_redeploy, &ea_redeploy) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+    // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
+    let database_name = format!("{}-0", &environment_check.databases[0].name);
+    match is_pod_restarted(environment_check, database_name.as_str()) {
+        (true, _) => assert!(true),
+        (false, _) => assert!(false),
+        _ => {}
+    }
+
+    match delete_environment(&context_for_delete, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
+}
+
+// to check if app redeploy or not, it shouldn't
+#[test]
+fn redeploy_same_app_with_ebs() {
+    init();
+
+    let context = context();
+    let context_bis = context.clone_not_same_execution_id();
+    let context_for_deletion = context.clone_not_same_execution_id();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+
+    // Todo: make an image that check there is a mounted disk
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.storage = vec![Storage {
+                id: generate_id(),
+                name: "photos".to_string(),
+                storage_type: StorageType::Ssd,
+                size_in_gib: 10,
+                mount_point: "/mnt/photos".to_string(),
+                snapshot_retention_in_days: 0,
+            }];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+    let mut environment_redeploy = environment.clone();
+    let mut environment_check1 = environment.clone();
+    let mut environment_check2 = environment.clone();
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+
+    let ea = EnvironmentAction::Environment(environment);
+    let ea2 = EnvironmentAction::Environment(environment_redeploy);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+    let app_name = format!("{}-0", &environment_check1.applications[0].name);
+    let (_, number) = is_pod_restarted(environment_check1, app_name.clone().as_str());
+
+    match deploy_environment(&context_bis, &ea2) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    let (_, number2) = is_pod_restarted(environment_check2, app_name.as_str());
+    //nothing change in the app, so, it shouldn't be restarted
+    assert!(number.eq(&number2));
+    match delete_environment(&context_for_deletion, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 }
 
