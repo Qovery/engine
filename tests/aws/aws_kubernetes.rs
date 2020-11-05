@@ -93,6 +93,7 @@ fn create_and_upgrade_cluster_from_master_branch() {
     delete_eks_cluster_in_eu_west_3();
 }
 
+#[test]
 fn create_eks_cluster_in_us_east_2() {
     init();
 

@@ -507,6 +507,7 @@ impl<'a> Kubernetes for EKS<'a> {
             crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
                 temp_dir.as_str(),
                 true,
+                self.context.is_dry_run_deploy(),
             ),
         )?;
 

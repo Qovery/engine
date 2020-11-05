@@ -61,12 +61,15 @@ fn terraform_exec_with_init_validate_plan(
 pub fn terraform_exec_with_init_validate_plan_apply(
     root_dir: &str,
     first_time_init_terraform: bool,
+    dry_run: bool,
 ) -> Result<(), SimpleError> {
     // terraform init and plan
     terraform_exec_with_init_validate_plan(root_dir, first_time_init_terraform);
 
     // terraform apply
-    terraform_exec(root_dir, vec!["apply", "-auto-approve", "tf_plan"])?;
+    if dry_run {
+        terraform_exec(root_dir, vec!["apply", "-auto-approve", "tf_plan"])?;
+    }
 
     Ok(())
 }
