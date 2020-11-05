@@ -66,6 +66,8 @@ spec:
           volumeMounts:
             - name: docker-graph-storage
               mountPath: /var/lib/docker
+            - name: qovery-workspace
+              mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
       dnsPolicy: "None"
       dnsConfig:
         nameservers:
@@ -93,3 +95,6 @@ spec:
       volumes:
       - name: docker-graph-storage
         emptyDir: {}
+      - name: qovery-workspace
+        emptyDir:
+          sizeLimit: {{ .Values.volumes.qoveryWorkspace.size }}
