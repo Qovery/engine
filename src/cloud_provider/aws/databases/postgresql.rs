@@ -14,6 +14,7 @@ use crate::error::{
     from_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
 };
 use crate::models::Context;
+use std::path::Path;
 
 pub struct PostgreSQL {
     context: Context,
@@ -376,6 +377,10 @@ impl Create for PostgreSQL {
 
                 let from_dir =
                     format!("{}/common/services/postgresql", self.context.lib_root_dir());
+                let chart_values = format!(
+                    "{}/common/chart_values/postgresql",
+                    &self.context.lib_root_dir()
+                );
 
                 let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
@@ -386,6 +391,16 @@ impl Create for PostgreSQL {
                         &context,
                     ),
                 )?;
+
+                let copy_res = crate::fs::copy_files(
+                    Path::new(chart_values.as_str()),
+                    Path::new(workspace_dir.as_str()),
+                    false,
+                );
+                match copy_res {
+                    Ok(o) => info!("Chart values are successfully copied"),
+                    _ => error!("Chart values are not copied"),
+                };
 
                 // render templates
                 let helm_release_name = self.helm_release_name();

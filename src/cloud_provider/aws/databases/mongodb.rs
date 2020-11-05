@@ -14,6 +14,7 @@ use crate::error::{
     from_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
 };
 use crate::models::Context;
+use std::path::Path;
 
 pub struct MongoDB {
     context: Context,
@@ -387,6 +388,21 @@ impl Create for MongoDB {
                         &context,
                     ),
                 )?;
+
+                let chart_values = format!(
+                    "{}/common/chart_values/mongodb",
+                    &self.context.lib_root_dir()
+                );
+
+                let copy_res = crate::fs::copy_files(
+                    Path::new(chart_values.as_str()),
+                    Path::new(workspace_dir.as_str()),
+                    false,
+                );
+                match copy_res {
+                    Ok(o) => info!("Chart values are successfully copied"),
+                    _ => error!("Chart values are not copied"),
+                };
 
                 // render templates
                 let helm_release_name = self.helm_release_name();
