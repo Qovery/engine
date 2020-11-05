@@ -823,6 +823,16 @@ impl Context {
     pub fn metadata(&self) -> Option<&Metadata> {
         self.metadata.as_ref()
     }
+
+    pub fn is_dry_run_deploy(&self) -> bool {
+        match &self.metadata {
+            Some(meta) => match meta.dry_run_deploy {
+                Some(true) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
 }
 
 /// put everything you want here that is required to change the behaviour of the request.
@@ -830,10 +840,11 @@ impl Context {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Metadata {
     pub test: Option<bool>,
+    pub dry_run_deploy: Option<bool>,
 }
 
 impl Metadata {
-    pub fn new(test: Option<bool>) -> Self {
-        Metadata { test }
+    pub fn new(test: Option<bool>, dry_run_deploy: Option<bool>) -> Self {
+        Metadata { test, dry_run_deploy }
     }
 }

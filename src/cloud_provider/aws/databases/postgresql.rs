@@ -347,6 +347,7 @@ impl Create for PostgreSQL {
                     crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
                         workspace_dir.as_str(),
                         false,
+                        self.context.is_dry_run_deploy(),
                     ),
                 )?;
             }
