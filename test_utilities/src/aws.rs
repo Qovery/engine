@@ -36,6 +36,7 @@ use crate::utilities::{build_platform_local_docker, generate_id};
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-1";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
+pub const KUBE_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
 
 pub fn aws_access_key_id() -> String {
     std::env::var("AWS_ACCESS_KEY_ID").expect("env var AWS_ACCESS_KEY_ID is mandatory")
@@ -142,8 +143,8 @@ pub fn aws_kubernetes_eks<'a>(
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
         context.clone(),
-        "dmubm9agk7sr8a8r",
-        "dmubm9agk7sr8a8r",
+        KUBE_CLUSTER_ID,
+        KUBE_CLUSTER_ID,
         AWS_KUBERNETES_VERSION,
         aws_default_region().as_str(),
         cloud_provider,
@@ -486,6 +487,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
         applications: vec![Application {
             id: generate_id(),
             name: format!("{}-{}", "simple-app".to_string(), &suffix),
+            /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: "Dockerfile".to_string(),
