@@ -37,6 +37,50 @@ where
     Ok(())
 }
 
+/*#[derive(DeserializeQuery)]
+struct PodDescribe {
+    #[query(".status.containerStatuses[0]..restartCount")]
+    pub restart_count: u32,
+}*/
+
+pub fn kubectl_exec_get_number_of_restart<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    podname: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<String, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut output_vec: Vec<String> = Vec::new();
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let mut output_vec: Vec<String> = Vec::with_capacity(20);
+    let _ = kubectl_exec_with_output(
+        vec![
+            "get",
+            "po",
+            podname,
+            "-n",
+            namespace,
+            "-o=custom-columns=:.status.containerStatuses..restartCount",
+        ],
+        _envs,
+        |out| match out {
+            Ok(line) => output_vec.push(line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+    let output_string: String = output_vec.join("");
+    Ok(output_string)
+}
+
 pub fn kubectl_exec_get_external_ingress_hostname<P>(
     kubernetes_config: P,
     namespace: &str,
