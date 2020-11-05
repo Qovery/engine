@@ -15,7 +15,7 @@ use qovery_engine::models::{
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, context};
-use test_utilities::utilities::init;
+use test_utilities::utilities::{init, is_pod_restarted};
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
@@ -540,42 +540,10 @@ fn deploy_a_working_environment_and_redeploy_with_postgresql() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
     // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-
-    // kubectl_exec_get_number_of_restart
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
     let database_name = format!("{}-0", &environment_check.databases[0].name);
-    let access_key = aws_access_key_id();
-    let secret_key = aws_secret_access_key();
-    let aws_credentials_envs = vec![
-        ("AWS_ACCESS_KEY_ID", access_key.as_str()),
-        ("AWS_SECRET_ACCESS_KEY", secret_key.as_str()),
-    ];
-
-    let kubernetes_config = common::kubernetes_config_path(
-        "/tmp",
-        &environment_check.organization_id.as_str(),
-        "dmubm9agk7sr8a8r",
-        aws_access_key_id().as_str(),
-        aws_secret_access_key().as_str(),
-        aws_default_region().as_str(),
-    );
-    match kubernetes_config {
-        Ok(path) => {
-            let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
-                path.as_str(),
-                namespace_name.clone().as_str(),
-                database_name.clone().as_str(),
-                aws_credentials_envs,
-            );
-            match restarted_database {
-                Ok(count) => assert_eq!(count.trim(), "0"),
-                _ => {}
-            }
-        }
+    match is_pod_restarted(environment_check, database_name.as_str()) {
+        (true, _) => assert!(true),
+        (false, _) => assert!(false),
         _ => {}
     }
 
@@ -583,6 +551,67 @@ fn deploy_a_working_environment_and_redeploy_with_postgresql() {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
+}
+
+// to check if app redeploy or not, it shouldn't
+#[test]
+fn redeploy_same_app_with_ebs() {
+    init();
+
+    let context = context();
+    let context_bis = context.clone_not_same_execution_id();
+    let context_for_deletion = context.clone_not_same_execution_id();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+
+    // Todo: make an image that check there is a mounted disk
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.storage = vec![Storage {
+                id: generate_id(),
+                name: "photos".to_string(),
+                storage_type: StorageType::Ssd,
+                size_in_gib: 10,
+                mount_point: "/mnt/photos".to_string(),
+                snapshot_retention_in_days: 0,
+            }];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+    let mut environment_redeploy = environment.clone();
+    let mut environment_check1 = environment.clone();
+    let mut environment_check2 = environment.clone();
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+
+    let ea = EnvironmentAction::Environment(environment);
+    let ea2 = EnvironmentAction::Environment(environment_redeploy);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+    let app_name = format!("{}-0", &environment_check1.applications[0].name);
+    let (_, number) = is_pod_restarted(environment_check1, app_name.clone().as_str());
+
+    match deploy_environment(&context_bis, &ea2) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    let (_, number2) = is_pod_restarted(environment_check2, app_name.as_str());
+    //nothing change in the app, so, it shouldn't be restarted
+    assert!(number.eq(&number2));
+    match delete_environment(&context_for_deletion, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 }
 

@@ -3,7 +3,10 @@ use curl::Error;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
+use crate::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key};
 use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::cloud_provider::aws::common;
+use qovery_engine::cmd;
 use qovery_engine::models::{Context, Environment};
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
@@ -57,5 +60,46 @@ fn curl_path(path: &str) -> bool {
             println!("TEST Error : while trying to call {}", e);
             return false;
         }
+    }
+}
+
+pub fn is_pod_restarted(environment_check: Environment, podToCheck: &str) -> (bool, String) {
+    let namespace_name = format!(
+        "{}-{}",
+        &environment_check.project_id.clone(),
+        &environment_check.id.clone(),
+    );
+    let access_key = aws_access_key_id();
+    let secret_key = aws_secret_access_key();
+    let aws_credentials_envs = vec![
+        ("AWS_ACCESS_KEY_ID", access_key.as_str()),
+        ("AWS_SECRET_ACCESS_KEY", secret_key.as_str()),
+    ];
+
+    let kubernetes_config = common::kubernetes_config_path(
+        "/tmp",
+        &environment_check.organization_id.as_str(),
+        "dmubm9agk7sr8a8r",
+        aws_access_key_id().as_str(),
+        aws_secret_access_key().as_str(),
+        aws_default_region().as_str(),
+    );
+    match kubernetes_config {
+        Ok(path) => {
+            let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
+                path.as_str(),
+                namespace_name.clone().as_str(),
+                podToCheck,
+                aws_credentials_envs,
+            );
+            match restarted_database {
+                Ok(count) => match count.trim().eq("0") {
+                    true => return (true, "0".to_string()),
+                    false => return (true, count.to_string()),
+                },
+                _ => return (false, "".to_string()),
+            }
+        }
+        Err(e) => return (false, "".to_string()),
     }
 }

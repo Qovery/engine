@@ -54,6 +54,10 @@ function run_tests() {
       "running")
         counter=0
       ;;
+      "passed")
+        echo "Results: Congrats, functional tests succeeded!!!"
+        exit 0
+      ;;
       "success")
         echo "Results: Congrats, functional tests succeeded!!!"
         exit 0
