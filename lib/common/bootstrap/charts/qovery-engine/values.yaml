@@ -24,6 +24,11 @@ environmentVariables:
   #CLOUD_PROVIDER: ""
   #REGION: ""
 
+volumes:
+  qoveryWorkspace:
+    size: 50Gi
+    path: /home/qovery/.qovery-workspace
+
 buildContainer:
   image: docker
   tag: 19.03.12-dind
