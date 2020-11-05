@@ -2,9 +2,9 @@ name: functionnal-tests
 
 on:
   push:
-    branches-ignore: [ main ]
+    branches-ignore: [ main, dev ]
   pull_request:
-    branches-ignore: [ main ]
+    branches-ignore: [ main, dev ]
   pull_request_target:
     branches-ignore: [ main ]
 
