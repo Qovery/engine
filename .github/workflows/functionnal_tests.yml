@@ -5,6 +5,8 @@ on:
     branches-ignore: [ main, dev ]
   pull_request:
     branches-ignore: [ main, dev ]
+  pull_request_target:
+    branches-ignore: [ main, dev ]
 
 jobs:
   build:
