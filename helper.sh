@@ -52,13 +52,66 @@ function check_untracked_files() {
   fi
 }
 
-function get_commit_id() {
+function get_gitlab_engine_commit_id() {
+  # Ensure we're in the correct folder
+  if [ $(git config --get remote.origin.url | $ggrep -c "gitlab.com:qovery/qovery-engine.git") != "1" ] ; then
+    echo "You're not in the correct directory and should be in the gitlab repo: $(pwd)"
+    exit 1
+  fi
   git rev-parse HEAD
 }
 
+function get_github_engine_commit_id() {
+  # Ensure we're in the correct folder
+  if [ $(git config --get remote.origin.url | $ggrep -c "github.com/Qovery/engine.git") != "1" ] ; then
+    echo "You're not in the correct directory and should be in the gitlab repo: $(pwd)"
+    exit 1
+  fi
+  git rev-parse HEAD
+}
+
+function generate_image_tag() {
+  gitlab_commit_id=$(get_gitlab_engine_commit_id)
+
+  cd $ENGINE_DIR
+  github_commit_id=$(github_commit_id)
+  cd -
+
+  echo "${github_commit_id:0:7}-${gitlab_commit_id:0:7}"
+}
+
+
+function prepare_engine() {
+    if [ -e $ENGINE_DIR ] ; then
+      echo "Found a symlink for the engine, going to use it"
+    elif [ ! -d $ENGINE_DIR ] ; then
+      git clone https://github.com/Qovery/engine.git $ENGINE_DIR
+    fi
+
+    ENGINE_BRANCH=""
+    if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
+      ENGINE_BRANCH=$GITHUB_ENGINE_BRANCH_NAME
+    else
+      ENGINE_BRANCH=$(git branch --show-current)
+    fi
+
+    cd $ENGINE_DIR
+    git checkout $ENGINE_BRANCH
+    git pull
+    echo "Latest commit on branch $ENGINE_BRANCH:"
+    git log -1
+    commit_id=$(get_commit_id)
+    cd -
+
+    # Update in place the Cargo.toml to ensure consistency between lib folder and engine lib
+    sed -ri "s/(.+github.com\/Qovery\/engine.*rev.*?\")[A-Za-z0-9]+(.+)/\1$commit_id\2/" app/Cargo.toml
+    sed -ri "s/(.+github.com\/Qovery\/engine.*rev.*?\")[A-Za-z0-9]+(.+)/\1$commit_id\2/" qovery-engine-task-manager/Cargo.toml
+}
+
 function build_image() { ## Build Engine image locally. Args: <tag_version>
-  tag=$(get_commit_id)
   prepare_engine
+  tag=$(generate_image_tag)
+
   cp docker/load.sh docker/engine/load.sh
   cp docker/bin_versions bin_versions
   # copy providers files to download required binaries
@@ -67,23 +120,27 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   find $LIB_ROOT_DIR -name "tf-providers*" -exec cp {} docker/engine/providers/ \;
   $sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/*
   DOCKER_BUILDKIT=1 docker build -t qoveryrd/engine:${tag} .
+
   rm -f docker/engine/load.sh
   rm -f bin_versions
   rm -f docker/engine/providers/*
 }
 
 function build_ci_image() { ## Build CI image locally. Args: <tag_version>
-  tag=$(get_commit_id)
+  tag=$(generate_image_tag)
+
   cp docker/load.sh docker/ci/load.sh
   cp docker/bin_versions docker/ci/bin_versions
+
   cd docker/ci
   DOCKER_BUILDKIT=1 docker build --no-cache -t qoveryrd/ci:${tag} .
+
   rm -f docker/ci/load.sh
   rm -f docker/ci/bin_versions
 }
 
 function push_image() { ## Push Engine local image with current commit ID as tag
-  tag=$(get_commit_id)
+  tag=$(generate_image_tag)
   set -e
 
   docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
@@ -91,7 +148,7 @@ function push_image() { ## Push Engine local image with current commit ID as tag
 }
 
 function push_ci_image() { ## Push CI local image with current commit ID as tag
-  tag=$(get_commit_id)
+  tag=$(generate_image_tag)
   set -e
 
   docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
@@ -99,16 +156,17 @@ function push_ci_image() { ## Push CI local image with current commit ID as tag
 }
 
 function new_release() { ## Release a new engine version with commit ID as tag
-  tag=$(get_commit_id)
+  tag=$(generate_image_tag)
+
   check_untracked_files
   build_image
   push_image
+
   echo -e "\e[92mNew image name is: qoveryrd/engine:${tag}\e[0m"
 }
 
 function set_release_ga() { ## Release a new engine version and mark it as globally available
-  tag=$(get_commit_id)
-  # Note: this is the dev version for the moment as the prod one is not released yet
+  tag=$(generate_image_tag)
   curl -s -X PUT -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}"
 }
 
@@ -118,7 +176,7 @@ function get_release_ga() { ## Get globally available release version
 }
 
 function release_to_prod() { ## Release GA to prod
-  tag=$(get_commit_id)
+  tag=$(generate_image_tag)
   AWS_ACCESS_KEY_ID=$AWS_PROD_DEPLOY_ACCESS_KEY \
   AWS_SECRET_ACCESS_KEY=$AWS_PROD_DEPLOY_SECRET_KEY \
   AWS_DEFAULT_REGION=eu-west-3 \
@@ -137,30 +195,7 @@ resources.requests.cpu="500m",\
 resources.requests.memory="2Gi"
 }
 
-function prepare_engine() {
-    if [ -e $ENGINE_DIR ] ; then
-      echo "Found a symlink for the engine, going to use it"
-    elif [ ! -d $ENGINE_DIR ] ; then
-      git clone https://github.com/Qovery/engine.git $ENGINE_DIR
-    fi
-
-    ENGINE_BRANCH=""
-    if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
-      ENGINE_BRANCH=$GITHUB_ENGINE_BRANCH_NAME
-    fi
-
-    cd $ENGINE_DIR
-    git checkout $ENGINE_BRANCH
-    git pull
-    echo "Latest commit on branch $ENGINE_BRANCH:"
-    git log -1
-    commit_id=$(git rev-parse HEAD)
-    cd -
-
-    # Update in place the Cargo.toml to ensure consistency between lib folder and engine lib
-    sed -ri "s/(.+github.com\/Qovery\/engine.*rev.*?\")[A-Za-z0-9]+(.+)/\1$commit_id\2/" app/Cargo.toml
-    sed -ri "s/(.+github.com\/Qovery\/engine.*rev.*?\")[A-Za-z0-9]+(.+)/\1$commit_id\2/" qovery-engine-task-manager/Cargo.toml
-}
+## Tests
 
 function fast_tests() { # Run fast tests only on qovery-engine
   export RUST_LOG=info

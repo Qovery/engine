@@ -3,9 +3,6 @@
 The Qovery Engine is an abstraction layer to deploy stateless and stateful applications on any Cloud providers.delete
 It also bootstraps Kubernetes clusters and mandatory elements (network) for clients.
 
-## Features
-* TODO
-* TODO
 
 ## Packages
 ### qovery-engine
@@ -15,10 +12,10 @@ Qovery engine is able to deploy complete clusters environments and deploy client
 Files to make images that should run for builds or Qovery application run.
 
 ### app
-TODO
+Qovery binary application
 
 ### qovery-engine-task-manager
-TODO
+Task manager is made to handle coming tasks from NATS and run them with the engine.
 
 ### qovery-engine-shared
 TDOO
@@ -37,12 +34,11 @@ TDOO
 Install [EnvFile](https://plugins.jetbrains.com/plugin/7861-envfile) plugin on Intellij, and add `.env` file to your build and run.
 
 ### Generate a new image version
-To generate a new Engine image version, you have to use Gitlab. Simply push on master and run a build job on Gitlab:
-https://gitlab.com/qovery/qovery-engine/-/jobs
+To generate a new Engine image version, you have to use Gitlab and GitHub:
+1. On GitHub, ensure your wished commits are stored in dev or master branch.
+2. On Gitlab, run a dev or mmain pipeline to generate images and push to repository
 
-At the end of the job, the image and tag will be shown. Replace the Terraform "qovery_engine_version" variable with the
-image tag and push.
-
+Note: naming image tags is made of the first 7 chars Github commit id + a dash + 7 first chars Gitlab commit id 
 
 ## Supported connectors
 ### Build Platforms
