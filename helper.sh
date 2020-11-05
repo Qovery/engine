@@ -54,7 +54,7 @@ function check_untracked_files() {
 
 function get_gitlab_engine_commit_id() {
   # Ensure we're in the correct folder
-  if [ $(git config --get remote.origin.url | $ggrep -c "gitlab.com:qovery/qovery-engine.git") != "1" ] ; then
+  if [ $(git config --get remote.origin.url | $ggrep -c "gitlab.com:qovery/qovery-engine.git") -ne 1 ] ; then
     echo "You're not in the correct directory and should be in the gitlab repo: $(pwd)"
     exit 1
   fi
@@ -63,7 +63,7 @@ function get_gitlab_engine_commit_id() {
 
 function get_github_engine_commit_id() {
   # Ensure we're in the correct folder
-  if [ $(git config --get remote.origin.url | $ggrep -c "github.com/Qovery/engine.git") != "1" ] ; then
+  if [ $(git config --get remote.origin.url | $ggrep -c "github.com/Qovery/engine.git") -ne 1 ] ; then
     echo "You're not in the correct directory and should be in the gitlab repo: $(pwd)"
     exit 1
   fi
@@ -74,7 +74,7 @@ function generate_image_tag() {
   gitlab_commit_id=$(get_gitlab_engine_commit_id)
 
   cd $ENGINE_DIR
-  github_commit_id=$(github_commit_id)
+  github_commit_id=$(get_github_engine_commit_id)
   cd -
 
   echo "${github_commit_id:0:7}-${gitlab_commit_id:0:7}"
@@ -100,7 +100,7 @@ function prepare_engine() {
     git pull
     echo "Latest commit on branch $ENGINE_BRANCH:"
     git log -1
-    commit_id=$(get_commit_id)
+    commit_id=$(get_github_engine_commit_id)
     cd -
 
     # Update in place the Cargo.toml to ensure consistency between lib folder and engine lib
