@@ -2,11 +2,11 @@ name: functionnal-tests
 
 on:
   push:
-    branches-ignore: [ main, dev ]
+    branches-ignore: [ main ]
   pull_request:
-    branches-ignore: [ main, dev ]
+    branches-ignore: [ main ]
   pull_request_target:
-    branches-ignore: [ main, dev ]
+    branches-ignore: [ main ]
 
 jobs:
   build:
