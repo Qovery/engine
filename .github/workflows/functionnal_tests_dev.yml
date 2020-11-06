@@ -28,4 +28,7 @@ jobs:
       - name: Run a multi-line script
         timeout-minutes: 60
         run: |
+          branch=$(echo ${{github.ref}} | sed -r 's/.+\/(.+)/\1/')
+          echo "Branch name: $branch"
+          export GITHUB_BRANCH=$branch
           ./helper.sh full_tests
