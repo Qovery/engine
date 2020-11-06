@@ -54,7 +54,7 @@ function check_untracked_files() {
 
 function get_gitlab_engine_commit_id() {
   # Ensure we're in the correct folder
-  if [ $(git config --get remote.origin.url | $ggrep -c "gitlab.com:qovery/qovery-engine.git") -ne 1 ] ; then
+  if [ $(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/qovery-engine.git") -ne 1 ] ; then
     echo "You're not in the correct directory and should be in the gitlab repo: $(pwd)"
     exit 1
   fi
@@ -63,7 +63,7 @@ function get_gitlab_engine_commit_id() {
 
 function get_github_engine_commit_id() {
   # Ensure we're in the correct folder
-  if [ $(git config --get remote.origin.url | $ggrep -c "github.com/Qovery/engine.git") -ne 1 ] ; then
+  if [ $(git config --get remote.origin.url | $grep -c "github.com/Qovery/engine.git") -ne 1 ] ; then
     echo "You're not in the correct directory and should be in the gitlab repo: $(pwd)"
     exit 1
   fi
