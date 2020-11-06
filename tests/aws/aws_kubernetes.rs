@@ -64,8 +64,8 @@ fn create_and_upgrade_cluster_from_master_branch() {
                 assert!(false);
             }
         },
-        Ok(o) => {
-            info!("cargo build sucess {:?}", o);
+        Ok(_) => {
+            info!("cargo build sucess");
             assert!(true);
         }
     };
