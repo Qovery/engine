@@ -1,6 +1,4 @@
-use std::error::Error;
 use std::fmt;
-use std::fmt::Display;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum EngineInitError {

@@ -12,76 +12,40 @@ use std::time::Duration;
 use std::{env, thread};
 use std::{fs, io, process};
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use crossbeam_channel::{unbounded, Sender};
 use dirs::home_dir;
-use nats::{Connection, Subscription};
-use retry::delay::Fibonacci;
-use retry::OperationResult;
-use serde::{Deserialize, Serialize};
-
+use nats::tls::TlsConnector;
+use nats::{Connection, Message, Subscription};
 use qovery_engine::cmd;
 use qovery_engine::models::Context;
+use retry::delay::Fibonacci;
+use retry::OperationResult;
+use uuid::Uuid;
+
 use qovery_engine_shared::{subject, Mode};
-use qovery_engine_task_manager::models::{
-    CheckTaskOrderRequest, CheckTaskOrderResponse, CheckTaskRunningResponse, Request, Response,
-};
-use qovery_engine_task_manager::task_manager::{
-    InternalTask, PreRun, State, Status, Task, TaskManager,
-};
+use qovery_engine_task_manager::models::Request;
+use qovery_engine_task_manager::task_manager::{PreRun, State, Task, TaskManager};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::{EngineInitError, ErrorKind};
-use crate::TaskSelector::{Environment, Infrastructure};
+use crate::models::{
+    CheckTaskOrderRequest, CheckTaskOrderResponse, CheckTaskRunningResponse,
+    GetTaskManagerInfoRequest, GetTaskManagerInfoResponse, Ping, Response, StatusResponse,
+    TaskSelector,
+};
 
 mod constants;
 mod custom_error;
+mod models;
 
 const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";
 const CORE_PING_SUBJECT: &str = "core.ping";
 const ENGINE_TASK_RUNNING_CHECK_SUBJECT: &str = "engine.task_running_check";
 const ENGINE_TASK_ORDER_EXECUTION_CHECK_SUBJECT: &str = "engine.task_order_execution_check";
-
-enum TaskSelector {
-    Infrastructure(&'static str),
-    Environment(&'static str),
-}
-
-#[derive(Serialize, Deserialize)]
-struct StatusResponse {
-    id: String,
-    created_at: DateTime<Utc>,
-    status: Status,
-}
-
-impl StatusResponse {
-    fn new(id: String, status: Status) -> Self {
-        StatusResponse {
-            id,
-            created_at: Utc::now(),
-            status,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct Ping {
-    created_at: DateTime<Utc>,
-    engine_started_at: DateTime<Utc>,
-    engine_name: String,
-    // TODO add stats? deployments: { total, total_successes, total_failed ...}
-}
-
-impl Ping {
-    fn new(engine_started_at: DateTime<Utc>, engine_name: &str) -> Self {
-        Ping {
-            created_at: Utc::now(),
-            engine_started_at,
-            engine_name: engine_name.to_string(),
-        }
-    }
-}
+const ENGINE_INCOMING_TASK_SUBJECT: &str = "engine.incoming_task";
+const ENGINE_TASK_MANAGER_INFO_SUBJECT: &str = "engine.task_manager_info";
 
 fn subject_name(mode: &Mode, task_selector: &TaskSelector) -> String {
     subject(
@@ -285,11 +249,117 @@ fn listen_for_task_order_execution_check(
     Ok(sub)
 }
 
+fn task_manager_info_subject_name(mode: &Mode) -> String {
+    subject(&mode, ENGINE_TASK_MANAGER_INFO_SUBJECT)
+}
+
+/// This function listen for task coming from other engines to load balance them.
+fn listen_for_incoming_load_balancing_tasks(
+    engine_id: &str,
+    task_manager: Arc<Mutex<TaskManager>>,
+    workspace_root_dir: String,
+    lib_root_dir: String,
+    docker_tcp_socket: Option<String>,
+    task_selector: &TaskSelector,
+    nc: &Connection,
+    mode: &Mode,
+    tx: Sender<Box<dyn Task>>,
+) -> Result<(Subscription, Subscription), Error> {
+    let incoming_task_subject_name = subject(
+        &mode,
+        &*format!("{}.{}", ENGINE_INCOMING_TASK_SUBJECT, engine_id), // unique subject for each engine instance
+    );
+
+    let incoming_task_sub = nc.subscribe(incoming_task_subject_name.as_str())?;
+    let incoming_task_sub_1 = incoming_task_sub.clone();
+    info!("subscribe to {}", incoming_task_subject_name.as_str());
+
+    let tm_info_subject_name = task_manager_info_subject_name(&mode);
+    let tm_info_task_sub = nc.subscribe(tm_info_subject_name.as_str())?;
+    let tm_info_task_sub_1 = tm_info_task_sub.clone();
+    info!("subscribe to {}", tm_info_subject_name.as_str());
+
+    let nc = nc.clone();
+    let engine_id = engine_id.to_string();
+    let task_selector = task_selector.clone();
+    let subject_name = tm_info_subject_name.clone();
+    let workspace_root_dir = workspace_root_dir.clone();
+    let lib_root_dir = lib_root_dir.clone();
+    let docker_tcp_socket = docker_tcp_socket.clone();
+    let mode = mode.clone();
+
+    // incoming tasks receiver
+    let _ = thread::Builder::new()
+        .name(format!(
+            "incoming-lb-task-{}-{}",
+            task_selector.name(),
+            generate_id()
+        ))
+        .spawn(move || {
+            let nc = nc.clone();
+            let task_selector = task_selector.clone();
+            let workspace_root_dir = workspace_root_dir.clone();
+            let lib_root_dir = lib_root_dir.clone();
+            let docker_tcp_socket = docker_tcp_socket.clone();
+            let mode = mode.clone();
+
+            loop {
+                for msg in incoming_task_sub.next() {
+                    debug!("{}", msg);
+
+                    receive_and_queue_task(
+                        msg,
+                        workspace_root_dir.clone(),
+                        lib_root_dir.clone(),
+                        docker_tcp_socket.clone(),
+                        &task_selector,
+                        &nc,
+                        &mode,
+                        &tx,
+                    );
+                }
+            }
+        });
+
+    // respond to get info request on the task manager remaining tasks to run
+    let _ = thread::Builder::new()
+        .name(format!(
+            "tm-get-info-{}-{}",
+            task_selector.name(),
+            generate_id()
+        ))
+        .spawn(move || {
+            let engine_id = engine_id.clone();
+            let subject_name = subject_name.clone();
+
+            loop {
+                for msg in tm_info_task_sub.next() {
+                    debug!("{}", msg);
+
+                    let remaining_tasks_to_run = match task_manager.lock() {
+                        Ok(tm) => tm.remaining_tasks_to_run(),
+                        Err(_) => 10_000, // set to 10 000 to make the engine unlikely taking a task
+                    };
+
+                    let res = GetTaskManagerInfoResponse::new(
+                        engine_id.as_str(),
+                        subject_name.as_str(),
+                        remaining_tasks_to_run,
+                    );
+
+                    let _ = msg.respond(res.as_json_string());
+                }
+            }
+        });
+
+    Ok((incoming_task_sub_1, tm_info_task_sub_1))
+}
+
 fn listen_for_events(
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_tcp_socket: Option<String>,
-    task_selector: TaskSelector,
+    task_selector: &TaskSelector,
     nc: &Connection,
     mode: &Mode,
     tx: Sender<Box<dyn Task>>,
@@ -300,6 +370,7 @@ fn listen_for_events(
 
     let nc = nc.clone();
     let sub_1 = sub.clone();
+    let task_selector = task_selector.clone();
     let mode = mode.clone();
     let ts_str = match task_selector {
         Infrastructure(_) => "infrastructure",
@@ -315,55 +386,75 @@ fn listen_for_events(
                 for msg in sub.next() {
                     debug!("{}", msg);
 
-                    let nc_1 = nc.clone();
-                    let mode = mode.clone();
-
-                    // call before to run the current task to check that the same task is not running on another engine app
-                    // check is_the_same_task_running and is_the_next_task_to_run functions to know more about the details
-                    let pre_run_callback = Box::new(move |task: &dyn Task| {
-                        PreRun::add(
-                            is_the_same_task_running(task, nc_1.clone(), mode.clone()),
-                            is_the_next_task_to_run(task, nc_1.clone(), mode.clone()),
-                        )
-                    });
-
-                    match serde_json::from_slice::<Request>(msg.data.as_slice()) {
-                        Ok(req) => {
-                            let context = Context::new(
-                                req.id.as_str(),
-                                workspace_root_dir.as_str(),
-                                lib_root_dir.as_str(),
-                                docker_tcp_socket.clone(),
-                                req.metadata.clone(),
-                            );
-
-                            let _ = tx.send(match task_selector {
-                                TaskSelector::Infrastructure(_) => Box::new(
-                                    InfrastructureTask::new(context, req, pre_run_callback),
-                                ),
-                                TaskSelector::Environment(_) => {
-                                    Box::new(EnvironmentTask::new(context, req, pre_run_callback))
-                                }
-                            });
-
-                            let _ = msg.respond(Response::new(None).as_json_string());
-                        }
-                        Err(err) => {
-                            error!("{}", msg);
-                            error!(
-                                "receiving request but JSON decoding error occurred: {:?}",
-                                err
-                            );
-
-                            let response = Response::new(Some(err.to_string()));
-                            let _ = msg.respond(response.as_json_string());
-                        }
-                    };
-                }
+                receive_and_queue_task(
+                    msg,
+                    workspace_root_dir.clone(),
+                    lib_root_dir.clone(),
+                    docker_tcp_socket.clone(),
+                    &task_selector,
+                    &nc,
+                    &mode,
+                    &tx,
+                );
             }
         });
 
     Ok(sub_1)
+}
+
+fn receive_and_queue_task(
+    msg: Message,
+    workspace_root_dir: String,
+    lib_root_dir: String,
+    docker_tcp_socket: Option<String>,
+    task_selector: &TaskSelector,
+    nc: &Connection,
+    mode: &Mode,
+    tx: &Sender<Box<dyn Task>>,
+) {
+    let nc = nc.clone();
+    let mode = mode.clone();
+
+    // call before to run the current task to check that the same task is not running on another engine app
+    // check is_the_same_task_running and is_the_next_task_to_run functions to know more about the details
+    let pre_run_callback = Box::new(move |task: &dyn Task| {
+        PreRun::add(
+            is_the_same_task_running(task, nc.clone(), mode.clone()),
+            is_the_next_task_to_run(task, nc.clone(), mode.clone()),
+        )
+    });
+
+    match serde_json::from_slice::<Request>(msg.data.as_slice()) {
+        Ok(req) => {
+            let context = Context::new(
+                req.id.as_str(),
+                workspace_root_dir.as_str(),
+                lib_root_dir.as_str(),
+                docker_tcp_socket.clone(),
+                req.metadata.clone(),
+            );
+
+            tx.send(match task_selector {
+                TaskSelector::Infrastructure(_) => {
+                    Box::new(InfrastructureTask::new(context, req, pre_run_callback))
+                }
+                TaskSelector::Environment(_) => {
+                    Box::new(EnvironmentTask::new(context, req, pre_run_callback))
+                }
+            });
+
+            msg.respond(Response::new(None).as_json_string());
+        }
+        Err(err) => {
+            error!("{}", msg);
+            error!(
+                "receiving request but JSON decoding error occurred: {:?}",
+                err
+            );
+
+            msg.respond(Response::new(Some(err.to_string())).as_json_string());
+        }
+    };
 }
 
 /// Notify the core server that this engine exists and is running
@@ -399,10 +490,12 @@ fn watchdog(name: String, nc: Connection, sig_term_tx: Sender<bool>) {
                     sleep(Duration::from_secs(600));
                 } // ping every 10 minutes
                 _ => {
-                    error!("--------------------------------------------------");
-                    error!("ping KO!! What's wrong? Let's shutdown the service");
-                    error!("--------------------------------------------------");
-                    let _ = sig_term_tx.send(true);
+                    error!(r#"
+--------------------------------------------------
+Ping KO!! What's wrong? Let's shutdown the service
+--------------------------------------------------
+"#);
+                    sig_term_tx.send(true);
                 }
             }
         }
@@ -414,13 +507,11 @@ pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
         Ok(out) => {
             let is_empty = out.take(1).count() == 0;
             match is_empty {
-                true => {
-                    return Err(EngineInitError::Regular(ErrorKind::LibsDirEmpty));
-                }
+                true => Err(EngineInitError::Regular(ErrorKind::LibsDirEmpty)),
                 false => Ok(()),
             }
         }
-        Err(_) => return Err(EngineInitError::Regular(ErrorKind::LibsPathsMissing)),
+        Err(_) => Err(EngineInitError::Regular(ErrorKind::LibsPathsMissing)),
     }
 }
 
@@ -434,6 +525,7 @@ fn check_if_file_exist(path: &String) -> bool {
 fn check_versions_from(path: String) -> Result<(), EngineInitError> {
     // please append this vector if you want to test more binaries
     let bin_to_check = ["terraform"];
+
     // read line by line the version file
     if let Ok(lines) = read_lines(path) {
         for line in lines {
@@ -441,6 +533,7 @@ fn check_versions_from(path: String) -> Result<(), EngineInitError> {
                 // put in lowercase and split the BINARY_VERSION to BINARY
                 let lowercase = bin.to_lowercase();
                 let binary_name = lowercase.split("_").next().unwrap_or("");
+
                 // check if the binary need to be tested
                 if bin_to_check.contains(&binary_name) {
                     let result_cmd = cmd::utilities::run_version_command_for(&binary_name);
@@ -468,10 +561,15 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
+fn generate_id() -> u32 {
+    Uuid::new_v4().as_fields().0
+}
+
 pub fn main() -> io::Result<()> {
     println!("{}", ASCII_BANNER);
     env_logger::init();
 
+    let engine_id = env::var("ID").unwrap_or(generate_id().to_string());
     let organization = env::var("ORGANIZATION");
     let cloud_provider = env::var("CLOUD_PROVIDER");
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
@@ -483,6 +581,8 @@ pub fn main() -> io::Result<()> {
         "{}/.qovery-workspace",
         home_dir().unwrap().to_str().unwrap()
     ));
+
+    info!("engine id: {}", engine_id.as_str());
 
     info!(
         "running from current directory: {}",
@@ -499,6 +599,7 @@ pub fn main() -> io::Result<()> {
             process::exit(1);
         }
     }
+
     //checking if version file exist
     match check_if_file_exist(&version_file) {
         true => info!("Version file is accessible"),
@@ -538,18 +639,19 @@ pub fn main() -> io::Result<()> {
     };
 
     match env::var("DEPLOY_FROM_FILE") {
-        Err(_) => using_nats_server(
-            nats_server,
-            workspace_root_dir,
-            lib_root_dir,
-            docker_host,
-            mode,
-        ),
         Ok(deploy_from_file) => using_json_path_parameter(
             deploy_from_file,
             workspace_root_dir,
             lib_root_dir,
             docker_host,
+        ),
+        _ => using_nats_server(
+            engine_id,
+            nats_server,
+            workspace_root_dir,
+            lib_root_dir,
+            docker_host,
+            mode,
         ),
     }
 }
@@ -561,7 +663,7 @@ pub fn using_json_path_parameter(
     lib_root_dir: String,
     docker_host: Option<String>,
 ) -> Result<(), Error> {
-    let pre_run_callback = Box::new(|_task: &dyn Task| PreRun::Yes);
+    let pre_run_callback = Box::new(|_: &dyn Task| PreRun::Yes);
 
     // check if file json config file exist
     match check_if_file_exist(&deploy_from_file) {
@@ -604,8 +706,61 @@ pub fn using_json_path_parameter(
     }
 }
 
+/// Request engines (within the same zone) to give their Task Manager infos.
+fn list_engines_task_manager_infos(
+    mode: &Mode,
+    nc: &Connection,
+    request: GetTaskManagerInfoRequest,
+) -> Vec<GetTaskManagerInfoResponse> {
+    let tm_info_subject_name = subject(mode, ENGINE_TASK_MANAGER_INFO_SUBJECT);
+
+    let sub = match nc.request_multi(tm_info_subject_name.as_str(), request.as_json_string()) {
+        Ok(sub) => sub,
+        Err(_) => {
+            error!("can't get task manager infos from other engines");
+            // FIXME should we retry?
+            return vec![];
+        }
+    };
+
+    let mut results: Vec<GetTaskManagerInfoResponse> = Vec::with_capacity(5);
+
+    for msg in sub.next() {
+        match serde_json::from_slice::<GetTaskManagerInfoResponse>(msg.data.as_slice()) {
+            Ok(tm_info) => results.push(tm_info),
+            Err(err) => error!("{:?}", err),
+        };
+    }
+
+    results
+}
+
+/// This function help to find the engine where to dispatch the next task.
+/// The choice is based on the less loaded by counting the number of tasks that remained to be run.
+/// If there is no result (E.g network issue) - then return None
+fn find_the_engine_where_to_dispatch_the_next_task(
+    mut task_manager_infos: Vec<GetTaskManagerInfoResponse>,
+) -> Option<GetTaskManagerInfoResponse> {
+    let _ = task_manager_infos.sort_by_key(|x| x.remaining_tasks_to_run);
+
+    match task_manager_infos.first() {
+        Some(v) => Some(v.clone()),
+        None => None,
+    }
+}
+
+/// This function dispatch a task to an engine through NATS
+fn dispatch_task_to_engine(task: &dyn Task, subject_name: &str, nc: &Connection) {
+    // FIXME should I wait for ack?
+    nc.publish(
+        subject_name,
+        serde_json::to_string(task.bytes_payload().as_slice()).unwrap(),
+    );
+}
+
 // the engine can be autonomous using the nats server to receive actions
-pub fn using_nats_server(
+fn using_nats_server(
+    engine_id: String,
     nats_server: String,
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -645,6 +800,10 @@ pub fn using_nats_server(
     info!("connection to the NATS server established");
 
     let nc_1 = nc.clone();
+    let nc_2 = nc.clone();
+
+    let mode_1 = mode.clone();
+    let engine_id_1 = engine_id.clone();
 
     let (tx_task, rx_task) = unbounded::<Box<dyn Task>>();
     let (tx_quit, rx_quit) = unbounded::<bool>();
@@ -694,20 +853,91 @@ pub fn using_nats_server(
                     let _ = tx_quit.send(true);
                 });
 
+            let nc = nc_2.clone();
+            let mode = mode_1.clone();
+            let engine_id = engine_id_1.clone();
+
             loop {
                 let task = rx_task.recv().unwrap();
-                t1_task_manager.lock().unwrap().add_task(task);
+                // load balance workload before dispatching the task to the current task manager.
+                match t1_task_manager.lock() {
+                    Ok(mut tm) => {
+                        // request info from other engines
+                        // to know how many remaining tasks to run they have?
+                        match find_the_engine_where_to_dispatch_the_next_task(
+                            list_engines_task_manager_infos(
+                                &mode,
+                                &nc,
+                                GetTaskManagerInfoRequest::new(engine_id.as_str()),
+                            ),
+                        ) {
+                            None => tm.add_task(task), // This is a default/fallback choice. Add the task into the local engine. Maybe not the best choice, but better than nothing.
+                            Some(tm_info) => {
+                                // FIXME how to prevent ping/pong between engines?
+                                // dispatch the task into the best engine
+                                if tm_info.engine_id == engine_id.as_str() {
+                                    // the local engine is less loaded than the others
+                                    tm.add_task(task);
+                                } else {
+                                    // another engine is less loaded
+                                    let tm_info_subject_name =
+                                        task_manager_info_subject_name(&mode);
+
+                                    dispatch_task_to_engine(
+                                        task.borrow(),
+                                        tm_info_subject_name.as_str(),
+                                        &nc,
+                                    );
+                                }
+                            }
+                        };
+                    }
+                    Err(err) => {
+                        error!("{:?}", err);
+                        warn!("wait for 5 seconds prior to try to add task again");
+                        thread::sleep(Duration::from_secs(5));
+                    }
+                };
             }
         });
 
     let _ = listen_for_task_running_check_events(task_manager.clone(), &nc, &mode)?;
     let _ = listen_for_task_order_execution_check(task_manager.clone(), &nc, &mode)?;
 
+    let infrastructure_task_selector = TaskSelector::Infrastructure("infrastructure");
+    let environment_task_selector = TaskSelector::Environment("environment");
+
+    let (lb_infrastructure_incoming_task_sub, lb_infrastructure_tm_info_sub) =
+        listen_for_incoming_load_balancing_tasks(
+            engine_id.as_str(),
+            task_manager.clone(),
+            workspace_root_dir.clone(),
+            lib_root_dir.clone(),
+            docker_host.clone(),
+            &infrastructure_task_selector,
+            &nc,
+            &mode,
+            tx_task.clone(),
+        )?;
+
+    let (lb_environment_incoming_task_sub, lb_environment_tm_info_sub) =
+        listen_for_incoming_load_balancing_tasks(
+            engine_id.as_str(),
+            task_manager.clone(),
+            workspace_root_dir.clone(),
+            lib_root_dir.clone(),
+            docker_host.clone(),
+            &environment_task_selector,
+            &nc,
+            &mode,
+            tx_task.clone(),
+        )?;
+
     let infrastructure_sub = listen_for_events(
         workspace_root_dir.clone(),
         lib_root_dir.clone(),
         docker_host.clone(),
-        Infrastructure("infrastructure"),
+        &infrastructure_task_selector,
         &nc,
         &mode,
         tx_task.clone(),
@@ -717,7 +947,7 @@ pub fn using_nats_server(
         workspace_root_dir,
         lib_root_dir,
         docker_host,
-        Environment("environment"),
+        &environment_task_selector,
         &nc,
         &mode,
         tx_task.clone(),
@@ -736,9 +966,12 @@ pub fn using_nats_server(
             // unsubscribe listeners
             // do not unsubscribe "task_running_check_sub - it must be alive during the whole tasks completion"
             let _ = infrastructure_sub.unsubscribe();
-            info!("unsubscribe from infrastructure subject");
             let _ = environment_sub.unsubscribe();
-            info!("unsubscribe from environment subject");
+            let _ = lb_infrastructure_incoming_task_sub.unsubscribe();
+            let _ = lb_infrastructure_tm_info_sub.unsubscribe();
+            let _ = lb_environment_incoming_task_sub.unsubscribe();
+            let _ = lb_environment_tm_info_sub.unsubscribe();
+            info!("unsubscribe from all subjects");
             task_manager.lock().unwrap().stop();
             info!("request to TaskManager to stop receiving new tasks");
         });
@@ -754,4 +987,29 @@ pub fn using_nats_server(
 
     warn!("end of execution");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::find_the_engine_where_to_dispatch_the_next_task;
+    use crate::models::GetTaskManagerInfoResponse;
+
+    #[test]
+    fn find_the_engine_where_to_dispatch_the_next_task_tests() {
+        let x = GetTaskManagerInfoResponse::new("abc", "a.b.c", 4);
+        let y = GetTaskManagerInfoResponse::new("def", "d.e.f", 1);
+        let z = GetTaskManagerInfoResponse::new("ghi", "g.h.i", 2);
+
+        assert_eq!(
+            find_the_engine_where_to_dispatch_the_next_task(vec![x, y, z])
+                .unwrap()
+                .remaining_tasks_to_run,
+            1
+        );
+
+        match find_the_engine_where_to_dispatch_the_next_task(vec![]) {
+            Some(_) => assert!(false),
+            None => assert!(true),
+        };
+    }
 }

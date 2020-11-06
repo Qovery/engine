@@ -29,6 +29,9 @@ pub struct Request {
     pub target_environment: Option<Environment>,
     pub failover_environment: Option<Environment>,
     pub metadata: Option<Metadata>,
+    // this field is used to store the data bytes from the current request send through NATS.
+    #[serde(skip_serializing)]
+    pub bytes_payload: Vec<u8>,
 }
 
 impl Request {
@@ -342,76 +345,4 @@ pub struct Options {
     spaces_secret_key: Option<String>,
     token: Option<String>,
     region: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Response {
-    pub created_at: DateTime<Utc>,
-    pub message: Option<String>,
-}
-
-impl Response {
-    pub fn new(message: Option<String>) -> Self {
-        Response {
-            created_at: Utc::now(),
-            message,
-        }
-    }
-
-    pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct CheckTaskRunningResponse {
-    pub is_running: bool,
-}
-
-impl CheckTaskRunningResponse {
-    pub fn new(is_running: bool) -> Self {
-        CheckTaskRunningResponse {
-            is_running: is_running,
-        }
-    }
-
-    pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct CheckTaskOrderRequest {
-    pub group_id: String,
-    pub created_at: DateTime<Utc>,
-}
-
-impl CheckTaskOrderRequest {
-    pub fn new(group_id: String, created_at: DateTime<Utc>) -> Self {
-        CheckTaskOrderRequest {
-            group_id,
-            created_at,
-        }
-    }
-
-    pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct CheckTaskOrderResponse {
-    pub is_first_place: bool,
-}
-
-impl CheckTaskOrderResponse {
-    pub fn new(is_first_place: bool) -> Self {
-        CheckTaskOrderResponse {
-            is_first_place: is_first_place,
-        }
-    }
-
-    pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
 }

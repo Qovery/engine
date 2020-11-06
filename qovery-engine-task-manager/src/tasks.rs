@@ -72,6 +72,10 @@ impl Task for InfrastructureTask {
         self.request.id.as_str()
     }
 
+    fn bytes_payload(&self) -> &Vec<u8> {
+        self.request.bytes_payload.borrow()
+    }
+
     fn send_status(&self, sender: &Sender<Message>, status: Status) {
         let it = InternalTask {
             task: Box::new(self.clone()),
@@ -141,7 +145,7 @@ impl Task for InfrastructureTask {
             nodes.borrow(),
         );
 
-        match self.request.action {
+        let _ = match self.request.action {
             Action::Create => tx.create_kubernetes(kubernetes.borrow()),
             Action::Pause => tx.create_kubernetes(kubernetes.borrow()),
             Action::Delete => tx.delete_kubernetes(kubernetes.borrow()),
@@ -240,6 +244,10 @@ impl Task for EnvironmentTask {
         self.request.id.as_str()
     }
 
+    fn bytes_payload(&self) -> &Vec<u8> {
+        self.request.bytes_payload.borrow()
+    }
+
     fn send_status(&self, sender: &Sender<Message>, status: Status) {
         let it = InternalTask {
             task: Box::new(self.clone()),
@@ -323,7 +331,7 @@ impl Task for EnvironmentTask {
             Some(ea) => ea,
         };
 
-        match self.request.action {
+        let _ = match self.request.action {
             Action::Create => tx.deploy_environment(kubernetes.borrow(), &environment_action),
             Action::Pause => tx.pause_environment(kubernetes.borrow(), &environment_action),
             Action::Delete => tx.delete_environment(kubernetes.borrow(), &environment_action),
@@ -604,8 +612,8 @@ fn format_engine_error_output(
         EngineErrorScope::Environment(id, name) => {
             format!("Environment '{}' with id '{}'", name, id)
         }
-        EngineErrorScope::Database(id, _type, name) => {
-            format!("Database '{}' with id '{}'", name, id)
+        EngineErrorScope::Database(id, type_, name) => {
+            format!("{} Database '{}' with id '{}'", type_, name, id)
         }
         EngineErrorScope::Application(id, name) => {
             format!("Application '{}' with id '{}'", name, id)

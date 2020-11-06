@@ -119,7 +119,7 @@ impl TaskManager {
 
     /// gracefully end the remaining tasks but stop accepting new ones
     pub fn stop(&self) {
-        self.end_task_sig_sender.send(true);
+        let _ = self.end_task_sig_sender.send(true);
     }
 
     /// run task manager - only a single instance will run
@@ -160,10 +160,10 @@ impl TaskManager {
                                     .insert(it.task.id().to_string(), it.status.clone())
                                     .refresh();
 
-                                tx_run_msg_2.send(Ok(it));
+                                let _ = tx_run_msg_2.send(Ok(it));
                             }
                             Err(err) => {
-                                tx_run_msg_2.send(Err(err));
+                                let _ = tx_run_msg_2.send(Err(err));
                             }
                         }
                     }
@@ -351,6 +351,7 @@ pub trait Task: Send {
     fn created_at(&self) -> &DateTime<Utc>;
     fn group_id(&self) -> &str;
     fn id(&self) -> &str;
+    fn bytes_payload(&self) -> &Vec<u8>;
     fn send_status(&self, sender: &Sender<Message>, status: Status);
     /// return true if you want to run it now, or false if you want to run this task later.
     /// this function is called just before `run()` is called.
