@@ -195,14 +195,24 @@ resources.requests.cpu="500m",\
 resources.requests.memory="2Gi"
 }
 
-## Tests
+# Tests
+
+function prepare_tests() {
+  set -e
+  for item in $(cat .env) ; do
+    key=$(echo $item | awk -F'=' '{ print $1}')
+    value=$(echo $item | awk -F'=' '{ print $2}' | sed 's:/:\\\/:g')
+    echo "Updating $key value"
+    find $ENGINE_DIR -type f -exec $sed -ri "s/CHANGE-ME-$key/$value/g" {} +
+  done
+}
 
 function fast_tests() { # Run fast tests only on qovery-engine
   export RUST_LOG=info
   nb_treads=$1
   export_env
   prepare_engine
-  pwd
+  prepare_tests
   cd $ENGINE_DIR
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
   cat results.json | cargo2junit > results-fast.xml
@@ -213,6 +223,7 @@ function all_tests() { # Run all tests on qovery-engine
   nb_treads=$1
   export_env
   prepare_engine
+  prepare_tests
   cd $ENGINE_DIR
   cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results_all.json
   cat results_all.json | cargo2junit > results-full.xml
@@ -223,24 +234,24 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
   export RUST_LOG=info
   export_env
   prepare_engine
+  prepare_tests
   cd $ENGINE_DIR
   cargo test --package qovery-engine --test lib $test_name -- --ignored --exact
 }
 
 function export_env() {
-  for line in $(cat .env)
-  do
+  for line in $(cat .env) ; do
     export $line
   done
 }
 
 function all-test-remote-lib(){
   GITHUB_ENGINE_BRANCH_NAME=$1
-  #sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
   export RUST_LOG=info
   nb_treads=8
   export_env
   prepare_engine
+  prepare_tests
   cd $ENGINE_DIR
   cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results_all.json
   cat results_all.json | cargo2junit > results-full.xml
@@ -248,11 +259,11 @@ function all-test-remote-lib(){
 
 function fast-test-remote-lib(){
   GITHUB_ENGINE_BRANCH_NAME=$1
-  #sed -i -e "s/main/$GITHUB_ENGINE_BRANCH_NAME/g" app/Cargo.toml
   export RUST_LOG=info
   nb_treads=8
   export_env
   prepare_engine
+  prepare_tests
   cd $ENGINE_DIR
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
   cat results.json | cargo2junit > results-fast.xml
@@ -269,12 +280,6 @@ build_image)
   ;;
 build_ci_image)
   build_ci_image
-  ;;
-generate_tmp_libs_tar)
-  generate_tmp_libs_tar
-  ;;
-s3_upload_resources)
-  s3_upload_resources
   ;;
 new_release)
   new_release
