@@ -266,9 +266,9 @@ fn deploy_a_working_environment_with_custom_domain() {
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
                 // should be the client domain
-                domain: "test-domain.CHANGE-ME-CUSTOM_TEST_DOMAIN".to_string(),
+                domain: "test-domain.CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
                 // should be our domain
-                target_domain: "target-domain.CHANGE-ME-DEFAULT_TEST_DOMAIN".to_string(),
+                target_domain: "target-domain.CHANGE-ME/DEFAULT_TEST_DOMAIN".to_string(),
             }];
             router
         })
@@ -282,7 +282,7 @@ fn deploy_a_working_environment_with_custom_domain() {
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
                 // should be the client domain
-                domain: "test-domain.CHANGE-ME-CUSTOM_TEST_DOMAIN".to_string(),
+                domain: "test-domain.CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
                 // should be our domain
                 target_domain: "target-domain.DEFAULT_TEST_DOMAIN".to_string(),
             }];
@@ -379,7 +379,8 @@ fn deploy_a_working_environment_with_postgresql() {
 
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
-    let database_host = "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME-DEFAULT_TEST_DOMAIN"; // External access check
+    let database_host =
+        "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 5432;
     let database_db_name = "my-postgres".to_string();
     let database_username = "superuser".to_string();
@@ -626,7 +627,8 @@ fn deploy_a_working_production_environment_with_postgresql() {
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
 
-    let database_host = "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME-DEFAULT_TEST_DOMAIN"; // External access check
+    let database_host =
+        "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 5432;
     let database_db_name = "postgres".to_string();
     let database_username = "superuser".to_string();
@@ -707,7 +709,8 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 
     let context_for_delete = context.clone_not_same_execution_id();
 
-    let database_host = "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME-DEFAULT_TEST_DOMAIN"; // External access check
+    let database_host =
+        "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 27017;
     let database_db_name = "my-mongodb".to_string();
     let database_username = "superuser".to_string();
@@ -918,7 +921,8 @@ fn deploy_a_working_environment_with_mysql() {
 
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
-    let database_host = "mysql-".to_string() + generate_id().as_str() + ".CHANGE-ME-DEFAULT_TEST_DOMAIN"; // External access check
+    let database_host =
+        "mysql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 3306;
     let database_db_name = "mydb".to_string();
     let database_username = "superuser".to_string();
@@ -1008,7 +1012,8 @@ fn deploy_a_working_production_environment_with_mysql() {
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Production;
 
-    let database_host = "mysql-app-".to_string() + generate_id().as_str() + "-svc.CHANGE-ME-DEFAULT_TEST_DOMAIN"; // External access check
+    let database_host =
+        "mysql-app-".to_string() + generate_id().as_str() + "-svc.CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 3306;
     let database_db_name = "mysql".to_string();
     let database_username = "superuser".to_string();
