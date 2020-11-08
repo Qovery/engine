@@ -126,11 +126,11 @@
   "documentdb_cidr_subnet": "23",
   "elasticsearch_cidr_subnet": "23",
   "tls_email_report": "CHANGE-ME/LETS_ENCRYPT_EMAIL_REPORT",
-  "engine_version_controller_token": "fake_token",
+  "engine_version_controller_token": "CHANGE-ME/QOVERY_ENGINE_CONTROLLER_TOKEN",
   "grafana_admin_user": "ajdoiawjdiodjidfujij",
   "grafana_admin_password": "ajdoiawjdiojAWDJawdj",
   "discord_api_key": "",
   "qovery_nats_url": "",
   "qovery_ssh_key": "",
-  "eks_access_cidr_blocks": CHANGE-ME/LETS_ENCRYPT_EMAIL_REPORT
+  "eks_access_cidr_blocks": CHANGE-ME/EKS_ACCESS_CIDR_BLOCKS
 }
