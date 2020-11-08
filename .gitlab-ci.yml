@@ -51,6 +51,31 @@ wip-full-tests:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
 
+all-test-from-github:
+  stage: all-test-remote-lib
+  retry: 0
+  script:
+    - ./helper.sh all-tests $LIB_COMMIT_ID
+  rules:
+    - if: '$TEST_TYPE == "full"'
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
+
+fast-test-from-github:
+  stage: fast-test-remote-lib
+  retry: 0
+  script:
+    - ./helper.sh fast-tests $LIB_COMMIT_ID
+  rules:
+    - if: '$TEST_TYPE == "fast"'
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results-fast.xml
+
+
 dev-full-tests:
   stage: tests
   retry: 0
@@ -137,27 +162,3 @@ wip-deploy_engine:
   only:
     refs:
       - master
-
-all-test-from-github:
-  stage: all-test-remote-lib
-  retry: 0
-  script:
-    - ./helper.sh all-test-remote-lib $LIB_COMMIT_ID
-  rules:
-    - if: '$TEST_TYPE == "full"'
-  artifacts:
-    when: always
-    reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
-
-fast-test-from-github:
-  stage: fast-test-remote-lib
-  retry: 0
-  script:
-    - ./helper.sh fast-test-remote-lib $LIB_COMMIT_ID
-  rules:
-    - if: '$TEST_TYPE == "fast"'
-  artifacts:
-    when: always
-    reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results-fast.xml

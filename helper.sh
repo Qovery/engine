@@ -81,23 +81,41 @@ function generate_image_tag() {
 }
 
 
-function prepare_engine() {
-    if [ -e $ENGINE_DIR ] ; then
-      echo "Found a symlink for the engine, going to use it"
-    elif [ ! -d $ENGINE_DIR ] ; then
-      git clone https://github.com/Qovery/engine.git $ENGINE_DIR
-    fi
+function prepare_engine() { ## Ensure github engine repo is present and propose solutions if not
+    RUNNING_ON_CI=0
 
     ENGINE_BRANCH=""
     if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
       ENGINE_BRANCH=$GITHUB_ENGINE_BRANCH_NAME
+      RUNNING_ON_CI=1
     else
       ENGINE_BRANCH=$(git branch --show-current)
     fi
 
+    if [ -e $ENGINE_DIR ] ; then
+      echo "Found $ENGINE_DIR directory, going to use it"
+    elif [ ! -d $ENGINE_DIR ] ; then
+      if [ $RUNNING_ON_CI -eq 0 ] ; then
+        echo "'cloned-engine' folder is missing. To get it, you can:"
+        echo "1. Clone the engine from the engine repo: git clone https://github.com/Qovery/engine.git $ENGINE_DIR"
+        echo "2. Make a symlink from your current engine version (WARN, file updates can occur)"
+        echo ""
+        echo "Hit any key to continue or CTRL+C to stop"
+        read
+      else
+        cd $ENGINE_DIR
+        git checkout $ENGINE_BRANCH
+        git pull
+        cd -
+      fi
+    fi
+
+    if [ ! -e $ENGINE_DIR ] ; then
+      echo "Engine directory $ENGINE_DIR wasn't found"
+      exit 1
+    fi
+
     cd $ENGINE_DIR
-    git checkout $ENGINE_BRANCH
-    git pull
     echo "Latest commit on branch $ENGINE_BRANCH:"
     git log -1
     commit_id=$(get_github_engine_commit_id)
@@ -197,36 +215,14 @@ resources.requests.memory="2Gi"
 
 # Tests
 
-function prepare_tests() {
+function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
   set -e
   for item in $(cat .env) ; do
     key=$(echo $item | awk -F'=' '{ print $1}')
     value=$(echo $item | awk -F'=' '{ print $2}' | sed 's:/:\\\/:g')
     echo "Updating $key value"
-    find $ENGINE_DIR -type f -exec $sed -ri "s/CHANGE-ME-$key/$value/g" {} +
+    find ${ENGINE_DIR}/test* -type f -exec $sed -ri "s/CHANGE-ME\\/$key/$value/g" {} +
   done
-}
-
-function fast_tests() { # Run fast tests only on qovery-engine
-  export RUST_LOG=info
-  nb_treads=$1
-  export_env
-  prepare_engine
-  prepare_tests
-  cd $ENGINE_DIR
-  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
-  cat results.json | cargo2junit > results-fast.xml
-}
-
-function all_tests() { # Run all tests on qovery-engine
-  export RUST_LOG=info
-  nb_treads=$1
-  export_env
-  prepare_engine
-  prepare_tests
-  cd $ENGINE_DIR
-  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results_all.json
-  cat results_all.json | cargo2junit > results-full.xml
 }
 
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
@@ -245,7 +241,7 @@ function export_env() {
   done
 }
 
-function all-test-remote-lib(){
+function all-test-remote-lib(){ ## Run all tests on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
   export RUST_LOG=info
   nb_treads=8
@@ -257,7 +253,7 @@ function all-test-remote-lib(){
   cat results_all.json | cargo2junit > results-full.xml
 }
 
-function fast-test-remote-lib(){
+function fast-test-remote-lib(){ ## Run fast tests only on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
   export RUST_LOG=info
   nb_treads=8
@@ -320,6 +316,12 @@ all-test-remote-lib)
 single_test)
   check_num_args 2
   single_test $2
+  ;;
+prepare_tests)
+  prepare_tests
+  ;;
+prepare_engine)
+  prepare_engine
   ;;
 *)
   print_help
