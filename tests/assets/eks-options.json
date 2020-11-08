@@ -121,7 +121,7 @@
   ],
   "vpc_cidr_block": "10.0.0.0/16",
   "eks_cidr_subnet": "23",
-  "qovery_api_url": "api.qovery.com",
+  "qovery_api_url": "CHANGE-ME/QOVERY_API_URL",
   "rds_cidr_subnet": "23",
   "documentdb_cidr_subnet": "23",
   "elasticsearch_cidr_subnet": "23",
@@ -129,8 +129,8 @@
   "engine_version_controller_token": "CHANGE-ME/QOVERY_ENGINE_CONTROLLER_TOKEN",
   "grafana_admin_user": "ajdoiawjdiodjidfujij",
   "grafana_admin_password": "ajdoiawjdiojAWDJawdj",
-  "discord_api_key": "",
-  "qovery_nats_url": "",
-  "qovery_ssh_key": "",
+  "discord_api_key": "CHANGE-ME/DISCORD_API_URL",
+  "qovery_nats_url": "CHANGE-ME/QOVERY_NATS_URL",
+  "qovery_ssh_key": "CHANGE-ME/QOVERY_SSH_USER",
   "eks_access_cidr_blocks": CHANGE-ME/EKS_ACCESS_CIDR_BLOCKS
 }
