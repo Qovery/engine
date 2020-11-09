@@ -1,1 +1,1 @@
-mod container_registry;
+mod kubernetes;

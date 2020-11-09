@@ -3,12 +3,15 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
 use crate::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, KUBE_CLUSTER_ID};
+
+use chrono::Utc;
 use curl::easy::Easy;
 use digitalocean::error::Error::ReqwestError;
+use dirs::home_dir;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::common;
 use qovery_engine::cmd;
-use qovery_engine::models::{Context, Environment};
+use qovery_engine::models::{Context, Environment, Metadata};
 use reqwest::StatusCode;
 use std::path::Path;
 
@@ -141,4 +144,31 @@ pub fn curl_it_and_compare(path: &str, should_return_str: &str) -> Result<bool, 
         },
         Err(e) => Err(e),
     }
+}
+
+pub fn context() -> Context {
+    let execution_id = execution_id();
+    let home_dir = std::env::var("WORKSPACE_ROOT_DIR")
+        .unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
+    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+    let metadata = Metadata {
+        test: Option::from(true),
+        dry_run_deploy: Option::from(true),
+    };
+
+    Context::new(
+        execution_id.as_str(),
+        home_dir.as_str(),
+        lib_root_dir.as_str(),
+        None,
+        Option::from(metadata),
+    )
+}
+
+pub fn execution_id() -> String {
+    Utc::now()
+        .to_rfc3339()
+        .replace(":", "-")
+        .replace(".", "-")
+        .replace("+", "-")
 }

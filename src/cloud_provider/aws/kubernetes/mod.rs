@@ -14,6 +14,7 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::aws::common::{do_stateless_service_cleanup, kubernetes_config_path};
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::common::workerNodeDataTemplate::WorkerNodeDataTemplate;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{
     check_kubernetes_has_enough_resources_to_deploy_environment, Kind, Kubernetes, KubernetesNode,
@@ -1349,12 +1350,4 @@ impl<'a> Kubernetes for EKS<'a> {
 
 fn get_s3_kubeconfig_bucket_name(id: String) -> String {
     format!("qovery-kubeconfigs-{}", id)
-}
-
-#[derive(Serialize, Deserialize)]
-struct WorkerNodeDataTemplate {
-    instance_type: String,
-    desired_size: String,
-    max_size: String,
-    min_size: String,
 }

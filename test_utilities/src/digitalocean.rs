@@ -7,9 +7,13 @@ use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 
+use crate::aws::{terraform_aws_access_key_id, terraform_aws_secret_access_key};
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::build_platform_local_docker;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node;
+use qovery_engine::cloud_provider::TerraformStateCredentials;
 
+pub const DO_KUBERNETES_VERSION: &str = "1.18.10-do.1";
 pub const DIGITAL_OCEAN_URL: &str = "https://api.digitalocean.com/v2/";
 
 pub fn digital_ocean_token() -> String {
@@ -43,6 +47,20 @@ pub fn docker_cr_do_engine(context: &Context) -> Engine {
     )
 }
 
+pub fn do_kubernetes_nodes() -> Vec<Node> {
+    vec![Node::new(4, 8), Node::new(4, 8), Node::new(4, 8)]
+}
+
 pub fn cloud_provider_digitalocean(context: &Context) -> DO {
-    DO::new(context.clone(), "test", digital_ocean_token().as_str())
+    DO::new(
+        context.clone(),
+        "test",
+        digital_ocean_token().as_str(),
+        "digital-ocean-test-cluster",
+        TerraformStateCredentials {
+            access_key_id: terraform_aws_access_key_id().to_string(),
+            secret_access_key: terraform_aws_secret_access_key().to_string(),
+            region: "eu-west-3".to_string(),
+        },
+    )
 }

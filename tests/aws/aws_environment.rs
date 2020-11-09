@@ -14,8 +14,8 @@ use qovery_engine::models::{
     EnvironmentVariable, ExternalService, GitCredentials, Kind, Storage, StorageType,
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, context};
-use test_utilities::utilities::{curl_it_and_compare, init, is_pod_restarted};
+use test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key};
+use test_utilities::utilities::{context, curl_it_and_compare, init, is_pod_restarted};
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have

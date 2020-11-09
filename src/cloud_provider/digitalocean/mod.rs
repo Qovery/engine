@@ -1,3 +1,5 @@
+pub mod kubernetes;
+
 extern crate digitalocean;
 
 use std::any::Any;
@@ -6,21 +8,33 @@ use std::rc::Rc;
 use digitalocean::DigitalOcean;
 
 use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
-use crate::error::EngineError;
-use crate::models::{Context, Listener, ProgressListener};
+use crate::error::{EngineError, EngineErrorCause};
+use crate::models::{Context, Listener, Listeners, ProgressListener};
 
 pub struct DO {
     context: Context,
     id: String,
+    name: String,
     pub token: String,
+    terraform_state_credentials: TerraformStateCredentials,
+    listeners: Listeners,
 }
 
 impl DO {
-    pub fn new(context: Context, id: &str, token: &str) -> Self {
+    pub fn new(
+        context: Context,
+        id: &str,
+        token: &str,
+        name: &str,
+        terraform_state_credentials: TerraformStateCredentials,
+    ) -> Self {
         DO {
             context,
             id: id.to_string(),
+            name: name.to_string(),
             token: token.to_string(),
+            terraform_state_credentials,
+            listeners: vec![],
         }
     }
 
@@ -43,26 +57,37 @@ impl CloudProvider for DO {
     }
 
     fn organization_id(&self) -> &str {
-        unimplemented!()
+        self.id.as_str()
     }
 
     fn name(&self) -> &str {
-        unimplemented!()
+        self.name.as_str()
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        let client = DigitalOcean::new(&self.token);
+        match client {
+            Ok(_x) => Ok(()),
+            Err(_) => {
+                return Err(
+                    self.engine_error(
+                        EngineErrorCause::User("Your AWS account seems to be no longer valid (bad Credentials). \
+                    Please contact your Organization administrator to fix or change the Credentials."),
+                        format!("failed to login to Digital Ocean {}", self.name_with_id()))
+                );
+            }
+        }
     }
 
-    fn add_listener(&mut self, _listener: Listener) {
-        unimplemented!()
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 
     fn terraform_state_credentials(&self) -> &TerraformStateCredentials {
-        unimplemented!()
+        &self.terraform_state_credentials
     }
 
     fn as_any(&self) -> &dyn Any {
-        unimplemented!()
+        self
     }
 }

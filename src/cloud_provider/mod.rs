@@ -10,6 +10,7 @@ use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listener, ProgressListener};
 
 pub mod aws;
+pub mod common;
 pub mod digitalocean;
 pub mod environment;
 pub mod gcp;

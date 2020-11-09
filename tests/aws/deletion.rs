@@ -6,13 +6,13 @@ use qovery_engine::cmd::kubectl::create_sample_secret_terraform_in_namespace;
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use test_utilities::cloudflare::dns_provider_cloudflare;
-use test_utilities::utilities::init;
+use test_utilities::utilities::{context, init};
 
 pub fn do_not_delete_cluster_containing_tfstate() {
     init();
     // put some environments here, simulated or not
 
-    let context = test_utilities::aws::context();
+    let context = context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
