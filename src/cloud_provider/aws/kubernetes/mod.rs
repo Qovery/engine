@@ -64,6 +64,7 @@ pub struct Options {
     pub documentdb_cidr_subnet: String,
     pub elasticsearch_cidr_subnet: String,
     pub engine_version_controller_token: String,
+    pub agent_version_controller_token: String,
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
     pub discord_api_key: String,
@@ -193,6 +194,10 @@ impl<'a> EKS<'a> {
         context.insert(
             "engine_version_controller_token",
             &self.options.engine_version_controller_token,
+        );
+        context.insert(
+            "agent_version_controller_token",
+            &self.options.agent_version_controller_token,
         );
 
         // DNS configuration

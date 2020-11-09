@@ -124,7 +124,22 @@ variable "qovery_engine_info" {
   type = map(string)
 }
 
+variable "qovery_engine_replicas" {
+  description = "This variable is used to get random ID generated for the engine"
+  default = "2"
+  type = number
+}
+
 # Agent info
+
+variable "qovery_agent_info" {
+  description = "Qovery agent info"
+  default = {
+    "token" = "{{ agent_version_controller_token }}"
+    "api_fqdn" = "{{ qovery_api_url }}"
+  }
+  type = map(string)
+}
 
 variable "qovery_agent_replicas" {
   description = "This variable is used to get random ID generated for the agent"
