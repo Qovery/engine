@@ -241,10 +241,10 @@ function export_env() {
   done
 }
 
-function all-test-remote-lib(){ ## Run all tests on qovery-engine
+function all_tests(){ ## Run all tests on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
+  nb_treads=$2
   export RUST_LOG=info
-  nb_treads=8
   export_env
   prepare_engine
   prepare_tests
@@ -253,10 +253,10 @@ function all-test-remote-lib(){ ## Run all tests on qovery-engine
   cat results_all.json | cargo2junit > results-full.xml
 }
 
-function fast-test-remote-lib(){ ## Run fast tests only on qovery-engine
+function fast_tests(){ ## Run fast tests only on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
+  nb_treads=$2
   export RUST_LOG=info
-  nb_treads=8
   export_env
   prepare_engine
   prepare_tests
@@ -296,22 +296,16 @@ get_release_ga)
   get_release_ga
   ;;
 fast_tests)
-  fast_tests 8
+  fast_tests $GITHUB_ENGINE_BRANCH_NAME 8
   ;;
 fast_tests_seq)
-  fast_tests 1
+  fast_tests $GITHUB_ENGINE_BRANCH_NAME 1
   ;;
 all_tests)
-  all_tests 8
+  all_tests $GITHUB_ENGINE_BRANCH_NAME 8
   ;;
 all_tests_seq)
-  all_tests 1
-  ;;
-fast-test-remote-lib)
-  fast-test-remote-lib $GITHUB_ENGINE_BRANCH_NAME
-  ;;
-all-test-remote-lib)
-  all-test-remote-lib $GITHUB_ENGINE_BRANCH_NAME
+  all_tests $GITHUB_ENGINE_BRANCH_NAME 1
   ;;
 single_test)
   check_num_args 2
