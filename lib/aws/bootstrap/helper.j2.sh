@@ -113,6 +113,15 @@ function get_engine_version_to_use() { ## get the engine version for a given clu
   curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "$API_URL?type=cluster&clusterId=$CLUSTER_ID" && exit 0
 }
 
+function get_agent_version_to_use() { ## get the agent version for a given cluster. Args: token, api_fqdn, cluster_id
+  AGENT_VERSION_CONTROLLER_TOKEN=$1
+  API_FQDN=$2
+  CLUSTER_ID=$3
+  API_URL="https://$API_FQDN/api/v1/agent-version"
+
+  curl -s -H "X-Qovery-Signature: $AGENT_VERSION_CONTROLLER_TOKEN" "$API_URL?type=cluster&clusterId=$CLUSTER_ID" && exit 0
+}
+
 case $1 in
   create_elasticsearch_role_for_aws_service)
     check_args 2
@@ -134,6 +143,10 @@ case $1 in
   get_engine_version_to_use)
     check_args 3
     get_engine_version_to_use "$2" "$3" "$4"
+  ;;
+  get_agent_version_to_use)
+    check_args 3
+    get_agent_version_to_use "$2" "$3" "$4"
   ;;
   *)
     help

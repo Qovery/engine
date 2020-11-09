@@ -1,6 +1,6 @@
-//data "external" "get_agent_version_to_use" {
-//  program = ["./helper.sh", "get_agent_version_to_use", var.qovery_agent_info.token, var.qovery_agent_info.api_fqdn, var.eks_cluster_id]
-//}
+data "external" "get_agent_version_to_use" {
+  program = ["./helper.sh", "get_agent_version_to_use", var.qovery_agent_info.token, var.qovery_agent_info.api_fqdn, var.eks_cluster_id]
+}
 
 resource "random_id" "qovery_agent_id" {
   keepers = {
@@ -26,14 +26,9 @@ resource "helm_release" "qovery_agent_resources" {
     value = timestamp()
   }
 
-//  set {
-//    name = "image.tag"
-//    value = data.external.get_engine_version_to_use.result.version
-//  }
-
   set {
     name = "image.tag"
-    value = "cf82326cdddaa5758249bd46e81343fc99dc5782"
+    value = data.external.get_agent_version_to_use.result.version
   }
 
   set {
