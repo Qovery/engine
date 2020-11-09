@@ -238,7 +238,7 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
 
 function export_env() {
   for line in $(cat .env) ; do
-    if [ $(echo $line | $grep -c QOVERY_SSH_USER) -gt 0 ] ; then
+    if [ $(echo $line | $grep -c QOVERY_SSH_USER) -eq 0 ] ; then
       export $line
     fi
   done
