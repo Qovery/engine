@@ -217,9 +217,9 @@ resources.requests.memory="2Gi"
 
 function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
   set -e
-  for item in $(cat .env) ; do
-    key=$(echo $item | awk -F'=' '{ print $1}')
-    value=$(echo $item | awk -F'=' '{ print $2}' | sed 's:/:\\\/:g')
+  cat .env | while read item ; do
+    key=$(echo $item | $awk -F'=' '{ print $1}')
+    value=$(echo $item | $sed -r "s,^\w+='(.+)'$,\1,g" | $sed 's,/,\\\/,g')
     echo "Updating $key value"
     find ${ENGINE_DIR}/test* -type f -exec $sed -ri "s/CHANGE-ME\\/$key/$value/g" {} +
   done
