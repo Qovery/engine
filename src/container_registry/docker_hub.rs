@@ -5,7 +5,9 @@ use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::EngineErrorCause;
 use crate::models::{Context, Listener, Listeners, ProgressListener};
+extern crate reqwest;
 
+use reqwest::{Client, StatusCode};
 pub struct DockerHub {
     context: Context,
     id: String,
@@ -85,57 +87,24 @@ impl ContainerRegistry for DockerHub {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        let envs = match self.context.docker_tcp_socket() {
-            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
-            None => vec![],
-        };
-
-        // login into docker hub
-        match cmd::utilities::exec_with_envs(
-            "docker",
-            vec![
-                "login",
-                "-u",
-                self.login.as_str(),
-                "-p",
-                self.password.as_str(),
-            ],
-            envs.clone(),
-        ) {
-            Err(err) => {
-                if let Some(message) = err.message {
-                    error!("{}", message);
-                };
-
-                return false;
-            }
-            _ => {}
-        };
-
-        // check if image and tag exist
-        // note: to retrieve if specific tags exist you can specify the tag at the end of the cUrl path
-        let curl_path = format!(
-            "https://index.docker.io/v1/repositories/{}/tags/",
-            image.name
+        use reqwest::blocking::Client;
+        let client = Client::new();
+        let path = format!(
+            "https://index.docker.io/v1/repositories/{}/{}/tags",
+            &self.login, image.name
         );
-        let mut exist_stdoud: bool = false;
-        let mut exist_stderr: bool = true;
+        let res = client
+            .get(path.as_str())
+            .basic_auth(&self.login, Option::from(&self.password))
+            .send();
 
-        // TODO Change this by using curl lib
-        cmd::utilities::exec_with_envs_and_output(
-            "curl",
-            vec!["--silent", "-f", "-lSL", &curl_path],
-            envs.clone(),
-            |r_out| match r_out {
-                Ok(_) => exist_stdoud = true,
-                Err(e) => error!("Error while getting stdout from curl {}", e),
+        match res {
+            Ok(out) => match out.status() {
+                StatusCode::OK => true,
+                _ => false,
             },
-            |r_err| match r_err {
-                Ok(_) => exist_stderr = true,
-                Err(e) => error!("Error while getting stderr from curl {}", e),
-            },
-        );
-        exist_stdoud
+            Err(_) => false,
+        }
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
