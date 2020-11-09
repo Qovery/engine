@@ -20,39 +20,70 @@ use std::io::{BufReader, Read};
 use std::path::Path;
 use std::process::Command;
 use std::{env, fs};
-use test_utilities::aws::AWS_KUBERNETES_VERSION;
+use test_utilities::aws::{
+    aws_access_key_id, aws_default_region, aws_secret_access_key, AWS_KUBERNETES_VERSION,
+};
 
-pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
+pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "https://github.com/Qovery/engine.git";
 pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-master/";
 pub const GIT_LOGIN: &str = "CHANGE-ME";
 pub const GIT_TOKEN: &str = "CHANGE-ME";
 
 #[test]
-#[ignore]
-fn create_and_upgrade_cluster_from_master_branch() {
+fn upgrade_new_cluster() {
     init();
+    // create a cluster with last version of the engine
     let tmp_dir = format!("{}{}", TMP_DESTINATION_GIT, generate_id());
     let current_path = env::current_dir().unwrap();
     fs::remove_dir_all(TMP_DESTINATION_GIT);
     let gr = GitRepository {
         url: QOVERY_ENGINE_REPOSITORY_URL.to_string(),
-        credentials: Some(Credentials {
-            login: GIT_LOGIN.to_string(),
-            password: GIT_TOKEN.to_string(),
-        }),
+        // this repo is public !
+        credentials: None,
         commit_id: "".to_string(),
         dockerfile_path: "".to_string(),
     };
     fs::create_dir_all(tmp_dir.clone());
-    info!("Cloning qovery-engine repository");
+    info!("Cloning old engine repository");
     let clone = git::clone(&gr.url, tmp_dir.clone(), &gr.credentials);
     match clone {
-        Ok(repo) => info!("Well cloned qovery-engine repository"),
+        Ok(repo) => info!("Well clone engine repository"),
         Err(e) => {
-            info!("error while cloning the qovery-engine repo {}", e);
+            info!("error while cloning the engine repo {}", e);
             assert!(false);
         }
     }
+    // should generate json file assets
+    let cargo_test = Command::new("bash")
+        .arg("helper.sh")
+        .arg("prepare_tests")
+        .output();
+    match cargo_test {
+        Err(e) => {
+            info!("generating json in assets failed {:?}", e);
+            assert!(false);
+        }
+        Ok(o) => {
+            info!("generating json in assets successful {:?}", o);
+            assert!(true);
+        }
+    };
+    // copy it in the tmp project
+    let cpy = fs::copy(
+        format!("qovery-engine/tests/assets/eks-options.json"),
+        format!("{}/tests/assets/eks-options.json", &tmp_dir),
+    );
+    match cpy {
+        Ok(_) => {
+            info!("copy json file OK");
+            assert!(true);
+        }
+        Err(e) => {
+            info!("copy json file NOT OK {:?}", e);
+            assert!(false);
+        }
+    }
+
     let tmp_qe = Path::new(&tmp_dir);
     assert!(env::set_current_dir(&tmp_qe).is_ok());
     info!("Building qovery-engine (could take some time...)");
@@ -64,29 +95,44 @@ fn create_and_upgrade_cluster_from_master_branch() {
                 assert!(false);
             }
         },
-        Ok(_) => {
-            info!("cargo build sucess");
+        Ok(o) => {
+            info!("cargo build sucess {:?}", o);
             assert!(true);
         }
     };
+
     info!("Cargo test create eks cluster");
+    env::set_var("LIB_ROOT_DIR", format!("{}/lib", &tmp_dir));
+    env::set_var("AWS_ACCESS_KEY_ID", aws_access_key_id());
+    env::set_var("AWS_SECRET_ACCESS_KEY", aws_secret_access_key());
+    env::set_var("AWS_DEFAULT_REGION", aws_default_region());
+    env::set_var("AWS_DEFAULT_REGION", "eu-west-3");
+    env::set_var("PERMIT_CLUSTER_CREATION", "true");
+    env::set_var(
+        "EKS_OPTIONS",
+        format!("{}/tests/assets/eks-options.json", &tmp_dir),
+    );
+
     let cargo_test = Command::new("cargo")
         .arg("test")
         .arg("--package")
         .arg("qovery-engine")
         .arg("--test")
         .arg("lib")
-        .arg("aws::aws_environment::create_eks_cluster_in_eu_west_3")
+        .arg("aws::aws_kubernetes::create_eks_cluster_in_eu_west_3")
         .arg("--")
+        .arg("--ignored")
         .arg("--exact")
-        .env("LIB_ROOT_DIR", format!("{}/lib", &tmp_dir))
         .output();
-
     match cargo_test {
-        Err(e) => match e {
-            _ => assert!(false),
-        },
-        _ => assert!(true),
+        Err(e) => {
+            info!("cargo test failed {:?}", e);
+            assert!(false);
+        }
+        Ok(o) => {
+            info!("cargo test sucess {:?}", o);
+            assert!(true);
+        }
     };
     assert!(env::set_current_dir(&current_path).is_ok());
     create_eks_cluster_in_eu_west_3();
@@ -94,7 +140,13 @@ fn create_and_upgrade_cluster_from_master_branch() {
 }
 
 #[test]
+#[ignore]
 fn create_eks_cluster_in_us_east_2() {
+    // PERMIT_CLUSTER_CREATION env variable prevent you to not spend money on unnecessary cluster creation
+    match env::var("PERMIT_CLUSTER_CREATION") {
+        Ok(s) => {}
+        _ => return,
+    }
     init();
 
     let context = test_utilities::aws::context();
@@ -108,7 +160,7 @@ fn create_eks_cluster_in_us_east_2() {
 
     let cloudflare = dns_provider_cloudflare(&context);
 
-    let mut file = File::open("tests/assets/eks-options.json").unwrap();
+    let mut file = File::open(env::var("EKS_OPTIONS").unwrap()).unwrap();
     let mut read_buf = String::new();
     file.read_to_string(&mut read_buf).unwrap();
 
@@ -152,7 +204,14 @@ pub fn read_file(filepath: &str) -> String {
     contents
 }
 
+#[test]
+#[ignore]
 fn create_eks_cluster_in_eu_west_3() {
+    // PERMIT_CLUSTER_CREATION env variable prevent you to not spend money on unnecessary cluster creation
+    match env::var("PERMIT_CLUSTER_CREATION") {
+        Ok(s) => {}
+        _ => return,
+    }
     init();
 
     let context = test_utilities::aws::context();
