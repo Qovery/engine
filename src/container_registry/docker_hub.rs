@@ -105,7 +105,7 @@ impl ContainerRegistry for DockerHub {
             },
             Err(e) => {
                 error!(
-                    "While try to retrieving if DockerHub repository exist {:?}",
+                    "While trying to retrieve if DockerHub repository exist {:?}",
                     e
                 );
                 false
