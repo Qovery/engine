@@ -271,6 +271,12 @@ if [ $ARGS_NUM -eq 0 ] ; then
 fi
 #set -u
 
+if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
+  branch_name=$GITHUB_ENGINE_BRANCH_NAME
+else
+  branch_name=dev
+fi
+
 case $1 in
 build_image)
   build_image
@@ -297,16 +303,16 @@ get_release_ga)
   get_release_ga
   ;;
 fast_tests)
-  fast_tests $GITHUB_ENGINE_BRANCH_NAME 8
+  fast_tests $branch_name 8
   ;;
 fast_tests_seq)
-  fast_tests $GITHUB_ENGINE_BRANCH_NAME 1
+  fast_tests $branch_name 1
   ;;
 all_tests)
-  all_tests $GITHUB_ENGINE_BRANCH_NAME 8
+  all_tests $branch_name 8
   ;;
 all_tests_seq)
-  all_tests $GITHUB_ENGINE_BRANCH_NAME 1
+  all_tests $branch_name 1
   ;;
 single_test)
   check_num_args 2
