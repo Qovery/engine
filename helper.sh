@@ -17,6 +17,8 @@ QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=cloned-engine
 export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
+export RUNNING_ON_CI=0
+export ENGINE_BRANCH=""
 
 function print_help() {
   echo "Usage: $0 <option>"
@@ -80,14 +82,9 @@ function generate_image_tag() {
   echo "${github_commit_id:0:7}-${gitlab_commit_id:0:7}"
 }
 
-
 function prepare_engine() { ## Ensure github engine repo is present and propose solutions if not
-    RUNNING_ON_CI=0
-
-    ENGINE_BRANCH=""
-    if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
+    if [ $RUNNING_ON_CI -eq 1 ] ; then
       ENGINE_BRANCH=$GITHUB_ENGINE_BRANCH_NAME
-      RUNNING_ON_CI=1
     else
       ENGINE_BRANCH=$(git branch --show-current)
     fi
@@ -237,11 +234,11 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
 }
 
 function export_env() {
-  for line in $(cat .env) ; do
-    if [ $(echo $line | $grep -c QOVERY_SSH_USER) -eq 0 ] ; then
-      export $line
-    fi
-  done
+  while IFS= read line ; do
+    key=$(echo $line | $awk -F'=' '{ print $1}')
+    value=$(echo $line | $sed -r "s,^\w+='(.+)'$,\1,g")
+    export $key=$value
+  done <".env"
 }
 
 function all_tests(){ ## Run all tests on qovery-engine
@@ -274,8 +271,9 @@ fi
 
 if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
   branch_name=$GITHUB_ENGINE_BRANCH_NAME
+  RUNNING_ON_CI=1
 else
-  branch_name=dev
+  branch_name=$(git branch --show-current)
 fi
 
 case $1 in
@@ -317,7 +315,7 @@ all_tests_seq)
   ;;
 single_test)
   check_num_args 2
-  single_test $2
+  single_test $branch_name $2
   ;;
 prepare_tests)
   prepare_tests
