@@ -103,7 +103,13 @@ impl ContainerRegistry for DockerHub {
                 StatusCode::OK => true,
                 _ => false,
             },
-            Err(_) => false,
+            Err(e) => {
+                error!(
+                    "While try to retrieving if DockerHub repository exist {:?}",
+                    e
+                );
+                false
+            }
         }
     }
 
