@@ -229,7 +229,7 @@ function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
   test_name=$1
   export RUST_LOG=info
-  #export_env
+  export_env
   prepare_engine
   prepare_tests
   cd $ENGINE_DIR
@@ -238,7 +238,9 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
 
 function export_env() {
   for line in $(cat .env) ; do
-    export $line
+    if [ $(echo $line | $grep -c QOVERY_SSH_USER) -gt 0 ] ; then
+      export $line
+    fi
   done
 }
 
@@ -246,7 +248,7 @@ function all_tests(){ ## Run all tests on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info
-  #export_env
+  export_env
   prepare_engine
   prepare_tests
   cd $ENGINE_DIR
@@ -258,7 +260,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info
-  #export_env
+  export_env
   prepare_engine
   prepare_tests
   cd $ENGINE_DIR
@@ -269,7 +271,6 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
 if [ $ARGS_NUM -eq 0 ] ; then
   print_help
 fi
-#set -u
 
 if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
   branch_name=$GITHUB_ENGINE_BRANCH_NAME
