@@ -78,7 +78,7 @@ variable "eks_cluster_name" {
 
 variable "eks_access_cidr_blocks" {
   description = "Kubernetes cluster name"
-  default     = {{ eks_access_cidr_blocks }}
+  default     = "{{ eks_access_cidr_blocks }}"
   type        = list(string)
 }
 
@@ -238,13 +238,13 @@ variable "elasticsearch_cidr_subnet" {
 # Helm alert manager discord
 variable "discord_api_key" {
   description = "discord url with token for used for alerting"
-  default = "{{ discord_api_key }}"
+  default = {{ discord_api_key }}
   type = string
 }
 
 # Helm qovery agent
 variable "qovery_nats_url" {
   description = "URL of qovery nats server"
-  default = "{{ qovery_nats_url }}"
+  default = {{ qovery_nats_url }}
   type = string
 }
