@@ -103,6 +103,7 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
         echo "Hit any key to continue or CTRL+C to stop"
         read
       else
+        git clone https://github.com/Qovery/engine.git $ENGINE_DIR
         cd $ENGINE_DIR
         git checkout $ENGINE_BRANCH
         git pull
@@ -228,7 +229,7 @@ function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
   test_name=$1
   export RUST_LOG=info
-  export_env
+  #export_env
   prepare_engine
   prepare_tests
   cd $ENGINE_DIR
@@ -245,7 +246,7 @@ function all_tests(){ ## Run all tests on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info
-  export_env
+  #export_env
   prepare_engine
   prepare_tests
   cd $ENGINE_DIR
@@ -257,7 +258,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info
-  export_env
+  #export_env
   prepare_engine
   prepare_tests
   cd $ENGINE_DIR
