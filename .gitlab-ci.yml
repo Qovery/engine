@@ -124,25 +124,25 @@ dev-release:
     refs:
       - dev
 
-master-build:
+main-build:
   stage: build
   retry: 1
   script:
     - ./helper.sh build_image
   only:
     refs:
-      - master
+      - main
 
-master-release:
+main-release:
   stage: release
   retry: 1
   script:
     - ./helper.sh new_release
   only:
     refs:
-      - master
+      - main
 
-master-set-ga:
+main-set-ga:
   stage: set_ga
   retry: 2
   script:
@@ -150,7 +150,7 @@ master-set-ga:
   when: manual
   only:
     refs:
-      - master
+      - main
 
 wip-deploy_engine:
   stage: deploy_to_qovery_prod
@@ -160,4 +160,4 @@ wip-deploy_engine:
   when: manual
   only:
     refs:
-      - master
+      - main
