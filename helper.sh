@@ -56,8 +56,9 @@ function check_untracked_files() {
 
 function get_gitlab_engine_commit_id() {
   # Ensure we're in the correct folder
-  if [ $(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/qovery-engine.git") -ne 1 ] ; then
+  if [ $(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/qovery-engine.git") -ne 1 ] && [ -z $CI_REPOSITORY_URL ] ; then
     echo "You're not in the correct directory and should be in the gitlab repo: $(pwd)"
+    git config --get remote.origin.url
     exit 1
   fi
   git rev-parse HEAD
@@ -66,7 +67,8 @@ function get_gitlab_engine_commit_id() {
 function get_github_engine_commit_id() {
   # Ensure we're in the correct folder
   if [ $(git config --get remote.origin.url | $grep -c "github.com/Qovery/engine.git") -ne 1 ] ; then
-    echo "You're not in the correct directory and should be in the gitlab repo: $(pwd)"
+    echo "You're not in the correct directory and should be in the github repo: $(pwd)"
+    git config --get remote.origin.url
     exit 1
   fi
   git rev-parse HEAD
@@ -75,16 +77,24 @@ function get_github_engine_commit_id() {
 function generate_image_tag() {
   gitlab_commit_id=$(get_gitlab_engine_commit_id)
 
+  current_dir=$(pwd)
   cd $ENGINE_DIR
   github_commit_id=$(get_github_engine_commit_id)
-  cd -
+  cd $current_dir
 
   echo "${github_commit_id:0:7}-${gitlab_commit_id:0:7}"
 }
 
 function prepare_engine() { ## Ensure github engine repo is present and propose solutions if not
     if [ $RUNNING_ON_CI -eq 1 ] ; then
-      ENGINE_BRANCH=$GITHUB_ENGINE_BRANCH_NAME
+      if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
+        ENGINE_BRANCH=$GITHUB_ENGINE_BRANCH_NAME
+      elif [ ! -z $CI_COMMIT_REF_NAME ] ; then
+        ENGINE_BRANCH=$CI_COMMIT_REF_NAME
+      else
+        echo "Can't get commit ID"
+        exit 1
+      fi
     else
       ENGINE_BRANCH=$(git branch --show-current)
     fi
@@ -143,7 +153,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
 }
 
 function build_ci_image() { ## Build CI image locally. Args: <tag_version>
-  tag=$(generate_image_tag)
+  generate_image_tag
 
   cp docker/load.sh docker/ci/load.sh
   cp docker/bin_versions docker/ci/bin_versions
