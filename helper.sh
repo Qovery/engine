@@ -271,13 +271,16 @@ if [ $ARGS_NUM -eq 0 ] ; then
   print_help
 fi
 
-if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] || [ ! -z $GITLAB_USER_ID ] ; then
-  branch_name=$GITHUB_ENGINE_BRANCH_NAME
+if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
+  commit_id=$GITHUB_ENGINE_BRANCH_NAME
+  RUNNING_ON_CI=1
+elif [ ! -z $GITLAB_USER_ID ] ; then
+  commit_id=$CI_COMMIT_SHA
   RUNNING_ON_CI=1
 else
-  branch_name="$(git rev-parse --abbrev-ref HEAD)"
+  commit_id="$(git rev-parse HEAD)"
 fi
-echo "Detected branch name: $ranch_name"
+echo "Detected commit ID: $commit_id"
 
 case $1 in
 build_image)
@@ -305,20 +308,20 @@ get_release_ga)
   get_release_ga
   ;;
 fast_tests)
-  fast_tests $branch_name 8
+  fast_tests $commit_id 8
   ;;
 fast_tests_seq)
-  fast_tests $branch_name 1
+  fast_tests $commit_id 1
   ;;
 all_tests)
-  all_tests $branch_name 8
+  all_tests $commit_id 8
   ;;
 all_tests_seq)
-  all_tests $branch_name 1
+  all_tests $commit_id 1
   ;;
 single_test)
   check_num_args 2
-  single_test $branch_name $2
+  single_test $commit_id $2
   ;;
 prepare_tests)
   prepare_tests
