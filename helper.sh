@@ -237,7 +237,9 @@ function export_env() { ## Export environment variables from .env file
   while IFS= read line ; do
     key=$(echo $line | $awk -F'=' '{ print $1}')
     value=$(echo $line | $sed -r "s,^\w+='(.+)'$,\1,g")
-    export $key=$value
+    if [ "$key" != "QOVERY_SSH_USER" ] ; then
+      export $key=$value
+    fi
   done <".env"
 }
 
