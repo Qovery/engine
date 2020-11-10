@@ -108,7 +108,7 @@ function get_engine_version_to_use() { ## get the engine version for a given clu
   ENGINE_VERSION_CONTROLLER_TOKEN=$1
   API_FQDN=$2
   CLUSTER_ID=$3
-  API_URL="https://$API_FQDN/api/v1/engine-version"
+  API_URL="$API_FQDN/api/v1/engine-version"
 
   curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "$API_URL?type=cluster&clusterId=$CLUSTER_ID" && exit 0
 }
@@ -117,7 +117,7 @@ function get_agent_version_to_use() { ## get the agent version for a given clust
   AGENT_VERSION_CONTROLLER_TOKEN=$1
   API_FQDN=$2
   CLUSTER_ID=$3
-  API_URL="https://$API_FQDN/api/v1/agent-version"
+  API_URL="$API_FQDN/api/v1/agent-version"
 
   curl -s -H "X-Qovery-Signature: $AGENT_VERSION_CONTROLLER_TOKEN" "$API_URL?type=cluster&clusterId=$CLUSTER_ID" && exit 0
 }

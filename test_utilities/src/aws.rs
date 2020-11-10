@@ -75,7 +75,7 @@ pub fn context() -> Context {
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
     let metadata = Metadata {
         test: Option::from(true),
-        dry_run_deploy: Option::from(true),
+        dry_run_deploy: Option::from(false),
     };
 
     Context::new(
