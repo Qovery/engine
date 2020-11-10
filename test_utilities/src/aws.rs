@@ -713,3 +713,60 @@ pub fn non_working_environment(context: &Context) -> Environment {
 
     environment
 }
+
+
+pub fn echo_app_environment(context: &Context) -> Environment {
+    let suffix = generate_id();
+    Environment {
+        execution_id: context.execution_id().to_string(),
+        id: generate_id(),
+        kind: Kind::Development,
+        owner_id: generate_id(),
+        project_id: generate_id(),
+        organization_id: ORGANIZATION_ID.to_string(),
+        action: Action::Create,
+        applications: vec![Application {
+            id: generate_id(),
+            name: format!("{}-{}", "echo-app".to_string(), &suffix),
+            /*name: "simple-app".to_string(),*/
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+            commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
+            dockerfile_path: "Dockerfile".to_string(),
+            action: Action::Create,
+            git_credentials: GitCredentials {
+                login: "x-access-token".to_string(),
+                access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
+                expired_at: Utc::now(),
+            },
+            storage: vec![],
+            environment_variables: vec![
+                EnvironmentVariable {
+                    key: "ECHO_TEXT".to_string(),
+                    value: "42".to_string(),
+                },
+            ],
+            branch: "echo-app".to_string(),
+            private_port: Some(5678),
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 256,
+            total_instances: 2,
+            cpu_burst: "100m".to_string(),
+            start_timeout_in_seconds: 60,
+        }],
+        routers: vec![Router {
+            id: generate_id(),
+            name: "main".to_string(),
+            action: Action::Create,
+            default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                application_name: format!("{}-{}", "echo-app".to_string(), &suffix),
+            }],
+        }],
+        databases: vec![],
+        external_services: vec![],
+        clone_from_environment_id: None,
+    }
+}
