@@ -25,7 +25,7 @@ use test_utilities::aws::{
 };
 
 pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "https://github.com/Qovery/engine.git";
-pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-master/";
+pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
 pub const GIT_LOGIN: &str = "CHANGE-ME";
 pub const GIT_TOKEN: &str = "CHANGE-ME";
 
