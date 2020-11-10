@@ -142,11 +142,6 @@ fn upgrade_new_cluster() {
 #[test]
 #[ignore]
 fn create_eks_cluster_in_us_east_2() {
-    // PERMIT_CLUSTER_CREATION env variable prevent you to not spend money on unnecessary cluster creation
-    match env::var("PERMIT_CLUSTER_CREATION") {
-        Ok(s) => {}
-        _ => return,
-    }
     init();
 
     let context = test_utilities::aws::context();
@@ -207,11 +202,6 @@ pub fn read_file(filepath: &str) -> String {
 #[test]
 #[ignore]
 fn create_eks_cluster_in_eu_west_3() {
-    // PERMIT_CLUSTER_CREATION env variable prevent you to not spend money on unnecessary cluster creation
-    match env::var("PERMIT_CLUSTER_CREATION") {
-        Ok(s) => {}
-        _ => return,
-    }
     init();
 
     let context = test_utilities::aws::context();
