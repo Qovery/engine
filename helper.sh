@@ -233,7 +233,7 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
   cargo test --package qovery-engine --test lib $test_name -- --ignored --exact
 }
 
-function export_env() {
+function export_env() { ## Export environment variables from .env file
   while IFS= read line ; do
     key=$(echo $line | $awk -F'=' '{ print $1}')
     value=$(echo $line | $sed -r "s,^\w+='(.+)'$,\1,g")
