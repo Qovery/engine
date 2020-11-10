@@ -273,7 +273,7 @@ if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
   branch_name=$GITHUB_ENGINE_BRANCH_NAME
   RUNNING_ON_CI=1
 else
-  branch_name=$(git branch --show-current)
+  branch_name=$(git rev-parse --abbrev-ref HEAD)
 fi
 
 case $1 in
