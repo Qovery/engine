@@ -275,8 +275,9 @@ if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] || [ ! -z $GITLAB_USER_ID ] ; then
   branch_name=$GITHUB_ENGINE_BRANCH_NAME
   RUNNING_ON_CI=1
 else
-  branch_name=$(git rev-parse --abbrev-ref HEAD)
+  branch_name="$(git rev-parse --abbrev-ref HEAD)"
 fi
+echo "Detected branch name: $ranch_name"
 
 case $1 in
 build_image)

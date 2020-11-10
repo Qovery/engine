@@ -75,7 +75,6 @@ fast-test-from-github:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results-fast.xml
 
-
 dev-full-tests:
   stage: tests
   retry: 0
