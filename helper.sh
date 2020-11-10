@@ -271,7 +271,7 @@ if [ $ARGS_NUM -eq 0 ] ; then
   print_help
 fi
 
-if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
+if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] || [ ! -z $GITLAB_USER_ID ] ; then
   branch_name=$GITHUB_ENGINE_BRANCH_NAME
   RUNNING_ON_CI=1
 else
