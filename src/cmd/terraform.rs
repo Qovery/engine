@@ -67,7 +67,7 @@ pub fn terraform_exec_with_init_validate_plan_apply(
     terraform_exec_with_init_validate_plan(root_dir, first_time_init_terraform);
 
     // terraform apply
-    if dry_run {
+    if !dry_run {
         terraform_exec(root_dir, vec!["apply", "-auto-approve", "tf_plan"])?;
     }
 
