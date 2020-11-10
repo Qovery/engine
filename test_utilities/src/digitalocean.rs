@@ -23,6 +23,8 @@ pub fn digital_ocean_token() -> String {
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     DOCR::new(
         context.clone(),
+        "doea59qe62xaw3wj",
+        "qovery-registry",
         "qovery-registry",
         digital_ocean_token().as_str(),
     )

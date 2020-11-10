@@ -1,0 +1,121 @@
+{%- if is_storage %}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ name }}
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    appId: {{ id }}
+    app: {{ name }}
+spec:
+  replicas: {{ total_instances }}
+  serviceName: {{ name }}
+  selector:
+    matchLabels:
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+      appId: {{ id }}
+      app: {{ name }}
+  template:
+    metadata:
+      labels:
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ id }}
+        app: {{ name }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                    - {{ name }}
+              topologyKey: "kubernetes.io/hostname"
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {}
+      containers:
+        - name: {{ name }}
+          image: "{{ image_name_with_tag }}"
+          env:
+            {%- for ev in environment_variables %}
+            - name: "{{ ev.key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ name }}
+                  key: {{ ev.key }}
+            {%- endfor %}
+            {%- if private_port %}
+          ports:
+            - containerPort: {{ private_port }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: {{ private_port }}
+            initialDelaySeconds: {{ start_timeout_in_seconds }}
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ private_port }}
+            initialDelaySeconds: {{ start_timeout_in_seconds }}
+            periodSeconds: 20
+            {%- endif %}
+          resources:
+            limits:
+              cpu: {{ total_cpus }}
+              memory: {{ total_ram_in_mib }}Mi
+            requests:
+              cpu: {{ total_cpus }}
+              memory: {{ total_ram_in_mib }}Mi
+          volumeMounts:
+{%- for s in storage %}
+            - name: {{ s.id }}
+              mountPath: {{ s.mount_point }}
+{%- endfor %}
+  volumeClaimTemplates:
+{%- for s in storage %}
+{% if clone %}
+  - metadata:
+      name: {{ s.id }}
+      labels:
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ id }}
+        app: {{ name }}
+        diskId: {{ s.id }}
+        diskType: {{ s.storage_type }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
+      dataSource:
+        name: {{ s.id }}
+        kind: PersistentVolumeClaim
+      resources:
+        requests:
+          storage: {{ disk.size_in_gib }}Gi
+{% else %}
+  - metadata:
+      name: {{ s.id }}
+      labels:
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ id }}
+        diskId: {{ s.id }}
+        diskType: {{ s.storage_type }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
+      resources:
+        requests:
+          storage: {{ s.size_in_gib }}Gi
+{%- endif %}
+{%- endfor %}
+{%- endif %}

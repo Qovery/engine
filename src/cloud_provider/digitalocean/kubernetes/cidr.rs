@@ -1,8 +1,8 @@
+use crate::cmd::utilities;
+use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use crate::cmd::utilities;
-use std::borrow::Borrow;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoVpc {
@@ -40,18 +40,11 @@ fn get_forbidden_cidr_per_region() -> HashMap<&'static str, &'static str, Random
     forbidden_cidr
 }
 
-pub fn get_used_cidr_on_region() {
+pub fn get_used_cidr_on_region(token: &str) {
     let mut output_from_cli = String::new();
     utilities::exec_with_output(
         "doctl",
-        vec![
-            "vpcs",
-            "list",
-            "--output",
-            "json",
-            "-t",
-            "34158dea3388309455954a9602be686de63b84ca6374db04588e818731ccf184",
-        ],
+        vec!["vpcs", "list", "--output", "json", "-t", token],
         |r_out| match r_out {
             Ok(s) => output_from_cli.push_str(&s.to_owned()),
             Err(e) => error!("DOCTL Cli not respond well{}", e),

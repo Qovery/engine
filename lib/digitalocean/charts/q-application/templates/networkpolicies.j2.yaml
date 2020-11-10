@@ -1,0 +1,95 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ name }}-default
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    app: {{ name }}
+    envId: {{ environment_id }}
+spec:
+  # Deny all ingress by default to this application
+  podSelector:
+    matchLabels:
+      appId: {{ id }}
+      app: {{ name }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ name }}-app-access
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    app: {{ name }}
+    envId: {{ environment_id }}
+spec:
+  # Then allow some ingress to this application
+  podSelector:
+    matchLabels:
+      appId: {{ id }}
+      app: {{ name }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+  ingress:
+  # Allow ingress from same environment
+  - from:
+    - podSelector:
+        matchLabels:
+          ownerId: {{ owner_id }}
+          envId: {{ environment_id }}
+
+  # Allow ingress from everywhere but only to application port
+  {% if is_private_port %}
+  - ports:
+    - port: {{ private_port }}
+  {% endif %}
+  # FIXME(sileht): Previous rule is not perfect as other pods/namespaces can
+  # access to the application port without going through the Ingress object,
+  # but that's not critical neither
+  # Only way to fix that is to allow lb and kube-proxy to access the namespace/pods explictly via IP, eg:
+  # - from:
+  #   - ipBlock:
+  #       cidr: 10.0.99.179/32
+  #   - ipBlock:
+  #       cidr: 10.0.28.216/32
+  #   - ipBlock:
+  #       cidr: 10.0.98.42/32
+  #   - ipBlock:
+  #       cidr: 10.0.59.208/32
+  # Since user pods, kube-proxy, and lbs are all in 10.0.0.0/8 we can't write generic rule like:
+  #   - ipBlock:
+  #       cidr: 0.0.0.0/0
+  #       except: [10.0.0.0/8]
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ name }}-deny-aws-metadata-server
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    app: {{ name }}
+    envId: {{ environment_id }}
+spec:
+  podSelector:
+    matchLabels:
+      appId: {{ id }}
+      app: {{ name }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          - 169.254.169.254/32

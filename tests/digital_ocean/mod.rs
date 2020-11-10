@@ -1,1 +1,1 @@
-mod kubernetes;
+pub mod kubernetes;

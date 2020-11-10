@@ -17,14 +17,18 @@ pub struct DOCR {
     pub context: Context,
     pub registry_name: String,
     pub api_key: String,
+    pub name: String,
+    pub id: String,
 }
 
 impl DOCR {
-    pub fn new(context: Context, registry_name: &str, api_key: &str) -> Self {
+    pub fn new(context: Context, id: &str, name: &str, registry_name: &str, api_key: &str) -> Self {
         DOCR {
             context,
             registry_name: registry_name.to_string(),
             api_key: api_key.to_string(),
+            id: id.to_string(),
+            name: name.to_string(),
         }
     }
     pub fn client(&self) -> DigitalOcean {
@@ -135,15 +139,23 @@ impl ContainerRegistry for DOCR {
     }
 
     fn id(&self) -> &str {
-        unimplemented!()
+        self.id.as_str()
     }
 
     fn name(&self) -> &str {
-        unimplemented!()
+        self.name.as_str()
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        match cmd::doctl::doctl_do_registry_login(&self.api_key) {
+            Ok(_o) => {}
+            Err(e) => return Err(
+                self.engine_error(
+                    EngineErrorCause::User("Your DOCR account seems to be no longer valid (bad Credentials). \
+                    Please contact your Organization administrator to fix or change the Credentials."),
+                    format!("failed to login to DOCR {}", self.name_with_id())))
+        };
+        Ok(())
     }
 
     fn add_listener(&mut self, _listener: Listener) {
