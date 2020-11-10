@@ -107,7 +107,6 @@ fn upgrade_new_cluster() {
     env::set_var("AWS_SECRET_ACCESS_KEY", aws_secret_access_key());
     env::set_var("AWS_DEFAULT_REGION", aws_default_region());
     env::set_var("AWS_DEFAULT_REGION", "eu-west-3");
-    env::set_var("PERMIT_CLUSTER_CREATION", "true");
     env::set_var(
         "EKS_OPTIONS",
         format!("{}/tests/assets/eks-options.json", &tmp_dir),
