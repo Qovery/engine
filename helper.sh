@@ -153,7 +153,8 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
 }
 
 function build_ci_image() { ## Build CI image locally. Args: <tag_version>
-  generate_image_tag
+  prepare_engine
+  tag=$(generate_image_tag)
 
   cp docker/load.sh docker/ci/load.sh
   cp docker/bin_versions docker/ci/bin_versions
@@ -166,6 +167,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
 }
 
 function push_image() { ## Push Engine local image with current commit ID as tag
+  prepare_engine
   tag=$(generate_image_tag)
   set -e
 
@@ -174,6 +176,7 @@ function push_image() { ## Push Engine local image with current commit ID as tag
 }
 
 function push_ci_image() { ## Push CI local image with current commit ID as tag
+  prepare_engine
   tag=$(generate_image_tag)
   set -e
 
@@ -181,7 +184,8 @@ function push_ci_image() { ## Push CI local image with current commit ID as tag
   docker push qoveryrd/ci:${tag}
 }
 
-function new_release() { ## Release a new engine version with commit ID as tag
+function new_release() { ## Release a new engine version with commit ID as tagprepare_engine
+  prepare_engine
   tag=$(generate_image_tag)
 
   check_untracked_files
@@ -192,16 +196,18 @@ function new_release() { ## Release a new engine version with commit ID as tag
 }
 
 function set_release_ga() { ## Release a new engine version and mark it as globally available
+  prepare_engine
   tag=$(generate_image_tag)
-  curl -s -X PUT -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}"
+  curl -s -X PUT -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}" || exit 1
 }
 
 function get_release_ga() { ## Get globally available release version
   echo -e "Last defined GA version: "
-  curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"
+  curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"  || exit 1
 }
 
 function release_to_prod() { ## Release GA to prod
+  prepare_engine
   tag=$(generate_image_tag)
   AWS_ACCESS_KEY_ID=$AWS_PROD_DEPLOY_ACCESS_KEY \
   AWS_SECRET_ACCESS_KEY=$AWS_PROD_DEPLOY_SECRET_KEY \
