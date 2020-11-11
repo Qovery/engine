@@ -35,22 +35,25 @@ function check_num_args() {
 }
 
 function check_untracked_files() {
-  no_commit=1
-  if [ $(git diff --exit-code | wc -l) -ne 0 ] ; then
-    no_commit=0
-  fi
+  if [ $RUNNING_ON_CI -eq 0 ] ; then
+    no_commit=1
+    if [ $(git diff --exit-code | wc -l) -ne 0 ] ; then
+      no_commit=0
+    fi
 
-  if [ $(git diff --cached --exit-code | wc -l) -ne 0 ] ; then
-    no_commit=0
-  fi
+    if [ $(git diff --cached --exit-code | wc -l) -ne 0 ] ; then
+      no_commit=0
+    fi
 
-  if [ $(git ls-files --other --exclude-standard --directory | wc -l) -ne 0 ] ; then
-    no_commit=0
-  fi
+    if [ $(git ls-files --other --exclude-standard --directory | wc -l) -ne 0 ] ; then
+      no_commit=0
+    fi
 
-  if [ $no_commit -eq 0 ] ; then
-    echo "There are some untracked files changes by git. Ensure you've commited all your files first"
-    exit 1
+    if [ $no_commit -eq 0 ] ; then
+      echo "There are some untracked files changes by git. Ensure you've commited all your files first"chefclub.tv
+      git status
+      exit 1
+    fi
   fi
 }
 
