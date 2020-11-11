@@ -216,7 +216,7 @@ function release_to_prod() { ## Release GA to prod
   AWS_SECRET_ACCESS_KEY=$AWS_PROD_DEPLOY_SECRET_KEY \
   AWS_DEFAULT_REGION=eu-west-3 \
   helm upgrade --kubeconfig $AWS_PROD_KUBECONFIG --install --history-max 50 --wait --namespace qovery qovery-engine \
-   lib/common/bootstrap/charts/qovery-engine --set \
+   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine --set \
 image.tag="$tag",\
 environmentVariables.NATS_SERVER="panic.qovery.com:4242",\
 environmentVariables.CLOUD_PROVIDER="aws",\
