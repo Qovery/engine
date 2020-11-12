@@ -25,7 +25,7 @@ variable "vpc_cidr_block" {
 
 variable "test_cluster" {
   description = "Is this a test cluster?"
-  default = "false"
+  default = "{% if test_cluster %}true{% else %}false{% endif %}"
   type = string
 }
 
