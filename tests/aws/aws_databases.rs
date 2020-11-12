@@ -5,6 +5,7 @@ use rusoto_core::region::Region::Custom;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::generate_id;
+use crate::aws::aws_environment::{delete_environment, deploy_environment};
 use qovery_engine::cloud_provider::aws::common;
 use qovery_engine::cloud_provider::service::Router;
 use qovery_engine::cmd;
@@ -16,7 +17,6 @@ use qovery_engine::models::{
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, context};
 use test_utilities::utilities::{init, is_pod_restarted};
-use crate::aws::aws_environment::{deploy_environment, delete_environment};
 
 // to check overload between several databases and apps
 #[test]
@@ -58,7 +58,6 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 **
 **/
 
-
 #[test]
 #[ignore]
 fn deploy_a_working_development_environment_with_all_options_and_psql() {
@@ -97,7 +96,6 @@ fn deploy_a_working_development_environment_with_all_options_and_psql() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 }
-
 
 #[test]
 fn deploy_a_working_environment_with_postgresql() {
@@ -195,7 +193,8 @@ fn deploy_a_working_environment_and_redeploy_with_postgresql() {
 
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
-    let database_host = "postgresql-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
+    let database_host =
+        "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 5432;
     let database_db_name = "my-postgres".to_string();
     let database_username = "superuser".to_string();
@@ -487,7 +486,6 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 **
 **/
 
-
 /// test mongodb v3.6 with development environment
 #[test]
 fn deploy_a_working_environment_with_mongodb_v3_6() {
@@ -533,13 +531,11 @@ fn deploy_a_working_environment_with_production_mongodb_v3_6() {
     test_mongodb_configuration(context, environment, "3.6");
 }
 
-
 /**
 **
 ** MySQL PART
 **
 **/
-
 
 #[test]
 #[ignore]
