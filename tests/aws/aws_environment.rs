@@ -15,7 +15,7 @@ use qovery_engine::models::{
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, context};
-use test_utilities::utilities::{init, is_pod_restarted};
+use test_utilities::utilities::{curl_it_and_compare, init, is_pod_restarted};
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
@@ -662,66 +662,66 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     };
 }
 
-
 #[test]
 #[ignore]
 fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
     init();
     // context for non working environment
     let context_failover_1 = context();
-    let context_failover_2 = context.clone_not_same_execution_id();
+    let context_failover_2 = context_failover_1.clone_not_same_execution_id();
 
-    let context_first_fail_deployement_1 = context.clone_not_same_execution_id();
-    let context_second_fail_deployement_2 = context.clone_not_same_execution_id();
+    let context_first_fail_deployement_1 = context_failover_1.clone_not_same_execution_id();
+    let context_second_fail_deployement_2 = context_failover_1.clone_not_same_execution_id();
 
     let mut failover_environment_1 = test_utilities::aws::echo_app_environment(&context_failover_1);
-    let mut fail_app_1 = test_utilities::aws::non_working_environment(&context_first_fail_deployement_1);
-    let mut failover_environment_1 = test_utilities::aws::echo_app_environment(&context_failover_2);
-    let mut fail_app_2 = test_utilities::aws::non_working_environment(&context_second_fail_deployement_2);
+    let mut fail_app_1 =
+        test_utilities::aws::non_working_environment(&context_first_fail_deployement_1);
+    let mut failover_environment_2 = test_utilities::aws::echo_app_environment(&context_failover_2);
+    let mut fail_app_2 =
+        test_utilities::aws::non_working_environment(&context_second_fail_deployement_2);
 
-    failover_environment.applications = failover_environment
+    failover_environment_2.applications = failover_environment_2
         .applications
         .into_iter()
-        .map(|mut app |{
-            app.environment_variables = vec![
-                EnvironmentVariable {
-                    key: "ECHO_TEXT".to_string(),
-                    value: "Lilou".to_string(),
-                },
-            ],
+        .map(|mut app| {
+            app.environment_variables = vec![EnvironmentVariable {
+                key: "ECHO_TEXT".to_string(),
+                value: "Lilou".to_string(),
+            }];
             app
         })
-    .collect::<Vec<qovery_engine::models::Application>>();
+        .collect::<Vec<qovery_engine::models::Application>>();
 
     // context for deletion
-    let context_deletion = context.clone_not_same_execution_id();
+    let context_deletion = context_failover_1.clone_not_same_execution_id();
     let mut delete_env = test_utilities::aws::echo_app_environment(&context_deletion);
     delete_env.action = Action::Delete;
     let ea_delete = EnvironmentAction::Environment(delete_env);
+
+    let envToCheck = failover_environment_1.clone();
 
     // first deployement
     let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, failover_environment_1);
     let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, failover_environment_2);
 
-
     match deploy_environment(&context_failover_1, &ea1) {
         TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(true),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-    match deploy_environment(&context_failover_2, &ea2) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
     };
+
+    match deploy_environment(&context_failover_2, &ea2) {
+        TransactionResult::Ok => assert!(false),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
+
     match delete_environment(&context_deletion, &ea_delete) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 }
-
-
 
 #[test]
 #[ignore]
