@@ -714,7 +714,8 @@ pub fn non_working_environment(context: &Context) -> Environment {
     environment
 }
 
-
+// echo app environment is an environment that contains http-echo container (forked from hashicorp)
+// ECHO_TEXT var will be the content of the application root path
 pub fn echo_app_environment(context: &Context) -> Environment {
     let suffix = generate_id();
     Environment {
