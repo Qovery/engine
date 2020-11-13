@@ -498,7 +498,7 @@ impl<'a> Transaction<'a> {
                     let applications = apps_result.ok().unwrap();
                     applications_by_environment.insert(target_environment, applications);
 
-                    // build ad well the failover environment, retention could remove the application image
+                    // build as well the failover environment, retention could remove the application image
                     match environment_action {
                         EnvironmentAction::EnvironmentWithFailover(_, fe) => {
                             let apps_result = match self._build_applications(fe, option) {
