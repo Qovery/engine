@@ -10,6 +10,7 @@ use qovery_engine::cloud_provider::aws::common;
 use qovery_engine::cmd;
 use qovery_engine::models::{Context, Environment};
 use reqwest::StatusCode;
+use std::path::Path;
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
@@ -21,6 +22,17 @@ pub fn init() {
         "running from current directory: {}",
         std::env::current_dir().unwrap().to_str().unwrap()
     );
+    let lib_root_dir =
+        std::env::var("LIB_ROOT_DIR").expect("env var AWS_ACCESS_KEY_ID is mandatory");
+    // check the lib root dir
+    let path = format!("{}/helm-freeze.yaml", lib_root_dir);
+    match Path::new(path.as_str()).exists() {
+        false => {
+            println!("Please check the LIB_ROOT_DIR env var, can't retrieve the helm-freeze file");
+            assert!(false);
+        }
+        true => println!("LIB_ROOT_DIR env var seems to be ok"),
+    }
 }
 
 pub fn generate_id() -> String {
