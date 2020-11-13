@@ -127,9 +127,6 @@ pub fn curl_it_and_compare(path: &str, should_return_str: &str) -> Result<bool, 
             }
             _ => Ok(false),
         },
-        Err(e) => {
-            println!("While curl {}: {:?}", path, e);
-            Err(e)
-        }
+        Err(e) => Err(e),
     }
 }
