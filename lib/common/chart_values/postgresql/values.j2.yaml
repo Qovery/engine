@@ -2,10 +2,6 @@
 ## Please, note that this will override the image parameters, including dependencies, configured to use the global value
 ## Current available global Docker image parameters: imageRegistry and imagePullSecrets
 ##
-
-nameOverride: {{ name }}
-fullnameOverride: {{ name }}
-
 global:
   postgresql: {}
 #   imageRegistry: myRegistryName
@@ -19,12 +15,31 @@ global:
 image:
   registry: docker.io
   repository: bitnami/postgresql
-  tag:  "{{ version }}"
+  tag: "{{ version }}"
+  ## Specify a imagePullPolicy
+  ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+  ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+  ##
   pullPolicy: IfNotPresent
+  ## Optionally specify an array of imagePullSecrets.
+  ## Secrets must be manually created in the namespace.
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+  ##
+  # pullSecrets:
+  #   - myRegistryKeySecretName
+
   ## Set to true if you would like to see extra information on logs
   ## It turns BASH and NAMI debugging in minideb
   ## ref:  https://github.com/bitnami/minideb-extras/#turn-on-bash-debugging
   debug: false
+
+## String to partially override postgresql.fullname template (will maintain the release name)
+##
+# nameOverride:
+
+## String to fully override postgresql.fullname template
+##
+# fullnameOverride:
 
 ##
 ## Init containers parameters:
@@ -36,6 +51,10 @@ volumePermissions:
     registry: docker.io
     repository: bitnami/minideb
     tag: buster
+    ## Specify a imagePullPolicy
+    ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+    ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+    ##
     pullPolicy: IfNotPresent
     ## Optionally specify an array of imagePullSecrets.
     ## Secrets must be manually created in the namespace.
@@ -55,6 +74,15 @@ volumePermissions:
   securityContext:
     runAsUser: 0
 
+## Use an alternate scheduler, e.g. "stork".
+## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
+##
+# schedulerName:
+
+
+## Pod Security Context
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+##
 securityContext:
   enabled: true
   fsGroup: 1001
@@ -81,13 +109,13 @@ replication:
   enabled: false
   user: repl_user
   password: repl_password
-  slaveReplicas: 2
+  slaveReplicas: 1
   ## Set synchronous commit mode: on, off, remote_apply, remote_write and local
   ## ref: https://www.postgresql.org/docs/9.6/runtime-config-wal.html#GUC-WAL-LEVEL
-  synchronousCommit: "on"
+  synchronousCommit: "off"
   ## From the number of `slaveReplicas` defined above, set the number of those that will have synchronous replication
   ## NOTE: It cannot be > slaveReplicas
-  numSynchronousReplicas: 1
+  numSynchronousReplicas: 0
   ## Replication Cluster application name. Useful for defining multiple replication policies
   applicationName: my_application
 
@@ -113,7 +141,6 @@ postgresqlPassword: {{ database_password }}
 ## Create a database
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-on-first-run
 ##
-# postgresqlDatabase:
 postgresqlDatabase: {{ name }}
 
 ## PostgreSQL data dir
@@ -184,10 +211,6 @@ extraEnv: []
 #      #!/bin/sh
 #      echo "Do something."
 
-## Specify the PostgreSQL username and password to execute the initdb scripts
-initdbUser: postgres
-initdbPassword: {{ database_password }}
-
 ## ConfigMap with scripts to be run at first boot
 ## NOTE: This will override initdbScripts
 # initdbScriptsConfigMap:
@@ -195,6 +218,10 @@ initdbPassword: {{ database_password }}
 ## Secret with scripts to be run at first boot (in case it contains sensitive information)
 ## NOTE: This can work along initdbScripts or initdbScriptsConfigMap
 # initdbScriptsSecret:
+
+## Specify the PostgreSQL username and password to execute the initdb scripts
+initdbUser: postgres
+initdbPassword: {{ database_password }}
 
 ## Optional duration in seconds the pod needs to terminate gracefully.
 ## ref: https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods
@@ -220,10 +247,30 @@ ldap:
 
 ## PostgreSQL service configuration
 service:
+  ## PosgresSQL service type
   type: ClusterIP
   # clusterIP: None
   port: 5432
+
+  ## Specify the nodePort value for the LoadBalancer and NodePort service types.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+  ##
+  # nodePort:
+
+  ## Provide any additional annotations which may be required. Evaluated as a template.
+  ##
   annotations: {}
+
+  ## Set the LoadBalancer service type to internal only.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
+  ##
+  # loadBalancerIP:
+
+  ## Load Balancer sources. Evaluated as a template.
+  ## https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/#restrict-access-for-loadbalancer-service
+  ##
+  # loadBalancerSourceRanges:
+  # - 10.10.10.0/24
 
 ## Start master and slave(s) pod(s) without limitations on shm memory.
 ## By default docker and containerd (and possibly other container runtimes)
@@ -257,6 +304,10 @@ persistence:
   ## The value is evaluated as a template, so, for example, the name can depend on .Release or .Chart
   ##
   # existingClaim:
+
+  ## The path the volume will be mounted at, useful when using different
+  ## PostgreSQL images.
+  ##
   mountPath: /bitnami/postgresql
 
   ## The subdirectory of the volume to mount to, useful in dev environments
@@ -299,6 +350,15 @@ master:
   podLabels: {}
   podAnnotations: {}
   priorityClassName: ""
+  ## Extra init containers
+  ## Example
+  ##
+  ## extraInitContainers:
+  ##   - name: do-something
+  ##     image: busybox
+  ##     command: ['do', 'something']
+  extraInitContainers: []
+
   ## Additional PostgreSQL Master Volume mounts
   ##
   extraVolumeMounts: []
@@ -319,12 +379,13 @@ master:
 
   ## Override the service configuration for master
   ##
-  service: {}
+  service:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+    external-dns.alpha.kubernetes.io/ttl: "300"
   # type:
   # nodePort:
   # clusterIP:
-  service_nlb:
-    fqdn: "{{ fqdn }}"
 
 ##
 ## PostgreSQL Slave parameters
@@ -343,14 +404,10 @@ slave:
   podLabels: {}
   podAnnotations: {}
   priorityClassName: ""
-  ## Extra init containers
-  ## Example
-  ##
-  ## extraInitContainers:
-  ##   - name: do-something
-  ##     image: busybox
-  ##     command: ['do', 'something']
-  extraInitContainers: []
+  extraInitContainers: |
+    # - name: do-something
+    #   image: busybox
+    #   command: ['do', 'something']
   ## Additional PostgreSQL Slave Volume mounts
   ##
   extraVolumeMounts: []
@@ -455,6 +512,17 @@ metrics:
     enabled: false
     additionalLabels: {}
     namespace: ""
+    ## These are just examples rules, please adapt them to your needs.
+    ## Make sure to constraint the rules to the current postgresql service.
+    ## rules:
+    ##   - alert: HugeReplicationLag
+    ##     expr: pg_replication_lag{service="{{ template "postgresql.fullname" . }}-metrics"} / 3600 > 1
+    ##     for: 1m
+    ##     labels:
+    ##       severity: critical
+    ##     annotations:
+    ##       description: replication for {{ template "postgresql.fullname" . }} PostgreSQL is lagging by {{ "{{ $value }}" }} hour(s).
+    ##       summary: PostgreSQL replication is lagging by {{ "{{ $value }}" }} hour(s).
     rules: []
 
   image:

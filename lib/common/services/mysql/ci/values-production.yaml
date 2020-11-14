@@ -26,3 +26,4 @@ metrics:
   ## Kubeval doesn't recognise ServiceMonitor as a valid K8s object
   # serviceMonitor:
   #   enabled: true
+

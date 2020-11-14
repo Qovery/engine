@@ -80,4 +80,4 @@ destinations:
   - name: aws-bootstrap
     path: aws/bootstrap/charts
   - name: services
-    path: aws/services
+    path: common/services
