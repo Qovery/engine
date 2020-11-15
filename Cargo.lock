@@ -2626,6 +2626,7 @@ dependencies = [
  "env_logger",
  "qovery-engine",
  "rand 0.7.3",
+ "reqwest 0.10.8",
  "serde",
  "serde_derive",
  "serde_json",

@@ -186,6 +186,13 @@ impl<'a> EKS<'a> {
             .map(|x| format!("{}", x.clone().to_string()))
             .collect();
         let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
+        let test_cluster = match self.context.metadata() {
+            Some(meta) => match meta.test {
+                Some(true) => true,
+                _ => false,
+            },
+            _ => false,
+        };
 
         let mut context = TeraContext::new();
         // Qovery
@@ -199,6 +206,7 @@ impl<'a> EKS<'a> {
             "agent_version_controller_token",
             &self.options.agent_version_controller_token,
         );
+        context.insert("test_cluster", &test_cluster);
 
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);
@@ -226,12 +234,9 @@ impl<'a> EKS<'a> {
         context.insert("dns_email_report", &self.options.tls_email_report); // Pierre suggested renaming to tls_email_report
 
         // TLS
-        let lets_encrypt_url = match self.context.metadata() {
-            Some(meta) => match meta.test {
-                Some(true) => "https://acme-staging-v02.api.letsencrypt.org/directory",
-                _ => "https://acme-v02.api.letsencrypt.org/directory",
-            },
-            _ => "https://acme-v02.api.letsencrypt.org/directory",
+        let lets_encrypt_url = match &test_cluster {
+            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
+            false => "https://acme-v02.api.letsencrypt.org/directory",
         };
         context.insert("acme_server_url", lets_encrypt_url);
 

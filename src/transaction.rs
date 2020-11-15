@@ -497,6 +497,37 @@ impl<'a> Transaction<'a> {
 
                     let applications = apps_result.ok().unwrap();
                     applications_by_environment.insert(target_environment, applications);
+
+                    // build as well the failover environment, retention could remove the application image
+                    match environment_action {
+                        EnvironmentAction::EnvironmentWithFailover(_, fe) => {
+                            let apps_result = match self._build_applications(fe, option) {
+                                Ok(applications) => {
+                                    match self._push_applications(applications, option) {
+                                        Ok(results) => {
+                                            let applications = results
+                                                .into_iter()
+                                                .map(|(app, _)| app)
+                                                .collect::<Vec<_>>();
+
+                                            Ok(applications)
+                                        }
+                                        Err(err) => Err(err),
+                                    }
+                                }
+                                Err(err) => Err(err),
+                            };
+                            if apps_result.is_err() {
+                                // should never be triggered because core always should ask for working failover environment
+                                let commit_error = apps_result.err().unwrap();
+                                error!(
+                                    "An error occurred on failover application  {:?}",
+                                    commit_error
+                                );
+                            }
+                        }
+                        _ => {}
+                    };
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
                     // deploy complete environment

@@ -241,14 +241,14 @@ initChownData:
 
 
 # Administrator credentials when not using an existing secret (see below)
-adminUser: {{ grafana_admin_user }}
-adminPassword: {{ grafana_admin_password }}
+adminUser: "{{ grafana_admin_user }}"
+adminPassword: "{{ grafana_admin_password }}"
 
 # Use an existing secret for the admin user.
 admin:
   existingSecret: ""
   userKey: admin-user
-  passwordKey: tbd
+  passwordKey: admin-password
 
 
 ## Define command to be executed at startup by grafana container
@@ -493,8 +493,8 @@ smtp:
   # `existingSecret` is a reference to an existing secret containing the smtp configuration
   # for Grafana.
   existingSecret: ""
-  userKey: "qovery"
-  passwordKey: "tbd"
+  userKey: "user"
+  passwordKey: "password"
 
 ## Sidecars that collect the configmaps with specified label and stores the included files them into the respective folders
 ## Requires at least Grafana 5 to work and can't be used together with parameters dashboardProviders, datasources and dashboards

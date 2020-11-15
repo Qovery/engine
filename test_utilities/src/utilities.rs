@@ -1,13 +1,15 @@
-use curl::easy::Easy;
 use curl::Error;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
 use crate::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, KUBE_CLUSTER_ID};
+use curl::easy::Easy;
+use digitalocean::error::Error::ReqwestError;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::common;
 use qovery_engine::cmd;
 use qovery_engine::models::{Context, Environment};
+use reqwest::StatusCode;
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
@@ -101,5 +103,30 @@ pub fn is_pod_restarted(environment_check: Environment, podToCheck: &str) -> (bo
             }
         }
         Err(e) => return (false, "".to_string()),
+    }
+}
+
+// curl it and compare the body result, invalid certs are accepted
+pub fn curl_it_and_compare(path: &str, should_return_str: &str) -> Result<bool, reqwest::Error> {
+    use reqwest::blocking::Client;
+    let client = Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
+
+    let res = client.get(path).send();
+
+    match res {
+        Ok(output) => match output.status() {
+            StatusCode::OK | StatusCode::PERMANENT_REDIRECT => {
+                let returned = output.text().unwrap();
+                match should_return_str.eq(returned.as_str()) {
+                    true => Ok(true),
+                    false => Ok(false),
+                }
+            }
+            _ => Ok(false),
+        },
+        Err(e) => Err(e),
     }
 }
