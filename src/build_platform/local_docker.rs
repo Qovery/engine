@@ -255,7 +255,7 @@ impl BuildPlatform for LocalDocker {
                 return Err(self.engine_error(
                     EngineErrorCause::User(
                         "It looks like your Dockerfile is wrong. Did you consider building \
-                        your container locally using `qovery run` or `docker build`?",
+                        your container locally using `qovery run` or `docker build --no-cache`?",
                     ),
                     format!(
                         "error while building container image {}. Error: {:?}",
