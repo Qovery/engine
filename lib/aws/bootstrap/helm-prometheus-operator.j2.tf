@@ -31,11 +31,6 @@ resource "helm_release" "prometheus_operator" {
   }
 
   set {
-    name = "priorityClassName"
-    value = "medium-priority"
-  }
-
-  set {
     name = "kube-state-metrics.resources.requests.cpu"
     value = "20m"
   }
