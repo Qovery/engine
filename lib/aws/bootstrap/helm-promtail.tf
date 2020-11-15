@@ -17,11 +17,6 @@ resource "helm_release" "promtail" {
     value = "loki"
   }
 
-  set {
-    name = "priorityClassName"
-    value = "high-priority"
-  }
-
   depends_on = [
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,

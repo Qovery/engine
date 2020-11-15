@@ -105,11 +105,6 @@ resource "helm_release" "loki" {
     value = "true"
   }
 
-  set {
-    name = "priorityClassName"
-    value = "high-priority"
-  }
-
   depends_on = [
     aws_iam_user.iam_eks_loki,
     aws_iam_access_key.iam_eks_loki,

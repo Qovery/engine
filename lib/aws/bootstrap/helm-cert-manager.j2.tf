@@ -29,12 +29,6 @@ resource "helm_release" "cert_manager" {
   }
 
   set {
-    name = "priorityClassName"
-    value = "high-priority"
-  }
-
-
-  set {
     name = "installCRDs"
     value = "true"
   }
