@@ -8,24 +8,9 @@ resource "helm_release" "cert_manager" {
 
   values = [file("chart_values/cert-manager.yaml")]
 
-  /////////////////////
-  // There is a bug to handle it properly, upgrade never stop :/. May be related: https://github.com/jetstack/cert-manager/issues/3239
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  //  set {
-  //    name = "fake"
-  //    value = timestamp()
-  //  }
-
-  lifecycle {
-    ignore_changes = [
-      status,
-      force_update,
-    ]
-  }
- /////////////////////
   set {
-    name = "version"
-    value = "0.16.1"
+    name = "fake"
+    value = timestamp()
   }
 
   set {
