@@ -193,7 +193,7 @@ impl ECR {
               "selection": {
                 "countType": "sinceImagePushed",
                 "countUnit": "days",
-                "countNumber": 1,
+                "countNumber": 365,
                 "tagStatus": "any"
               },
               "description": "Remove unit test images",
@@ -208,7 +208,7 @@ impl ECR {
         let r = async_run(self.ecr_client().put_lifecycle_policy(plp));
 
         match r {
-            Err(err) => Err(self.engine_error(
+            Err(_) => Err(self.engine_error(
                 EngineErrorCause::Internal,
                 format!(
                     "can't set lifecycle policy to ECR repository {} for {}",
