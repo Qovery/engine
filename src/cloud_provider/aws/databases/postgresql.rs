@@ -190,7 +190,7 @@ impl PostgreSQL {
                     ),
                 )?;
 
-                match crate::cmd::terraform::terraform_exec_with_init_validate_destroy(
+                match crate::cmd::terraform::terraform_exec_with_init_plan_apply_destroy(
                     workspace_dir.as_str(),
                 ) {
                     Ok(_) => {

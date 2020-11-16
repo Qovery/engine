@@ -732,7 +732,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let terraform_result = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            cmd::terraform::terraform_exec_with_init_validate_destroy(temp_dir.as_str()),
+            cmd::terraform::terraform_exec_with_init_plan_apply_destroy(temp_dir.as_str()),
         );
 
         // we should delete the bucket containing the kubeconfig after
