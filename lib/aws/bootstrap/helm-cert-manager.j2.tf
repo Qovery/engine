@@ -77,12 +77,12 @@ resource "helm_release" "cert_manager" {
 
   set {
     name = "webhook.resources.limits.memory"
-    value = "32Mi"
+    value = "128Mi"
   }
 
   set {
     name = "webhook.resources.requests.memory"
-    value = "32Mi"
+    value = "128Mi"
   }
 
   # Limits cainjector
