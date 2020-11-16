@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 use dirs::home_dir;
-use retry::delay::Fibonacci;
+use retry::delay::Fixed;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -17,7 +17,7 @@ use crate::error::{SimpleError, SimpleErrorKind};
 
 fn terraform_exec_with_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     // terraform init
-    let result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         let try_result = terraform_exec(root_dir, vec!["init"]);
         match try_result {
             Ok(out) => OperationResult::Ok(out),
