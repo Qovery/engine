@@ -674,11 +674,22 @@ fn upload_s3_file(
     secrets_access_key: &str,
     access_key_id: &str,
 ) {
+    let object_key = format!("archives/{}/{}", organization_id, file_path);
+    let bucket_name = "qovery-terrafom-tfstates";
+    info!(
+        "Sending file {} to bucket {} object {} wth {} {}",
+        file_path,
+        bucket_name.clone(),
+        object_key.clone(),
+        access_key_id.clone(),
+        secrets_access_key.clone(),
+    );
+
     match s3::push_object(
-        secrets_access_key,
         access_key_id,
-        "qovery-terrafom-tfstates",
-        format!("archives/{}/{}", organization_id, file_path).as_str(),
+        secrets_access_key,
+        bucket_name,
+        object_key.as_str(),
         file_path,
     ) {
         Ok(_) => info!("Archive successfully pushed to Qovery S3"),
