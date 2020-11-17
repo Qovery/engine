@@ -83,6 +83,10 @@ dev-full-tests:
   only:
     refs:
       - dev
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
 
 dev-fast-tests-sequential:
   stage: tests
@@ -93,6 +97,10 @@ dev-fast-tests-sequential:
   only:
     refs:
       - dev
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results-fast.xml
 
 dev-full-tests-sequential:
   stage: tests
@@ -103,6 +111,10 @@ dev-full-tests-sequential:
   only:
     refs:
       - dev
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
 
 dev-build:
   stage: build
