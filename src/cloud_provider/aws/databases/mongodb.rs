@@ -378,8 +378,7 @@ impl Create for MongoDB {
                         kubernetes.region(),
                     ),
                 )?;
-
-                // TODO @ MARC use /common/chart_values/mongodb to replace the /common/services/mongodb/values.j2.yaml
+                // default chart
                 let from_dir = format!("{}/common/services/mongodb", self.context.lib_root_dir());
 
                 let _ = from_simple_error_to_engine_error(
@@ -391,21 +390,21 @@ impl Create for MongoDB {
                         &context,
                     ),
                 )?;
-
+                // overwrite with our chart values
                 let chart_values = format!(
                     "{}/common/chart_values/mongodb",
                     &self.context.lib_root_dir()
                 );
 
-                let copy_res = crate::fs::copy_files(
-                    Path::new(chart_values.as_str()),
-                    Path::new(workspace_dir.as_str()),
-                    false,
-                );
-                match copy_res {
-                    Ok(o) => info!("Chart values are successfully copied"),
-                    _ => error!("Chart values are not copied"),
-                };
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        chart_values.as_str(),
+                        workspace_dir.as_str(),
+                        &context,
+                    ),
+                )?;
 
                 // render templates
                 let helm_release_name = self.helm_release_name();
