@@ -377,14 +377,13 @@ impl Create for PostgreSQL {
                     ),
                 )?;
 
-                // TODO @ MARC use /common/chart_values/postgresql to replace the /common/services/postresql/values.j2.yaml
                 let from_dir =
                     format!("{}/common/services/postgresql", self.context.lib_root_dir());
                 let chart_values = format!(
                     "{}/common/chart_values/postgresql",
                     &self.context.lib_root_dir()
                 );
-
+                // default chart
                 let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
@@ -394,18 +393,17 @@ impl Create for PostgreSQL {
                         &context,
                     ),
                 )?;
+                // overwrite with our chart values
+                let _ = from_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::template::generate_and_copy_all_files_into_dir(
+                        chart_values.as_str(),
+                        workspace_dir.as_str(),
+                        &context,
+                    ),
+                )?;
 
-                let copy_res = crate::fs::copy_files(
-                    Path::new(chart_values.as_str()),
-                    Path::new(workspace_dir.as_str()),
-                    false,
-                );
-                match copy_res {
-                    Ok(o) => info!("Chart values are successfully copied"),
-                    _ => error!("Chart values are not copied"),
-                };
-
-                // render templates
                 let helm_release_name = self.helm_release_name();
                 let aws_credentials_envs = vec![
                     (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
