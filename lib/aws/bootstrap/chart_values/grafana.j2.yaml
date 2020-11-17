@@ -310,23 +310,15 @@ plugins: []
 ## Configure grafana datasources
 ## ref: http://docs.grafana.org/administration/provisioning/#datasources
 ##
-datasources:
-  datasources.yaml:
-    apiVersion: 1
-    datasources:
-      - name: Prometheus
-        type: prometheus
-        url: "http://prometheus-operator-prometheus:9090"
-        access: proxy
-        isDefault: true
-      - name: PromLoki
-        type: prometheus
-        url: "http://loki.logging.svc:3100/loki"
-        access: proxy
-        isDefault: false
-      - name: Loki
-        type: loki
-        url: "http://loki.logging.svc:3100"
+datasources: {}
+#  datasources.yaml:
+#    apiVersion: 1
+#    datasources:
+#    - name: Prometheus
+#      type: prometheus
+#      url: http://prometheus-prometheus-server
+#      access: proxy
+#      isDefault: true
 
 ## Configure notifiers
 ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
