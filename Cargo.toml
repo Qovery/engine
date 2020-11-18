@@ -52,6 +52,3 @@ digitalocean = "0.1.1"
 
 [dev-dependencies]
 test-utilities = { path = "test_utilities" }
-
-[workspace]
-exclude = ["cloned_engine"]
