@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#set -x
+set -x
 
 awk=awk
 sed=sed
@@ -11,8 +11,9 @@ if [ "$(uname)" == "Darwin" ] ; then
   sed='gsed'
 fi
 
+trap "exit 1" 10
 ARGS_NUM=$#
-# Note: this is the dev version for the moment as the prod one is not released yet
+PROC="$$"
 QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=cloned-engine
@@ -24,6 +25,11 @@ function print_help() {
   echo "Usage: $0 <option>"
   $grep '##' $0 | $grep -v grep | $sed -r "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | $awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
   exit 1
+}
+
+function fatal(){
+  echo "$@" >&2
+  kill -9 $PROC
 }
 
 function check_num_args() {
@@ -59,20 +65,16 @@ function check_untracked_files() {
 
 function get_gitlab_engine_commit_id() {
   # Ensure we're in the correct folder
-  if [ $(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/qovery-engine.git") -ne 1 ] && [ -z $CI_REPOSITORY_URL ] ; then
-    echo "You're not in the correct directory and should be in the gitlab repo: $(pwd)"
-    git config --get remote.origin.url
-    exit 1
+  if [ "$(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/qovery-engine.git")" != "1" ] && [ -z $CI_REPOSITORY_URL ] ; then
+    (fatal "You're not in the correct directory and should be in the gitlab repo: $(pwd)")
   fi
   git rev-parse HEAD
 }
 
 function get_github_engine_commit_id() {
   # Ensure we're in the correct folder
-  if [ $(git config --get remote.origin.url | $grep -c "github.com/Qovery/engine.git") -ne 1 ] ; then
-    echo "You're not in the correct directory and should be in the github repo: $(pwd)"
-    git config --get remote.origin.url
-    exit 1
+  if [ $(git config --get remote.origin.url | $grep -c "github.com:Qovery/engine.git") -ne 1 ] ; then
+    (fatal "You're not in the correct directory and should be in the github repo: $(pwd)")
   fi
   git rev-parse HEAD
 }
@@ -129,12 +131,7 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
     cd $ENGINE_DIR
     echo "Latest commit on branch $ENGINE_BRANCH:"
     git log -1
-    commit_id=$(get_github_engine_commit_id)
     cd -
-
-    # Update in place the Cargo.toml to ensure consistency between lib folder and engine lib
-    sed -ri "s/(.+github.com\/Qovery\/engine.*rev.*?\")[A-Za-z0-9]+(.+)/\1$commit_id\2/" app/Cargo.toml
-    sed -ri "s/(.+github.com\/Qovery\/engine.*rev.*?\")[A-Za-z0-9]+(.+)/\1$commit_id\2/" qovery-engine-task-manager/Cargo.toml
 }
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
@@ -264,7 +261,6 @@ function export_env() { ## Export environment variables from .env file
 }
 
 function all_tests(){ ## Run all tests on qovery-engine
-
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info
@@ -279,7 +275,6 @@ function all_tests(){ ## Run all tests on qovery-engine
 }
 
 function fast_tests(){ ## Run fast tests only on qovery-engine
-
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info

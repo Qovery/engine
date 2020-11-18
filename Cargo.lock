@@ -548,6 +548,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "curl"
+version = "0.4.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e268162af1a5fe89917ae25ba3b0a77c8da752bdc58e7dbb4f15b91fbd33756e"
+dependencies = [
+ "curl-sys",
+ "libc",
+ "openssl-probe",
+ "openssl-sys",
+ "schannel",
+ "socket2",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "curl-sys"
+version = "0.4.38+curl-7.73.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498ecfb4f59997fd40023d62a9f1e506e768b2baeb59a1d311eb9751cdcd7e3f"
+dependencies = [
+ "cc",
+ "libc",
+ "libz-sys",
+ "openssl-sys",
+ "pkg-config",
+ "vcpkg",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "curve25519-dalek"
 version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2006,7 +2036,6 @@ dependencies = [
 [[package]]
 name = "qovery-engine"
 version = "0.1.0"
-source = "git+https://github.com/Qovery/engine?rev=0aa7859291592c189878edb8b42f402c27b219ec#0aa7859291592c189878edb8b42f402c27b219ec"
 dependencies = [
  "base64 0.12.3",
  "chrono",
@@ -2035,6 +2064,7 @@ dependencies = [
  "serde_json",
  "tar",
  "tera",
+ "test-utilities",
  "tokio 0.2.22",
  "walkdir",
 ]
@@ -3037,6 +3067,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb6bfa289a4d7c5766392812c0a1f4c1ba45afa1ad47803c11e1f407d846d75f"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test-utilities"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "curl",
+ "digitalocean",
+ "dirs 3.0.1",
+ "env_logger",
+ "qovery-engine",
+ "rand 0.7.3",
+ "reqwest 0.10.8",
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
