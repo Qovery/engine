@@ -161,3 +161,12 @@ variable "backup_window" {
 #  default = "{ service_info['snapshot']['snapshot_id'] }"
 #  type = string
 #}
+
+{%- if resource_expiration_in_seconds is defined %}
+# Pleco ttl
+variable "resource_expiration_in_seconds" {
+  description = "Resource expiration in seconds"
+  default = {{ resource_expiration_in_seconds }}
+  type = number
+}
+{% endif %}
