@@ -23,7 +23,7 @@ pub fn init() {
         std::env::current_dir().unwrap().to_str().unwrap()
     );
     let lib_root_dir =
-        std::env::var("LIB_ROOT_DIR").expect("env var AWS_ACCESS_KEY_ID is mandatory");
+        std::env::var("LIB_ROOT_DIR").expect("env var LIB_ROOT_DIR is mandatory");
     // check the lib root dir
     let path = format!("{}/helm-freeze.yaml", lib_root_dir);
     match Path::new(path.as_str()).exists() {
