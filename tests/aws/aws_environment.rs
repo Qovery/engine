@@ -662,8 +662,6 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     };
 }
 
-#[test]
-#[ignore]
 fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
     init();
     // context for non working environment
