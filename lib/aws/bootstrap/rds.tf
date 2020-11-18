@@ -98,7 +98,6 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
 # Todo: create a bastion to avoid this
 
 resource "aws_security_group_rule" "postgres_remote_access" {
-  count = var.test_cluster == "false" ? 1 : 0
   cidr_blocks       = ["0.0.0.0/0"]
   description       = "Allow RDS PostgreSQL incoming access from anywhere"
   from_port         = 5432
@@ -109,7 +108,6 @@ resource "aws_security_group_rule" "postgres_remote_access" {
 }
 
 resource "aws_security_group_rule" "mysql_remote_access" {
-  count = var.test_cluster == "false" ? 1 : 0
   cidr_blocks       = ["0.0.0.0/0"]
   description       = "Allow RDS MySQL incoming access from anywhere"
   from_port         = 3306
