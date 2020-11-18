@@ -28,7 +28,6 @@ pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
 pub const GIT_LOGIN: &str = "CHANGE-ME";
 pub const GIT_TOKEN: &str = "CHANGE-ME";
 
-#[test]
 fn upgrade_new_cluster() {
     init();
     // create a cluster with last version of the engine
