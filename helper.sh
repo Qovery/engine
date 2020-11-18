@@ -164,6 +164,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
 
   cd docker/ci
   DOCKER_BUILDKIT=1 docker build --no-cache -t qoveryrd/ci:${tag} .
+  cd ..
 
   rm -f docker/ci/load.sh
   rm -f docker/ci/bin_versions

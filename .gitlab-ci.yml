@@ -1,4 +1,4 @@
-image: qoveryrd/ci:cc55f67074390dedf92c0abd207fc5fbdc789587
+image: qoveryrd/ci:4bdfc93-34ecb35
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
