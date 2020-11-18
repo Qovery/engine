@@ -13,6 +13,7 @@ use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
 use crate::models::DatabaseKind::Mongodb;
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -833,6 +834,16 @@ impl Context {
             _ => false,
         }
     }
+
+    pub fn resource_expiration_in_seconds(&self) -> Option<u32> {
+        match &self.metadata {
+            Some(meta) => match meta.resource_expiration_in_seconds {
+                Some(ttl) => Some(ttl),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 }
 
 /// put everything you want here that is required to change the behaviour of the request.
@@ -841,10 +852,19 @@ impl Context {
 pub struct Metadata {
     pub test: Option<bool>,
     pub dry_run_deploy: Option<bool>,
+    pub resource_expiration_in_seconds: Option<u32>,
 }
 
 impl Metadata {
-    pub fn new(test: Option<bool>, dry_run_deploy: Option<bool>) -> Self {
-        Metadata { test, dry_run_deploy }
+    pub fn new(
+        test: Option<bool>,
+        dry_run_deploy: Option<bool>,
+        resource_expiration_in_seconds: Option<u32>,
+    ) -> Self {
+        Metadata {
+            test,
+            dry_run_deploy,
+            resource_expiration_in_seconds,
+        }
     }
 }

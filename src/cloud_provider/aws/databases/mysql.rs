@@ -131,6 +131,11 @@ impl MySQL {
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
 
+        context.insert(
+            "resource_expiration_in_seconds",
+            &self.context.resource_expiration_in_seconds(),
+        );
+
         context
     }
 

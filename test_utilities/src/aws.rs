@@ -76,6 +76,7 @@ pub fn context() -> Context {
     let metadata = Metadata {
         test: Option::from(true),
         dry_run_deploy: Option::from(false),
+        resource_expiration_in_seconds: Some(2700),
     };
 
     Context::new(
@@ -740,12 +741,10 @@ pub fn echo_app_environment(context: &Context) -> Environment {
                 expired_at: Utc::now(),
             },
             storage: vec![],
-            environment_variables: vec![
-                EnvironmentVariable {
-                    key: "ECHO_TEXT".to_string(),
-                    value: "42".to_string(),
-                },
-            ],
+            environment_variables: vec![EnvironmentVariable {
+                key: "ECHO_TEXT".to_string(),
+                value: "42".to_string(),
+            }],
             branch: "echo-app".to_string(),
             private_port: Some(5678),
             total_cpus: "100m".to_string(),
