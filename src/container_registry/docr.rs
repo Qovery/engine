@@ -203,14 +203,6 @@ impl ContainerRegistry for DOCR {
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
-        match cmd::doctl::doctl_do_registry_login(&self.api_key) {
-            Ok(_o) => {}
-            Err(e) => return Err(
-                self.engine_error(
-                    EngineErrorCause::User("Your DOCR account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials."),
-                    format!("failed to login to DOCR {}", self.name_with_id())))
-        };
         Ok(())
     }
 

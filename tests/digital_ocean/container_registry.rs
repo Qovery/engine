@@ -6,7 +6,7 @@ use qovery_engine::error::EngineError;
 
 #[test]
 fn test_create_delete_do_container_registry(){
-    let repoToCreate = DOCR {
+    let repo_to_create = DOCR {
         context:  context(),
         registry_name: "test-digital-ocean".to_string(),
         api_key: digital_ocean_token(),
@@ -20,14 +20,14 @@ fn test_create_delete_do_container_registry(){
         commit_id: "".to_string(),
         registry_url: None
     };
-    let result = repoToCreate.create_repository(&image);
+    let result = repo_to_create.create_repository(&image);
     // should be created
     match result {
         Ok(_)=> assert!(true),
         _ => assert!(false),
     }
     // now delete it !
-    let del_res = repoToCreate.delete_repository(&image);
+    let del_res = repo_to_create.delete_repository(&image);
     match del_res {
         Ok(_)=> assert!(true),
         _ => assert!(false)

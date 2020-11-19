@@ -12,6 +12,9 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::build_platform_local_docker;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
+use qovery_engine::dns_provider::DnsProvider;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+use std::fs::File;
 
 pub const DO_KUBERNETES_VERSION: &str = "1.18.10-do.1";
 pub const DIGITAL_OCEAN_URL: &str = "https://api.digitalocean.com/v2/";
@@ -46,6 +49,27 @@ pub fn docker_cr_do_engine(context: &Context) -> Engine {
         container_registry,
         cloud_provider,
         dns_provider,
+    )
+}
+
+pub fn do_kubernetes_ks<'a>(
+    context: &Context,
+    cloud_provider: &'a DO,
+    dns_provider: &'a dyn DnsProvider,
+    nodes: Vec<Node>,
+) -> DOKS<'a> {
+    let mut file = File::open("tests/assets/do-options.json").expect("file not found");
+    let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
+    DOKS::<'a>::new(
+        context.clone(),
+        "my-first-doks",
+        "do-kube-cluster-fra1",
+        DO_KUBERNETES_VERSION,
+        "fra1",
+        cloud_provider,
+        dns_provider,
+        options_values,
+        nodes,
     )
 }
 

@@ -371,7 +371,79 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        unimplemented!()
+        info!("DOKS.deploy_environment() called for {}", self.name());
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        let stateful_deployment_target = match environment.kind {
+            crate::cloud_provider::environment::Kind::Production => {
+                DeploymentTarget::ManagedServices(self, environment)
+            }
+            crate::cloud_provider::environment::Kind::Development => {
+                DeploymentTarget::SelfHosted(self, environment)
+            }
+        };
+        //TODO: Do I have enough ressources to run this ?
+
+        // create all stateful services (database)
+        for service in &environment.stateful_services {
+            let progress_scope = service.progress_scope();
+
+            listeners_helper.start_in_progress(ProgressInfo::new(
+                progress_scope.clone(),
+                ProgressLevel::Info,
+                Some(format!(
+                    "let's deploy {} {}",
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                )),
+                self.context.execution_id(),
+            ));
+
+            match service.exec_action(&stateful_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with stateful service {} , id: {} => {:?}",
+                        service.name(),
+                        service.id(),
+                        err
+                    );
+
+                    listeners_helper.error(ProgressInfo::new(
+                        progress_scope,
+                        ProgressLevel::Error,
+                        Some(format!(
+                            "error while deploying {} {} : error => {:?}",
+                            service.service_type().name().to_lowercase(),
+                            service.name(),
+                            err
+                        )),
+                        self.context.execution_id(),
+                    ));
+
+                    return Err(err);
+                }
+                _ => {
+                    listeners_helper.start_in_progress(ProgressInfo::new(
+                        progress_scope,
+                        ProgressLevel::Info,
+                        Some(format!(
+                            "deployment succeeded for {} {}",
+                            service.service_type().name().to_lowercase(),
+                            service.name()
+                        )),
+                        self.context.execution_id(),
+                    ));
+                }
+            }
+        }
+        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
+        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
+        // TODO: create all stateless services (router, application...)
+
+        //TODO: check stateless services are well deployed
+        Ok(())
+
+
     }
 
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {

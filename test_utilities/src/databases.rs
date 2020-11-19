@@ -3,7 +3,6 @@ use qovery_engine::models::{Environment, Kind, Context, Action, Database, Databa
 use crate::aws::ORGANIZATION_ID;
 
 pub fn only_dev_postgresql_database(context: &Context) -> Environment {
-    let suffix = generate_id();
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_id();
