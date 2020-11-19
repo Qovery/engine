@@ -12,7 +12,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{
-    from_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
 };
 use crate::models::Context;
 use std::path::Path;
@@ -142,7 +142,7 @@ impl PostgreSQL {
 
                 let context = self.tera_context(*kubernetes, *environment);
 
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -152,7 +152,7 @@ impl PostgreSQL {
                     ),
                 )?;
 
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -162,7 +162,7 @@ impl PostgreSQL {
                     ),
                 )?;
 
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -176,7 +176,7 @@ impl PostgreSQL {
                     ),
                 )?;
 
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -218,7 +218,7 @@ impl PostgreSQL {
                 let selector = format!("app={}", self.name());
 
                 if is_error {
-                    let _ = from_simple_error_to_engine_error(
+                    let _ = cast_simple_error_to_engine_error(
                         self.engine_error_scope(),
                         self.context.execution_id(),
                         common::get_stateless_resource_information(
@@ -231,7 +231,7 @@ impl PostgreSQL {
                 }
 
                 // clean the resource
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     common::do_stateless_service_cleanup(
@@ -308,7 +308,7 @@ impl Create for PostgreSQL {
 
                 let workspace_dir = self.workspace_directory();
 
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -318,7 +318,7 @@ impl Create for PostgreSQL {
                     ),
                 )?;
 
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -328,7 +328,7 @@ impl Create for PostgreSQL {
                     ),
                 )?;
 
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -342,7 +342,7 @@ impl Create for PostgreSQL {
                     ),
                 )?;
 
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
@@ -364,7 +364,7 @@ impl Create for PostgreSQL {
                     .downcast_ref::<AWS>()
                     .unwrap();
 
-                let kubernetes_config_file_path = from_simple_error_to_engine_error(
+                let kubernetes_config_file_path = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     common::kubernetes_config_path(
@@ -384,7 +384,7 @@ impl Create for PostgreSQL {
                     &self.context.lib_root_dir()
                 );
                 // default chart
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -394,7 +394,7 @@ impl Create for PostgreSQL {
                     ),
                 )?;
                 // overwrite with our chart values
-                let _ = from_simple_error_to_engine_error(
+                let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -411,7 +411,7 @@ impl Create for PostgreSQL {
                 ];
 
                 // do exec helm upgrade and return the last deployment status
-                let helm_history_row = from_simple_error_to_engine_error(
+                let helm_history_row = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::cmd::helm::helm_exec_with_upgrade_history(
