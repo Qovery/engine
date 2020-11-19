@@ -1,4 +1,5 @@
 pub mod kubernetes;
+pub mod databases;
 
 extern crate digitalocean;
 
