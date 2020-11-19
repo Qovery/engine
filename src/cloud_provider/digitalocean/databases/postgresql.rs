@@ -1,7 +1,7 @@
 use crate::cloud_provider::service::{DatabaseOptions, Create};
 use crate::models::{Context, Action, Environment};
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::error::{EngineError, from_simple_error_to_engine_error};
+use crate::error::{EngineError, cast_simple_error_to_engine_error};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cloud_provider::service::Service;
 use tera::Context as TeraContext;

@@ -5,7 +5,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode, Resources};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::dns_provider::DnsProvider;
-use crate::error::{from_simple_error_to_engine_error, EngineError};
+use crate::error::{cast_simple_error_to_engine_error, EngineError};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
@@ -307,7 +307,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         // generate terraform files and copy them into temp dir
         let context = self.tera_context();
 
-        let _ = from_simple_error_to_engine_error(
+        let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::generate_and_copy_all_files_into_dir(
@@ -320,7 +320,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = from_simple_error_to_engine_error(
+        let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::copy_non_template_files(
@@ -329,7 +329,7 @@ impl<'a> Kubernetes for DOKS<'a> {
             ),
         )?;
 
-        let _ = from_simple_error_to_engine_error(
+        let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(

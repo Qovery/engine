@@ -154,6 +154,7 @@ pub fn context() -> Context {
     let metadata = Metadata {
         test: Option::from(true),
         dry_run_deploy: Option::from(true),
+        resource_expiration_in_seconds: Some(2700),
     };
 
     Context::new(
