@@ -7,13 +7,12 @@ use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
-use crate::cloud_provider::aws::databases::{MongoDB, MySQL, PostgreSQL};
+use crate::cloud_provider::aws::databases::{MongoDB, MySQL, PostgreSQL, Redis};
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
 use crate::models::DatabaseKind::Mongodb;
-use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -495,6 +494,23 @@ impl Database {
 
                     Some(db)
                 }
+                DatabaseKind::Redis => {
+                    let db: Box<dyn StatefulService> = Box::new(Redis::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options,
+                    ));
+
+                    Some(db)
+                }
                 _ => None,
             },
             CPKind::GCP => None,
@@ -510,6 +526,7 @@ pub enum DatabaseKind {
     Postgresql,
     Mysql,
     Mongodb,
+    Redis,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
