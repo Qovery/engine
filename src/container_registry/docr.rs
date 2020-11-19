@@ -9,6 +9,11 @@ use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::{EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listener, ProgressListener};
+use reqwest::{header, StatusCode};
+use serde_json::Error;
+use serde::{Deserialize, Serialize};
+use reqwest::blocking::{Client, Response};
+use reqwest::header::{HeaderValue, HeaderMap};
 
 // TODO : use --output json
 // see https://www.digitalocean.com/community/tutorials/how-to-use-doctl-the-official-digitalocean-command-line-client
@@ -20,6 +25,14 @@ pub struct DOCR {
     pub name: String,
     pub id: String,
 }
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+struct DO_API_Create_repository {
+    name: String,
+    subscription_tier_slug: String,
+}
+
+const cr_api_path:&str = "https://api.digitalocean.com/v2/registry";
 
 impl DOCR {
     pub fn new(context: Context, id: &str, name: &str, registry_name: &str, api_key: &str) -> Self {
@@ -35,27 +48,57 @@ impl DOCR {
         DigitalOcean::new(self.api_key.as_str()).unwrap()
     }
 
-    pub fn create_repository(&self, _image: &Image) -> Result<(), EngineError> {
-        match cmd::utilities::exec(
-            "doctl",
-            vec![
-                "registry",
-                "create",
-                self.registry_name.as_str(),
-                "-t",
-                self.api_key.as_str(),
-            ],
-        ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!("failed to create DOCR {}", self.registry_name.as_str()),
-                ));
-            }
-            _ => {}
-        };
 
-        Ok(())
+    pub fn create_repository(&self, _image: &Image) -> Result<(), EngineError> {
+        let mut headers = get_header_with_bearer(&self.api_key);
+        //TODO: receive subscription_tier_slug from core
+        let repo = DO_API_Create_repository {
+            name: self.registry_name.clone(),
+            subscription_tier_slug: "basic".to_owned(),
+        };
+        let to_create_repo = serde_json::to_string(&repo);
+        match to_create_repo {
+            Ok(repo_res) => {
+                let res = reqwest::blocking::Client::new()
+                    .post(cr_api_path)
+                    .headers(headers)
+                    .body(repo_res)
+                    .send();
+                match res {
+                    Ok(output) => match output.status() {
+                        StatusCode::OK => Ok(()),
+                        StatusCode::CREATED => Ok(()),
+                        status => {
+                            warn!("status from DO registry API {}", status);
+                            return Err(self.engine_error(
+                                EngineErrorCause::Internal,
+                                format!(
+                                    "Bad status code : {} returned by the DO registry API for creating DO CR {}",
+                                    status,
+                                    &self.registry_name,
+                                ),
+                            ))
+                        }
+                    }
+                    Err(e) => return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        format!(
+                            "failed to create repository {} : {:?}",
+                            &self.registry_name,
+                            e,
+                        ),
+                    ))
+                }
+            }
+            Err(e) => return Err(self.engine_error(
+                EngineErrorCause::Internal,
+                format!(
+                    "Unable to initialize DO Registry {} : {:?}",
+                    &self.registry_name,
+                    e,
+                ),
+            ))
+        }
     }
 
     pub fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, EngineError> {
@@ -101,32 +144,45 @@ impl DOCR {
         self.create_repository(&_image)
     }
 
-    fn delete_repository(&self, _image: &Image) -> Result<(), EngineError> {
-        match cmd::utilities::exec(
-            "doctl",
-            vec![
-                "registry",
-                "delete",
-                self.registry_name.as_str(),
-                "-f",
-                "-t",
-                self.api_key.as_str(),
-            ],
-        ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to delete DOCR repository {} from {}",
-                        self.registry_name.as_str(),
-                        self.name_with_id(),
-                    ),
-                ));
-            }
-            _ => {}
-        };
-        Ok(())
+    pub fn delete_repository(&self, _image: &Image) -> Result<(), EngineError> {
+        let mut headers = get_header_with_bearer(&self.api_key);
+        let res = reqwest::blocking::Client::new()
+            .delete(cr_api_path)
+            .headers(headers)
+            .send();
+        match res {
+            Ok(out) => match out.status() {
+                StatusCode::NO_CONTENT => Ok(()),
+                status => {
+                    warn!("delete status from DO registry API {}", status);
+                    return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        format!(
+                            "Bad status code : {} returned by the DO registry API for deleting DO CR {}",
+                            status,
+                            &self.registry_name,
+                        ),
+                    ))
+                }
+            },
+            Err(e) => return Err(self.engine_error(
+                EngineErrorCause::Internal,
+                format!(
+                    "No response from the Digital Ocean API {} : {:?}",
+                    &self.registry_name,
+                    e,
+                ),
+            ))
+        }
     }
+}
+
+// generate the right header for digital ocean with token
+fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
+    let mut headers = header::HeaderMap::new();
+    headers.insert("Content-Type", "application/json".parse().unwrap());
+    headers.insert("Authorization", format!("Bearer {}", token).parse().unwrap());
+    headers
 }
 
 impl ContainerRegistry for DOCR {
