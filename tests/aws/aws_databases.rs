@@ -54,13 +54,13 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 
 /**
 **
-** PostgreSQL PART
+** PostgreSQL tests
 **
 **/
 
 #[test]
 #[ignore]
-fn deploy_a_working_development_environment_with_all_options_and_psql() {
+fn postgresql_deploy_a_working_development_environment_with_all_options() {
     init();
 
     let context = context();
@@ -98,7 +98,7 @@ fn deploy_a_working_development_environment_with_all_options_and_psql() {
 }
 
 #[test]
-fn deploy_a_working_environment_with_postgresql() {
+fn postgresql_deploy_a_working_environment() {
     init();
 
     let context = context();
@@ -184,7 +184,7 @@ fn deploy_a_working_environment_with_postgresql() {
 }
 
 #[test]
-fn deploy_a_working_environment_and_redeploy_with_postgresql() {
+fn postgresql_deploy_a_working_environment_and_redeploy() {
     init();
 
     let context = context();
@@ -285,7 +285,7 @@ fn deploy_a_working_environment_and_redeploy_with_postgresql() {
 
 #[test]
 #[ignore]
-fn deploy_a_working_production_environment_with_postgresql() {
+fn postgresql_deploy_a_working_production_environment() {
     init();
 
     let context = context();
@@ -370,6 +370,12 @@ fn deploy_a_working_production_environment_with_postgresql() {
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
     };
 }
+
+/**
+**
+** MongoDB tests
+**
+**/
 
 fn test_mongodb_configuration(context: Context, mut environment: Environment, version: &str) {
     init();
@@ -480,15 +486,9 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
     };
 }
 
-/**
-**
-** MongoDB PART
-**
-**/
-
 /// test mongodb v3.6 with development environment
 #[test]
-fn deploy_a_working_environment_with_mongodb_v3_6() {
+fn mongodb_v3_6_deploy_a_working_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "3.6");
@@ -496,7 +496,7 @@ fn deploy_a_working_environment_with_mongodb_v3_6() {
 
 #[test]
 #[ignore]
-fn deploy_a_working_environment_with_mongodb_v4_0() {
+fn mongodb_v4_0_deploy_a_working_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.0");
@@ -505,7 +505,7 @@ fn deploy_a_working_environment_with_mongodb_v4_0() {
 /// test mongodb v4.2 with development environment
 #[test]
 #[ignore]
-fn deploy_a_working_environment_with_mongodb_v4_2() {
+fn mongodb_v4_2_deploy_a_working_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.2");
@@ -513,7 +513,7 @@ fn deploy_a_working_environment_with_mongodb_v4_2() {
 
 /// test mongodb v4.4 with development environment
 #[test]
-fn deploy_a_working_environment_with_mongodb_v4_4() {
+fn mongodb_v4_4_deploy_a_working_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.4");
@@ -522,7 +522,7 @@ fn deploy_a_working_environment_with_mongodb_v4_4() {
 /// test mongodb v3.6 with production environment (DocumentDB)
 #[test]
 #[ignore]
-fn deploy_a_working_production_environment_mongodb_v3_6() {
+fn deploy_a_working_environment_with_production_mongodb_v3_6() {
     let context = context();
 
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -533,13 +533,13 @@ fn deploy_a_working_production_environment_mongodb_v3_6() {
 
 /**
 **
-** MySQL PART
+** MySQL tests
 **
 **/
 
 #[test]
 #[ignore]
-fn deploy_a_working_environment_with_mysql() {
+fn mysql_deploy_a_working_environment() {
     init();
 
     let context = context();
@@ -629,7 +629,7 @@ fn deploy_a_working_environment_with_mysql() {
 #[test]
 #[ignore]
 /// Tests the creation of a simple environment on AWS, with the DB provisioned on RDS.
-fn deploy_a_working_production_environment_with_mysql() {
+fn mysql_deploy_a_working_production_environment() {
     init();
 
     let context = context();
@@ -714,3 +714,133 @@ fn deploy_a_working_production_environment_with_mysql() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 }
+
+/**
+**
+** Redis tests
+**
+**/
+
+fn test_redis_configuration(context: Context, mut environment: Environment, version: &str) {
+    init();
+
+    let context_for_delete = context.clone_not_same_execution_id();
+
+    let database_host =
+        "redis-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+    let database_port = 6379;
+    let database_db_name = "my-redis".to_string();
+    let database_username = "superuser".to_string();
+    let database_password = generate_id();
+    // while waiting the info to be given directly in the database info, we're using this
+    let is_elasticcache = match environment.kind {
+        Kind::Production => true,
+        Kind::Development => false,
+    };
+
+    environment.databases = vec![Database {
+        kind: DatabaseKind::Redis,
+        action: Action::Create,
+        id: generate_id(),
+        name: database_db_name.clone(),
+        version: version.to_string(),
+        fqdn_id: "redis-".to_string() + generate_id().as_str(),
+        fqdn: database_host.clone(),
+        port: database_port.clone(),
+        username: database_username.clone(),
+        password: database_password.clone(),
+        total_cpus: "500m".to_string(),
+        total_ram_in_mib: 512,
+        disk_size_in_gib: 10,
+        database_instance_type: "db.t2.medium".to_string(),
+        database_disk_type: "gp2".to_string(),
+    }];
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.name = "redis-app".to_string();
+            app.branch = "redis-app".to_string();
+            app.commit_id = "70dbab1201fc3b3320da96eca5425ed52d6b2afd".to_string();
+            app.private_port = Some(1234);
+            app.dockerfile_path = format!("Dockerfile-{}", version);
+            app.environment_variables = vec![
+                // EnvironmentVariable {
+                //     key: "ENABLE_DEBUG".to_string(),
+                //     value: "true".to_string(),
+                // },
+                // EnvironmentVariable {
+                //     key: "DEBUG_PAUSE".to_string(),
+                //     value: "true".to_string(),
+                // },
+                EnvironmentVariable {
+                    key: "IS_ELASTICCACHE".to_string(),
+                    value: is_elasticcache.to_string(),
+                },
+                EnvironmentVariable {
+                    key: "REDIS_HOST".to_string(),
+                    value: database_host.clone(),
+                },
+                EnvironmentVariable {
+                    key: "REDIS_PORT".to_string(),
+                    value: database_port.clone().to_string(),
+                },
+                EnvironmentVariable {
+                    key: "REDIS_USERNAME".to_string(),
+                    value: database_username.clone(),
+                },
+                EnvironmentVariable {
+                    key: "REDIS_PASSWORD".to_string(),
+                    value: database_password.clone(),
+                },
+            ];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+    environment.routers[0].routes[0].application_name = "redis-app".to_string();
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment);
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // todo: check the database disk is here and with correct size
+
+    match delete_environment(&context_for_delete, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
+}
+
+#[test]
+fn redis_v5_deploy_a_working_environment() {
+    let context = context();
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    test_redis_configuration(context, environment, "5.0");
+}
+
+#[test]
+fn redis_v6_deploy_a_working_environment() {
+    let context = context();
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    test_redis_configuration(context, environment, "6.0");
+}
+
+// test Redis v3.6 with production environment (Elasticcache)
+// #[test]
+// #[ignore]
+// fn redis_v3_6_deploy_a_working_environment_with_production() {
+//     let context = context();
+//
+//     let mut environment = test_utilities::aws::working_minimal_environment(&context);
+//     environment.kind = Kind::Production;
+//
+//     test_redis_configuration(context, environment, "5.0");
+// }

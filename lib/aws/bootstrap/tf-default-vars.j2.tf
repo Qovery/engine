@@ -199,32 +199,33 @@ variable "documentdb_cidr_subnet" {
   type        = number
 }
 
+# Elasticache
+
+variable "elasticache_subnets_zone_a" {
+  description = "Elasticache subnets Zone A"
+  default = {{ elasticache_zone_a_subnet_blocks }}
+  type = list(string)
+}
+
+variable "elasticache_subnets_zone_b" {
+  description = "Elasticache subnets Zone B"
+  default = {{ elasticache_zone_b_subnet_blocks }}
+  type = list(string)
+}
+
+variable "elasticache_subnets_zone_c" {
+  description = "Elasticache subnets Zone C"
+  default = {{ elasticache_zone_c_subnet_blocks }}
+  type = list(string)
+}
+
+variable "elasticache_cidr_subnet" {
+  description = "Elasticache CIDR (x.x.x.x/CIDR)"
+  default     = {{ elasticache_cidr_subnet }}
+  type        = number
+}
+
 # Elasticsearch
-
-variable "enable_elastic_search" {
-  default = false
-  type = bool
-  description = "option that create elasticsearch stack for logs, logs could use loki as well"
-}
-# Must start with a lowercase alphabet and be at least 3 and no more than 28 characters long.
-# Valid characters are a-z (lowercase letters), 0-9, and - (hyphen).
-variable "elasticsearch_q_logs_domain_name" {
-  description = "ES domain name"
-  default = "qovery-{{ eks_cluster_id }}"
-  type = string
-}
-
-variable "elasticsearch_node_number" {
-  description = "Number of Elasticsearch nodes"
-  default = 3
-  type = number
-}
-
-variable "elasticsearch_volume_size" {
-  description = "Disk size per node"
-  default = 50
-  type = number
-}
 
 variable "elasticsearch_subnets_zone_a" {
   description = "Elasticsearch subnets Zone A"

@@ -52,6 +52,9 @@ pub struct Options {
     pub documentdb_zone_a_subnet_blocks: Vec<String>,
     pub documentdb_zone_b_subnet_blocks: Vec<String>,
     pub documentdb_zone_c_subnet_blocks: Vec<String>,
+    pub elasticache_zone_a_subnet_blocks: Vec<String>,
+    pub elasticache_zone_b_subnet_blocks: Vec<String>,
+    pub elasticache_zone_c_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_a_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_b_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_c_subnet_blocks: Vec<String>,
@@ -62,6 +65,7 @@ pub struct Options {
     pub tls_email_report: String,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
+    pub elasticache_cidr_subnet: String,
     pub elasticsearch_cidr_subnet: String,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
@@ -138,6 +142,15 @@ impl<'a> EKS<'a> {
         let documentdb_zone_c_subnet_blocks =
             format_ips(&self.options.documentdb_zone_c_subnet_blocks);
 
+        let elasticache_zone_a_subnet_blocks =
+            format_ips(&self.options.elasticache_zone_a_subnet_blocks);
+
+        let elasticache_zone_b_subnet_blocks =
+            format_ips(&self.options.elasticache_zone_b_subnet_blocks);
+
+        let elasticache_zone_c_subnet_blocks =
+            format_ips(&self.options.elasticache_zone_c_subnet_blocks);
+
         let elasticsearch_zone_a_subnet_blocks =
             format_ips(&self.options.elasticsearch_zone_a_subnet_blocks);
 
@@ -173,6 +186,7 @@ impl<'a> EKS<'a> {
         let qovery_api_url = self.options.qovery_api_url.clone();
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
         let documentdb_cidr_subnet = self.options.documentdb_cidr_subnet.clone();
+        let elasticache_cidr_subnet = self.options.elasticache_cidr_subnet.clone();
         let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
 
         let managed_dns_list = vec![self.dns_provider.name()];
@@ -313,6 +327,23 @@ impl<'a> EKS<'a> {
         context.insert(
             "documentdb_zone_c_subnet_blocks",
             &documentdb_zone_c_subnet_blocks,
+        );
+
+        // AWS - Elasticache
+        context.insert("elasticache_cidr_subnet", &elasticache_cidr_subnet);
+        context.insert(
+            "elasticache_zone_a_subnet_blocks",
+            &elasticache_zone_a_subnet_blocks,
+        );
+
+        context.insert(
+            "elasticache_zone_b_subnet_blocks",
+            &elasticache_zone_b_subnet_blocks,
+        );
+
+        context.insert(
+            "elasticache_zone_c_subnet_blocks",
+            &elasticache_zone_c_subnet_blocks,
         );
 
         // AWS - Elasticsearch

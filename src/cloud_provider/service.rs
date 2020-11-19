@@ -256,6 +256,7 @@ pub enum DatabaseType<'a> {
     PostgreSQL(&'a DatabaseOptions),
     MongoDB(&'a DatabaseOptions),
     MySQL(&'a DatabaseOptions),
+    Redis(&'a DatabaseOptions),
 }
 
 #[derive(Eq, PartialEq)]
@@ -275,6 +276,7 @@ impl<'a> ServiceType<'a> {
                 DatabaseType::PostgreSQL(_) => "PostgreSQL database",
                 DatabaseType::MongoDB(_) => "MongoDB database",
                 DatabaseType::MySQL(_) => "MySQL database",
+                DatabaseType::Redis(_) => "Redis database",
             },
             ServiceType::Router => "Router",
         }
