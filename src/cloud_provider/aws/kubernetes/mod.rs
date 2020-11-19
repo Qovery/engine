@@ -29,7 +29,7 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::cloudflare::Cloudflare;
 use crate::dns_provider::DnsProvider;
 use crate::dns_provider::Kind::CLOUDFLARE;
-use crate::error::{from_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
@@ -409,7 +409,7 @@ impl<'a> Kubernetes for EKS<'a> {
             .downcast_ref::<AWS>()
             .unwrap();
 
-        let kubernetes_config_file_path = from_simple_error_to_engine_error(
+        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             common::kubernetes_config_path(
@@ -427,7 +427,7 @@ impl<'a> Kubernetes for EKS<'a> {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let nodes = from_simple_error_to_engine_error(
+        let nodes = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             cmd::kubectl::kubectl_exec_get_node(kubernetes_config_file_path, aws_credentials_envs),
@@ -489,7 +489,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // generate terraform files and copy them into temp dir
         let context = self.tera_context();
 
-        let _ = from_simple_error_to_engine_error(
+        let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::generate_and_copy_all_files_into_dir(
@@ -502,7 +502,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = from_simple_error_to_engine_error(
+        let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::copy_non_template_files(
@@ -511,7 +511,7 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         )?;
 
-        let _ = from_simple_error_to_engine_error(
+        let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
@@ -583,7 +583,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // generate terraform files and copy them into temp dir
         let context = self.tera_context();
 
-        let _ = from_simple_error_to_engine_error(
+        let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::generate_and_copy_all_files_into_dir(
@@ -597,7 +597,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
 
-        let _ = from_simple_error_to_engine_error(
+        let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::copy_non_template_files(
@@ -617,7 +617,7 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         ];
 
-        let kubernetes_config_file_path = from_simple_error_to_engine_error(
+        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             kubernetes_config_path(
@@ -643,7 +643,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
                 info!("Deleting non Qovery Namespaces");
                 for namespace_to_delete in namespaces_to_delete.iter() {
-                    let kubernetes_config_file_path0 = from_simple_error_to_engine_error(
+                    let kubernetes_config_file_path0 = cast_simple_error_to_engine_error(
                         self.engine_error_scope(),
                         self.context.execution_id(),
                         kubernetes_config_path(
@@ -683,7 +683,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         info!("Deleting Qovery managed Namespaces");
 
-        let kubernetes_config_file_path2 = from_simple_error_to_engine_error(
+        let kubernetes_config_file_path2 = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             kubernetes_config_path(
@@ -729,7 +729,7 @@ impl<'a> Kubernetes for EKS<'a> {
         }
 
         info!("Running Terraform destroy");
-        let terraform_result = from_simple_error_to_engine_error(
+        let terraform_result = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             cmd::terraform::terraform_exec_with_init_plan_apply_destroy(temp_dir.as_str()),
@@ -1319,7 +1319,7 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         ];
 
-        let kubernetes_config_file_path = from_simple_error_to_engine_error(
+        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             common::kubernetes_config_path(

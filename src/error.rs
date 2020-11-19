@@ -89,7 +89,7 @@ impl From<std::io::Error> for SimpleError {
     }
 }
 
-pub fn from_simple_error_to_engine_error<X, T: Into<String>>(
+pub fn cast_simple_error_to_engine_error<X, T: Into<String>>(
     scope: EngineErrorScope,
     execution_id: T,
     input: Result<X, SimpleError>,
