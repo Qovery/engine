@@ -13,6 +13,9 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, Metadata};
+use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+use qovery_engine::git::clone;
+use qovery_engine::cloud_provider::kubernetes::Kind;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -144,6 +147,8 @@ impl CloudProvider {
                 context.clone(),
                 self.id.as_str(),
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
+                self.name.as_str(),
+                terraform_state_credentials,
             )),
         }
     }
@@ -198,6 +203,51 @@ impl Kubernetes {
                     })
                     .collect::<Vec<_>>(),
             )),
+            qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(DOKS::new(
+                context.clone(),
+                self.id.as_str(),
+                self.name.as_str(),
+                self.version.as_str(),
+                self.region.as_str(),
+                cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
+                dns_provider,
+                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::Options>(
+                    self.options.clone(),
+                )
+                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                nodes
+                    .into_iter()
+                    .map(|x| {
+                        qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
+                            x.total_cpu(),
+                            x.total_memory_in_gib(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )),
+            //TODO implement here DO
+            qovery_engine::cloud_provider::kubernetes::Kind::DOKS => Box::new(DOKS::new(
+                context.clone(),
+                self.id.as_str(),
+                self.name.as_str(),
+                self.version.as_str(),
+                self.region.as_str(),
+                cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
+                dns_provider,
+                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::Options>(
+                    self.options.clone(),
+                )
+                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                nodes
+                    .into_iter()
+                    .map(|x| {
+                        qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
+                            x.total_cpu(),
+                            x.total_memory_in_gib(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )),
         }
     }
 
@@ -225,6 +275,12 @@ impl Node {
         match kubernetes.kind {
             qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(
                 qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(
+                    self.cpu,
+                    self.memory_in_gib,
+                ),
+            ),
+            qovery_engine::cloud_provider::kubernetes::Kind::DOKS => Box::new(
+                qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
                     self.cpu,
                     self.memory_in_gib,
                 ),
@@ -264,8 +320,10 @@ impl ContainerRegistry {
             )),
             qovery_engine::container_registry::Kind::DOCR => Box::new(DOCR::new(
                 context.clone(),
+                self.id.as_str(),
                 self.name.as_str(),
-                self.options.secret_access_key.as_ref().unwrap().as_str(),
+                self.name.as_str(),
+                self.options.secret_access_key.as_ref().unwrap().as_str()
             )),
         }
     }
