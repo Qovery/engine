@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://www.qovery.com">
-    <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_logo.svg" width="318px" alt="Qovery logo" />
+    <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery-engine-logo.svg" width="318px" alt="Qovery logo" />
   </a>
 </p>
 <h3 align="center">Deploy any complex application, seamlessly</h3>
