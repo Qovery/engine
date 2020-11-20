@@ -37,7 +37,7 @@ function run_tests() {
   max_unexpected_status=5
   while [ $counter -le $max_unexpected_status ] ; do
     current_status=$(curl -s -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$pipeline_id | jq --raw-output '.detailed_status.text')
-    echo "Current pipeline status: $current_status"
+    echo "Current pipeline id $pipeline_id status: $current_status"
     case $current_status in
       "created")
         ((counter=$counter+1))
