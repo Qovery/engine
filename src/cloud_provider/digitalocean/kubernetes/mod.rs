@@ -127,7 +127,7 @@ impl<'a> DOKS<'a> {
         );
         context.insert(
             "cloudflare_api_token",
-            "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7",
+            "CHANGE-ME",
         );
 
         // Digital Ocean
