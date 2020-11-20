@@ -2,6 +2,7 @@ extern crate test_utilities;
 use self::test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key};
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{generate_id, init};
+use gethostname;
 use log::{info, warn};
 use qovery_engine::build_platform::GitRepository;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
@@ -14,8 +15,11 @@ use qovery_engine::git::Credentials;
 use qovery_engine::models::{Clone2, GitCredentials};
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::{cmd, git};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use serde_json::value::Value;
 use std::borrow::Borrow;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -27,6 +31,15 @@ pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
 pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
 pub const GIT_LOGIN: &str = "CHANGE-ME";
 pub const GIT_TOKEN: &str = "CHANGE-ME";
+
+// avoid test collisions
+fn generate_cluster_id(prefix: &str) -> String {
+    let suffix = match gethostname::gethostname().into_string() {
+        Ok(suffix) => suffix,
+        _ => generate_id(),
+    };
+    format!("{}-{}", prefix, suffix)
+}
 
 fn upgrade_new_cluster() {
     init();
@@ -160,12 +173,13 @@ fn create_eks_cluster_in_us_east_2() {
         qovery_engine::cloud_provider::aws::kubernetes::Options,
     >(read_buf.as_str());
 
+    let region = "us-east-2";
     let kubernetes = EKS::new(
         context,
-        "eks-on-us-east-2",
-        "eks-us-east-2",
+        generate_cluster_id(region).as_str(),
+        generate_cluster_id(region).as_str(),
         AWS_KUBERNETES_VERSION,
-        "us-east-2",
+        region,
         &aws,
         &cloudflare,
         options_result.expect("Oh my god an error in test... Options options options"),
@@ -220,12 +234,13 @@ fn create_eks_cluster_in_eu_west_3() {
         qovery_engine::cloud_provider::aws::kubernetes::Options,
     >(read_buf.as_str());
 
+    let region = "eu-west-3";
     let kubernetes = EKS::new(
         context.clone(),
-        "eks-on-eu-west-3",
-        "eks-eu-west-3",
+        generate_cluster_id(region).as_str(),
+        generate_cluster_id(region).as_str(),
         AWS_KUBERNETES_VERSION,
-        "eu-west-3",
+        region,
         &aws,
         &cloudflare,
         options_result.expect("Oh my god an error in test... Options options options"),
@@ -266,12 +281,13 @@ fn delete_eks_cluster_in_us_east_2() {
         qovery_engine::cloud_provider::aws::kubernetes::Options,
     >(read_buf.as_str());
 
+    let region = "us-east-2";
     let kubernetes = EKS::new(
         context,
-        "eks-on-us-east-2",
-        "eks-us-east-2",
+        generate_cluster_id(region).as_str(),
+        generate_cluster_id(region).as_str(),
         AWS_KUBERNETES_VERSION,
-        "us-east-2",
+        region,
         &aws,
         &cloudflare,
         options_result.expect("Oh my god an error in test... Options options options"),
@@ -313,12 +329,13 @@ fn delete_eks_cluster_in_eu_west_3() {
         qovery_engine::cloud_provider::aws::kubernetes::Options,
     >(read_buf.as_str());
 
+    let region = "eu-west-3";
     let kubernetes = EKS::new(
         context,
-        "eks-on-eu-west-3",
-        "eks-eu-west-3",
+        generate_cluster_id(region).as_str(),
+        generate_cluster_id(region).as_str(),
         AWS_KUBERNETES_VERSION,
-        "eu-west-3",
+        region,
         &aws,
         &cloudflare,
         options_result.expect("Oh my god an error in test... Options options options"),
