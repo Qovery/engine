@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: qoveryrd/pleco
   pullPolicy: IfNotPresent
-  plecoImageTag: "v0.1.8"
+  plecoImageTag: "v0.2.1"
 
 environmentVariables:
   CHECK_INTERVAL: "120"

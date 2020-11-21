@@ -55,7 +55,7 @@ charts:
     version: 10.6.17
     dest: services
   - name: pleco
-    version: 0.1.8
+    version: 0.2.1
     repo_name: pleco
 
 repos:
