@@ -297,6 +297,7 @@ if [ ! -z $GITHUB_COMMIT_ID ] ; then
 # Check if running manually
 elif [ ! -z $GITLAB_USER_ID ] ; then
   commit_id=$CI_COMMIT_SHA
+  RUNNING_ON_CI=1
 else
   commit_id="$(git rev-parse HEAD)"
 fi
