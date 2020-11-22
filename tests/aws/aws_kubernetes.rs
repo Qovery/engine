@@ -33,12 +33,22 @@ pub const GIT_LOGIN: &str = "CHANGE-ME";
 pub const GIT_TOKEN: &str = "CHANGE-ME";
 
 // avoid test collisions
-fn generate_cluster_id(prefix: &str) -> String {
-    let suffix = match gethostname::gethostname().into_string() {
-        Ok(suffix) => suffix,
+fn generate_cluster_id(region: &str) -> String {
+    let name = gethostname::gethostname().into_string();
+    match name {
+        // shrink to 15 chars in order to avoid resources name issues
+        Ok(mut current_name) => {
+            let mut shrink_size = 15;
+            let mut final_name = format!("{}", &current_name[..shrink_size]);
+            // do not end with a non alphanumeric char
+            while !final_name.chars().last().unwrap().is_alphanumeric() {
+                shrink_size -= 1;
+                final_name = format!("{}", &current_name[..shrink_size]);
+            }
+            format!("{}-{}", final_name, region)
+        },
         _ => generate_id(),
-    };
-    format!("{}-{}", prefix, suffix)
+    }
 }
 
 fn upgrade_new_cluster() {
