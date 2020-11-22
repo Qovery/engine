@@ -1,14 +1,12 @@
 extern crate digitalocean;
 
-use std::rc::Rc;
-
 use digitalocean::DigitalOcean;
 
 use crate::build_platform::Image;
 use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
-use crate::error::{EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listener, ProgressListener};
+use crate::error::{EngineErrorCause};
+use crate::models::{Context, Listener};
 
 // TODO : use --output json
 // see https://www.digitalocean.com/community/tutorials/how-to-use-doctl-the-official-digitalocean-command-line-client
@@ -92,37 +90,37 @@ impl DOCR {
         Ok(PushResult { image })
     }
 
-    fn get_or_create_repository(&self, _image: &Image) -> Result<(), EngineError> {
-        // TODO check if repository really exist
-        self.create_repository(&_image)
-    }
+    // fn get_or_create_repository(&self, _image: &Image) -> Result<(), EngineError> {
+    //     // TODO check if repository really exist
+    //     self.create_repository(&_image)
+    // }
 
-    fn delete_repository(&self, _image: &Image) -> Result<(), EngineError> {
-        match cmd::utilities::exec(
-            "doctl",
-            vec![
-                "registry",
-                "delete",
-                self.registry_name.as_str(),
-                "-f",
-                "-t",
-                self.api_key.as_str(),
-            ],
-        ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to delete DOCR repository {} from {}",
-                        self.registry_name.as_str(),
-                        self.name_with_id(),
-                    ),
-                ));
-            }
-            _ => {}
-        };
-        Ok(())
-    }
+    // fn delete_repository(&self, _image: &Image) -> Result<(), EngineError> {
+    //     match cmd::utilities::exec(
+    //         "doctl",
+    //         vec![
+    //             "registry",
+    //             "delete",
+    //             self.registry_name.as_str(),
+    //             "-f",
+    //             "-t",
+    //             self.api_key.as_str(),
+    //         ],
+    //     ) {
+    //         Err(_) => {
+    //             return Err(self.engine_error(
+    //                 EngineErrorCause::Internal,
+    //                 format!(
+    //                     "failed to delete DOCR repository {} from {}",
+    //                     self.registry_name.as_str(),
+    //                     self.name_with_id(),
+    //                 ),
+    //             ));
+    //         }
+    //         _ => {}
+    //     };
+    //     Ok(())
+    // }
 }
 
 impl ContainerRegistry for DOCR {

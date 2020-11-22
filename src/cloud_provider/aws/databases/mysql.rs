@@ -1,7 +1,6 @@
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities;
-use crate::cloud_provider::aws::kubernetes::EKS;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -11,15 +10,11 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::cmd::kubectl::{
-    kubectl_exec_create_namespace, kubectl_exec_delete_namespace, kubectl_exec_delete_secret,
-};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
 };
 use crate::models::Context;
-use std::path::Path;
 
 pub struct MySQL {
     context: Context,

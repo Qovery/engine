@@ -1,14 +1,10 @@
-use digitalocean::DigitalOcean;
-
 use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::container_registry::docr;
-use qovery_engine::container_registry::docr::DOCR;
-use qovery_engine::dns_provider::cloudflare::Cloudflare;
-use qovery_engine::engine::Engine;
-use qovery_engine::models::Context;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::build_platform_local_docker;
+use qovery_engine::container_registry::docr::DOCR;
+use qovery_engine::models::Context;
+use qovery_engine::engine::Engine;
 
 pub const DIGITAL_OCEAN_URL: &str = "https://api.digitalocean.com/v2/";
 

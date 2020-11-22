@@ -5,23 +5,11 @@ use self::test_utilities::utilities::{generate_id, init};
 use gethostname;
 use log::{info, warn};
 use qovery_engine::build_platform::GitRepository;
-use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
-use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::kubernetes::Kubernetes;
-use qovery_engine::cloud_provider::CloudProvider;
-use qovery_engine::dns_provider::cloudflare::Cloudflare;
-use qovery_engine::git::Credentials;
-use qovery_engine::models::{Clone2, GitCredentials};
 use qovery_engine::transaction::TransactionResult;
-use qovery_engine::{cmd, git};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-use serde_json::value::Value;
-use std::borrow::Borrow;
-use std::ffi::OsString;
+use qovery_engine::{git};
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{Read};
 use std::path::Path;
 use std::process::Command;
 use std::{env, fs};
@@ -29,15 +17,13 @@ use test_utilities::aws::AWS_KUBERNETES_VERSION;
 
 pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
 pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
-pub const GIT_LOGIN: &str = "CHANGE-ME";
-pub const GIT_TOKEN: &str = "CHANGE-ME";
 
 // avoid test collisions
 fn generate_cluster_id(region: &str) -> String {
     let name = gethostname::gethostname().into_string();
     match name {
         // shrink to 15 chars in order to avoid resources name issues
-        Ok(mut current_name) => {
+        Ok(current_name) => {
             let mut shrink_size = 15;
             // avoid out of bounds issue
             if current_name.chars().count() < shrink_size {
@@ -72,7 +58,7 @@ fn upgrade_new_cluster() {
     info!("Cloning old engine repository");
     let clone = git::clone(&gr.url, tmp_dir.clone(), &gr.credentials);
     match clone {
-        Ok(repo) => info!("Well clone engine repository"),
+        Ok(_) => info!("Well clone engine repository"),
         Err(e) => {
             info!("error while cloning the engine repo {}", e);
             assert!(false);
@@ -159,8 +145,8 @@ fn upgrade_new_cluster() {
         }
     };
     assert!(env::set_current_dir(&current_path).is_ok());
-    create_eks_cluster_in_eu_west_3();
-    delete_eks_cluster_in_eu_west_3();
+    //create_eks_cluster_in_eu_west_3();
+    //delete_eks_cluster_in_eu_west_3();
 }
 
 #[test]
@@ -212,17 +198,17 @@ fn create_eks_cluster_in_us_east_2() {
     };
 }
 
-pub fn read_file(filepath: &str) -> String {
-    let file = File::open(filepath).expect("could not open file");
-    let mut buffered_reader = BufReader::new(file);
-    let mut contents = String::new();
-    let _number_of_bytes: usize = match buffered_reader.read_to_string(&mut contents) {
-        Ok(number_of_bytes) => number_of_bytes,
-        Err(_err) => 0,
-    };
-
-    contents
-}
+// pub fn read_file(filepath: &str) -> String {
+//     let file = File::open(filepath).expect("could not open file");
+//     let mut buffered_reader = BufReader::new(file);
+//     let mut contents = String::new();
+//     let _number_of_bytes: usize = match buffered_reader.read_to_string(&mut contents) {
+//         Ok(number_of_bytes) => number_of_bytes,
+//         Err(_err) => 0,
+//     };
+//
+//     contents
+// }
 
 #[test]
 #[ignore]
@@ -273,97 +259,97 @@ fn create_eks_cluster_in_eu_west_3() {
     };
 }
 
-fn delete_eks_cluster_in_us_east_2() {
-    init();
+// fn delete_eks_cluster_in_us_east_2() {
+//     init();
+//
+//     let context = test_utilities::aws::context();
+//
+//     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+//     let session = engine.session().unwrap();
+//     let mut tx = session.transaction();
+//
+//     let aws = test_utilities::aws::cloud_provider_aws(&context);
+//     let nodes = test_utilities::aws::aws_kubernetes_nodes();
+//
+//     let cloudflare = dns_provider_cloudflare(&context);
+//
+//     let mut file = File::open("tests/assets/eks-options.json").unwrap();
+//     let mut read_buf = String::new();
+//     file.read_to_string(&mut read_buf).unwrap();
+//
+//     let options_result = serde_json::from_str::<
+//         qovery_engine::cloud_provider::aws::kubernetes::Options,
+//     >(read_buf.as_str());
+//
+//     let region = "us-east-2";
+//     let kubernetes = EKS::new(
+//         context,
+//         generate_cluster_id(region).as_str(),
+//         generate_cluster_id(region).as_str(),
+//         AWS_KUBERNETES_VERSION,
+//         region,
+//         &aws,
+//         &cloudflare,
+//         options_result.expect("Oh my god an error in test... Options options options"),
+//         nodes,
+//     );
+//
+//     match tx.delete_kubernetes(&kubernetes) {
+//         Err(err) => panic!("{:?}", err),
+//         _ => {}
+//     }
+//
+//     let _ = match tx.commit() {
+//         TransactionResult::Ok => assert!(true),
+//         TransactionResult::Rollback(_) => assert!(false),
+//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//     };
+// }
 
-    let context = test_utilities::aws::context();
-
-    let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let aws = test_utilities::aws::cloud_provider_aws(&context);
-    let nodes = test_utilities::aws::aws_kubernetes_nodes();
-
-    let cloudflare = dns_provider_cloudflare(&context);
-
-    let mut file = File::open("tests/assets/eks-options.json").unwrap();
-    let mut read_buf = String::new();
-    file.read_to_string(&mut read_buf).unwrap();
-
-    let options_result = serde_json::from_str::<
-        qovery_engine::cloud_provider::aws::kubernetes::Options,
-    >(read_buf.as_str());
-
-    let region = "us-east-2";
-    let kubernetes = EKS::new(
-        context,
-        generate_cluster_id(region).as_str(),
-        generate_cluster_id(region).as_str(),
-        AWS_KUBERNETES_VERSION,
-        region,
-        &aws,
-        &cloudflare,
-        options_result.expect("Oh my god an error in test... Options options options"),
-        nodes,
-    );
-
-    match tx.delete_kubernetes(&kubernetes) {
-        Err(err) => panic!("{:?}", err),
-        _ => {}
-    }
-
-    let _ = match tx.commit() {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-fn delete_eks_cluster_in_eu_west_3() {
-    init();
-    // put some environments here, simulated or not
-
-    let context = test_utilities::aws::context();
-
-    let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let aws = test_utilities::aws::cloud_provider_aws(&context);
-    let nodes = test_utilities::aws::aws_kubernetes_nodes();
-
-    let cloudflare = dns_provider_cloudflare(&context);
-
-    let mut file = File::open("tests/assets/eks-options.json").unwrap();
-    let mut read_buf = String::new();
-    file.read_to_string(&mut read_buf).unwrap();
-
-    let options_result = serde_json::from_str::<
-        qovery_engine::cloud_provider::aws::kubernetes::Options,
-    >(read_buf.as_str());
-
-    let region = "eu-west-3";
-    let kubernetes = EKS::new(
-        context,
-        generate_cluster_id(region).as_str(),
-        generate_cluster_id(region).as_str(),
-        AWS_KUBERNETES_VERSION,
-        region,
-        &aws,
-        &cloudflare,
-        options_result.expect("Oh my god an error in test... Options options options"),
-        nodes,
-    );
-
-    match tx.delete_kubernetes(&kubernetes) {
-        Err(err) => panic!("{:?}", err),
-        _ => {}
-    }
-
-    let _ = match tx.commit() {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
+// fn delete_eks_cluster_in_eu_west_3() {
+//     init();
+//     // put some environments here, simulated or not
+//
+//     let context = test_utilities::aws::context();
+//
+//     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+//     let session = engine.session().unwrap();
+//     let mut tx = session.transaction();
+//
+//     let aws = test_utilities::aws::cloud_provider_aws(&context);
+//     let nodes = test_utilities::aws::aws_kubernetes_nodes();
+//
+//     let cloudflare = dns_provider_cloudflare(&context);
+//
+//     let mut file = File::open("tests/assets/eks-options.json").unwrap();
+//     let mut read_buf = String::new();
+//     file.read_to_string(&mut read_buf).unwrap();
+//
+//     let options_result = serde_json::from_str::<
+//         qovery_engine::cloud_provider::aws::kubernetes::Options,
+//     >(read_buf.as_str());
+//
+//     let region = "eu-west-3";
+//     let kubernetes = EKS::new(
+//         context,
+//         generate_cluster_id(region).as_str(),
+//         generate_cluster_id(region).as_str(),
+//         AWS_KUBERNETES_VERSION,
+//         region,
+//         &aws,
+//         &cloudflare,
+//         options_result.expect("Oh my god an error in test... Options options options"),
+//         nodes,
+//     );
+//
+//     match tx.delete_kubernetes(&kubernetes) {
+//         Err(err) => panic!("{:?}", err),
+//         _ => {}
+//     }
+//
+//     let _ = match tx.commit() {
+//         TransactionResult::Ok => assert!(true),
+//         TransactionResult::Rollback(_) => assert!(false),
+//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//     };
+// }

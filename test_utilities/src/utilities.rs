@@ -1,16 +1,14 @@
-use curl::Error;
-use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
 use crate::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, KUBE_CLUSTER_ID};
 use curl::easy::Easy;
-use digitalocean::error::Error::ReqwestError;
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::aws::common;
 use qovery_engine::cmd;
 use qovery_engine::models::{Context, Environment};
 use reqwest::StatusCode;
 use std::path::Path;
+use qovery_engine::cloud_provider::aws::common;
+use rand::distributions::Alphanumeric;
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
@@ -68,7 +66,7 @@ fn curl_path(path: &str) -> bool {
     easy.url(path).unwrap();
     let res = easy.perform();
     match res {
-        Ok(out) => return true,
+        Ok(_out) => return true,
 
         Err(e) => {
             println!("TEST Error : while trying to call {}", e);
@@ -77,7 +75,7 @@ fn curl_path(path: &str) -> bool {
     }
 }
 
-pub fn is_pod_restarted(environment_check: Environment, podToCheck: &str) -> (bool, String) {
+pub fn is_pod_restarted(environment_check: Environment, pod_to_check: &str) -> (bool, String) {
     let namespace_name = format!(
         "{}-{}",
         &environment_check.project_id.clone(),
@@ -103,7 +101,7 @@ pub fn is_pod_restarted(environment_check: Environment, podToCheck: &str) -> (bo
             let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
                 path.as_str(),
                 namespace_name.clone().as_str(),
-                podToCheck,
+                pod_to_check,
                 aws_credentials_envs,
             );
             match restarted_database {
@@ -114,7 +112,7 @@ pub fn is_pod_restarted(environment_check: Environment, podToCheck: &str) -> (bo
                 _ => return (false, "".to_string()),
             }
         }
-        Err(e) => return (false, "".to_string()),
+        Err(_e) => return (false, "".to_string()),
     }
 }
 

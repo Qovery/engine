@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use git2::Error;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
