@@ -6,7 +6,7 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Action, Application as AApplication, Create, Delete, ExternalService as EExternalService,
+    Action, Application as AApplication, Create, Delete,
     Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;

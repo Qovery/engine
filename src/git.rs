@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use git2::build::RepoBuilder;
-use git2::{Error, Oid, Repository, Submodule};
+use git2::{Error, Oid, Repository};
 
 /// TODO support SSH repository_url - we assume that the repository URL starts with HTTPS
 /// TODO support git submodules
@@ -29,7 +29,7 @@ where
 pub fn checkout(repo: &Repository, commit_id: &str, repo_url: &str) -> Result<(), Error> {
     let oid = match Oid::from_str(&commit_id) {
         Err(e) => {
-            let mut x = git2::Error::from_str(
+            let x = git2::Error::from_str(
                 format!(
                     "Error while trying to validate commit ID {} on repository {}: {}",
                     &commit_id, &repo_url, &e
@@ -59,7 +59,7 @@ pub fn checkout(repo: &Repository, commit_id: &str, repo_url: &str) -> Result<()
 
     let obj = match repo.revparse_single(&commit_id) {
         Err(e) => {
-            let mut x = git2::Error::from_str(
+            let x = git2::Error::from_str(
                 format!(
                     "Wasn't able to use git object commit ID {} on repository {}: {}",
                     &commit_id, &repo_url, &e

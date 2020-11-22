@@ -1,17 +1,11 @@
-use std::borrow::Borrow;
-use std::env;
-use std::iter::FromIterator;
-use std::ops::Deref;
-use std::rc::Rc;
 use std::str::FromStr;
 
 use itertools::Itertools;
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::common::{do_stateless_service_cleanup, kubernetes_config_path};
+use crate::cloud_provider::aws::common::{kubernetes_config_path};
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -19,25 +13,21 @@ use crate::cloud_provider::kubernetes::{
     check_kubernetes_has_enough_resources_to_deploy_environment, Kind, Kubernetes, KubernetesNode,
     Resources,
 };
-use crate::cloud_provider::service::{Service, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
-use crate::cmd::helm::helm_uninstall_list;
 use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
-use crate::dns_provider::cloudflare::Cloudflare;
-use crate::dns_provider::DnsProvider;
-use crate::dns_provider::Kind::CLOUDFLARE;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
-use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope,
 };
 use crate::string::terraform_list_format;
 use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
-use crate::{dns_provider, dynamo_db, s3};
+use crate::{dns_provider, s3};
+use crate::dns_provider::DnsProvider;
+use crate::fs::workspace_directory;
 
 pub mod node;
 
@@ -728,7 +718,7 @@ impl<'a> Kubernetes for EKS<'a> {
         )?;
 
         // TODO use label instead fixed names
-        let mut qovery_namespaces = get_qovery_managed_namespaces();
+        let qovery_namespaces = get_qovery_managed_namespaces();
         for qovery_namespace in qovery_namespaces.iter() {
             let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                 &kubernetes_config_file_path2,
@@ -1167,8 +1157,6 @@ impl<'a> Kubernetes for EKS<'a> {
     fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.pause_environment() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
                 DeploymentTarget::ManagedServices(self, environment)
@@ -1257,9 +1245,6 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.delete_environment() called for {}", self.name());
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-        // TODO use listeners_helper !!!! Don't be so shy Marc + Pierre
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {

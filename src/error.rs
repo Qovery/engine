@@ -1,7 +1,4 @@
-use std::error::Error;
 use std::process::ExitStatus;
-
-use rusoto_core::RusotoError;
 
 pub type Type = String;
 pub type Id = String;

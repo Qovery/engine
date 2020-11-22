@@ -1,7 +1,7 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
-use std::io::{Error, ErrorKind, Write};
+use std::io::{Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 

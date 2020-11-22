@@ -1,5 +1,5 @@
 use dns_lookup::lookup_host;
-use retry::delay::{Fibonacci, Fixed};
+use retry::delay::{Fibonacci};
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
@@ -14,10 +14,10 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError, SimpleErrorKind,
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
 };
 use crate::models::{
-    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Context, Listeners
 };
 
 pub struct Router {
@@ -491,49 +491,49 @@ impl Create for Router {
     fn on_create_check(&self) -> Result<(), EngineError> {
         // FIXME remove this
         return Ok(());
-
-        // TODO -------------------------------------------------------------
-        // TODO integration tests required before using DNS propagation check
-        // TODO -------------------------------------------------------------
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-        // Todo: inform the client about the fact we're going to check for a certain amount of time
-
-        let check_result = retry::retry(Fixed::from_millis(3000).take(200), || {
-            let rs_ips = lookup_host(self.default_domain.as_str());
-            match rs_ips {
-                Ok(ips) => {
-                    info!("Records from DNS are successfully retrieved.");
-                    OperationResult::Ok(ips)
-                }
-                Err(err) => {
-                    warn!(
-                        "Failed to retrieve record from DNS '{}', retrying...",
-                        self.default_domain.as_str()
-                    );
-                    warn!("DNS lookup error: {:?}", err);
-                    OperationResult::Retry(err)
-                }
-            }
-        });
-
-        match check_result {
-            Ok(_) => Ok(()),
-            Err(_) => {
-                let message = format!("Wasn't able to check DNS availability '{}', can be due to a too long DNS propagation. Please retry and contact your administrator if the problem persists", self.default_domain.as_str());
-                error!("{}", message);
-
-                listeners_helper.error(ProgressInfo::new(
-                    ProgressScope::Router {
-                        id: self.id().into(),
-                    },
-                    ProgressLevel::Error,
-                    Some("DNS propagation goes wrong."),
-                    self.context.execution_id(),
-                ));
-                // TODO: fixme I shouldn't return OK but I think I have a cache issue
-                Ok(())
-            }
-        }
+        //
+        // // TODO -------------------------------------------------------------
+        // // TODO integration tests required before using DNS propagation check
+        // // TODO -------------------------------------------------------------
+        // let listeners_helper = ListenersHelper::new(&self.listeners);
+        // // Todo: inform the client about the fact we're going to check for a certain amount of time
+        //
+        // let check_result = retry::retry(Fixed::from_millis(3000).take(200), || {
+        //     let rs_ips = lookup_host(self.default_domain.as_str());
+        //     match rs_ips {
+        //         Ok(ips) => {
+        //             info!("Records from DNS are successfully retrieved.");
+        //             OperationResult::Ok(ips)
+        //         }
+        //         Err(err) => {
+        //             warn!(
+        //                 "Failed to retrieve record from DNS '{}', retrying...",
+        //                 self.default_domain.as_str()
+        //             );
+        //             warn!("DNS lookup error: {:?}", err);
+        //             OperationResult::Retry(err)
+        //         }
+        //     }
+        // });
+        //
+        // match check_result {
+        //     Ok(_) => Ok(()),
+        //     Err(_) => {
+        //         let message = format!("Wasn't able to check DNS availability '{}', can be due to a too long DNS propagation. Please retry and contact your administrator if the problem persists", self.default_domain.as_str());
+        //         error!("{}", message);
+        //
+        //         listeners_helper.error(ProgressInfo::new(
+        //             ProgressScope::Router {
+        //                 id: self.id().into(),
+        //             },
+        //             ProgressLevel::Error,
+        //             Some("DNS propagation goes wrong."),
+        //             self.context.execution_id(),
+        //         ));
+        //         // TODO: fixme I shouldn't return OK but I think I have a cache issue
+        //         Ok(())
+        //     }
+        // }
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {

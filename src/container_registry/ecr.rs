@@ -1,10 +1,9 @@
-use std::rc::Rc;
 use std::str::FromStr;
 
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    CreateRepositoryError, CreateRepositoryRequest, DescribeImagesRequest,
+    CreateRepositoryRequest, DescribeImagesRequest,
     DescribeRepositoriesRequest, Ecr, EcrClient, GetAuthorizationTokenRequest, ImageDetail,
     ImageIdentifier, PutLifecyclePolicyRequest, Repository,
 };
@@ -15,7 +14,7 @@ use crate::cmd;
 use crate::container_registry::{ContainerRegistry, Kind, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope,
 };
 use crate::runtime::async_run;

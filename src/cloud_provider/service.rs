@@ -1,5 +1,4 @@
 use std::net::TcpStream;
-use std::process::id;
 
 use tera::Context as TeraContext;
 
@@ -43,7 +42,7 @@ pub trait Service {
             if !crate::cmd::utilities::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
 
-                let cause = EngineErrorCause::Internal;
+                //let cause = EngineErrorCause::Internal;
 
                 return Err(EngineError::new(
                     EngineErrorCause::Internal,

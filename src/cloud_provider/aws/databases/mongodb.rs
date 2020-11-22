@@ -12,10 +12,9 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
 };
 use crate::models::Context;
-use std::path::Path;
 
 pub struct MongoDB {
     context: Context,
@@ -64,9 +63,9 @@ impl MongoDB {
         crate::string::cut(format!("mongodb-{}", self.id()), 50)
     }
 
-    fn helm_release_external_dns(&self) -> String {
-        format!("{}-dns", self.helm_release_name())
-    }
+    // fn helm_release_external_dns(&self) -> String {
+    //     format!("{}-dns", self.helm_release_name())
+    // }
 
     fn workspace_directory(&self) -> String {
         crate::fs::workspace_directory(

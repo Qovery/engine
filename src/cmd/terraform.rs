@@ -1,47 +1,36 @@
-use std::ffi::OsStr;
-use std::fmt::{Display, Formatter};
-use std::io::Error;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
-use std::process::{Child, Command, ExitStatus, Stdio};
-
 use dirs::home_dir;
-use retry::delay::Fixed;
-use retry::OperationResult;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::cmd::utilities::exec_with_envs_and_output;
-use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::constants::{TF_PLUGIN_CACHE_DIR};
+use crate::error::{SimpleError};
 
-fn terraform_exec_with_init_validate(root_dir: &str) -> Result<(), SimpleError> {
-    // terraform init
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
-        let try_result = terraform_exec(root_dir, vec!["init"]);
-        match try_result {
-            Ok(out) => OperationResult::Ok(out),
-            Err(err) => OperationResult::Err(format!("Command error: {:?}", err)),
-        }
-    });
-
-    match result {
-        Err(err) => match err {
-            retry::Error::Operation {
-                error: _,
-                total_delay: _,
-                tries: _,
-            } => Ok(Some(false)),
-            retry::Error::Internal(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(err))),
-        },
-        Ok(_) => Ok(Some(true)),
-    };
-
-    // terraform validate config
-    terraform_exec(root_dir, vec!["validate"])?;
-
-    Ok(())
-}
+// fn terraform_exec_with_init_validate(root_dir: &str) -> Result<(), SimpleError> {
+//     // terraform init
+//     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+//         let try_result = terraform_exec(root_dir, vec!["init"]);
+//         match try_result {
+//             Ok(out) => OperationResult::Ok(out),
+//             Err(err) => OperationResult::Err(format!("Command error: {:?}", err)),
+//         }
+//     });
+//
+//     match result {
+//         Err(err) => match err {
+//             retry::Error::Operation {
+//                 error: _,
+//                 total_delay: _,
+//                 tries: _,
+//             } => Ok(Some(false)),
+//             retry::Error::Internal(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(err))),
+//         },
+//         Ok(_) => Ok(Some(true)),
+//     };
+//
+//     // terraform validate config
+//     terraform_exec(root_dir, vec!["validate"])?;
+//
+//     Ok(())
+// }
 
 fn terraform_exec_with_init_validate_plan(
     root_dir: &str,

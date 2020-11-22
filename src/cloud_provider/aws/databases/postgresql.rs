@@ -12,10 +12,9 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
 };
 use crate::models::Context;
-use std::path::Path;
 
 pub struct PostgreSQL {
     context: Context,

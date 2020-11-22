@@ -1,21 +1,14 @@
 extern crate test_utilities;
 
-use chrono::Utc;
-use rusoto_core::region::Region::Custom;
-
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::generate_id;
-use qovery_engine::cloud_provider::aws::common;
-use qovery_engine::cloud_provider::service::Router;
-use qovery_engine::cmd;
-use qovery_engine::models::Kind::Production;
 use qovery_engine::models::{
-    Action, Clone2, Context, CustomDomain, Database, DatabaseKind, Environment, EnvironmentAction,
-    EnvironmentVariable, ExternalService, GitCredentials, Kind, Storage, StorageType,
+    Action, Clone2, Context, CustomDomain, Environment, EnvironmentAction,
+    Storage, StorageType,
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, context};
-use test_utilities::utilities::{curl_it_and_compare, init, is_pod_restarted};
+use test_utilities::utilities::{init, is_pod_restarted};
+use self::test_utilities::aws::context;
 
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
@@ -28,9 +21,9 @@ pub fn generate_contexts_and_environments(
     let mut context_vec: Vec<Context> = Vec::new();
     let mut env_vec: Vec<Environment> = Vec::new();
     let context = context();
-    for i in std::iter::repeat(number) {
+    for _ in std::iter::repeat(number) {
         context_vec.push(context.clone_not_same_execution_id());
-        let mut environment = func(&context);
+        let environment = func(&context);
         env_vec.push(environment);
     }
     (context_vec, env_vec)
@@ -61,23 +54,23 @@ pub fn deploy_environment(
     tx.commit()
 }
 
-pub fn pause_environment(
-    context: &Context,
-    environment_action: &EnvironmentAction,
-) -> TransactionResult {
-    let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = test_utilities::aws::cloud_provider_aws(&context);
-    let nodes = test_utilities::aws::aws_kubernetes_nodes();
-    let dns_provider = dns_provider_cloudflare(context);
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
-
-    tx.pause_environment(&k, &environment_action);
-
-    tx.commit()
-}
+// pub fn pause_environment(
+//     context: &Context,
+//     environment_action: &EnvironmentAction,
+// ) -> TransactionResult {
+//     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+//     let session = engine.session().unwrap();
+//     let mut tx = session.transaction();
+//
+//     let cp = test_utilities::aws::cloud_provider_aws(&context);
+//     let nodes = test_utilities::aws::aws_kubernetes_nodes();
+//     let dns_provider = dns_provider_cloudflare(context);
+//     let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
+//
+//     tx.pause_environment(&k, &environment_action);
+//
+//     tx.commit()
+// }
 
 pub fn delete_environment(
     context: &Context,
@@ -130,7 +123,7 @@ fn deploy_dockerfile_not_exist() {
     let context = context();
     let context2 = context.clone_not_same_execution_id();
 
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
     // working env
     let mut not_working_env = test_utilities::aws::working_minimal_environment(&context2);
 
@@ -196,7 +189,7 @@ fn deploy_a_working_environment_with_domain() {
     let context = context();
     let context_for_deletion = context.clone_not_same_execution_id();
 
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
@@ -363,9 +356,9 @@ fn redeploy_same_app_with_ebs() {
             app
         })
         .collect::<Vec<qovery_engine::models::Application>>();
-    let mut environment_redeploy = environment.clone();
-    let mut environment_check1 = environment.clone();
-    let mut environment_check2 = environment.clone();
+    let environment_redeploy = environment.clone();
+    let environment_check1 = environment.clone();
+    let environment_check2 = environment.clone();
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
 
@@ -484,7 +477,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
     let context_for_not_working = context.clone_not_same_execution_id();
     let context_for_delete = context.clone_not_same_execution_id();
     // env part generation
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
     let mut environment_for_not_working =
         test_utilities::aws::working_minimal_environment(&context_for_not_working);
     // this environment is broken by container exit
@@ -530,7 +523,7 @@ fn deploy_ok_fail_fail_ok_environment() {
     init();
     // working env
     let context = context();
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
     let ea = EnvironmentAction::Environment(environment);
     // not working 1
     let context_for_not_working = context.clone_not_same_execution_id();
@@ -542,7 +535,7 @@ fn deploy_ok_fail_fail_ok_environment() {
         test_utilities::aws::working_minimal_environment(&context_for_not_working2);
     // final env is working
     let context_for_working2 = context.clone_not_same_execution_id();
-    let mut working_env_2 = test_utilities::aws::working_minimal_environment(&context_for_working2);
+    let working_env_2 = test_utilities::aws::working_minimal_environment(&context_for_working2);
     let ea2 = EnvironmentAction::Environment(working_env_2);
     // work for delete
     let context_for_delete = context.clone_not_same_execution_id();
@@ -613,7 +606,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 
     let context = context();
 
-    let mut environment = test_utilities::aws::non_working_environment(&context);
+    let environment = test_utilities::aws::non_working_environment(&context);
 
     let ea = EnvironmentAction::Environment(environment);
 
@@ -641,8 +634,8 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     // context for non working environment
     let context = context();
 
-    let mut environment = test_utilities::aws::non_working_environment(&context);
-    let mut failover_environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::non_working_environment(&context);
+    let failover_environment = test_utilities::aws::working_minimal_environment(&context);
     // context for deletion
     let context_deletion = context.clone_not_same_execution_id();
     let mut delete_env = test_utilities::aws::working_minimal_environment(&context_deletion);
@@ -662,64 +655,62 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     };
 }
 
-fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
-    init();
-    // context for non working environment
-    let context_failover_1 = context();
-    let context_failover_2 = context_failover_1.clone_not_same_execution_id();
-
-    let context_first_fail_deployement_1 = context_failover_1.clone_not_same_execution_id();
-    let context_second_fail_deployement_2 = context_failover_1.clone_not_same_execution_id();
-
-    let mut failover_environment_1 = test_utilities::aws::echo_app_environment(&context_failover_1);
-    let mut fail_app_1 =
-        test_utilities::aws::non_working_environment(&context_first_fail_deployement_1);
-    let mut failover_environment_2 = test_utilities::aws::echo_app_environment(&context_failover_2);
-    let mut fail_app_2 =
-        test_utilities::aws::non_working_environment(&context_second_fail_deployement_2);
-
-    failover_environment_2.applications = failover_environment_2
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.environment_variables = vec![EnvironmentVariable {
-                key: "ECHO_TEXT".to_string(),
-                value: "Lilou".to_string(),
-            }];
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
-
-    // context for deletion
-    let context_deletion = context_failover_1.clone_not_same_execution_id();
-    let mut delete_env = test_utilities::aws::echo_app_environment(&context_deletion);
-    delete_env.action = Action::Delete;
-    let ea_delete = EnvironmentAction::Environment(delete_env);
-
-    let envToCheck = failover_environment_1.clone();
-
-    // first deployement
-    let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, failover_environment_1);
-    let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, failover_environment_2);
-
-    match deploy_environment(&context_failover_1, &ea1) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
-
-    match deploy_environment(&context_failover_2, &ea2) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
-
-    match delete_environment(&context_deletion, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
+// fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
+//     init();
+//     // context for non working environment
+//     let context_failover_1 = context();
+//     let context_failover_2 = context_failover_1.clone_not_same_execution_id();
+//
+//     let context_first_fail_deployement_1 = context_failover_1.clone_not_same_execution_id();
+//     let context_second_fail_deployement_2 = context_failover_1.clone_not_same_execution_id();
+//
+//     let mut failover_environment_1 = test_utilities::aws::echo_app_environment(&context_failover_1);
+//     let mut fail_app_1 =
+//         test_utilities::aws::non_working_environment(&context_first_fail_deployement_1);
+//     let mut failover_environment_2 = test_utilities::aws::echo_app_environment(&context_failover_2);
+//     let mut fail_app_2 =
+//         test_utilities::aws::non_working_environment(&context_second_fail_deployement_2);
+//
+//     failover_environment_2.applications = failover_environment_2
+//         .applications
+//         .into_iter()
+//         .map(|mut app| {
+//             app.environment_variables = vec![EnvironmentVariable {
+//                 key: "ECHO_TEXT".to_string(),
+//                 value: "Lilou".to_string(),
+//             }];
+//             app
+//         })
+//         .collect::<Vec<qovery_engine::models::Application>>();
+//
+//     // context for deletion
+//     let context_deletion = context_failover_1.clone_not_same_execution_id();
+//     let mut delete_env = test_utilities::aws::echo_app_environment(&context_deletion);
+//     delete_env.action = Action::Delete;
+//     let ea_delete = EnvironmentAction::Environment(delete_env);
+//
+//     // first deployement
+//     let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, failover_environment_1);
+//     let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, failover_environment_2);
+//
+//     match deploy_environment(&context_failover_1, &ea1) {
+//         TransactionResult::Ok => assert!(false),
+//         TransactionResult::Rollback(_) => assert!(false),
+//         TransactionResult::UnrecoverableError(_, _) => assert!(true),
+//     };
+//
+//     match deploy_environment(&context_failover_2, &ea2) {
+//         TransactionResult::Ok => assert!(false),
+//         TransactionResult::Rollback(_) => assert!(false),
+//         TransactionResult::UnrecoverableError(_, _) => assert!(true),
+//     };
+//
+//     match delete_environment(&context_deletion, &ea_delete) {
+//         TransactionResult::Ok => assert!(true),
+//         TransactionResult::Rollback(_) => assert!(false),
+//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//     };
+// }
 
 #[test]
 #[ignore]
@@ -728,8 +719,8 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
 
     let context = context();
 
-    let mut environment = test_utilities::aws::non_working_environment(&context);
-    let mut failover_environment = test_utilities::aws::non_working_environment(&context);
+    let environment = test_utilities::aws::non_working_environment(&context);
+    let failover_environment = test_utilities::aws::non_working_environment(&context);
 
     let context_for_deletion = context.clone_not_same_execution_id();
     let mut delete_env = test_utilities::aws::non_working_environment(&context_for_deletion);

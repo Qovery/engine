@@ -1,6 +1,3 @@
-use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-
 // this fn should implements the algorythm describe here: https://qovery.atlassian.net/secure/RapidBoard.jspa?rapidView=10&modal=detail&selectedIssue=DEV-283
 pub fn get_firsts_namespaces_to_delete(namespaces: Vec<&str>) -> Vec<&str> {
     // from all namesapce remove managed and never delete namespaces

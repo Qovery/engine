@@ -1,36 +1,25 @@
 extern crate serde;
 extern crate serde_derive;
 
-use std::borrow::Borrow;
 use std::fs::File;
-use std::io::Read;
-use std::str::FromStr;
 
 use chrono::Utc;
 use dirs::home_dir;
-use serde_json::map::Values;
-use serde_json::value::Value;
 
-use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::build_platform::BuildPlatform;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
+use qovery_engine::cloud_provider::{TerraformStateCredentials};
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
-use qovery_engine::container_registry::ContainerRegistry;
-use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{
-    Action, Application, Context, CustomDomain, Database, DatabaseKind, Environment,
+    Action, Application, Context, Database, DatabaseKind, Environment,
     EnvironmentVariable, GitCredentials, Kind, Metadata, Route, Router, Storage, StorageType,
 };
-use qovery_engine::session::Session;
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
 
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
@@ -140,7 +129,7 @@ pub fn aws_kubernetes_eks<'a>(
     dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
 ) -> EKS<'a> {
-    let mut file = File::open("tests/assets/eks-options.json").expect("file not found");
+    let file = File::open("tests/assets/eks-options.json").expect("file not found");
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
         context.clone(),

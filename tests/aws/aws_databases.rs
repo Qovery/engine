@@ -1,21 +1,14 @@
 extern crate test_utilities;
 
-use chrono::Utc;
-use rusoto_core::region::Region::Custom;
-
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::generate_id;
 use crate::aws::aws_environment::{delete_environment, deploy_environment};
-use qovery_engine::cloud_provider::aws::common;
-use qovery_engine::cloud_provider::service::Router;
-use qovery_engine::cmd;
 use qovery_engine::models::Kind::Production;
 use qovery_engine::models::{
-    Action, Clone2, Context, CustomDomain, Database, DatabaseKind, Environment, EnvironmentAction,
-    EnvironmentVariable, ExternalService, GitCredentials, Kind, Storage, StorageType,
+    Action, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction,
+    EnvironmentVariable, Kind,
 };
-use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, context};
+use qovery_engine::transaction::{TransactionResult};
+use test_utilities::aws::{context};
 use test_utilities::utilities::{init, is_pod_restarted};
 
 // to check overload between several databases and apps
@@ -25,7 +18,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
     init();
     let context = context();
     let context_for_deletion = context.clone_not_same_execution_id();
-    let mut environment = test_utilities::aws::environment_3_apps_3_routers_3_databases(&context);
+    let environment = test_utilities::aws::environment_3_apps_3_routers_3_databases(&context);
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
@@ -67,7 +60,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
     let context_for_deletion = context.clone_not_same_execution_id();
 
     let mut environment = test_utilities::aws::environnement_2_app_2_routers_1_psql(&context);
-    let mut env_to_check = environment.clone();
+    //let env_to_check = environment.clone();
     let mut environment_delete =
         test_utilities::aws::environnement_2_app_2_routers_1_psql(&context_for_deletion);
 
@@ -249,7 +242,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         })
         .collect::<Vec<qovery_engine::models::Application>>();
     environment.routers[0].routes[0].application_name = "postgres-app".to_string();
-    let mut environment_to_redeploy = environment.clone();
+    let environment_to_redeploy = environment.clone();
     let environment_check = environment.clone();
     let ea_redeploy = EnvironmentAction::Environment(environment_to_redeploy);
 
@@ -273,7 +266,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
     match is_pod_restarted(environment_check, database_name.as_str()) {
         (true, _) => assert!(true),
         (false, _) => assert!(false),
-        _ => {}
     }
 
     match delete_environment(&context_for_delete, &ea_delete) {
@@ -490,7 +482,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 #[test]
 fn mongodb_v3_6_deploy_a_working_environment() {
     let context = context();
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "3.6");
 }
 
@@ -498,7 +490,7 @@ fn mongodb_v3_6_deploy_a_working_environment() {
 #[ignore]
 fn mongodb_v4_0_deploy_a_working_environment() {
     let context = context();
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.0");
 }
 
@@ -507,7 +499,7 @@ fn mongodb_v4_0_deploy_a_working_environment() {
 #[ignore]
 fn mongodb_v4_2_deploy_a_working_environment() {
     let context = context();
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.2");
 }
 
@@ -515,7 +507,7 @@ fn mongodb_v4_2_deploy_a_working_environment() {
 #[test]
 fn mongodb_v4_4_deploy_a_working_environment() {
     let context = context();
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.4");
 }
 

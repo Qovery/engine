@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::thread;
 
-use serde::{Deserialize, Serialize};
-
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Application, Service};
 use crate::container_registry::PushResult;
@@ -10,7 +8,7 @@ use crate::engine::Engine;
 use crate::error::EngineError;
 use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo,
-    ProgressLevel, ProgressScope,
+    ProgressLevel,
 };
 
 pub struct Transaction<'a> {
