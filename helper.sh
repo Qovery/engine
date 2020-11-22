@@ -335,7 +335,7 @@ fast_tests_seq)
   fast_tests $commit_id 1
   ;;
 all_tests)
-  all_tests $commit_id 8
+  all_tests $commit_id 1
   ;;
 all_tests_seq)
   all_tests $commit_id 1
