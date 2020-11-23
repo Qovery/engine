@@ -223,9 +223,15 @@ impl<'a> DOKS<'a> {
         };
 
         context.insert("dns_email_report", &self.options.tls_email_report); // Pierre suggested renaming to tls_email_report
+        let space_kubeconfig_bucket = get_space_bucket_kubeconfig_name(self.id.clone());
+        context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
 
         context
     }
+}
+
+pub fn get_space_bucket_kubeconfig_name(id: String) -> String {
+    format!("qovery-kubeconfigs-{}", id)
 }
 
 impl<'a> Kubernetes for DOKS<'a> {
@@ -439,11 +445,60 @@ impl<'a> Kubernetes for DOKS<'a> {
         // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         // TODO: create all stateless services (router, application...)
+        // create all stateless services (router, application...)
+        for service in &environment.stateless_services {
+            let progress_scope = service.progress_scope();
 
+            listeners_helper.start_in_progress(ProgressInfo::new(
+                progress_scope.clone(),
+                ProgressLevel::Info,
+                Some(format!(
+                    "let's deploy {} {}",
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                )),
+                self.context.execution_id(),
+            ));
+
+            match service.exec_action(&stateless_deployment_target) {
+                Err(err) => {
+                    error!(
+                        "error with stateless service {} , id: {} => {:?}",
+                        service.name(),
+                        service.id(),
+                        err
+                    );
+
+                    listeners_helper.error(ProgressInfo::new(
+                        progress_scope,
+                        ProgressLevel::Error,
+                        Some(format!(
+                            "error while deploying {} {} : error => {:?}",
+                            service.service_type().name().to_lowercase(),
+                            service.name(),
+                            err
+                        )),
+                        self.context.execution_id(),
+                    ));
+
+                    return Err(err);
+                }
+                _ => {
+                    listeners_helper.start_in_progress(ProgressInfo::new(
+                        progress_scope,
+                        ProgressLevel::Info,
+                        Some(format!(
+                            "deployment succeeded for {} {}",
+                            service.service_type().name().to_lowercase(),
+                            service.name()
+                        )),
+                        self.context.execution_id(),
+                    ));
+                }
+            }
+        }
         //TODO: check stateless services are well deployed
         Ok(())
-
-
     }
 
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {

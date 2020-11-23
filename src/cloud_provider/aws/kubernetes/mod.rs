@@ -1348,6 +1348,6 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 }
 
-fn get_s3_kubeconfig_bucket_name(id: String) -> String {
+pub fn get_s3_kubeconfig_bucket_name(id: String) -> String {
     format!("qovery-kubeconfigs-{}", id)
 }
