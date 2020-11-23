@@ -53,7 +53,7 @@ wip-full-tests:
 
 # Dev branch
 
-all-test-from-github:
+dev-full-test-from-github:
   stage: tests
   retry: 0
   script:
@@ -66,7 +66,7 @@ all-test-from-github:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
 
-fast-test-from-github:
+dev-fast-test-from-github:
   stage: tests
   retry: 0
   script:
