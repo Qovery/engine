@@ -136,8 +136,6 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
   prepare_engine
-  cd $ENGINE_DIR
-  git config --get remote.origin.url
   tag=$(generate_image_tag)
 
   cp docker/load.sh docker/engine/load.sh
