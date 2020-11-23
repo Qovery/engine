@@ -1,7 +1,7 @@
-use test_utilities::utilities::{init, context};
-use qovery_engine::models::{Clone2, Action, EnvironmentAction};
-use qovery_engine::transaction::TransactionResult;
 use crate::digital_ocean::deploy_environment_on_do;
+use qovery_engine::models::{Action, Clone2, EnvironmentAction};
+use qovery_engine::transaction::TransactionResult;
+use test_utilities::utilities::{context, init};
 
 #[test]
 #[ignore]
@@ -11,7 +11,7 @@ fn deploy_one_postgresql() {
     let context = context();
     let context_for_deletion = context.clone_not_same_execution_id();
 
-    let mut environment = test_utilities::databases::only_dev_postgresql_database(&context);
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;

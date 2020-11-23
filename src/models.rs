@@ -200,8 +200,11 @@ impl Application {
                 ),
             )),
             CPKind::GCP => None,
-            _ => None,
+            /*            CPKind::DO => Some(Box::new(
+                crate::cloud_provider::digitalocean::application::Application::new(context.clone()),
+            )),*/
             //TODO to implement
+            _ => None,
         }
     }
 
