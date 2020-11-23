@@ -73,9 +73,9 @@ dev-fast-test-from-github:
   script:
     - ./helper.sh fast-tests $LIB_COMMIT_ID
   when: always
-  only:
-    variables:
-      - $TEST_TYPE == null
+  rules:
+    - if: '$TEST_TYPE == "fast"'
+      when: always
   artifacts:
     when: always
     reports:
