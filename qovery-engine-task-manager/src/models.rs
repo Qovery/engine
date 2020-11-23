@@ -5,9 +5,7 @@ use serde_json::Value;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::cloud_provider::gcp::GCP;
 use qovery_engine::cloud_provider::kubernetes::Kind;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::docr::DOCR;
@@ -128,7 +126,8 @@ impl CloudProvider {
             };
 
         match self.kind {
-            qovery_engine::cloud_provider::Kind::AWS => Box::new(AWS::new(
+            //qovery_engine::cloud_provider::Kind::AWS => Box::new(AWS::new( FIXME
+            _ => Box::new(AWS::new(
                 context.clone(),
                 self.id.as_str(),
                 organization_id,
@@ -136,17 +135,6 @@ impl CloudProvider {
                 self.options.access_key_id.as_ref().unwrap().as_str(),
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
                 terraform_state_credentials,
-            )),
-            qovery_engine::cloud_provider::Kind::GCP => Box::new(GCP::new(
-                context.clone(),
-                self.id.as_str(),
-                self.name.as_str(),
-                "",
-            )),
-            qovery_engine::cloud_provider::Kind::DO => Box::new(DO::new(
-                context.clone(),
-                self.id.as_str(),
-                self.options.secret_access_key.as_ref().unwrap().as_str(),
             )),
         }
     }
@@ -179,7 +167,8 @@ impl Kubernetes {
         nodes: &Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>>,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a> {
         match self.kind {
-            qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(EKS::new(
+            //qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(EKS::new( FIXME
+            _ => Box::new(EKS::new(
                 context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
@@ -195,51 +184,6 @@ impl Kubernetes {
                     .into_iter()
                     .map(|x| {
                         qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(
-                            x.total_cpu(),
-                            x.total_memory_in_gib(),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            )),
-            qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(DOKS::new(
-                context.clone(),
-                self.id.as_str(),
-                self.name.as_str(),
-                self.version.as_str(),
-                self.region.as_str(),
-                cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
-                dns_provider,
-                serde_json::from_value::<
-                    qovery_engine::cloud_provider::digitalocean::kubernetes::Options,
-                >(self.options.clone())
-                .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
-                nodes
-                    .into_iter()
-                    .map(|x| {
-                        qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
-                            x.total_cpu(),
-                            x.total_memory_in_gib(),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            )),
-            //TODO implement here DO
-            qovery_engine::cloud_provider::kubernetes::Kind::DOKS => Box::new(DOKS::new(
-                context.clone(),
-                self.id.as_str(),
-                self.name.as_str(),
-                self.version.as_str(),
-                self.region.as_str(),
-                cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
-                dns_provider,
-                serde_json::from_value::<
-                    qovery_engine::cloud_provider::digitalocean::kubernetes::Options,
-                >(self.options.clone())
-                .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
-                nodes
-                    .into_iter()
-                    .map(|x| {
-                        qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
                             x.total_cpu(),
                             x.total_memory_in_gib(),
                         )
@@ -271,14 +215,9 @@ impl Node {
         kubernetes: &Kubernetes,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode> {
         match kubernetes.kind {
-            qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(
+            //qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new( FIXME
+            _ => Box::new(
                 qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(
-                    self.cpu,
-                    self.memory_in_gib,
-                ),
-            ),
-            qovery_engine::cloud_provider::kubernetes::Kind::DOKS => Box::new(
-                qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
                     self.cpu,
                     self.memory_in_gib,
                 ),
