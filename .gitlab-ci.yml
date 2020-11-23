@@ -25,6 +25,7 @@ wip-fast-tests:
     - ./helper.sh fast_tests
   only:
   - merge_requests
+  when: always
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -60,7 +61,7 @@ dev-full-test-from-github:
     - ./helper.sh all-tests $LIB_COMMIT_ID
   only:
     variables:
-      - $TEST_TYPE =~ /^full$/
+      - $TEST_TYPE == "full"
   artifacts:
     when: always
     reports:
@@ -71,9 +72,10 @@ dev-fast-test-from-github:
   retry: 0
   script:
     - ./helper.sh fast-tests $LIB_COMMIT_ID
+  when: always
   only:
     variables:
-      - $TEST_TYPE =~ /^fast$/
+      - $TEST_TYPE == "fast"
   artifacts:
     when: always
     reports:
