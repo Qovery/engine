@@ -14,6 +14,7 @@ use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
+use tracing::{event, span, Level};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct ExternalService {
@@ -75,7 +76,7 @@ impl ExternalService {
             Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
             None => {
                 let image_name_with_tag = self.image().name_with_tag();
-                warn!("there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
+                event!(Level::WARN,"there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
                 context.insert("image_name_with_tag", image_name_with_tag.as_str());
             }
         }
@@ -191,7 +192,8 @@ impl Service for ExternalService {
 
 impl Create for ExternalService {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!(
+        event!(
+            Level::INFO,
             "AWS.external_service.on_create() called for {}",
             self.name()
         );
@@ -297,7 +299,8 @@ impl Create for ExternalService {
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
+        event!(
+            Level::WARN,
             "AWS.external_service.on_create_error() called for {}",
             self.name()
         );
@@ -364,7 +367,11 @@ impl Create for ExternalService {
 
 impl Pause for ExternalService {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.external_service.on_pause() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.external_service.on_pause() called for {}",
+            self.name()
+        );
         self.delete(target, false)
     }
 
@@ -373,7 +380,8 @@ impl Pause for ExternalService {
     }
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
+        event!(
+            Level::WARN,
             "AWS.external_service.on_pause_error() called for {}",
             self.name()
         );
@@ -383,7 +391,8 @@ impl Pause for ExternalService {
 
 impl Delete for ExternalService {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!(
+        event!(
+            Level::INFO,
             "AWS.external_service.on_delete() called for {}",
             self.name()
         );
@@ -395,7 +404,8 @@ impl Delete for ExternalService {
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
+        event!(
+            Level::WARN,
             "AWS.external_service.on_delete_error() called for {}",
             self.name()
         );

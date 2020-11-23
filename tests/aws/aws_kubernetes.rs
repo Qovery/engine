@@ -2,7 +2,6 @@ extern crate test_utilities;
 use self::test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key};
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{generate_id, init};
-use log::{info, warn};
 use qovery_engine::build_platform::GitRepository;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
@@ -23,6 +22,7 @@ use std::process::Command;
 use std::{env, fs};
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use test_utilities::utilities::context;
+use tracing::{event, span, Level};
 
 pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
 pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
@@ -43,12 +43,12 @@ fn upgrade_new_cluster() {
         dockerfile_path: "".to_string(),
     };
     fs::create_dir_all(tmp_dir.clone());
-    info!("Cloning old engine repository");
+    event!(Level::INFO, "Cloning old engine repository");
     let clone = git::clone(&gr.url, tmp_dir.clone(), &gr.credentials);
     match clone {
-        Ok(repo) => info!("Well clone engine repository"),
+        Ok(repo) => event!(Level::INFO, "Well clone engine repository"),
         Err(e) => {
-            info!("error while cloning the engine repo {}", e);
+            event!(Level::INFO, "error while cloning the engine repo {}", e);
             assert!(false);
         }
     }
@@ -59,11 +59,11 @@ fn upgrade_new_cluster() {
         .output();
     match cargo_test {
         Err(e) => {
-            info!("generating json in assets failed {:?}", e);
+            event!(Level::INFO, "generating json in assets failed {:?}", e);
             assert!(false);
         }
         Ok(o) => {
-            info!("generating json in assets successful {:?}", o);
+            event!(Level::INFO, "generating json in assets successful {:?}", o);
             assert!(true);
         }
     };
@@ -74,33 +74,36 @@ fn upgrade_new_cluster() {
     );
     match cpy {
         Ok(_) => {
-            info!("copy json file OK");
+            event!(Level::INFO, "copy json file OK");
             assert!(true);
         }
         Err(e) => {
-            info!("copy json file NOT OK {:?}", e);
+            event!(Level::INFO, "copy json file NOT OK {:?}", e);
             assert!(false);
         }
     }
 
     let tmp_qe = Path::new(&tmp_dir);
     assert!(env::set_current_dir(&tmp_qe).is_ok());
-    info!("Building qovery-engine (could take some time...)");
+    event!(
+        Level::INFO,
+        "Building qovery-engine (could take some time...)"
+    );
     let cargo_build = Command::new("cargo").arg("build").output();
     match cargo_build {
         Err(e) => match e {
             _ => {
-                warn!("cargo build error {:?}", e);
+                event!(Level::WARN, "cargo build error {:?}", e);
                 assert!(false);
             }
         },
         Ok(o) => {
-            info!("cargo build sucess {:?}", o);
+            event!(Level::INFO, "cargo build sucess {:?}", o);
             assert!(true);
         }
     };
 
-    info!("Cargo test create eks cluster");
+    event!(Level::INFO, "Cargo test create eks cluster");
     env::set_var("LIB_ROOT_DIR", format!("{}/lib", &tmp_dir));
     env::set_var("AWS_ACCESS_KEY_ID", aws_access_key_id());
     env::set_var("AWS_SECRET_ACCESS_KEY", aws_secret_access_key());
@@ -124,11 +127,11 @@ fn upgrade_new_cluster() {
         .output();
     match cargo_test {
         Err(e) => {
-            info!("cargo test failed {:?}", e);
+            event!(Level::INFO, "cargo test failed {:?}", e);
             assert!(false);
         }
         Ok(o) => {
-            info!("cargo test sucess {:?}", o);
+            event!(Level::INFO, "cargo test sucess {:?}", o);
             assert!(true);
         }
     };

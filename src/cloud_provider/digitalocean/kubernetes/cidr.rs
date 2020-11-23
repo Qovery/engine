@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
-
+use tracing::{event, span, Level};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoVpc {
     id: String,
@@ -47,14 +47,15 @@ pub fn get_used_cidr_on_region(token: &str) {
         vec!["vpcs", "list", "--output", "json", "-t", token],
         |r_out| match r_out {
             Ok(s) => output_from_cli.push_str(&s.to_owned()),
-            Err(e) => error!("DOCTL Cli not respond well{}", e),
+            Err(e) => event!(Level::ERROR, "DOCTL Cli not respond well{}", e),
         },
         |r_err| match r_err {
-            Ok(s) => error!(
+            Ok(s) => event!(
+                Level::ERROR,
                 "DOCTL Cli error from cmd inserted, please check vpcs list command{}",
                 s
             ),
-            Err(e) => error!("DOCTL Cli not respond good {}", e),
+            Err(e) => event!(Level::ERROR, "DOCTL Cli not respond good {}", e),
         },
     );
     let buff = output_from_cli.borrow();

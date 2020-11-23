@@ -16,6 +16,7 @@ use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
 };
 use crate::models::Context;
+use tracing::{event, span, Level};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
@@ -89,7 +90,7 @@ impl Application {
             Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
             None => {
                 let image_name_with_tag = self.image().name_with_tag();
-                warn!("there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
+                event!(Level::WARN,"there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
                 context.insert("image_name_with_tag", image_name_with_tag.as_str());
             }
         }
@@ -229,7 +230,11 @@ impl Service for Application {
 
 impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.application.on_create() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.application.on_create() called for {}",
+            self.name()
+        );
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
@@ -326,7 +331,8 @@ impl Create for Application {
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
+        event!(
+            Level::WARN,
             "AWS.application.on_create_error() called for {}",
             self.name()
         );
@@ -393,7 +399,11 @@ impl Create for Application {
 
 impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.application.on_pause() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.application.on_pause() called for {}",
+            self.name()
+        );
         self.delete(target, false)
     }
 
@@ -402,7 +412,8 @@ impl Pause for Application {
     }
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
+        event!(
+            Level::WARN,
             "AWS.application.on_pause_error() called for {}",
             self.name()
         );
@@ -412,7 +423,11 @@ impl Pause for Application {
 
 impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.application.on_delete() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.application.on_delete() called for {}",
+            self.name()
+        );
         self.delete(target, false)
     }
 
@@ -421,7 +436,8 @@ impl Delete for Application {
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
+        event!(
+            Level::WARN,
             "AWS.application.on_delete_error() called for {}",
             self.name()
         );

@@ -5,8 +5,8 @@ use std::path::Path;
 
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use tracing::{event, span, Level};
 use walkdir::WalkDir;
-
 pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), Error> {
     let files = WalkDir::new(from)
         .follow_links(true)
@@ -102,15 +102,15 @@ pub fn create_workspace_archive(
     working_root_dir: &str,
     execution_id: &str,
 ) -> Result<String, std::io::Error> {
-    info!("archive workspace directory in progress");
+    event!(Level::INFO, "archive workspace directory in progress");
 
     match archive_workspace_directory(working_root_dir, execution_id) {
         Err(err) => {
-            error!("archive workspace directory error: {:?}", err);
+            event!(Level::ERROR, "archive workspace directory error: {:?}", err);
             Err(err)
         }
         Ok(file) => {
-            info!("workspace directory is archived");
+            event!(Level::INFO, "workspace directory is archived");
             cleanup_workspace_directory(working_root_dir, execution_id);
             Ok(file)
         }

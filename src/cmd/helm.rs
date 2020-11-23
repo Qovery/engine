@@ -15,7 +15,7 @@ use crate::cmd::structs::{Helm, HelmHistoryRow};
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use crate::error::{SimpleError, SimpleErrorKind};
-
+use tracing::{event, span, Level};
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
 
 pub enum Timeout<T> {
@@ -35,7 +35,8 @@ where
     P: AsRef<Path>,
 {
     // do exec helm upgrade
-    info!(
+    event!(
+        Level::INFO,
         "exec helm upgrade for namespace {} and chart {}",
         namespace,
         chart_root_dir.as_ref().to_str().unwrap()
@@ -51,7 +52,8 @@ where
     )?;
 
     // list helm history
-    info!(
+    event!(
+        Level::INFO,
         "exec helm history for namespace {} and chart {}",
         namespace,
         chart_root_dir.as_ref().to_str().unwrap()
@@ -105,12 +107,12 @@ where
         ],
         envs,
         |out| match out {
-            Ok(line) => info!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
+            Ok(line) => event!(Level::INFO, "{}", line.as_str()),
+            Err(err) => event!(Level::ERROR, "{}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line.as_str()),
+            Err(err) => event!(Level::ERROR, "{}", err),
         },
     )
 }
@@ -135,12 +137,12 @@ where
         ],
         envs,
         |out| match out {
-            Ok(line) => info!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
+            Ok(line) => event!(Level::INFO, "{}", line.as_str()),
+            Err(err) => event!(Level::ERROR, "{}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line.as_str()),
+            Err(err) => event!(Level::ERROR, "{}", err),
         },
     )
 }
@@ -170,15 +172,23 @@ where
         envs,
         |out| match out {
             Ok(line) => output_string = line,
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     ) {
-        Ok(_) => info!("Helm history success for release name: {}", release_name),
-        Err(_) => info!("Helm history found for release name: {}", release_name),
+        Ok(_) => event!(
+            Level::INFO,
+            "Helm history success for release name: {}",
+            release_name
+        ),
+        Err(_) => event!(
+            Level::INFO,
+            "Helm history found for release name: {}",
+            release_name
+        ),
     };
     // TODO better check, release not found
 
@@ -215,15 +225,20 @@ where
         envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     ) {
-        Ok(_) => info!("Helm uninstall fail with : {}", helmlist_string.clone()),
-        Err(_) => info!(
+        Ok(_) => event!(
+            Level::INFO,
+            "Helm uninstall fail with : {}",
+            helmlist_string.clone()
+        ),
+        Err(_) => event!(
+            Level::INFO,
             "Helm history found for release name: {}",
             helmlist_string.clone()
         ),
@@ -261,14 +276,16 @@ where
         ],
         envs,
         |out| match out {
-            Ok(line) => info!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
+            Ok(line) => event!(Level::INFO, "{}", line.as_str()),
+            Err(err) => event!(Level::ERROR, "{}", err),
         },
         |out| match out {
             // don't crash errors if releases are not found
-            Ok(line) if line.contains("Error: release: not found") => info!("{}", line.as_str()),
-            Ok(line) => error!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
+            Ok(line) if line.contains("Error: release: not found") => {
+                event!(Level::INFO, "{}", line.as_str())
+            }
+            Ok(line) => event!(Level::ERROR, "{}", line.as_str()),
+            Err(err) => event!(Level::ERROR, "{}", err),
         },
     )
 }
@@ -285,7 +302,8 @@ where
     P: AsRef<Path>,
 {
     // do exec helm upgrade
-    info!(
+    event!(
+        Level::INFO,
         "exec helm upgrade for namespace {} and chart {}",
         namespace,
         chart_root_dir.as_ref().to_str().unwrap()
@@ -301,7 +319,8 @@ where
     )?;
 
     // list helm history
-    info!(
+    event!(
+        Level::INFO,
         "exec helm history for namespace {} and chart {}",
         namespace,
         chart_root_dir.as_ref().to_str().unwrap()
@@ -337,11 +356,11 @@ where
         envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{}", err),
+            Err(err) => event!(Level::ERROR, "{}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line.as_str()),
+            Err(err) => event!(Level::ERROR, "{}", err),
         },
     );
     let output_string: String = output_vec.join("");
@@ -355,7 +374,7 @@ where
         }
         Err(e) => {
             let message = format!("Error while deserializing all helms names {}", e);
-            error!("{}", message.as_str());
+            event!(Level::ERROR, "{}", message.as_str());
             return Err(SimpleError::new(SimpleErrorKind::Other, Some(message)));
         }
     }
@@ -363,16 +382,7 @@ where
 }
 
 pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
-    helm_exec_with_output(
-        args,
-        envs,
-        |line| {
-            info!("{}", line.unwrap());
-        },
-        |line| {
-            error!("{}", line.unwrap());
-        },
-    )
+    helm_exec_with_output(args, envs, |line| {}, |line| {})
 }
 
 pub fn helm_exec_with_output<F, X>(

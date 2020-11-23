@@ -14,19 +14,35 @@ use qovery_engine::cmd;
 use qovery_engine::models::{Context, Environment, Metadata};
 use reqwest::StatusCode;
 use std::path::Path;
-
+use tracing::info;
+use tracing_subscriber;
+use tracing_subscriber::FmtSubscriber;
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
 }
-
+use tracing::{event, span, Level};
 pub fn init() {
-    env_logger::try_init();
+    // previous logger
+    /*env_logger::try_init();
     println!(
         "running from current directory: {}",
         std::env::current_dir().unwrap().to_str().unwrap()
-    );
-    let lib_root_dir =
-        std::env::var("LIB_ROOT_DIR").expect("env var LIB_ROOT_DIR is mandatory");
+    );*/
+
+    let subscriber = FmtSubscriber::builder()
+        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+        // will be written to stdout.
+        .with_max_level(Level::INFO)
+        // completes the builder.
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("setting tracing default failed");
+    tracing_subscriber::fmt::try_init();
+    let span = span!(Level::INFO, "test_blabla");
+
+    let _enter = span.enter();
+    drop(_enter);
+    event!(Level::INFO, "Blablablatest");
+    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("env var LIB_ROOT_DIR is mandatory");
     // check the lib root dir
     let path = format!("{}/helm-freeze.yaml", lib_root_dir);
     match Path::new(path.as_str()).exists() {

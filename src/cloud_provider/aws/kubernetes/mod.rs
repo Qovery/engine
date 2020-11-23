@@ -1,15 +1,15 @@
+use itertools::Itertools;
+use rusoto_core::Region;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::borrow::Borrow;
 use std::env;
 use std::iter::FromIterator;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
-
-use itertools::Itertools;
-use rusoto_core::Region;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tera::Context as TeraContext;
+use tracing::{event, span, Level};
 
 use crate::cloud_provider::aws::common::{do_stateless_service_cleanup, kubernetes_config_path};
 use crate::cloud_provider::aws::kubernetes::node::Node;
@@ -464,7 +464,7 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_create(&self) -> Result<(), EngineError> {
-        info!("EKS.on_create() called for {}", self.name());
+        event!(Level::INFO, "EKS.on_create() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -526,7 +526,11 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_create_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "EKS.on_create_error() called for {}",
+            self.name()
+        );
         // FIXME
         Err(self.engine_error(
             EngineErrorCause::Internal,
@@ -538,27 +542,35 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_upgrade(&self) -> Result<(), EngineError> {
-        info!("EKS.on_upgrade() called for {}", self.name());
+        event!(Level::INFO, "EKS.on_upgrade() called for {}", self.name());
         unimplemented!()
     }
 
     fn on_upgrade_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_upgrade_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "EKS.on_upgrade_error() called for {}",
+            self.name()
+        );
         unimplemented!()
     }
 
     fn on_downgrade(&self) -> Result<(), EngineError> {
-        info!("EKS.on_downgrade() called for {}", self.name());
+        event!(Level::INFO, "EKS.on_downgrade() called for {}", self.name());
         unimplemented!()
     }
 
     fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_downgrade_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "EKS.on_downgrade_error() called for {}",
+            self.name()
+        );
         unimplemented!()
     }
 
     fn on_delete(&self) -> Result<(), EngineError> {
-        info!("EKS.on_delete() called for {}", self.name());
+        event!(Level::INFO, "EKS.on_delete() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -642,7 +654,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
                 let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
 
-                info!("Deleting non Qovery Namespaces");
+                event!(Level::INFO, "Deleting non Qovery Namespaces");
                 for namespace_to_delete in namespaces_to_delete.iter() {
                     let kubernetes_config_file_path0 = cast_simple_error_to_engine_error(
                         self.engine_error_scope(),
@@ -664,9 +676,12 @@ impl<'a> Kubernetes for EKS<'a> {
                     );
 
                     match deletion {
-                        Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
+                        Ok(_) => {
+                            event!(Level::INFO, "Namespace {} is deleted", namespace_to_delete)
+                        }
                         Err(_) => {
-                            error!(
+                            event!(
+                                Level::ERROR,
                                 "Can't delete the namespace {}, quiting now",
                                 namespace_to_delete
                             );
@@ -675,14 +690,15 @@ impl<'a> Kubernetes for EKS<'a> {
                 }
             }
 
-            Err(e) => error!(
+            Err(e) => event!(
+                Level::ERROR,
                 "Error while getting all namespaces for Kubernetes cluster {}: error {:?}",
                 self.name_with_id(),
                 e.message
             ),
         }
 
-        info!("Deleting Qovery managed Namespaces");
+        event!(Level::INFO, "Deleting Qovery managed Namespaces");
 
         let kubernetes_config_file_path2 = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -706,9 +722,14 @@ impl<'a> Kubernetes for EKS<'a> {
                 aws_credentials_envs.clone(),
             );
             match deletion {
-                Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
+                Ok(_) => event!(
+                    Level::INFO,
+                    "Namespace {} is fully deleted",
+                    qovery_namespace
+                ),
                 Err(_) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "Can't delete the namespace {}, quiting now",
                         qovery_namespace
                     );
@@ -716,7 +737,10 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
-        info!("Delete all remaining deployed helm applications");
+        event!(
+            Level::INFO,
+            "Delete all remaining deployed helm applications"
+        );
 
         match cmd::helm::helm_list(&kubernetes_config_file_path2, aws_credentials_envs.clone()) {
             Ok(helm_list) => {
@@ -726,10 +750,10 @@ impl<'a> Kubernetes for EKS<'a> {
                     aws_credentials_envs.clone(),
                 );
             }
-            Err(_) => error!("Unable to get helm list"),
+            Err(_) => event!(Level::ERROR, "Unable to get helm list"),
         }
 
-        info!("Running Terraform destroy");
+        event!(Level::INFO, "Running Terraform destroy");
         let terraform_result = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
@@ -740,7 +764,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // to prevent to loose connection from terraform to kube cluster
         match terraform_result {
             Ok(_) => {
-                info!("Deleting S3 Bucket containing Kubeconfig");
+                event!(Level::INFO, "Deleting S3 Bucket containing Kubeconfig");
                 let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
                 let _region = Region::from_str(self.region()).unwrap();
                 s3::delete_bucket(
@@ -750,7 +774,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 );
             }
             _ => {
-                error!("Something is wrong with terraform destroy, Kubeconfig S3 location will not be deleting preventing to loose kube accessibility");
+                event!(Level::ERROR,"Something is wrong with terraform destroy, Kubeconfig S3 location will not be deleting preventing to loose kube accessibility");
             }
         }
 
@@ -758,7 +782,11 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_delete_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_delete_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "EKS.on_delete_error() called for {}",
+            self.name()
+        );
 
         // FIXME What should we do if something goes wrong while deleting the cluster?
 
@@ -766,7 +794,11 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("EKS.deploy_environment() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "EKS.deploy_environment() called for {}",
+            self.name()
+        );
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -799,7 +831,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
             match service.exec_action(&stateful_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateful service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
@@ -854,7 +887,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
             match service.exec_action(&stateless_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateless service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
@@ -907,7 +941,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
             match service.on_create_check() {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateful service while checking it {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
@@ -959,7 +994,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
             match service.on_create_check() {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateless service while checking it {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
@@ -999,7 +1035,11 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
-        warn!("EKS.deploy_environment_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "EKS.deploy_environment_error() called for {}",
+            self.name()
+        );
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -1040,7 +1080,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
             match service.on_create_error(&stateful_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateful service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
@@ -1095,7 +1136,8 @@ impl<'a> Kubernetes for EKS<'a> {
 
             match service.on_create_error(&stateless_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateless service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
@@ -1135,7 +1177,11 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("EKS.pause_environment() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "EKS.pause_environment() called for {}",
+            self.name()
+        );
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -1152,7 +1198,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for stateful_service in &environment.stateful_services {
             match stateful_service.on_pause(&stateful_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateful service {} , id: {} => {:?}",
                         stateful_service.name(),
                         stateful_service.id(),
@@ -1171,7 +1218,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for stateless_service in &environment.stateless_services {
             match stateless_service.on_pause(&stateless_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateless service {} , id: {} => {:?}",
                         stateless_service.name(),
                         stateless_service.id(),
@@ -1188,7 +1236,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for stateful_service in &environment.stateful_services {
             match stateful_service.on_pause_check() {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateful service while checking it {} , id: {} => {:?}",
                         stateful_service.name(),
                         stateful_service.id(),
@@ -1204,7 +1253,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for stateless_service in &environment.stateless_services {
             match stateless_service.on_pause_check() {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateless service while checking it {} , id: {} => {:?}",
                         stateless_service.name(),
                         stateless_service.id(),
@@ -1221,12 +1271,20 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        warn!("EKS.pause_environment_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "EKS.pause_environment_error() called for {}",
+            self.name()
+        );
         Ok(())
     }
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("EKS.delete_environment() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "EKS.delete_environment() called for {}",
+            self.name()
+        );
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
         // TODO use listeners_helper !!!! Don't be so shy Marc + Pierre
@@ -1244,7 +1302,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for stateful_service in &environment.stateful_services {
             match stateful_service.on_delete(&stateful_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateful service {} , id: {} => {:?}",
                         stateful_service.name(),
                         stateful_service.id(),
@@ -1263,7 +1322,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for stateless_service in &environment.stateless_services {
             match stateless_service.on_delete(&stateless_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateless service {} , id: {} => {:?}",
                         stateless_service.name(),
                         stateless_service.id(),
@@ -1280,7 +1340,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for stateful_service in &environment.stateful_services {
             match stateful_service.on_delete_check() {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateful service while checking it {} , id: {} => {:?}",
                         stateful_service.name(),
                         stateful_service.id(),
@@ -1296,7 +1357,8 @@ impl<'a> Kubernetes for EKS<'a> {
         for stateless_service in &environment.stateless_services {
             match stateless_service.on_delete_check() {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateless service while checking it {} , id: {} => {:?}",
                         stateless_service.name(),
                         stateless_service.id(),
@@ -1343,7 +1405,11 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        warn!("EKS.delete_environment_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "EKS.delete_environment_error() called for {}",
+            self.name()
+        );
         Ok(())
     }
 }

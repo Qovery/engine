@@ -1,11 +1,11 @@
-use crate::cloud_provider::service::{DatabaseOptions, Create};
-use crate::models::{Context, Action, Environment};
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::error::{EngineError, cast_simple_error_to_engine_error};
-use crate::cloud_provider::DeploymentTarget;
 use crate::cloud_provider::service::Service;
+use crate::cloud_provider::service::{Create, DatabaseOptions};
+use crate::cloud_provider::DeploymentTarget;
+use crate::error::{cast_simple_error_to_engine_error, EngineError};
+use crate::models::{Action, Context, Environment};
 use tera::Context as TeraContext;
-
+use tracing::{event, span, Level};
 pub struct PostgreSQL {
     context: Context,
     id: String,
@@ -65,28 +65,37 @@ impl PostgreSQL {
         //TODO generate the context
         context
     }
-    }
-
-
+}
 
 impl Create for PostgreSQL {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("DigitalOcean.PostgreSQL.on_create() called for {}", self.name);
+        event!(
+            Level::INFO,
+            "DigitalOcean.PostgreSQL.on_create() called for {}",
+            self.name
+        );
         let workspace_dir = self.workspace_directory();
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
-                info!("deploy postgresql on Digital Ocean Managed Services for {}", self.name);
+                event!(
+                    Level::INFO,
+                    "deploy postgresql on Digital Ocean Managed Services for {}",
+                    self.name
+                );
                 unimplemented!()
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 // use helm
-                info!("deploy PostgreSQL on Kubernetes for {}", self.name);
+                event!(
+                    Level::INFO,
+                    "deploy PostgreSQL on Kubernetes for {}",
+                    self.name
+                );
                 unimplemented!()
             }
         }
-
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {

@@ -6,6 +6,7 @@ use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult
 use crate::error::EngineErrorCause;
 use crate::models::{Context, Listener, Listeners, ProgressListener};
 extern crate reqwest;
+use tracing::{event, span, Level};
 
 use reqwest::{Client, StatusCode};
 pub struct DockerHub {
@@ -55,14 +56,14 @@ impl ContainerRegistry for DockerHub {
             vec!["--version"],
             |r_out| match r_out {
                 Ok(s) => output_from_cmd.push_str(&s.to_owned()),
-                Err(e) => error!("Error while getting sdtout from docker {}", e),
+                Err(e) => event!(Level::ERROR, "Error while getting sdtout from docker {}", e),
             },
             |r_err| match r_err {
-                Ok(s) => error!("Error executing docker command {}", s),
-                Err(e) => error!("Error while getting stderr from docker {}", e),
+                Ok(s) => event!(Level::ERROR, "Error executing docker command {}", s),
+                Err(e) => event!(Level::ERROR, "Error while getting stderr from docker {}", e),
             },
         );
-        info!("Using Docker: {}", output_from_cmd);
+        event!(Level::INFO, "Using Docker: {}", output_from_cmd);
         Ok(())
     }
 
@@ -104,7 +105,8 @@ impl ContainerRegistry for DockerHub {
                 _ => false,
             },
             Err(e) => {
-                error!(
+                event!(
+                    Level::ERROR,
                     "While trying to retrieve if DockerHub repository exist {:?}",
                     e
                 );

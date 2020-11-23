@@ -16,7 +16,7 @@ use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
 };
 use crate::models::Context;
-
+use tracing::{event, span, Level};
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
     pub key: String,
@@ -98,7 +98,7 @@ impl Application {
             Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
             None => {
                 let image_name_with_tag = self.image().name_with_tag();
-                warn!("there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
+                event!(Level::WARN,"there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
                 context.insert("image_name_with_tag", image_name_with_tag.as_str());
             }
         }
@@ -124,7 +124,8 @@ impl Application {
 
 impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!(
+        event!(
+            Level::INFO,
             "DigitalOcean.application.on_create() called for {}",
             self.name
         );

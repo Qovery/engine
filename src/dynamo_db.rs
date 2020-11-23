@@ -1,13 +1,13 @@
 use std::io::{Error, ErrorKind};
 
+use crate::runtime::async_run;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_dynamodb::{
     AttributeDefinition, CreateTableError, CreateTableInput, DynamoDb, DynamoDbClient,
     KeySchemaElement,
 };
-
-use crate::runtime::async_run;
+use tracing::{event, span, Level};
 
 pub fn create_terraform_table(
     access_key_id: &str,
@@ -43,7 +43,7 @@ pub fn create_terraform_table(
     match r {
         Err(err) => match err {
             RusotoError::Unknown(r) => {
-                error!("{}", r.body_as_str());
+                event!(Level::ERROR, "{}", r.body_as_str());
                 Err(Error::new(ErrorKind::Other, r.body_as_str()))
             }
             RusotoError::Service(r) => match r {

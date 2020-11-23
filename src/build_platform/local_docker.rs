@@ -2,6 +2,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use git2::Error;
+use tracing::{event, Level};
 
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
@@ -83,12 +84,17 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError> {
-        info!("LocalDocker.build() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "LocalDocker.build() called for {}",
+            self.name()
+        );
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         if !force_build && self.image_does_exist(&build.image)? {
-            info!(
+            event!(
+                Level::INFO,
                 "image {:?} does already exist - no need to build it",
                 build.image
             );
@@ -103,7 +109,11 @@ impl BuildPlatform for LocalDocker {
             format!("build/{}", build.image.name.as_str()),
         );
 
-        info!("cloning repository: {}", build.git_repository.url);
+        event!(
+            Level::INFO,
+            "cloning repository: {}",
+            build.git_repository.url
+        );
         let git_clone = git::clone(
             build.git_repository.url.as_str(),
             &into_dir,
@@ -118,7 +128,7 @@ impl BuildPlatform for LocalDocker {
                     &build.git_repository.url, err
                 );
 
-                error!("{}", message);
+                event!(Level::ERROR, "{}", message);
 
                 return Err(self.engine_error(EngineErrorCause::Internal, message));
             }
@@ -135,7 +145,7 @@ impl BuildPlatform for LocalDocker {
                     &build.git_repository.url, commit_id, err
                 );
 
-                error!("{}", message);
+                event!(Level::ERROR, "{}", message);
 
                 return Err(self.engine_error(EngineErrorCause::Internal, message));
             }
@@ -150,7 +160,7 @@ impl BuildPlatform for LocalDocker {
                     &build.git_repository.url, err
                 );
 
-                error!("{}", message);
+                event!(Level::ERROR, "{}", message);
 
                 return Err(self.engine_error(EngineErrorCause::Internal, message));
             }
@@ -173,7 +183,7 @@ impl BuildPlatform for LocalDocker {
                     dockerfile_complete_path.as_str()
                 );
 
-                error!("{}", &message);
+                event!(Level::ERROR, "{}", &message);
 
                 return Err(self.engine_error(EngineErrorCause::Internal, message));
             }
@@ -223,7 +233,7 @@ impl BuildPlatform for LocalDocker {
             envs,
             |line| {
                 let line_string = line.unwrap();
-                info!("{}", line_string.as_str());
+                event!(Level::INFO, "{}", line_string.as_str());
 
                 listeners_helper.start_in_progress(ProgressInfo::new(
                     ProgressScope::Application {
@@ -236,7 +246,7 @@ impl BuildPlatform for LocalDocker {
             },
             |line| {
                 let line_string = line.unwrap();
-                error!("{}", line_string.as_str());
+                event!(Level::ERROR, "{}", line_string.as_str());
 
                 listeners_helper.error(ProgressInfo::new(
                     ProgressScope::Application {
@@ -282,7 +292,11 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn build_error(&self, build: Build) -> Result<BuildResult, EngineError> {
-        warn!("LocalDocker.build_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "LocalDocker.build_error() called for {}",
+            self.name()
+        );
 
         let listener_helper = ListenersHelper::new(&self.listeners);
 

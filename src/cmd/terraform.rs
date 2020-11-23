@@ -10,6 +10,7 @@ use retry::delay::Fixed;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tracing::{event, span, Level};
 
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
@@ -99,11 +100,7 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), SimpleError
         format!("{} terraform", root_dir).as_str(),
         args,
         vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
-        |line: Result<String, std::io::Error>| {
-            info!("{}", line.unwrap());
-        },
-        |line: Result<String, std::io::Error>| {
-            error!("{}", line.unwrap());
-        },
+        |line: Result<String, std::io::Error>| {},
+        |line: Result<String, std::io::Error>| {},
     )
 }

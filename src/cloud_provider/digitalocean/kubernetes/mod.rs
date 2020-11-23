@@ -20,7 +20,7 @@ use std::borrow::Borrow;
 use std::rc::Rc;
 use std::str::FromStr;
 use tera::Context as TeraContext;
-
+use tracing::{event, span, Level};
 pub mod cidr;
 pub mod node;
 
@@ -284,7 +284,8 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn on_create(&self) -> Result<(), EngineError> {
-        info!(
+        event!(
+            Level::INFO,
             "DigitalOceaan kube cluster.on_create() called for {}",
             self.name()
         );
@@ -377,7 +378,11 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("DOKS.deploy_environment() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "DOKS.deploy_environment() called for {}",
+            self.name()
+        );
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         let stateful_deployment_target = match environment.kind {
@@ -407,7 +412,8 @@ impl<'a> Kubernetes for DOKS<'a> {
 
             match service.exec_action(&stateful_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateful service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
@@ -462,7 +468,8 @@ impl<'a> Kubernetes for DOKS<'a> {
 
             match service.exec_action(&stateless_deployment_target) {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "error with stateless service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),

@@ -3,17 +3,18 @@ extern crate digitalocean;
 use std::rc::Rc;
 
 use digitalocean::DigitalOcean;
+use tracing::{event, span, Level};
 
 use crate::build_platform::Image;
 use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::{EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listener, ProgressListener};
-use reqwest::{header, StatusCode};
-use serde_json::Error;
-use serde::{Deserialize, Serialize};
 use reqwest::blocking::{Client, Response};
-use reqwest::header::{HeaderValue, HeaderMap};
+use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{header, StatusCode};
+use serde::{Deserialize, Serialize};
+use serde_json::Error;
 
 // TODO : use --output json
 // see https://www.digitalocean.com/community/tutorials/how-to-use-doctl-the-official-digitalocean-command-line-client
@@ -32,7 +33,7 @@ struct DO_API_Create_repository {
     subscription_tier_slug: String,
 }
 
-const cr_api_path:&str = "https://api.digitalocean.com/v2/registry";
+const cr_api_path: &str = "https://api.digitalocean.com/v2/registry";
 
 impl DOCR {
     pub fn new(context: Context, id: &str, name: &str, registry_name: &str, api_key: &str) -> Self {
@@ -47,7 +48,6 @@ impl DOCR {
     pub fn client(&self) -> DigitalOcean {
         DigitalOcean::new(self.api_key.as_str()).unwrap()
     }
-
 
     pub fn create_repository(&self, _image: &Image) -> Result<(), EngineError> {
         let mut headers = get_header_with_bearer(&self.api_key);
@@ -69,7 +69,7 @@ impl DOCR {
                         StatusCode::OK => Ok(()),
                         StatusCode::CREATED => Ok(()),
                         status => {
-                            warn!("status from DO registry API {}", status);
+                            event!(Level::WARN, "status from DO registry API {}", status);
                             return Err(self.engine_error(
                                 EngineErrorCause::Internal,
                                 format!(
@@ -77,27 +77,29 @@ impl DOCR {
                                     status,
                                     &self.registry_name,
                                 ),
-                            ))
+                            ));
                         }
+                    },
+                    Err(e) => {
+                        return Err(self.engine_error(
+                            EngineErrorCause::Internal,
+                            format!(
+                                "failed to create repository {} : {:?}",
+                                &self.registry_name, e,
+                            ),
+                        ))
                     }
-                    Err(e) => return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        format!(
-                            "failed to create repository {} : {:?}",
-                            &self.registry_name,
-                            e,
-                        ),
-                    ))
                 }
             }
-            Err(e) => return Err(self.engine_error(
-                EngineErrorCause::Internal,
-                format!(
-                    "Unable to initialize DO Registry {} : {:?}",
-                    &self.registry_name,
-                    e,
-                ),
-            ))
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "Unable to initialize DO Registry {} : {:?}",
+                        &self.registry_name, e,
+                    ),
+                ))
+            }
         }
     }
 
@@ -154,7 +156,7 @@ impl DOCR {
             Ok(out) => match out.status() {
                 StatusCode::NO_CONTENT => Ok(()),
                 status => {
-                    warn!("delete status from DO registry API {}", status);
+                    event!(Level::WARN, "delete status from DO registry API {}", status);
                     return Err(self.engine_error(
                         EngineErrorCause::Internal,
                         format!(
@@ -162,17 +164,18 @@ impl DOCR {
                             status,
                             &self.registry_name,
                         ),
-                    ))
+                    ));
                 }
             },
-            Err(e) => return Err(self.engine_error(
-                EngineErrorCause::Internal,
-                format!(
-                    "No response from the Digital Ocean API {} : {:?}",
-                    &self.registry_name,
-                    e,
-                ),
-            ))
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "No response from the Digital Ocean API {} : {:?}",
+                        &self.registry_name, e,
+                    ),
+                ))
+            }
         }
     }
 }
@@ -181,7 +184,10 @@ impl DOCR {
 fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
     let mut headers = header::HeaderMap::new();
     headers.insert("Content-Type", "application/json".parse().unwrap());
-    headers.insert("Authorization", format!("Bearer {}", token).parse().unwrap());
+    headers.insert(
+        "Authorization",
+        format!("Bearer {}", token).parse().unwrap(),
+    );
     headers
 }
 

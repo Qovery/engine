@@ -11,6 +11,7 @@ use crate::error::{EngineError, SimpleError};
 
 pub type Logs = String;
 pub type Describe = String;
+use tracing::{event, span, Level};
 
 pub fn kubernetes_config_path(
     workspace_directory: &str,
@@ -77,11 +78,11 @@ pub fn get_stateless_resource_information(
         aws_credentials_envs.clone(),
     ) {
         Ok(output) => {
-            info!("{}", output);
+            event!(Level::ERROR, "{}", output);
             output
         }
         Err(err) => {
-            error!("{:?}", err);
+            event!(Level::ERROR, "{:?}", err);
             return Err(err);
         }
     };
@@ -94,11 +95,11 @@ pub fn get_stateless_resource_information(
         aws_credentials_envs.clone(),
     ) {
         Ok(output) => {
-            info!("{}", output);
+            event!(Level::INFO, "{}", output);
             output
         }
         Err(err) => {
-            error!("{:?}", err);
+            event!(Level::ERROR, "{:?}", err);
             return Err(err);
         }
     };

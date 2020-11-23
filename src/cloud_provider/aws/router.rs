@@ -19,7 +19,7 @@ use crate::error::{
 use crate::models::{
     Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
-
+use tracing::{event, span, Level};
 pub struct Router {
     context: Context,
     id: String,
@@ -148,13 +148,13 @@ impl Router {
                             Some(hostname) => context
                                 .insert("external_ingress_hostname_default", hostname.as_str()),
                             None => {
-                                warn!("unable to get external_ingress_hostname_default - what's wrong? This must never happened");
+                                event!(Level::WARN,"unable to get external_ingress_hostname_default - what's wrong? This must never happened");
                             }
                         }
                     }
                     _ => {
                         // FIXME really?
-                        warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
+                        event!(Level::WARN,"can't fetch kubernetes config file - what's wrong? This must never happened");
                     }
                 }
 
@@ -178,19 +178,20 @@ impl Router {
                                     );
                                 }
                                 None => {
-                                    warn!("unable to get external_ingress_hostname_custom - what's wrong? This must never happened");
+                                    event!(Level::WARN,"unable to get external_ingress_hostname_custom - what's wrong? This must never happened");
                                 }
                             }
                         }
                         _ => {
                             // FIXME really?
-                            warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
+                            event!(Level::WARN,"can't fetch kubernetes config file - what's wrong? This must never happened");
                         }
                     }
                     context.insert("app_id", kubernetes.id());
                 }
             }
-            Err(_) => error!(
+            Err(_) => event!(
+                Level::ERROR,
                 "can't fetch kubernetes config file - what's wrong? This must never happened"
             ), // FIXME should I return an Err?
         }
@@ -293,11 +294,15 @@ impl crate::cloud_provider::service::Router for Router {
     fn check_domains(&self) -> Result<(), EngineError> {
         let check_result = retry::retry(Fibonacci::from_millis(3000).take(1), || {
             // TODO send information back to the core
-            info!("check custom domain {}", self.default_domain.as_str());
+            event!(
+                Level::INFO,
+                "check custom domain {}",
+                self.default_domain.as_str()
+            );
             match lookup_host(self.default_domain.as_str()) {
                 Ok(_) => OperationResult::Ok(()),
                 Err(err) => {
-                    debug!("{:?}", err);
+                    event!(Level::INFO, "{:?}", err);
                     OperationResult::Retry(())
                 }
             }
@@ -326,7 +331,11 @@ impl StatelessService for Router {}
 
 impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.router.on_create() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.router.on_create() called for {}",
+            self.name()
+        );
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
@@ -360,7 +369,7 @@ impl Create for Router {
 
         if !self.custom_domains.is_empty() {
             // custom domains? create an NGINX ingress
-            info!("setup NGINX ingress for custom domains");
+            event!(Level::INFO, "setup NGINX ingress for custom domains");
 
             let into_dir = crate::fs::workspace_directory(
                 self.context.workspace_root_dir(),
@@ -436,7 +445,8 @@ impl Create for Router {
                             OperationResult::Ok(external_ingress_hostname_custom)
                         }
                         Err(err) => {
-                            error!(
+                            event!(
+                                Level::ERROR,
                                 "Waiting NLB endpoint to be available to be able to configure TLS"
                             );
                             OperationResult::Retry(err)
@@ -449,7 +459,10 @@ impl Create for Router {
                     //put it in the context
                     context.insert("nlb_ingress_hostname", &elb);
                 }
-                Err(_) => error!("Error getting the NLB endpoint to be able to configure TLS"),
+                Err(_) => event!(
+                    Level::ERROR,
+                    "Error getting the NLB endpoint to be able to configure TLS"
+                ),
             }
         }
 
@@ -502,15 +515,16 @@ impl Create for Router {
             let rs_ips = lookup_host(self.default_domain.as_str());
             match rs_ips {
                 Ok(ips) => {
-                    info!("Records from DNS are successfully retrieved.");
+                    event!(Level::INFO, "Records from DNS are successfully retrieved.");
                     OperationResult::Ok(ips)
                 }
                 Err(err) => {
-                    warn!(
+                    event!(
+                        Level::WARN,
                         "Failed to retrieve record from DNS '{}', retrying...",
                         self.default_domain.as_str()
                     );
-                    warn!("DNS lookup error: {:?}", err);
+                    event!(Level::WARN, "DNS lookup error: {:?}", err);
                     OperationResult::Retry(err)
                 }
             }
@@ -520,7 +534,7 @@ impl Create for Router {
             Ok(_) => Ok(()),
             Err(_) => {
                 let message = format!("Wasn't able to check DNS availability '{}', can be due to a too long DNS propagation. Please retry and contact your administrator if the problem persists", self.default_domain.as_str());
-                error!("{}", message);
+                event!(Level::ERROR, "{}", message);
 
                 listeners_helper.error(ProgressInfo::new(
                     ProgressScope::Router {
@@ -537,19 +551,31 @@ impl Create for Router {
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.router.on_create_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "AWS.router.on_create_error() called for {}",
+            self.name()
+        );
         self.delete(target)
     }
 }
 
 impl Pause for Router {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.router.on_pause() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.router.on_pause() called for {}",
+            self.name()
+        );
         self.delete(target)
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
-        warn!("AWS.router.on_pause_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "AWS.router.on_pause_error() called for {}",
+            self.name()
+        );
         // TODO check resource has been cleaned?
         Ok(())
     }
@@ -561,7 +587,11 @@ impl Pause for Router {
 
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.router.on_delete() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.router.on_delete() called for {}",
+            self.name()
+        );
         self.delete(target)
     }
 
@@ -570,7 +600,11 @@ impl Delete for Router {
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.router.on_delete_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "AWS.router.on_delete_error() called for {}",
+            self.name()
+        );
         self.delete(target)
     }
 }

@@ -1,13 +1,13 @@
+use crate::error::{SimpleError, SimpleErrorKind};
 use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-
-use crate::error::{SimpleError, SimpleErrorKind};
 use tera::Error as TeraError;
 use tera::{Context, Tera};
+use tracing::{event, span, Level};
 use walkdir::WalkDir;
 
 pub fn generate_and_copy_all_files_into_dir<S, P>(
@@ -49,7 +49,7 @@ where
                 tera::ErrorKind::__Nonexhaustive => format!("non exhaustive error"),
             };
 
-            error!("{}", error_msg.as_str());
+            event!(Level::ERROR, "{}", error_msg.as_str());
             return Err(SimpleError::new(SimpleErrorKind::Other, Some(error_msg)));
         }
     };
@@ -82,7 +82,7 @@ where
     P: AsRef<Path>,
 {
     //TODO: sort on fly context should be implemented to optimize reading
-    debug!("context: {:#?}", context);
+    event!(Level::INFO, "context: {:#?}", context);
     let root_dir_str = root_dir.as_ref().to_str().unwrap();
     let tera_template_string = format!("{}/**/*.j2.*", root_dir_str);
 

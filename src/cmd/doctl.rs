@@ -1,7 +1,7 @@
 use crate::cmd::utilities::{exec_with_envs_and_output, exec_with_output};
 use crate::error::{SimpleError, SimpleErrorKind};
 use std::io::Error;
-
+use tracing::{event, span, Level};
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Root {
@@ -21,15 +21,18 @@ pub fn doctl_do_registry_login(token: &str) -> Result<(), SimpleError> {
         vec!["registry", "login", "-t", token],
         |out| match out {
             Ok(line) => {}
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
             Ok(line) => output_string = line,
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     );
     if output_string.contains("412") {
-        warn!("Digital Ocean account doesn't contains registry");
+        event!(
+            Level::WARN,
+            "Digital Ocean account doesn't contains registry"
+        );
     }
     if output_string.contains("401") {
         return Err(SimpleError::new(
@@ -46,11 +49,11 @@ pub fn doctl_do_registry_get_repository(token: &str) -> Result<(), SimpleError> 
         vec!["registry", "get", "-t", token, "--output", "json"],
         |out| match out {
             Ok(line) => {}
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
             Ok(line) => output_string = line,
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     );
     let mut res = match serde_json::from_str::<Vec<ErrorDoctl>>(output_string.as_str()) {
@@ -66,12 +69,12 @@ pub fn doctl_do_registry_create(token: &str) -> Result<(), SimpleError> {
     let _ = doctl_exec_with_output(
         vec!["registry", "create", "qovery", "-t", token],
         |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::INFO, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 

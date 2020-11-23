@@ -6,7 +6,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_secret};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::SimpleError;
-
+use tracing::{event, span, Level};
 // generate the kubernetes config path
 pub fn get_kubernetes_config_path(
     workspace: &str,
@@ -68,7 +68,8 @@ pub fn delete_terraform_tfstate_secret(
             Ok(())
         }
         Err(e) => {
-            error!(
+            event!(
+                Level::ERROR,
                 "Failed to generate the kubernetes config file path: {:?}",
                 e
             );

@@ -12,7 +12,7 @@ use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo,
     ProgressLevel, ProgressScope,
 };
-
+use tracing::{event, span, Level};
 pub struct Transaction<'a> {
     engine: &'a Engine,
     steps: Vec<Step<'a>>,
@@ -179,7 +179,8 @@ impl<'a> Transaction<'a> {
             // catch build error, can't do it in Fn
             let build_result = match result {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "build error for external_service {}: {:?}",
                         external_service.id.as_str(),
                         err
@@ -203,7 +204,8 @@ impl<'a> Transaction<'a> {
             // catch build error, can't do it in Fn
             let build_result = match result {
                 Err(err) => {
-                    error!(
+                    event!(
+                        Level::ERROR,
                         "build error for application {}: {:?}",
                         application.id.as_str(),
                         err
@@ -254,7 +256,7 @@ impl<'a> Transaction<'a> {
             match result {
                 Ok(tuple) => results.push(tuple),
                 Err(err) => {
-                    error!("error pushing docker image {:?}", err);
+                    event!(Level::ERROR, "error pushing docker image {:?}", err);
                     return Err(err);
                 }
             }
@@ -269,11 +271,15 @@ impl<'a> Transaction<'a> {
     ) -> TransactionResult {
         match environment.is_valid() {
             Err(engine_error) => {
-                warn!("ROLLBACK STARTED! an error occurred {:?}", engine_error);
+                event!(
+                    Level::WARN,
+                    "ROLLBACK STARTED! an error occurred {:?}",
+                    engine_error
+                );
                 return match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(engine_error),
                     Err(err) => {
-                        error!("ROLLBACK FAILED! fatal error: {:?}", err);
+                        event!(Level::ERROR, "ROLLBACK FAILED! fatal error: {:?}", err);
                         TransactionResult::UnrecoverableError(engine_error, err)
                     }
                 };
@@ -434,11 +440,11 @@ impl<'a> Transaction<'a> {
                     // create kubernetes
                     match kubernetes.on_create() {
                         Err(err) => {
-                            warn!("ROLLBACK STARTED! an error occurred {:?}", err);
+                            event!(Level::WARN, "ROLLBACK STARTED! an error occurred {:?}", err);
                             match self.rollback() {
                                 Ok(_) => TransactionResult::Rollback(err),
                                 Err(e) => {
-                                    error!("ROLLBACK FAILED! fatal error: {:?}", e);
+                                    event!(Level::ERROR, "ROLLBACK FAILED! fatal error: {:?}", e);
                                     TransactionResult::UnrecoverableError(err, e)
                                 }
                             }
@@ -450,11 +456,11 @@ impl<'a> Transaction<'a> {
                     // delete kubernetes
                     match kubernetes.on_delete() {
                         Err(err) => {
-                            warn!("ROLLBACK STARTED! an error occurred {:?}", err);
+                            event!(Level::WARN, "ROLLBACK STARTED! an error occurred {:?}", err);
                             match self.rollback() {
                                 Ok(_) => TransactionResult::Rollback(err),
                                 Err(e) => {
-                                    error!("ROLLBACK FAILED! fatal error: {:?}", e);
+                                    event!(Level::ERROR, "ROLLBACK FAILED! fatal error: {:?}", e);
                                     TransactionResult::UnrecoverableError(err, e)
                                 }
                             }
@@ -484,12 +490,16 @@ impl<'a> Transaction<'a> {
 
                     if apps_result.is_err() {
                         let commit_error = apps_result.err().unwrap();
-                        warn!("ROLLBACK STARTED! an error occurred {:?}", commit_error);
+                        event!(
+                            Level::WARN,
+                            "ROLLBACK STARTED! an error occurred {:?}",
+                            commit_error
+                        );
 
                         return match self.rollback() {
                             Ok(_) => TransactionResult::Rollback(commit_error),
                             Err(err) => {
-                                error!("ROLLBACK FAILED! fatal error: {:?}", err);
+                                event!(Level::ERROR, "ROLLBACK FAILED! fatal error: {:?}", err);
                                 TransactionResult::UnrecoverableError(commit_error, err)
                             }
                         };
@@ -520,7 +530,8 @@ impl<'a> Transaction<'a> {
                             if apps_result.is_err() {
                                 // should never be triggered because core always should ask for working failover environment
                                 let commit_error = apps_result.err().unwrap();
-                                error!(
+                                event!(
+                                    Level::ERROR,
                                     "An error occurred on failover application  {:?}",
                                     commit_error
                                 );
@@ -659,7 +670,11 @@ impl<'a> Transaction<'a> {
                 let rollback_result = match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(err),
                     Err(rollback_err) => {
-                        error!("ROLLBACK FAILED! fatal error: {:?}", rollback_err);
+                        event!(
+                            Level::ERROR,
+                            "ROLLBACK FAILED! fatal error: {:?}",
+                            rollback_err
+                        );
                         TransactionResult::UnrecoverableError(err, rollback_err)
                     }
                 };

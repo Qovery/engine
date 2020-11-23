@@ -1,16 +1,3 @@
-use std::ffi::OsStr;
-use std::fmt::{Display, Formatter};
-use std::io::Error;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
-use std::process::{Child, Command, ExitStatus, Stdio};
-
-use dirs::home_dir;
-use retry::delay::Fibonacci;
-use retry::OperationResult;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-
 use crate::cmd::structs::{
     Item, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
     KubernetesService,
@@ -18,6 +5,18 @@ use crate::cmd::structs::{
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use crate::error::{SimpleError, SimpleErrorKind};
+use dirs::home_dir;
+use retry::delay::Fibonacci;
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::ffi::OsStr;
+use std::fmt::{Display, Formatter};
+use std::io::Error;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+use std::process::{Child, Command, ExitStatus, Stdio};
+use tracing::{event, span, Level};
 
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
@@ -70,11 +69,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
     let output_string: String = output_vec.join("");
@@ -103,11 +102,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -117,8 +116,8 @@ where
         match serde_json::from_str::<KubernetesList<KubernetesService>>(output_string.as_str()) {
             Ok(x) => x,
             Err(err) => {
-                error!("{:?}", err);
-                error!("{}", output_string.as_str());
+                event!(Level::ERROR, "{:?}", err);
+                event!(Level::ERROR, "{}", output_string.as_str());
                 return Err(SimpleError::new(
                     SimpleErrorKind::Other,
                     Some(output_string),
@@ -178,7 +177,7 @@ where
                 Some(true) => OperationResult::Ok(true),
                 _ => {
                     let t = format!("pod with selector: {} is not ready yet", selector);
-                    info!("{}", t.as_str());
+                    event!(Level::INFO, "{}", t.as_str());
                     OperationResult::Retry(t)
                 }
             },
@@ -218,11 +217,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -232,8 +231,8 @@ where
     {
         Ok(x) => x,
         Err(err) => {
-            error!("{:?}", err);
-            error!("{}", output_string.as_str());
+            event!(Level::ERROR, "{:?}", err);
+            event!(Level::ERROR, "{}", output_string.as_str());
             return Err(SimpleError::new(
                 SimpleErrorKind::Other,
                 Some(output_string),
@@ -286,7 +285,7 @@ where
                 Some(true) => OperationResult::Ok(true),
                 _ => {
                     let t = format!("job {} is not ready yet", job_name);
-                    info!("{}", t.as_str());
+                    event!(Level::INFO, "{}", t.as_str());
                     OperationResult::Retry(t)
                 }
             },
@@ -326,11 +325,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -339,8 +338,8 @@ where
     let result = match serde_json::from_str::<KubernetesJob>(output_string.as_str()) {
         Ok(x) => x,
         Err(err) => {
-            error!("{:?}", err);
-            error!("{}", output_string.as_str());
+            event!(Level::ERROR, "{:?}", err);
+            event!(Level::ERROR, "{}", output_string.as_str());
             return Err(SimpleError::new(
                 SimpleErrorKind::Other,
                 Some(output_string),
@@ -371,12 +370,12 @@ where
         vec!["create", "namespace", namespace],
         _envs,
         |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::INFO, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -409,11 +408,11 @@ where
         _envs,
         |out| match out {
             Ok(_line) => output_vec.push(_line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
             Ok(_line) => {}
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     );
     Ok(output_vec.join(""))
@@ -441,11 +440,11 @@ where
         _envs,
         |out| match out {
             Ok(_line) => exist = true,
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
             Ok(_line) => {}
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
     Ok(exist)
@@ -468,11 +467,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -486,7 +485,8 @@ where
             }
         }
         Err(e) => {
-            error!(
+            event!(
+                Level::ERROR,
                 "Error while deserializing Kubernetes namespaces names {}",
                 e
             );
@@ -516,15 +516,13 @@ where
                     Some("Namespace contains terraform tfstates in secret, can't delete it !"),
                 ));
             }
-            false => info!(
+            false => event!(
+                Level::INFO,
                 "Namespace {} doesn't contain any tfstates, able to delete it",
                 namespace
             ),
         },
-        Err(e) => warn!(
-            "Unable to execute describe on secrets: {}. it may not exist anymore?",
-            e.message.unwrap_or("".into())
-        ),
+        Err(e) => {} //TODO:fixme }
     };
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
@@ -535,12 +533,12 @@ where
         vec!["delete", "namespace", namespace],
         _envs,
         |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::INFO, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -563,12 +561,12 @@ where
         vec!["delete", "secret", secret],
         _envs,
         |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::INFO, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -594,11 +592,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -624,11 +622,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -652,11 +650,11 @@ where
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => event!(Level::ERROR, "{}", line),
+            Err(err) => event!(Level::ERROR, "{:?}", err),
         },
     )?;
 
@@ -666,8 +664,8 @@ where
         match serde_json::from_str::<KubernetesList<KubernetesNode>>(output_string.as_str()) {
             Ok(x) => x,
             Err(err) => {
-                error!("{:?}", err);
-                error!("{}", output_string.as_str());
+                event!(Level::ERROR, "{:?}", err);
+                event!(Level::ERROR, "{}", output_string.as_str());
                 return Err(SimpleError::new(
                     SimpleErrorKind::Other,
                     Some(output_string),

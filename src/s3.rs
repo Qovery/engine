@@ -1,11 +1,3 @@
-use std::fmt::Display;
-use std::fs::{read_to_string, File};
-use std::io::{Error, ErrorKind, Read, Write};
-use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
-use std::str::FromStr;
-use std::{fs, io};
-
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
@@ -15,6 +7,14 @@ use rusoto_s3::{
     GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request, PutBucketVersioningRequest,
     S3Client, VersioningConfiguration, S3,
 };
+use std::fmt::Display;
+use std::fs::{read_to_string, File};
+use std::io::{Error, ErrorKind, Read, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::str::FromStr;
+use std::{fs, io};
+use tracing::{event, span, Level};
 
 use crate::cmd::utilities::exec_with_envs;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -92,7 +92,7 @@ pub fn get_object(
             return match err {
                 RusotoError::Service(s) => match s {
                     GetObjectError::NoSuchKey(x) => {
-                        info!("no such key '{}': {}", object_key, x.as_str());
+                        event!(Level::INFO, "no such key '{}': {}", object_key, x.as_str());
                         Err(SimpleError::new(
                             SimpleErrorKind::Other,
                             Some(format!("no such key '{}': {}", object_key, x.as_str())),
@@ -111,7 +111,7 @@ pub fn get_object(
                         Ok(..) => Ok(r_from_aws_cli.unwrap()),
                         Err(err) => {
                             if let Some(message) = err.message {
-                                error!("{}", message);
+                                event!(Level::ERROR, "{}", message);
                             }
 
                             Err(_err)
@@ -175,7 +175,7 @@ where
         match file_content {
             Ok(file_content) => OperationResult::Ok(file_content),
             Err(err) => {
-                warn!(
+                event!(Level::WARN,
                     "Can't download the kubernetes config file {} stored on {}, please check access key and secrets",
                     kubernetes_config_object_key, kubernetes_config_bucket_name
                 );
@@ -239,7 +239,7 @@ pub fn delete_bucket(
     secret_access_key: &str,
     bucket_name: &str,
 ) -> Result<(), SimpleError> {
-    info!("Deleting S3 Bucket {}", bucket_name.clone());
+    event!(Level::INFO, "Deleting S3 Bucket {}", bucket_name.clone());
     match exec_with_envs(
         "aws",
         vec![
@@ -255,11 +255,12 @@ pub fn delete_bucket(
         ],
     ) {
         Ok(o) => {
-            info!("Successfuly delete bucket");
+            event!(Level::INFO, "Successfuly delete bucket");
             return Ok(o);
         }
         Err(e) => {
-            error!(
+            event!(
+                Level::ERROR,
                 "while deleting bucket {}",
                 e.message.as_ref().unwrap_or(&"".into())
             );
@@ -279,7 +280,8 @@ pub fn push_object(
     object_key: &str,
     local_file_path: &str,
 ) -> Result<(), SimpleError> {
-    info!(
+    event!(
+        Level::INFO,
         "Pushing object {} to bucket {}",
         local_file_path.clone(),
         bucket_name.clone()
@@ -298,11 +300,12 @@ pub fn push_object(
         ],
     ) {
         Ok(o) => {
-            info!("Successfully uploading the object on bucket");
+            event!(Level::INFO, "Successfully uploading the object on bucket");
             return Ok(o);
         }
         Err(e) => {
-            error!(
+            event!(
+                Level::ERROR,
                 "While uploading object {}",
                 e.message.as_ref().unwrap_or(&"".into())
             );

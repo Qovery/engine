@@ -9,6 +9,7 @@ use rusoto_ecr::{
     ImageIdentifier, PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
+use tracing::{event, span, Level};
 
 use crate::build_platform::Image;
 use crate::cmd;
@@ -158,14 +159,14 @@ impl ECR {
     }
 
     fn create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
-        info!("ECR create repository {}", image.name.as_str());
+        event!(Level::INFO, "ECR create repository {}", image.name.as_str());
         let mut crr = CreateRepositoryRequest::default();
         crr.repository_name = image.name.clone();
 
         let r = async_run(self.ecr_client().create_repository(crr));
         match r {
             Err(err) => match err {
-                RusotoError::Service(ref err) => info!("{:?}", err),
+                RusotoError::Service(ref err) => event!(Level::INFO, "{:?}", err),
                 _ => {
                     return Err(self.engine_error(
                         EngineErrorCause::Internal,
@@ -224,7 +225,11 @@ impl ECR {
         // check if the repository already exists
         let repository = self.get_repository(&image);
         if repository.is_some() {
-            info!("ECR repository {} already exists", image.name.as_str());
+            event!(
+                Level::INFO,
+                "ECR repository {} already exists",
+                image.name.as_str()
+            );
             return Ok(repository.unwrap());
         }
 
@@ -270,7 +275,7 @@ impl ContainerRegistry for ECR {
     }
 
     fn on_create(&self) -> Result<(), EngineError> {
-        info!("ECR.on_create() called");
+        event!(Level::INFO, "ECR.on_create() called");
         Ok(())
     }
 
@@ -389,7 +394,7 @@ impl ContainerRegistry for ECR {
                 self.name()
             );
 
-            info!("{}", info_message.as_str());
+            event!(Level::INFO, "{}", info_message.as_str());
 
             listeners_helper.start_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
@@ -412,7 +417,7 @@ impl ContainerRegistry for ECR {
             self.name()
         );
 
-        info!("{}", info_message.as_str());
+        event!(Level::INFO, "{}", info_message.as_str());
 
         listeners_helper.start_in_progress(ProgressInfo::new(
             ProgressScope::Application {

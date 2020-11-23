@@ -16,6 +16,7 @@ use crate::error::{
 };
 use crate::models::Context;
 use std::path::Path;
+use tracing::{event, span, Level};
 
 pub struct PostgreSQL {
     context: Context,
@@ -100,7 +101,8 @@ impl PostgreSQL {
 
                 utilities::create_namespace(&environment.namespace(), kube_config.as_str(), aws);
             }
-            Err(e) => error!(
+            Err(e) => event!(
+                Level::ERROR,
                 "Failed to generate the kubernetes config file path: {:?}",
                 e
             ),
@@ -199,7 +201,7 @@ impl PostgreSQL {
                     workspace_dir.as_str(),
                 ) {
                     Ok(_) => {
-                        info!("Deleting secrets containing tfstates");
+                        event!(Level::INFO, "Deleting secrets containing tfstates");
                         utilities::delete_terraform_tfstate_secret(
                             *kubernetes,
                             environment,
@@ -212,7 +214,7 @@ impl PostgreSQL {
                             e.message.unwrap_or("".into())
                         );
 
-                        error!("{}", message);
+                        event!(Level::ERROR, "{}", message);
 
                         return Err(self.engine_error(EngineErrorCause::Internal, message));
                     }
@@ -301,14 +303,22 @@ impl Database for PostgreSQL {}
 
 impl Create for PostgreSQL {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.PostgreSQL.on_create() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.PostgreSQL.on_create() called for {}",
+            self.name()
+        );
 
         let workspace_dir = self.workspace_directory();
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
-                info!("deploy postgresql on AWS RDS for {}", self.name());
+                event!(
+                    Level::INFO,
+                    "deploy postgresql on AWS RDS for {}",
+                    self.name()
+                );
                 let context = self.tera_context(*kubernetes, *environment);
 
                 let workspace_dir = self.workspace_directory();
@@ -359,7 +369,11 @@ impl Create for PostgreSQL {
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 // use helm
-                info!("deploy PostgreSQL on Kubernetes for {}", self.name());
+                event!(
+                    Level::INFO,
+                    "deploy PostgreSQL on Kubernetes for {}",
+                    self.name()
+                );
 
                 let context = self.tera_context(*kubernetes, *environment);
 
@@ -471,7 +485,8 @@ impl Create for PostgreSQL {
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
+        event!(
+            Level::WARN,
             "AWS.PostgreSQL.on_create_error() called for {}",
             self.name()
         );
@@ -482,7 +497,11 @@ impl Create for PostgreSQL {
 
 impl Pause for PostgreSQL {
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.PostgreSQL.on_pause() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.PostgreSQL.on_pause() called for {}",
+            self.name()
+        );
 
         // TODO how to pause production? - the goal is to reduce cost, but it is possible to pause a production env?
         // TODO how to pause development? - the goal is also to reduce cost, we can set the number of instances to 0, which will avoid to delete data :)
@@ -495,7 +514,11 @@ impl Pause for PostgreSQL {
     }
 
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.PostgreSQL.on_pause_error() called for {}", self.name());
+        event!(
+            Level::WARN,
+            "AWS.PostgreSQL.on_pause_error() called for {}",
+            self.name()
+        );
 
         // TODO what to do if there is a pause error?
 
@@ -505,7 +528,11 @@ impl Pause for PostgreSQL {
 
 impl Delete for PostgreSQL {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.PostgreSQL.on_delete() called for {}", self.name());
+        event!(
+            Level::INFO,
+            "AWS.PostgreSQL.on_delete() called for {}",
+            self.name()
+        );
         self.delete(target, false)
     }
 
@@ -514,7 +541,8 @@ impl Delete for PostgreSQL {
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
+        event!(
+            Level::WARN,
             "AWS.PostgreSQL.on_create_error() called for {}",
             self.name()
         );
