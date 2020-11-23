@@ -83,12 +83,13 @@ dev-full-tests:
   stage: tests
   retry: 0
   script:
+    - env
     - ./helper.sh all_tests
   only:
     refs:
       - dev
     variables:
-      - $TEST_TYPE != null
+      - $TEST_TYPE == null
   artifacts:
     when: always
     reports:
