@@ -522,7 +522,7 @@ fn mongodb_v4_4_deploy_a_working_environment() {
 /// test mongodb v3.6 with production environment (DocumentDB)
 #[test]
 #[ignore]
-fn deploy_a_working_environment_with_production_mongodb_v3_6() {
+fn mongodb_v3_6_deploy_a_working_environment_with_production() {
     let context = context();
 
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
