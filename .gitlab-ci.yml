@@ -75,7 +75,7 @@ dev-fast-test-from-github:
   when: always
   only:
     variables:
-      - $TEST_TYPE == "fast"
+      - $TEST_TYPE == null
   artifacts:
     when: always
     reports:
