@@ -437,7 +437,7 @@ impl<'a> Transaction<'a> {
                                 Ok(_) => TransactionResult::Rollback(err),
                                 Err(e) => {
                                     error!("ROLLBACK FAILED! fatal error: {:?}", e);
-                                    TransactionResult::UnrecoverableError(err, e)
+                                    return TransactionResult::UnrecoverableError(err, e);
                                 }
                             }
                         }
@@ -453,7 +453,7 @@ impl<'a> Transaction<'a> {
                                 Ok(_) => TransactionResult::Rollback(err),
                                 Err(e) => {
                                     error!("ROLLBACK FAILED! fatal error: {:?}", e);
-                                    TransactionResult::UnrecoverableError(err, e)
+                                    return TransactionResult::UnrecoverableError(err, e);
                                 }
                             }
                         }
@@ -488,7 +488,7 @@ impl<'a> Transaction<'a> {
                             Ok(_) => TransactionResult::Rollback(commit_error),
                             Err(err) => {
                                 error!("ROLLBACK FAILED! fatal error: {:?}", err);
-                                TransactionResult::UnrecoverableError(commit_error, err)
+                                return TransactionResult::UnrecoverableError(commit_error, err);
                             }
                         };
                     }
