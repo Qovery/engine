@@ -18,6 +18,8 @@ stages:
 before_script:
   - test -z $KUBERNETES_PORT || export DOCKER_HOST=tcp://127.0.0.1:2375
 
+# Feat/fix branches
+
 wip-fast-tests:
   stage: tests
   retry: 0
@@ -51,13 +53,16 @@ wip-full-tests:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
 
+# Dev branch
+
 all-test-from-github:
   stage: all-test-remote-lib
   retry: 0
   script:
     - ./helper.sh all-tests $LIB_COMMIT_ID
-  rules:
-    - if: '$TEST_TYPE == "full"'
+  only:
+    variables:
+      - $TEST_TYPE == "full"
   artifacts:
     when: always
     reports:
@@ -68,8 +73,9 @@ fast-test-from-github:
   retry: 0
   script:
     - ./helper.sh fast-tests $LIB_COMMIT_ID
-  rules:
-    - if: '$TEST_TYPE == "fast"'
+  only:
+    variables:
+      - $TEST_TYPE == "fast"
   artifacts:
     when: always
     reports:
@@ -83,6 +89,8 @@ dev-full-tests:
   only:
     refs:
       - dev
+    variables:
+      - $TEST_TYPE == null
   artifacts:
     when: always
     reports:
@@ -136,6 +144,8 @@ dev-release:
     refs:
       - dev
 
+# Main branch
+
 main-build:
   stage: build
   retry: 1
@@ -164,7 +174,7 @@ main-set-ga:
     refs:
       - main
 
-wip-deploy_engine:
+main-deploy_engine:
   stage: deploy_to_qovery_prod
   retry: 0
   script:
