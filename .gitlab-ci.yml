@@ -88,7 +88,7 @@ dev-full-tests:
     refs:
       - dev
     variables:
-      - $TEST_TYPE == null
+      - $TEST_TYPE != null
   artifacts:
     when: always
     reports:
