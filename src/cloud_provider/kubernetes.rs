@@ -61,6 +61,7 @@ pub trait KubernetesNode {
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
     EKS,
+    DOKS,
 }
 
 #[derive(Debug)]
