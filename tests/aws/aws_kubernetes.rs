@@ -39,6 +39,10 @@ fn generate_cluster_id(region: &str) -> String {
         // shrink to 15 chars in order to avoid resources name issues
         Ok(mut current_name) => {
             let mut shrink_size = 15;
+            // avoid out of bounds issue
+            if current_name.chars().count() < shrink_size {
+                shrink_size = current_name.chars().count()
+            }
             let mut final_name = format!("{}", &current_name[..shrink_size]);
             // do not end with a non alphanumeric char
             while !final_name.chars().last().unwrap().is_alphanumeric() {
