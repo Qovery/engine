@@ -58,7 +58,7 @@ dev-full-test-from-github:
   stage: tests
   retry: 0
   script:
-    - ./helper.sh all-tests $LIB_COMMIT_ID
+    - ./helper.sh all_tests $LIB_COMMIT_ID
   rules:
     - if: '$TESTS_TYPE == "full"'
   artifacts:
@@ -70,7 +70,7 @@ dev-fast-test-from-github:
   stage: tests
   retry: 0
   script:
-    - ./helper.sh fast-tests $LIB_COMMIT_ID
+    - ./helper.sh fast_tests $LIB_COMMIT_ID
   rules:
     - if: '$TESTS_TYPE == "fast"'
   artifacts:
