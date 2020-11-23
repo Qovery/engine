@@ -60,7 +60,7 @@ dev-full-test-from-github:
   script:
     - ./helper.sh all-tests $LIB_COMMIT_ID
   rules:
-    - if: '$TEST_TYPE == "full"'
+    - if: '$TESTS_TYPE == "full"'
   artifacts:
     when: always
     reports:
@@ -72,7 +72,7 @@ dev-fast-test-from-github:
   script:
     - ./helper.sh fast-tests $LIB_COMMIT_ID
   rules:
-    - if: '$TEST_TYPE == "fast"'
+    - if: '$TESTS_TYPE == "fast"'
   artifacts:
     when: always
     reports:
@@ -82,13 +82,12 @@ dev-full-tests:
   stage: tests
   retry: 0
   script:
-    - env
     - ./helper.sh all_tests
   only:
     refs:
       - dev
     variables:
-      - $TEST_TYPE == null
+      - $TESTS_TYPE == null
   artifacts:
     when: always
     reports:
