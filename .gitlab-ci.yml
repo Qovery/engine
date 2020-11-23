@@ -8,8 +8,6 @@ services:
 
 stages:
   - tests
-  - all-test-remote-lib
-  - fast-test-remote-lib
   - build
   - release
   - set_ga
@@ -56,7 +54,7 @@ wip-full-tests:
 # Dev branch
 
 all-test-from-github:
-  stage: all-test-remote-lib
+  stage: tests
   retry: 0
   script:
     - ./helper.sh all-tests $LIB_COMMIT_ID
@@ -69,7 +67,7 @@ all-test-from-github:
       junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
 
 fast-test-from-github:
-  stage: fast-test-remote-lib
+  stage: tests
   retry: 0
   script:
     - ./helper.sh fast-tests $LIB_COMMIT_ID
