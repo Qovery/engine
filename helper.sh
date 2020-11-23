@@ -73,7 +73,6 @@ function get_gitlab_engine_commit_id() {
 
 function get_github_engine_commit_id() {
   # Ensure we're in the correct folder
-  git config --get remote.origin.url
   if [ $(git config --get remote.origin.url | $grep -c "github.com:Qovery/engine.git") -ne 1 ] ; then
     (fatal "You're not in the correct directory and should be in the github repo: $(pwd)")
   fi
@@ -137,6 +136,8 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
   prepare_engine
+  cd $ENGINE_DIR
+  git config --get remote.origin.url
   tag=$(generate_image_tag)
 
   cp docker/load.sh docker/engine/load.sh
