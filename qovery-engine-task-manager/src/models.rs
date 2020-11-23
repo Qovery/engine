@@ -5,17 +5,17 @@ use serde_json::Value;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::gcp::GCP;
+use qovery_engine::cloud_provider::kubernetes::Kind;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, Metadata};
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::git::clone;
-use qovery_engine::cloud_provider::kubernetes::Kind;
+use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, Metadata};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -147,8 +147,6 @@ impl CloudProvider {
                 context.clone(),
                 self.id.as_str(),
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
-                self.name.as_str(),
-                terraform_state_credentials,
             )),
         }
     }
@@ -211,10 +209,10 @@ impl Kubernetes {
                 self.region.as_str(),
                 cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
                 dns_provider,
-                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::Options>(
-                    self.options.clone(),
-                )
-                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                serde_json::from_value::<
+                    qovery_engine::cloud_provider::digitalocean::kubernetes::Options,
+                >(self.options.clone())
+                .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 nodes
                     .into_iter()
                     .map(|x| {
@@ -234,10 +232,10 @@ impl Kubernetes {
                 self.region.as_str(),
                 cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
                 dns_provider,
-                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::Options>(
-                    self.options.clone(),
-                )
-                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                serde_json::from_value::<
+                    qovery_engine::cloud_provider::digitalocean::kubernetes::Options,
+                >(self.options.clone())
+                .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 nodes
                     .into_iter()
                     .map(|x| {
@@ -322,8 +320,6 @@ impl ContainerRegistry {
                 context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
-                self.name.as_str(),
-                self.options.secret_access_key.as_ref().unwrap().as_str()
             )),
         }
     }
