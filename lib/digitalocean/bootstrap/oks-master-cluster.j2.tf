@@ -9,8 +9,4 @@ resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
     auto_scale = var.oks_master_autoscale
     node_count = var.oks_master_node_count
   }
-
-  provisioner "local-exec" {
-    command = "doctl kubernetes cluster kubeconfig show {{ kubernetes_master_cluster_name }} -t {{ digitalocean_token }} >> kubeconfig.yaml"
-  }
 }

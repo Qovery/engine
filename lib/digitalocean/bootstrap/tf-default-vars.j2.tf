@@ -66,3 +66,8 @@ variable "vpc_name" {
   description = "name of vpc, take care to insert unique names"
   default = "{{ vpc_name }}"
 }
+
+variable "space_bucket_kubeconfig" {
+  description = "space bucket with kubeconfigs"
+  default = "{{ space_bucket_kubeconfig }}"
+}
