@@ -70,12 +70,12 @@ resource "helm_release" "qovery_engine_resources" {
 
   set {
     name = "resources.limits.memory"
-    value = "2Gi"
+    value = "4Gi"
   }
 
   set {
     name = "resources.requests.memory"
-    value = "2Gi"
+    value = "4Gi"
   }
 
   depends_on = [
