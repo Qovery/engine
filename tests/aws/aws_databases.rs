@@ -825,14 +825,14 @@ fn redis_v6_deploy_a_working_environment() {
     test_redis_configuration(context, environment, "6.0");
 }
 
-// test Redis v3.6 with production environment (Elasticcache)
-// #[test]
-// #[ignore]
-// fn redis_v3_6_deploy_a_working_environment_with_production() {
-//     let context = context();
-//
-//     let mut environment = test_utilities::aws::working_minimal_environment(&context);
-//     environment.kind = Kind::Production;
-//
-//     test_redis_configuration(context, environment, "5.0");
-// }
+// test Redis 5.0 with production environment (Elasticcache)
+#[test]
+#[ignore]
+fn redis_v3_6_deploy_a_working_environment_with_production() {
+    let context = context();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    environment.kind = Kind::Production;
+
+    test_redis_configuration(context, environment, "5.0");
+}
