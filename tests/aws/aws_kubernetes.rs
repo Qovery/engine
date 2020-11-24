@@ -26,8 +26,7 @@ fn generate_cluster_id(region: &str) -> String {
         Ok(current_name) => {
             let mut shrink_size = 15;
             // avoid out of bounds issue
-            // note only lowercase are allowed in lot of AWS ressources
-            if current_name.to_lowercase().chars().count() < shrink_size {
+            if current_name.chars().count() < shrink_size {
                 shrink_size = current_name.chars().count()
             }
             let mut final_name = format!("{}", &current_name[..shrink_size]);
@@ -36,7 +35,8 @@ fn generate_cluster_id(region: &str) -> String {
                 shrink_size -= 1;
                 final_name = format!("{}", &current_name[..shrink_size]);
             }
-            format!("{}-{}", final_name, region)
+            // note ensure you use only lowercase  (uppercase are not allowed in lot of AWS ressources)
+            format!("{}-{}", final_name.to_lowercase(), region.to_lowercase())
         },
         _ => generate_id(),
     }
