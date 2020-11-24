@@ -58,7 +58,7 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
 
     let cloudflare = dns_provider_cloudflare(&context);
 
-    let mut file = File::open("cloned-engine/tests/assets/eks-options.json").unwrap();
+    let mut file = File::open("tests/assets/eks-options.json").unwrap();
     let mut read_buf = String::new();
     file.read_to_string(&mut read_buf).unwrap();
 
