@@ -62,6 +62,7 @@ resource "aws_route_table_association" "elasticache_cluster_zone_c" {
 
 resource "aws_elasticache_subnet_group" "elasticache" {
   description = "Elasticache linked to ${var.eks_cluster_id}"
+  # WARNING: this "name" value is used into elasticache clusters, you need to update it accordingly
   name = "elasticache-${aws_vpc.eks.id}"
   subnet_ids = flatten([aws_subnet.elasticache_zone_a.*.id, aws_subnet.elasticache_zone_b.*.id, aws_subnet.elasticache_zone_c.*.id])
 }
@@ -70,7 +71,7 @@ resource "aws_elasticache_subnet_group" "elasticache" {
 
 resource "aws_security_group_rule" "elasticache_remote_access" {
   cidr_blocks       = ["0.0.0.0/0"]
-  description       = "Allow Elasticache incoming access from anywhere"
+  description       = "Allow Redis incoming access from anywhere"
   from_port         = 6379
   protocol          = "tcp"
   security_group_id = aws_security_group.eks_cluster_workers.id
