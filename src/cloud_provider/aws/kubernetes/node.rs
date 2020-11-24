@@ -3,9 +3,7 @@ use std::any::Any;
 use crate::cloud_provider::kubernetes::KubernetesNode;
 
 pub struct Node {
-    total_cpu: u8,
-    total_memory_in_gib: u16,
-    instance_types_table: [(u8, u16, &'static str); 6],
+    instance_type: String,
 }
 
 impl Node {
@@ -17,10 +15,10 @@ impl Node {
     /// use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
     /// use qovery_engine::cloud_provider::kubernetes::KubernetesNode;
     ///
-    /// let node = Node::new(2, 4);
+    /// let node = Node::new_with_cpu_and_mem(2, 4);
     /// assert_eq!(node.instance_type(), "t2.medium")
     /// ```
-    pub fn new(total_cpu: u8, total_memory_in_gib: u16) -> Self {
+    pub fn new_with_cpu_and_mem(total_cpu: u8, total_memory_in_gib: u16) -> Self {
         let instance_types_table = [
             (1, 1, "t2.micro"),
             (1, 2, "t2.small"),
@@ -31,37 +29,31 @@ impl Node {
             // TODO add other instance types
         ];
 
+        if total_cpu == 0 || total_memory_in_gib == 0 {
+            let (_, _, instance_type) = instance_types_table.first().unwrap();
+            return Node::new(*instance_type);
+        }
+
+        for (_cpu, mem, instance_type) in instance_types_table.iter() {
+            if total_memory_in_gib <= *mem {
+                return Node::new(*instance_type);
+            }
+        }
+
+        let (_, _, instance_type) = instance_types_table.last().unwrap();
+        Node::new(*instance_type)
+    }
+
+    pub fn new<T: Into<String>>(instance_type: T) -> Self {
         Node {
-            total_cpu,
-            total_memory_in_gib,
-            instance_types_table,
+            instance_type: instance_type.into(),
         }
     }
 }
 
 impl KubernetesNode for Node {
-    fn total_cpu(&self) -> u8 {
-        self.total_cpu
-    }
-
-    fn total_memory_in_gib(&self) -> u16 {
-        self.total_memory_in_gib
-    }
-
     fn instance_type(&self) -> &str {
-        if self.total_cpu() == 0 || self.total_memory_in_gib() == 0 {
-            let (_, _, instance_type) = self.instance_types_table.first().unwrap();
-            return instance_type;
-        }
-
-        for (_cpu, mem, instance_type) in self.instance_types_table.iter() {
-            if self.total_memory_in_gib() <= *mem {
-                return instance_type;
-            }
-        }
-
-        let (_, _, instance_type) = self.instance_types_table.last().unwrap();
-        return instance_type;
+        self.instance_type.as_str()
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -76,22 +68,43 @@ mod tests {
 
     #[test]
     fn test_instance_types() {
-        assert_eq!(Node::new(0, 0).instance_type(), "t2.micro");
-        assert_eq!(Node::new(1, 0).instance_type(), "t2.micro");
-        assert_eq!(Node::new(0, 1).instance_type(), "t2.micro");
-        assert_eq!(Node::new(1, 1).instance_type(), "t2.micro");
-        assert_eq!(Node::new(1, 2).instance_type(), "t2.small");
-        assert_eq!(Node::new(2, 4).instance_type(), "t2.medium");
-        assert_eq!(Node::new(2, 5).instance_type(), "t2.large");
-        assert_eq!(Node::new(1, 6).instance_type(), "t2.large");
-        assert_eq!(Node::new(1, 7).instance_type(), "t2.large");
-        assert_eq!(Node::new(2, 8).instance_type(), "t2.large");
-        assert_eq!(Node::new(3, 8).instance_type(), "t2.large");
-        assert_eq!(Node::new(3, 10).instance_type(), "t2.xlarge");
-        assert_eq!(Node::new(3, 12).instance_type(), "t2.xlarge");
-        assert_eq!(Node::new(4, 16).instance_type(), "t2.xlarge");
-        assert_eq!(Node::new(4, 17).instance_type(), "t2.2xlarge");
-        assert_eq!(Node::new(8, 32).instance_type(), "t2.2xlarge");
-        assert_eq!(Node::new(16, 64).instance_type(), "t2.2xlarge");
+        assert_eq!(Node::new_with_cpu_and_mem(0, 0).instance_type(), "t2.micro");
+        assert_eq!(Node::new_with_cpu_and_mem(1, 0).instance_type(), "t2.micro");
+        assert_eq!(Node::new_with_cpu_and_mem(0, 1).instance_type(), "t2.micro");
+        assert_eq!(Node::new_with_cpu_and_mem(1, 1).instance_type(), "t2.micro");
+        assert_eq!(Node::new_with_cpu_and_mem(1, 2).instance_type(), "t2.small");
+        assert_eq!(
+            Node::new_with_cpu_and_mem(2, 4).instance_type(),
+            "t2.medium"
+        );
+        assert_eq!(Node::new_with_cpu_and_mem(2, 5).instance_type(), "t2.large");
+        assert_eq!(Node::new_with_cpu_and_mem(1, 6).instance_type(), "t2.large");
+        assert_eq!(Node::new_with_cpu_and_mem(1, 7).instance_type(), "t2.large");
+        assert_eq!(Node::new_with_cpu_and_mem(2, 8).instance_type(), "t2.large");
+        assert_eq!(Node::new_with_cpu_and_mem(3, 8).instance_type(), "t2.large");
+        assert_eq!(
+            Node::new_with_cpu_and_mem(3, 10).instance_type(),
+            "t2.xlarge"
+        );
+        assert_eq!(
+            Node::new_with_cpu_and_mem(3, 12).instance_type(),
+            "t2.xlarge"
+        );
+        assert_eq!(
+            Node::new_with_cpu_and_mem(4, 16).instance_type(),
+            "t2.xlarge"
+        );
+        assert_eq!(
+            Node::new_with_cpu_and_mem(4, 17).instance_type(),
+            "t2.2xlarge"
+        );
+        assert_eq!(
+            Node::new_with_cpu_and_mem(8, 32).instance_type(),
+            "t2.2xlarge"
+        );
+        assert_eq!(
+            Node::new_with_cpu_and_mem(16, 64).instance_type(),
+            "t2.2xlarge"
+        );
     }
 }
