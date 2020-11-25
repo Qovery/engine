@@ -241,7 +241,7 @@ fn deploy_a_working_environment_with_custom_domain() {
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
                 // should be the client domain
-                domain: "test-domain.qvy.io".to_string(),
+                domain: "CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
                 // should be our domain
                 target_domain: "target-domain.oom.sh".to_string(),
             }];
@@ -257,7 +257,7 @@ fn deploy_a_working_environment_with_custom_domain() {
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
                 // should be the client domain
-                domain: "test-domain.qvy.io".to_string(),
+                domain: "CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
                 // should be our domain
                 target_domain: "target-domain.DEFAULT_TEST_DOMAIN".to_string(),
             }];
