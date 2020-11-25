@@ -56,12 +56,12 @@ resource "helm_release" "cert_manager" {
 
   set {
     name = "resources.limits.memory"
-    value = "512Mi"
+    value = "1Gi"
   }
 
   set {
     name = "resources.requests.memory"
-    value = "256Mi"
+    value = "1Gi"
   }
 
   # Limits webhook
@@ -98,12 +98,12 @@ resource "helm_release" "cert_manager" {
 
   set {
     name = "cainjector.resources.limits.memory"
-    value = "512Mi"
+    value = "1Gi"
   }
 
   set {
     name = "cainjector.resources.requests.memory"
-    value = "256Mi"
+    value = "1Gi"
   }
 
   depends_on = [
