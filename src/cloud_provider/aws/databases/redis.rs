@@ -1,7 +1,6 @@
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities;
-use crate::cloud_provider::aws::kubernetes::EKS;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -11,15 +10,10 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::cmd::kubectl::{
-    kubectl_exec_create_namespace, kubectl_exec_delete_namespace, kubectl_exec_delete_secret,
-};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
-};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
-use std::path::Path;
+use std::collections::HashMap;
 
 pub struct Redis {
     context: Context,
@@ -130,6 +124,11 @@ impl Redis {
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
+
+        context.insert(
+            "resource_expiration_in_seconds",
+            &self.context.resource_expiration_in_seconds(),
+        );
 
         context
     }
@@ -272,7 +271,16 @@ impl Service for Redis {
     }
 
     fn version(&self) -> &str {
-        self.version.as_str()
+        let mut redis_managed_versions = HashMap::with_capacity(2);
+        redis_managed_versions.insert(5, "5.0.6");
+        redis_managed_versions.insert(6, "6.x");
+
+        // todo: return Result instead to better handle not supported version and avoid trying to deploy a non supported version
+        match utilities::check_version(redis_managed_versions, self.version.as_str()) {
+            Ok(v) => v,
+            Err(e) => e,
+        }
+        .as_ref()
     }
 
     fn action(&self) -> &Action {
