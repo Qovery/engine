@@ -3,7 +3,7 @@ extern crate digitalocean;
 use std::rc::Rc;
 
 use digitalocean::DigitalOcean;
-use tracing::{event, span, Level};
+use tracing::{event, info, span, warn, Level};
 
 use crate::build_platform::Image;
 use crate::cmd;
@@ -121,7 +121,18 @@ impl DOCR {
             _ => {}
         };
 
-        match cmd::utilities::exec("docker", vec!["push", dest.as_str()]) {
+        match cmd::utilities::exec_with_output(
+            "docker",
+            vec!["push", dest.as_str()],
+            |r_out| match r_out {
+                Ok(line) => event!(Level::INFO, "{}", line),
+                Err(line) => event!(Level::ERROR, "{}", line),
+            },
+            |r_out| match r_out {
+                Ok(line) => event!(Level::INFO, "{}", line),
+                Err(line) => event!(Level::ERROR, "{}", line),
+            },
+        ) {
             Err(_) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
@@ -239,9 +250,13 @@ impl ContainerRegistry for DOCR {
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
     fn push(&self, image: &Image, _force_push: bool) -> Result<PushResult, EngineError> {
         let image = image.clone();
-        // TODO 1/ instead use get_or_create_repository
-        // TODO 2/ does an error is returned if the repository already exist or not?
-        self.create_repository(&image)?;
+        match self.create_repository(&image) {
+            Ok(_) => info!(
+                "Digital Ocean Container registry {} is created",
+                self.registry_name
+            ),
+            Err(_) => warn!("Unable to create Container registry {}", self.registry_name),
+        };
 
         match cmd::utilities::exec(
             "doctl",
@@ -264,8 +279,11 @@ impl ContainerRegistry for DOCR {
             _ => {}
         };
 
-        //TODO check force or not
-        let dest = format!("{}:{}", self.registry_name.as_str(), image.tag.as_str());
+        let dest = format!(
+            "registry.digitalocean.com/{}/{}",
+            self.registry_name.as_str(),
+            image.name_with_tag()
+        );
         self.push_image(dest, &image)
     }
 

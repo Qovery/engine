@@ -88,16 +88,17 @@ impl Application {
         )
     }
 
-    /*    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
-        let mut context = self.default_tera_context(kubernetes, environment);
-        let commit_id = self.image().commit_id.as_str();
+    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+        // TODO use default_tera_context instead
+        let mut context = TeraContext::new();
+        let commit_id = self.image.commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
 
-        match &self.image().registry_url {
+        match &self.image.registry_url {
             Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
             None => {
-                let image_name_with_tag = self.image().name_with_tag();
+                let image_name_with_tag = self.image.name_with_tag();
                 event!(Level::WARN,"there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
                 context.insert("image_name_with_tag", image_name_with_tag.as_str());
             }
@@ -119,7 +120,7 @@ impl Application {
         context.insert("start_timeout_in_seconds", &self.start_timeout_in_seconds);
 
         context
-    }*/
+    }
 }
 
 impl Create for Application {
@@ -129,94 +130,6 @@ impl Create for Application {
             "DigitalOcean.application.on_create() called for {}",
             self.name
         );
-        /*
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let digitalocean = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<DO>()
-            .unwrap();
-
-        let context = self.context(kubernetes, environment);
-        let workspace_dir = self.workspace_directory();
-
-        let from_dir = format!(
-            "{}/digitalocean/charts/q-application",
-            self.context.lib_root_dir()
-        );
-
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                from_dir.as_str(),
-                workspace_dir.as_str(),
-                &context,
-            ),
-        )?;
-
-        // render
-        // TODO check the rendered files?
-        let helm_release_name = self.helm_release_name();
-        let do_credentials_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalocean.token.as_str())];
-
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                environment.organization_id.as_str(),
-                kubernetes.id(),
-                digitalocean.token.as_str(),
-            ),
-        )?;
-
-        // do exec helm upgrade and return the last deployment status
-        let helm_history_row = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::cmd::helm::helm_exec_with_upgrade_history(
-                kubernetes_config_file_path.as_str(),
-                environment.namespace(),
-                helm_release_name.as_str(),
-                workspace_dir.as_str(),
-                Timeout::Value(self.start_timeout_in_seconds),
-            ),
-        )?;
-
-        // check deployment status
-        if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your application didn't start for some reason. \
-                Are you sure your application is correctly running? You can give a try by running \
-                locally `qovery run`. You can also check the application log from the web \
-                interface or the CLI with `qovery log`",
-                ),
-                format!("Application {} has failed to start ⤬", self.name_with_id()),
-            ));
-        }
-
-        // TODO: check app status
-
-               let selector = format!("app={}", self.name);
-
-
-               let _ = cast_simple_error_to_engine_error(
-                   self.engine_error_scope(),
-                   self.context.execution_id(),
-                   crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
-                       kubernetes_config_file_path.as_str(),
-                       environment.namespace(),
-                       selector.as_str(),
-                       do_credentials_envs,
-                   ),
-               )?;
-        */
         Ok(())
     }
 
@@ -226,5 +139,86 @@ impl Create for Application {
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
+    }
+}
+
+impl Delete for Application {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        unimplemented!()
+    }
+
+    fn on_delete_check(&self) -> Result<(), EngineError> {
+        unimplemented!()
+    }
+
+    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        unimplemented!()
+    }
+}
+
+impl Pause for Application {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        unimplemented!()
+    }
+
+    fn on_pause_check(&self) -> Result<(), EngineError> {
+        unimplemented!()
+    }
+
+    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        unimplemented!()
+    }
+}
+impl crate::cloud_provider::service::Application for Application {
+    fn image(&self) -> &Image {
+        &self.image
+    }
+
+    fn set_image(&mut self, image: Image) {
+        self.image = image;
+    }
+}
+
+impl StatelessService for Application {}
+
+impl Service for Application {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn service_type(&self) -> ServiceType {
+        ServiceType::Application
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        self.image.commit_id.as_str()
+    }
+
+    fn action(&self) -> &Action {
+        &self.action
+    }
+
+    fn private_port(&self) -> Option<u16> {
+        self.private_port
+    }
+
+    fn total_cpus(&self) -> String {
+        self.total_cpus.to_string()
+    }
+
+    fn total_ram_in_mib(&self) -> u32 {
+        self.total_ram_in_mib
+    }
+
+    fn total_instances(&self) -> u16 {
+        self.total_instances
     }
 }
