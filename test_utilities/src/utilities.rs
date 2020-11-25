@@ -11,12 +11,23 @@ use crate::aws::{aws_access_key_id, KUBE_CLUSTER_ID, aws_secret_access_key, aws_
 use qovery_engine::cloud_provider::aws::common;
 use qovery_engine::cmd;
 
+use tracing::{info, Level,error,warn,span};
+use tracing_subscriber;
+use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::util::SubscriberInitExt;
+
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
 }
 
 pub fn init() {
-    env_logger::try_init();
+    let collector = tracing_subscriber::fmt()
+        // filter spans/events with level TRACE or higher.
+        .with_max_level(Level::INFO)
+        // build but do not install the subscriber.
+        .finish();
+    collector.try_init();
+
     println!(
         "running from current directory: {}",
         std::env::current_dir().unwrap().to_str().unwrap()

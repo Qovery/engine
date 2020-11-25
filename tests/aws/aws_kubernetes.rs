@@ -3,7 +3,7 @@ use self::test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secre
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{generate_id, init};
 use gethostname;
-use log::{info, warn};
+use tracing::{debug, error, info, span, warn, Level};
 use qovery_engine::build_platform::GitRepository;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::git;
@@ -160,7 +160,8 @@ fn create_eks_cluster_in_us_east_2() {
 
 fn delete_eks_cluster_in_us_east_2() {
     init();
-
+    let span = span!(Level::TRACE, "create_eks_cluster_in_us_east_2");
+    let _enter = span.enter();
     let context = test_utilities::aws::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
