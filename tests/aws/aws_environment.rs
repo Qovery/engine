@@ -243,7 +243,7 @@ fn deploy_a_working_environment_with_custom_domain() {
                 // should be the client domain
                 domain: "CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
                 // should be our domain
-                target_domain: "target-domain.oom.sh".to_string(),
+                target_domain: "target-domain.CHANGE-ME/DEFAULT_TEST_DOMAIN".to_string(),
             }];
             router
         })
@@ -259,7 +259,7 @@ fn deploy_a_working_environment_with_custom_domain() {
                 // should be the client domain
                 domain: "CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
                 // should be our domain
-                target_domain: "target-domain.DEFAULT_TEST_DOMAIN".to_string(),
+                target_domain: "target-domain.CHANGE-ME/DEFAULT_TEST_DOMAIN".to_string(),
             }];
             router
         })
