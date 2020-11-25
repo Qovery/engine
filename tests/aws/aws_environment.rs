@@ -241,7 +241,7 @@ fn deploy_a_working_environment_with_custom_domain() {
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
                 // should be the client domain
-                domain: "CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
+                domain: "test-domain.CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
                 // should be our domain
                 target_domain: "target-domain.CHANGE-ME/DEFAULT_TEST_DOMAIN".to_string(),
             }];
@@ -257,7 +257,7 @@ fn deploy_a_working_environment_with_custom_domain() {
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
                 // should be the client domain
-                domain: "CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
+                domain: "test-domain.CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
                 // should be our domain
                 target_domain: "target-domain.CHANGE-ME/DEFAULT_TEST_DOMAIN".to_string(),
             }];
