@@ -4,6 +4,8 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_secret};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::SimpleError;
+use semver::{SemVerError, Version};
+use std::collections::HashMap;
 
 // generate the kubernetes config path
 pub fn get_kubernetes_config_path(
@@ -72,5 +74,44 @@ pub fn delete_terraform_tfstate_secret(
             );
             Err(e)
         }
+    }
+}
+
+pub fn check_version(
+    all_versions: HashMap<u64, &str>,
+    version_to_check: &str,
+) -> Result<str, SemVerError> {
+    match Version::parse(version_to_check) {
+        Ok(version) => match all_versions.get(&version.major) {
+            Some(version) => Ok(**version.clone()),
+            None => Err(SemVerError::ParseError("version not supported".to_string())),
+        },
+        Err(e) => Err(e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::aws::databases::utilities::check_version;
+    use std::collections::HashMap;
+
+    #[test]
+    fn check_redis_version() {
+        let mut redis_managed_versions = HashMap::with_capacity(2);
+        redis_managed_versions.insert(5, "5.0.6");
+        redis_managed_versions.insert(6, "6.x");
+
+        assert_eq!(
+            check_version(redis_managed_versions.clone(), "5").unwrap(),
+            "5.0.6"
+        );
+        assert_eq!(
+            check_version(redis_managed_versions.clone(), "5.0").unwrap(),
+            "5.0.6"
+        );
+        assert_eq!(
+            check_version(redis_managed_versions.clone(), "6.0").unwrap(),
+            "6.x"
+        );
     }
 }
