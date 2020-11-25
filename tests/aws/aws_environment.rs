@@ -9,7 +9,7 @@ use qovery_engine::models::{
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::{init, is_pod_restarted_aws_env};
 use self::test_utilities::aws::context;
-
+use tracing::{span,Level};
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
 // it permit you to create several different workspaces for each steps
@@ -94,6 +94,9 @@ pub fn delete_environment(
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
     init();
 
+    let span = span!(Level::INFO, "deploy_a_working_environment_with_no_router_on_aws_eks");
+    let _enter = span.enter();
+
     let context = context();
     let context_for_delete = context.clone_not_same_execution_id();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -120,6 +123,10 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 #[test]
 fn deploy_dockerfile_not_exist() {
     init();
+
+    let span = span!(Level::TRACE, "deploy_dockerfile_not_exist");
+    let _enter = span.enter();
+
     let context = context();
     let context2 = context.clone_not_same_execution_id();
 
@@ -152,6 +159,9 @@ fn deploy_dockerfile_not_exist() {
 #[test]
 fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     init();
+
+    let span = span!(Level::TRACE, "deploy_a_not_working_environment_with_no_router_on_aws_eks");
+    let _enter = span.enter();
 
     let context = context();
     let context_for_deletion = context.clone_not_same_execution_id();
@@ -186,6 +196,9 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
 fn deploy_a_working_environment_with_domain() {
     init();
 
+    let span = span!(Level::TRACE, "deploy_a_working_environment_with_domain");
+    let _enter = span.enter();
+
     let context = context();
     let context_for_deletion = context.clone_not_same_execution_id();
 
@@ -214,6 +227,9 @@ fn deploy_a_working_environment_with_domain() {
 fn deploy_a_working_environment_with_custom_domain() {
     init();
 
+    let span = span!(Level::TRACE, "deploy_a_working_environment_with_custom_domain");
+    let _enter = span.enter();
+
     let context = context();
     let context_for_delete = context.clone_not_same_execution_id();
 
@@ -225,9 +241,9 @@ fn deploy_a_working_environment_with_custom_domain() {
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
                 // should be the client domain
-                domain: "test-domain.CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
+                domain: "test-domain.qvy.io".to_string(),
                 // should be our domain
-                target_domain: "target-domain.CHANGE-ME/DEFAULT_TEST_DOMAIN".to_string(),
+                target_domain: "target-domain.oom.sh".to_string(),
             }];
             router
         })
@@ -241,7 +257,7 @@ fn deploy_a_working_environment_with_custom_domain() {
         .map(|mut router| {
             router.custom_domains = vec![CustomDomain {
                 // should be the client domain
-                domain: "test-domain.CHANGE-ME/CUSTOM_TEST_DOMAIN".to_string(),
+                domain: "test-domain.qvy.io".to_string(),
                 // should be our domain
                 target_domain: "target-domain.DEFAULT_TEST_DOMAIN".to_string(),
             }];
@@ -268,6 +284,9 @@ fn deploy_a_working_environment_with_custom_domain() {
 #[ignore]
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
     init();
+
+    let span = span!(Level::TRACE, "deploy_a_working_environment_with_storage_on_aws_eks");
+    let _enter = span.enter();
 
     let context = context();
     let context_for_deletion = context.clone_not_same_execution_id();
@@ -333,6 +352,9 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 #[test]
 fn redeploy_same_app_with_ebs() {
     init();
+
+    let span = span!(Level::TRACE, "redeploy_same_app_with_ebs");
+    let _enter = span.enter();
 
     let context = context();
     let context_bis = context.clone_not_same_execution_id();
@@ -472,6 +494,9 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
 fn deploy_a_not_working_environment_and_after_working_environment() {
     init();
 
+    let span = span!(Level::TRACE, "deploy_a_not_working_environment_and_after_working_environment");
+    let _enter = span.enter();
+
     // let mut contex_envs = generate_contexts_and_environments(3, test_utilities::aws::working_minimal_environment);
     let context = context();
     let context_for_not_working = context.clone_not_same_execution_id();
@@ -521,6 +546,10 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
 #[test]
 fn deploy_ok_fail_fail_ok_environment() {
     init();
+
+    let span = span!(Level::TRACE, "deploy_ok_fail_fail_ok_environment");
+    let _enter = span.enter();
+
     // working env
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -604,6 +633,9 @@ fn deploy_ok_fail_fail_ok_environment() {
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     init();
 
+    let span = span!(Level::TRACE, "deploy_a_non_working_environment_with_no_failover_on_aws_eks");
+    let _enter = span.enter();
+
     let context = context();
 
     let environment = test_utilities::aws::non_working_environment(&context);
@@ -631,6 +663,10 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 #[ignore]
 fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     init();
+
+    let span = span!(Level::TRACE, "deploy_a_non_working_environment_with_a_working_failover_on_aws_eks");
+    let _enter = span.enter();
+
     // context for non working environment
     let context = context();
 
@@ -716,6 +752,9 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 #[ignore]
 fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
     init();
+
+    let span = span!(Level::TRACE, "deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks");
+    let _enter = span.enter();
 
     let context = context();
 

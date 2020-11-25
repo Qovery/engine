@@ -1,6 +1,6 @@
 use std::io::Error;
 use std::path::Path;
-
+use tracing::{debug, error, info, span, warn, Level};
 use crate::cmd::structs::{Helm, HelmHistoryRow};
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -356,10 +356,10 @@ pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleE
         args,
         envs,
         |line| {
-            info!("{}", line.unwrap());
+            span!(Level::INFO, "{}","{}", line.unwrap());
         },
-        |line| {
-            error!("{}", line.unwrap());
+        |line_err| {
+            span!(Level::INFO, "{}","{}", line_err.unwrap());
         },
     )
 }

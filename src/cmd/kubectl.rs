@@ -514,9 +514,7 @@ where
             ),
         },
         Err(e) => warn!(
-            "Unable to execute describe on secrets: {}. it may not exist anymore?",
-            e.message.unwrap_or("".into())
-        ),
+            "Unable to execute describe on secrets. it may not exist anymore?"),
     };
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);

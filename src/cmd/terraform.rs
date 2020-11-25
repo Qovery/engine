@@ -5,6 +5,7 @@ use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::error::{SimpleError, SimpleErrorKind};
 use retry::delay::Fixed;
 use retry::OperationResult;
+use tracing::{span, Level};
 
 fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleError> {
     // terraform init
@@ -99,10 +100,10 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), SimpleError
         args,
         vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
         |line: Result<String, std::io::Error>| {
-            info!("{}", line.unwrap());
+            span!(Level::INFO, "{}","{}", line.unwrap());
         },
         |line: Result<String, std::io::Error>| {
-            error!("{}", line.unwrap());
+            span!(Level::ERROR, "{}","{}", line.unwrap());
         },
     )
 }
