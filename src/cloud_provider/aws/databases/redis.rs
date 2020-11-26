@@ -11,9 +11,8 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
-use semver::SemVerError;
 use std::collections::HashMap;
 
 pub struct Redis {
@@ -582,17 +581,17 @@ impl Backup for Redis {
 fn get_redis_version(
     requested_version: &str,
     is_managed_service: bool,
-) -> Result<String, SemVerError> {
+) -> Result<String, StringError> {
     let mut supported_redis_versions = HashMap::with_capacity(2);
 
     if is_managed_service {
         // https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/supported-engine-versions.html
-        supported_redis_versions.insert(5, "5.0.6");
-        supported_redis_versions.insert(6, "6.x");
+        supported_redis_versions.insert("5", "5.0.6");
+        supported_redis_versions.insert("6", "6.x");
     } else {
         // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
-        supported_redis_versions.insert(5, "5.0.10-debian-10-r28");
-        supported_redis_versions.insert(6, "6.0.9-debian-10-r26");
+        supported_redis_versions.insert("5", "5.0.10-debian-10-r28");
+        supported_redis_versions.insert("6", "6.0.9-debian-10-r26");
     }
 
     match utilities::get_supported_version_to_use(supported_redis_versions, requested_version) {

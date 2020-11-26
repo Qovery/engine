@@ -3,9 +3,16 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_secret};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::SimpleError;
-use semver::{SemVerError, Version};
+use crate::error::{SimpleError, StringError};
 use std::collections::HashMap;
+
+// unfortunately some proposed versions are not SemVer like Elasticache (6.x)
+// this is why we need ot have our own structure
+pub struct VersionsNumber {
+    major: String,
+    minor: Option<String>,
+    patch: Option<String>,
+}
 
 // generate the kubernetes config path
 pub fn get_kubernetes_config_path(
@@ -77,16 +84,52 @@ pub fn delete_terraform_tfstate_secret(
     }
 }
 
+pub fn get_version_semver(version: &str) -> Result<VersionsNumber, StringError> {
+    let mut version_split = version.split(".");
+
+    let major = match version_split.next() {
+        Some(major) => major.to_string(),
+        _ => {
+            return Err(StringError::new(
+                "please check the version you've sent, it can't be checked".to_string(),
+            ))
+        }
+    };
+
+    let minor = match version_split.next() {
+        Some(minor) => Some(minor.to_string()),
+        _ => None,
+    };
+
+    let patch = match version_split.next() {
+        Some(patch) => Some(patch.to_string()),
+        _ => None,
+    };
+
+    Ok(VersionsNumber {
+        major,
+        minor,
+        patch,
+    })
+}
+
 pub fn get_supported_version_to_use(
-    all_supported_versions: HashMap<u64, &str>,
+    all_supported_versions: HashMap<&str, &str>,
     version_to_check: &str,
-) -> Result<String, SemVerError> {
-    match Version::parse(version_to_check) {
-        Ok(version) => match all_supported_versions.get(&version.major) {
-            Some(version) => Ok(version.to_string()),
-            None => Err(SemVerError::ParseError("version not supported".to_string())),
-        },
-        Err(e) => Err(e),
+) -> Result<String, StringError> {
+    let version = match get_version_semver(version_to_check) {
+        Ok(version) => version,
+        Err(e) => return Err(e),
+    };
+
+    match all_supported_versions.get(version.major.as_str()) {
+        Some(version) => Ok(version.to_string()),
+        None => {
+            return Err(StringError::new(format!(
+                "this {} version is not supported",
+                version_to_check
+            )))
+        }
     }
 }
 
@@ -98,17 +141,24 @@ mod tests {
     #[test]
     fn check_redis_version() {
         let mut redis_managed_versions = HashMap::with_capacity(1);
-        redis_managed_versions.insert(6, "6.x");
+        redis_managed_versions.insert("6", "6.x");
         let mut redis_self_hosted_versions = HashMap::with_capacity(1);
-        redis_self_hosted_versions.insert(6, "6.0.9-debian-10-r26");
+        redis_self_hosted_versions.insert("6", "6.0.9-debian-10-r26");
 
         assert_eq!(
-            get_supported_version_to_use(redis_managed_versions.clone(), "6.0.0").unwrap(),
+            get_supported_version_to_use(redis_managed_versions.clone(), "6").unwrap(),
             "6.x"
         );
         assert_eq!(
             get_supported_version_to_use(redis_self_hosted_versions.clone(), "6.0.0").unwrap(),
             "6.0.9-debian-10-r26"
+        );
+        assert_eq!(
+            get_supported_version_to_use(redis_managed_versions.clone(), "1")
+                .unwrap_err()
+                .message
+                .as_str(),
+            "this 1 version is not supported"
         );
     }
 }
