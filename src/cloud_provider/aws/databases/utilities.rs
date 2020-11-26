@@ -77,13 +77,13 @@ pub fn delete_terraform_tfstate_secret(
     }
 }
 
-pub fn check_version(
-    all_versions: HashMap<u64, &str>,
+pub fn get_supported_version_to_use(
+    all_supported_versions: HashMap<u64, &str>,
     version_to_check: &str,
-) -> Result<str, SemVerError> {
+) -> Result<String, SemVerError> {
     match Version::parse(version_to_check) {
-        Ok(version) => match all_versions.get(&version.major) {
-            Some(version) => Ok(**version.clone()),
+        Ok(version) => match all_supported_versions.get(&version.major) {
+            Some(version) => Ok(version.to_string()),
             None => Err(SemVerError::ParseError("version not supported".to_string())),
         },
         Err(e) => Err(e),
@@ -92,26 +92,23 @@ pub fn check_version(
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::databases::utilities::check_version;
+    use crate::cloud_provider::aws::databases::utilities::get_supported_version_to_use;
     use std::collections::HashMap;
 
     #[test]
     fn check_redis_version() {
-        let mut redis_managed_versions = HashMap::with_capacity(2);
-        redis_managed_versions.insert(5, "5.0.6");
+        let mut redis_managed_versions = HashMap::with_capacity(1);
         redis_managed_versions.insert(6, "6.x");
+        let mut redis_self_hosted_versions = HashMap::with_capacity(1);
+        redis_self_hosted_versions.insert(6, "6.0.9-debian-10-r26");
 
         assert_eq!(
-            check_version(redis_managed_versions.clone(), "5").unwrap(),
-            "5.0.6"
-        );
-        assert_eq!(
-            check_version(redis_managed_versions.clone(), "5.0").unwrap(),
-            "5.0.6"
-        );
-        assert_eq!(
-            check_version(redis_managed_versions.clone(), "6.0").unwrap(),
+            get_supported_version_to_use(redis_managed_versions.clone(), "6.0.0").unwrap(),
             "6.x"
+        );
+        assert_eq!(
+            get_supported_version_to_use(redis_self_hosted_versions.clone(), "6.0.0").unwrap(),
+            "6.0.9-debian-10-r26"
         );
     }
 }
