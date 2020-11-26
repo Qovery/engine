@@ -63,6 +63,11 @@ pub struct SimpleError {
 }
 
 #[derive(Debug)]
+pub struct StringError {
+    pub message: String,
+}
+
+#[derive(Debug)]
 pub enum SimpleErrorKind {
     Command(ExitStatus),
     Other,
@@ -80,9 +85,21 @@ impl SimpleError {
     }
 }
 
+impl StringError {
+    pub fn new(message: String) -> Self {
+        StringError { message }
+    }
+}
+
 impl From<std::io::Error> for SimpleError {
     fn from(err: std::io::Error) -> Self {
         SimpleError::new(SimpleErrorKind::Other, Some(err.to_string()))
+    }
+}
+
+impl From<std::io::Error> for StringError {
+    fn from(err: std::io::Error) -> Self {
+        StringError::new(err.to_string())
     }
 }
 
