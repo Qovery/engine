@@ -597,7 +597,7 @@ impl<'a> Transaction<'a> {
             EnvironmentAction::EnvironmentWithFailover(te, _) => te,
         };
 
-        let empty_vec = Vec::with_capacity(0);
+        let empty_vec = Vec::with_capacity(0); //doit avoir une application
         let built_applications = match applications_by_environment.get(target_environment) {
             Some(applications) => applications,
             None => &empty_vec,

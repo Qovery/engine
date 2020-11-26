@@ -19,6 +19,8 @@ pub struct DO {
     id: String,
     name: String,
     pub token: String,
+    spaces_access_id: String,
+    spaces_secret_key: String,
     terraform_state_credentials: TerraformStateCredentials,
     listeners: Listeners,
 }
@@ -28,6 +30,8 @@ impl DO {
         context: Context,
         id: &str,
         token: &str,
+        spaces_access_id: &str,
+        spaces_secret_key: &str,
         name: &str,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Self {
@@ -36,6 +40,8 @@ impl DO {
             id: id.to_string(),
             name: name.to_string(),
             token: token.to_string(),
+            spaces_access_id: spaces_access_id.to_string(),
+            spaces_secret_key: spaces_secret_key.to_string(),
             terraform_state_credentials,
             listeners: vec![],
         }

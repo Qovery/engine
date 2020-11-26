@@ -133,7 +133,9 @@ impl<'a> DOKS<'a> {
         // Digital Ocean
         context.insert("digitalocean_token", &self.cloud_provider.token);
         context.insert("do_region", &self.region);
-
+        // Sapces Credentiales
+        context.insert("spaces_access_id", &self.cloud_provider.spaces_access_id);
+        context.insert("spaces_secret_key", &self.cloud_provider.spaces_secret_key);
         // AWS S3 tfstate storage tfstates
         context.insert(
             "aws_access_key_tfstates_account",
@@ -276,7 +278,7 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn listeners(&self) -> &Listeners {
-        unimplemented!()
+        &self.listeners
     }
 
     fn resources(&self, environment: &Environment) -> Result<Resources, EngineError> {

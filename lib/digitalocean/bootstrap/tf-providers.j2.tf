@@ -7,6 +7,8 @@ provider "aws" {
 
 provider "digitalocean" {
   token = "{{ digitalocean_token }}"
+  spaces_access_id = "{{ spaces_access_id }}"
+  spaces_secret_key = "{{ spaces_secret_key }}"
 }
 
 provider "helm" {

@@ -200,10 +200,25 @@ impl Application {
                 ),
             )),
             CPKind::GCP => None,
-            /*            CPKind::DO => Some(Box::new(
-                crate::cloud_provider::digitalocean::application::Application::new(context.clone()),
-            )),*/
-            //TODO to implement
+            CPKind::DO => Some(Box::new(
+                crate::cloud_provider::digitalocean::application::Application::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.private_port,
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.total_instances,
+                    self.start_timeout_in_seconds,
+                    image.clone(),
+                    self.environment_variables
+                        .iter()
+                        .map(|ev| ev.to_do_application_environment_variable())
+                        .collect::<Vec<_>>(),
+                ),
+            )),
             _ => None,
         }
     }
@@ -239,8 +254,26 @@ impl Application {
                 ),
             )),
             CPKind::GCP => None,
+            CPKind::DO => Some(Box::new(
+                crate::cloud_provider::digitalocean::application::Application::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.private_port,
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.total_instances,
+                    self.start_timeout_in_seconds,
+                    image,
+                    self.environment_variables
+                        .iter()
+                        .map(|ev| ev.to_do_application_environment_variable())
+                        .collect::<Vec<_>>(),
+                ),
+            )),
             _ => None,
-            //TODO to implement
         }
     }
 
@@ -291,6 +324,15 @@ impl EnvironmentVariable {
         &self,
     ) -> crate::cloud_provider::aws::application::EnvironmentVariable {
         crate::cloud_provider::aws::application::EnvironmentVariable {
+            key: self.key.clone(),
+            value: self.value.clone(),
+        }
+    }
+
+    pub fn to_do_application_environment_variable(
+        &self,
+    ) -> crate::cloud_provider::digitalocean::application::EnvironmentVariable {
+        crate::cloud_provider::digitalocean::application::EnvironmentVariable {
             key: self.key.clone(),
             value: self.value.clone(),
         }

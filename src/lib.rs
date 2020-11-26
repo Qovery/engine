@@ -15,6 +15,7 @@ pub mod error;
 pub mod fs;
 pub mod git;
 pub mod models;
+pub mod object_storage;
 mod runtime;
 pub mod s3;
 pub mod session;

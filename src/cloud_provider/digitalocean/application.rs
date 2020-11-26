@@ -16,7 +16,7 @@ use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
 };
 use crate::models::Context;
-use tracing::{event, span, Level};
+use tracing::{error, event, info, span, Level};
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
     pub key: String,
@@ -130,6 +130,38 @@ impl Create for Application {
             "DigitalOcean.application.on_create() called for {}",
             self.name
         );
+
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        };
+
+        let digitalocean = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<DO>()
+            .unwrap();
+
+        let context = self.context(kubernetes, environment);
+        let workspace_dir = self.workspace_directory();
+
+        let from_dir = format!(
+            "{}/digitalocean/charts/q-application",
+            self.context.lib_root_dir()
+        );
+
+        let kubernetes_config_file_path = common::kubernetes_config_path(
+            workspace_dir.as_str(),
+            environment.organization_id.as_str(),
+            kubernetes.id(),
+            digitalocean.spaces_secret_key.as_str(),
+            digitalocean.spaces_access_id.as_str(),
+        );
+        match kubernetes_config_file_path {
+            Ok(path) => info!("Successfuly download kubeconfig in {}", path),
+            Err(e) => error!("Unable to download the kubeconfig: Error: {:?}", e.message),
+        }
+
         Ok(())
     }
 
