@@ -2,7 +2,7 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities;
 use crate::cloud_provider::aws::{common, AWS};
-use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::environment::{Environment, Kind};
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
     Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause,
@@ -11,7 +11,9 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
+use crate::error::{
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, StringError,
+};
 use crate::models::Context;
 use std::collections::HashMap;
 
@@ -70,7 +72,11 @@ impl Redis {
         )
     }
 
-    fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+    fn tera_context(
+        &self,
+        kubernetes: &dyn Kubernetes,
+        environment: &Environment,
+    ) -> Result<TeraContext, EngineError> {
         let mut context = self.default_tera_context(kubernetes, environment);
 
         // FIXME: is there an other way than downcast a pointer?
@@ -104,6 +110,28 @@ impl Redis {
             ),
         }
 
+        let is_managed_version = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
+
+        let database_version = match get_redis_version(&self.version(), is_managed_version) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    EngineErrorScope::Engine,
+                    self.id(),
+                    Some(e.message),
+                ))
+            }
+        };
+        context.insert("database_version", database_version.as_str());
+        context.insert(
+            "database_version_major",
+            &database_version.chars().next().unwrap(),
+        );
+
         context.insert("namespace", environment.namespace());
 
         context.insert("aws_access_key", &cp.access_key_id);
@@ -130,7 +158,7 @@ impl Redis {
             &self.context.resource_expiration_in_seconds(),
         );
 
-        context
+        Ok(context)
     }
 
     fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), EngineError> {
@@ -143,7 +171,10 @@ impl Redis {
                     return Ok(());
                 }
 
-                let context = self.tera_context(*kubernetes, *environment);
+                let context = match self.tera_context(*kubernetes, *environment) {
+                    Ok(c) => c,
+                    Err(e) => return Err(e),
+                };
 
                 let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
@@ -303,7 +334,10 @@ impl Create for Redis {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy Redis on AWS Elasticcache for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment);
+                let context = match self.tera_context(*kubernetes, *environment) {
+                    Ok(c) => c,
+                    Err(e) => return Err(e),
+                };
 
                 let workspace_dir = self.workspace_directory();
 
@@ -354,7 +388,10 @@ impl Create for Redis {
                 // use helm
                 info!("deploy Redis on Kubernetes for {}", self.name());
 
-                let context = self.tera_context(*kubernetes, *environment);
+                let context = match self.tera_context(*kubernetes, *environment) {
+                    Ok(c) => c,
+                    Err(e) => return Err(e),
+                };
                 let workspace_dir = self.workspace_directory();
 
                 let aws = kubernetes

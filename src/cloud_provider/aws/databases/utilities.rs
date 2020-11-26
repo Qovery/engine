@@ -3,7 +3,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_secret};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{SimpleError, StringError};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError, StringError};
 use std::collections::HashMap;
 
 // unfortunately some proposed versions are not SemVer like Elasticache (6.x)
