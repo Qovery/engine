@@ -52,13 +52,13 @@ variable "elasticache_identifier" {
 
 variable "elasticache_version" {
   description = "Elasticache version"
-  default = "{{ version }}"
+  default = "{{ database_version }}"
   type = string
 }
 
 variable "parameter_group_name" {
   description = "Elasticache parameter group name"
-  default = "{% if version == 6 %}default.redis6.x{% else %}default.redis5.0{% endif %}"
+  default = "{% if database_version_major == '6' %}default.redis6.x{% else %}default.redis5.0{% endif %}"
   type = string
 }
 
