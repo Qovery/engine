@@ -186,44 +186,6 @@ impl Redis {
                     ),
                 )?;
 
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!("{}/aws/services/redis", self.context.lib_root_dir()).as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
-                )?;
-
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!(
-                            "{}/aws/charts/external-name-svc",
-                            self.context.lib_root_dir()
-                        )
-                        .as_str(),
-                        format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
-                        &context,
-                    ),
-                )?;
-
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!(
-                            "{}/aws/charts/external-name-svc",
-                            self.context.lib_root_dir()
-                        )
-                        .as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
-                )?;
-
                 match crate::cmd::terraform::terraform_exec_with_init_plan_apply_destroy(
                     workspace_dir.as_str(),
                 ) {
