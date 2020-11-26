@@ -188,6 +188,7 @@ impl BuildPlatform for LocalDocker {
         let name_with_tag = build.image.name_with_tag();
         let mut docker_args = vec![
             "build",
+            "--no-cache",
             "-f",
             dockerfile_complete_path.as_str(),
             "-t",
