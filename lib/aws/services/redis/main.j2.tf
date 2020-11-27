@@ -69,8 +69,14 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
   }
 
   # Elasticache instance basics
-  engine_version = var.elasticache_version
   port = var.port
+  engine_version = var.elasticache_version
+  # Thanks GOD AWS for not using SemVer and adding your own versioning system,
+  # need to add this dirty trick while Hashicorp fix this issue
+  # https://github.com/hashicorp/terraform-provider-aws/issues/15625
+  lifecycle {
+    ignore_changes = [engine_version]
+  }
 
   {%- if replication_group_id is defined %}
   # todo: add cluster mode and replicas support
