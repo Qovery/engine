@@ -184,8 +184,7 @@ impl Kubernetes {
                     .into_iter()
                     .map(|x| {
                         qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(
-                            x.total_cpu(),
-                            x.total_memory_in_gib(),
+                            x.instance_type(),
                         )
                     })
                     .collect::<Vec<_>>(),
@@ -205,8 +204,7 @@ impl Kubernetes {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Node {
-    pub cpu: u8,
-    pub memory_in_gib: u16,
+    pub instance_type: String,
 }
 
 impl Node {
@@ -218,8 +216,7 @@ impl Node {
             //qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new( FIXME
             _ => Box::new(
                 qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(
-                    self.cpu,
-                    self.memory_in_gib,
+                    &self.instance_type,
                 ),
             ),
         }
