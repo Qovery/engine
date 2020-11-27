@@ -1,7 +1,7 @@
 provider "aws" {
   profile    = "default"
   region     = "{{ region }}"
-  version    = "~> 2.63"
+  version    = "~> 3.18.0"
   access_key = "{{ aws_access_key }}"
   secret_key = "{{ aws_secret_key }}"
 }
