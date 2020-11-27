@@ -11,12 +11,14 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::cmd::structs::HelmHistoryRow;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError,
 };
 use crate::models::Context;
 use tracing::{error, event, info, span, Level};
+
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
     pub key: String,
@@ -89,8 +91,7 @@ impl Application {
     }
 
     fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
-        // TODO use default_tera_context instead
-        let mut context = TeraContext::new();
+        let mut context = self.default_tera_context(kubernetes, environment);
         let commit_id = self.image.commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
@@ -116,6 +117,9 @@ impl Application {
         context.insert("environment_variables", &environment_variables);
 
         //TODO: no storage for the moment
+        let is_storage = false;
+        context.insert("is_storage", &is_storage);
+
         context.insert("clone", &false);
         context.insert("start_timeout_in_seconds", &self.start_timeout_in_seconds);
 
@@ -150,16 +154,48 @@ impl Create for Application {
             self.context.lib_root_dir()
         );
 
-        let kubernetes_config_file_path = common::kubernetes_config_path(
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                from_dir.as_str(),
+                workspace_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        let kubeconfig_path = common::kubernetes_config_path(
             workspace_dir.as_str(),
             environment.organization_id.as_str(),
             kubernetes.id(),
             digitalocean.spaces_secret_key.as_str(),
             digitalocean.spaces_access_id.as_str(),
         );
-        match kubernetes_config_file_path {
-            Ok(path) => info!("Successfuly download kubeconfig in {}", path),
-            Err(e) => error!("Unable to download the kubeconfig: Error: {:?}", e.message),
+        match kubeconfig_path {
+            Ok(path) => {
+                let helm_release_name = self.helm_release_name();
+                let digitalocean_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalocean.token.as_str())];
+                match crate::cmd::helm::helm_exec_with_upgrade_history(
+                    path.as_str(),
+                    environment.namespace(),
+                    helm_release_name.as_str(),
+                    workspace_dir.as_str(),
+                    Timeout::Value(self.start_timeout_in_seconds),
+                    digitalocean_envs.clone(),
+                ) {
+                    Ok(upgrade) => {
+                        let selector = format!("app={}", self.name());
+                        crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
+                            path.as_str(),
+                            environment.namespace(),
+                            selector.as_str(),
+                            digitalocean_envs.clone(),
+                        );
+                    }
+                    Err(e) => error!("Helm upgrade {:?}", e.message),
+                }
+            }
+            Err(e) => error!("Retreiving the kubeconfig {:?}", e.message),
         }
 
         Ok(())

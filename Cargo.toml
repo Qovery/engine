@@ -34,8 +34,10 @@ tracing-subscriber = "0.2"
 # Jinja2
 tera = "1.3.1"
 serde = "1.0.114"
-serde_json = "1.0.57"
+serde_json = "1.0.59"
 serde_derive = "1.0"
+serde-query = "0.1.3"
+
 # AWS deps
 tokio = "0.2.22"
 rusoto_core = "0.45.0"

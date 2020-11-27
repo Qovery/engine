@@ -33,7 +33,12 @@ struct DO_API_Create_repository {
     subscription_tier_slug: String,
 }
 
-const cr_api_path: &str = "https://api.digitalocean.com/v2/registry";
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+struct DO_API_Subecribe_to_Kube_Cluster {
+    cluster_uuids: Vec<String>,
+}
+
+pub const cr_api_path: &str = "https://api.digitalocean.com/v2/registry";
 
 impl DOCR {
     pub fn new(context: Context, id: &str, name: &str, registry_name: &str, api_key: &str) -> Self {
@@ -96,6 +101,60 @@ impl DOCR {
                     EngineErrorCause::Internal,
                     format!(
                         "Unable to initialize DO Registry {} : {:?}",
+                        &self.registry_name, e,
+                    ),
+                ))
+            }
+        }
+    }
+
+    pub fn subscribe_kube_cluster_to_container_registry(
+        &self,
+        cluster_uuid: &str,
+    ) -> Result<(), EngineError> {
+        let mut headers = get_header_with_bearer(&self.api_key);
+        //TODO: receive subscription_tier_slug from core
+        let clusterIds = DO_API_Subecribe_to_Kube_Cluster {
+            cluster_uuids: vec![cluster_uuid.to_string()],
+        };
+        let res_cluster_to_link = serde_json::to_string(&clusterIds);
+        match res_cluster_to_link {
+            Ok(cluster_to_link) => {
+                let res = reqwest::blocking::Client::new()
+                    .post(cr_api_path)
+                    .headers(headers)
+                    .body(cluster_to_link)
+                    .send();
+                match res {
+                    Ok(output) => match output.status() {
+                        StatusCode::NO_CONTENT => Ok(()),
+                        status => {
+                            event!(Level::WARN, "status from DO registry API {}", status);
+                            return Err(self.engine_error(
+                                EngineErrorCause::Internal,
+                                format!(
+                                    "Bad status code : {} returned by the DO registry API for subscribing cluster {}",
+                                    status, &self.registry_name,
+                                ),
+                            ));
+                        }
+                    },
+                    Err(e) => {
+                        return Err(self.engine_error(
+                            EngineErrorCause::Internal,
+                            format!(
+                                "failed to subscribe cluster to the  repository {}",
+                                &self.registry_name,
+                            ),
+                        ))
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "Unable to initialize DO registry subscription {} : {:?}",
                         &self.registry_name, e,
                     ),
                 ))
@@ -192,7 +251,7 @@ impl DOCR {
 }
 
 // generate the right header for digital ocean with token
-fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
+pub fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
     let mut headers = header::HeaderMap::new();
     headers.insert("Content-Type", "application/json".parse().unwrap());
     headers.insert(

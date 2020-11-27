@@ -1,4 +1,5 @@
 use crate::cloud_provider::common::workerNodeDataTemplate::WorkerNodeDataTemplate;
+use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster;
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
@@ -21,6 +22,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use tera::Context as TeraContext;
 use tracing::{event, span, Level};
+
 pub mod cidr;
 pub mod node;
 
@@ -396,6 +398,11 @@ impl<'a> Kubernetes for DOKS<'a> {
             }
         };
         //TODO: Do I have enough ressources to run this ?
+
+        // retrieve the cluster uuid, usefull to link DO registry to k8s cluster
+        let cluster_uuid = get_uuid_of_cluster(self.cloud_provider.token.as_str(), self.id());
+
+        // ensure DO registry is linked to k8s cluster
 
         // create all stateful services (database)
         for service in &environment.stateful_services {
