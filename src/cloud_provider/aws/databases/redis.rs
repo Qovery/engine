@@ -171,10 +171,10 @@ impl Redis {
                     return Ok(());
                 }
 
-                let context = match self.tera_context(*kubernetes, *environment) {
-                    Ok(c) => c,
-                    Err(e) => return Err(e),
-                };
+                let context = self.tera_context(*kubernetes, *environment)?;
+
+                // deploy before destroy to avoid missing elements
+                self.on_create(target)?;
 
                 let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
@@ -296,10 +296,7 @@ impl Create for Redis {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy Redis on AWS Elasticcache for {}", self.name());
-                let context = match self.tera_context(*kubernetes, *environment) {
-                    Ok(c) => c,
-                    Err(e) => return Err(e),
-                };
+                let context = self.tera_context(*kubernetes, *environment)?;
 
                 let workspace_dir = self.workspace_directory();
 
@@ -350,10 +347,7 @@ impl Create for Redis {
                 // use helm
                 info!("deploy Redis on Kubernetes for {}", self.name());
 
-                let context = match self.tera_context(*kubernetes, *environment) {
-                    Ok(c) => c,
-                    Err(e) => return Err(e),
-                };
+                let context = self.tera_context(*kubernetes, *environment)?;
                 let workspace_dir = self.workspace_directory();
 
                 let aws = kubernetes
