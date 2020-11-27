@@ -182,7 +182,7 @@ impl BuildPlatform for LocalDocker {
             .options
             .environment_variables
             .iter()
-            .map(|ev| format!("'{}={}'", ev.key, ev.value))
+            .map(|ev| format!("{}={}", ev.key, ev.value))
             .collect::<Vec<_>>();
 
         let name_with_tag = build.image.name_with_tag();
