@@ -246,6 +246,7 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
   export_env
   prepare_engine
   prepare_tests
+  cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
   cargo test --package qovery-engine --test lib $test_name -- --ignored --exact
 }
@@ -267,6 +268,7 @@ function all_tests(){ ## Run all tests on qovery-engine
   export_env
   prepare_engine
   prepare_tests
+  cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
   cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results_all.json
   TESTS_STATUS="${PIPESTATUS[0]}"
@@ -281,6 +283,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   export_env
   prepare_engine
   prepare_tests
+  cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
   TESTS_STATUS="${PIPESTATUS[0]}"
