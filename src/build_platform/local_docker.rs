@@ -194,9 +194,9 @@ impl BuildPlatform for LocalDocker {
         }
 
         let mut docker_args = if disable_build_cache {
-            vec!["build"]
-        } else {
             vec!["build", "--no-cache"]
+        } else {
+            vec!["build"]
         };
 
         let name_with_tag = build.image.name_with_tag();
