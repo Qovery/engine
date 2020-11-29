@@ -6,10 +6,10 @@ use gethostname;
 use log::{info, warn};
 use qovery_engine::build_platform::GitRepository;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
+use qovery_engine::git;
 use qovery_engine::transaction::TransactionResult;
-use qovery_engine::{git};
 use std::fs::File;
-use std::io::{Read};
+use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 use std::{env, fs};
@@ -20,7 +20,15 @@ pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
 
 // avoid test collisions
 fn generate_cluster_id(region: &str) -> String {
+    let check_if_running_on_gitlab_env_var = "CI_PROJECT_TITLE";
     let name = gethostname::gethostname().into_string();
+
+    // if running on CI, generate an ID
+    match env::var_os(check_if_running_on_gitlab_env_var) {
+        None => {}
+        Some(_) => return generate_id(),
+    };
+
     match name {
         // shrink to 15 chars in order to avoid resources name issues
         Ok(current_name) => {
@@ -35,9 +43,9 @@ fn generate_cluster_id(region: &str) -> String {
                 shrink_size -= 1;
                 final_name = format!("{}", &current_name[..shrink_size]);
             }
-            // note ensure you use only lowercase  (uppercase are not allowed in lot of AWS ressources)
+            // note ensure you use only lowercase  (uppercase are not allowed in lot of AWS resources)
             format!("{}-{}", final_name.to_lowercase(), region.to_lowercase())
-        },
+        }
         _ => generate_id(),
     }
 }
