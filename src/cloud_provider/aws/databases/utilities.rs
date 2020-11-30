@@ -4,15 +4,8 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_secret};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{SimpleError, StringError};
+use crate::utilities::get_version_number;
 use std::collections::HashMap;
-
-// unfortunately some proposed versions are not SemVer like Elasticache (6.x)
-// this is why we need ot have our own structure
-pub struct VersionsNumber {
-    major: String,
-    minor: Option<String>,
-    patch: Option<String>,
-}
 
 // generate the kubernetes config path
 pub fn get_kubernetes_config_path(
@@ -84,40 +77,14 @@ pub fn delete_terraform_tfstate_secret(
     }
 }
 
-pub fn get_version_semver(version: &str) -> Result<VersionsNumber, StringError> {
-    let mut version_split = version.split(".");
+type ProvidedVersion<'a> = &'a str;
+type RealVersion<'a> = &'a str;
 
-    let major = match version_split.next() {
-        Some(major) => major.to_string(),
-        _ => {
-            return Err(StringError::new(
-                "please check the version you've sent, it can't be checked".to_string(),
-            ))
-        }
-    };
-
-    let minor = match version_split.next() {
-        Some(minor) => Some(minor.to_string()),
-        _ => None,
-    };
-
-    let patch = match version_split.next() {
-        Some(patch) => Some(patch.to_string()),
-        _ => None,
-    };
-
-    Ok(VersionsNumber {
-        major,
-        minor,
-        patch,
-    })
-}
-
-pub fn get_supported_version_to_use(
-    all_supported_versions: HashMap<&str, &str>,
+pub fn get_supported_version_to_use<'a>(
+    all_supported_versions: HashMap<ProvidedVersion<'a>, RealVersion<'a>>,
     version_to_check: &str,
 ) -> Result<String, StringError> {
-    let version = match get_version_semver(version_to_check) {
+    let version = match get_version_number(version_to_check) {
         Ok(version) => version,
         Err(e) => return Err(e),
     };
