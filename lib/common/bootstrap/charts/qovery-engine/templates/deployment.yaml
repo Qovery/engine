@@ -41,7 +41,7 @@ spec:
                   key: {{ $key }}
             {{ end }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.engineResources | nindent 12 }}
         - name: docker-build
           image: "{{ .Values.buildContainer.image }}:{{ .Values.buildContainer.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -63,7 +63,7 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 30
           resources:
-          {{- toYaml .Values.resources | nindent 12 }}
+          {{- toYaml .Values.buildResources | nindent 12 }}
           volumeMounts:
             - name: docker-graph-storage
               mountPath: /var/lib/docker
