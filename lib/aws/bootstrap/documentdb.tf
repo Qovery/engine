@@ -71,6 +71,7 @@ resource "aws_docdb_subnet_group" "documentdb" {
 # Todo: create a bastion to avoid this
 
 resource "aws_security_group_rule" "documentdb_remote_access" {
+  count = var.test_cluster == "false" ? 1 : 0
   cidr_blocks       = ["0.0.0.0/0"]
   description       = "Allow DocumentDB incoming access from anywhere"
   from_port         = 27017

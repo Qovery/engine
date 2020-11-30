@@ -50,9 +50,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          {{- with .Values.cainjector.image }}
-          image: "{{- if .registry -}}{{ .registry }}/{{- end -}}{{ .repository }}{{- if (.digest) -}} @{{.digest}}{{- else -}}:{{ default $.Chart.AppVersion .tag }} {{- end -}}"
-          {{- end }}
+          image: "{{ .Values.cainjector.image.repository }}:{{ default .Chart.AppVersion .Values.cainjector.image.tag }}"
           imagePullPolicy: {{ .Values.cainjector.image.pullPolicy }}
           args:
           {{- if .Values.global.logLevel }}

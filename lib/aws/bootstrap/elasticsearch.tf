@@ -1,5 +1,6 @@
 # Because it needs to be uniq across all clusters and Terraform doesn't brings solution to this, I'm using this hack
 data "external" "create_elasticsearch_role" {
+  count = var.enable_elastic_search ? 1 : 0
   program = ["./helper.sh", "create_elasticsearch_role_for_aws_service", "AWSServiceRoleForAmazonElasticsearchService", "es.amazonaws.com"]
 }
 
@@ -69,6 +70,8 @@ resource "aws_security_group" "elasticsearch" {
   name = "elasticsearch-${var.eks_cluster_id}"
   description = "Elasticsearch security group"
   vpc_id = aws_vpc.eks.id
+
+  count = var.enable_elastic_search ? 1 : 0
 
   ingress {
     from_port = 443

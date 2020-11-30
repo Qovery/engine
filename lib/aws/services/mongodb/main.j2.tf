@@ -87,7 +87,6 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
     q_environment_id = var.q_environment_id
     q_project_id = var.q_project_id
     database_identifier = var.documentdb_identifier
-    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
     {% if snapshot is defined and snapshot["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
   }
 

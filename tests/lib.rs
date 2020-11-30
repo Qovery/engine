@@ -1,3 +1,3 @@
 mod aws;
-mod digital_ocean;
+mod digitalocean;
 mod unit;

@@ -1,5 +1,5 @@
 use dns_lookup::lookup_host;
-use retry::delay::{Fibonacci};
+use retry::delay::{Fibonacci, Fixed};
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
@@ -11,13 +11,12 @@ use crate::cloud_provider::service::{
     Action, Create, Delete, Pause, Router as RRouter, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
+    from_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError, SimpleErrorKind,
 };
 use crate::models::{
-    Context, Listeners
+    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 
 pub struct Router {
@@ -232,7 +231,7 @@ impl Router {
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             common::do_stateless_service_cleanup(
@@ -291,7 +290,7 @@ impl Service for Router {
 
 impl crate::cloud_provider::service::Router for Router {
     fn check_domains(&self) -> Result<(), EngineError> {
-        let check_result = retry::retry(Fibonacci::from_millis(3000).take(1), || {
+        let check_result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
             // TODO send information back to the core
             info!("check custom domain {}", self.default_domain.as_str());
             match lookup_host(self.default_domain.as_str()) {
@@ -314,7 +313,7 @@ impl crate::cloud_provider::service::Router for Router {
                         "domain {} is still not ready after several retries",
                         self.default_domain.as_str()
                     ),
-                ));
+                ))
             }
         }
 
@@ -341,7 +340,7 @@ impl Create for Router {
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             common::kubernetes_config_path(
@@ -368,11 +367,8 @@ impl Create for Router {
                 "routers/nginx-ingress",
             );
 
-            let from_dir = format!(
-                "{}/common/chart_values/nginx-ingress",
-                self.context.lib_root_dir()
-            );
-            let _ = cast_simple_error_to_engine_error(
+            let from_dir = format!("{}/common/chart_values", self.context.lib_root_dir());
+            let _ = from_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context.execution_id(),
                 crate::template::generate_and_copy_all_files_into_dir(
@@ -382,7 +378,7 @@ impl Create for Router {
                 ),
             )?;
 
-            let _ = cast_simple_error_to_engine_error(
+            let _ = from_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context.execution_id(),
                 crate::template::copy_non_template_files(
@@ -395,7 +391,7 @@ impl Create for Router {
             )?;
 
             // do exec helm upgrade and return the last deployment status
-            let helm_history_row = cast_simple_error_to_engine_error(
+            let helm_history_row = from_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context.execution_id(),
                 crate::cmd::helm::helm_exec_with_upgrade_history_with_override(
@@ -454,7 +450,7 @@ impl Create for Router {
         }
 
         let from_dir = format!("{}/aws/charts/q-ingress-tls", self.context.lib_root_dir());
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::generate_and_copy_all_files_into_dir(
@@ -465,7 +461,7 @@ impl Create for Router {
         )?;
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = cast_simple_error_to_engine_error(
+        let helm_history_row = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::cmd::helm::helm_exec_with_upgrade_history(
@@ -473,7 +469,6 @@ impl Create for Router {
                 environment.namespace(),
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
-                Timeout::Default,
                 self.aws_credentials_envs(aws).to_vec(),
             ),
         )?;
@@ -489,51 +484,40 @@ impl Create for Router {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        // FIXME remove this
-        return Ok(());
-        //
-        // // TODO -------------------------------------------------------------
-        // // TODO integration tests required before using DNS propagation check
-        // // TODO -------------------------------------------------------------
-        // let listeners_helper = ListenersHelper::new(&self.listeners);
-        // // Todo: inform the client about the fact we're going to check for a certain amount of time
-        //
-        // let check_result = retry::retry(Fixed::from_millis(3000).take(200), || {
-        //     let rs_ips = lookup_host(self.default_domain.as_str());
-        //     match rs_ips {
-        //         Ok(ips) => {
-        //             info!("Records from DNS are successfully retrieved.");
-        //             OperationResult::Ok(ips)
-        //         }
-        //         Err(err) => {
-        //             warn!(
-        //                 "Failed to retrieve record from DNS '{}', retrying...",
-        //                 self.default_domain.as_str()
-        //             );
-        //             warn!("DNS lookup error: {:?}", err);
-        //             OperationResult::Retry(err)
-        //         }
-        //     }
-        // });
-        //
-        // match check_result {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => {
-        //         let message = format!("Wasn't able to check DNS availability '{}', can be due to a too long DNS propagation. Please retry and contact your administrator if the problem persists", self.default_domain.as_str());
-        //         error!("{}", message);
-        //
-        //         listeners_helper.error(ProgressInfo::new(
-        //             ProgressScope::Router {
-        //                 id: self.id().into(),
-        //             },
-        //             ProgressLevel::Error,
-        //             Some("DNS propagation goes wrong."),
-        //             self.context.execution_id(),
-        //         ));
-        //         // TODO: fixme I shouldn't return OK but I think I have a cache issue
-        //         Ok(())
-        //     }
-        // }
+        let check_result = retry::retry(Fixed::from_millis(3000).take(60), || {
+            let rs_ips = lookup_host(self.default_domain.as_str());
+            match rs_ips {
+                Ok(ips) => {
+                    info!("Records from DNS are successfully retrieved.");
+                    OperationResult::Ok(ips)
+                }
+                Err(e) => {
+                    warn!("Failed to retrieve record from DNS, retrying");
+                    OperationResult::Retry(e)
+                }
+            }
+        });
+
+        match check_result {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                let message = "While checking the DNS propagation";
+                error!("{}", message);
+
+                let listeners_helper = ListenersHelper::new(&self.listeners);
+
+                listeners_helper.error(ProgressInfo::new(
+                    ProgressScope::Router {
+                        id: self.id().into(),
+                    },
+                    ProgressLevel::Error,
+                    Some("DNS propagation goes wrong."),
+                    self.context.execution_id(),
+                ));
+
+                Err(self.engine_error(EngineErrorCause::Internal, message.into()))
+            }
+        }
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {

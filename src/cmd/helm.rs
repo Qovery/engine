@@ -1,23 +1,26 @@
+use std::ffi::OsStr;
+use std::fmt::{Display, Formatter};
 use std::io::Error;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::process::{Child, Command, ExitStatus, Stdio};
+
+use dirs::home_dir;
+use retry::delay::Fibonacci;
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::cmd::structs::{Helm, HelmHistoryRow};
 use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use crate::error::{SimpleError, SimpleErrorKind};
-
-const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
-
-pub enum Timeout<T> {
-    Default,
-    Value(T),
-}
 
 pub fn helm_exec_with_upgrade_history<P>(
     kubernetes_config: P,
     namespace: &str,
     release_name: &str,
     chart_root_dir: P,
-    timeout: Timeout<u32>,
     envs: Vec<(&str, &str)>,
 ) -> Result<Option<HelmHistoryRow>, SimpleError>
 where
@@ -35,7 +38,6 @@ where
         namespace,
         release_name,
         chart_root_dir.as_ref(),
-        timeout,
         envs.clone(),
     )?;
 
@@ -61,20 +63,11 @@ pub fn helm_exec_upgrade<P>(
     namespace: &str,
     release_name: &str,
     chart_root_dir: P,
-    timeout: Timeout<u32>,
     envs: Vec<(&str, &str)>,
 ) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
-    let timeout = format!(
-        "{}s",
-        match timeout {
-            Timeout::Value(v) => v + HELM_DEFAULT_TIMEOUT_IN_SECONDS,
-            Timeout::Default => HELM_DEFAULT_TIMEOUT_IN_SECONDS,
-        }
-    );
-
     helm_exec_with_output(
         vec![
             "upgrade",
@@ -84,8 +77,6 @@ where
             "--install",
             "--history-max",
             "50",
-            "--timeout",
-            timeout.as_str(),
             "--wait",
             "--namespace",
             namespace,
@@ -374,23 +365,28 @@ where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),
 {
-    // Note: Helm CLI use spf13/cobra lib for the CLI; One function is mainly used to return an error if a command failed.
-    // Helm returns an error each time a command does not succeed as they want. Which leads to handling error with status code 1
-    // It means that the command successfully ran, but it didn't terminate as expected
     match exec_with_envs_and_output("helm", args, envs, stdout_output, stderr_output) {
-        Err(err) => match err.kind {
-            SimpleErrorKind::Command(exit_status) => match exit_status.code() {
-                Some(exit_status_code) => {
-                    if exit_status_code == 1 {
-                        Ok(())
-                    } else {
-                        Err(err)
-                    }
-                }
-                None => Err(err),
-            },
-            SimpleErrorKind::Other => Err(err),
-        },
-        _ => Ok(()),
-    }
+        Err(err) => return Err(err),
+        _ => {}
+    };
+
+    Ok(())
+}
+
+pub fn kubectl_exec_with_output<F, X>(
+    args: Vec<&str>,
+    envs: Vec<(&str, &str)>,
+    stdout_output: F,
+    stderr_output: X,
+) -> Result<(), SimpleError>
+where
+    F: FnMut(Result<String, Error>),
+    X: FnMut(Result<String, Error>),
+{
+    match exec_with_envs_and_output("kubectl", args, envs, stdout_output, stderr_output) {
+        Err(err) => return Err(err),
+        _ => {}
+    };
+
+    Ok(())
 }

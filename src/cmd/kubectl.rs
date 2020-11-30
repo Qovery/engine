@@ -1,16 +1,23 @@
+use std::ffi::OsStr;
+use std::fmt::{Display, Formatter};
 use std::io::Error;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::process::{Child, Command, ExitStatus, Stdio};
 
+use dirs::home_dir;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::cmd::structs::{
     Item, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
     KubernetesService,
 };
 use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use crate::error::{SimpleError, SimpleErrorKind};
-use crate::constants::KUBECONFIG;
 
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
@@ -28,49 +35,6 @@ where
     };
 
     Ok(())
-}
-
-/*#[derive(DeserializeQuery)]
-struct PodDescribe {
-    #[query(".status.containerStatuses[0]..restartCount")]
-    pub restart_count: u32,
-}*/
-
-pub fn kubectl_exec_get_number_of_restart<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    podname: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
-
-    let mut output_vec: Vec<String> = Vec::with_capacity(20);
-    let _ = kubectl_exec_with_output(
-        vec![
-            "get",
-            "po",
-            podname,
-            "-n",
-            namespace,
-            "-o=custom-columns=:.status.containerStatuses..restartCount",
-        ],
-        _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-    )?;
-    let output_string: String = output_vec.join("");
-    Ok(output_string)
 }
 
 pub fn kubectl_exec_get_external_ingress_hostname<P>(
@@ -468,7 +432,7 @@ where
         },
     )?;
 
-    let output_string: String = output_vec.join("");
+    let mut output_string: String = output_vec.join("");
     let mut to_return: Vec<String> = Vec::new();
     let result = serde_json::from_str::<KubernetesList<Item>>(output_string.as_str());
     match result {

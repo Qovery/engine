@@ -25,7 +25,7 @@ variable "vpc_cidr_block" {
 
 variable "test_cluster" {
   description = "Is this a test cluster?"
-  default = "{{ test_cluster }}"
+  default = "false"
   type = string
 }
 
@@ -78,7 +78,7 @@ variable "eks_cluster_name" {
 
 variable "eks_access_cidr_blocks" {
   description = "Kubernetes cluster name"
-  default     = {{ eks_access_cidr_blocks }}
+  default     = "{{ eks_access_cidr_blocks }}"
   type        = list(string)
 }
 
@@ -124,22 +124,7 @@ variable "qovery_engine_info" {
   type = map(string)
 }
 
-variable "qovery_engine_replicas" {
-  description = "This variable is used to get random ID generated for the engine"
-  default = "2"
-  type = number
-}
-
 # Agent info
-
-variable "qovery_agent_info" {
-  description = "Qovery agent info"
-  default = {
-    "token" = "{{ agent_version_controller_token }}"
-    "api_fqdn" = "{{ qovery_api_url }}"
-  }
-  type = map(string)
-}
 
 variable "qovery_agent_replicas" {
   description = "This variable is used to get random ID generated for the agent"
@@ -199,33 +184,32 @@ variable "documentdb_cidr_subnet" {
   type        = number
 }
 
-# Elasticache
-
-variable "elasticache_subnets_zone_a" {
-  description = "Elasticache subnets Zone A"
-  default = {{ elasticache_zone_a_subnet_blocks }}
-  type = list(string)
-}
-
-variable "elasticache_subnets_zone_b" {
-  description = "Elasticache subnets Zone B"
-  default = {{ elasticache_zone_b_subnet_blocks }}
-  type = list(string)
-}
-
-variable "elasticache_subnets_zone_c" {
-  description = "Elasticache subnets Zone C"
-  default = {{ elasticache_zone_c_subnet_blocks }}
-  type = list(string)
-}
-
-variable "elasticache_cidr_subnet" {
-  description = "Elasticache CIDR (x.x.x.x/CIDR)"
-  default     = {{ elasticache_cidr_subnet }}
-  type        = number
-}
-
 # Elasticsearch
+
+variable "enable_elastic_search" {
+  default = false
+  type = bool
+  description = "option that create elasticsearch stack for logs, logs could use loki as well"
+}
+# Must start with a lowercase alphabet and be at least 3 and no more than 28 characters long.
+# Valid characters are a-z (lowercase letters), 0-9, and - (hyphen).
+variable "elasticsearch_q_logs_domain_name" {
+  description = "ES domain name"
+  default = "qovery-{{ eks_cluster_id }}"
+  type = string
+}
+
+variable "elasticsearch_node_number" {
+  description = "Number of Elasticsearch nodes"
+  default = 3
+  type = number
+}
+
+variable "elasticsearch_volume_size" {
+  description = "Disk size per node"
+  default = 50
+  type = number
+}
 
 variable "elasticsearch_subnets_zone_a" {
   description = "Elasticsearch subnets Zone A"
@@ -254,13 +238,13 @@ variable "elasticsearch_cidr_subnet" {
 # Helm alert manager discord
 variable "discord_api_key" {
   description = "discord url with token for used for alerting"
-  default = "{{ discord_api_key }}"
+  default = {{ discord_api_key }}
   type = string
 }
 
 # Helm qovery agent
 variable "qovery_nats_url" {
   description = "URL of qovery nats server"
-  default = "{{ qovery_nats_url }}"
+  default = {{ qovery_nats_url }}
   type = string
 }

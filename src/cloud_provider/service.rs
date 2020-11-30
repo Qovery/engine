@@ -1,4 +1,5 @@
 use std::net::TcpStream;
+use std::process::id;
 
 use tera::Context as TeraContext;
 
@@ -42,7 +43,7 @@ pub trait Service {
             if !crate::cmd::utilities::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
 
-                //let cause = EngineErrorCause::Internal;
+                let cause = EngineErrorCause::Internal;
 
                 return Err(EngineError::new(
                     EngineErrorCause::Internal,
@@ -255,7 +256,6 @@ pub enum DatabaseType<'a> {
     PostgreSQL(&'a DatabaseOptions),
     MongoDB(&'a DatabaseOptions),
     MySQL(&'a DatabaseOptions),
-    Redis(&'a DatabaseOptions),
 }
 
 #[derive(Eq, PartialEq)]
@@ -275,7 +275,6 @@ impl<'a> ServiceType<'a> {
                 DatabaseType::PostgreSQL(_) => "PostgreSQL database",
                 DatabaseType::MongoDB(_) => "MongoDB database",
                 DatabaseType::MySQL(_) => "MySQL database",
-                DatabaseType::Redis(_) => "Redis database",
             },
             ServiceType::Router => "Router",
         }

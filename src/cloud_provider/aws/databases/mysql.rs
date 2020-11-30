@@ -1,6 +1,7 @@
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities;
+use crate::cloud_provider::aws::kubernetes::EKS;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -9,10 +10,12 @@ use crate::cloud_provider::service::{
     Service, ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::helm::Timeout;
+use crate::cmd::kubectl::{
+    kubectl_exec_create_namespace, kubectl_exec_delete_namespace, kubectl_exec_delete_secret,
+};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
+    from_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
 };
 use crate::models::Context;
 
@@ -126,11 +129,6 @@ impl MySQL {
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
 
-        context.insert(
-            "resource_expiration_in_seconds",
-            &self.context.resource_expiration_in_seconds(),
-        );
-
         context
     }
 
@@ -146,7 +144,7 @@ impl MySQL {
 
                 let context = self.tera_context(*kubernetes, *environment);
 
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -156,7 +154,7 @@ impl MySQL {
                     ),
                 )?;
 
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -166,7 +164,7 @@ impl MySQL {
                     ),
                 )?;
 
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -180,7 +178,7 @@ impl MySQL {
                     ),
                 )?;
 
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -194,7 +192,7 @@ impl MySQL {
                     ),
                 )?;
 
-                match crate::cmd::terraform::terraform_exec_with_init_plan_apply_destroy(
+                match crate::cmd::terraform::terraform_exec_with_init_validate_destroy(
                     workspace_dir.as_str(),
                 ) {
                     Ok(_) => {
@@ -222,7 +220,7 @@ impl MySQL {
                 let selector = format!("app={}", self.name());
 
                 if is_error {
-                    let _ = cast_simple_error_to_engine_error(
+                    let _ = from_simple_error_to_engine_error(
                         self.engine_error_scope(),
                         self.context.execution_id(),
                         common::get_stateless_resource_information(
@@ -235,7 +233,7 @@ impl MySQL {
                 }
 
                 // clean the resource
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     common::do_stateless_service_cleanup(
@@ -308,7 +306,7 @@ impl Create for MySQL {
 
                 let workspace_dir = self.workspace_directory();
 
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -318,7 +316,7 @@ impl Create for MySQL {
                     ),
                 )?;
 
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -328,7 +326,7 @@ impl Create for MySQL {
                     ),
                 )?;
 
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -342,12 +340,12 @@ impl Create for MySQL {
                     ),
                 )?;
 
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
                         workspace_dir.as_str(),
-                        self.context.is_dry_run_deploy(),
+                        false,
                     ),
                 )?;
             }
@@ -364,7 +362,7 @@ impl Create for MySQL {
                     .downcast_ref::<AWS>()
                     .unwrap();
 
-                let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+                let kubernetes_config_file_path = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     common::kubernetes_config_path(
@@ -376,10 +374,10 @@ impl Create for MySQL {
                         kubernetes.region(),
                     ),
                 )?;
-                // default chart
+
                 let from_dir = format!("{}/common/services/mysql", self.context.lib_root_dir());
 
-                let _ = cast_simple_error_to_engine_error(
+                let _ = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::template::generate_and_copy_all_files_into_dir(
@@ -388,20 +386,8 @@ impl Create for MySQL {
                         &context,
                     ),
                 )?;
-                // overwrite with our chart values
-                let chart_values =
-                    format!("{}/common/chart_values/mysql", &self.context.lib_root_dir());
 
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        chart_values.as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
-                )?;
-
+                // render templates
                 let helm_release_name = self.helm_release_name();
                 let aws_credentials_envs = vec![
                     (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
@@ -409,7 +395,7 @@ impl Create for MySQL {
                 ];
 
                 // do exec helm upgrade and return the last deployment status
-                let helm_history_row = cast_simple_error_to_engine_error(
+                let helm_history_row = from_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
                     crate::cmd::helm::helm_exec_with_upgrade_history(
@@ -417,7 +403,6 @@ impl Create for MySQL {
                         environment.namespace(),
                         helm_release_name.as_str(),
                         workspace_dir.as_str(),
-                        Timeout::Default,
                         aws_credentials_envs.clone(),
                     ),
                 )?;

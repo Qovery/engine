@@ -1,62 +1,102 @@
 extern crate test_utilities;
-use self::test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key};
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{generate_id, init};
-use gethostname;
 use log::{info, warn};
 use qovery_engine::build_platform::GitRepository;
+use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
-use qovery_engine::git;
+use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::kubernetes::Kubernetes;
+use qovery_engine::cloud_provider::CloudProvider;
+use qovery_engine::dns_provider::cloudflare::Cloudflare;
+use qovery_engine::git::Credentials;
+use qovery_engine::models::{Clone2, GitCredentials};
 use qovery_engine::transaction::TransactionResult;
+use qovery_engine::{cmd, git};
+use serde_json::value::Value;
+use std::borrow::Borrow;
 use std::fs::File;
-use std::io::Read;
+use std::io::{BufReader, Read};
 use std::path::Path;
 use std::process::Command;
 use std::{env, fs};
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 
 pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
-pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
+pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-master/";
+pub const GIT_LOGIN: &str = "CHANGE-ME";
+pub const GIT_TOKEN: &str = "CHANGE-ME";
 
-// avoid test collisions
-fn generate_cluster_id(region: &str) -> String {
-    let check_if_running_on_gitlab_env_var = "CI_PROJECT_TITLE";
-    let name = gethostname::gethostname().into_string();
-
-    // if running on CI, generate an ID
-    match env::var_os(check_if_running_on_gitlab_env_var) {
-        None => {}
-        Some(_) => return generate_id(),
+#[test]
+#[ignore]
+fn create_and_upgrade_cluster_from_master_branch() {
+    init();
+    let tmp_dir = format!("{}{}", TMP_DESTINATION_GIT, generate_id());
+    let current_path = env::current_dir().unwrap();
+    fs::remove_dir_all(TMP_DESTINATION_GIT);
+    let gr = GitRepository {
+        url: QOVERY_ENGINE_REPOSITORY_URL.to_string(),
+        credentials: Some(Credentials {
+            login: GIT_LOGIN.to_string(),
+            password: GIT_TOKEN.to_string(),
+        }),
+        commit_id: "".to_string(),
+        dockerfile_path: "".to_string(),
     };
-
-    match name {
-        // shrink to 15 chars in order to avoid resources name issues
-        Ok(current_name) => {
-            let mut shrink_size = 15;
-            // avoid out of bounds issue
-            if current_name.chars().count() < shrink_size {
-                shrink_size = current_name.chars().count()
-            }
-            let mut final_name = format!("{}", &current_name[..shrink_size]);
-            // do not end with a non alphanumeric char
-            while !final_name.chars().last().unwrap().is_alphanumeric() {
-                shrink_size -= 1;
-                final_name = format!("{}", &current_name[..shrink_size]);
-            }
-            // note ensure you use only lowercase  (uppercase are not allowed in lot of AWS resources)
-            format!("{}-{}", final_name.to_lowercase(), region.to_lowercase())
+    fs::create_dir_all(tmp_dir.clone());
+    info!("Cloning qovery-engine repository");
+    let clone = git::clone(&gr.url, tmp_dir.clone(), &gr.credentials);
+    match clone {
+        Ok(repo) => info!("Well cloned qovery-engine repository"),
+        Err(e) => {
+            info!("error while cloning the qovery-engine repo {}", e);
+            assert!(false);
         }
-        _ => generate_id(),
     }
+    let tmp_qe = Path::new(&tmp_dir);
+    assert!(env::set_current_dir(&tmp_qe).is_ok());
+    info!("Building qovery-engine (could take some time...)");
+    let cargo_build = Command::new("cargo").arg("build").output();
+    match cargo_build {
+        Err(e) => match e {
+            _ => {
+                warn!("cargo build error {:?}", e);
+                assert!(false);
+            }
+        },
+        Ok(o) => {
+            info!("cargo build sucess {:?}", o);
+            assert!(true);
+        }
+    };
+    info!("Cargo test create eks cluster");
+    let cargo_test = Command::new("cargo")
+        .arg("test")
+        .arg("--package")
+        .arg("qovery-engine")
+        .arg("--test")
+        .arg("lib")
+        .arg("aws::aws_environment::create_eks_cluster_in_eu_west_3")
+        .arg("--")
+        .arg("--exact")
+        .env("LIB_ROOT_DIR", format!("{}/lib", &tmp_dir))
+        .output();
+
+    match cargo_test {
+        Err(e) => match e {
+            _ => assert!(false),
+        },
+        _ => assert!(true),
+    };
+    assert!(env::set_current_dir(&current_path).is_ok());
+    create_eks_cluster_in_eu_west_3();
+    delete_eks_cluster_in_eu_west_3();
 }
 
-// temporary disable this until the delete works properly
-//#[test]
-//#[ignore]
-fn create_and_destroy_eks_cluster_in_eu_west_3() {
+fn create_eks_cluster_in_us_east_2() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -75,13 +115,12 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
         qovery_engine::cloud_provider::aws::kubernetes::Options,
     >(read_buf.as_str());
 
-    let region = "eu-west-3";
     let kubernetes = EKS::new(
-        context.clone(),
-        generate_cluster_id(region).as_str(),
-        generate_cluster_id(region).as_str(),
+        context,
+        "eks-on-us-east-2",
+        "eks-us-east-2",
         AWS_KUBERNETES_VERSION,
-        region,
+        "us-east-2",
         &aws,
         &cloudflare,
         options_result.expect("Oh my god an error in test... Options options options"),
@@ -98,23 +137,24 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
-    match tx.delete_kubernetes(&kubernetes) {
-        Err(err) => panic!("{:?}", err),
-        _ => {}
-    }
-
-    let _ = match tx.commit() {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
 }
 
-// some useful snippets
-fn create_eks_cluster_in_us_east_2() {
+pub fn read_file(filepath: &str) -> String {
+    let file = File::open(filepath).expect("could not open file");
+    let mut buffered_reader = BufReader::new(file);
+    let mut contents = String::new();
+    let _number_of_bytes: usize = match buffered_reader.read_to_string(&mut contents) {
+        Ok(number_of_bytes) => number_of_bytes,
+        Err(_err) => 0,
+    };
+
+    contents
+}
+
+fn create_eks_cluster_in_eu_west_3() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -133,13 +173,12 @@ fn create_eks_cluster_in_us_east_2() {
         qovery_engine::cloud_provider::aws::kubernetes::Options,
     >(read_buf.as_str());
 
-    let region = "us-east-2";
     let kubernetes = EKS::new(
-        context,
-        generate_cluster_id(region).as_str(),
-        generate_cluster_id(region).as_str(),
+        context.clone(),
+        "eks-on-eu-west-3",
+        "eks-eu-west-3",
         AWS_KUBERNETES_VERSION,
-        region,
+        "eu-west-3",
         &aws,
         &cloudflare,
         options_result.expect("Oh my god an error in test... Options options options"),
@@ -161,7 +200,7 @@ fn create_eks_cluster_in_us_east_2() {
 fn delete_eks_cluster_in_us_east_2() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -180,13 +219,12 @@ fn delete_eks_cluster_in_us_east_2() {
         qovery_engine::cloud_provider::aws::kubernetes::Options,
     >(read_buf.as_str());
 
-    let region = "us-east-2";
     let kubernetes = EKS::new(
         context,
-        generate_cluster_id(region).as_str(),
-        generate_cluster_id(region).as_str(),
+        "eks-on-us-east-2",
+        "eks-us-east-2",
         AWS_KUBERNETES_VERSION,
-        region,
+        "us-east-2",
         &aws,
         &cloudflare,
         options_result.expect("Oh my god an error in test... Options options options"),
@@ -209,7 +247,7 @@ fn delete_eks_cluster_in_eu_west_3() {
     init();
     // put some environments here, simulated or not
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -228,13 +266,12 @@ fn delete_eks_cluster_in_eu_west_3() {
         qovery_engine::cloud_provider::aws::kubernetes::Options,
     >(read_buf.as_str());
 
-    let region = "eu-west-3";
     let kubernetes = EKS::new(
         context,
-        generate_cluster_id(region).as_str(),
-        generate_cluster_id(region).as_str(),
+        "eks-on-eu-west-3",
+        "eks-eu-west-3",
         AWS_KUBERNETES_VERSION,
-        region,
+        "eu-west-3",
         &aws,
         &cloudflare,
         options_result.expect("Oh my god an error in test... Options options options"),

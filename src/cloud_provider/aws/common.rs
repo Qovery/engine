@@ -1,3 +1,4 @@
+use std::io::Error;
 use std::str::FromStr;
 
 use rusoto_core::Region;
@@ -6,7 +7,7 @@ use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{SimpleError};
+use crate::error::{EngineError, SimpleError};
 
 pub type Logs = String;
 pub type Describe = String;

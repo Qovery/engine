@@ -24,11 +24,6 @@ environmentVariables:
   #CLOUD_PROVIDER: ""
   #REGION: ""
 
-volumes:
-  qoveryWorkspace:
-    size: 50Gi
-    path: /home/qovery/.qovery-workspace
-
 buildContainer:
   image: docker
   tag: 19.03.12-dind
@@ -58,9 +53,7 @@ securityContext:
   # runAsNonRoot: true
   # runAsUser: 1000
 
-engineResources: {}
-
-buildResources: {}
+resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following

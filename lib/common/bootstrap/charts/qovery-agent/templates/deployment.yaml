@@ -1,4 +1,3 @@
-{{- $kubefullname := include "qovery-agent.fullname" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -38,7 +37,7 @@ spec:
             - name: "{{ $key }}"
               valueFrom:
                 secretKeyRef:
-                  name: {{ $kubefullname }}
+                  name: qovery-agent
                   key: {{ $key }}
             {{ end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}

@@ -8,10 +8,31 @@ resource "helm_release" "cert_manager" {
 
   values = [file("chart_values/cert-manager.yaml")]
 
-  set {
-    name = "fake"
-    value = timestamp()
+  /////////////////////
+  // There is a bug to handle it properly, upgrade never stop :/. May be related: https://github.com/jetstack/cert-manager/issues/3239
+  // make a fake arg to avoid TF to validate update on failure because of the atomic option
+  //  set {
+  //    name = "fake"
+  //    value = timestamp()
+  //  }
+
+  lifecycle {
+    ignore_changes = [
+      status,
+      force_update,
+    ]
   }
+ /////////////////////
+  set {
+    name = "version"
+    value = "0.16.1"
+  }
+
+  set {
+    name = "priorityClassName"
+    value = "high-priority"
+  }
+
 
   set {
     name = "installCRDs"
@@ -56,12 +77,12 @@ resource "helm_release" "cert_manager" {
 
   set {
     name = "resources.limits.memory"
-    value = "1Gi"
+    value = "512Mi"
   }
 
   set {
     name = "resources.requests.memory"
-    value = "1Gi"
+    value = "256Mi"
   }
 
   # Limits webhook
@@ -77,12 +98,12 @@ resource "helm_release" "cert_manager" {
 
   set {
     name = "webhook.resources.limits.memory"
-    value = "128Mi"
+    value = "32Mi"
   }
 
   set {
     name = "webhook.resources.requests.memory"
-    value = "128Mi"
+    value = "32Mi"
   }
 
   # Limits cainjector
@@ -98,12 +119,12 @@ resource "helm_release" "cert_manager" {
 
   set {
     name = "cainjector.resources.limits.memory"
-    value = "1Gi"
+    value = "512Mi"
   }
 
   set {
     name = "cainjector.resources.requests.memory"
-    value = "1Gi"
+    value = "256Mi"
   }
 
   depends_on = [

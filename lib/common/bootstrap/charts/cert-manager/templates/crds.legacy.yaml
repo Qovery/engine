@@ -1,4 +1,4 @@
-{{- if (semverCompare "<1.16-0" .Capabilities.KubeVersion.GitVersion) }}
+{{- if (semverCompare "<1.15-0" .Capabilities.KubeVersion.GitVersion) }}
 {{- if .Values.installCRDs }}
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -68,6 +68,11 @@ spec:
         spec:
           description: Desired state of the CertificateRequest resource.
           properties:
+            csr:
+              description: The PEM-encoded x509 certificate signing request to be
+                submitted to the CA for signing.
+              format: byte
+              type: string
             duration:
               description: The requested 'duration' (i.e. lifetime) of the Certificate.
                 This option may be ignored/overridden by some issuer types.
@@ -98,16 +103,10 @@ spec:
               required:
               - name
               type: object
-            request:
-              description: The PEM-encoded x509 certificate signing request to be
-                submitted to the CA for signing.
-              format: byte
-              type: string
             usages:
               description: Usages is the set of x509 usages that are requested for
-                the certificate. If usages are set they SHOULD be encoded inside the
-                CSR spec Defaults to `digital signature` and `key encipherment` if
-                not specified.
+                the certificate. Defaults to `digital signature` and `key encipherment`
+                if not specified.
               items:
                 description: 'KeyUsage specifies valid usage contexts for keys. See:
                   https://tools.ietf.org/html/rfc5280#section-4.2.1.3      https://tools.ietf.org/html/rfc5280#section-4.2.1.12
@@ -145,8 +144,8 @@ spec:
                 type: string
               type: array
           required:
+          - csr
           - issuerRef
-          - request
           type: object
         status:
           description: Status of the CertificateRequest. This is set and managed automatically.
@@ -208,19 +207,10 @@ spec:
               format: date-time
               type: string
           type: object
-      required:
-      - spec
-  version: v1
   versions:
-  - name: v1
+  - name: v1alpha2
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
 ---
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -310,9 +300,9 @@ spec:
                 the certificate will be automatically renewed 2/3rds of the way through
                 the certificate's duration.
               type: string
-            emailAddresses:
-              description: EmailAddresses is a list of email subjectAltNames to be
-                set on the Certificate.
+            emailSANs:
+              description: EmailSANs is a list of email subjectAltNames to be set
+                on the Certificate.
               items:
                 type: string
               type: array
@@ -347,6 +337,36 @@ spec:
               required:
               - name
               type: object
+            keyAlgorithm:
+              description: KeyAlgorithm is the private key algorithm of the corresponding
+                private key for this certificate. If provided, allowed values are
+                either "rsa" or "ecdsa" If `keyAlgorithm` is specified and `keySize`
+                is not provided, key size of 256 will be used for "ecdsa" key algorithm
+                and key size of 2048 will be used for "rsa" key algorithm.
+              enum:
+              - rsa
+              - ecdsa
+              type: string
+            keyEncoding:
+              description: KeyEncoding is the private key cryptography standards (PKCS)
+                for this certificate's private key to be encoded in. If provided,
+                allowed values are "pkcs1" and "pkcs8" standing for PKCS#1 and PKCS#8,
+                respectively. If KeyEncoding is not specified, then PKCS#1 will be
+                used by default.
+              enum:
+              - pkcs1
+              - pkcs8
+              type: string
+            keySize:
+              description: KeySize is the key bit size of the corresponding private
+                key for this certificate. If `keyAlgorithm` is set to `RSA`, valid
+                values are `2048`, `4096` or `8192`, and will default to `2048` if
+                not specified. If `keyAlgorithm` is set to `ECDSA`, valid values are
+                `256`, `384` or `521`, and will default to `256` if not specified.
+                No other values are allowed.
+              maximum: 8192
+              minimum: 0
+              type: integer
             keystores:
               description: Keystores configures additional keystore output formats
                 stored in the `secretName` Secret resource.
@@ -416,28 +436,15 @@ spec:
                   - passwordSecretRef
                   type: object
               type: object
+            organization:
+              description: Organization is a list of organizations to be used on the
+                Certificate.
+              items:
+                type: string
+              type: array
             privateKey:
               description: Options to control private keys used for the Certificate.
               properties:
-                algorithm:
-                  description: Algorithm is the private key algorithm of the corresponding
-                    private key for this certificate. If provided, allowed values
-                    are either "rsa" or "ecdsa" If `algorithm` is specified and `size`
-                    is not provided, key size of 256 will be used for "ecdsa" key
-                    algorithm and key size of 2048 will be used for "rsa" key algorithm.
-                  enum:
-                  - RSA
-                  - ECDSA
-                  type: string
-                encoding:
-                  description: The private key cryptography standards (PKCS) encoding
-                    for this certificate's private key to be encoded in. If provided,
-                    allowed values are "pkcs1" and "pkcs8" standing for PKCS#1 and
-                    PKCS#8, respectively. Defaults to PKCS#1 if not specified.
-                  enum:
-                  - PKCS1
-                  - PKCS8
-                  type: string
                 rotationPolicy:
                   description: RotationPolicy controls how private keys should be
                     regenerated when a re-issuance is being processed. If set to Never,
@@ -448,16 +455,6 @@ spec:
                     the specified requirements will be generated whenever a re-issuance
                     occurs. Default is 'Never' for backward compatibility.
                   type: string
-                size:
-                  description: Size is the key bit size of the corresponding private
-                    key for this certificate. If `algorithm` is set to `RSA`, valid
-                    values are `2048`, `4096` or `8192`, and will default to `2048`
-                    if not specified. If `algorithm` is set to `ECDSA`, valid values
-                    are `256`, `384` or `521`, and will default to `256` if not specified.
-                    No other values are allowed.
-                  maximum: 8192
-                  minimum: 0
-                  type: integer
               type: object
             renewBefore:
               description: The amount of time before the currently issued certificate's
@@ -490,11 +487,6 @@ spec:
                   items:
                     type: string
                   type: array
-                organizations:
-                  description: Organizations to be used on the Certificate.
-                  items:
-                    type: string
-                  type: array
                 postalCodes:
                   description: Postal codes to be used on the Certificate.
                   items:
@@ -514,8 +506,8 @@ spec:
                     type: string
                   type: array
               type: object
-            uris:
-              description: URIs is a list of URI subjectAltNames to be set on the
+            uriSANs:
+              description: URISANs is a list of URI subjectAltNames to be set on the
                 Certificate.
               items:
                 type: string
@@ -645,19 +637,10 @@ spec:
                 in the annotation is greater than this field."
               type: integer
           type: object
-      required:
-      - spec
-  version: v1
   versions:
-  - name: v1
+  - name: v1alpha2
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
 ---
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -718,21 +701,22 @@ spec:
           type: object
         spec:
           properties:
-            authorizationURL:
-              description: The URL to the ACME Authorization resource that this challenge
-                is a part of.
+            authzURL:
+              description: AuthzURL is the URL to the ACME Authorization resource
+                that this challenge is a part of.
               type: string
             dnsName:
-              description: dnsName is the identifier that this challenge is for, e.g.
+              description: DNSName is the identifier that this challenge is for, e.g.
                 example.com. If the requested DNSName is a 'wildcard', this field
                 MUST be set to the non-wildcard domain, e.g. for `*.example.com`,
                 it must be `example.com`.
               type: string
             issuerRef:
-              description: References a properly configured ACME-type Issuer which
-                should be used to create this Challenge. If the Issuer does not exist,
-                processing will be retried. If the Issuer is not an 'ACME' Issuer,
-                an error will be returned and the Challenge will be marked as failed.
+              description: IssuerRef references a properly configured ACME-type Issuer
+                which should be used to create this Challenge. If the Issuer does
+                not exist, processing will be retried. If the Issuer is not an 'ACME'
+                Issuer, an error will be returned and the Challenge will be marked
+                as failed.
               properties:
                 group:
                   description: Group of the resource being referred to.
@@ -747,22 +731,23 @@ spec:
               - name
               type: object
             key:
-              description: 'The ACME challenge key for this challenge For HTTP01 challenges,
-                this is the value that must be responded with to complete the HTTP01
-                challenge in the format: `<private key JWK thumbprint>.<key from acme
-                server for challenge>`. For DNS01 challenges, this is the base64 encoded
-                SHA256 sum of the `<private key JWK thumbprint>.<key from acme server
-                for challenge>` text that must be set as the TXT record content.'
+              description: 'Key is the ACME challenge key for this challenge For HTTP01
+                challenges, this is the value that must be responded with to complete
+                the HTTP01 challenge in the format: `<private key JWK thumbprint>.<key
+                from acme server for challenge>`. For DNS01 challenges, this is the
+                base64 encoded SHA256 sum of the `<private key JWK thumbprint>.<key
+                from acme server for challenge>` text that must be set as the TXT
+                record content.'
               type: string
             solver:
-              description: Contains the domain solving configuration that should be
-                used to solve this challenge resource.
+              description: Solver contains the domain solving configuration that should
+                be used to solve this challenge resource.
               properties:
                 dns01:
                   description: Configures cert-manager to attempt to complete authorizations
                     by performing the DNS01 challenge flow.
                   properties:
-                    acmeDNS:
+                    acmedns:
                       description: Use the 'ACME DNS' (https://github.com/joohoi/acme-dns)
                         API to manage DNS01 challenge records.
                       properties:
@@ -848,7 +833,7 @@ spec:
                       - clientTokenSecretRef
                       - serviceConsumerDomain
                       type: object
-                    azureDNS:
+                    azuredns:
                       description: Use the Microsoft Azure DNS API to manage DNS01
                         challenge records.
                       properties:
@@ -893,7 +878,7 @@ spec:
                       - resourceGroupName
                       - subscriptionID
                       type: object
-                    cloudDNS:
+                    clouddns:
                       description: Use the Google Cloud DNS API to manage DNS01 challenge
                         records.
                       properties:
@@ -1187,10 +1172,9 @@ spec:
                               type: object
                             spec:
                               description: PodSpec defines overrides for the HTTP01
-                                challenge solver pod. Only the 'priorityClassName',
-                                'nodeSelector', 'affinity', 'serviceAccountName' and
-                                'tolerations' fields are supported currently. All
-                                other fields will be ignored.
+                                challenge solver pod. Only the 'nodeSelector', 'affinity'
+                                and 'tolerations' fields are supported currently.
+                                All other fields will be ignored.
                               properties:
                                 affinity:
                                   description: If specified, the pod's scheduling
@@ -1970,12 +1954,6 @@ spec:
                                     which must match a node''s labels for the pod
                                     to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/'
                                   type: object
-                                priorityClassName:
-                                  description: If specified, the pod's priorityClassName.
-                                  type: string
-                                serviceAccountName:
-                                  description: If specified, the pod's service account
-                                  type: string
                                 tolerations:
                                   description: If specified, the pod's tolerations.
                                   items:
@@ -2072,26 +2050,27 @@ spec:
                   type: object
               type: object
             token:
-              description: The ACME challenge token for this challenge. This is the
-                raw value returned from the ACME server.
+              description: Token is the ACME challenge token for this challenge. This
+                is the raw value returned from the ACME server.
               type: string
             type:
-              description: The type of ACME challenge this resource represents. One
-                of "HTTP-01" or "DNS-01".
+              description: Type is the type of ACME challenge this resource represents.
+                One of "http-01" or "dns-01".
               enum:
-              - HTTP-01
-              - DNS-01
+              - http-01
+              - dns-01
               type: string
             url:
-              description: The URL of the ACME Challenge resource for this challenge.
-                This can be used to lookup details about the status of this challenge.
+              description: URL is the URL of the ACME Challenge resource for this
+                challenge. This can be used to lookup details about the status of
+                this challenge.
               type: string
             wildcard:
-              description: wildcard will be true if this challenge is for a wildcard
+              description: Wildcard will be true if this challenge is for a wildcard
                 identifier, for example '*.example.com'.
               type: boolean
           required:
-          - authorizationURL
+          - authzURL
           - dnsName
           - issuerRef
           - key
@@ -2103,26 +2082,27 @@ spec:
         status:
           properties:
             presented:
-              description: presented will be set to true if the challenge values for
+              description: Presented will be set to true if the challenge values for
                 this challenge are currently 'presented'. This *does not* imply the
                 self check is passing. Only that the values have been 'submitted'
                 for the appropriate challenge mechanism (i.e. the DNS01 TXT record
                 has been presented, or the HTTP01 configuration has been configured).
               type: boolean
             processing:
-              description: Used to denote whether this challenge should be processed
-                or not. This field will only be set to true by the 'scheduling' component.
-                It will only be set to false by the 'challenges' controller, after
-                the challenge has reached a final state or timed out. If this field
-                is set to false, the challenge controller will not take any more action.
+              description: Processing is used to denote whether this challenge should
+                be processed or not. This field will only be set to true by the 'scheduling'
+                component. It will only be set to false by the 'challenges' controller,
+                after the challenge has reached a final state or timed out. If this
+                field is set to false, the challenge controller will not take any
+                more action.
               type: boolean
             reason:
-              description: Contains human readable information on why the Challenge
+              description: Reason contains human readable information on why the Challenge
                 is in the current state.
               type: string
             state:
-              description: Contains the current 'state' of the challenge. If not set,
-                the state of the challenge is unknown.
+              description: State contains the current 'state' of the challenge. If
+                not set, the state of the challenge is unknown.
               enum:
               - valid
               - ready
@@ -2135,18 +2115,10 @@ spec:
           type: object
       required:
       - metadata
-      - spec
-  version: v1
   versions:
-  - name: v1
+  - name: v1alpha2
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
 ---
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -2211,13 +2183,6 @@ spec:
               description: ACME configures this issuer to communicate with a RFC8555
                 (ACME) server to obtain signed x509 certificates.
               properties:
-                disableAccountKeyGeneration:
-                  description: Enables or disables generating a new ACME account key.
-                    If true, the Issuer resource will *not* request a new account
-                    but will expect the account key to be supplied via an existing
-                    secret. If false, the cert-manager system will generate a new
-                    ACME account key for the Issuer. Defaults to false.
-                  type: boolean
                 email:
                   description: Email is the email address to be associated with the
                     ACME account. This field is optional, but it is strongly recommended
@@ -2270,16 +2235,6 @@ spec:
                   - keyID
                   - keySecretRef
                   type: object
-                preferredChain:
-                  description: 'PreferredChain is the chain to use if the ACME server
-                    outputs multiple. PreferredChain is no guarantee that this one
-                    gets delivered by the ACME endpoint. For example, for Let''s Encrypt''s
-                    DST crosssign you would use: "DST Root CA X3" or "ISRG Root X1"
-                    for the newer Let''s Encrypt root CA. This value picks the first
-                    certificate bundle in the ACME alternative chains that has a certificate
-                    with this value as its issuer''s CN'
-                  maxLength: 64
-                  type: string
                 privateKeySecretRef:
                   description: PrivateKey is the name of a Kubernetes Secret resource
                     that will be used to store the automatically generated ACME account
@@ -2326,7 +2281,7 @@ spec:
                         description: Configures cert-manager to attempt to complete
                           authorizations by performing the DNS01 challenge flow.
                         properties:
-                          acmeDNS:
+                          acmedns:
                             description: Use the 'ACME DNS' (https://github.com/joohoi/acme-dns)
                               API to manage DNS01 challenge records.
                             properties:
@@ -2420,7 +2375,7 @@ spec:
                             - clientTokenSecretRef
                             - serviceConsumerDomain
                             type: object
-                          azureDNS:
+                          azuredns:
                             description: Use the Microsoft Azure DNS API to manage
                               DNS01 challenge records.
                             properties:
@@ -2466,7 +2421,7 @@ spec:
                             - resourceGroupName
                             - subscriptionID
                             type: object
-                          cloudDNS:
+                          clouddns:
                             description: Use the Google Cloud DNS API to manage DNS01
                               challenge records.
                             properties:
@@ -2680,6 +2635,7 @@ spec:
                                   to reference a Secret resource. For details on the
                                   schema of this field, consult the webhook provider
                                   implementation's documentation.
+                                x-kubernetes-preserve-unknown-fields: true
                               groupName:
                                 description: The API group name that should be used
                                   when POSTing ChallengePayload resources to the webhook
@@ -2776,10 +2732,9 @@ spec:
                                     type: object
                                   spec:
                                     description: PodSpec defines overrides for the
-                                      HTTP01 challenge solver pod. Only the 'priorityClassName',
-                                      'nodeSelector', 'affinity', 'serviceAccountName'
-                                      and 'tolerations' fields are supported currently.
-                                      All other fields will be ignored.
+                                      HTTP01 challenge solver pod. Only the 'nodeSelector',
+                                      'affinity' and 'tolerations' fields are supported
+                                      currently. All other fields will be ignored.
                                     properties:
                                       affinity:
                                         description: If specified, the pod's scheduling
@@ -3656,13 +3611,6 @@ spec:
                                           for the pod to be scheduled on that node.
                                           More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/'
                                         type: object
-                                      priorityClassName:
-                                        description: If specified, the pod's priorityClassName.
-                                        type: string
-                                      serviceAccountName:
-                                        description: If specified, the pod's service
-                                          account
-                                        type: string
                                       tolerations:
                                         description: If specified, the pod's tolerations.
                                         items:
@@ -3908,12 +3856,6 @@ spec:
                     If not set the system root certificates are used to validate the
                     TLS connection.
                   format: byte
-                  type: string
-                namespace:
-                  description: 'Name of the vault namespace. Namespaces is a set of
-                    features within Vault Enterprise that allows Vault environments
-                    to support Secure Multi-tenancy. e.g: "ns1" More about namespaces
-                    can be found here https://www.vaultproject.io/docs/enterprise/namespaces'
                   type: string
                 path:
                   description: 'Path is the mount path of the Vault PKI backend''s
@@ -4055,19 +3997,10 @@ spec:
                 type: object
               type: array
           type: object
-      required:
-      - spec
-  version: v1
   versions:
-  - name: v1
+  - name: v1alpha2
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
 ---
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -4131,13 +4064,6 @@ spec:
               description: ACME configures this issuer to communicate with a RFC8555
                 (ACME) server to obtain signed x509 certificates.
               properties:
-                disableAccountKeyGeneration:
-                  description: Enables or disables generating a new ACME account key.
-                    If true, the Issuer resource will *not* request a new account
-                    but will expect the account key to be supplied via an existing
-                    secret. If false, the cert-manager system will generate a new
-                    ACME account key for the Issuer. Defaults to false.
-                  type: boolean
                 email:
                   description: Email is the email address to be associated with the
                     ACME account. This field is optional, but it is strongly recommended
@@ -4190,16 +4116,6 @@ spec:
                   - keyID
                   - keySecretRef
                   type: object
-                preferredChain:
-                  description: 'PreferredChain is the chain to use if the ACME server
-                    outputs multiple. PreferredChain is no guarantee that this one
-                    gets delivered by the ACME endpoint. For example, for Let''s Encrypt''s
-                    DST crosssign you would use: "DST Root CA X3" or "ISRG Root X1"
-                    for the newer Let''s Encrypt root CA. This value picks the first
-                    certificate bundle in the ACME alternative chains that has a certificate
-                    with this value as its issuer''s CN'
-                  maxLength: 64
-                  type: string
                 privateKeySecretRef:
                   description: PrivateKey is the name of a Kubernetes Secret resource
                     that will be used to store the automatically generated ACME account
@@ -4246,7 +4162,7 @@ spec:
                         description: Configures cert-manager to attempt to complete
                           authorizations by performing the DNS01 challenge flow.
                         properties:
-                          acmeDNS:
+                          acmedns:
                             description: Use the 'ACME DNS' (https://github.com/joohoi/acme-dns)
                               API to manage DNS01 challenge records.
                             properties:
@@ -4340,7 +4256,7 @@ spec:
                             - clientTokenSecretRef
                             - serviceConsumerDomain
                             type: object
-                          azureDNS:
+                          azuredns:
                             description: Use the Microsoft Azure DNS API to manage
                               DNS01 challenge records.
                             properties:
@@ -4386,7 +4302,7 @@ spec:
                             - resourceGroupName
                             - subscriptionID
                             type: object
-                          cloudDNS:
+                          clouddns:
                             description: Use the Google Cloud DNS API to manage DNS01
                               challenge records.
                             properties:
@@ -4600,6 +4516,7 @@ spec:
                                   to reference a Secret resource. For details on the
                                   schema of this field, consult the webhook provider
                                   implementation's documentation.
+                                x-kubernetes-preserve-unknown-fields: true
                               groupName:
                                 description: The API group name that should be used
                                   when POSTing ChallengePayload resources to the webhook
@@ -4696,10 +4613,9 @@ spec:
                                     type: object
                                   spec:
                                     description: PodSpec defines overrides for the
-                                      HTTP01 challenge solver pod. Only the 'priorityClassName',
-                                      'nodeSelector', 'affinity', 'serviceAccountName'
-                                      and 'tolerations' fields are supported currently.
-                                      All other fields will be ignored.
+                                      HTTP01 challenge solver pod. Only the 'nodeSelector',
+                                      'affinity' and 'tolerations' fields are supported
+                                      currently. All other fields will be ignored.
                                     properties:
                                       affinity:
                                         description: If specified, the pod's scheduling
@@ -5576,13 +5492,6 @@ spec:
                                           for the pod to be scheduled on that node.
                                           More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/'
                                         type: object
-                                      priorityClassName:
-                                        description: If specified, the pod's priorityClassName.
-                                        type: string
-                                      serviceAccountName:
-                                        description: If specified, the pod's service
-                                          account
-                                        type: string
                                       tolerations:
                                         description: If specified, the pod's tolerations.
                                         items:
@@ -5829,12 +5738,6 @@ spec:
                     TLS connection.
                   format: byte
                   type: string
-                namespace:
-                  description: 'Name of the vault namespace. Namespaces is a set of
-                    features within Vault Enterprise that allows Vault environments
-                    to support Secure Multi-tenancy. e.g: "ns1" More about namespaces
-                    can be found here https://www.vaultproject.io/docs/enterprise/namespaces'
-                  type: string
                 path:
                   description: 'Path is the mount path of the Vault PKI backend''s
                     `sign` endpoint, e.g: "my_pki_mount/sign/my-role-name".'
@@ -5975,19 +5878,10 @@ spec:
                 type: object
               type: array
           type: object
-      required:
-      - spec
-  version: v1
   versions:
-  - name: v1
+  - name: v1alpha2
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
 ---
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -6053,6 +5947,12 @@ spec:
                 CSR. If specified, this value must also be present in `dnsNames`.
                 This field must match the corresponding field on the DER encoded CSR.
               type: string
+            csr:
+              description: Certificate signing request bytes in DER encoding. This
+                will be used when finalizing the order. This field must be set on
+                the order.
+              format: byte
+              type: string
             dnsNames:
               description: DNSNames is a list of DNS names that should be included
                 as part of the Order validation process. This field must match the
@@ -6079,16 +5979,10 @@ spec:
               required:
               - name
               type: object
-            request:
-              description: Certificate signing request bytes in DER encoding. This
-                will be used when finalizing the order. This field must be set on
-                the order.
-              format: byte
-              type: string
           required:
+          - csr
           - dnsNames
           - issuerRef
-          - request
           type: object
         status:
           properties:
@@ -6212,18 +6106,10 @@ spec:
           type: object
       required:
       - metadata
-      - spec
-  version: v1
   versions:
-  - name: v1
+  - name: v1alpha2
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
 
 {{- end }}
 {{- end }}

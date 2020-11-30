@@ -1,8 +1,10 @@
 use std::path::Path;
 use std::rc::Rc;
 
+use git2::Error;
+
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
-use crate::error::{EngineError, EngineErrorCause};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
 use crate::models::{
@@ -178,35 +180,21 @@ impl BuildPlatform for LocalDocker {
             _ => {}
         }
 
-        let mut disable_build_cache = false;
-
-        let mut env_var_args: Vec<String> =
-            Vec::with_capacity(build.options.environment_variables.len());
-
-        for ev in &build.options.environment_variables {
-            if ev.key == "QOVERY_DISABLE_BUILD_CACHE" && ev.value.to_lowercase() == "true" {
-                // this is a special flag to disable build cache dynamically
-                // -- do not pass this env var key/value to as build parameter
-                disable_build_cache = true;
-            } else {
-                env_var_args.push(format!("{}={}", ev.key, ev.value));
-            }
-        }
-
-        let mut docker_args = if disable_build_cache {
-            vec!["build", "--no-cache"]
-        } else {
-            vec!["build"]
-        };
+        let env_var_args = &build
+            .options
+            .environment_variables
+            .iter()
+            .map(|ev| format!("'{}={}'", ev.key, ev.value))
+            .collect::<Vec<_>>();
 
         let name_with_tag = build.image.name_with_tag();
-
-        docker_args.extend(vec![
+        let mut docker_args = vec![
+            "build",
             "-f",
             dockerfile_complete_path.as_str(),
             "-t",
             name_with_tag.as_str(),
-        ]);
+        ];
 
         let mut docker_args = if env_var_args.is_empty() {
             docker_args
@@ -267,7 +255,7 @@ impl BuildPlatform for LocalDocker {
                 return Err(self.engine_error(
                     EngineErrorCause::User(
                         "It looks like your Dockerfile is wrong. Did you consider building \
-                        your container locally using `qovery run` or `docker build --no-cache`?",
+                        your container locally using `qovery run` or `docker build`?",
                     ),
                     format!(
                         "error while building container image {}. Error: {:?}",

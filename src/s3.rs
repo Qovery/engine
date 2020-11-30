@@ -1,17 +1,19 @@
+use std::fmt::Display;
 use std::fs::{read_to_string, File};
-use std::io::{Read, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::str::FromStr;
-use std::{fs};
+use std::{fs, io};
 
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    GetObjectError, GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request,
-    S3Client, S3,
+    CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, GetObjectError,
+    GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request, PutBucketVersioningRequest,
+    S3Client, VersioningConfiguration, S3,
 };
 
 use crate::cmd::utilities::exec_with_envs;
@@ -97,7 +99,7 @@ pub fn get_object(
                         ))
                     }
                 },
-                RusotoError::Unknown(_) => {
+                RusotoError::Unknown(r) => {
                     let r_from_aws_cli = get_object_via_aws_cli(
                         access_key_id,
                         secret_access_key,

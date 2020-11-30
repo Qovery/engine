@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ template "redis.fullname" . }}-health
-  namespace: {{ .Release.Namespace | quote }}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "redis.name" . }}
     chart: {{ template "redis.chart" . }}
@@ -25,17 +25,7 @@ data:
         -a $REDIS_PASSWORD $no_auth_warning \
 {{- end }}
         -h localhost \
-{{- if .Values.tls.enabled }}
-        -p $REDIS_TLS_PORT \
-        --tls \
-        --cacert {{ template "redis.tlsCACert" . }} \
-        {{- if .Values.tls.authClients }}
-          --cert {{ template "redis.tlsCert" . }} \
-          --key {{ template "redis.tlsCertKey" . }} \
-        {{- end }}
-{{- else }}
         -p $REDIS_PORT \
-{{- end }}
         ping
     )
     if [ "$response" != "PONG" ]; then
@@ -58,17 +48,7 @@ data:
         -a $REDIS_PASSWORD $no_auth_warning \
 {{- end }}
         -h localhost \
-{{- if .Values.tls.enabled }}
-        -p $REDIS_TLS_PORT \
-        --tls \
-        --cacert {{ template "redis.tlsCACert" . }} \
-        {{- if .Values.tls.authClients }}
-          --cert {{ template "redis.tlsCert" . }} \
-          --key {{ template "redis.tlsCertKey" . }} \
-        {{- end }}
-{{- else }}
         -p $REDIS_PORT \
-{{- end }}
         ping
     )
     if [ "$response" != "PONG" ] && [ "$response" != "LOADING Redis is loading the dataset in memory" ]; then
@@ -92,17 +72,7 @@ data:
         -a $REDIS_PASSWORD $no_auth_warning \
 {{- end }}
         -h localhost \
-{{- if .Values.tls.enabled }}
-        -p $REDIS_SENTINEL_TLS_PORT_NUMBER \
-        --tls \
-        --cacert {{ template "redis.tlsCACert" . }} \
-        {{- if .Values.tls.authClients }}
-          --cert {{ template "redis.tlsCert" . }} \
-          --key {{ template "redis.tlsCertKey" . }} \
-        {{- end }}
-{{- else }}
         -p $REDIS_SENTINEL_PORT \
-{{- end }}
         ping
     )
     if [ "$response" != "PONG" ]; then
@@ -142,14 +112,6 @@ data:
 {{- end }}
         -h $REDIS_MASTER_HOST \
         -p $REDIS_MASTER_PORT_NUMBER \
-{{- if .Values.tls.enabled }}
-        --tls \
-        --cacert {{ template "redis.tlsCACert" . }} \
-        {{- if .Values.tls.authClients }}
-          --cert {{ template "redis.tlsCert" . }} \
-          --key {{ template "redis.tlsCertKey" . }} \
-        {{- end }}
-{{- end }}
         ping
     )
     if [ "$response" != "PONG" ]; then
@@ -173,14 +135,6 @@ data:
 {{- end }}
         -h $REDIS_MASTER_HOST \
         -p $REDIS_MASTER_PORT_NUMBER \
-{{- if .Values.tls.enabled }}
-        --tls \
-        --cacert {{ template "redis.tlsCACert" . }} \
-        {{- if .Values.tls.authClients }}
-          --cert {{ template "redis.tlsCert" . }} \
-          --key {{ template "redis.tlsCertKey" . }} \
-        {{- end }}
-{{- end }}
         ping
     )
     if [ "$response" != "PONG" ] && [ "$response" != "LOADING Redis is loading the dataset in memory" ]; then

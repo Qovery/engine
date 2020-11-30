@@ -23,4 +23,4 @@ mod string;
 mod template;
 pub mod transaction;
 mod unit_conversion;
-mod utilities;
+mod object_storage;

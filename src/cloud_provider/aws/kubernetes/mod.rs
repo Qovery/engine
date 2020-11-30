@@ -1,11 +1,17 @@
+use std::borrow::Borrow;
+use std::env;
+use std::iter::FromIterator;
+use std::ops::Deref;
+use std::rc::Rc;
 use std::str::FromStr;
 
 use itertools::Itertools;
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::common::{kubernetes_config_path};
+use crate::cloud_provider::aws::common::{do_stateless_service_cleanup, kubernetes_config_path};
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -13,21 +19,25 @@ use crate::cloud_provider::kubernetes::{
     check_kubernetes_has_enough_resources_to_deploy_environment, Kind, Kubernetes, KubernetesNode,
     Resources,
 };
+use crate::cloud_provider::service::{Service, ServiceType};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
+use crate::cmd::helm::helm_uninstall_list;
 use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::dns_provider::cloudflare::Cloudflare;
+use crate::dns_provider::DnsProvider;
+use crate::dns_provider::Kind::CLOUDFLARE;
+use crate::error::{from_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope,
 };
 use crate::string::terraform_list_format;
 use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
-use crate::{dns_provider, s3};
-use crate::dns_provider::DnsProvider;
-use crate::fs::workspace_directory;
+use crate::{dns_provider, dynamo_db, s3};
 
 pub mod node;
 
@@ -42,9 +52,6 @@ pub struct Options {
     pub documentdb_zone_a_subnet_blocks: Vec<String>,
     pub documentdb_zone_b_subnet_blocks: Vec<String>,
     pub documentdb_zone_c_subnet_blocks: Vec<String>,
-    pub elasticache_zone_a_subnet_blocks: Vec<String>,
-    pub elasticache_zone_b_subnet_blocks: Vec<String>,
-    pub elasticache_zone_c_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_a_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_b_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_c_subnet_blocks: Vec<String>,
@@ -55,10 +62,8 @@ pub struct Options {
     pub tls_email_report: String,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
-    pub elasticache_cidr_subnet: String,
     pub elasticsearch_cidr_subnet: String,
     pub engine_version_controller_token: String,
-    pub agent_version_controller_token: String,
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
     pub discord_api_key: String,
@@ -132,15 +137,6 @@ impl<'a> EKS<'a> {
         let documentdb_zone_c_subnet_blocks =
             format_ips(&self.options.documentdb_zone_c_subnet_blocks);
 
-        let elasticache_zone_a_subnet_blocks =
-            format_ips(&self.options.elasticache_zone_a_subnet_blocks);
-
-        let elasticache_zone_b_subnet_blocks =
-            format_ips(&self.options.elasticache_zone_b_subnet_blocks);
-
-        let elasticache_zone_c_subnet_blocks =
-            format_ips(&self.options.elasticache_zone_c_subnet_blocks);
-
         let elasticsearch_zone_a_subnet_blocks =
             format_ips(&self.options.elasticsearch_zone_a_subnet_blocks);
 
@@ -176,7 +172,6 @@ impl<'a> EKS<'a> {
         let qovery_api_url = self.options.qovery_api_url.clone();
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
         let documentdb_cidr_subnet = self.options.documentdb_cidr_subnet.clone();
-        let elasticache_cidr_subnet = self.options.elasticache_cidr_subnet.clone();
         let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
 
         let managed_dns_list = vec![self.dns_provider.name()];
@@ -190,13 +185,6 @@ impl<'a> EKS<'a> {
             .map(|x| format!("{}", x.clone().to_string()))
             .collect();
         let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
-        let test_cluster = match self.context.metadata() {
-            Some(meta) => match meta.test {
-                Some(true) => true,
-                _ => false,
-            },
-            _ => false,
-        };
 
         let mut context = TeraContext::new();
         // Qovery
@@ -206,11 +194,6 @@ impl<'a> EKS<'a> {
             "engine_version_controller_token",
             &self.options.engine_version_controller_token,
         );
-        context.insert(
-            "agent_version_controller_token",
-            &self.options.agent_version_controller_token,
-        );
-        context.insert("test_cluster", &test_cluster);
 
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);
@@ -238,9 +221,12 @@ impl<'a> EKS<'a> {
         context.insert("dns_email_report", &self.options.tls_email_report); // Pierre suggested renaming to tls_email_report
 
         // TLS
-        let lets_encrypt_url = match &test_cluster {
-            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
-            false => "https://acme-v02.api.letsencrypt.org/directory",
+        let lets_encrypt_url = match self.context.metadata() {
+            Some(meta) => match meta.test {
+                Some(true) => "https://acme-staging-v02.api.letsencrypt.org/directory",
+                _ => "https://acme-v02.api.letsencrypt.org/directory",
+            },
+            _ => "https://acme-v02.api.letsencrypt.org/directory",
         };
         context.insert("acme_server_url", lets_encrypt_url);
 
@@ -308,7 +294,6 @@ impl<'a> EKS<'a> {
             "documentdb_zone_a_subnet_blocks",
             &documentdb_zone_a_subnet_blocks,
         );
-
         context.insert(
             "documentdb_zone_b_subnet_blocks",
             &documentdb_zone_b_subnet_blocks,
@@ -317,23 +302,6 @@ impl<'a> EKS<'a> {
         context.insert(
             "documentdb_zone_c_subnet_blocks",
             &documentdb_zone_c_subnet_blocks,
-        );
-
-        // AWS - Elasticache
-        context.insert("elasticache_cidr_subnet", &elasticache_cidr_subnet);
-        context.insert(
-            "elasticache_zone_a_subnet_blocks",
-            &elasticache_zone_a_subnet_blocks,
-        );
-
-        context.insert(
-            "elasticache_zone_b_subnet_blocks",
-            &elasticache_zone_b_subnet_blocks,
-        );
-
-        context.insert(
-            "elasticache_zone_c_subnet_blocks",
-            &elasticache_zone_c_subnet_blocks,
         );
 
         // AWS - Elasticsearch
@@ -430,7 +398,7 @@ impl<'a> Kubernetes for EKS<'a> {
             .downcast_ref::<AWS>()
             .unwrap();
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             common::kubernetes_config_path(
@@ -448,7 +416,7 @@ impl<'a> Kubernetes for EKS<'a> {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let nodes = cast_simple_error_to_engine_error(
+        let nodes = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             cmd::kubectl::kubectl_exec_get_node(kubernetes_config_file_path, aws_credentials_envs),
@@ -510,7 +478,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // generate terraform files and copy them into temp dir
         let context = self.tera_context();
 
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::generate_and_copy_all_files_into_dir(
@@ -523,7 +491,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::copy_non_template_files(
@@ -532,12 +500,12 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         )?;
 
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
                 temp_dir.as_str(),
-                self.context.is_dry_run_deploy(),
+                true,
             ),
         )?;
 
@@ -603,7 +571,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // generate terraform files and copy them into temp dir
         let context = self.tera_context();
 
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::generate_and_copy_all_files_into_dir(
@@ -617,7 +585,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
 
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::copy_non_template_files(
@@ -637,7 +605,7 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         ];
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             kubernetes_config_path(
@@ -663,7 +631,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
                 info!("Deleting non Qovery Namespaces");
                 for namespace_to_delete in namespaces_to_delete.iter() {
-                    let kubernetes_config_file_path0 = cast_simple_error_to_engine_error(
+                    let kubernetes_config_file_path0 = from_simple_error_to_engine_error(
                         self.engine_error_scope(),
                         self.context.execution_id(),
                         kubernetes_config_path(
@@ -703,7 +671,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         info!("Deleting Qovery managed Namespaces");
 
-        let kubernetes_config_file_path2 = cast_simple_error_to_engine_error(
+        let kubernetes_config_file_path2 = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             kubernetes_config_path(
@@ -717,7 +685,7 @@ impl<'a> Kubernetes for EKS<'a> {
         )?;
 
         // TODO use label instead fixed names
-        let qovery_namespaces = get_qovery_managed_namespaces();
+        let mut qovery_namespaces = get_qovery_managed_namespaces();
         for qovery_namespace in qovery_namespaces.iter() {
             let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                 &kubernetes_config_file_path2,
@@ -749,10 +717,10 @@ impl<'a> Kubernetes for EKS<'a> {
         }
 
         info!("Running Terraform destroy");
-        let terraform_result = cast_simple_error_to_engine_error(
+        let terraform_result = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            cmd::terraform::terraform_exec_with_init_plan_apply_destroy(temp_dir.as_str()),
+            cmd::terraform::terraform_exec_with_init_validate_destroy(temp_dir.as_str()),
         );
 
         // we should delete the bucket containing the kubeconfig after
@@ -1156,6 +1124,8 @@ impl<'a> Kubernetes for EKS<'a> {
     fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.pause_environment() called for {}", self.name());
 
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
                 DeploymentTarget::ManagedServices(self, environment)
@@ -1244,6 +1214,9 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.delete_environment() called for {}", self.name());
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        // TODO use listeners_helper !!!! Don't be so shy Marc + Pierre
 
         let stateful_deployment_target = match environment.kind {
             crate::cloud_provider::environment::Kind::Production => {
@@ -1334,7 +1307,7 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         ];
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             common::kubernetes_config_path(

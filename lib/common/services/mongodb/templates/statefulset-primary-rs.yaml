@@ -128,7 +128,7 @@ spec:
             value: "$(MONGODB_POD_NAME).{{ template "mongodb.fullname" . }}-headless.{{ template "mongodb.namespace" . }}.svc.{{ .Values.clusterDomain }}"
             {{- else }}
             value: "$(MONGODB_POD_NAME).{{ template "mongodb.fullname" . }}-headless.{{ template "mongodb.namespace" . }}"
-            {{- end }}          
+            {{- end }}
             {{- end }}
           {{- if .Values.mongodbUsername }}
           - name: MONGODB_USERNAME

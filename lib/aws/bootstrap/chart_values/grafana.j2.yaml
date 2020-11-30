@@ -241,14 +241,14 @@ initChownData:
 
 
 # Administrator credentials when not using an existing secret (see below)
-adminUser: "{{ grafana_admin_user }}"
-adminPassword: "{{ grafana_admin_password }}"
+adminUser: {{ grafana_admin_user }}
+adminPassword: {{ grafana_admin_password }}
 
 # Use an existing secret for the admin user.
 admin:
   existingSecret: ""
   userKey: admin-user
-  passwordKey: admin-password
+  passwordKey: tbd
 
 
 ## Define command to be executed at startup by grafana container
@@ -310,15 +310,23 @@ plugins: []
 ## Configure grafana datasources
 ## ref: http://docs.grafana.org/administration/provisioning/#datasources
 ##
-datasources: {}
-#  datasources.yaml:
-#    apiVersion: 1
-#    datasources:
-#    - name: Prometheus
-#      type: prometheus
-#      url: http://prometheus-prometheus-server
-#      access: proxy
-#      isDefault: true
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: "http://prometheus-operator-prometheus:9090"
+        access: proxy
+        isDefault: true
+      - name: PromLoki
+        type: prometheus
+        url: "http://loki.logging.svc:3100/loki"
+        access: proxy
+        isDefault: false
+      - name: Loki
+        type: loki
+        url: "http://loki.logging.svc:3100"
 
 ## Configure notifiers
 ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
@@ -485,8 +493,8 @@ smtp:
   # `existingSecret` is a reference to an existing secret containing the smtp configuration
   # for Grafana.
   existingSecret: ""
-  userKey: "user"
-  passwordKey: "password"
+  userKey: "qovery"
+  passwordKey: "tbd"
 
 ## Sidecars that collect the configmaps with specified label and stores the included files them into the respective folders
 ## Requires at least Grafana 5 to work and can't be used together with parameters dashboardProviders, datasources and dashboards

@@ -21,11 +21,10 @@ function run_tests() {
   test -z $GITLAB_PROJECT_ID && variable_not_found "GITLAB_PROJECT_ID"
   test -z $GITLAB_TOKEN && variable_not_found "GITLAB_TOKEN"
   test -z $GITLAB_PERSONAL_TOKEN && variable_not_found "GITLAB_PERSONAL_TOKEN"
-  test -z $GITHUB_BRANCH && variable_not_found "GITHUB_BRANCH"
   GITLAB_REF="dev"
 
   echo "Requesting Gitlab pipeline"
-  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
+  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$(echo $GITHUB_CONTEXT | jq --raw-output '.ref')" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
   if [ $(echo $pipeline_id | egrep -c '^[0-9]+$') -eq 0 ] ; then
     echo "Pipeline ID is not correct, we expected a number and got: $pipeline_id"
     exit 1
@@ -37,7 +36,7 @@ function run_tests() {
   max_unexpected_status=5
   while [ $counter -le $max_unexpected_status ] ; do
     current_status=$(curl -s -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$pipeline_id | jq --raw-output '.detailed_status.text')
-    echo "Current pipeline id $pipeline_id status: $current_status"
+    echo "Current pipeline status: $current_status"
     case $current_status in
       "created")
         ((counter=$counter+1))
@@ -53,10 +52,6 @@ function run_tests() {
       ;;
       "running")
         counter=0
-      ;;
-      "passed")
-        echo "Results: Congrats, functional tests succeeded!!!"
-        exit 0
       ;;
       "success")
         echo "Results: Congrats, functional tests succeeded!!!"

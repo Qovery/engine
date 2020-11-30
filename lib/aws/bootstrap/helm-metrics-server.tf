@@ -31,6 +31,11 @@ resource "helm_release" "metrics_server" {
     value = "256Mi"
   }
 
+  set {
+    name = "priorityClassName"
+    value = "high-priority"
+  }
+
   depends_on = [
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,

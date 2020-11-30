@@ -1,3 +1,5 @@
+use std::num::{ParseFloatError, ParseIntError};
+
 /// convert a cpu string (kubernetes like) into a float. It supports millis cpu
 /// examples:
 /// 250m = 0.25 cpu

@@ -1,93 +1,82 @@
+use std::ffi::OsStr;
+use std::fmt::{Display, Formatter};
+use std::io::Error;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+use std::process::{Child, Command, ExitStatus, Stdio};
+
 use dirs::home_dir;
+use retry::delay::Fibonacci;
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::cmd::utilities::exec_with_envs_and_output;
-use crate::constants::TF_PLUGIN_CACHE_DIR;
-use crate::error::{SimpleError, SimpleErrorKind};
-use retry::delay::Fixed;
-use retry::OperationResult;
+use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
+use crate::error::SimpleError;
 
-fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleError> {
+fn terraform_exec_with_init_validate(
+    root_dir: &str,
+    first_time_init_terraform: bool,
+) -> Result<(), SimpleError> {
     // terraform init
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
-        let try_result = terraform_exec(root_dir, vec!["init"]);
-        match try_result {
-            Ok(out) => OperationResult::Ok(out),
-            Err(err) => OperationResult::Err(format!("Command error: {:?}", err)),
-        }
-    });
-
-    match result {
-        Err(err) => match err {
-            retry::Error::Operation {
-                error: _,
-                total_delay: _,
-                tries: _,
-            } => Ok(Some(false)),
-            retry::Error::Internal(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(err))),
-        },
-        Ok(_) => Ok(Some(true)),
+    let init_args = if first_time_init_terraform {
+        vec!["init"]
+    } else {
+        vec!["init"]
     };
 
-    match terraform_exec(root_dir, vec!["validate"]) {
-        Err(e) => {
-            error!("While trying to Terraform validate the rendered templates");
-            return Err(e);
-        }
-        _ => {
-            match terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"]) {
-                Err(e) => {
-                    error!("While trying to Terraform plan the rendered templates");
-                    return Err(e);
-                }
-                Ok(rs) => {}
-            };
-        }
+    //TODO print
+    terraform_exec(root_dir, init_args)?;
+
+    // terraform validate config
+    terraform_exec(root_dir, vec!["validate"])?;
+
+    Ok(())
+}
+
+fn terraform_exec_with_init_validate_plan(
+    root_dir: &str,
+    first_time_init_terraform: bool,
+) -> Result<(), SimpleError> {
+    // terraform init
+    let init_args = if first_time_init_terraform {
+        vec!["init"]
+    } else {
+        vec!["init"]
     };
+
+    //TODO print
+    terraform_exec(root_dir, init_args)?;
+
+    // terraform validate config
+    terraform_exec(root_dir, vec!["validate"])?;
+
+    // terraform plan
+    terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"])?;
+
     Ok(())
 }
 
 pub fn terraform_exec_with_init_validate_plan_apply(
     root_dir: &str,
-    dry_run: bool,
+    first_time_init_terraform: bool,
 ) -> Result<(), SimpleError> {
-    match terraform_exec_with_init_validate_plan(root_dir) {
-        Ok(_) => match dry_run {
-            true => {
-                warn!("dry run flag is true, no terraform apply will happens");
-            }
-            false => match terraform_exec(root_dir, vec!["apply", "-auto-approve", "tf_plan"]) {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("While trying to Terraform apply the rendered templates");
-                    return Err(e);
-                }
-            },
-        },
-        Err(e) => return Err(e),
-    };
+    // terraform init and plan
+    terraform_exec_with_init_validate_plan(root_dir, first_time_init_terraform);
+
+    // terraform apply
+    terraform_exec(root_dir, vec!["apply", "-auto-approve", "tf_plan"])?;
+
     Ok(())
 }
 
-pub fn terraform_exec_with_init_plan_apply_destroy(root_dir: &str) -> Result<(), SimpleError> {
+pub fn terraform_exec_with_init_validate_destroy(root_dir: &str) -> Result<(), SimpleError> {
     // terraform init and plan
-    // should apply before destroy to be sure destroy will compute on all ressources
-    match terraform_exec_with_init_validate_plan_apply(root_dir, false) {
-        Ok(_) => {}
-        Err(e) => {
-            return Err(e);
-        }
-    }
+    terraform_exec_with_init_validate(root_dir, false);
 
     // terraform destroy
-    match terraform_exec(root_dir, vec!["destroy", "-auto-approve"]) {
-        Ok(_) => {}
-        Err(e) => {
-            error!("While trying to Terraform destroy the rendered templates");
-            return Err(e);
-        }
-    };
-
-    Ok(())
+    terraform_exec(root_dir, vec!["destroy", "-auto-approve"])
 }
 
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), SimpleError> {

@@ -1,25 +1,36 @@
 extern crate serde;
 extern crate serde_derive;
 
+use std::borrow::Borrow;
 use std::fs::File;
+use std::io::Read;
+use std::str::FromStr;
 
 use chrono::Utc;
 use dirs::home_dir;
+use serde_json::map::Values;
+use serde_json::value::Value;
 
+use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::build_platform::BuildPlatform;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::TerraformStateCredentials;
+use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
+use qovery_engine::container_registry::ContainerRegistry;
+use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{
-    Action, Application, Context, Database, DatabaseKind, Environment, EnvironmentVariable,
-    GitCredentials, Kind, Metadata, Route, Router, Storage, StorageType,
+    Action, Application, Context, CustomDomain, Database, DatabaseKind, Environment,
+    EnvironmentVariable, GitCredentials, Kind, Metadata, Route, Router, Storage, StorageType,
 };
+use qovery_engine::session::Session;
 
 use crate::cloudflare::dns_provider_cloudflare;
+use crate::utilities::init;
 use crate::utilities::{build_platform_local_docker, generate_id};
 
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
@@ -47,34 +58,6 @@ pub fn terraform_aws_access_key_id() -> String {
 pub fn terraform_aws_secret_access_key() -> String {
     std::env::var("TERRAFORM_AWS_SECRET_ACCESS_KEY")
         .expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory")
-}
-
-pub fn execution_id() -> String {
-    Utc::now()
-        .to_rfc3339()
-        .replace(":", "-")
-        .replace(".", "-")
-        .replace("+", "-")
-}
-
-pub fn context() -> Context {
-    let execution_id = execution_id();
-    let home_dir = std::env::var("WORKSPACE_ROOT_DIR")
-        .unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
-    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let metadata = Metadata {
-        test: Option::from(true),
-        dry_run_deploy: Option::from(false),
-        resource_expiration_in_seconds: Some(2700),
-    };
-
-    Context::new(
-        execution_id.as_str(),
-        home_dir.as_str(),
-        lib_root_dir.as_str(),
-        None,
-        Option::from(metadata),
-    )
 }
 
 pub fn container_registry_ecr(context: &Context) -> ECR {
@@ -464,6 +447,47 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
         clone_from_environment_id: None,
     }
 }
+
+pub fn environment_only_http_server(context: &Context) -> Environment {
+    let suffix = generate_id();
+    Environment {
+        execution_id: context.execution_id().to_string(),
+        id: generate_id(),
+        kind: Kind::Development,
+        owner_id: generate_id(),
+        project_id: generate_id(),
+        organization_id: ORGANIZATION_ID.to_string(),
+        action: Action::Create,
+        applications: vec![Application {
+            id: generate_id(),
+            name: format!("{}-{}", "mini-http".to_string(), &suffix),
+            /*name: "simple-app".to_string(),*/
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+            commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
+            dockerfile_path: "Dockerfile".to_string(),
+            action: Action::Create,
+            git_credentials: GitCredentials {
+                login: "x-access-token".to_string(),
+                access_token: "xxx".to_string(),
+                expired_at: Utc::now(),
+            },
+            storage: vec![],
+            environment_variables: vec![],
+            branch: "mini-http".to_string(),
+            private_port: Some(3000),
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 256,
+            total_instances: 2,
+            cpu_burst: "100m".to_string(),
+            start_timeout_in_seconds: 60,
+        }],
+        routers: vec![],
+        databases: vec![],
+        external_services: vec![],
+        clone_from_environment_id: None,
+    }
+}
+
 
 pub fn working_minimal_environment(context: &Context) -> Environment {
     let suffix = generate_id();

@@ -6,13 +6,12 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Action, Application as AApplication, Create, Delete,
+    Action, Application as AApplication, Create, Delete, ExternalService as EExternalService,
     Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{from_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -105,7 +104,7 @@ impl ExternalService {
         let selector = format!("app={}", self.name());
 
         if is_error {
-            let _ = cast_simple_error_to_engine_error(
+            let _ = from_simple_error_to_engine_error(
                 crate::cloud_provider::service::ExternalService::engine_error_scope(self),
                 self.context.execution_id(),
                 common::get_stateless_resource_information(
@@ -118,7 +117,7 @@ impl ExternalService {
         }
 
         // clean the resource
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             crate::cloud_provider::service::ExternalService::engine_error_scope(self),
             self.context.execution_id(),
             common::do_stateless_service_cleanup(
@@ -210,7 +209,7 @@ impl Create for ExternalService {
         let workspace_dir = self.workspace_directory();
 
         let from_dir = format!("{}/common/services/q-job", self.context.lib_root_dir());
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             crate::cloud_provider::service::ExternalService::engine_error_scope(self),
             self.context.execution_id(),
             crate::template::generate_and_copy_all_files_into_dir(
@@ -228,7 +227,7 @@ impl Create for ExternalService {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
             crate::cloud_provider::service::ExternalService::engine_error_scope(self),
             self.context.execution_id(),
             common::kubernetes_config_path(
@@ -242,7 +241,7 @@ impl Create for ExternalService {
         )?;
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = cast_simple_error_to_engine_error(
+        let helm_history_row = from_simple_error_to_engine_error(
             crate::cloud_provider::service::ExternalService::engine_error_scope(self),
             self.context.execution_id(),
             crate::cmd::helm::helm_exec_with_upgrade_history(
@@ -250,7 +249,6 @@ impl Create for ExternalService {
                 environment.namespace(),
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
-                Timeout::Default,
                 aws_credentials_envs.clone(),
             ),
         )?;
@@ -319,7 +317,7 @@ impl Create for ExternalService {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
             crate::cloud_provider::service::ExternalService::engine_error_scope(self),
             self.context.execution_id(),
             common::kubernetes_config_path(
@@ -334,7 +332,7 @@ impl Create for ExternalService {
 
         let helm_release_name = self.helm_release_name();
 
-        let history_rows = cast_simple_error_to_engine_error(
+        let history_rows = from_simple_error_to_engine_error(
             crate::cloud_provider::service::ExternalService::engine_error_scope(self),
             self.context.execution_id(),
             crate::cmd::helm::helm_exec_history(
@@ -346,7 +344,7 @@ impl Create for ExternalService {
         )?;
 
         if history_rows.len() == 1 {
-            cast_simple_error_to_engine_error(
+            from_simple_error_to_engine_error(
                 crate::cloud_provider::service::ExternalService::engine_error_scope(self),
                 self.context.execution_id(),
                 crate::cmd::helm::helm_exec_uninstall(

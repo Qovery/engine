@@ -73,9 +73,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          {{- with .Values.image }}
-          image: "{{- if .registry -}}{{ .registry }}/{{- end -}}{{ .repository }}{{- if (.digest) -}} @{{.digest}}{{- else -}}:{{ default $.Chart.AppVersion .tag }} {{- end -}}"
-          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
         {{- if .Values.global.logLevel }}

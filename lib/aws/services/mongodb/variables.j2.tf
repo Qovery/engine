@@ -114,20 +114,11 @@ variable "preferred_backup_window" {
   type = string
 }
 
-{%- if snapshot is defined %}
+{% if snapshot is defined %}
 # Snapshots
 variable "snapshot_identifier" {
   description = "Snapshot ID to restore"
   default = "{{ snapshot['snapshot_id']}}"
   type = string
-}
-{% endif %}
-
-{%- if resource_expiration_in_seconds is defined %}
-# Pleco ttl
-variable "resource_expiration_in_seconds" {
-  description = "Resource expiration in seconds"
-  default = {{ resource_expiration_in_seconds }}
-  type = number
 }
 {% endif %}

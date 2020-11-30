@@ -374,7 +374,7 @@ registry: "txt"
 txtOwnerId: "{{ eks_cluster_id }}"
 ## Prefix to create a TXT record with a name following the pattern prefix.<CNAME record>
 ##
-txtPrefix: "qvy-{{ eks_cluster_id }}-"
+txtPrefix: "qvy-"
 
 ## Extra Arguments to passed to external-dns
 ##

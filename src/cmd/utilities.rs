@@ -1,9 +1,17 @@
 use std::ffi::OsStr;
+use std::fmt::{Display, Formatter};
 use std::io::Error;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 
+use dirs::home_dir;
+use retry::delay::Fibonacci;
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::constants::{KUBECONFIG, TF_PLUGIN_CACHE_DIR};
 use crate::error::{SimpleError, SimpleErrorKind};
 
 fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
@@ -62,9 +70,9 @@ where
         return Ok(());
     }
 
-    Err(SimpleError::new(
+    Err(SimpleError::new::<&str>(
         SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
+        None,
     ))
 }
 
@@ -88,9 +96,9 @@ where
         return Ok(());
     }
 
-    Err(SimpleError::new(
+    Err(SimpleError::new::<String>(
         SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
+        None,
     ))
 }
 
@@ -143,7 +151,7 @@ where
 
     Err(SimpleError::new(
         SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
+        Some(command_string),
     ))
 }
 
@@ -179,7 +187,7 @@ where
 
     Err(SimpleError::new(
         SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
+        Some(command_string),
     ))
 }
 
@@ -194,7 +202,7 @@ pub fn run_version_command_for(binary_name: &str) -> String {
             Err(e) => error!("Error while getting stdout from {} {}", binary_name, e),
         },
         |r_err| match r_err {
-            Ok(_) => error!("Error executing {}", binary_name),
+            Ok(s) => error!("Error executing {}", binary_name),
             Err(e) => error!("Error while getting stderr from {} {}", binary_name, e),
         },
     );

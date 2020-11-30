@@ -1,4 +1,7 @@
+use std::error::Error;
 use std::process::ExitStatus;
+
+use rusoto_core::RusotoError;
 
 pub type Type = String;
 pub type Id = String;
@@ -63,11 +66,6 @@ pub struct SimpleError {
 }
 
 #[derive(Debug)]
-pub struct StringError {
-    pub message: String,
-}
-
-#[derive(Debug)]
 pub enum SimpleErrorKind {
     Command(ExitStatus),
     Other,
@@ -85,25 +83,13 @@ impl SimpleError {
     }
 }
 
-impl StringError {
-    pub fn new(message: String) -> Self {
-        StringError { message }
-    }
-}
-
 impl From<std::io::Error> for SimpleError {
     fn from(err: std::io::Error) -> Self {
         SimpleError::new(SimpleErrorKind::Other, Some(err.to_string()))
     }
 }
 
-impl From<std::io::Error> for StringError {
-    fn from(err: std::io::Error) -> Self {
-        StringError::new(err.to_string())
-    }
-}
-
-pub fn cast_simple_error_to_engine_error<X, T: Into<String>>(
+pub fn from_simple_error_to_engine_error<X, T: Into<String>>(
     scope: EngineErrorScope,
     execution_id: T,
     input: Result<X, SimpleError>,
@@ -112,7 +98,7 @@ pub fn cast_simple_error_to_engine_error<X, T: Into<String>>(
         Err(simple_error) => {
             let message = match simple_error.kind {
                 SimpleErrorKind::Command(exit_status) => format!(
-                    "{} ({})",
+                    "{} (exit status: {})",
                     simple_error.message.unwrap_or("<no message>".into()),
                     exit_status
                 ),

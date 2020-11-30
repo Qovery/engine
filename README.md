@@ -1,14 +1,12 @@
 <p align="center">
   <a href="https://www.qovery.com">
-    <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery-engine-logo.svg" width="318px" alt="Qovery logo" />
+    <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_logo.svg" width="318px" alt="Qovery logo" />
   </a>
 </p>
 <h3 align="center">Deploy any complex application, seamlessly</h3>
 <p align="center">Deploy your apps on any Cloud providers in just a few seconds ⚡</p>
 
 <p align="center">
-<img src="https://img.shields.io/badge/stability-work_in_progress-lightgrey.svg?style=flat-square" alt="work in progress badge">
-<img src="https://github.com/Qovery/engine/workflows/functionnal-tests/badge.svg?style=flat-square" alt="Func tests">
 <a href="https://discord.qovery.com"> <img alt="Discord" src="https://img.shields.io/discord/688766934917185556?label=discord&style=flat-square"> </a>
 </p>
 
@@ -172,10 +170,3 @@ The Qovery Engine is designed to operate as an administrator and takes decisions
 ## License
 
 See the [LICENSE](./LICENSE) file for licensing information.
-
-
-## Qovery
-
-Qovery is a [CNCF](https://landscape.cncf.io/format=members&selected=qovery-member) and [Linux Foundation](https://www.linuxfoundation.org/membership/members/) silver member.
-
-<img src="https://raw.githubusercontent.com/cncf/artwork/master/other/cncf-member/silver/color/cncf-member-silver-color.svg" width="300px" alt="CNCF Silver Member logo" />

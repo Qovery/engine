@@ -43,6 +43,11 @@ resource "helm_release" "nginx_ingress" {
     value = timestamp()
   }
 
+  set {
+    name = "priorityClassName"
+    value = "high-priority"
+  }
+
   # Controller resources
   set {
     name = "controller.resources.limits.cpu"

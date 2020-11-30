@@ -10,10 +10,9 @@ use crate::cloud_provider::service::{
     StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
+    from_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
 };
 use crate::models::Context;
 
@@ -28,7 +27,6 @@ pub struct Application {
     cpu_burst: String,
     total_ram_in_mib: u32,
     total_instances: u16,
-    start_timeout_in_seconds: u32,
     image: Image,
     storage: Vec<Storage>,
     environment_variables: Vec<EnvironmentVariable>,
@@ -45,7 +43,6 @@ impl Application {
         cpu_burst: String,
         total_ram_in_mib: u32,
         total_instances: u16,
-        start_timeout_in_seconds: u32,
         image: Image,
         storage: Vec<Storage>,
         environment_variables: Vec<EnvironmentVariable>,
@@ -60,7 +57,6 @@ impl Application {
             cpu_burst,
             total_ram_in_mib,
             total_instances,
-            start_timeout_in_seconds,
             image,
             storage,
             environment_variables,
@@ -129,7 +125,6 @@ impl Application {
         context.insert("storage", &storage);
         context.insert("is_storage", &is_storage);
         context.insert("clone", &false);
-        context.insert("start_timeout_in_seconds", &self.start_timeout_in_seconds);
 
         context
     }
@@ -145,7 +140,7 @@ impl Application {
         let selector = format!("app={}", self.name());
 
         if is_error {
-            let _ = cast_simple_error_to_engine_error(
+            let _ = from_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context.execution_id(),
                 common::get_stateless_resource_information(
@@ -158,7 +153,7 @@ impl Application {
         }
 
         // clean the resource
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             common::do_stateless_service_cleanup(
@@ -246,7 +241,7 @@ impl Create for Application {
 
         let from_dir = format!("{}/aws/charts/q-application", self.context.lib_root_dir());
 
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::template::generate_and_copy_all_files_into_dir(
@@ -264,7 +259,7 @@ impl Create for Application {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             common::kubernetes_config_path(
@@ -278,7 +273,7 @@ impl Create for Application {
         )?;
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = cast_simple_error_to_engine_error(
+        let helm_history_row = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::cmd::helm::helm_exec_with_upgrade_history(
@@ -286,7 +281,6 @@ impl Create for Application {
                 environment.namespace(),
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
-                Timeout::Value(self.start_timeout_in_seconds),
                 aws_credentials_envs.clone(),
             ),
         )?;
@@ -307,7 +301,7 @@ impl Create for Application {
         // check app status
         let selector = format!("app={}", self.name());
 
-        let _ = cast_simple_error_to_engine_error(
+        let _ = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
@@ -349,7 +343,7 @@ impl Create for Application {
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ];
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+        let kubernetes_config_file_path = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             common::kubernetes_config_path(
@@ -364,7 +358,7 @@ impl Create for Application {
 
         let helm_release_name = self.helm_release_name();
 
-        let history_rows = cast_simple_error_to_engine_error(
+        let history_rows = from_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             crate::cmd::helm::helm_exec_history(
@@ -376,7 +370,7 @@ impl Create for Application {
         )?;
 
         if history_rows.len() == 1 {
-            cast_simple_error_to_engine_error(
+            from_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context.execution_id(),
                 crate::cmd::helm::helm_exec_uninstall(

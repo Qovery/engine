@@ -7,8 +7,6 @@ kubectl -n kube-system delete clusterrole aws-node;
 kubectl -n kube-system delete clusterrolebinding aws-node;
 kubectl -n kube-system delete crd eniconfigs.crd.k8s.amazonaws.com;
 kubectl -n kube-system delete serviceaccount aws-node
-# sleep is to avoid: "rendered manifests contain a resource that already exists"
-sleep 10
 EOT
     environment = {
       KUBECONFIG = local_file.kubeconfig.filename

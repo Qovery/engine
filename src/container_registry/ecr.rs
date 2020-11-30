@@ -1,9 +1,10 @@
+use std::rc::Rc;
 use std::str::FromStr;
 
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    CreateRepositoryRequest, DescribeImagesRequest,
+    CreateRepositoryError, CreateRepositoryRequest, DescribeImagesRequest,
     DescribeRepositoriesRequest, Ecr, EcrClient, GetAuthorizationTokenRequest, ImageDetail,
     ImageIdentifier, PutLifecyclePolicyRequest, Repository,
 };
@@ -14,7 +15,7 @@ use crate::cmd;
 use crate::container_registry::{ContainerRegistry, Kind, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
     ProgressScope,
 };
 use crate::runtime::async_run;
@@ -192,7 +193,7 @@ impl ECR {
               "selection": {
                 "countType": "sinceImagePushed",
                 "countUnit": "days",
-                "countNumber": 365,
+                "countNumber": 1,
                 "tagStatus": "any"
               },
               "description": "Remove unit test images",
@@ -207,7 +208,7 @@ impl ECR {
         let r = async_run(self.ecr_client().put_lifecycle_policy(plp));
 
         match r {
-            Err(_) => Err(self.engine_error(
+            Err(err) => Err(self.engine_error(
                 EngineErrorCause::Internal,
                 format!(
                     "can't set lifecycle policy to ECR repository {} for {}",

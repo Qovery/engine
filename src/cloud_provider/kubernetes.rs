@@ -56,6 +56,7 @@ pub trait KubernetesNode {
     fn as_any(&self) -> &dyn Any;
 }
 
+
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
     EKS,
