@@ -52,15 +52,15 @@ pub trait Kubernetes {
 }
 
 pub trait KubernetesNode {
-    fn total_cpu(&self) -> u8;
-    fn total_memory_in_gib(&self) -> u16;
     fn instance_type(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
 }
 
+
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
     EKS,
+    DOKS,
 }
 
 #[derive(Debug)]

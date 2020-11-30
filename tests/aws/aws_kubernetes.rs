@@ -96,7 +96,7 @@ fn create_and_upgrade_cluster_from_master_branch() {
 fn create_eks_cluster_in_us_east_2() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -154,7 +154,7 @@ pub fn read_file(filepath: &str) -> String {
 fn create_eks_cluster_in_eu_west_3() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -200,7 +200,7 @@ fn create_eks_cluster_in_eu_west_3() {
 fn delete_eks_cluster_in_us_east_2() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -247,7 +247,7 @@ fn delete_eks_cluster_in_eu_west_3() {
     init();
     // put some environments here, simulated or not
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();

@@ -13,6 +13,7 @@ use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
 use crate::models::DatabaseKind::Mongodb;
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -162,6 +163,7 @@ pub struct Application {
     pub cpu_burst: String,
     pub total_ram_in_mib: u32,
     pub total_instances: u16,
+    pub start_timeout_in_seconds: u32,
     pub storage: Vec<Storage>,
     pub environment_variables: Vec<EnvironmentVariable>,
 }
@@ -197,8 +199,26 @@ impl Application {
                 ),
             )),
             CPKind::GCP => None,
+            CPKind::DO => Some(Box::new(
+                crate::cloud_provider::digitalocean::application::Application::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.private_port,
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.total_instances,
+                    self.start_timeout_in_seconds,
+                    image.clone(),
+                    self.environment_variables
+                        .iter()
+                        .map(|ev| ev.to_do_application_environment_variable())
+                        .collect::<Vec<_>>(),
+                ),
+            )),
             _ => None,
-            //TODO to implement
         }
     }
 
@@ -232,8 +252,26 @@ impl Application {
                 ),
             )),
             CPKind::GCP => None,
+            CPKind::DO => Some(Box::new(
+                crate::cloud_provider::digitalocean::application::Application::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.private_port,
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.total_instances,
+                    self.start_timeout_in_seconds,
+                    image,
+                    self.environment_variables
+                        .iter()
+                        .map(|ev| ev.to_do_application_environment_variable())
+                        .collect::<Vec<_>>(),
+                ),
+            )),
             _ => None,
-            //TODO to implement
         }
     }
 
@@ -284,6 +322,15 @@ impl EnvironmentVariable {
         &self,
     ) -> crate::cloud_provider::aws::application::EnvironmentVariable {
         crate::cloud_provider::aws::application::EnvironmentVariable {
+            key: self.key.clone(),
+            value: self.value.clone(),
+        }
+    }
+
+    pub fn to_do_application_environment_variable(
+        &self,
+    ) -> crate::cloud_provider::digitalocean::application::EnvironmentVariable {
+        crate::cloud_provider::digitalocean::application::EnvironmentVariable {
             key: self.key.clone(),
             value: self.value.clone(),
         }
@@ -820,6 +867,26 @@ impl Context {
     pub fn metadata(&self) -> Option<&Metadata> {
         self.metadata.as_ref()
     }
+
+    pub fn is_dry_run_deploy(&self) -> bool {
+        match &self.metadata {
+            Some(meta) => match meta.dry_run_deploy {
+                Some(true) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn resource_expiration_in_seconds(&self) -> Option<u32> {
+        match &self.metadata {
+            Some(meta) => match meta.resource_expiration_in_seconds {
+                Some(ttl) => Some(ttl),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 }
 
 /// put everything you want here that is required to change the behaviour of the request.
@@ -827,10 +894,20 @@ impl Context {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Metadata {
     pub test: Option<bool>,
+    pub dry_run_deploy: Option<bool>,
+    pub resource_expiration_in_seconds: Option<u32>,
 }
 
 impl Metadata {
-    pub fn new(test: Option<bool>) -> Self {
-        Metadata { test }
+    pub fn new(
+        test: Option<bool>,
+        dry_run_deploy: Option<bool>,
+        resource_expiration_in_seconds: Option<u32>,
+    ) -> Self {
+        Metadata {
+            test,
+            dry_run_deploy,
+            resource_expiration_in_seconds,
+        }
     }
 }

@@ -36,6 +36,7 @@ use crate::utilities::{build_platform_local_docker, generate_id};
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-1";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
+pub const KUBE_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
 
 pub fn aws_access_key_id() -> String {
     std::env::var("AWS_ACCESS_KEY_ID").expect("env var AWS_ACCESS_KEY_ID is mandatory")
@@ -57,32 +58,6 @@ pub fn terraform_aws_access_key_id() -> String {
 pub fn terraform_aws_secret_access_key() -> String {
     std::env::var("TERRAFORM_AWS_SECRET_ACCESS_KEY")
         .expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory")
-}
-
-pub fn execution_id() -> String {
-    Utc::now()
-        .to_rfc3339()
-        .replace(":", "-")
-        .replace(".", "-")
-        .replace("+", "-")
-}
-
-pub fn context() -> Context {
-    let execution_id = execution_id();
-    let home_dir = std::env::var("WORKSPACE_ROOT_DIR")
-        .unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
-    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let metadata = Metadata {
-        test: Option::from(true),
-    };
-
-    Context::new(
-        execution_id.as_str(),
-        home_dir.as_str(),
-        lib_root_dir.as_str(),
-        None,
-        Option::from(metadata),
-    )
 }
 
 pub fn container_registry_ecr(context: &Context) -> ECR {
@@ -108,10 +83,10 @@ pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
 
 pub fn aws_kubernetes_nodes() -> Vec<Node> {
     vec![
-        Node::new(2, 16),
-        Node::new(2, 16),
-        Node::new(2, 16),
-        Node::new(2, 16),
+        Node::new_with_cpu_and_mem(2, 16),
+        Node::new_with_cpu_and_mem(2, 16),
+        Node::new_with_cpu_and_mem(2, 16),
+        Node::new_with_cpu_and_mem(2, 16),
     ]
 }
 
@@ -137,12 +112,12 @@ pub fn aws_kubernetes_eks<'a>(
     dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
 ) -> EKS<'a> {
-    let mut file = File::open("tests/assets/eks-options.json").expect("file not found");
+    let file = File::open("tests/assets/eks-options.json").expect("file not found");
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
         context.clone(),
-        "dmubm9agk7sr8a8r",
-        "dmubm9agk7sr8a8r",
+        KUBE_CLUSTER_ID,
+        KUBE_CLUSTER_ID,
         AWS_KUBERNETES_VERSION,
         aws_default_region().as_str(),
         cloud_provider,
@@ -179,7 +154,8 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
     let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
 
     // mongoDB management part
-    let database_host_mongo = "mongodb-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
+    let database_host_mongo =
+        "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
@@ -196,7 +172,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
 
     // pSQL 1 management part
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = fqdn_id.clone() + ".oom.sh";
+    let fqdn = fqdn_id.clone() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN";
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_id();
@@ -204,7 +180,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
 
     // pSQL 2 management part
     let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
-    let fqdn_2 = fqdn_id_2.clone() + ".oom.sh";
+    let fqdn_2 = fqdn_id_2.clone() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN";
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "my-psql-2".to_string();
 
@@ -226,7 +202,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME".to_string(),
+                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -265,6 +241,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
             Application {
                 id: generate_id(),
@@ -275,7 +252,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME".to_string(),
+                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -314,6 +291,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
             Application {
                 id: generate_id(),
@@ -324,7 +302,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME".to_string(),
+                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -371,6 +349,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
         ],
         routers: vec![
@@ -378,7 +357,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -390,7 +369,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -402,7 +381,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "third-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -469,6 +448,47 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
     }
 }
 
+pub fn environment_only_http_server(context: &Context) -> Environment {
+    let suffix = generate_id();
+    Environment {
+        execution_id: context.execution_id().to_string(),
+        id: generate_id(),
+        kind: Kind::Development,
+        owner_id: generate_id(),
+        project_id: generate_id(),
+        organization_id: ORGANIZATION_ID.to_string(),
+        action: Action::Create,
+        applications: vec![Application {
+            id: generate_id(),
+            name: format!("{}-{}", "mini-http".to_string(), &suffix),
+            /*name: "simple-app".to_string(),*/
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+            commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
+            dockerfile_path: "Dockerfile".to_string(),
+            action: Action::Create,
+            git_credentials: GitCredentials {
+                login: "x-access-token".to_string(),
+                access_token: "xxx".to_string(),
+                expired_at: Utc::now(),
+            },
+            storage: vec![],
+            environment_variables: vec![],
+            branch: "mini-http".to_string(),
+            private_port: Some(3000),
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 256,
+            total_instances: 2,
+            cpu_burst: "100m".to_string(),
+            start_timeout_in_seconds: 60,
+        }],
+        routers: vec![],
+        databases: vec![],
+        external_services: vec![],
+        clone_from_environment_id: None,
+    }
+}
+
+
 pub fn working_minimal_environment(context: &Context) -> Environment {
     let suffix = generate_id();
     Environment {
@@ -482,13 +502,14 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
         applications: vec![Application {
             id: generate_id(),
             name: format!("{}-{}", "simple-app".to_string(), &suffix),
+            /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: "Dockerfile".to_string(),
             action: Action::Create,
             git_credentials: GitCredentials {
                 login: "x-access-token".to_string(),
-                access_token: "CHANGE-ME".to_string(),
+                access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
                 expired_at: Utc::now(),
             },
             storage: vec![],
@@ -499,12 +520,13 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             total_ram_in_mib: 256,
             total_instances: 2,
             cpu_burst: "100m".to_string(),
+            start_timeout_in_seconds: 60,
         }],
         routers: vec![Router {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".oom.sh",
+            default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -520,7 +542,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
 
 pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = fqdn_id.clone() + ".oom.sh";
+    let fqdn = fqdn_id.clone() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN";
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
@@ -565,7 +587,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME".to_string(),
+                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -604,6 +626,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
             Application {
                 id: generate_id(),
@@ -614,7 +637,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 action: Action::Create,
                 git_credentials: GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME".to_string(),
+                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
                     expired_at: Utc::now(),
                 },
                 storage: vec![Storage {
@@ -653,6 +676,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 total_ram_in_mib: 256,
                 total_instances: 2,
                 cpu_burst: "100m".to_string(),
+                start_timeout_in_seconds: 60,
             },
         ],
         routers: vec![
@@ -660,7 +684,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -672,7 +696,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -702,4 +726,60 @@ pub fn non_working_environment(context: &Context) -> Environment {
         .collect::<Vec<_>>();
 
     environment
+}
+
+// echo app environment is an environment that contains http-echo container (forked from hashicorp)
+// ECHO_TEXT var will be the content of the application root path
+pub fn echo_app_environment(context: &Context) -> Environment {
+    let suffix = generate_id();
+    Environment {
+        execution_id: context.execution_id().to_string(),
+        id: generate_id(),
+        kind: Kind::Development,
+        owner_id: generate_id(),
+        project_id: generate_id(),
+        organization_id: ORGANIZATION_ID.to_string(),
+        action: Action::Create,
+        applications: vec![Application {
+            id: generate_id(),
+            name: format!("{}-{}", "echo-app".to_string(), &suffix),
+            /*name: "simple-app".to_string(),*/
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+            commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
+            dockerfile_path: "Dockerfile".to_string(),
+            action: Action::Create,
+            git_credentials: GitCredentials {
+                login: "x-access-token".to_string(),
+                access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
+                expired_at: Utc::now(),
+            },
+            storage: vec![],
+            environment_variables: vec![EnvironmentVariable {
+                key: "ECHO_TEXT".to_string(),
+                value: "42".to_string(),
+            }],
+            branch: "echo-app".to_string(),
+            private_port: Some(5678),
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 256,
+            total_instances: 2,
+            cpu_burst: "100m".to_string(),
+            start_timeout_in_seconds: 60,
+        }],
+        routers: vec![Router {
+            id: generate_id(),
+            name: "main".to_string(),
+            action: Action::Create,
+            default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                application_name: format!("{}-{}", "echo-app".to_string(), &suffix),
+            }],
+        }],
+        databases: vec![],
+        external_services: vec![],
+        clone_from_environment_id: None,
+    }
 }

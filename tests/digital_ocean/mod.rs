@@ -1,1 +1,0 @@
-mod container_registry;

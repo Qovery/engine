@@ -11,7 +11,7 @@ use qovery_engine::models::{
     EnvironmentVariable, ExternalService, GitCredentials, Kind, Storage, StorageType,
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use test_utilities::aws::context;
+use test_utilities::utilities::context;
 use test_utilities::utilities::init;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;

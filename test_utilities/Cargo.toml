@@ -16,7 +16,7 @@ serde = "1.0"
 serde_json = "1.0.57"
 serde_derive = "1.0"
 curl = "0.4.34"
-
+reqwest = { version = "0.10.8", features = ["blocking"] }
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"

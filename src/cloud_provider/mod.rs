@@ -15,6 +15,7 @@ pub mod environment;
 pub mod gcp;
 pub mod kubernetes;
 pub mod service;
+mod common;
 
 pub trait CloudProvider {
     fn context(&self) -> &Context;

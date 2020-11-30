@@ -12,7 +12,6 @@ use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo,
     ProgressLevel, ProgressScope,
 };
-
 pub struct Transaction<'a> {
     engine: &'a Engine,
     steps: Vec<Step<'a>>,
@@ -254,7 +253,7 @@ impl<'a> Transaction<'a> {
             match result {
                 Ok(tuple) => results.push(tuple),
                 Err(err) => {
-                    error!("error pushing docker image {:?}", err);
+                    error!( "error pushing docker image {:?}", err);
                     return Err(err);
                 }
             }
@@ -269,11 +268,14 @@ impl<'a> Transaction<'a> {
     ) -> TransactionResult {
         match environment.is_valid() {
             Err(engine_error) => {
-                warn!("ROLLBACK STARTED! an error occurred {:?}", engine_error);
+                warn!(
+                    "ROLLBACK STARTED! an error occurred {:?}",
+                    engine_error
+                );
                 return match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(engine_error),
                     Err(err) => {
-                        error!("ROLLBACK FAILED! fatal error: {:?}", err);
+                        error!( "ROLLBACK FAILED! fatal error: {:?}", err);
                         TransactionResult::UnrecoverableError(engine_error, err)
                     }
                 };
@@ -434,11 +436,11 @@ impl<'a> Transaction<'a> {
                     // create kubernetes
                     match kubernetes.on_create() {
                         Err(err) => {
-                            warn!("ROLLBACK STARTED! an error occurred {:?}", err);
+                            warn!( "ROLLBACK STARTED! an error occurred {:?}", err);
                             match self.rollback() {
                                 Ok(_) => TransactionResult::Rollback(err),
                                 Err(e) => {
-                                    error!("ROLLBACK FAILED! fatal error: {:?}", e);
+                                    error!( "ROLLBACK FAILED! fatal error: {:?}", e);
                                     TransactionResult::UnrecoverableError(err, e)
                                 }
                             }
@@ -450,11 +452,11 @@ impl<'a> Transaction<'a> {
                     // delete kubernetes
                     match kubernetes.on_delete() {
                         Err(err) => {
-                            warn!("ROLLBACK STARTED! an error occurred {:?}", err);
+                            warn!( "ROLLBACK STARTED! an error occurred {:?}", err);
                             match self.rollback() {
                                 Ok(_) => TransactionResult::Rollback(err),
                                 Err(e) => {
-                                    error!("ROLLBACK FAILED! fatal error: {:?}", e);
+                                    error!( "ROLLBACK FAILED! fatal error: {:?}", e);
                                     TransactionResult::UnrecoverableError(err, e)
                                 }
                             }
@@ -484,12 +486,15 @@ impl<'a> Transaction<'a> {
 
                     if apps_result.is_err() {
                         let commit_error = apps_result.err().unwrap();
-                        warn!("ROLLBACK STARTED! an error occurred {:?}", commit_error);
+                        warn!(
+                            "ROLLBACK STARTED! an error occurred {:?}",
+                            commit_error
+                        );
 
                         return match self.rollback() {
                             Ok(_) => TransactionResult::Rollback(commit_error),
                             Err(err) => {
-                                error!("ROLLBACK FAILED! fatal error: {:?}", err);
+                                error!( "ROLLBACK FAILED! fatal error: {:?}", err);
                                 TransactionResult::UnrecoverableError(commit_error, err)
                             }
                         };
@@ -497,6 +502,37 @@ impl<'a> Transaction<'a> {
 
                     let applications = apps_result.ok().unwrap();
                     applications_by_environment.insert(target_environment, applications);
+
+                    // build as well the failover environment, retention could remove the application image
+                    match environment_action {
+                        EnvironmentAction::EnvironmentWithFailover(_, fe) => {
+                            let apps_result = match self._build_applications(fe, option) {
+                                Ok(applications) => {
+                                    match self._push_applications(applications, option) {
+                                        Ok(results) => {
+                                            let applications = results
+                                                .into_iter()
+                                                .map(|(app, _)| app)
+                                                .collect::<Vec<_>>();
+
+                                            Ok(applications)
+                                        }
+                                        Err(err) => Err(err),
+                                    }
+                                }
+                                Err(err) => Err(err),
+                            };
+                            if apps_result.is_err() {
+                                // should never be triggered because core always should ask for working failover environment
+                                let commit_error = apps_result.err().unwrap();
+                                error!(
+                                    "An error occurred on failover application  {:?}",
+                                    commit_error
+                                );
+                            }
+                        }
+                        _ => {}
+                    };
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
                     // deploy complete environment
@@ -547,15 +583,15 @@ impl<'a> Transaction<'a> {
         applications_by_environment: &HashMap<&Environment, Vec<Box<dyn Application>>>,
         action_fn: F,
     ) -> TransactionResult
-    where
-        F: Fn(&crate::cloud_provider::environment::Environment) -> Result<(), EngineError>,
+        where
+            F: Fn(&crate::cloud_provider::environment::Environment) -> Result<(), EngineError>,
     {
         let target_environment = match environment_action {
             EnvironmentAction::Environment(te) => te,
             EnvironmentAction::EnvironmentWithFailover(te, _) => te,
         };
 
-        let empty_vec = Vec::with_capacity(0);
+        let empty_vec = Vec::with_capacity(0); //doit avoir une application
         let built_applications = match applications_by_environment.get(target_environment) {
             Some(applications) => applications,
             None => &empty_vec,
@@ -576,8 +612,8 @@ impl<'a> Transaction<'a> {
 
         // inner function - I use it instead of closure because of ?Sized
         fn get_final_progress_info<T>(service: &Box<T>, execution_id: &str) -> ProgressInfo
-        where
-            T: Service + ?Sized,
+            where
+                T: Service + ?Sized,
         {
             ProgressInfo::new(
                 service.progress_scope(),
@@ -628,7 +664,10 @@ impl<'a> Transaction<'a> {
                 let rollback_result = match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(err),
                     Err(rollback_err) => {
-                        error!("ROLLBACK FAILED! fatal error: {:?}", rollback_err);
+                        error!(
+                            "ROLLBACK FAILED! fatal error: {:?}",
+                            rollback_err
+                        );
                         TransactionResult::UnrecoverableError(err, rollback_err)
                     }
                 };
