@@ -814,14 +814,14 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
 #[test]
 fn redis_v5_deploy_a_working_environment() {
     let context = context();
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
     test_redis_configuration(context, environment, "5.0");
 }
 
 #[test]
 fn redis_v6_deploy_a_working_environment() {
     let context = context();
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let environment = test_utilities::aws::working_minimal_environment(&context);
     test_redis_configuration(context, environment, "6.0");
 }
 
