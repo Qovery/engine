@@ -523,6 +523,17 @@ fn mongodb_v3_6_deploy_a_working_environment_with_production() {
     test_mongodb_configuration(context, environment, "3.6");
 }
 
+#[test]
+#[ignore]
+fn mongodb_v4_0_deploy_a_working_environment_with_production() {
+    let context = context();
+
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    environment.kind = Kind::Production;
+
+    test_mongodb_configuration(context, environment, "4.0");
+}
+
 /**
 **
 ** MySQL tests
