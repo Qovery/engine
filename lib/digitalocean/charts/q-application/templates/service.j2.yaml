@@ -1,0 +1,23 @@
+{%- if is_private_port %}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ name }}
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    app: {{ name }}
+    envId: {{ environment_id }}
+spec:
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: {{ private_port }}
+      targetPort: {{ private_port }}
+  selector:
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    app: {{ name }}
+    envId: {{ environment_id }}
+{% endif %}

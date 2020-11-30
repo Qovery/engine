@@ -7,7 +7,7 @@ use qovery_engine::models::{
     Storage, StorageType,
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use test_utilities::utilities::{init, is_pod_restarted};
+use test_utilities::utilities::{init, is_pod_restarted_aws_env};
 use self::test_utilities::aws::context;
 
 // insert how many actions you will use in tests
@@ -372,7 +372,7 @@ fn redeploy_same_app_with_ebs() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
     let app_name = format!("{}-0", &environment_check1.applications[0].name);
-    let (_, number) = is_pod_restarted(environment_check1, app_name.clone().as_str());
+    let (_, number) = is_pod_restarted_aws_env(environment_check1, app_name.clone().as_str());
 
     match deploy_environment(&context_bis, &ea2) {
         TransactionResult::Ok => assert!(true),
@@ -380,7 +380,7 @@ fn redeploy_same_app_with_ebs() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 
-    let (_, number2) = is_pod_restarted(environment_check2, app_name.as_str());
+    let (_, number2) = is_pod_restarted_aws_env(environment_check2, app_name.as_str());
     //nothing change in the app, so, it shouldn't be restarted
     assert!(number.eq(&number2));
     match delete_environment(&context_for_deletion, &ea_delete) {
