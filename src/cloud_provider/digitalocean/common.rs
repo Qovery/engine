@@ -3,9 +3,10 @@ use crate::container_registry::docr::get_header_with_bearer;
 use crate::error::{SimpleError, SimpleErrorKind};
 use crate::object_storage::do_space::download_space_object;
 use reqwest::StatusCode;
+use retry::delay::Fixed;
+use retry::OperationResult;
 use std::fs::File;
 use std::io::Write;
-
 extern crate serde_json;
 
 pub fn kubernetes_config_path(
@@ -23,21 +24,38 @@ pub fn kubernetes_config_path(
         workspace_directory, kubernetes_cluster_id
     );
 
-    let kubeconfig = download_space_object(
-        spaces_access_id,
-        spaces_secret_key,
-        kubernetes_config_bucket_name.as_str(),
-        kubernetes_config_object_key.as_str(),
-        region,
-    );
-    match kubeconfig {
-        Ok(body) => {
+    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+        let try_kubeconfig = download_space_object(
+            spaces_access_id,
+            spaces_secret_key,
+            kubernetes_config_bucket_name.as_str(),
+            kubernetes_config_object_key.as_str(),
+            region,
+        );
+        match try_kubeconfig {
+            Ok(kubeconfig) => OperationResult::Ok(kubeconfig),
+            Err(err) => OperationResult::Err(format!(
+                "Unable to download the kubeconfig file from space: {:?}",
+                err
+            )),
+        }
+    });
+
+    match result {
+        Ok(downloaded) => {
             let mut file =
                 File::create(kubernetes_config_file_path.clone()).expect("unable to create file");
-            file.write_all(body.as_bytes()).expect("unable to write");
+            file.write_all(downloaded.as_bytes())
+                .expect("unable to write");
             Ok(kubernetes_config_file_path)
         }
-        Err(e) => Err(e),
+        Err(e) => Err(SimpleError::new(
+            SimpleErrorKind::Other,
+            Some(format!(
+                "Unable to download the kubeconfig file after many retries {:?}",
+                e
+            )),
+        )),
     }
 }
 
