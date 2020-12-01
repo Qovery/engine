@@ -1,0 +1,21 @@
+name: engine-release
+
+on:
+  push:
+    branches: main
+
+jobs:
+  engine-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Run a multi-line script
+        timeout-minutes: 60
+        env:
+          GITLAB_PROJECT_ID: ${{ secrets.GITLAB_PROJECT_ID }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_PERSONAL_TOKEN: ${{ secrets.GITLAB_PERSONAL_TOKEN }}
+        run: |
+          export GITHUB_BRANCH=main
+          export GITHUB_COMMIT_ID=$GITHUB_SHA
+          ./helper.sh release
