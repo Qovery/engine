@@ -11,9 +11,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
-};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
 
 pub struct MySQL {
@@ -126,10 +124,12 @@ impl MySQL {
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
 
-        context.insert(
-            "resource_expiration_in_seconds",
-            &self.context.resource_expiration_in_seconds(),
-        );
+        if self.context.resource_expiration_in_seconds().is_some() {
+            context.insert(
+                "resource_expiration_in_seconds",
+                &self.context.resource_expiration_in_seconds(),
+            )
+        }
 
         context
     }
