@@ -434,9 +434,36 @@ impl Router {
                     ));
                 Some(router)
             }
+
             CPKind::GCP => None,
+
+            CPKind::DO => {
+                let router: Box<dyn StatelessService> =
+                    Box::new(crate::cloud_provider::digitalocean::router::Router::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.name.as_str(),
+                        self.default_domain.as_str(),
+                        self.custom_domains
+                            .iter()
+                            .map(
+                                |x| crate::cloud_provider::digitalocean::router::CustomDomain {
+                                    domain: x.domain.clone(),
+                                    target_domain: x.target_domain.clone(),
+                                },
+                            )
+                            .collect::<Vec<_>>(),
+                        self.routes
+                            .iter()
+                            .map(|x| crate::cloud_provider::digitalocean::Route {
+                                path: x.path.clone(),
+                                application_name: x.application_name.clone(),
+                            })
+                            .collect::<Vec<_>>(),
+                    ));
+                Some(router)
+            }
             _ => None,
-            //TODO to implement
         }
     }
 }
