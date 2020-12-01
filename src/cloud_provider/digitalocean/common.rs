@@ -38,10 +38,13 @@ pub fn kubernetes_config_path(
         );
         match try_kubeconfig {
             Ok(kubeconfig) => OperationResult::Ok(kubeconfig),
-            Err(err) => OperationResult::Err(format!(
-                "Unable to download the kubeconfig file from space: {:?}",
-                err
-            )),
+            Err(err) => {
+                warn!("Failed to download the kubeconfig file, retrying...");
+                return OperationResult::Err(format!(
+                    "Unable to download the kubeconfig file from space: {:?}",
+                    err
+                ));
+            }
         }
     });
 
