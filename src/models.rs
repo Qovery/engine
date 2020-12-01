@@ -455,7 +455,7 @@ impl Router {
                             .collect::<Vec<_>>(),
                         self.routes
                             .iter()
-                            .map(|x| crate::cloud_provider::digitalocean::Route {
+                            .map(|x| crate::cloud_provider::digitalocean::router::Route {
                                 path: x.path.clone(),
                                 application_name: x.application_name.clone(),
                             })
