@@ -263,13 +263,15 @@ function export_env() { ## Export environment variables from .env file
 function all_tests(){ ## Run all tests on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
-  #export RUST_LOG=info
+  export RUST_LOG=info
   export_env
   prepare_engine
   prepare_tests
   cd $ENGINE_DIR
-  #cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results_all.json
-  cargo test --color always -- --ignored --color always --test-threads=$nb_treads 
+  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results_all.json
+  TESTS_STATUS="${PIPESTATUS[0]}"
+  cat results.json | cargo2junit > results-fast.xml
+  return $TESTS_STATUS
 }
 
 function fast_tests(){ ## Run fast tests only on qovery-engine
