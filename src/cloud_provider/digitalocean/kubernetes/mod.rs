@@ -310,7 +310,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
+            format!("digitalocean/bootstrap/{}", self.name()),
         );
 
         // generate terraform files and copy them into temp dir
