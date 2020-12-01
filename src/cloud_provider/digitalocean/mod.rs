@@ -3,6 +3,7 @@ pub mod application;
 pub mod common;
 pub mod databases;
 pub mod kubernetes;
+pub(crate) mod router;
 
 extern crate digitalocean;
 
