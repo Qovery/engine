@@ -1,15 +1,15 @@
 extern crate test_utilities;
 
+use self::test_utilities::aws::context;
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::generate_id;
 use qovery_engine::models::{
-    Action, Clone2, Context, CustomDomain, Environment, EnvironmentAction,
-    Storage, StorageType,
+    Action, Clone2, Context, CustomDomain, Environment, EnvironmentAction, Storage, StorageType,
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::{init, is_pod_restarted_aws_env};
-use self::test_utilities::aws::context;
 use tracing::{span,Level};
+
 // insert how many actions you will use in tests
 // args are function you want to use and how many context you want to have
 // it permit you to create several different workspaces for each steps
@@ -94,7 +94,10 @@ pub fn delete_environment(
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
     init();
 
-    let span = span!(Level::INFO, "deploy_a_working_environment_with_no_router_on_aws_eks");
+    let span = span!(
+        Level::INFO,
+        "deploy_a_working_environment_with_no_router_on_aws_eks"
+    );
     let _enter = span.enter();
 
     let context = context();
@@ -124,7 +127,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 fn deploy_dockerfile_not_exist() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_dockerfile_not_exist");
+    let span = span!(Level::INFO, "deploy_dockerfile_not_exist");
     let _enter = span.enter();
 
     let context = context();
@@ -160,7 +163,10 @@ fn deploy_dockerfile_not_exist() {
 fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_a_not_working_environment_with_no_router_on_aws_eks");
+    let span = span!(
+        Level::INFO,
+        "deploy_a_not_working_environment_with_no_router_on_aws_eks"
+    );
     let _enter = span.enter();
 
     let context = context();
@@ -196,7 +202,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
 fn deploy_a_working_environment_with_domain() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_a_working_environment_with_domain");
+    let span = span!(Level::INFO, "deploy_a_working_environment_with_domain");
     let _enter = span.enter();
 
     let context = context();
@@ -227,7 +233,10 @@ fn deploy_a_working_environment_with_domain() {
 fn deploy_a_working_environment_with_custom_domain() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_a_working_environment_with_custom_domain");
+    let span = span!(
+        Level::INFO,
+        "deploy_a_working_environment_with_custom_domain"
+    );
     let _enter = span.enter();
 
     let context = context();
@@ -285,7 +294,10 @@ fn deploy_a_working_environment_with_custom_domain() {
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_a_working_environment_with_storage_on_aws_eks");
+    let span = span!(
+        Level::INFO,
+        "deploy_a_working_environment_with_storage_on_aws_eks"
+    );
     let _enter = span.enter();
 
     let context = context();
@@ -353,7 +365,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 fn redeploy_same_app_with_ebs() {
     init();
 
-    let span = span!(Level::TRACE, "redeploy_same_app_with_ebs");
+    let span = span!(Level::INFO, "redeploy_same_app_with_ebs");
     let _enter = span.enter();
 
     let context = context();
@@ -494,7 +506,10 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
 fn deploy_a_not_working_environment_and_after_working_environment() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_a_not_working_environment_and_after_working_environment");
+    let span = span!(
+        Level::INFO,
+        "deploy_a_not_working_environment_and_after_working_environment"
+    );
     let _enter = span.enter();
 
     // let mut contex_envs = generate_contexts_and_environments(3, test_utilities::aws::working_minimal_environment);
@@ -547,7 +562,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
 fn deploy_ok_fail_fail_ok_environment() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_ok_fail_fail_ok_environment");
+    let span = span!(Level::INFO, "deploy_ok_fail_fail_ok_environment");
     let _enter = span.enter();
 
     // working env
@@ -633,7 +648,10 @@ fn deploy_ok_fail_fail_ok_environment() {
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_a_non_working_environment_with_no_failover_on_aws_eks");
+    let span = span!(
+        Level::INFO,
+        "deploy_a_non_working_environment_with_no_failover_on_aws_eks"
+    );
     let _enter = span.enter();
 
     let context = context();
@@ -664,7 +682,10 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_a_non_working_environment_with_a_working_failover_on_aws_eks");
+    let span = span!(
+        Level::INFO,
+        "deploy_a_non_working_environment_with_a_working_failover_on_aws_eks"
+    );
     let _enter = span.enter();
 
     // context for non working environment
@@ -753,7 +774,10 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
     init();
 
-    let span = span!(Level::TRACE, "deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks");
+    let span = span!(
+        Level::INFO,
+        "deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks"
+    );
     let _enter = span.enter();
 
     let context = context();
