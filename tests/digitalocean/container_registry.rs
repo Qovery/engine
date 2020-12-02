@@ -10,7 +10,6 @@ fn test_create_delete_do_container_registry(){
         context:  context(),
         registry_name: "test-digital-ocean".to_string(),
         api_key: digital_ocean_token(),
-        name: "".to_string(),
         id: "".to_string()
     };
     let image = Image{

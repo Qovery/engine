@@ -22,7 +22,6 @@ pub struct DOCR {
     pub context: Context,
     pub registry_name: String,
     pub api_key: String,
-    pub name: String,
     pub id: String,
 }
 
@@ -41,13 +40,12 @@ pub const cr_api_path: &str = "https://api.digitalocean.com/v2/registry";
 pub const cr_cluster_api_path: &str = "https://api.digitalocean.com/v2/kubernetes/registry";
 
 impl DOCR {
-    pub fn new(context: Context, id: &str, name: &str, registry_name: &str, api_key: &str) -> Self {
+    pub fn new(context: Context, id: &str, registry_name: &str, api_key: &str) -> Self {
         DOCR {
             context,
             registry_name: registry_name.to_string(),
             api_key: api_key.to_string(),
             id: id.to_string(),
-            name: name.to_string(),
         }
     }
     pub fn client(&self) -> DigitalOcean {
@@ -56,10 +54,9 @@ impl DOCR {
 
     pub fn create_repository(&self, _image: &Image) -> Result<(), EngineError> {
         let mut headers = get_header_with_bearer(&self.api_key);
-        //TODO: receive subscription_tier_slug from core
         let repo = DO_API_Create_repository {
             name: self.registry_name.clone(),
-            subscription_tier_slug: "basic".to_owned(),
+            subscription_tier_slug: "professional".to_owned(),
         };
         let to_create_repo = serde_json::to_string(&repo);
         match to_create_repo {
@@ -221,7 +218,7 @@ impl ContainerRegistry for DOCR {
     }
 
     fn name(&self) -> &str {
-        self.name.as_str()
+        self.registry_name.as_str()
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
