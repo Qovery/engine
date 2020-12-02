@@ -256,8 +256,7 @@ impl ContainerRegistry {
                 context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
-                self.name.as_str(),
-                self.name.as_str(),
+                self.options.secret_access_key.as_ref().unwrap().as_str(),
             )),
         }
     }
