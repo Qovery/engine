@@ -56,9 +56,14 @@ function download() { ## Download prerequisites binaries for the engine
 
 function download_terraform_plugins() {
   echo "Downloading Terraform plugins"
+  origin_dir=$(pwd)
   cd docker/engine/providers
-  terraform init
-  cd -
+  for i in * ; do
+    cd $i
+    terraform init
+    cd -
+  done
+  cd $origin_dir
 }
 
 function install() { ## Make symlinks to install binaries in default PATH

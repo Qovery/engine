@@ -143,9 +143,13 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   # copy providers files to download required binaries
   rm -Rf docker/engine/providers/*
   set -e
-  find $LIB_ROOT_DIR -name "tf-providers*" -exec cp {} docker/engine/providers/ \;
-  $sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/*
-  DOCKER_BUILDKIT=1 docker build -t qoveryrd/engine:${tag} .
+  for i in $(find cloned-engine/lib -name "tf-providers*") ; do
+    provider=$(echo $i | sed -r 's/.+\/(.+)(\/.+){2}.tf/\1/')
+    mkdir -p docker/engine/providers/$provider
+    cp $i docker/engine/providers/$provider/
+    $sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/$provider/*
+  done
+  docker build -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
