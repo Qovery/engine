@@ -67,6 +67,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         Level::INFO,
         "postgresql_deploy_a_working_development_environment_with_all_options"
     );
+    let _enter = span.enter();
 
     let context = context();
     let context_for_deletion = context.clone_not_same_execution_id();
@@ -107,6 +108,7 @@ fn postgresql_deploy_a_working_environment() {
     init();
 
     let span = span!(Level::INFO, "postgresql_deploy_a_working_environment");
+    let _enter = span.enter();
 
     let context = context();
     let context_for_delete = context.clone_not_same_execution_id();
@@ -198,6 +200,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         Level::INFO,
         "postgresql_deploy_a_working_environment_and_redeploy"
     );
+    let _enter = span.enter();
 
     let context = context();
     let context_for_redeploy = context.clone_not_same_execution_id();
@@ -303,6 +306,7 @@ fn postgresql_deploy_a_working_production_environment() {
         Level::INFO,
         "postgresql_deploy_a_working_production_environment"
     );
+    let _enter = span.enter();
 
     let context = context();
     let context_for_delete = context.clone_not_same_execution_id();
@@ -397,7 +401,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
     init();
 
     let span = span!(Level::INFO, "test_mongodb_configuration");
-
+    let _enter = span.enter();
     let context_for_delete = context.clone_not_same_execution_id();
 
     let database_host =
@@ -572,6 +576,7 @@ fn mysql_deploy_a_working_environment() {
     init();
 
     let span = span!(Level::INFO, "mysql_deploy_a_working_environment");
+    let _enter = span.enter();
 
     let context = context();
     let deletion_context = context.clone_not_same_execution_id();
@@ -664,6 +669,7 @@ fn mysql_deploy_a_working_production_environment() {
     init();
 
     let span = span!(Level::INFO, "mysql_deploy_a_working_production_environment");
+    let _enter = span.enter();
 
     let context = context();
     let deletion_context = context.clone_not_same_execution_id();
@@ -756,8 +762,8 @@ fn mysql_deploy_a_working_production_environment() {
 
 fn test_redis_configuration(context: Context, mut environment: Environment, version: &str) {
     init();
-
     let span = span!(Level::INFO, "test_redis_configuration");
+    let _enter = span.enter();
 
     let context_for_delete = context.clone_not_same_execution_id();
 
@@ -857,6 +863,7 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
 #[test]
 fn redis_v5_deploy_a_working_environment() {
     let context = context();
+    const test_name: &str = "redis_v6_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_redis_configuration(context, environment, "5.0");
 }
@@ -864,6 +871,7 @@ fn redis_v5_deploy_a_working_environment() {
 #[test]
 fn redis_v6_deploy_a_working_environment() {
     let context = context();
+    const test_name: &str = "redis_v6_0_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_redis_configuration(context, environment, "6.0");
 }
@@ -873,6 +881,7 @@ fn redis_v6_deploy_a_working_environment() {
 #[ignore]
 fn redis_v5_0_deploy_a_working_environment_with_production() {
     let context = context();
+    const test_name: &str = "redis_v5_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
     test_redis_configuration(context, environment, "5.0");
@@ -883,6 +892,7 @@ fn redis_v5_0_deploy_a_working_environment_with_production() {
 #[ignore]
 fn redis_v6_0_deploy_a_working_environment_with_production() {
     let context = context();
+    const test_name: &str = "redis_v6_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
     test_redis_configuration(context, environment, "6.0");
