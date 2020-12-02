@@ -256,6 +256,8 @@ impl ContainerRegistry {
                 context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
+                self.name.as_str(),
+                self.name.as_str(),
             )),
         }
     }
