@@ -4,7 +4,7 @@ use test_utilities::utilities::{context, init};
 use crate::digitalocean::deploy_environment_on_do;
 use tracing::{debug, error, info, span, warn, Level};
 
-#[test]
+
 fn deploy_a_working_environment_with_no_router_on_do() {
     init();
     let span = span!(
