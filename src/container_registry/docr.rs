@@ -54,6 +54,8 @@ impl DOCR {
 
     pub fn create_repository(&self, _image: &Image) -> Result<(), EngineError> {
         let mut headers = get_header_with_bearer(&self.api_key);
+        // subscription_tier_slug: https://www.digitalocean.com/products/container-registry/
+        // starter and basic tiers are too limited on repository creation
         let repo = DO_API_Create_repository {
             name: self.registry_name.clone(),
             subscription_tier_slug: "professional".to_owned(),
