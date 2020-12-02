@@ -8,6 +8,10 @@ KUBECONFIG
 resource "local_file" "kubeconfig" {
   filename = "${var.space_bucket_kubeconfig}/${var.oks_cluster_id}.yaml"
   content = local.kubeconfig
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 
@@ -17,4 +21,8 @@ resource "digitalocean_spaces_bucket_object" "upload_kubeconfig" {
   key          = "${var.oks_cluster_id}.yaml"
   source       = local_file.kubeconfig.filename
   depends_on = [local_file.kubeconfig, digitalocean_spaces_bucket.space_bucket_kubeconfig]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
