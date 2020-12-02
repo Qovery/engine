@@ -126,7 +126,6 @@ dev-build:
   retry: 1
   script:
     - ./helper.sh build_image
-  when: manual
   only:
     refs:
       - dev
