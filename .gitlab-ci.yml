@@ -10,8 +10,7 @@ stages:
   - tests
   - build
   - release
-  - set_ga
-  - deploy_to_qovery_prod
+  - deploy
 
 before_script:
   - test -z $KUBERNETES_PORT || export DOCKER_HOST=tcp://127.0.0.1:2375
@@ -161,7 +160,7 @@ main-release:
       - main
 
 main-set-ga:
-  stage: set_ga
+  stage: deploy
   retry: 2
   script:
     - ./helper.sh set_release_ga
@@ -171,7 +170,7 @@ main-set-ga:
       - main
 
 main-deploy_engine:
-  stage: deploy_to_qovery_prod
+  stage: deploy
   retry: 0
   script:
     - ./helper.sh release_to_prod
