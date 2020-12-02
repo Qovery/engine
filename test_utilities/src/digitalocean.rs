@@ -40,7 +40,6 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
         context.clone(),
         "doea59qe62xaw3wj",
         "qovery-registry",
-        "qovery-registry",
         digital_ocean_token().as_str(),
     )
 }
