@@ -2,10 +2,16 @@ use qovery_engine::models::{Action, Clone2, EnvironmentAction};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{context, init};
 use crate::digitalocean::deploy_environment_on_do;
+use tracing::{debug, error, info, span, warn, Level};
 
 #[test]
 fn deploy_a_working_environment_with_no_router_on_do() {
     init();
+    let span = span!(
+        Level::INFO,
+        "deploy_a_working_environment_with_no_router_on_do"
+    );
+    let _enter = span.enter();
 
     let context = context();
     let context_for_delete = context.clone_not_same_execution_id();

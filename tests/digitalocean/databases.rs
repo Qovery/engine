@@ -2,10 +2,17 @@ use qovery_engine::models::{Action, Clone2, EnvironmentAction};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{context, init};
 use crate::digitalocean::deploy_environment_on_do;
+use tracing::{debug, error, info, span, warn, Level};
 
 //TODO: Do you wanna play a game ?
 fn deploy_one_postgresql() {
     init();
+
+    let span = span!(
+        Level::INFO,
+        "deploy_one_postgresql"
+    );
+    let _enter = span.enter();
 
     let context = context();
     let context_for_deletion = context.clone_not_same_execution_id();
