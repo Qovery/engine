@@ -153,7 +153,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
-  rm -f docker/engine/providers/*
+  rm -Rf docker/engine/providers/*
 }
 
 function build_ci_image() { ## Build CI image locally. Args: <tag_version>
