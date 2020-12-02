@@ -111,7 +111,7 @@ impl Application {
             .iter()
             .map(|ev| EnvironmentVariableDataTemplate {
                 key: ev.key.clone(),
-                value: ev.value.clone(),
+                value: base64::encode(ev.value.clone()),
             })
             .collect::<Vec<_>>();
 
