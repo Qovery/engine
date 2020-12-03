@@ -41,6 +41,8 @@ spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
       securityContext: {}
+      imagePullSecrets:
+        - name: {{ registry_name }}
       containers:
         - name: {{ name }}
           image: "{{ image_name_with_tag }}"

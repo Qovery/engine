@@ -117,6 +117,8 @@ impl Application {
 
         context.insert("environment_variables", &environment_variables);
 
+
+        context.insert("registry_name","qovery-registry");
         //TODO: no storage for the moment
         let is_storage = false;
         context.insert("is_storage", &is_storage);
