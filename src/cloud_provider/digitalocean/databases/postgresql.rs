@@ -2,7 +2,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::Service;
 use crate::cloud_provider::service::{Create, DatabaseOptions};
 use crate::cloud_provider::DeploymentTarget;
-use crate::error::{cast_simple_error_to_engine_error, EngineError};
+use crate::error::EngineError;
 use crate::models::{Action, Context, Environment};
 use tera::Context as TeraContext;
 pub struct PostgreSQL {

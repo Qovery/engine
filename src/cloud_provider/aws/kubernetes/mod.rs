@@ -33,6 +33,7 @@ pub mod node;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Options {
+    // AWS related
     pub eks_zone_a_subnet_blocks: Vec<String>,
     pub eks_zone_b_subnet_blocks: Vec<String>,
     pub eks_zone_c_subnet_blocks: Vec<String>,
@@ -51,12 +52,12 @@ pub struct Options {
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
     pub eks_access_cidr_blocks: Vec<String>,
-    pub qovery_api_url: String,
-    pub tls_email_report: String,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticache_cidr_subnet: String,
     pub elasticsearch_cidr_subnet: String,
+    // Qovery
+    pub qovery_api_url: String,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
     pub grafana_admin_user: String,
@@ -64,6 +65,8 @@ pub struct Options {
     pub discord_api_key: String,
     pub qovery_nats_url: String,
     pub qovery_ssh_key: String,
+    // Others
+    pub tls_email_report: String,
 }
 
 pub struct EKS<'a> {

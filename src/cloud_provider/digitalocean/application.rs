@@ -163,8 +163,8 @@ impl Create for Application {
         let workspace_dir = self.workspace_directory();
 
         // retrieve the cluster uuid, useful to link DO registry to k8s cluster
-        let kube_id = kubernetes.name();
-        let cluster_uuid_res = get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kube_id);
+        let cluster_uuid_res =
+            get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
         match cluster_uuid_res {
             // ensure DO registry is linked to k8s cluster
             Ok(uuid) => match subscribe_kube_cluster_to_container_registry(
