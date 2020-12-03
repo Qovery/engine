@@ -338,13 +338,13 @@ get_release_ga)
   get_release_ga
   ;;
 fast_tests)
-  fast_tests $commit_id 15
+  fast_tests $commit_id 10
   ;;
 fast_tests_seq)
   fast_tests $commit_id 1
   ;;
 all_tests)
-  all_tests $commit_id 15
+  all_tests $commit_id 10
   ;;
 all_tests_seq)
   all_tests $commit_id 1
