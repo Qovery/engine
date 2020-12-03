@@ -5,7 +5,7 @@ use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::common::{kubernetes_config_path};
+use crate::cloud_provider::aws::common::kubernetes_config_path;
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -18,16 +18,16 @@ use crate::cmd;
 use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
+use crate::dns_provider::DnsProvider;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::string::terraform_list_format;
 use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
 use crate::{dns_provider, s3};
-use crate::dns_provider::DnsProvider;
-use crate::fs::workspace_directory;
+use std::thread;
 
 pub mod node;
 
@@ -854,6 +854,9 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
+
         // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         // create all stateless services (router, application...)
@@ -909,6 +912,9 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
+
         // check all deployed services
         for service in &environment.stateful_services {
             let progress_scope = service.progress_scope();
@@ -961,6 +967,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 }
             }
         }
+
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
 
         for service in &environment.stateless_services {
             let progress_scope = service.progress_scope();
@@ -1095,6 +1104,9 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
+
         // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         // clean up all stateless services (router, application...)
@@ -1182,6 +1194,9 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
+
         // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         // create all stateless services (router, application...)
@@ -1201,6 +1216,9 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
+
         // check all deployed services
         for stateful_service in &environment.stateful_services {
             match stateful_service.on_pause_check() {
@@ -1217,6 +1235,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 _ => {}
             }
         }
+
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
 
         for stateless_service in &environment.stateless_services {
             match stateless_service.on_pause_check() {
@@ -1271,6 +1292,9 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
+
         // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
         let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
         // delete all stateless services (router, application...)
@@ -1290,6 +1314,9 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
+
         // check all deployed services
         for stateful_service in &environment.stateful_services {
             match stateful_service.on_delete_check() {
@@ -1306,6 +1333,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 _ => {}
             }
         }
+
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
 
         for stateless_service in &environment.stateless_services {
             match stateless_service.on_delete_check() {
