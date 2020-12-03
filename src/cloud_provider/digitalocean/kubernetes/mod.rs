@@ -1,5 +1,4 @@
 use crate::cloud_provider::common::workerNodeDataTemplate::WorkerNodeDataTemplate;
-use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
@@ -13,11 +12,10 @@ use crate::models::{
     ProgressScope,
 };
 use crate::string::terraform_list_format;
-use crate::{cmd, dns_provider};
+use crate::dns_provider;
 use digitalocean::api::Region;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
 use std::rc::Rc;
 use std::str::FromStr;
 use tera::Context as TeraContext;
@@ -27,10 +25,20 @@ pub mod node;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Options {
+    // Digital Ocean
     pub vpc_cidr_block: String,
+    pub vpc_name: String,
+    // Qovery
     pub qovery_api_url: String,
-    pub tls_email_report: String,
     pub engine_version_controller_token: String,
+    pub agent_version_controller_token: String,
+    pub grafana_admin_user: String,
+    pub grafana_admin_password: String,
+    pub discord_api_key: String,
+    pub qovery_nats_url: String,
+    pub qovery_ssh_key: String,
+    // Others
+    pub tls_email_report: String,
 }
 
 pub struct DOKS<'a> {
@@ -84,57 +92,88 @@ impl<'a> DOKS<'a> {
     fn tera_context(&self) -> TeraContext {
         let mut context = TeraContext::new();
 
-        // VPC segmentation
-        let vpc_name = format!("qovery-{}", &self.id);
-        context.insert("vpc_name", &vpc_name);
-        let qovery_api_url = self.options.qovery_api_url.clone();
+        // Basics
+        let test_cluster = match self.context.metadata() {
+            Some(meta) => match meta.test {
+                Some(true) => true,
+                _ => false,
+            },
+            _ => false,
+        };
 
-        // Options
-        context.insert("qovery_api_url", &qovery_api_url);
-        context.insert("dns_email_report", &self.options.tls_email_report); // Pierre suggested renaming to tls_email_report
+        // OKS
+        context.insert("oks_cluster_id", &self.id());
+        context.insert("oks_version", &self.version());
+        context.insert("oks_master_size", "s-1vcpu-2gb");
+
+        // Network
+        let vpc_name = &self.options.vpc_name;
+        context.insert("vpc_name", vpc_name);
         let vpc_cidr_block = self.options.vpc_cidr_block.clone();
         context.insert("vpc_cidr_block", &vpc_cidr_block);
+
+        // Qovery
         context.insert(
             "engine_version_controller_token",
             &self.options.engine_version_controller_token,
         );
+        context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
+        context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
+        context.insert("qovery_ssh_key", self.options.qovery_ssh_key.as_str());
+        context.insert("discord_api_key", self.options.discord_api_key.as_str());
 
         // TLS
-        let lets_encrypt_url = match self.context.metadata() {
-            Some(meta) => match meta.test {
-                Some(true) => "https://acme-staging-v02.api.letsencrypt.org/directory",
-                _ => "https://acme-v02.api.letsencrypt.org/directory",
-            },
-            _ => "https://acme-v02.api.letsencrypt.org/directory",
+        let lets_encrypt_url = match &test_cluster {
+            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
+            false => "https://acme-v02.api.letsencrypt.org/directory",
         };
         context.insert("acme_server_url", lets_encrypt_url);
+        context.insert("dns_email_report", &self.options.tls_email_report);
 
         // DNS management
-        let managed_dns = vec![self.dns_provider.name()];
-        context.insert("managed_dns", &managed_dns);
-
-        let managed_dns_helm_format = managed_dns
+        let managed_dns_list = vec![self.dns_provider.name()];
+        let managed_dns_domains_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
+        let managed_dns_domains_terraform_format =
+            terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+        let managed_dns_resolvers: Vec<String> = self
+            .dns_provider
+            .resolvers()
             .iter()
-            .map(|name| format!("\"{}\"", name))
-            .collect::<Vec<_>>(); // Todo: make it customizable
-        context.insert("managed_dns_helm_format", &managed_dns_helm_format);
-        let managed_dns_terraform_format = managed_dns
-            .iter()
-            .map(|name| format!("{{{}}}", name))
-            .collect::<Vec<_>>()
-            .join(",");
+            .map(|x| format!("{}", x.clone().to_string()))
+            .collect();
+        let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
+        context.insert("managed_dns", &managed_dns_list);
         context.insert(
-            "managed_dns_terraform_format",
-            &managed_dns_terraform_format,
+            "managed_dns_domains_helm_format",
+            &managed_dns_domains_helm_format,
         );
-        context.insert("cloudflare_api_token", self.dns_provider.token());
+        context.insert(
+            "managed_dns_domains_terraform_format",
+            &managed_dns_domains_terraform_format,
+        );
+        context.insert(
+            "managed_dns_resolvers_terraform_format",
+            &managed_dns_resolvers_terraform_format,
+        );
+
+        match self.dns_provider.kind() {
+            dns_provider::Kind::CLOUDFLARE => {
+                context.insert("external_dns_provider", "cloudflare");
+                context.insert("cloudflare_api_token", self.dns_provider.token());
+                context.insert("cloudflare_email", self.dns_provider.account());
+            }
+        };
 
         // Digital Ocean
         context.insert("digitalocean_token", &self.cloud_provider.token);
         context.insert("do_region", &self.region);
+
         // Sapces Credentiales
         context.insert("spaces_access_id", &self.cloud_provider.spaces_access_id);
         context.insert("spaces_secret_key", &self.cloud_provider.spaces_secret_key);
+        let space_kubeconfig_bucket = get_space_bucket_kubeconfig_name(self.id.clone());
+        context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
+
         // AWS S3 tfstate storage tfstates
         context.insert(
             "aws_access_key_tfstates_account",
@@ -165,13 +204,7 @@ impl<'a> DOKS<'a> {
         );
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
 
-        // kubernetes cluster vars
-        context.insert("oks_cluster_id", &self.id());
-
-        context.insert("oks_version", &self.version());
-
-        context.insert("oks_master_size", "s-2vcpu-4gb");
-
+        // kubernetes workers
         context.insert("kubernetes_master_cluster_name", &self.name());
         let worker_nodes = self
             .nodes
@@ -187,45 +220,6 @@ impl<'a> DOKS<'a> {
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
         context.insert("oks_worker_nodes", &worker_nodes);
-
-        // DNS configuration
-        let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
-        let managed_dns_domains_terraform_format =
-            terraform_list_format(vec![self.dns_provider.domain().to_string()]);
-        let managed_dns_resolvers: Vec<String> = self
-            .dns_provider
-            .resolvers()
-            .iter()
-            .map(|x| format!("{}", x.clone().to_string()))
-            .collect();
-        let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
-
-        context.insert("managed_dns", &managed_dns_list);
-        context.insert(
-            "managed_dns_domains_helm_format",
-            &managed_dns_domains_helm_format,
-        );
-        context.insert(
-            "managed_dns_domains_terraform_format",
-            &managed_dns_domains_terraform_format,
-        );
-        context.insert(
-            "managed_dns_resolvers_terraform_format",
-            &managed_dns_resolvers_terraform_format,
-        );
-
-        match self.dns_provider.kind() {
-            dns_provider::Kind::CLOUDFLARE => {
-                context.insert("external_dns_provider", "cloudflare");
-                context.insert("cloudflare_api_token", self.dns_provider.token());
-                context.insert("cloudflare_email", self.dns_provider.account());
-            }
-        };
-
-        context.insert("dns_email_report", &self.options.tls_email_report); // Pierre suggested renaming to tls_email_report
-        let space_kubeconfig_bucket = get_space_bucket_kubeconfig_name(self.id.clone());
-        context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
 
         context
     }
@@ -377,7 +371,9 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("DOKS.deploy_environment() called for {}", self.name());
+        info!("DOKS.deploy_environment() called for {}",
+            self.name()
+        );
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         let stateful_deployment_target = match environment.kind {
@@ -407,8 +403,7 @@ impl<'a> Kubernetes for DOKS<'a> {
 
             match service.exec_action(&stateful_deployment_target) {
                 Err(err) => {
-                    error!(
-                        "error with stateful service {} , id: {} => {:?}",
+                    error!("error with stateful service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
                         err
@@ -462,8 +457,7 @@ impl<'a> Kubernetes for DOKS<'a> {
 
             match service.exec_action(&stateless_deployment_target) {
                 Err(err) => {
-                    error!(
-                        "error with stateless service {} , id: {} => {:?}",
+                    error!("error with stateless service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
                         err

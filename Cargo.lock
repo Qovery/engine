@@ -1724,6 +1724,7 @@ dependencies = [
  "dirs 3.0.1",
  "dns-lookup",
  "flate2",
+ "futures 0.3.7",
  "gethostname",
  "git2",
  "itertools",
