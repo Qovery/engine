@@ -274,9 +274,9 @@ function all_tests(){ ## Run all tests on qovery-engine
   prepare_tests
   cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
-  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results_all.json
+  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
   TESTS_STATUS="${PIPESTATUS[0]}"
-  cat results.json | cargo2junit > results-fast.xml
+  cat results.json | cargo2junit > results.xml
   return $TESTS_STATUS
 }
 
@@ -291,7 +291,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   cd $ENGINE_DIR
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
   TESTS_STATUS="${PIPESTATUS[0]}"
-  cat results.json | cargo2junit > results-fast.xml
+  cat results.json | cargo2junit > results.xml
   return $TESTS_STATUS
 }
 
