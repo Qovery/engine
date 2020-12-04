@@ -2,6 +2,7 @@ resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
   name = var.kubernetes_master_cluster_name
   region = var.digitalocean_region
   version = var.oks_version
+  vpc_uuid = digitalocean_vpc.qovery_vpc.id
 
   node_pool {
     name = var.oks_master_name
