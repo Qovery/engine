@@ -36,6 +36,52 @@ struct DO_API_Subecribe_to_Kube_Cluster {
     cluster_uuids: Vec<String>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DO_API_get_container_registry {
+    pub registry: Registry,
+    pub subscription: Subscription,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Registry {
+    pub name: String,
+    #[serde(rename = "created_at")]
+    pub created_at: String,
+    #[serde(rename = "storage_usage_bytes")]
+    pub storage_usage_bytes: i64,
+    #[serde(rename = "storage_usage_updated_at")]
+    pub storage_usage_updated_at: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subscription {
+    pub tier: Tier,
+    #[serde(rename = "created_at")]
+    pub created_at: String,
+    #[serde(rename = "updated_at")]
+    pub updated_at: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tier {
+    pub name: String,
+    pub slug: String,
+    #[serde(rename = "included_repositories")]
+    pub included_repositories: i64,
+    #[serde(rename = "included_storage_bytes")]
+    pub included_storage_bytes: i64,
+    #[serde(rename = "allow_storage_overage")]
+    pub allow_storage_overage: bool,
+    #[serde(rename = "included_bandwidth_bytes")]
+    pub included_bandwidth_bytes: i64,
+    #[serde(rename = "monthly_price_in_cents")]
+    pub monthly_price_in_cents: i64,
+}
+
 pub const cr_api_path: &str = "https://api.digitalocean.com/v2/registry";
 pub const cr_cluster_api_path: &str = "https://api.digitalocean.com/v2/kubernetes/registry";
 
@@ -339,12 +385,25 @@ pub fn subscribe_kube_cluster_to_container_registry(
 pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
     let headers = get_header_with_bearer(api_key);
     let res = reqwest::blocking::Client::new()
-        .get(cr_cluster_api_path)
+        .get(cr_api_path)
         .headers(headers)
         .send();
     match res {
         Ok(output) => match output.status() {
-            StatusCode::OK => Ok("qovery-test".to_string()),
+            StatusCode::OK => {
+                let content = output.text().unwrap();
+                let res_registry = serde_json::from_str::<DO_API_get_container_registry>(&content);
+
+                match res_registry {
+                    Ok(registry) => return Ok(registry.registry.name),
+                    Err(e) => return Err(SimpleError::new(
+                        SimpleErrorKind::Other,
+                        Some(
+                            "While trying to deserialize Registry describe json received from Digital Ocean API",
+                        ),
+                    )),
+                }
+            }
             status => {
                 warn!("status from DO registry API {}", status);
                 return Err(SimpleError::new(SimpleErrorKind::Other,Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")));

@@ -10,13 +10,13 @@ use qovery_engine::models::Context;
 use crate::aws::{terraform_aws_access_key_id, terraform_aws_secret_access_key};
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::build_platform_local_docker;
-use qovery_engine::cloud_provider::digitalocean::api_structs::clusters::{Cluster};
+use qovery_engine::cloud_provider::digitalocean::api_structs::clusters::Cluster;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::dns_provider::DnsProvider;
-use std::fs::File;
 use reqwest::StatusCode;
+use std::fs::File;
 
 pub const DO_KUBERNETES_VERSION: &str = "1.18.10-do.2";
 pub const DIGITAL_OCEAN_URL: &str = "https://api.digitalocean.com/v2/";
@@ -69,13 +69,12 @@ pub fn do_kubernetes_ks<'a>(
     dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
 ) -> DOKS<'a> {
-    let mut file =
-        File::open("tests/assets/do-options.json").expect("file not found");
+    let mut file = File::open("tests/assets/do-options.json").expect("file not found");
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     DOKS::<'a>::new(
         context.clone(),
-        "my-first-doks",
-        "do-kube-cluster-fra1",
+        "my-first-doks-1",
+        "do-kube-cluster-fra1-1",
         DO_KUBERNETES_VERSION,
         "fra1",
         cloud_provider,

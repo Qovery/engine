@@ -79,7 +79,11 @@ struct Cluster {
 }
 */
 
-pub fn get_uuid_of_cluster(token: &str, kubeID: &str) -> Result<String, SimpleError> {
+// retreive the digital ocean uuid of the kube cluster from our cluster name
+pub fn get_uuid_of_cluster_from_name(
+    token: &str,
+    kube_cluster_name: &str,
+) -> Result<String, SimpleError> {
     let mut headers = get_header_with_bearer(token);
     let res = reqwest::blocking::Client::new()
         .get(do_cluster_api_path)
@@ -91,7 +95,7 @@ pub fn get_uuid_of_cluster(token: &str, kubeID: &str) -> Result<String, SimpleEr
                 let content = response.text().unwrap();
                 let res_clusters  = serde_json::from_str::<Clusters>(&content);
                 match res_clusters{
-                    Ok(clusters) => match search_uuid_cluster_for(kubeID,clusters){
+                    Ok(clusters) => match search_uuid_cluster_for(kube_cluster_name,clusters){
                         Some(uuid) => return Ok(uuid),
                         None => return Err(SimpleError::new(
                             SimpleErrorKind::Other,

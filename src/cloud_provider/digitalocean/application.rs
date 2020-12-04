@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster;
+use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
 use crate::cloud_provider::digitalocean::{common, DO};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -14,7 +14,9 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::HelmHistoryRow;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
-use crate::container_registry::docr::subscribe_kube_cluster_to_container_registry;
+use crate::container_registry::docr::{
+    get_current_registry_name, subscribe_kube_cluster_to_container_registry,
+};
 use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError,
 };
@@ -118,8 +120,17 @@ impl Application {
         context.insert("environment_variables", &environment_variables);
 
         // retreive the registry name
-        context.insert("registry_name", "qovery-registry");
-        //TODO: no storage for the moment
+        let digitalocean = kubernetes
+            .cloud_provider()
+            .as_any()
+            .downcast_ref::<DO>()
+            .unwrap();
+
+        let current_registry_name = get_current_registry_name(&digitalocean.token);
+        match current_registry_name {
+            Ok(registry_name) => context.insert("registry_name", &registry_name),
+            _ => error!("Unable to fetch the registry name !"),
+        }
         let is_storage = false;
         context.insert("is_storage", &is_storage);
 
@@ -152,7 +163,8 @@ impl Create for Application {
         let workspace_dir = self.workspace_directory();
 
         // retrieve the cluster uuid, useful to link DO registry to k8s cluster
-        let cluster_uuid_res = get_uuid_of_cluster(digitalocean.token.as_str(), kubernetes.name());
+        let kube_id = kubernetes.name();
+        let cluster_uuid_res = get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kube_id);
         match cluster_uuid_res {
             // ensure DO registry is linked to k8s cluster
             Ok(uuid) => match subscribe_kube_cluster_to_container_registry(
