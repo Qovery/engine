@@ -43,7 +43,7 @@ fn create_doks_cluster_in_fra_1() {
 
     let cloudflare = dns_provider_cloudflare(&context);
 
-    let mut file = File::open("cloned-engine/tests/assets/do-options.json").unwrap();
+    let mut file = File::open("tests/assets/do-options.json").unwrap();
     let mut read_buf = String::new();
     file.read_to_string(&mut read_buf).unwrap();
 
