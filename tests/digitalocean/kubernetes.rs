@@ -1,33 +1,30 @@
 extern crate test_utilities;
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::digitalocean::{
-    digital_ocean_spaces_access_id, digital_ocean_spaces_secret_key, digital_ocean_token,get_kube_cluster_name_from_uuid,
+    digital_ocean_spaces_access_id, digital_ocean_spaces_secret_key, digital_ocean_token,
+    get_kube_cluster_name_from_uuid,
 };
-use self::test_utilities::utilities::{init, generate_id};
+use self::test_utilities::utilities::{generate_id, init};
 use qovery_engine::cloud_provider::digitalocean::api_structs::clusters::Clusters;
 use qovery_engine::cloud_provider::digitalocean::common::{
     get_uuid_of_cluster, kubernetes_config_path,
 };
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_namespace};
+use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
 use qovery_engine::container_registry::docr::get_header_with_bearer;
+use qovery_engine::error::SimpleError;
 use qovery_engine::transaction::TransactionResult;
 use reqwest::StatusCode;
 use std::fs::File;
 use std::io::Read;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
-use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_namespace};
-use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
-use qovery_engine::error::SimpleError;
-use tracing::{debug, error, info, span, warn, Level};
 
 #[test]
 fn create_doks_cluster_in_fra_1() {
     init();
 
-    let span = span!(
-        Level::INFO,
-        "create_doks_cluster_in_fra_1"
-    );
+    let span = span!(Level::INFO, "create_doks_cluster_in_fra_1");
     let _enter = span.enter();
 
     let cluster_id = "my-first-doks";
@@ -45,7 +42,7 @@ fn create_doks_cluster_in_fra_1() {
 
     let cloudflare = dns_provider_cloudflare(&context);
 
-    let mut file = File::open("tests/assets/do-options.json").unwrap();
+    let mut file = File::open("cloned-engine/tests/assets/do-options.json").unwrap();
     let mut read_buf = String::new();
     file.read_to_string(&mut read_buf).unwrap();
 
@@ -70,10 +67,9 @@ fn create_doks_cluster_in_fra_1() {
     }
     tx.commit();
 
-
     // TESTING: Kube cluster UUID is OK ?
     let res_uuid = get_uuid_of_cluster(digital_ocean_token().as_str(), cluster_name.clone());
-    match  res_uuid{
+    match res_uuid {
         Ok(uuid) => assert_eq!(
             get_kube_cluster_name_from_uuid(uuid.as_str()),
             cluster_name.clone()
@@ -111,5 +107,4 @@ fn create_doks_cluster_in_fra_1() {
         Err(_) => assert!(false)
     }
     */
-
 }

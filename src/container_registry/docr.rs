@@ -130,11 +130,11 @@ impl DOCR {
             vec!["push", dest.as_str()],
             |r_out| match r_out {
                 Ok(line) => info!("{}", line),
-                Err(line) => error!( "{}", line),
+                Err(line) => error!("{}", line),
             },
             |r_out| match r_out {
                 Ok(line) => info!("{}", line),
-                Err(line) => error!( "{}", line),
+                Err(line) => error!("{}", line),
             },
         ) {
             Err(_) => {
@@ -171,7 +171,7 @@ impl DOCR {
             Ok(out) => match out.status() {
                 StatusCode::NO_CONTENT => Ok(()),
                 status => {
-                    warn!( "delete status from DO registry API {}", status);
+                    warn!("delete status from DO registry API {}", status);
                     return Err(self.engine_error(
                         EngineErrorCause::Internal,
                         format!(
@@ -316,21 +316,47 @@ pub fn subscribe_kube_cluster_to_container_registry(
                 Ok(output) => match output.status() {
                     StatusCode::NO_CONTENT => return Ok(()),
                     status => {
-                        warn!( "status from DO registry API {}", status);
+                        warn!("status from DO registry API {}", status);
                         return Err(SimpleError::new(SimpleErrorKind::Other,Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")));
                     }
                 },
                 Err(e) => {
-                    print!("{:?}", e);
+                    error!("{:?}", e);
                     return Err(SimpleError::new(SimpleErrorKind::Other,Some("Unable to call Digital Ocean when tyring to subscribe repository to cluster")));
                 }
             }
         }
         Err(e) => {
-            print!("{:?}", e);
+            error!("{:?}", e);
             return Err(SimpleError::new(
                 SimpleErrorKind::Other,
                 Some("Unable to Serialize digital ocean cluster uuids"),
+            ));
+        }
+    }
+}
+
+pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
+    let headers = get_header_with_bearer(api_key);
+    let res = reqwest::blocking::Client::new()
+        .get(cr_cluster_api_path)
+        .headers(headers)
+        .send();
+    match res {
+        Ok(output) => match output.status() {
+            StatusCode::OK => Ok("qovery-test".to_string()),
+            status => {
+                warn!("status from DO registry API {}", status);
+                return Err(SimpleError::new(SimpleErrorKind::Other,Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")));
+            }
+        },
+        Err(e) => {
+            error!("{:?}", e);
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some(
+                    "Unable to call Digital Ocean when tyring to fetch the container registry name",
+                ),
             ));
         }
     }

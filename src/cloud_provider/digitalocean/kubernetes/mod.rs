@@ -379,9 +379,7 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("DOKS.deploy_environment() called for {}",
-            self.name()
-        );
+        info!("DOKS.deploy_environment() called for {}", self.name());
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         let stateful_deployment_target = match environment.kind {
@@ -411,7 +409,8 @@ impl<'a> Kubernetes for DOKS<'a> {
 
             match service.exec_action(&stateful_deployment_target) {
                 Err(err) => {
-                    error!("error with stateful service {} , id: {} => {:?}",
+                    error!(
+                        "error with stateful service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
                         err
@@ -465,7 +464,8 @@ impl<'a> Kubernetes for DOKS<'a> {
 
             match service.exec_action(&stateless_deployment_target) {
                 Err(err) => {
-                    error!("error with stateless service {} , id: {} => {:?}",
+                    error!(
+                        "error with stateless service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
                         err
