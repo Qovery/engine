@@ -4,12 +4,7 @@ variable "digitalocean_region" {
   type    = string
 }
 
-// container registry
-variable "container_registry_name" {
-  default = "qovery"
-  type = string
-}
-
+// kubernetes MASTER cluster
 // kubernetes MASTER cluster
 variable "kubernetes_master_cluster_name" {
   default = "{{ kubernetes_master_cluster_name }}"
