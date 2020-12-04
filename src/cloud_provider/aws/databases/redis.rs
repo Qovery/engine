@@ -102,7 +102,7 @@ impl Redis {
                     .downcast_ref::<AWS>()
                     .unwrap();
 
-                utilities::create_namespace(&environment.namespace(), kube_config.as_str(), aws);
+                utilities::create_namespace_without_labels(&environment.namespace(), kube_config.as_str(), aws);
             }
             Err(e) => error!(
                 "Failed to generate the kubernetes config file path: {:?}",

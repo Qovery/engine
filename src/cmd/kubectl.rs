@@ -4,10 +4,7 @@ use std::path::Path;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 
-use crate::cmd::structs::{
-    Item, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
-    KubernetesService,
-};
+use crate::cmd::structs::{Item, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase, KubernetesService, LabelsContent};
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::error::{SimpleError, SimpleErrorKind};
 use crate::constants::KUBECONFIG;
@@ -347,20 +344,131 @@ where
     Ok(Some(false))
 }
 
-pub fn kubectl_exec_create_namespace<P>(
+pub fn kubectl_exec_is_namespace_present<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
-where
-    P: AsRef<Path>,
+) -> bool
+    where
+        P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
+    let mut output_vec: Vec<String> = Vec::new();
+    let result = kubectl_exec_with_output(
+        vec!["get", "namespace", namespace],
+        _envs,
+        |out| match out {
+            Ok(line) => output_vec.push(line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    );
+
+    match result {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+pub fn kubectl_exec_create_namespace<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    labels: Option<Vec<LabelsContent>>,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    // don't create the namespace if already exists and not not return error in this case
+    if !kubectl_exec_is_namespace_present(
+        kubernetes_config.as_ref(),
+        namespace.clone(),
+        envs.clone(),
+    ) {
+        // create namespace
+        let mut _envs = Vec::with_capacity(envs.len() + 1);
+        _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+        _envs.extend(envs.clone());
+
+        let _ = kubectl_exec_with_output(
+            vec!["create", "namespace", namespace],
+            _envs,
+            |out| match out {
+                Ok(line) => info!("{}", line),
+                Err(err) => error!("{:?}", err),
+            },
+            |out| match out {
+                Ok(line) => error!("{}", line),
+                Err(err) => error!("{:?}", err),
+            },
+        )?;
+    }
+
+    // additional labels
+    if labels.is_some() {
+        match kubectl_add_labels_to_namespace(
+            kubernetes_config,
+            namespace,
+            labels.unwrap(),
+            envs,
+        ) {
+            Ok(_) => {},
+            Err(e) => return Err(e),
+        }
+    };
+
+    Ok(())
+}
+
+pub fn kubectl_add_labels_to_namespace<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    labels: Vec<LabelsContent>,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), SimpleError>
+    where
+        P: AsRef<Path>,
+{
+    if labels.iter().count() > 0 {
+        return Err(SimpleError::new(
+            SimpleErrorKind::Other,
+            Some("No labels were defined, can't set them"),
+        ));
+    };
+
+    if !kubectl_exec_is_namespace_present(
+        kubernetes_config.as_ref(),
+        namespace.clone(),
+        envs.clone(),
+    ) {
+        return Err(SimpleError::new(
+            SimpleErrorKind::Other,
+            Some(format!{"Can't set labels on namespace {} because it doesn't exists", namespace}),
+        ));
+    }
+
+    let mut command_args = Vec::new();
+    let mut labels_string = Vec::new();
+    command_args.extend(vec!["label", "namespace", namespace, "--overwrite"]);
+
+    for label in labels.iter() {
+        labels_string.push(format!{"{}={}", label.name, label.value});
+    };
+    let labels_str = labels_string.iter().map(|x| x.as_ref()).collect::<Vec<&str>>();
+    command_args.extend(labels_str);
+
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs.clone());
+
     let _ = kubectl_exec_with_output(
-        vec!["create", "namespace", namespace],
+        command_args,
         _envs,
         |out| match out {
             Ok(line) => info!("{}", line),

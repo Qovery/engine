@@ -16,6 +16,7 @@ use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
 };
 use crate::models::Context;
+use crate::cmd::structs::LabelsContent;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
@@ -130,6 +131,13 @@ impl Application {
         context.insert("is_storage", &is_storage);
         context.insert("clone", &false);
         context.insert("start_timeout_in_seconds", &self.start_timeout_in_seconds);
+
+        if self.context.resource_expiration_in_seconds().is_some() {
+            context.insert(
+                "resource_expiration_in_seconds",
+                &self.context.resource_expiration_in_seconds(),
+            )
+        }
 
         context
     }
@@ -274,6 +282,27 @@ impl Create for Application {
                 aws.access_key_id.as_str(),
                 aws.secret_access_key.as_str(),
                 kubernetes.region(),
+            ),
+        )?;
+
+        // define labels to add to namespace
+        let namespace_labels = match self.context.resource_expiration_in_seconds() {
+            Some(v) => Some(vec![(LabelsContent{
+                name: "ttl".to_string(),
+                value: format!{"{}", self.context.resource_expiration_in_seconds().unwrap()},
+            })]),
+            None => None,
+        };
+
+        // create a namespace with labels if do not exists
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::cmd::kubectl::kubectl_exec_create_namespace(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                namespace_labels,
+                aws_credentials_envs.clone(),
             ),
         )?;
 

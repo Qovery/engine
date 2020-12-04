@@ -38,8 +38,19 @@ spec:
             - {{ .Values.environmentVariables.LOG_LEVEL | default "info" }}
             - --check-interval
             - "{{ .Values.environmentVariables.CHECK_INTERVAL | default 120 }}"
-            {{ if .Values.environmentVariables.DRY_RUN }}
+            {{ if not .Values.environmentVariables.DISABLE_DRY_RUN}}
             - --dry-run
+            {{ end }}
+            - --kube-conn
+            - {{ .Values.enabledFeatures.kubernetes }}
+            {{ if eq .Values.enabledFeatures.rds true}}
+            - --enable-rds
+            {{ end }}
+            {{ if eq .Values.enabledFeatures.elasticache true}}
+            - --enable-elasticache
+            {{ end }}
+            {{ if eq .Values.enabledFeatures.documentdb true}}
+            - --enable-documentdb
             {{ end }}
           env:
             {{ range $key, $value := .Values.environmentVariables -}}

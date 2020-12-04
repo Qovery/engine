@@ -29,12 +29,12 @@ pub fn get_kubernetes_config_path(
     )
 }
 
-pub fn create_namespace(namespace: &str, kube_config: &str, aws: &AWS) {
+pub fn create_namespace_without_labels(namespace: &str, kube_config: &str, aws: &AWS) {
     let aws_credentials_envs = vec![
         (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
         (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
     ];
-    kubectl_exec_create_namespace(kube_config, namespace, aws_credentials_envs);
+    kubectl_exec_create_namespace(kube_config, namespace,None, aws_credentials_envs);
 }
 
 pub fn delete_terraform_tfstate_secret(

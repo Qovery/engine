@@ -3,15 +3,23 @@ replicaCount: 1
 image:
   repository: qoveryrd/pleco
   pullPolicy: IfNotPresent
-  plecoImageTag: "v0.2.1"
+  plecoImageTag: "v0.3.0"
 
 environmentVariables:
   CHECK_INTERVAL: "120"
-  DRY_RUN: "true"
+  DISABLE_DRY_RUN: "false"
   LOG_LEVEL: "info"
   # AWS_ACCESS_KEY_ID: ""
   # AWS_SECRET_ACCESS_KEY: ""
   # AWS_DEFAULT_REGION: ""
+  # KUBECONFIG: ""
+
+enabledFeatures:
+  # Choose between in/out/off
+  kubernetes: "in"
+  rds: true
+  documentdb: true
+  elasticache: true
 
 imagePullSecrets: []
 nameOverride: ""

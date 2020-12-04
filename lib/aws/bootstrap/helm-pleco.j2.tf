@@ -14,6 +14,11 @@ resource "helm_release" "pleco" {
   }
 
   set {
+    name = "environmentVariables.DISABLE_DRY_RUN"
+    value = "true"
+  }
+
+  set {
     name = "environmentVariables.AWS_ACCESS_KEY_ID"
     value = "{{ aws_access_key }}"
   }
