@@ -100,10 +100,12 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), SimpleError
         args,
         vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
         |line: Result<String, std::io::Error>| {
-            span!(Level::INFO, "{}","{}", line.unwrap());
+            let output = line.unwrap();
+            info!("{}", output)
         },
         |line: Result<String, std::io::Error>| {
-            span!(Level::ERROR, "{}","{}", line.unwrap());
+            let output = line.unwrap();
+            error!("{}", output);
         },
     )
 }
