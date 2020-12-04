@@ -21,7 +21,7 @@ use std::io::Read;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
 use tracing::{debug, error, info, span, warn, Level};
 
-#[test]
+
 fn create_doks_cluster_in_fra_1() {
     init();
 
@@ -82,8 +82,8 @@ fn create_doks_cluster_in_fra_1() {
         }
     }
 
-    /*
-    TESTING: Kubeconfig
+    
+    TESTING: Kubeconfig DOWNLOAD //TODO: Fix the kubernetes_config_path fn
     match kubernetes_config_path(
         context.lib_root_dir().clone(),
         cluster_id.clone(),
@@ -111,5 +111,5 @@ fn create_doks_cluster_in_fra_1() {
         },
         Err(_) => assert!(false)
     }
-    */
+    
 }
