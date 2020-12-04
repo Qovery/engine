@@ -5,7 +5,6 @@ variable "digitalocean_region" {
 }
 
 // kubernetes MASTER cluster
-// kubernetes MASTER cluster
 variable "kubernetes_master_cluster_name" {
   default = "{{ kubernetes_master_cluster_name }}"
   type    = string

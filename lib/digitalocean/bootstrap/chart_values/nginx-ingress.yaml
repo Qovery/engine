@@ -245,7 +245,7 @@ controller:
     enabled: true
 
     annotations:
-      service.beta.kubernetes.io/do-loadbalancer-protocol: tcp
+      service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: 'true'
     labels: {}
     ## Deprecated, instead simply do not provide a clusterIP value
     omitClusterIP: false

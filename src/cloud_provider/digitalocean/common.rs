@@ -47,13 +47,13 @@ pub fn kubernetes_config_path(
             }
         }
     });
-
+    // Ok if the kubeconfig is downloaded, put it as file !
     match result {
         Ok(downloaded) => {
-            let mut file =
-                File::create(kubernetes_config_file_path.clone()).expect("unable to create file");
+            let mut file = File::create(kubernetes_config_file_path.clone())
+                .expect("Unable to create the Kubeconfig file on disk");
             file.write_all(downloaded.as_bytes())
-                .expect("unable to write");
+                .expect("Unable to write anything on hte kubeconfig file");
             Ok(kubernetes_config_file_path)
         }
         Err(e) => Err(SimpleError::new(
@@ -79,7 +79,8 @@ struct Cluster {
 }
 */
 
-// retreive the digital ocean uuid of the kube cluster from our cluster name
+// retrieve the digital ocean uuid of the kube cluster from our cluster name
+// each (terraform) apply may change the cluster uuid, so We need to retrieve it from the Digital Ocean API
 pub fn get_uuid_of_cluster_from_name(
     token: &str,
     kube_cluster_name: &str,
