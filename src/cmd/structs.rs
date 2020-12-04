@@ -18,6 +18,11 @@ pub struct Labels {
     pub name: String,
 }
 
+pub struct LabelsContent {
+    pub name: String,
+    pub value: String,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Spec {
