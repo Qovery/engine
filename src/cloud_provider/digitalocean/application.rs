@@ -11,6 +11,7 @@ use crate::cloud_provider::service::{
     StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::helm::Timeout;
 use crate::cmd::structs::HelmHistoryRow;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::container_registry::docr::subscribe_kube_cluster_to_container_registry;
@@ -18,7 +19,6 @@ use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError,
 };
 use crate::models::Context;
-use crate::cmd::helm::Timeout;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
@@ -117,8 +117,8 @@ impl Application {
 
         context.insert("environment_variables", &environment_variables);
 
-
-        context.insert("registry_name","qovery-registry");
+        // retreive the registry name
+        context.insert("registry_name", "qovery-registry");
         //TODO: no storage for the moment
         let is_storage = false;
         context.insert("is_storage", &is_storage);
@@ -132,7 +132,8 @@ impl Application {
 
 impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("DigitalOcean.application.on_create() called for {}",
+        info!(
+            "DigitalOcean.application.on_create() called for {}",
             self.name
         );
 
@@ -185,7 +186,6 @@ impl Create for Application {
             digitalocean.region.as_str(),
             digitalocean.spaces_secret_key.as_str(),
             digitalocean.spaces_access_id.as_str(),
-
         );
         match kubeconfig_path {
             Ok(path) => {
