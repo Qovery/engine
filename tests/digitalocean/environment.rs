@@ -6,7 +6,6 @@ use test_utilities::digitalocean::digital_ocean_token;
 use test_utilities::utilities::{context, init};
 use tracing::{debug, error, info, span, warn, Level};
 
-#[test]
 fn deploy_a_working_environment_with_no_router_on_do() {
     init();
     let span = span!(
@@ -51,7 +50,7 @@ fn deploy_a_working_environment_with_no_router_on_do() {
     };*/
 }
 
-#[test]
+
 fn deploy_a_working_environment_router_and_app_on_do() {
     init();
 
