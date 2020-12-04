@@ -32,7 +32,7 @@ wip-fast-tests:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results-fast.xml
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
 
 wip-full-tests:
   stage: tests
@@ -49,7 +49,7 @@ wip-full-tests:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
 
 # Dev branch
 
@@ -63,7 +63,7 @@ dev-full-test-from-github:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
 
 dev-fast-test-from-github:
   stage: tests
@@ -75,7 +75,7 @@ dev-fast-test-from-github:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results-fast.xml
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
 
 dev-full-tests:
   stage: tests
@@ -90,7 +90,7 @@ dev-full-tests:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
 
 dev-fast-tests-sequential:
   stage: tests
@@ -104,7 +104,7 @@ dev-fast-tests-sequential:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results-fast.xml
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
 
 dev-full-tests-sequential:
   stage: tests
@@ -118,7 +118,7 @@ dev-full-tests-sequential:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results-full.xml
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
 
 dev-build:
   stage: build
