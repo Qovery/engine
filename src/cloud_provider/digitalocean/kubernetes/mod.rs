@@ -85,8 +85,8 @@ impl<'a> DOKS<'a> {
         let mut context = TeraContext::new();
 
         // VPC segmentation
-        let vpc_name = "qovery";
-        context.insert("vpc_name", vpc_name);
+        let vpc_name = format!("qovery-{}", &self.id);
+        context.insert("vpc_name", &vpc_name);
         let qovery_api_url = self.options.qovery_api_url.clone();
 
         // Options
@@ -110,8 +110,9 @@ impl<'a> DOKS<'a> {
         context.insert("acme_server_url", lets_encrypt_url);
 
         // DNS management
-        let managed_dns = ["qovery.io"];
+        let managed_dns = vec![self.dns_provider.name()];
         context.insert("managed_dns", &managed_dns);
+
         let managed_dns_helm_format = managed_dns
             .iter()
             .map(|name| format!("\"{}\"", name))
@@ -126,10 +127,7 @@ impl<'a> DOKS<'a> {
             "managed_dns_terraform_format",
             &managed_dns_terraform_format,
         );
-        context.insert(
-            "cloudflare_api_token",
-            "9XhHmPprCG2OgLGhGEFEy7PxzOO_eydnxvtbRLn7",
-        );
+        context.insert("cloudflare_api_token", self.dns_provider.token());
 
         // Digital Ocean
         context.insert("digitalocean_token", &self.cloud_provider.token);
