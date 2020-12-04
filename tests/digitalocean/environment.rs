@@ -1,9 +1,12 @@
 use crate::digitalocean::deploy_environment_on_do;
+use qovery_engine::container_registry::docr::get_current_registry_name;
 use qovery_engine::models::{Action, Clone2, EnvironmentAction};
 use qovery_engine::transaction::TransactionResult;
+use test_utilities::digitalocean::digital_ocean_token;
 use test_utilities::utilities::{context, init};
 use tracing::{debug, error, info, span, warn, Level};
 
+#[test]
 fn deploy_a_working_environment_with_no_router_on_do() {
     init();
     let span = span!(
@@ -27,6 +30,17 @@ fn deploy_a_working_environment_with_no_router_on_do() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+
+    // perform check on internal fns
+    let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
+    let registry = engine.container_registry();
+    let registry_name = registry.name();
+    assert_eq!(
+        registry_name,
+        get_current_registry_name(digital_ocean_token().as_str())
+            .unwrap()
+            .as_str()
+    )
 
     /*
     TODO: delete environement is not implemented yet

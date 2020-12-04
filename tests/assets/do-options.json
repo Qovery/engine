@@ -1,5 +1,5 @@
 {
-  "vpc_cidr_block": "10.1.0.0/16",
+  "vpc_cidr_block": "10.2.0.0/16",
   "qovery_api_url": "api.qovery.com",
   "tls_email_report": "CHANGE-ME",
   "engine_version_controller_token": "fake_token"

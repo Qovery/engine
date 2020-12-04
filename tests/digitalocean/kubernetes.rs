@@ -7,18 +7,19 @@ use self::test_utilities::digitalocean::{
 use self::test_utilities::utilities::{generate_id, init};
 use qovery_engine::cloud_provider::digitalocean::api_structs::clusters::Clusters;
 use qovery_engine::cloud_provider::digitalocean::common::{
-    get_uuid_of_cluster, kubernetes_config_path,
+    get_uuid_of_cluster_from_name, kubernetes_config_path,
 };
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_namespace};
 use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
-use qovery_engine::container_registry::docr::get_header_with_bearer;
+use qovery_engine::container_registry::docr::{get_current_registry_name, get_header_with_bearer};
 use qovery_engine::error::SimpleError;
 use qovery_engine::transaction::TransactionResult;
 use reqwest::StatusCode;
 use std::fs::File;
 use std::io::Read;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
+use tracing::{debug, error, info, span, warn, Level};
 
 #[test]
 fn create_doks_cluster_in_fra_1() {
@@ -27,8 +28,8 @@ fn create_doks_cluster_in_fra_1() {
     let span = span!(Level::INFO, "create_doks_cluster_in_fra_1");
     let _enter = span.enter();
 
-    let cluster_id = "my-first-doks";
-    let cluster_name = "do-kube-cluster-fra1";
+    let cluster_id = "my-first-doks-1";
+    let cluster_name = "do-kube-cluster-fra1-1";
     let region = "fra1";
 
     let context = test_utilities::utilities::context();
@@ -68,7 +69,8 @@ fn create_doks_cluster_in_fra_1() {
     tx.commit();
 
     // TESTING: Kube cluster UUID is OK ?
-    let res_uuid = get_uuid_of_cluster(digital_ocean_token().as_str(), cluster_name.clone());
+    let res_uuid =
+        get_uuid_of_cluster_from_name(digital_ocean_token().as_str(), cluster_id.clone());
     match res_uuid {
         Ok(uuid) => assert_eq!(
             get_kube_cluster_name_from_uuid(uuid.as_str()),
