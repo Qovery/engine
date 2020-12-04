@@ -70,13 +70,16 @@ fn create_doks_cluster_in_fra_1() {
 
     // TESTING: Kube cluster UUID is OK ?
     let res_uuid =
-        get_uuid_of_cluster_from_name(digital_ocean_token().as_str(), cluster_id.clone());
+        get_uuid_of_cluster_from_name(digital_ocean_token().as_str(), cluster_name.clone());
     match res_uuid {
         Ok(uuid) => assert_eq!(
             get_kube_cluster_name_from_uuid(uuid.as_str()),
             cluster_name.clone()
         ),
-        Err(e) => assert!(false),
+        Err(e) => {
+            error!("{:?}", e.message);
+            assert!(false);
+        }
     }
 
     /*
