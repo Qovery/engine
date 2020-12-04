@@ -57,6 +57,7 @@ controller:
   ## Use host ports 80 and 443
   daemonset:
     useHostPort: false
+
     hostPorts:
       http: 80
       https: 443
@@ -68,11 +69,11 @@ controller:
 
   ## Election ID to use for status update
   ##
-  electionID: ingress-controller-leader-{{ id }}
+  electionID: ingress-controller-leader
 
   ## Name of the ingress class to route through this controller
   ##
-  ingressClass: "{{ id }}"
+  ingressClass: nginx-qovery
 
   # labels to add to the pod container metadata
   podLabels: {}
@@ -96,8 +97,8 @@ controller:
   ## Limit the scope of the controller
   ##
   scope:
-    enabled: true
-    namespace: "{{ namespace }}"   # defaults to .Release.Namespace
+    enabled: false
+    namespace: ""   # defaults to .Release.Namespace
 
   ## Allows customization of the configmap / nginx-configmap namespace
   ##
@@ -141,10 +142,12 @@ controller:
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
+  #  type: RollingUpdate
 
   # minReadySeconds to avoid killing pods before we are ready
   ##
   minReadySeconds: 0
+
 
   ## Node tolerations for server scheduling to nodes with taints
   ## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
@@ -243,9 +246,7 @@ controller:
 
     annotations:
       service.beta.kubernetes.io/do-loadbalancer-protocol: tcp
-    labels:
-      app_id : "{{ id }}"
-
+    labels: {}
     ## Deprecated, instead simply do not provide a clusterIP value
     omitClusterIP: false
     # clusterIP: ""
@@ -543,7 +544,7 @@ releaseLabelOverride: ""
 ## Enable RBAC as per https://github.com/kubernetes/ingress/tree/master/examples/rbac/nginx and https://github.com/kubernetes/ingress/issues/266
 rbac:
   create: true
-  scope: true
+  scope: false
 
 # If true, create & use Pod Security Policy resources
 # https://kubernetes.io/docs/concepts/policy/pod-security-policy/

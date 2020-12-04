@@ -1,6 +1,6 @@
 resource "helm_release" "nginx_ingress" {
   name = "nginx-ingress"
-  chart = "digitalocean/charts/nginx-ingress"
+  chart = "common/charts/nginx-ingress"
   namespace = "nginx-ingress"
   create_namespace = true
   atomic = true
@@ -59,6 +59,6 @@ resource "helm_release" "nginx_ingress" {
   }
 
   depends_on = [
-    digitalocean_kubernetes_cluster.kubernetes_cluster
+    digitalocean_kubernetes_cluster.kubernetes_cluster,
   ]
 }
