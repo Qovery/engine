@@ -32,7 +32,7 @@ variable "oks_master_size" {
 }
 
 variable "oks_master_node_count" {
-  default = 2
+  default = 4
 }
 
 variable "oks_master_autoscale" {
