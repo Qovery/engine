@@ -170,7 +170,7 @@ impl<'a> DOKS<'a> {
 
         context.insert("oks_version", &self.version());
 
-        context.insert("oks_master_size", "s-1vcpu-2gb");
+        context.insert("oks_master_size", "s-2vcpu-4gb");
 
         context.insert("kubernetes_master_cluster_name", &self.name());
         let worker_nodes = self
