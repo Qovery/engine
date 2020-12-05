@@ -38,8 +38,8 @@ spec:
             - {{ .Values.environmentVariables.LOG_LEVEL | default "info" }}
             - --check-interval
             - "{{ .Values.environmentVariables.CHECK_INTERVAL | default 120 }}"
-            {{ if not .Values.environmentVariables.DISABLE_DRY_RUN}}
-            - --dry-run
+            {{ if eq .Values.environmentVariables.DISABLE_DRY_RUN "true" }}
+            - --disable-dry-run
             {{ end }}
             - --kube-conn
             - {{ .Values.enabledFeatures.kubernetes }}
