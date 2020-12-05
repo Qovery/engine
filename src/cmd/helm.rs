@@ -162,7 +162,13 @@ where
             Err(err) => error!("{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
+            Ok(line) => {
+                if line.contains("Error: release: not found") {
+                    info!("{}", line)
+                } else {
+                    error!("{}", line)
+                }
+            },
             Err(err) => error!("{:?}", err),
         },
     ) {

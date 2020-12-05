@@ -365,7 +365,13 @@ pub fn kubectl_exec_is_namespace_present<P>(
             Err(err) => error!("{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
+            Ok(line) => {
+                if line.contains("Error from server (NotFound): namespaces") {
+                    info!("{}", line)
+                } else {
+                    error!("{}", line)
+                }
+            }
             Err(err) => error!("{:?}", err),
         },
     );
@@ -435,7 +441,7 @@ pub fn kubectl_add_labels_to_namespace<P>(
     where
         P: AsRef<Path>,
 {
-    if labels.iter().count() > 0 {
+    if labels.iter().count() == 0 {
         return Err(SimpleError::new(
             SimpleErrorKind::Other,
             Some("No labels were defined, can't set them"),
@@ -637,7 +643,13 @@ where
             Err(err) => error!("{:?}", err),
         },
         |out| match out {
-            Ok(line) => error!("{}", line),
+            Ok(line) => {
+                if line.contains("Error from server (NotFound): namespaces") {
+                    info!("{}", line)
+                } else {
+                    error!("{}", line)
+                }
+            },
             Err(err) => error!("{:?}", err),
         },
     )?;
