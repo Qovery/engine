@@ -12,6 +12,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::cmd::structs::{HelmHistoryRow, LabelsContent};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::container_registry::docr::{
     get_current_registry_name, subscribe_kube_cluster_to_container_registry,
@@ -198,10 +199,33 @@ impl Create for Application {
             digitalocean.spaces_secret_key.as_str(),
             digitalocean.spaces_access_id.as_str(),
         );
+
+        // define labels to add to namespace
+        let namespace_labels = match self.context.resource_expiration_in_seconds() {
+            Some(v) => Some(vec![(LabelsContent{
+                name: "ttl".to_string(),
+                value: format!{"{}", self.context.resource_expiration_in_seconds().unwrap()},
+            })]),
+            None => None,
+        };
+
         match kubeconfig_path {
             Ok(path) => {
                 let helm_release_name = self.helm_release_name();
                 let digitalocean_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalocean.token.as_str())];
+
+                // create a namespace with labels if do not exists
+                let _ = cast_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::cmd::kubectl::kubectl_exec_create_namespace(
+                        path.as_str(),
+                        environment.namespace(),
+                        namespace_labels,
+                        digitalocean_envs.clone(),
+                    ),
+                )?;
+
                 match crate::cmd::helm::helm_exec_with_upgrade_history(
                     path.as_str(),
                     environment.namespace(),
