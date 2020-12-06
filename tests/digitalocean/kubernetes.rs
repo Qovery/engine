@@ -83,7 +83,8 @@ fn create_doks_cluster_in_fra_1() {
     }
 
     
-    TESTING: Kubeconfig DOWNLOAD //TODO: Fix the kubernetes_config_path fn
+    //TESTING: Kubeconfig DOWNLOAD
+    //TODO: Fix the kubernetes_config_path fn
     match kubernetes_config_path(
         context.lib_root_dir().clone(),
         cluster_id.clone(),
