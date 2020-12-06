@@ -16,6 +16,7 @@ use crate::error::{
 };
 use crate::models::Context;
 use std::collections::HashMap;
+use crate::cmd::structs::LabelsContent;
 
 pub struct Redis {
     context: Context,
@@ -401,6 +402,28 @@ impl Create for Redis {
                     (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
                     (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
                 ];
+
+                // define labels to add to namespace
+                let namespace_labels = match self.context.resource_expiration_in_seconds() {
+                    Some(v) => Some(vec![(LabelsContent{
+                        name: "ttl".to_string(),
+                        value: format!{"{}", self.context.resource_expiration_in_seconds().unwrap()},
+                    })]),
+                    None => None,
+                };
+
+                // create a namespace with labels if do not exists
+                let _ = cast_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::cmd::kubectl::kubectl_exec_create_namespace(
+                        kubernetes_config_file_path.as_str(),
+                        environment.namespace(),
+                        namespace_labels,
+                        aws_credentials_envs.clone(),
+                    ),
+                )?;
+
 
                 // do exec helm upgrade and return the last deployment status
                 let helm_history_row = cast_simple_error_to_engine_error(

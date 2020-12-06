@@ -627,8 +627,8 @@ where
                 namespace
             ),
         },
-        Err(e) => warn!(
-            "Unable to execute describe on secrets. it may not exist anymore?"),
+        Err(e) => debug!(
+            "Unable to execute describe on secrets. it may not exist anymore"),
     };
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
@@ -643,13 +643,7 @@ where
             Err(err) => error!("{:?}", err),
         },
         |out| match out {
-            Ok(line) => {
-                if line.contains("Error from server (NotFound): namespaces") {
-                    info!("{}", line)
-                } else {
-                    error!("{}", line)
-                }
-            },
+            Ok(line) => error!("{}", line),
             Err(err) => error!("{:?}", err),
         },
     )?;
