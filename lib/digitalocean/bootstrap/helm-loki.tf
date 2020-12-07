@@ -1,7 +1,7 @@
 
 resource "digitalocean_spaces_bucket" "loki_space" {
   name   = "qovery-logs-${var.oks_cluster_id}"
-  region = var.digitalocean_region
+  region = var.region
 }
 
 resource "helm_release" "loki" {
@@ -22,17 +22,17 @@ resource "helm_release" "loki" {
 
   set {
     name = "config.storage_config.aws.endpoint"
-    value = "${var.digitalocean_region}.digitaloceanspaces.com"
+    value = "${var.region}.digitaloceanspaces.com"
   }
 
   set {
     name = "config.storage_config.aws.s3"
-    value = "s3://${var.space_access_id}:${var.space_secret_key}@{var.digitalocean_region}.digitaloceanspaces.com/qovery-logs-${var.oks_cluster_id}"
+    value = "s3://${var.space_access_id}:${var.space_secret_key}@{var.region}.digitaloceanspaces.com/qovery-logs-${var.oks_cluster_id}"
   }
 
   set {
     name = "config.storage_config.aws.region"
-    value = var.digitalocean_region
+    value = var.region
   }
 
   set {

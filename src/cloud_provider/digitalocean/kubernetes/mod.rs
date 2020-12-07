@@ -4,6 +4,7 @@ use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode, Resources};
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
 use crate::error::{cast_simple_error_to_engine_error, EngineError};
 use crate::fs::workspace_directory;
@@ -12,7 +13,6 @@ use crate::models::{
     ProgressScope,
 };
 use crate::string::terraform_list_format;
-use crate::dns_provider;
 use digitalocean::api::Region;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -103,6 +103,7 @@ impl<'a> DOKS<'a> {
 
         // OKS
         context.insert("oks_cluster_id", &self.id());
+        context.insert("oks_master_name", &self.name());
         context.insert("oks_version", &self.version());
         context.insert("oks_master_size", "s-1vcpu-2gb");
 
@@ -113,14 +114,31 @@ impl<'a> DOKS<'a> {
         context.insert("vpc_cidr_block", &vpc_cidr_block);
 
         // Qovery
+        context.insert("organization_id", self.cloud_provider.organization_id());
         context.insert(
             "engine_version_controller_token",
             &self.options.engine_version_controller_token,
         );
+        context.insert(
+            "agent_version_controller_token",
+            &self.options.agent_version_controller_token,
+        );
+        context.insert("test_cluster", &test_cluster);
         context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
         context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
         context.insert("qovery_ssh_key", self.options.qovery_ssh_key.as_str());
         context.insert("discord_api_key", self.options.discord_api_key.as_str());
+
+        // grafana credentials
+        context.insert(
+            "grafana_admin_user",
+            self.options.grafana_admin_user.as_str(),
+        );
+
+        context.insert(
+            "grafana_admin_password",
+            self.options.grafana_admin_password.as_str(),
+        );
 
         // TLS
         let lets_encrypt_url = match &test_cluster {
@@ -205,7 +223,6 @@ impl<'a> DOKS<'a> {
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
 
         // kubernetes workers
-        context.insert("kubernetes_master_cluster_name", &self.name());
         let worker_nodes = self
             .nodes
             .iter()
@@ -371,9 +388,7 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("DOKS.deploy_environment() called for {}",
-            self.name()
-        );
+        info!("DOKS.deploy_environment() called for {}", self.name());
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         let stateful_deployment_target = match environment.kind {
@@ -403,7 +418,8 @@ impl<'a> Kubernetes for DOKS<'a> {
 
             match service.exec_action(&stateful_deployment_target) {
                 Err(err) => {
-                    error!("error with stateful service {} , id: {} => {:?}",
+                    error!(
+                        "error with stateful service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
                         err
@@ -457,7 +473,8 @@ impl<'a> Kubernetes for DOKS<'a> {
 
             match service.exec_action(&stateless_deployment_target) {
                 Err(err) => {
-                    error!("error with stateless service {} , id: {} => {:?}",
+                    error!(
+                        "error with stateless service {} , id: {} => {:?}",
                         service.name(),
                         service.id(),
                         err

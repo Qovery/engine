@@ -31,8 +31,8 @@ variable "test_cluster" {
 }
 
 // kubernetes MASTER cluster
-variable "kubernetes_master_cluster_name" {
-  default = "{{ kubernetes_master_cluster_name }}"
+variable "oks_master_name" {
+  default = "{{ oks_master_name }}"
   type    = string
 }
 
@@ -46,11 +46,6 @@ variable "oks_cluster_id" {
   type    = string
 }
 
-variable "oks_master_name" {
-  default = "{{ kubernetes_master_cluster_name }}"
-  type    = string
-}
-
 variable "oks_master_size" {
   default = "{{ oks_master_size }}"
   type    = string
@@ -58,6 +53,7 @@ variable "oks_master_size" {
 
 variable "oks_master_node_count" {
   default = 4
+  type = number
 }
 
 variable "oks_master_autoscale" {
@@ -67,7 +63,7 @@ variable "oks_master_autoscale" {
 
 // kubernetes WORKER cluster
 variable "oks_pool_name" {
-  default = "{{ kubernetes_master_cluster_name }}"
+  default = "{{ oks_master_name }}"
   type    = string
 }
 
@@ -141,4 +137,3 @@ variable "discord_api_key" {
   default = "{{ discord_api_key }}"
   type = string
 }
->>>>>>> feat: adding missing helm charts

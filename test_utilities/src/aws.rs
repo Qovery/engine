@@ -57,26 +57,6 @@ pub fn execution_id() -> String {
         .replace("+", "-")
 }
 
-pub fn context() -> Context {
-    let execution_id = execution_id();
-    let home_dir = std::env::var("WORKSPACE_ROOT_DIR")
-        .unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
-    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let metadata = Metadata {
-        test: Option::from(true),
-        dry_run_deploy: Option::from(false),
-        resource_expiration_in_seconds: Some(2700),
-    };
-
-    Context::new(
-        execution_id.as_str(),
-        home_dir.as_str(),
-        lib_root_dir.as_str(),
-        None,
-        Option::from(metadata),
-    )
-}
-
 pub fn container_registry_ecr(context: &Context) -> ECR {
     ECR::new(
         context.clone(),

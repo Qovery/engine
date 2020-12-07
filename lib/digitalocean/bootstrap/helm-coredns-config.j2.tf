@@ -6,11 +6,12 @@ kubectl -n kube-system delete configmap coredns
 EOT
     environment = {
       KUBECONFIG = local_file.kubeconfig.filename
-      AWS_ACCESS_KEY_ID = "{{ aws_access_key }}"
-      AWS_SECRET_ACCESS_KEY = "{{ aws_secret_key }}"
-      AWS_DEFAULT_REGION = "{{ aws_region }}"
     }
   }
+
+  depends_on = [
+    digitalocean_kubernetes_cluster.kubernetes_cluster,
+  ]
 }
 
 resource "helm_release" "coredns-config" {
@@ -43,9 +44,6 @@ kubectl -n kube-system rollout restart deployment coredns
 EOT
     environment = {
       KUBECONFIG = local_file.kubeconfig.filename
-      AWS_ACCESS_KEY_ID = "{{ aws_access_key }}"
-      AWS_SECRET_ACCESS_KEY = "{{ aws_secret_key }}"
-      AWS_DEFAULT_REGION = "{{ aws_region }}"
     }
   }
 
