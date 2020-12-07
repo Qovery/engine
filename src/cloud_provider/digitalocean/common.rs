@@ -12,6 +12,8 @@ use retry::OperationResult;
 use std::fs::File;
 use std::io::Write;
 extern crate serde_json;
+use futures::executor::block_on;
+use tokio::runtime::Runtime;
 
 pub fn kubernetes_config_path(
     workspace_directory: &str,
@@ -28,42 +30,18 @@ pub fn kubernetes_config_path(
         workspace_directory, kubernetes_cluster_id
     );
 
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
-        let try_kubeconfig = download_space_object(
-            spaces_access_id,
-            spaces_secret_key,
-            kubernetes_config_bucket_name.as_str(),
-            kubernetes_config_object_key.as_str(),
-            region,
-        );
-        match try_kubeconfig {
-            Ok(kubeconfig) => OperationResult::Ok(kubeconfig),
-            Err(err) => {
-                warn!("Failed to download the kubeconfig file, retrying...");
-                return OperationResult::Err(format!(
-                    "Unable to download the kubeconfig file from space: {:?}",
-                    err
-                ));
-            }
-        }
-    });
-    // Ok if the kubeconfig is downloaded, put it as file !
-    match result {
-        Ok(downloaded) => {
-            let mut file = File::create(kubernetes_config_file_path.clone())
-                .expect("Unable to create the Kubeconfig file on disk");
-            file.write_all(downloaded.as_bytes())
-                .expect("Unable to write anything on hte kubeconfig file");
-            Ok(kubernetes_config_file_path)
-        }
-        Err(e) => Err(SimpleError::new(
-            SimpleErrorKind::Other,
-            Some(format!(
-                "Unable to download the kubeconfig file after many retries {:?}",
-                e
-            )),
-        )),
-    }
+    let future_kubeconfig = download_space_object(
+        spaces_access_id,
+        spaces_secret_key,
+        kubernetes_config_bucket_name.as_str(),
+        kubernetes_config_object_key.as_str(),
+        region,
+        kubernetes_config_file_path.as_str().clone(),
+    );
+    Runtime::new()
+        .expect("Failed to create Tokio runtime to download kubeconfig")
+        .block_on(future_kubeconfig);
+    Ok(kubernetes_config_file_path.clone())
 }
 
 pub const do_cluster_api_path: &str = "https://api.digitalocean.com/v2/kubernetes/clusters";
