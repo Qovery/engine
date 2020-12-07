@@ -163,8 +163,9 @@ impl Create for Application {
         let workspace_dir = self.workspace_directory();
 
         // retrieve the cluster uuid, useful to link DO registry to k8s cluster
+        let kube_name = kubernetes.name();
         let cluster_uuid_res =
-            get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
+            get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kube_name);
         match cluster_uuid_res {
             // ensure DO registry is linked to k8s cluster
             Ok(uuid) => match subscribe_kube_cluster_to_container_registry(
@@ -202,10 +203,12 @@ impl Create for Application {
 
         // define labels to add to namespace
         let namespace_labels = match self.context.resource_expiration_in_seconds() {
-            Some(v) => Some(vec![(LabelsContent{
-                name: "ttl".to_string(),
-                value: format!{"{}", self.context.resource_expiration_in_seconds().unwrap()},
-            })]),
+            Some(v) => Some(vec![
+                (LabelsContent {
+                    name: "ttl".to_string(),
+                    value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
+                }),
+            ]),
             None => None,
         };
 
