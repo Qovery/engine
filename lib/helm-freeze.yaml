@@ -27,6 +27,9 @@ charts:
     repo_name: aws
     dest: aws-bootstrap
     version: 0.3.1
+  - name: cluster-autoscaler
+    repo_name: cluster-autoscaler
+    version: 9.3.0
   - name: metrics-server
     repo_name: bitnami
     version: 4.3.1
@@ -73,6 +76,8 @@ repos:
     url: https://grafana.github.io/loki/charts
   - name: pleco
     url: https://qovery.github.io/pleco/
+  - name: cluster-autoscaler
+    url: https://kubernetes.github.io/autoscaler
 
 destinations:
   - name: default

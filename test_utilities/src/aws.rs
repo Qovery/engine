@@ -80,10 +80,10 @@ pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
 
 pub fn aws_kubernetes_nodes() -> Vec<Node> {
     vec![
-        Node::new_with_cpu_and_mem(2, 16),
-        Node::new_with_cpu_and_mem(2, 16),
-        Node::new_with_cpu_and_mem(2, 16),
-        Node::new_with_cpu_and_mem(2, 16),
+        Node::new_with_cpu_and_mem(2, 8),
+        Node::new_with_cpu_and_mem(2, 8),
+        Node::new_with_cpu_and_mem(2, 8),
+        Node::new_with_cpu_and_mem(2, 8),
     ]
 }
 

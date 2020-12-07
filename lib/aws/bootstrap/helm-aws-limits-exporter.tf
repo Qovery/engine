@@ -57,7 +57,7 @@ resource "helm_release" "iam_aws_limits_exporter" {
 
   depends_on = [
     aws_eks_cluster.eks_cluster,
-    helm_release.prometheus_operator,
+    helm_release.cluster_autoscaler,
     helm_release.aws_vpc_cni,
   ]
 }
