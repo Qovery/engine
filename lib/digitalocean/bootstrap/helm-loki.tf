@@ -32,7 +32,7 @@ resource "helm_release" "loki" {
 
   set {
     name = "config.storage_config.aws.region"
-    value = var.region
+    value = var.digitalocean_region
   }
 
   set {
@@ -48,5 +48,6 @@ resource "helm_release" "loki" {
   depends_on = [
     digitalocean_spaces_bucket.loki_space,
     digitalocean_kubernetes_cluster.kubernetes_cluster,
+    helm_release.q_storageclass,
   ]
 }
