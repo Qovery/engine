@@ -97,7 +97,6 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
     DO::new(
         context.clone(),
         "test",
-        "fra1",
         digital_ocean_token().as_str(),
         digital_ocean_spaces_access_id().as_str(),
         digital_ocean_spaces_secret_key().as_str(),
