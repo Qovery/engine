@@ -1,7 +1,17 @@
+locals {
+  prometheus_namespace = "prometheus"
+}
+
+resource "kubernetes_namespace" "prometheus_namespace" {
+  metadata {
+    name = local.prometheus_namespace
+  }
+}
+
 resource "helm_release" "prometheus_operator" {
   name = "prometheus-operator"
   chart = "common/charts/prometheus-operator"
-  namespace = "prometheus"
+  namespace = local.prometheus_namespace
   create_namespace = true
   atomic = true
   max_history = 50

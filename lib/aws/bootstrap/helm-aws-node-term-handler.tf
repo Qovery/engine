@@ -59,5 +59,6 @@ resource "helm_release" "aws_node_term_handler" {
   depends_on = [
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,
+    helm_release.cluster_autoscaler,
   ]
 }
