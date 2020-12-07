@@ -1,4 +1,5 @@
-# AWS specific
+# Qovery
+
 variable "cloud_provider" {
   description = "Cloud provider name"
   default = "aws"
@@ -17,15 +18,23 @@ variable "organization_id" {
   type        = string
 }
 
-variable "vpc_cidr_block" {
-  description = "VPC CIDR block"
-  default = "{{ vpc_cidr_block }}"
+variable "qovery_nats_url" {
+  description = "URL of qovery nats server"
+  default = "{{ qovery_nats_url }}"
   type = string
 }
 
 variable "test_cluster" {
   description = "Is this a test cluster?"
   default = "{{ test_cluster }}"
+  type = string
+}
+
+# AWS specific
+
+variable "vpc_cidr_block" {
+  description = "VPC CIDR block"
+  default = "{{ vpc_cidr_block }}"
   type = string
 }
 
@@ -255,12 +264,5 @@ variable "elasticsearch_cidr_subnet" {
 variable "discord_api_key" {
   description = "discord url with token for used for alerting"
   default = "{{ discord_api_key }}"
-  type = string
-}
-
-# Helm qovery agent
-variable "qovery_nats_url" {
-  description = "URL of qovery nats server"
-  default = "{{ qovery_nats_url }}"
   type = string
 }
