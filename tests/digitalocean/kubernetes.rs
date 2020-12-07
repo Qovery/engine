@@ -21,7 +21,6 @@ use std::io::Read;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
 use tracing::{debug, error, info, span, warn, Level};
 
-
 fn create_doks_cluster_in_fra_1() {
     init();
 
@@ -82,7 +81,6 @@ fn create_doks_cluster_in_fra_1() {
         }
     }
 
-    
     //TESTING: Kubeconfig DOWNLOAD
     //TODO: Fix the kubernetes_config_path fn
     match kubernetes_config_path(
@@ -91,26 +89,33 @@ fn create_doks_cluster_in_fra_1() {
         region.clone(),
         digital_ocean_spaces_secret_key().as_str(),
         digital_ocean_spaces_access_id().as_str(),
-    ){
+    ) {
         Ok(file) => {
-            let do_credentials_envs = vec![
-                (DIGITAL_OCEAN_TOKEN, digitalo.token.as_str()),
-            ];
+            let do_credentials_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalo.token.as_str())];
             // testing kubeconfig file
             let namespace_to_test = generate_id();
-            match kubectl_exec_create_namespace(file.clone(), namespace_to_test.clone().as_str(), do_credentials_envs.clone()){
+            match kubectl_exec_create_namespace(
+                file.clone(),
+                namespace_to_test.clone().as_str(),
+                None,
+                do_credentials_envs.clone(),
+            ) {
                 Ok(_) => {
                     // Delete created namespace
-                    match kubectl_exec_delete_namespace(file,namespace_to_test.as_str(),do_credentials_envs.clone()){
+                    match kubectl_exec_delete_namespace(
+                        file,
+                        namespace_to_test.as_str(),
+                        do_credentials_envs.clone(),
+                    ) {
                         Ok(_) => assert!(true),
-                        Err(_) => assert!(false)
+                        Err(_) => assert!(false),
                     }
                 }
-                Err(_) => { assert!(false)}
+                Err(_) => {
+                    assert!(false)
+                }
             }
-
-        },
-        Err(_) => assert!(false)
+        }
+        Err(_) => assert!(false),
     }
-    
 }
