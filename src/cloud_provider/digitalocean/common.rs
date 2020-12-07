@@ -7,12 +7,7 @@ use crate::container_registry::docr::get_header_with_bearer;
 use crate::error::{SimpleError, SimpleErrorKind};
 use crate::object_storage::do_space::download_space_object;
 use reqwest::StatusCode;
-use retry::delay::Fixed;
-use retry::OperationResult;
-use std::fs::File;
-use std::io::Write;
 extern crate serde_json;
-use futures::executor::block_on;
 use tokio::runtime::Runtime;
 
 pub fn kubernetes_config_path(
