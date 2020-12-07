@@ -5,6 +5,7 @@ use serde_json::Value;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::kubernetes::Kind;
 use qovery_engine::container_registry::docker_hub::DockerHub;
@@ -126,8 +127,7 @@ impl CloudProvider {
             };
 
         match self.kind {
-            //qovery_engine::cloud_provider::Kind::AWS => Box::new(AWS::new( FIXME
-            _ => Box::new(AWS::new(
+            qovery_engine::cloud_provider::Kind::AWS => Box::new(AWS::new(
                 context.clone(),
                 self.id.as_str(),
                 organization_id,
@@ -136,6 +136,16 @@ impl CloudProvider {
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
                 terraform_state_credentials,
             )),
+            qovery_engine::cloud_provider::Kind::DO => Box::new(DO::new(
+                context.clone(),
+                self.id.as_str(),
+                self.options.token.as_ref().unwrap().as_str(),
+                self.options.spaces_access_id.as_ref().unwrap().as_str(),
+                self.options.spaces_secret_key.as_ref().unwrap().as_str(),
+                self.name.as_str(),
+                terraform_state_credentials,
+            )),
+            _ => unimplemented!(),
         }
     }
 }
@@ -167,8 +177,7 @@ impl Kubernetes {
         nodes: &Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>>,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a> {
         match self.kind {
-            //qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(EKS::new( FIXME
-            _ => Box::new(EKS::new(
+            qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(EKS::new(
                 context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
@@ -189,6 +198,28 @@ impl Kubernetes {
                     })
                     .collect::<Vec<_>>(),
             )),
+            qovery_engine::cloud_provider::kubernetes::Kind::DOKS => Box::new(DOKS::new(
+                context.clone(),
+                self.id.as_str(),
+                self.name.as_str(),
+                self.version.as_str(),
+                self.region.as_str(),
+                cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
+                dns_provider,
+                serde_json::from_value::<
+                    qovery_engine::cloud_provider::digitalocean::kubernetes::Options,
+                >(self.options.clone())
+                .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
+                nodes
+                    .into_iter()
+                    .map(|x| {
+                        qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
+                            x.instance_type(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )),
+            _ => unimplemented!(),
         }
     }
 
@@ -213,12 +244,17 @@ impl Node {
         kubernetes: &Kubernetes,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode> {
         match kubernetes.kind {
-            //qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new( FIXME
-            _ => Box::new(
+            qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(
                 qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(
                     &self.instance_type,
                 ),
             ),
+            qovery_engine::cloud_provider::kubernetes::Kind::DOKS => Box::new(
+                qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
+                    &self.instance_type,
+                ),
+            ),
+            _ => unimplemented!(),
         }
     }
 }
@@ -258,6 +294,7 @@ impl ContainerRegistry {
                 self.name.as_str(),
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
             )),
+            _ => unimplemented!(),
         }
     }
 }
@@ -300,6 +337,9 @@ pub struct Options {
     password: Option<String>,
     access_key_id: Option<String>,
     secret_access_key: Option<String>,
+    spaces_access_id: Option<String>,
+    spaces_secret_key: Option<String>,
+    token: Option<String>,
     region: Option<String>,
 }
 
