@@ -1278,14 +1278,16 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         };
 
-        // delete all stateful services (database)
-        for stateful_service in &environment.stateful_services {
-            match stateful_service.on_delete(&stateful_deployment_target) {
+        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
+        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
+        // delete all stateless services (router, application...)
+        for stateless_service in &environment.stateless_services {
+            match stateless_service.on_delete(&stateless_deployment_target) {
                 Err(err) => {
                     error!(
-                        "error with stateful service {} , id: {} => {:?}",
-                        stateful_service.name(),
-                        stateful_service.id(),
+                        "error with stateless service {} , id: {} => {:?}",
+                        stateless_service.name(),
+                        stateless_service.id(),
                         err
                     );
 
@@ -1298,16 +1300,14 @@ impl<'a> Kubernetes for EKS<'a> {
         // Quick fix: adding 100 ms delay to avoid race condition on service status update
         thread::sleep(std::time::Duration::from_millis(100));
 
-        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
-        // delete all stateless services (router, application...)
-        for stateless_service in &environment.stateless_services {
-            match stateless_service.on_delete(&stateless_deployment_target) {
+        // delete all stateful services (database)
+        for stateful_service in &environment.stateful_services {
+            match stateful_service.on_delete(&stateful_deployment_target) {
                 Err(err) => {
                     error!(
-                        "error with stateless service {} , id: {} => {:?}",
-                        stateless_service.name(),
-                        stateless_service.id(),
+                        "error with stateful service {} , id: {} => {:?}",
+                        stateful_service.name(),
+                        stateful_service.id(),
                         err
                     );
 
