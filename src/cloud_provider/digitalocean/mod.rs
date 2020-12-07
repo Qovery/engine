@@ -25,14 +25,12 @@ pub struct DO {
     spaces_secret_key: String,
     terraform_state_credentials: TerraformStateCredentials,
     listeners: Listeners,
-    region: String,
 }
 
 impl DO {
     pub fn new(
         context: Context,
         id: &str,
-        region: &str,
         token: &str,
         spaces_access_id: &str,
         spaces_secret_key: &str,
@@ -44,7 +42,6 @@ impl DO {
             id: id.to_string(),
             name: name.to_string(),
             token: token.to_string(),
-            region: region.to_string(),
             spaces_access_id: spaces_access_id.to_string(),
             spaces_secret_key: spaces_secret_key.to_string(),
             terraform_state_credentials,

@@ -134,7 +134,7 @@ impl Router {
         let kubernetes_config_file_path = common::kubernetes_config_path(
             workspace_dir.as_str(),
             kubernetes.id(),
-            digitalocean.region.as_str(),
+            kubernetes.region(),
             digitalocean.spaces_secret_key.as_str(),
             digitalocean.spaces_access_id.as_str(),
         );
@@ -329,7 +329,7 @@ impl Create for Router {
             common::kubernetes_config_path(
                 workspace_dir.as_str(),
                 kubernetes.id(),
-                digitalocean.region.as_str(),
+                kubernetes.region(),
                 digitalocean.spaces_secret_key.as_str(),
                 digitalocean.spaces_access_id.as_str(),
             ),
