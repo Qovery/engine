@@ -12,7 +12,6 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::cmd::structs::HelmHistoryRow;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::container_registry::docr::{
     get_current_registry_name, subscribe_kube_cluster_to_container_registry,
