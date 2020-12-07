@@ -88,7 +88,7 @@ resource "helm_release" "nginx_ingress" {
   depends_on = [
     aws_iam_role_policy.eks_cluster_ingress_loadbalancer_creation,
     aws_eks_cluster.eks_cluster,
-    helm_release.prometheus_operator,
+    helm_release.cluster_autoscaler,
     helm_release.aws_vpc_cni,
   ]
 }
