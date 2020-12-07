@@ -3,18 +3,19 @@ use curl::Error;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
-use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::models::{Context, Environment, Metadata};
+use crate::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, KUBE_CLUSTER_ID};
 use chrono::Utc;
 use dirs::home_dir;
-use crate::aws::{aws_access_key_id, KUBE_CLUSTER_ID, aws_secret_access_key, aws_default_region};
+use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::common;
 use qovery_engine::cmd;
+use qovery_engine::models::{Context, Environment, Metadata};
 
-use tracing::{info, Level,error,warn,span};
+use crate::aws;
+use tracing::{error, info, span, warn, Level};
 use tracing_subscriber;
-use tracing_subscriber::FmtSubscriber;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::FmtSubscriber;
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
@@ -96,7 +97,10 @@ pub fn context() -> Context {
     )
 }
 
-pub fn is_pod_restarted_aws_env(environment_check: Environment, pod_to_check: &str) -> (bool, String) {
+pub fn is_pod_restarted_aws_env(
+    environment_check: Environment,
+    pod_to_check: &str,
+) -> (bool, String) {
     let namespace_name = format!(
         "{}-{}",
         &environment_check.project_id.clone(),

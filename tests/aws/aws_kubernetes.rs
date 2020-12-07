@@ -3,7 +3,6 @@ use self::test_utilities::aws::{aws_access_key_id, aws_default_region, aws_secre
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{generate_id, init};
 use gethostname;
-use tracing::{debug, error, info, span, warn, Level};
 use qovery_engine::build_platform::GitRepository;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::git;
@@ -14,6 +13,7 @@ use std::path::Path;
 use std::process::Command;
 use std::{env, fs};
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
+use tracing::{debug, error, info, span, warn, Level};
 
 pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
 pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
@@ -56,7 +56,7 @@ fn generate_cluster_id(region: &str) -> String {
 fn create_and_destroy_eks_cluster_in_eu_west_3() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -114,7 +114,7 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
 fn create_eks_cluster_in_us_east_2() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -162,7 +162,7 @@ fn delete_eks_cluster_in_us_east_2() {
     init();
     let span = span!(Level::TRACE, "create_eks_cluster_in_us_east_2");
     let _enter = span.enter();
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
@@ -210,7 +210,7 @@ fn delete_eks_cluster_in_eu_west_3() {
     init();
     // put some environments here, simulated or not
 
-    let context = test_utilities::aws::context();
+    let context = test_utilities::utilities::context();
 
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();

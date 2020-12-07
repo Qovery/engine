@@ -19,6 +19,7 @@ use crate::models::{Context, Listener, Listeners, ProgressListener};
 pub struct DO {
     context: Context,
     id: String,
+    organization_id: String,
     name: String,
     pub token: String,
     spaces_access_id: String,
@@ -31,6 +32,7 @@ impl DO {
     pub fn new(
         context: Context,
         id: &str,
+        organization_id: &str,
         token: &str,
         spaces_access_id: &str,
         spaces_secret_key: &str,
@@ -40,6 +42,7 @@ impl DO {
         DO {
             context,
             id: id.to_string(),
+            organization_id: organization_id.to_string(),
             name: name.to_string(),
             token: token.to_string(),
             spaces_access_id: spaces_access_id.to_string(),
@@ -68,7 +71,7 @@ impl CloudProvider for DO {
     }
 
     fn organization_id(&self) -> &str {
-        self.id.as_str()
+        self.organization_id.as_str()
     }
 
     fn name(&self) -> &str {

@@ -19,21 +19,6 @@ resource "helm_release" "pleco" {
   }
 
   set {
-    name = "environmentVariables.AWS_ACCESS_KEY_ID"
-    value = "{{ aws_access_key }}"
-  }
-
-  set {
-    name = "environmentVariables.AWS_SECRET_ACCESS_KEY"
-    value = "{{ aws_secret_key }}"
-  }
-
-  set {
-    name = "environmentVariables.AWS_DEFAULT_REGION"
-    value = "{{ aws_region }}"
-  }
-
-  set {
     name = "environmentVariables.LOG_LEVEL"
     value = "debug"
   }

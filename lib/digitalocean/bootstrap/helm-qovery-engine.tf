@@ -100,7 +100,6 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   depends_on = [
-    aws_eks_cluster.eks_cluster,
-    helm_release.aws_vpc_cni,
+    digitalocean_kubernetes_cluster.kubernetes_cluster
   ]
 }

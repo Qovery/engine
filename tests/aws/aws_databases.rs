@@ -8,7 +8,7 @@ use qovery_engine::models::{
     EnvironmentVariable, Kind,
 };
 use qovery_engine::transaction::TransactionResult;
-use test_utilities::aws::context;
+use test_utilities::utilities::context;
 use test_utilities::utilities::{init, is_pod_restarted_aws_env};
 use tracing::{span, Level};
 // to check overload between several databases and apps

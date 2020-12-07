@@ -18,6 +18,7 @@ use qovery_engine::dns_provider::DnsProvider;
 use reqwest::StatusCode;
 use std::fs::File;
 
+pub const ORGANIZATION_ID: &str = "a8nb94c7fwxzr2ja";
 pub const DO_KUBERNETES_VERSION: &str = "1.18.10-do.2";
 pub const DIGITAL_OCEAN_URL: &str = "https://api.digitalocean.com/v2/";
 
@@ -73,8 +74,8 @@ pub fn do_kubernetes_ks<'a>(
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     DOKS::<'a>::new(
         context.clone(),
-        "my-first-doks-1",
-        "do-kube-cluster-fra1-1",
+        "my-first-doks-2",
+        "do-kube-cluster-fra1-2",
         DO_KUBERNETES_VERSION,
         "fra1",
         cloud_provider,
@@ -90,6 +91,10 @@ pub fn do_kubernetes_nodes() -> Vec<Node> {
         Node::new_with_cpu_and_mem(4, 8),
         Node::new_with_cpu_and_mem(4, 8),
         Node::new_with_cpu_and_mem(4, 8),
+        Node::new_with_cpu_and_mem(4, 8),
+        Node::new_with_cpu_and_mem(4, 8),
+        Node::new_with_cpu_and_mem(4, 8),
+        Node::new_with_cpu_and_mem(4, 8),
     ]
 }
 
@@ -97,6 +102,7 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
     DO::new(
         context.clone(),
         "test",
+        ORGANIZATION_ID,
         digital_ocean_token().as_str(),
         digital_ocean_spaces_access_id().as_str(),
         digital_ocean_spaces_secret_key().as_str(),

@@ -18,7 +18,6 @@ resource "helm_release" "promtail" {
   }
 
   depends_on = [
-    helm_release.loki,
     digitalocean_kubernetes_cluster.kubernetes_cluster,
   ]
 }
