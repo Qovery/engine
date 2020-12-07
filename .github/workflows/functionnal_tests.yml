@@ -20,6 +20,7 @@ jobs:
           args: --release --all-features
   functionnal-tests:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
     needs: build
     steps:
       - uses: actions/checkout@v1
