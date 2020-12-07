@@ -20,6 +20,7 @@ dns-lookup = "1.0.3"
 rand = "0.7.3"
 gethostname = "0.2.1"
 reqwest = { version = "0.10.8", features = ["blocking"] }
+futures = "0.3"
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 
 # tar gz
