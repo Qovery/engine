@@ -65,3 +65,13 @@ variable "space_bucket_kubeconfig" {
   description = "space bucket with kubeconfigs"
   default = "{{ space_bucket_kubeconfig }}"
 }
+
+variable "space_access_id" {
+  description = "credentials space access key"
+  default = "{{ spaces_access_id }}"
+}
+
+variable "space_secret_key" {
+  description = "credentials space access key"
+  default = "{{ spaces_secret_key }}"
+}
