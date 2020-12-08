@@ -139,6 +139,7 @@ impl CloudProvider {
             qovery_engine::cloud_provider::Kind::DO => Box::new(DO::new(
                 context.clone(),
                 self.id.as_str(),
+                organization_id,
                 self.options.token.as_ref().unwrap().as_str(),
                 self.options.spaces_access_id.as_ref().unwrap().as_str(),
                 self.options.spaces_secret_key.as_ref().unwrap().as_str(),
