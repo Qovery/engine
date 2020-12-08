@@ -205,7 +205,7 @@ extraContainerVolumes: []
 persistence:
   type: pvc
   enabled: true
-  storageClassName: aws-ebs-gp2-0
+  storageClassName: do-volume-standard-0
   accessModes:
     - ReadWriteOnce
   size: 1Gi
