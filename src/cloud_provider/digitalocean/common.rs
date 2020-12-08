@@ -7,7 +7,10 @@ use crate::container_registry::docr::get_header_with_bearer;
 use crate::error::{SimpleError, SimpleErrorKind};
 use crate::object_storage::do_space::download_space_object;
 use reqwest::StatusCode;
+use std::os::unix::fs::PermissionsExt;
 extern crate serde_json;
+use std::fs;
+use std::fs::File;
 use tokio::runtime::Runtime;
 
 pub fn kubernetes_config_path(
@@ -36,6 +39,14 @@ pub fn kubernetes_config_path(
     Runtime::new()
         .expect("Failed to create Tokio runtime to download kubeconfig")
         .block_on(future_kubeconfig);
+    // removes warning kubeconfig is (world/group) readable
+
+    let mut file = File::open(kubernetes_config_file_path.clone().as_str())?;
+    let metadata = file.metadata()?;
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(0o400);
+    fs::set_permissions(kubernetes_config_file_path.clone().as_str(), permissions)?;
+
     Ok(kubernetes_config_file_path.clone())
 }
 
