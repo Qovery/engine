@@ -7,3 +7,4 @@ NOTES.txt
 .env
 results.xml
 results.json
+lib/kubernetes_config_*
