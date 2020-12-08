@@ -45,7 +45,8 @@ function download() { ## Download prerequisites binaries for the engine
   mv dumb-init $BIN_DEST_FOLDER/
 
   # DigitalOcean Doctl
-  curl -sLo doctl https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-${SYSTEM}-${ARCH}.tar.gz
+  curl -Lso doctl.tgz https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz
+  tar -zxf doctl.tgz
   mv doctl $BIN_DEST_FOLDER/doctl${DOCTL_VERSION}
 
   # Clean
