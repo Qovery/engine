@@ -19,5 +19,4 @@ resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
     node_count = var.oks_master_node_count
   }
 
-  tags = local.tags_oks
 }

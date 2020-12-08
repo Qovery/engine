@@ -105,7 +105,7 @@ impl<'a> DOKS<'a> {
         context.insert("oks_cluster_id", &self.id());
         context.insert("oks_master_name", &self.name());
         context.insert("oks_version", &self.version());
-        context.insert("oks_master_size", "s-1vcpu-2gb");
+        context.insert("oks_master_size", "s-4vcpu-8gb");
 
         // Network
         let vpc_name = &self.options.vpc_name;

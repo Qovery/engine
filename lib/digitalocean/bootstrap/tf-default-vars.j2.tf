@@ -52,7 +52,7 @@ variable "oks_master_size" {
 }
 
 variable "oks_master_node_count" {
-  default = 4
+  default = 5
   type = number
 }
 

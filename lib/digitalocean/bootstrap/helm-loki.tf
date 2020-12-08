@@ -27,7 +27,7 @@ resource "helm_release" "loki" {
 
   set {
     name = "config.storage_config.aws.s3"
-    value = "s3://${var.space_access_id}:${var.space_secret_key}@{var.region}.digitaloceanspaces.com/qovery-logs-${var.oks_cluster_id}"
+    value = "s3://${var.region}.digitaloceanspaces.com/qovery-logs-${var.oks_cluster_id}"
   }
 
   set {

@@ -90,7 +90,7 @@ resource "helm_release" "prometheus_operator" {
   # Limits prometheusOperator
   set {
     name = "prometheusOperator.resources.limits.cpu"
-    value = "1"
+    value = "500m"
   }
 
   set {
@@ -100,12 +100,12 @@ resource "helm_release" "prometheus_operator" {
 
   set {
     name = "prometheusOperator.resources.limits.memory"
-    value = "1Gi"
+    value = "512Mi"
   }
 
   set {
     name = "prometheusOperator.resources.requests.memory"
-    value = "1Gi"
+    value = "512Mi"
   }
 
   depends_on = [

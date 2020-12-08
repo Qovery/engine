@@ -74,8 +74,8 @@ pub fn do_kubernetes_ks<'a>(
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     DOKS::<'a>::new(
         context.clone(),
-        "my-first-doks-2",
-        "do-kube-cluster-fra1-2",
+        "my-first-doks-3",
+        "do-kube-cluster-fra1-3",
         DO_KUBERNETES_VERSION,
         "fra1",
         cloud_provider,
@@ -87,8 +87,6 @@ pub fn do_kubernetes_ks<'a>(
 
 pub fn do_kubernetes_nodes() -> Vec<Node> {
     vec![
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
         Node::new_with_cpu_and_mem(4, 8),
         Node::new_with_cpu_and_mem(4, 8),
         Node::new_with_cpu_and_mem(4, 8),
