@@ -1,6 +1,6 @@
 {
-  "vpc_name": "qovery",
-  "vpc_cidr_block": "10.2.0.0/16",
+  "vpc_name": "qovery-3",
+  "vpc_cidr_block": "10.3.0.0/16",
   "qovery_api_url": "api.qovery.com",
   "tls_email_report": "CHANGE-ME/LETS_ENCRYPT_EMAIL_REPORT",
   "engine_version_controller_token": "CHANGE-ME/QOVERY_ENGINE_CONTROLLER_TOKEN",

@@ -28,8 +28,8 @@ fn create_doks_cluster_in_fra_1() {
     let span = span!(Level::INFO, "create_doks_cluster_in_fra_1");
     let _enter = span.enter();
 
-    let cluster_id = "my-first-doks-2";
-    let cluster_name = "do-kube-cluster-fra1-2";
+    let cluster_id = "my-first-doks-3";
+    let cluster_name = "do-kube-cluster-fra1-3";
     let region = "fra1";
 
     let context = test_utilities::utilities::context();
