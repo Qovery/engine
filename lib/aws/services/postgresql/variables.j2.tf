@@ -154,6 +154,12 @@ variable "backup_window" {
   type = string
 }
 
+variable "delete_automated_backups" {
+  description = "Delete automated backups"
+  default = {{ delete_automated_backups }}
+  type = bool
+}
+
 # Snapshots
 # TODO later
 #variable "snapshot_identifier" {

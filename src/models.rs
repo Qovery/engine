@@ -925,6 +925,16 @@ impl Context {
         }
     }
 
+    pub fn is_test_cluster(&self) -> bool {
+        match &self.metadata {
+            Some(meta) => match meta.test {
+                Some(true) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
     pub fn resource_expiration_in_seconds(&self) -> Option<u32> {
         match &self.metadata {
             Some(meta) => match meta.resource_expiration_in_seconds {

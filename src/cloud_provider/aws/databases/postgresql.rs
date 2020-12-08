@@ -10,10 +10,10 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
-use crate::cmd::structs::LabelsContent;
 
 pub struct PostgreSQL {
     context: Context,
@@ -96,7 +96,11 @@ impl PostgreSQL {
                     .downcast_ref::<AWS>()
                     .unwrap();
 
-                utilities::create_namespace_without_labels(&environment.namespace(), kube_config.as_str(), aws);
+                utilities::create_namespace_without_labels(
+                    &environment.namespace(),
+                    kube_config.as_str(),
+                    aws,
+                );
             }
             Err(e) => error!(
                 "Failed to generate the kubernetes config file path: {:?}",
@@ -125,6 +129,10 @@ impl PostgreSQL {
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
 
+        context.insert(
+            "delete_automated_backups",
+            &self.context().is_test_cluster(),
+        );
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
                 "resource_expiration_in_seconds",
@@ -416,10 +424,12 @@ impl Create for PostgreSQL {
 
                 // define labels to add to namespace
                 let namespace_labels = match self.context.resource_expiration_in_seconds() {
-                    Some(v) => Some(vec![(LabelsContent{
-                        name: "ttl".to_string(),
-                        value: format!{"{}", self.context.resource_expiration_in_seconds().unwrap()},
-                    })]),
+                    Some(v) => Some(vec![
+                        (LabelsContent {
+                            name: "ttl".to_string(),
+                            value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
+                        }),
+                    ]),
                     None => None,
                 };
 
@@ -434,7 +444,6 @@ impl Create for PostgreSQL {
                         aws_credentials_envs.clone(),
                     ),
                 )?;
-
 
                 // do exec helm upgrade and return the last deployment status
                 let helm_history_row = cast_simple_error_to_engine_error(
