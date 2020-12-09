@@ -26,8 +26,11 @@ environmentVariables:
 
 volumes:
   qoveryWorkspace:
-    size: 50Gi
+    size: 30Gi
     path: /home/qovery/.qovery-workspace
+  dockerGraphStorage:
+    size: 20Gi
+    path: /var/lib/docker/
 
 buildContainer:
   image: docker

@@ -95,7 +95,8 @@ spec:
       {{- end }}
       volumes:
       - name: docker-graph-storage
-        emptyDir: {}
+        emptyDir:
+          sizeLimit: {{ .Values.volumes.dockerGraphStorage.size }}
       - name: qovery-workspace
         emptyDir:
           sizeLimit: {{ .Values.volumes.qoveryWorkspace.size }}
