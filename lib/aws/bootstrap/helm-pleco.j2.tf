@@ -14,7 +14,22 @@ resource "helm_release" "pleco" {
   }
 
   set {
-    name = "environmentVariables.DISABLE_DRY_RUN"
+    name = "enabledFeatures.rds"
+    value = "true"
+  }
+
+  set {
+    name = "enabledFeatures.documentdb"
+    value = "true"
+  }
+
+  set {
+    name = "enabledFeatures.elasticache"
+    value = "true"
+  }
+
+  set {
+    name = "enabledFeatures.disableDryRun"
     value = "true"
   }
 
