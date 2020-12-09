@@ -138,7 +138,18 @@ impl<'a> Transaction<'a> {
             .external_services
             .iter()
             // build only applications that are set with Action: Create
-            .filter(|es| es.action == Action::Create);
+            .filter(|es| es.action == Action::Create)
+            .filter(|es| {
+                // get useful services only
+                if option.force_build {
+                    // forcing build means building all services
+                    true
+                } else {
+                    let image = es.to_image();
+                    // return service only if it does not exist on the targeted container registry
+                    !self.engine.container_registry().does_image_exists(&image)
+                }
+            });
 
         let external_service_and_result_tuples = external_services_to_build
             .map(|es| {
@@ -157,7 +168,18 @@ impl<'a> Transaction<'a> {
             .applications
             .iter()
             // build only applications that are set with Action: Create
-            .filter(|app| app.action == Action::Create);
+            .filter(|app| app.action == Action::Create)
+            .filter(|app| {
+                // get useful services only
+                if option.force_build {
+                    // forcing build means building all services
+                    true
+                } else {
+                    let image = app.to_image();
+                    // return service only if it does not exist on the targeted container registry
+                    !self.engine.container_registry().does_image_exists(&image)
+                }
+            });
 
         let application_and_result_tuples = apps_to_build
             .map(|app| {
@@ -466,6 +488,8 @@ impl<'a> Transaction<'a> {
                         EnvironmentAction::Environment(te) => te,
                         EnvironmentAction::EnvironmentWithFailover(te, _) => te,
                     };
+
+                    // TODO check that the image is not existing into the Container Registry before building it.
 
                     let apps_result = match self._build_applications(target_environment, option) {
                         Ok(applications) => match self._push_applications(applications, option) {
