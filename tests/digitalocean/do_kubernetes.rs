@@ -21,7 +21,6 @@ use std::io::Read;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
 use tracing::{debug, error, info, span, warn, Level};
 
-#[test]
 fn create_doks_cluster_in_fra_1() {
     init();
 
