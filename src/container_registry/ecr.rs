@@ -3,9 +3,9 @@ use std::str::FromStr;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    CreateRepositoryRequest, DescribeImagesRequest,
-    DescribeRepositoriesRequest, Ecr, EcrClient, GetAuthorizationTokenRequest, ImageDetail,
-    ImageIdentifier, PutLifecyclePolicyRequest, Repository,
+    CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesRequest, Ecr, EcrClient,
+    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest,
+    Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -14,8 +14,7 @@ use crate::cmd;
 use crate::container_registry::{ContainerRegistry, Kind, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::runtime::async_run;
 
@@ -286,7 +285,7 @@ impl ContainerRegistry for ECR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        self.get_repository(image).is_some()
+        self.get_image(image).is_some()
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
