@@ -36,13 +36,17 @@ spec:
           args:
             - --level
             - {{ .Values.environmentVariables.LOG_LEVEL | default "info" }}
+            {{ if eq .Values.enabledFeatures.disableDryRun true }}
             - --check-interval
-            - "{{ .Values.environmentVariables.CHECK_INTERVAL | default 120 }}"
-            {{ if eq .Values.environmentVariables.DISABLE_DRY_RUN "true" }}
+            - "{{ .Values.enabledFeatures.checkInterval | default 120 }}"
+            {{ end }}
+            {{ if eq .Values.enabledFeatures.disableDryRun true }}
             - --disable-dry-run
             {{ end }}
+            {{ if .Values.enabledFeatures.kubernetes }}
             - --kube-conn
             - {{ .Values.enabledFeatures.kubernetes }}
+            {{ end }}
             {{ if eq .Values.enabledFeatures.rds true}}
             - --enable-rds
             {{ end }}
@@ -51,7 +55,7 @@ spec:
             {{ end }}
             {{ if eq .Values.enabledFeatures.documentdb true}}
             - --enable-documentdb
-            {{ end }}
+          {{ end }}
           env:
             {{ range $key, $value := .Values.environmentVariables -}}
             - name: "{{ $key }}"
@@ -72,5 +76,5 @@ spec:
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
-      {{- toYaml . | nindent 8 }}
+  {{- toYaml . | nindent 8 }}
   {{- end }}
