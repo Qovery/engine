@@ -1,6 +1,6 @@
 {{- $kubefullname := include "qovery-engine.fullname" . }}
 apiVersion: apps/v1
-kind: Deployment
+kind: Statefulset
 metadata:
   name: qovery-engine
   namespace: {{ .Values.namespace }}
@@ -95,8 +95,31 @@ spec:
       {{- end }}
       volumes:
       - name: docker-graph-storage
-        emptyDir:
+        ebs:
           sizeLimit: {{ .Values.volumes.dockerGraphStorage.size }}
       - name: qovery-workspace
-        emptyDir:
+        ebs:
           sizeLimit: {{ .Values.volumes.qoveryWorkspace.size }}
+  volumeClaimTemplates:
+  - metadata:
+      name: docker-graph-storage
+      labels:
+        {{- include "qovery-engine.labels" . | nindent 4 }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ .Values.persistence.storageClassName }}
+        resources:
+          requests:
+            storage: {{ .Values.volumes.dockerGraphStorage.size }}
+  - metadata:
+      name: qoveryWorkspace
+      labels:
+        {{- include "qovery-engine.labels" . | nindent 4 }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ .Values.persistence.storageClassName }}
+        resources:
+          requests:
+            storage: {{ .Values.volumes.qoveryWorkspace.size }}
