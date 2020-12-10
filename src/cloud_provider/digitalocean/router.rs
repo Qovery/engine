@@ -403,7 +403,7 @@ impl Create for Router {
                 Fibonacci::from_millis(3000).take(10),
                 || {
                     let external_ingress_hostname_custom =
-                        crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
+                        crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                             kubernetes_config_file_path.as_str(),
                             environment.namespace(),
                             format!(
