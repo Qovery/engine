@@ -8,7 +8,10 @@ use crate::build_platform::Image;
 use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::{EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind};
-use crate::models::{Context, Listener, ProgressListener};
+use crate::models::{
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
+    ProgressScope,
+};
 use reqwest::blocking::{Client, Response};
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{header, StatusCode};
@@ -23,6 +26,7 @@ pub struct DOCR {
     pub registry_name: String,
     pub api_key: String,
     pub id: String,
+    pub listeners: Listeners,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -92,6 +96,7 @@ impl DOCR {
             registry_name: registry_name.to_string(),
             api_key: api_key.to_string(),
             id: id.to_string(),
+            listeners: vec![],
         }
     }
     pub fn client(&self) -> DigitalOcean {
@@ -329,12 +334,28 @@ impl ContainerRegistry for DOCR {
             }
             _ => {}
         };
+        //TODO: check if image doesn't exist before pushing it!
 
         let dest = format!(
             "registry.digitalocean.com/{}/{}",
             self.registry_name.as_str(),
             image.name_with_tag()
         );
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let info_message = format!(
+            "image {:?} does not exist into DOCR {} repository - let's upload it",
+            image,
+            self.name()
+        );
+
+        listeners_helper.start_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
         self.push_image(dest, &image)
     }
 
