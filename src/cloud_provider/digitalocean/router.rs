@@ -5,6 +5,7 @@ use crate::cloud_provider::service::{
     Action, Create, Delete, Pause, Router as RRouter, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::helm::Timeout;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::{Context, Listeners};
@@ -436,7 +437,40 @@ impl Create for Router {
             }
         }
 
-        //TODO install and configure TLS
+        let from_dir = format!(
+            "{}/digitalocean/charts/q-ingress-tls",
+            self.context.lib_root_dir()
+        );
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                from_dir.as_str(),
+                workspace_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        // do exec helm upgrade and return the last deployment status
+        let helm_history_row = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::cmd::helm::helm_exec_with_upgrade_history(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                helm_release_name.as_str(),
+                workspace_dir.as_str(),
+                Timeout::Default,
+                do_credentials_envs.clone(),
+            ),
+        )?;
+
+        if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
+            return Err(self.engine_error(
+                EngineErrorCause::Internal,
+                "Router has failed to be deployed".into(),
+            ));
+        }
 
         Ok(())
     }
