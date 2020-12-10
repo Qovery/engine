@@ -3,11 +3,15 @@ use std::path::Path;
 
 use retry::delay::Fibonacci;
 use retry::OperationResult;
+use serde::de::DeserializeOwned;
 
-use crate::cmd::structs::{Item, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase, KubernetesService, LabelsContent};
+use crate::cmd::structs::{
+    Item, KubernetesEvent, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod,
+    KubernetesPodStatusPhase, KubernetesService, LabelsContent,
+};
 use crate::cmd::utilities::exec_with_envs_and_output;
-use crate::error::{SimpleError, SimpleErrorKind};
 use crate::constants::KUBECONFIG;
+use crate::error::{SimpleError, SimpleErrorKind};
 
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
@@ -26,12 +30,6 @@ where
 
     Ok(())
 }
-
-/*#[derive(DeserializeQuery)]
-struct PodDescribe {
-    #[query(".status.containerStatuses[0]..restartCount")]
-    pub restart_count: u32,
-}*/
 
 pub fn kubectl_exec_get_number_of_restart<P>(
     kubernetes_config: P,
@@ -66,6 +64,7 @@ where
             Err(err) => error!("{:?}", err),
         },
     )?;
+
     let output_string: String = output_vec.join("");
     Ok(output_string)
 }
@@ -79,41 +78,14 @@ pub fn kubectl_exec_get_external_ingress_hostname<P>(
 where
     P: AsRef<Path>,
 {
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
-
-    let mut output_vec: Vec<String> = Vec::with_capacity(20);
-    let _ = kubectl_exec_with_output(
+    let result = kubectl_exec::<P, KubernetesList<KubernetesService>>(
         vec![
             "get", "svc", "-o", "json", "-n", namespace, "-l", // selector
             selector,
         ],
-        _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        kubernetes_config,
+        envs,
     )?;
-
-    let output_string: String = output_vec.join("");
-
-    let result =
-        match serde_json::from_str::<KubernetesList<KubernetesService>>(output_string.as_str()) {
-            Ok(x) => x,
-            Err(err) => {
-                error!("{:?}", err);
-                error!("{}", output_string.as_str());
-                return Err(SimpleError::new(
-                    SimpleErrorKind::Other,
-                    Some(output_string),
-                ));
-            }
-        };
 
     if result.items.is_empty()
         || result
@@ -197,38 +169,7 @@ pub fn kubectl_exec_is_pod_ready<P>(
 where
     P: AsRef<Path>,
 {
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
-
-    let mut output_vec: Vec<String> = Vec::with_capacity(20);
-    let _ = kubectl_exec_with_output(
-        vec!["get", "pod", "-o", "json", "-n", namespace, "-l", selector],
-        _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-    )?;
-
-    let output_string: String = output_vec.join("");
-
-    let result = match serde_json::from_str::<KubernetesList<KubernetesPod>>(output_string.as_str())
-    {
-        Ok(x) => x,
-        Err(err) => {
-            error!("{:?}", err);
-            error!("{}", output_string.as_str());
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(output_string),
-            ));
-        }
-    };
+    let result = kubectl_exec_get_pod(kubernetes_config, namespace, selector, envs)?;
 
     if result.items.is_empty()
         || result
@@ -305,39 +246,13 @@ pub fn kubectl_exec_is_job_ready<P>(
 where
     P: AsRef<Path>,
 {
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
-
-    let mut output_vec: Vec<String> = Vec::with_capacity(20);
-    let _ = kubectl_exec_with_output(
+    let job_result = kubectl_exec::<P, KubernetesJob>(
         vec!["get", "job", "-o", "json", "-n", namespace, job_name],
-        _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        kubernetes_config,
+        envs,
     )?;
 
-    let output_string: String = output_vec.join("");
-
-    let result = match serde_json::from_str::<KubernetesJob>(output_string.as_str()) {
-        Ok(x) => x,
-        Err(err) => {
-            error!("{:?}", err);
-            error!("{}", output_string.as_str());
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(output_string),
-            ));
-        }
-    };
-
-    if result.status.succeeded > 0 {
+    if job_result.status.succeeded > 0 {
         return Ok(Some(true));
     }
 
@@ -349,8 +264,8 @@ pub fn kubectl_exec_is_namespace_present<P>(
     namespace: &str,
     envs: Vec<(&str, &str)>,
 ) -> bool
-    where
-        P: AsRef<Path>,
+where
+    P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -418,13 +333,8 @@ where
 
     // additional labels
     if labels.is_some() {
-        match kubectl_add_labels_to_namespace(
-            kubernetes_config,
-            namespace,
-            labels.unwrap(),
-            envs,
-        ) {
-            Ok(_) => {},
+        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap(), envs) {
+            Ok(_) => {}
             Err(e) => return Err(e),
         }
     };
@@ -438,8 +348,8 @@ pub fn kubectl_add_labels_to_namespace<P>(
     labels: Vec<LabelsContent>,
     envs: Vec<(&str, &str)>,
 ) -> Result<(), SimpleError>
-    where
-        P: AsRef<Path>,
+where
+    P: AsRef<Path>,
 {
     if labels.iter().count() == 0 {
         return Err(SimpleError::new(
@@ -455,7 +365,7 @@ pub fn kubectl_add_labels_to_namespace<P>(
     ) {
         return Err(SimpleError::new(
             SimpleErrorKind::Other,
-            Some(format!{"Can't set labels on namespace {} because it doesn't exists", namespace}),
+            Some(format! {"Can't set labels on namespace {} because it doesn't exists", namespace}),
         ));
     }
 
@@ -464,9 +374,12 @@ pub fn kubectl_add_labels_to_namespace<P>(
     command_args.extend(vec!["label", "namespace", namespace, "--overwrite"]);
 
     for label in labels.iter() {
-        labels_string.push(format!{"{}={}", label.name, label.value});
-    };
-    let labels_str = labels_string.iter().map(|x| x.as_ref()).collect::<Vec<&str>>();
+        labels_string.push(format! {"{}={}", label.name, label.value});
+    }
+    let labels_str = labels_string
+        .iter()
+        .map(|x| x.as_ref())
+        .collect::<Vec<&str>>();
     command_args.extend(labels_str);
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
@@ -564,45 +477,23 @@ pub fn kubectl_exec_get_all_namespaces<P>(
 where
     P: AsRef<Path>,
 {
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
-
-    let mut output_vec: Vec<String> = Vec::new();
-    let _ = kubectl_exec_with_output(
+    let result = kubectl_exec::<P, KubernetesList<Item>>(
         vec!["get", "namespaces", "-o", "json"],
-        _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-    )?;
+        kubernetes_config,
+        envs,
+    );
 
-    let output_string: String = output_vec.join("");
     let mut to_return: Vec<String> = Vec::new();
-    let result = serde_json::from_str::<KubernetesList<Item>>(output_string.as_str());
+
     match result {
         Ok(out) => {
             for item in out.items {
                 to_return.push(item.metadata.name);
             }
         }
-        Err(e) => {
-            error!(
-                "Error while deserializing Kubernetes namespaces names {}",
-                e
-            );
-
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(output_string),
-            ));
-        }
+        Err(e) => return Err(e),
     };
+
     Ok(to_return)
 }
 
@@ -627,8 +518,7 @@ where
                 namespace
             ),
         },
-        Err(e) => debug!(
-            "Unable to execute describe on secrets. it may not exist anymore"),
+        Err(_) => debug!("Unable to execute describe on secrets. it may not exist anymore"),
     };
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
@@ -684,7 +574,7 @@ pub fn kubectl_exec_logs<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
+) -> Result<Vec<String>, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -706,7 +596,7 @@ where
         },
     )?;
 
-    Ok(output_vec.join("\n"))
+    Ok(output_vec)
 }
 
 pub fn kubectl_exec_describe_pod<P>(
@@ -746,13 +636,63 @@ pub fn kubectl_exec_get_node<P>(
 where
     P: AsRef<Path>,
 {
+    kubectl_exec::<P, KubernetesList<KubernetesNode>>(
+        vec!["get", "node", "-o", "json"],
+        kubernetes_config,
+        envs,
+    )
+}
+
+pub fn kubectl_exec_get_pod<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesPod>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, KubernetesList<KubernetesPod>>(
+        vec!["get", "pod", "-o", "json", "-n", namespace, "-l", selector],
+        kubernetes_config,
+        envs,
+    )
+}
+
+pub fn kubectl_exec_get_event<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesEvent>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, KubernetesList<KubernetesEvent>>(
+        vec![
+            "get", "event", "-o", "json", "-n", namespace, "-l", selector,
+        ],
+        kubernetes_config,
+        envs,
+    )
+}
+
+fn kubectl_exec<P, T>(
+    args: Vec<&str>,
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<T, SimpleError>
+where
+    P: AsRef<Path>,
+    T: DeserializeOwned,
+{
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
     let _ = kubectl_exec_with_output(
-        vec!["get", "node", "-o", "json"],
+        args,
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
@@ -766,18 +706,17 @@ where
 
     let output_string: String = output_vec.join("");
 
-    let result =
-        match serde_json::from_str::<KubernetesList<KubernetesNode>>(output_string.as_str()) {
-            Ok(x) => x,
-            Err(err) => {
-                error!("{:?}", err);
-                error!("{}", output_string.as_str());
-                return Err(SimpleError::new(
-                    SimpleErrorKind::Other,
-                    Some(output_string),
-                ));
-            }
-        };
+    let result = match serde_json::from_str::<T>(output_string.as_str()) {
+        Ok(x) => x,
+        Err(err) => {
+            error!("{:?}", err);
+            error!("{}", output_string.as_str());
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some(output_string),
+            ));
+        }
+    };
 
     Ok(result)
 }

@@ -108,7 +108,33 @@ pub enum KubernetesPodStatusPhase {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodContainerStatus {
+    #[serde(rename = "last_state")]
+    pub last_state: KubernetesPodContainerStatusLastState,
     pub ready: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesPodContainerStatusLastState {
+    pub terminated: Option<ContainerStatusTerminated>,
+    pub waiting: Option<ContainerStatusWaiting>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerStatusWaiting {
+    pub message: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerStatusTerminated {
+    #[serde(rename = "exit_code")]
+    pub exit_code: i16,
+    pub message: Option<String>,
+    pub reason: String,
+    pub signal: i16,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -142,6 +168,15 @@ pub struct KubernetesNodeStatusResources {
     pub cpu: String,
     pub memory: String,
     pub pods: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesEvent {
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub message: Option<String>,
+    pub reason: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]

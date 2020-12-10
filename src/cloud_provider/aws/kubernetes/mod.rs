@@ -15,7 +15,9 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
-use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
+use crate::cmd::kubectl::{
+    kubectl_exec_delete_namespace, kubectl_exec_describe_pod, kubectl_exec_get_all_namespaces,
+};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -739,7 +741,6 @@ impl<'a> Kubernetes for EKS<'a> {
         }
 
         info!("Delete all remaining deployed helm applications");
-
         match cmd::helm::helm_list(&kubernetes_config_file_path2, aws_credentials_envs.clone()) {
             Ok(helm_list) => {
                 cmd::helm::helm_uninstall_list(
@@ -827,6 +828,8 @@ impl<'a> Kubernetes for EKS<'a> {
                         service.id(),
                         err
                     );
+
+                    //kubectl_exec_describe_pod();
 
                     listeners_helper.error(ProgressInfo::new(
                         progress_scope,
