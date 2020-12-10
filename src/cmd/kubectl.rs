@@ -4,10 +4,15 @@ use std::path::Path;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 
-use crate::cmd::structs::{Item, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase, KubernetesService, LabelsContent};
+use crate::cloud_provider::digitalocean::api_structs;
+use crate::cloud_provider::digitalocean::api_structs::svc::DOKubernetesList;
+use crate::cmd::structs::{
+    Item, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
+    KubernetesService, LabelsContent,
+};
 use crate::cmd::utilities::exec_with_envs_and_output;
-use crate::error::{SimpleError, SimpleErrorKind};
 use crate::constants::KUBECONFIG;
+use crate::error::{SimpleError, SimpleErrorKind};
 
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
@@ -68,6 +73,81 @@ where
     )?;
     let output_string: String = output_vec.join("");
     Ok(output_string)
+}
+
+// Get ip external ingress
+// CAUTION: use it only with DigitalOcean
+pub fn do_kubectl_exec_get_external_ingress_ip<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<String>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let mut output_vec: Vec<String> = Vec::with_capacity(20);
+    let _ = kubectl_exec_with_output(
+        vec![
+            "get", "svc", "-o", "json", "-n", namespace, "-l", // selector
+            selector,
+        ],
+        _envs,
+        |out| match out {
+            Ok(line) => output_vec.push(line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+
+    let output_string: String = output_vec.join("");
+
+    let result = match serde_json::from_str::<DOKubernetesList>(output_string.as_str()) {
+        Ok(x) => x,
+        Err(err) => {
+            error!("{:?}", err);
+            error!("{}", output_string.as_str());
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some(output_string),
+            ));
+        }
+    };
+
+    if result.items.is_empty()
+        || result
+            .items
+            .first()
+            .unwrap()
+            .status
+            .load_balancer
+            .ingress
+            .is_empty()
+    {
+        return Ok(None);
+    }
+
+    // FIXME unsafe unwrap here?
+    Ok(Some(
+        result
+            .items
+            .first()
+            .unwrap()
+            .status
+            .load_balancer
+            .ingress
+            .first()
+            .unwrap()
+            .ip
+            .clone(),
+    ))
 }
 
 pub fn kubectl_exec_get_external_ingress_hostname<P>(
@@ -349,8 +429,8 @@ pub fn kubectl_exec_is_namespace_present<P>(
     namespace: &str,
     envs: Vec<(&str, &str)>,
 ) -> bool
-    where
-        P: AsRef<Path>,
+where
+    P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -418,13 +498,8 @@ where
 
     // additional labels
     if labels.is_some() {
-        match kubectl_add_labels_to_namespace(
-            kubernetes_config,
-            namespace,
-            labels.unwrap(),
-            envs,
-        ) {
-            Ok(_) => {},
+        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap(), envs) {
+            Ok(_) => {}
             Err(e) => return Err(e),
         }
     };
@@ -438,8 +513,8 @@ pub fn kubectl_add_labels_to_namespace<P>(
     labels: Vec<LabelsContent>,
     envs: Vec<(&str, &str)>,
 ) -> Result<(), SimpleError>
-    where
-        P: AsRef<Path>,
+where
+    P: AsRef<Path>,
 {
     if labels.iter().count() == 0 {
         return Err(SimpleError::new(
@@ -455,7 +530,7 @@ pub fn kubectl_add_labels_to_namespace<P>(
     ) {
         return Err(SimpleError::new(
             SimpleErrorKind::Other,
-            Some(format!{"Can't set labels on namespace {} because it doesn't exists", namespace}),
+            Some(format! {"Can't set labels on namespace {} because it doesn't exists", namespace}),
         ));
     }
 
@@ -464,9 +539,12 @@ pub fn kubectl_add_labels_to_namespace<P>(
     command_args.extend(vec!["label", "namespace", namespace, "--overwrite"]);
 
     for label in labels.iter() {
-        labels_string.push(format!{"{}={}", label.name, label.value});
-    };
-    let labels_str = labels_string.iter().map(|x| x.as_ref()).collect::<Vec<&str>>();
+        labels_string.push(format! {"{}={}", label.name, label.value});
+    }
+    let labels_str = labels_string
+        .iter()
+        .map(|x| x.as_ref())
+        .collect::<Vec<&str>>();
     command_args.extend(labels_str);
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
@@ -627,8 +705,7 @@ where
                 namespace
             ),
         },
-        Err(e) => debug!(
-            "Unable to execute describe on secrets. it may not exist anymore"),
+        Err(e) => debug!("Unable to execute describe on secrets. it may not exist anymore"),
     };
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
