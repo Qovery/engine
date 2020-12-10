@@ -1,0 +1,22 @@
+{%- for custom_domain in custom_domains %}
+---
+apiVersion: cert-manager.io/v1alpha2
+kind: Issuer
+metadata:
+  name: {{ custom_domain.domain_hash }}
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    fqdn: "{{ custom_domain.domain }}"
+    fqdnId: {{ custom_domain.domain_hash }}
+spec:
+  acme:
+    server: {{ spec_acme_server }}
+    email: {{ spec_acme_email }}
+    privateKeySecretRef:
+      name: {{ custom_domain.domain_hash }}-key
+    solvers:
+      - http01:
+          ingress:
+            class: "{{ id }}"
+{%- endfor %}
