@@ -1,0 +1,19 @@
+{%- for custom_domain in custom_domains %}
+---
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: {{ custom_domain.domain_hash }}-cert
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    fqdn: "{{ custom_domain.domain }}"
+    fqdnId: {{ custom_domain.domain_hash }}
+spec:
+  secretName: le-{{ custom_domain.domain_hash }}-cert
+  issuerRef:
+    name: {{ custom_domain.domain_hash }}
+    kind: Issuer
+  dnsNames:
+    - {{ custom_domain.domain }}
+{%- endfor %}

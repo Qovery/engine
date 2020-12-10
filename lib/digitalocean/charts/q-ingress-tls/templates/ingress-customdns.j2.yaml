@@ -1,0 +1,43 @@
+{%- if routes|length >= 1  %}
+{%- for custom_domain in custom_domains %}
+{%- if custom_domain.target_domain %}
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: {{ name }}-{{ custom_domain.domain_hash }}
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    routerName: {{ name }}
+    routerId: {{ id }}
+    envId: {{ environment_id }}
+    fqdn: "{{ custom_domain.domain }}"
+    fqdnId: {{ custom_domain.domain_hash }}
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "true"
+    kubernetes.io/tls-acme: "true"
+    cert-manager.io/issuer: "{{ custom_domain.domain_hash }}"
+    kubernetes.io/ingress.class: "{{ id }}"
+    # this domain should be CNAME-ed by the client. ex: app.foo.bar -> app.qovery.io
+    external-dns.alpha.kubernetes.io/hostname: {{ custom_domain.target_domain }}
+    external-dns.alpha.kubernetes.io/target: {{ nlb_ingress_hostname }}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+spec:
+  tls:
+    - hosts:
+        - {{ custom_domain.domain }}
+      secretName: le-{{ custom_domain.domain_hash }}-custom-cert
+  rules:
+    - host: "{{ custom_domain.domain }}"
+      http:
+        paths:
+        {%- for route in routes %}
+          - path: {{ route.path }}
+            backend:
+              serviceName: "{{ route.application_name }}"
+              servicePort: {{ route.application_port }}
+        {%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
