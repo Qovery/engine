@@ -146,7 +146,7 @@ impl Router {
             Ok(kubernetes_config_file_path_string) => {
                 // Default domain
                 let external_ingress_hostname_default =
-                    crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
+                    crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                         kubernetes_config_file_path_string.as_str(),
                         "nginx-ingress",
                         "app=nginx-ingress,component=controller",
@@ -164,14 +164,14 @@ impl Router {
                         }
                     }
                     _ => {
-                        error!("can't fetch kubernetes config file - what's wrong? This must never happened");
+                        error!("can't fetch external ingress ip");
                     }
                 }
 
                 // Check if there is a custom domain first
                 if !self.custom_domains.is_empty() {
                     let external_ingress_hostname_custom =
-                        crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
+                        crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                             kubernetes_config_file_path_string.as_str(),
                             environment.namespace(),
                             "app=nginx-ingress,component=controller",
@@ -193,7 +193,7 @@ impl Router {
                             }
                         }
                         _ => {
-                            error!("can't fetch kubernetes config file - what's wrong? This must never happened");
+                            error!("can't fetch external_ingress_hostname_custom - what's wrong? This must never happened");
                         }
                     }
                     context.insert("app_id", kubernetes.id());
@@ -402,7 +402,7 @@ impl Create for Router {
             let external_ingress_hostname_custom_result = retry::retry(
                 Fibonacci::from_millis(3000).take(10),
                 || {
-                    let external_ingress_hostname_custom =
+                    let external_ingress_ip_custom =
                         crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                             kubernetes_config_file_path.as_str(),
                             environment.namespace(),
@@ -414,9 +414,9 @@ impl Create for Router {
                             do_credentials_envs.clone(),
                         );
 
-                    match external_ingress_hostname_custom {
-                        Ok(external_ingress_hostname_custom) => {
-                            OperationResult::Ok(external_ingress_hostname_custom)
+                    match external_ingress_ip_custom {
+                        Ok(external_ingress_ip_custom) => {
+                            OperationResult::Ok(external_ingress_ip_custom)
                         }
                         Err(err) => {
                             error!(

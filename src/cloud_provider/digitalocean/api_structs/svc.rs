@@ -179,6 +179,7 @@ pub struct FRelease {}
 pub struct FFinalizers {
     #[serde(rename = ".")]
     pub field: GeneratedType3,
+    #[serde(rename = "v:\"service.kubernetes.io/load-balancer-cleanup\"")]
     pub v_service_kubernetes_io_load_balancer_cleanup: VServiceKubernetesIoLoadBalancerCleanup,
 }
 
@@ -214,7 +215,9 @@ pub struct FExternalTrafficPolicy {}
 pub struct FPorts {
     #[serde(rename = ".")]
     pub field: GeneratedType4,
+    #[serde(rename = "k:{\"port\":443,\"protocol\":\"TCP\"}")]
     pub k_port443_protocol_tcp: KPort443ProtocolTcp,
+    #[serde(rename = "k:{\"port\":80,\"protocol\":\"TCP\"}")]
     pub k_port80_protocol_tcp: KPort80ProtocolTcp,
 }
 
