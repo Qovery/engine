@@ -338,7 +338,7 @@ notifiers:
         frequency: 2h
         disable_resolve_message: false
         settings:
-          content: "{{ eks_cluster_id }}"
+          content: "{{ oks_cluster_id }}"
           url: "{{ discord_api_key }}"
 #    - name: email-notifier
 #      type: email
