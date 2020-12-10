@@ -21,14 +21,15 @@ use std::io::Read;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
 use tracing::{debug, error, info, span, warn, Level};
 
-fn create_doks_cluster_in_fra_1() {
+#[test]
+fn create_doks_cluster_in_fra_10() {
     init();
 
-    let span = span!(Level::INFO, "create_doks_cluster_in_fra_1");
+    let span = span!(Level::INFO, "create_doks_cluster_in_fra_10");
     let _enter = span.enter();
 
-    let cluster_id = "my-first-doks-3";
-    let cluster_name = "do-kube-cluster-fra1-3";
+    let cluster_id = "my-first-doks-10";
+    let cluster_name = "do-kube-cluster-fra1-10";
     let region = "fra1";
 
     let context = test_utilities::utilities::context();
