@@ -273,12 +273,13 @@ impl ContainerRegistry for DOCR {
         Ok(())
     }
 
-    fn add_listener(&mut self, _listener: Listener) {
-        unimplemented!()
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 
     fn on_create(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        info!("DOCR.on_create() called");
+        Ok(())
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {
