@@ -231,7 +231,6 @@ fn deploy_a_working_environment_with_domain() {
     };
 }
 
-#[test]
 fn deploy_a_working_environment_with_custom_domain() {
     init();
 
