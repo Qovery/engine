@@ -2,7 +2,6 @@ use qovery_engine::models::{Context, EnvironmentAction};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::cloudflare::dns_provider_cloudflare;
 
-mod do_container_registry;
 mod do_databases;
 mod do_environment;
 pub mod do_kubernetes;
