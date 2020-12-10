@@ -74,8 +74,8 @@ pub fn do_kubernetes_ks<'a>(
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     DOKS::<'a>::new(
         context.clone(),
-        "my-first-doks-3",
-        "do-kube-cluster-fra1-3",
+        "my-first-doks-10",
+        "do-kube-cluster-fra1-10",
         DO_KUBERNETES_VERSION,
         "fra1",
         cloud_provider,
