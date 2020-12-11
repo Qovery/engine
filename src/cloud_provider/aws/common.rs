@@ -179,7 +179,7 @@ pub fn get_stateless_resource_information(
         aws_credentials_envs.clone(),
     ) {
         Ok(output) => {
-            info!("{}", output);
+            info!("{:?}", output);
             output.join("\n")
         }
         Err(err) => {

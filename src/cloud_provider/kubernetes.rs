@@ -3,10 +3,11 @@ use std::any::Any;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::service::Service;
 use crate::cloud_provider::CloudProvider;
 use crate::dns_provider::DnsProvider;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listener, Listeners};
+use crate::models::{Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel};
 
 pub trait Kubernetes {
     fn context(&self) -> &Context;
@@ -150,4 +151,72 @@ pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
     }
 
     Ok(())
+}
+
+pub fn check_kubernetes_service_error<T>(
+    result: Result<(), EngineError>,
+    kubernetes: &dyn Kubernetes,
+    service: &Box<T>,
+    listeners_helper: &ListenersHelper,
+    action_verb: &str,
+) -> Result<(), EngineError>
+where
+    T: Service + ?Sized,
+{
+    listeners_helper.start_in_progress(ProgressInfo::new(
+        service.progress_scope(),
+        ProgressLevel::Info,
+        Some(format!(
+            "{} {} {}",
+            action_verb,
+            service.service_type().name().to_lowercase(),
+            service.name()
+        )),
+        kubernetes.context().execution_id(),
+    ));
+
+    match result {
+        Err(err) => {
+            error!(
+                "{} error with {} {} , id: {} => {:?}",
+                action_verb,
+                service.service_type().name(),
+                service.name(),
+                service.id(),
+                err
+            );
+
+            listeners_helper.error(ProgressInfo::new(
+                service.progress_scope(),
+                ProgressLevel::Error,
+                Some(format!(
+                    "{} error {} {} : error => {:?}",
+                    action_verb,
+                    service.service_type().name().to_lowercase(),
+                    service.name(),
+                    err
+                )),
+                kubernetes.context().execution_id(),
+            ));
+
+            // TODO send details to user here
+
+            return Err(err);
+        }
+        _ => {
+            listeners_helper.start_in_progress(ProgressInfo::new(
+                service.progress_scope(),
+                ProgressLevel::Info,
+                Some(format!(
+                    "{} succeeded for {} {}",
+                    action_verb,
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                )),
+                kubernetes.context().execution_id(),
+            ));
+
+            Ok(())
+        }
+    }
 }
