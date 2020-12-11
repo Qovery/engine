@@ -4,7 +4,7 @@ resource "digitalocean_tag" "cluster_tag" {
 }
 
 resource "digitalocean_firewall" "qovery_firewall" {
-  name = "k8s-${digitalocean_kubernetes_cluster.kubernetes_cluster.id}-worker"
+  name = "k8s-${digitalocean_kubernetes_cluster.kubernetes_cluster.id}-qovery-additional-fw"
   tags = [digitalocean_tag.cluster_tag.id]
 
   // https://www.digitalocean.com/community/questions/using-do-managed-kubernetes-cluster-with-helm-chart-stable-prometheus-results-in-some-node_exporters-being-unreachable
