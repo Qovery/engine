@@ -1,5 +1,6 @@
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::databases::utilities::generate_supported_version;
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -12,8 +13,9 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
+use std::collections::HashMap;
 
 pub struct MongoDB {
     context: Context,
@@ -582,5 +584,78 @@ impl Backup for MongoDB {
 
     fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
+    }
+}
+
+fn get_mongodb_version(
+    requested_version: &str,
+    is_managed_service: bool,
+) -> Result<String, StringError> {
+    let mut supported_mondogb_versions = HashMap::new();
+    let mut database_name = "MongoDB";
+
+    if is_managed_service {
+        database_name = "DocumentDB";
+        // v3.6.0
+        let mut mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(0), None);
+        supported_mondogb_versions.extend(mongo_version);
+
+        // v4.0.0
+        let mut mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(0), None);
+        supported_mondogb_versions.extend(mongo_version);
+    } else {
+        // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
+
+        // v3.6
+        let mut mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(21), None);
+        supported_mondogb_versions.extend(mongo_version);
+
+        // v4.0
+        let mut mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(21), None);
+        supported_mondogb_versions.extend(mongo_version);
+
+        // v4.2
+        let mut mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(11), None);
+        supported_mondogb_versions.extend(mongo_version);
+
+        // v4.4
+        let mut mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(2), None);
+        supported_mondogb_versions.extend(mongo_version);
+    }
+
+    utilities::get_supported_version_to_use(
+        database_name,
+        supported_mondogb_versions,
+        requested_version,
+    )
+}
+
+#[cfg(test)]
+mod tests_mondogb {
+    use crate::cloud_provider::aws::databases::mongodb::get_mongodb_version;
+    use std::collections::HashMap;
+
+    #[test]
+    fn check_mondogb_version() {
+        // managed version
+        assert_eq!(get_mongodb_version("4", true).unwrap(), "4.0.0");
+        assert_eq!(get_mongodb_version("4.0", true).unwrap(), "4.0.0");
+        assert_eq!(
+            get_mongodb_version("4.4", true)
+                .unwrap_err()
+                .message
+                .as_str(),
+            "this DocumentDB 4.4 version is not supported"
+        );
+        // self-hosted version
+        assert_eq!(get_mongodb_version("4", false).unwrap(), "4.4.2");
+        assert_eq!(get_mongodb_version("4.2", false).unwrap(), "4.2.11");
+        assert_eq!(
+            get_mongodb_version("3.4", false)
+                .unwrap_err()
+                .message
+                .as_str(),
+            "this MongoDB 3.4 version is not supported"
+        );
     }
 }

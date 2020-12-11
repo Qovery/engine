@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
@@ -18,6 +16,7 @@ use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, StringError,
 };
 use crate::models::Context;
+use std::collections::HashMap;
 
 pub struct Redis {
     context: Context,
@@ -582,19 +581,53 @@ fn get_redis_version(
     is_managed_service: bool,
 ) -> Result<String, StringError> {
     let mut supported_redis_versions = HashMap::with_capacity(2);
+    let mut database_name = "Redis";
 
     if is_managed_service {
         // https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/supported-engine-versions.html
-        supported_redis_versions.insert("5", "5.0.6");
-        supported_redis_versions.insert("6", "6.x");
+        database_name = "Elasticache";
+
+        supported_redis_versions.insert("6".to_string(), "6.x".to_string());
+        supported_redis_versions.insert("5".to_string(), "5.0.6".to_string());
     } else {
         // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
-        supported_redis_versions.insert("5", "5.0.10-debian-10-r28");
-        supported_redis_versions.insert("6", "6.0.9-debian-10-r26");
+        supported_redis_versions.insert("6".to_string(), "6.0.9".to_string());
+        supported_redis_versions.insert("6.0".to_string(), "6.0.9".to_string());
+        supported_redis_versions.insert("5".to_string(), "5.0.10".to_string());
+        supported_redis_versions.insert("5.0".to_string(), "5.0.10".to_string());
     }
 
-    match utilities::get_supported_version_to_use(supported_redis_versions, requested_version) {
-        Ok(v) => Ok(v),
-        Err(e) => Err(e),
+    utilities::get_supported_version_to_use(
+        database_name,
+        supported_redis_versions,
+        requested_version,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::aws::databases::redis::get_redis_version;
+    use std::collections::HashMap;
+
+    #[test]
+    fn check_redis_version() {
+        // managed version
+        assert_eq!(get_redis_version("6", true).unwrap(), "6.x");
+        assert_eq!(get_redis_version("5", true).unwrap(), "5.0.6");
+        assert_eq!(
+            get_redis_version("1.0", true).unwrap_err().message.as_str(),
+            "this Elasticache 1.0 version is not supported"
+        );
+
+        // self-hosted version
+        assert_eq!(get_redis_version("6", false).unwrap(), "6.0.9");
+        assert_eq!(get_redis_version("6.0", false).unwrap(), "6.0.9");
+        assert_eq!(
+            get_redis_version("1.0", false)
+                .unwrap_err()
+                .message
+                .as_str(),
+            "this Redis 1.0 version is not supported"
+        );
     }
 }

@@ -802,7 +802,7 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
         .map(|mut app| {
             app.name = "redis-app".to_string();
             app.branch = "redis-app".to_string();
-            app.commit_id = "70dbab1201fc3b3320da96eca5425ed52d6b2afd".to_string();
+            app.commit_id = "2bd35d61941df2d9f5c4ce085481334f0845a2fb".to_string();
             app.private_port = Some(1234);
             app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
@@ -884,7 +884,7 @@ fn redis_v5_0_deploy_a_working_environment_with_production() {
     const test_name: &str = "redis_v5_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-    test_redis_configuration(context, environment, "5.0");
+    test_redis_configuration(context, environment, "5");
 }
 
 // test Redis 5.0 with production environment (Elasticache)
@@ -895,5 +895,5 @@ fn redis_v6_0_deploy_a_working_environment_with_production() {
     const test_name: &str = "redis_v6_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-    test_redis_configuration(context, environment, "6.0");
+    test_redis_configuration(context, environment, "6");
 }

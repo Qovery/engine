@@ -34,7 +34,7 @@ pub fn create_namespace_without_labels(namespace: &str, kube_config: &str, aws: 
         (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
         (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
     ];
-    kubectl_exec_create_namespace(kube_config, namespace,None, aws_credentials_envs);
+    kubectl_exec_create_namespace(kube_config, namespace, None, aws_credentials_envs);
 }
 
 pub fn delete_terraform_tfstate_secret(
@@ -77,11 +77,9 @@ pub fn delete_terraform_tfstate_secret(
     }
 }
 
-type ProvidedVersion<'a> = &'a str;
-type RealVersion<'a> = &'a str;
-
 pub fn get_supported_version_to_use<'a>(
-    all_supported_versions: HashMap<ProvidedVersion<'a>, RealVersion<'a>>,
+    database_name: &str,
+    all_supported_versions: HashMap<String, String>,
     version_to_check: &str,
 ) -> Result<String, StringError> {
     let version = match get_version_number(version_to_check) {
@@ -89,43 +87,129 @@ pub fn get_supported_version_to_use<'a>(
         Err(e) => return Err(e),
     };
 
-    match all_supported_versions.get(version.major.as_str()) {
+    // if a patch version is required
+    if version.patch.is_some() {
+        return match all_supported_versions.get(&format!(
+            "{}.{}.{}",
+            version.major,
+            version.minor.unwrap().to_string(),
+            version.patch.unwrap().to_string()
+        )) {
+            Some(version) => Ok(version.to_string()),
+            None => {
+                return Err(StringError::new(format!(
+                    "this {} {} version is not supported",
+                    database_name, version_to_check
+                )))
+            }
+        };
+    }
+
+    // if a minor version is required
+    if version.minor.is_some() {
+        return match all_supported_versions
+            .get(&format!("{}.{}", version.major, version.minor.unwrap()).to_string())
+        {
+            Some(version) => Ok(version.to_string()),
+            None => {
+                return Err(StringError::new(format!(
+                    "this {} {} version is not supported",
+                    database_name, version_to_check
+                )))
+            }
+        };
+    };
+
+    // if only a major version is required
+    match all_supported_versions.get(&version.major) {
         Some(version) => Ok(version.to_string()),
         None => {
             return Err(StringError::new(format!(
-                "this {} version is not supported",
-                version_to_check
+                "this {} {} version is not supported",
+                database_name, version_to_check
             )))
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::cloud_provider::aws::databases::utilities::get_supported_version_to_use;
-    use std::collections::HashMap;
+// Ease the support of multiple versions by range
+pub fn generate_supported_version(
+    major: i32,
+    minor_min: i32,
+    minor_max: i32,
+    update_min: Option<i32>,
+    update_max: Option<i32>,
+    suffix_version: Option<String>,
+) -> HashMap<String, String> {
+    let mut supported_versions = HashMap::new();
+    let mut latest_major_version = String::new();
 
-    #[test]
-    fn check_redis_version() {
-        let mut redis_managed_versions = HashMap::with_capacity(1);
-        redis_managed_versions.insert("6", "6.x");
-        let mut redis_self_hosted_versions = HashMap::with_capacity(1);
-        redis_self_hosted_versions.insert("6", "6.0.9-debian-10-r26");
+    // blank suffix if not requested
+    let suffix = match suffix_version {
+        Some(suffix) => suffix,
+        None => "".to_string(),
+    };
 
-        assert_eq!(
-            get_supported_version_to_use(redis_managed_versions.clone(), "6").unwrap(),
-            "6.x"
-        );
-        assert_eq!(
-            get_supported_version_to_use(redis_self_hosted_versions.clone(), "6.0.0").unwrap(),
-            "6.0.9-debian-10-r26"
-        );
-        assert_eq!(
-            get_supported_version_to_use(redis_managed_versions.clone(), "1")
-                .unwrap_err()
-                .message
-                .as_str(),
-            "this 1 version is not supported"
-        );
-    }
+    let _ = match update_min {
+        // manage minor with updates
+        Some(_) => {
+            latest_major_version =
+                format!("{}.{}.{}{}", major, minor_max, update_max.unwrap(), suffix);
+
+            if minor_min == minor_max {
+                // add short minor format targeting latest version
+                supported_versions.insert(
+                    format!("{}.{}", major.to_string(), minor_max.to_string()),
+                    latest_major_version.clone(),
+                );
+                if update_min.unwrap() == update_max.unwrap() {
+                    let version = format!("{}.{}.{}", major, minor_min, update_min.unwrap());
+                    supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
+                } else {
+                    for update in update_min.unwrap()..update_max.unwrap() + 1 {
+                        let version = format!("{}.{}.{}", major, minor_min, update);
+                        supported_versions
+                            .insert(version.clone(), format!("{}{}", version, suffix));
+                    }
+                }
+            } else {
+                for minor in minor_min..minor_max + 1 {
+                    // add short minor format targeting latest version
+                    supported_versions.insert(
+                        format!("{}.{}", major.to_string(), minor.to_string()),
+                        format!(
+                            "{}.{}.{}",
+                            major.to_string(),
+                            minor.to_string(),
+                            update_max.unwrap().to_string()
+                        ),
+                    );
+                    if update_min.unwrap() == update_max.unwrap() {
+                        let version = format!("{}.{}.{}", major, minor, update_min.unwrap());
+                        supported_versions
+                            .insert(version.clone(), format!("{}{}", version, suffix));
+                    } else {
+                        for update in update_min.unwrap()..update_max.unwrap() + 1 {
+                            let version = format!("{}.{}.{}", major, minor, update);
+                            supported_versions
+                                .insert(version.clone(), format!("{}{}", version, suffix));
+                        }
+                    }
+                }
+            }
+        }
+        // manage minor without updates
+        None => {
+            latest_major_version = format!("{}.{}{}", major, minor_max, suffix);
+            for minor in minor_min..minor_max + 1 {
+                let version = format!("{}.{}", major, minor);
+                supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
+            }
+        }
+    };
+
+    // default major + major.minor supported version
+    supported_versions.insert(major.to_string(), latest_major_version);
+
+    supported_versions
 }
