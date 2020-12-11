@@ -326,7 +326,7 @@ impl ContainerRegistry for DOCR {
                 StatusCode::OK => output.text(),
                 _ => {
                     error!(
-                        "While tyring to get all tags for image: {} shouldn't exist !",
+                        "While tyring to get all tags for image: {}, maybe this image not exist !",
                         &image.name
                     );
                     return false;
