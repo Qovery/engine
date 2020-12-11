@@ -200,11 +200,12 @@ where
                 kubernetes.context().execution_id(),
             ));
 
-            for line in service.debug_logs(deployment_target) {
+            let debug_logs = service.debug_logs(deployment_target);
+            if debug_logs.len() > 0 {
                 listeners_helper.error(ProgressInfo::new(
                     service.progress_scope(),
                     ProgressLevel::Info,
-                    Some(line),
+                    Some(debug_logs.join("\n")),
                     kubernetes.context().execution_id(),
                 ));
             }
