@@ -325,12 +325,18 @@ impl ContainerRegistry for DOCR {
             Ok(output) => match output.status() {
                 StatusCode::OK => output.text(),
                 _ => {
-                    error!("Incorrect Status received from Digital Ocean when tyring to get all tags for image, Image shouldn't exist !");
+                    error!(
+                        "While tyring to get all tags for image: {} shouldn't exist !",
+                        &image.name
+                    );
                     return false;
                 }
             },
             Err(_) => {
-                error!("Unable to communicate with DigitalOcean Repository to retrieve image tags");
+                error!(
+                    "While trying to communicate with DigitalOcean API to retrieve all tags for image {}",
+                    &image.name
+                );
                 return false;
             }
         };
@@ -348,14 +354,18 @@ impl ContainerRegistry for DOCR {
                     }
                     Err(e) => {
                         error!(
-                            "Unable to deserialize tags from  DigitalOcean Repository to retrieve"
+                            "Unable to deserialize tags from  DigitalOcean API for image {}",
+                            &image.tag
                         );
                         return false;
                     }
                 }
             }
             _ => {
-                error!("Unable to deserialize tags from  DigitalOcean Repository to retrieve");
+                error!(
+                    "while retrieving tags for image {} Unable to get output from DigitalOcean API",
+                    &image.name
+                );
                 return false;
             }
         }
