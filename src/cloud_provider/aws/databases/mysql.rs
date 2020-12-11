@@ -1,6 +1,6 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::databases::utilities;
+use crate::cloud_provider::aws::databases::{debug_logs, utilities};
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -278,7 +278,7 @@ impl Service for MySQL {
     }
 
     fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
-        Vec::new()
+        debug_logs(self, deployment_target)
     }
 }
 

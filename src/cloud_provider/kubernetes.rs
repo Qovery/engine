@@ -201,14 +201,18 @@ where
             ));
 
             let debug_logs = service.debug_logs(deployment_target);
-            if debug_logs.len() > 0 {
-                listeners_helper.error(ProgressInfo::new(
-                    service.progress_scope(),
-                    ProgressLevel::Info,
-                    Some(debug_logs.join("\n")),
-                    kubernetes.context().execution_id(),
-                ));
-            }
+            let debug_logs_string = if debug_logs.len() > 0 {
+                debug_logs.join("\n")
+            } else {
+                String::from("<no debug logs>")
+            };
+
+            listeners_helper.error(ProgressInfo::new(
+                service.progress_scope(),
+                ProgressLevel::Info,
+                Some(debug_logs_string),
+                kubernetes.context().execution_id(),
+            ));
 
             return Err(err);
         }
