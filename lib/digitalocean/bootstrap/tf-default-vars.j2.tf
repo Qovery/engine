@@ -2,7 +2,7 @@
 
 variable "cloud_provider" {
   description = "Cloud provider name"
-  default = "digitalocean"
+  default = "do"
   type = string
 }
 
