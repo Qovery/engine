@@ -1,5 +1,4 @@
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::Service;
 use crate::cloud_provider::service::{Create, DatabaseOptions};
 use crate::cloud_provider::DeploymentTarget;
 use crate::error::EngineError;
@@ -77,16 +76,15 @@ impl Create for PostgreSQL {
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
-                info!("deploy postgresql on Digital Ocean Managed Services for {}",
+                info!(
+                    "deploy postgresql on Digital Ocean Managed Services for {}",
                     self.name
                 );
                 unimplemented!()
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 // use helm
-                info!("deploy PostgreSQL on Kubernetes for {}",
-                    self.name
-                );
+                info!("deploy PostgreSQL on Kubernetes for {}", self.name);
                 unimplemented!()
             }
         }

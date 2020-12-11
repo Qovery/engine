@@ -1,5 +1,5 @@
 use dns_lookup::lookup_host;
-use retry::delay::{Fibonacci};
+use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
@@ -13,12 +13,8 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
-};
-use crate::models::{
-    Context, Listeners
-};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::models::{Context, Listeners};
 
 pub struct Router {
     context: Context,
@@ -59,14 +55,6 @@ impl Router {
             (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
             (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
         ]
-    }
-
-    fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("routers/{}", self.name()),
-        )
     }
 
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {

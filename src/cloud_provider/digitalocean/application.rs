@@ -85,14 +85,6 @@ impl Application {
         crate::string::cut(format!("application-{}-{}", self.name, self.id), 50)
     }
 
-    fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("applications/{}", self.name),
-        )
-    }
-
     fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
         let commit_id = self.image.commit_id.as_str();

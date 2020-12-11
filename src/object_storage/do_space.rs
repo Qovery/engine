@@ -1,11 +1,7 @@
-use crate::error::{SimpleError, SimpleErrorKind};
 use crate::s3::get_object;
-use rusoto_core::{Client, HttpClient, Region, RusotoError};
+use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
-use rusoto_s3::{GetObjectError, GetObjectOutput, GetObjectRequest, S3Client, S3};
-use std::io::{Cursor, Error};
-use tokio::macros::support::Future;
-use tokio::runtime::{Builder, Runtime};
+use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use tokio::{fs::File, io};
 
 pub(crate) async fn download_space_object(
@@ -30,18 +26,19 @@ pub(crate) async fn download_space_object(
 
     let client = Client::new_with(credentials, HttpClient::new().unwrap());
     let s3_client = S3Client::new_with_client(client, region.clone());
-    let mut object = s3_client
+    let object = s3_client
         .get_object(GetObjectRequest {
             bucket: bucket_name.to_string(),
             key: object_key.to_string(),
             ..Default::default()
         })
         .await;
+
     match object {
         Ok(mut obj_bod) => {
             let body = obj_bod.body.take();
             let mut body = body.unwrap().into_async_read();
-            let mut file = File::create(path_to_download.clone()).await;
+            let file = File::create(path_to_download.clone()).await;
             match file {
                 Ok(mut created_file) => match io::copy(&mut body, &mut created_file).await {
                     Ok(_) => info!("File {} is well downloaded", path_to_download),

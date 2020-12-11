@@ -62,18 +62,6 @@ impl MongoDB {
         crate::string::cut(format!("mongodb-{}", self.id()), 50)
     }
 
-    // fn helm_release_external_dns(&self) -> String {
-    //     format!("{}-dns", self.helm_release_name())
-    // }
-
-    fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("databases/{}", self.name()),
-        )
-    }
-
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
         // FIXME: is there an other way than downcast a pointer?

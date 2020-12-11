@@ -36,7 +36,7 @@ where
 pub fn kubectl_exec_get_number_of_restart<P>(
     kubernetes_config: P,
     namespace: &str,
-    podname: &str,
+    pod_name: &str,
     envs: Vec<(&str, &str)>,
 ) -> Result<String, SimpleError>
 where
@@ -51,7 +51,7 @@ where
         vec![
             "get",
             "po",
-            podname,
+            pod_name,
             "-n",
             namespace,
             "-o=custom-columns=:.status.containerStatuses..restartCount",

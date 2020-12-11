@@ -159,6 +159,7 @@ pub fn check_kubernetes_service_error<T>(
     service: &Box<T>,
     listeners_helper: &ListenersHelper,
     action_verb: &str,
+    error_details_output_to_show_to_user: Box<dyn Fn() -> Vec<String>>,
 ) -> Result<(), EngineError>
 where
     T: Service + ?Sized,
@@ -199,7 +200,14 @@ where
                 kubernetes.context().execution_id(),
             ));
 
-            // TODO send details to user here
+            for line in error_details_output_to_show_to_user() {
+                listeners_helper.error(ProgressInfo::new(
+                    service.progress_scope(),
+                    ProgressLevel::Info,
+                    Some(line),
+                    kubernetes.context().execution_id(),
+                ));
+            }
 
             return Err(err);
         }

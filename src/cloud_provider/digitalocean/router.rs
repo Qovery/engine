@@ -71,14 +71,6 @@ impl Router {
         crate::string::cut(format!("router-{}", self.id()), 50)
     }
 
-    fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("routers/{}", self.name()),
-        )
-    }
-
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
 

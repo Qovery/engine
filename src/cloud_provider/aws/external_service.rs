@@ -6,8 +6,8 @@ use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Action, Application as AApplication, Create, Delete,
-    Pause, Service, ServiceType, StatelessService,
+    Action, Application as AApplication, Create, Delete, Pause, Service, ServiceType,
+    StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -54,14 +54,6 @@ impl ExternalService {
         crate::string::cut(
             format!("external-service-{}-{}", self.name(), self.id()),
             50,
-        )
-    }
-
-    fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("external-services/{}", self.name()),
         )
     }
 

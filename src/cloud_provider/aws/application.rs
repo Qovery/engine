@@ -11,12 +11,10 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause,
-};
-use crate::models::Context;
 use crate::cmd::structs::LabelsContent;
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
@@ -70,14 +68,6 @@ impl Application {
 
     fn helm_release_name(&self) -> String {
         crate::string::cut(format!("application-{}-{}", self.name(), self.id()), 50)
-    }
-
-    fn workspace_directory(&self) -> String {
-        crate::fs::workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("applications/{}", self.name()),
-        )
     }
 
     fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
@@ -287,10 +277,12 @@ impl Create for Application {
 
         // define labels to add to namespace
         let namespace_labels = match self.context.resource_expiration_in_seconds() {
-            Some(v) => Some(vec![(LabelsContent{
-                name: "ttl".to_string(),
-                value: format!{"{}", self.context.resource_expiration_in_seconds().unwrap()},
-            })]),
+            Some(v) => Some(vec![
+                (LabelsContent {
+                    name: "ttl".to_string(),
+                    value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
+                }),
+            ]),
             None => None,
         };
 

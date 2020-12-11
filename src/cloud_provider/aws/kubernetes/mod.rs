@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::str::FromStr;
 use std::thread;
 
@@ -16,7 +17,7 @@ use crate::cloud_provider::kubernetes::{
     check_kubernetes_has_enough_resources_to_deploy_environment, check_kubernetes_service_error,
     Kind, Kubernetes, KubernetesNode, Resources,
 };
-use crate::cloud_provider::service::StatelessService;
+use crate::cloud_provider::service::Service;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
 use crate::cmd::kubectl::{
@@ -25,7 +26,7 @@ use crate::cmd::kubectl::{
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -33,7 +34,6 @@ use crate::models::{
 use crate::string::terraform_list_format;
 use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
 use crate::{dns_provider, s3};
-use std::borrow::Borrow;
 
 pub mod node;
 
@@ -817,6 +817,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "deployment",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -834,6 +835,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "deployment",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -848,6 +850,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "check deployment",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -861,6 +864,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "check deployment",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -900,6 +904,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "revert deployment",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -917,6 +922,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "revert deployment",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -945,6 +951,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "pause",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -962,6 +969,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "pause",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -976,6 +984,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "check pause",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -989,6 +998,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "check pause",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -1044,6 +1054,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "delete",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -1058,6 +1069,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "delete check",
+                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -1071,6 +1083,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 service,
                 &listeners_helper,
                 "delete check",
+                Box::new(|| Vec::new()),
             )?;
         }
 

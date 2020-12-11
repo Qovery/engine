@@ -17,6 +17,20 @@ pub trait Service {
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
+    fn workspace_directory(&self) -> String {
+        let dir_root = match self.service_type() {
+            ServiceType::Application => "applications",
+            ServiceType::ExternalService => "external-services",
+            ServiceType::Database(_) => "databases",
+            ServiceType::Router => "routers",
+        };
+
+        crate::fs::workspace_directory(
+            self.context().workspace_root_dir(),
+            self.context().execution_id(),
+            format!("{}/{}", dir_root, self.name()),
+        )
+    }
     fn version(&self) -> &str;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
