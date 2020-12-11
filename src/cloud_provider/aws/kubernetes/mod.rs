@@ -815,9 +815,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.exec_action(&stateful_deployment_target),
                 self,
                 service,
+                &stateful_deployment_target,
                 &listeners_helper,
                 "deployment",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -833,9 +833,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.exec_action(&stateless_deployment_target),
                 self,
                 service,
+                &stateless_deployment_target,
                 &listeners_helper,
                 "deployment",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -848,9 +848,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_create_check(),
                 self,
                 service,
+                &stateful_deployment_target,
                 &listeners_helper,
                 "check deployment",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -862,9 +862,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_create_check(),
                 self,
                 service,
+                &stateless_deployment_target,
                 &listeners_helper,
                 "check deployment",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -902,9 +902,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_create_error(&stateful_deployment_target),
                 self,
                 service,
+                &stateful_deployment_target,
                 &listeners_helper,
                 "revert deployment",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -920,9 +920,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_create_error(&stateless_deployment_target),
                 self,
                 service,
+                &stateless_deployment_target,
                 &listeners_helper,
                 "revert deployment",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -949,9 +949,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_pause(&stateful_deployment_target),
                 self,
                 service,
+                &stateful_deployment_target,
                 &listeners_helper,
                 "pause",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -967,9 +967,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_pause(&stateless_deployment_target),
                 self,
                 service,
+                &stateless_deployment_target,
                 &listeners_helper,
                 "pause",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -982,9 +982,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_pause_check(),
                 self,
                 service,
+                &stateful_deployment_target,
                 &listeners_helper,
                 "check pause",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -996,9 +996,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_pause_check(),
                 self,
                 service,
+                &stateless_deployment_target,
                 &listeners_helper,
                 "check pause",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -1052,9 +1052,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_delete(&stateful_deployment_target),
                 self,
                 service,
+                &stateful_deployment_target,
                 &listeners_helper,
                 "delete",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -1067,9 +1067,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_delete_check(),
                 self,
                 service,
+                &stateful_deployment_target,
                 &listeners_helper,
                 "delete check",
-                Box::new(|| Vec::new()),
             )?;
         }
 
@@ -1081,9 +1081,9 @@ impl<'a> Kubernetes for EKS<'a> {
                 service.on_delete_check(),
                 self,
                 service,
+                &stateless_deployment_target,
                 &listeners_helper,
                 "delete check",
-                Box::new(|| Vec::new()),
             )?;
         }
 

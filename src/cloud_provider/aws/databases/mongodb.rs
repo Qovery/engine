@@ -271,6 +271,10 @@ impl Service for MongoDB {
     fn total_instances(&self) -> u16 {
         1
     }
+
+    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 impl Database for MongoDB {}

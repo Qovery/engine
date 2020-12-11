@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
+use crate::cloud_provider::aws::common::get_stateless_resource_information_for_user;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -13,7 +14,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError};
 use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -222,6 +223,33 @@ impl Service for Application {
 
     fn total_instances(&self) -> u16 {
         self.total_instances
+    }
+
+    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
+        let (kubernetes, environment) = match deployment_target {
+            DeploymentTarget::ManagedServices(k, e) => (*k, *e),
+            DeploymentTarget::SelfHosted(k, e) => (*k, *e),
+        };
+
+        let workspace_dir = self.workspace_directory();
+        let selector = format!("app={}", self.name());
+
+        match get_stateless_resource_information_for_user(
+            kubernetes,
+            environment,
+            workspace_dir.as_str(),
+            selector.as_str(),
+        ) {
+            Ok(lines) => lines,
+            Err(err) => {
+                error!(
+                    "error while retrieving debug logs from application {}; error: {:?}",
+                    self.name(),
+                    err
+                );
+                Vec::new()
+            }
+        }
     }
 }
 

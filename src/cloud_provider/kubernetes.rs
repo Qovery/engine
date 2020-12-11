@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::Service;
-use crate::cloud_provider::CloudProvider;
+use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::dns_provider::DnsProvider;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel};
@@ -157,9 +157,9 @@ pub fn check_kubernetes_service_error<T>(
     result: Result<(), EngineError>,
     kubernetes: &dyn Kubernetes,
     service: &Box<T>,
+    deployment_target: &DeploymentTarget,
     listeners_helper: &ListenersHelper,
     action_verb: &str,
-    error_details_output_to_show_to_user: Box<dyn Fn() -> Vec<String>>,
 ) -> Result<(), EngineError>
 where
     T: Service + ?Sized,
@@ -200,7 +200,7 @@ where
                 kubernetes.context().execution_id(),
             ));
 
-            for line in error_details_output_to_show_to_user() {
+            for line in service.debug_logs(deployment_target) {
                 listeners_helper.error(ProgressInfo::new(
                     service.progress_scope(),
                     ProgressLevel::Info,

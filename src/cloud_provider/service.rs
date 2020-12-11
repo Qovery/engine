@@ -37,6 +37,7 @@ pub trait Service {
     fn total_cpus(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
+    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String>;
     fn is_listening(&self, ip: &str) -> bool {
         let private_port = match self.private_port() {
             Some(private_port) => private_port,

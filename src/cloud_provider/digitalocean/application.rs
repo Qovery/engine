@@ -335,4 +335,8 @@ impl Service for Application {
     fn total_instances(&self) -> u16 {
         self.total_instances
     }
+
+    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
+        Vec::new()
+    }
 }
