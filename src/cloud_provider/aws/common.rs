@@ -91,20 +91,22 @@ pub fn get_stateless_resource_information_for_user(
 
     for item in pods.items {
         for container_status in item.status.container_statuses {
-            if let Some(terminated) = container_status.last_state.terminated {
-                if let Some(message) = terminated.message {
-                    result.push(format!("terminated state message: {}", message));
+            if let Some(last_state) = container_status.last_state {
+                if let Some(terminated) = last_state.terminated {
+                    if let Some(message) = terminated.message {
+                        result.push(format!("terminated state message: {}", message));
+                    }
+
+                    result.push(format!(
+                        "terminated state exit code: {}",
+                        terminated.exit_code
+                    ));
                 }
 
-                result.push(format!(
-                    "terminated state exit code: {}",
-                    terminated.exit_code
-                ));
-            }
-
-            if let Some(waiting) = container_status.last_state.waiting {
-                if let Some(message) = waiting.message {
-                    result.push(format!("waiting state message: {}", message));
+                if let Some(waiting) = last_state.waiting {
+                    if let Some(message) = waiting.message {
+                        result.push(format!("waiting state message: {}", message));
+                    }
                 }
             }
         }

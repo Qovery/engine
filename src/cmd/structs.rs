@@ -109,7 +109,7 @@ pub enum KubernetesPodStatusPhase {
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodContainerStatus {
     #[serde(rename = "last_state")]
-    pub last_state: KubernetesPodContainerStatusLastState,
+    pub last_state: Option<KubernetesPodContainerStatusLastState>,
     pub ready: bool,
 }
 
