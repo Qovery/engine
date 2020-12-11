@@ -1,6 +1,6 @@
 # due to tags, (applied on kube cluster and pools), all droplets (scaled) will me automatically attached to the firewall below
 resource "digitalocean_tag" "cluster_tag" {
-  name = var.oks_master_name
+  name = var.oks_cluster_id
 }
 
 resource "digitalocean_firewall" "qovery_firewall" {
