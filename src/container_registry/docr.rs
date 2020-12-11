@@ -245,6 +245,16 @@ impl DOCR {
     }
 }
 
+pub fn path_to_retrieve_all_tags_from_registry(
+    registry_name: String,
+    repository_name: String,
+) -> String {
+    format!(
+        "https://api.digitalocean.com/v2/registry/{}/repositories/{}/tags",
+        registry_name, repository_name
+    )
+}
+
 // generate the right header for digital ocean with token
 pub fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
     let mut headers = header::HeaderMap::new();
@@ -298,8 +308,66 @@ impl ContainerRegistry for DOCR {
         unimplemented!()
     }
 
-    fn does_image_exists(&self, _image: &Image) -> bool {
-        unimplemented!()
+    fn does_image_exists(&self, image: &Image) -> bool {
+        let mut headers = get_header_with_bearer(self.api_key.as_str());
+        let res = reqwest::blocking::Client::new()
+            .get(
+                path_to_retrieve_all_tags_from_registry(
+                    self.registry_name.clone(),
+                    image.name.clone(),
+                )
+                .as_str(),
+            )
+            .headers(headers)
+            .send();
+        let body = match res {
+            Ok(output) => match output.status() {
+                StatusCode::OK => output.text(),
+                _ => {
+                    error!(
+                        "While tyring to get all tags for image: {}, maybe this image not exist !",
+                        &image.name
+                    );
+                    return false;
+                }
+            },
+            Err(_) => {
+                error!(
+                    "While trying to communicate with DigitalOcean API to retrieve all tags for image {}",
+                    &image.name
+                );
+                return false;
+            }
+        };
+        match body {
+            Ok(out) => {
+                let body_de = serde_json::from_str::<DescribeTagsForImage>(&out);
+                match body_de {
+                    Ok(tags_list) => {
+                        for tag_element in tags_list.tags {
+                            if tag_element.tag.eq(&image.tag) {
+                                return true;
+                            }
+                        }
+                        false
+                    }
+                    Err(e) => {
+                        error!(
+                            "Unable to deserialize tags from  DigitalOcean API for image {}",
+                            &image.tag
+                        );
+                        return false;
+                    }
+                }
+            }
+            _ => {
+                error!(
+                    "while retrieving tags for image {} Unable to get output from DigitalOcean API",
+                    &image.name
+                );
+                return false;
+            }
+        }
     }
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
@@ -440,4 +508,34 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
             ));
         }
     }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DescribeTagsForImage {
+    pub tags: Vec<Tag>,
+    pub meta: Meta,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tag {
+    #[serde(rename = "registry_name")]
+    pub registry_name: String,
+    pub repository: String,
+    pub tag: String,
+    #[serde(rename = "manifest_digest")]
+    pub manifest_digest: String,
+    #[serde(rename = "compressed_size_bytes")]
+    pub compressed_size_bytes: i64,
+    #[serde(rename = "size_bytes")]
+    pub size_bytes: i64,
+    #[serde(rename = "updated_at")]
+    pub updated_at: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Meta {
+    pub total: i64,
 }
