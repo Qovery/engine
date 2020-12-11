@@ -429,9 +429,9 @@ impl Create for Router {
             );
 
             match external_ingress_hostname_custom_result {
-                Ok(elb) => {
+                Ok(do_lb_ip) => {
                     //put it in the context
-                    context.insert("nlb_ingress_hostname", &elb);
+                    context.insert("do_lb_ingress_ip", &do_lb_ip);
                 }
                 Err(_) => error!("Error getting the NLB endpoint to be able to configure TLS"),
             }
