@@ -248,8 +248,7 @@ controller:
       service.beta.kubernetes.io/do-loadbalancer-name: nginx-qovery
       service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
       service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
-      service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: "true"
-      service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-medium"
+      service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
 
     labels: {}
     ## Deprecated, instead simply do not provide a clusterIP value
