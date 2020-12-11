@@ -21,7 +21,7 @@ metadata:
     kubernetes.io/ingress.class: "{{ id }}"
     # this domain should be CNAME-ed by the client. ex: app.foo.bar -> app.qovery.io
     external-dns.alpha.kubernetes.io/hostname: {{ custom_domain.target_domain }}
-    external-dns.alpha.kubernetes.io/target: {{ nlb_ingress_hostname }}
+    external-dns.alpha.kubernetes.io/target: {{ do_lb_ingress_ip }}
     external-dns.alpha.kubernetes.io/ttl: "300"
 spec:
   tls:
