@@ -143,16 +143,11 @@ impl PostgreSQL {
         context
     }
 
-    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), EngineError> {
+    fn delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let workspace_dir = self.workspace_directory();
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                if is_error {
-                    // do not delete if it is an error
-                    return Ok(());
-                }
-
                 let context = self.tera_context(*kubernetes, *environment);
 
                 let _ = cast_simple_error_to_engine_error(
@@ -228,20 +223,6 @@ impl PostgreSQL {
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 let helm_release_name = self.helm_release_name();
-                let selector = format!("app={}", self.name());
-
-                if is_error {
-                    let _ = cast_simple_error_to_engine_error(
-                        self.engine_error_scope(),
-                        self.context.execution_id(),
-                        common::get_stateless_resource_information(
-                            *kubernetes,
-                            *environment,
-                            workspace_dir.as_str(),
-                            selector.as_str(),
-                        ),
-                    )?;
-                }
 
                 // clean the resource
                 let _ = cast_simple_error_to_engine_error(
@@ -506,7 +487,7 @@ impl Create for PostgreSQL {
             self.name()
         );
 
-        self.delete(target, true)
+        Ok(())
     }
 }
 
@@ -536,7 +517,7 @@ impl Pause for PostgreSQL {
 impl Delete for PostgreSQL {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.PostgreSQL.on_delete() called for {}", self.name());
-        self.delete(target, false)
+        self.delete(target)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -548,7 +529,8 @@ impl Delete for PostgreSQL {
             "AWS.PostgreSQL.on_create_error() called for {}",
             self.name()
         );
-        self.delete(target, true)
+
+        Ok(())
     }
 }
 

@@ -10,10 +10,10 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
-use crate::cmd::structs::LabelsContent;
 
 pub struct MongoDB {
     context: Context,
@@ -99,7 +99,11 @@ impl MongoDB {
                     .downcast_ref::<AWS>()
                     .unwrap();
 
-                utilities::create_namespace_without_labels(&environment.namespace(), kube_config.as_str(), aws);
+                utilities::create_namespace_without_labels(
+                    &environment.namespace(),
+                    kube_config.as_str(),
+                    aws,
+                );
             }
             Err(e) => error!(
                 "Failed to generate the kubernetes config file path: {:?}",
@@ -138,16 +142,11 @@ impl MongoDB {
         context
     }
 
-    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), EngineError> {
+    fn delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let workspace_dir = self.workspace_directory();
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                if is_error {
-                    // do not delete if it is an error
-                    return Ok(());
-                }
-
                 let context = self.tera_context(*kubernetes, *environment);
 
                 let _ = cast_simple_error_to_engine_error(
@@ -223,20 +222,6 @@ impl MongoDB {
             }
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 let helm_release_name = self.helm_release_name();
-                let selector = format!("app={}", self.name());
-
-                if is_error {
-                    let _ = cast_simple_error_to_engine_error(
-                        self.engine_error_scope(),
-                        self.context.execution_id(),
-                        common::get_stateless_resource_information(
-                            *kubernetes,
-                            *environment,
-                            workspace_dir.as_str(),
-                            selector.as_str(),
-                        ),
-                    )?;
-                }
 
                 // clean the resource
                 let _ = cast_simple_error_to_engine_error(
@@ -419,10 +404,12 @@ impl Create for MongoDB {
 
                 // define labels to add to namespace
                 let namespace_labels = match self.context.resource_expiration_in_seconds() {
-                    Some(v) => Some(vec![(LabelsContent{
-                        name: "ttl".to_string(),
-                        value: format!{"{}", self.context.resource_expiration_in_seconds().unwrap()},
-                    })]),
+                    Some(v) => Some(vec![
+                        (LabelsContent {
+                            name: "ttl".to_string(),
+                            value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
+                        }),
+                    ]),
                     None => None,
                 };
 
@@ -495,8 +482,7 @@ impl Create for MongoDB {
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.MongoDB.on_create_error() called for {}", self.name());
-
-        self.delete(target, true)
+        Ok(())
     }
 }
 
@@ -526,7 +512,7 @@ impl Pause for MongoDB {
 impl Delete for MongoDB {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.MongoDB.on_delete() called for {}", self.name());
-        self.delete(target, false)
+        self.delete(target)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -535,7 +521,7 @@ impl Delete for MongoDB {
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.MongoDB.on_create_error() called for {}", self.name());
-        self.delete(target, true)
+        Ok(())
     }
 }
 

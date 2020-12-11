@@ -5,6 +5,8 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::de::DeserializeOwned;
 
+use crate::cloud_provider::digitalocean::api_structs;
+use crate::cloud_provider::digitalocean::api_structs::svc::DOKubernetesList;
 use crate::cmd::structs::{
     Item, KubernetesEvent, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod,
     KubernetesPodStatusPhase, KubernetesService, LabelsContent,
@@ -67,6 +69,81 @@ where
 
     let output_string: String = output_vec.join("");
     Ok(output_string)
+}
+
+// Get ip external ingress
+// CAUTION: use it only with DigitalOcean
+pub fn do_kubectl_exec_get_external_ingress_ip<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<String>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let mut output_vec: Vec<String> = Vec::with_capacity(20);
+    let _ = kubectl_exec_with_output(
+        vec![
+            "get", "svc", "-o", "json", "-n", namespace, "-l", // selector
+            selector,
+        ],
+        _envs,
+        |out| match out {
+            Ok(line) => output_vec.push(line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+
+    let output_string: String = output_vec.join("");
+
+    let result = match serde_json::from_str::<DOKubernetesList>(output_string.as_str()) {
+        Ok(x) => x,
+        Err(err) => {
+            error!("{:?}", err);
+            error!("{}", output_string.as_str());
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some(output_string),
+            ));
+        }
+    };
+
+    if result.items.is_empty()
+        || result
+            .items
+            .first()
+            .unwrap()
+            .status
+            .load_balancer
+            .ingress
+            .is_empty()
+    {
+        return Ok(None);
+    }
+
+    // FIXME unsafe unwrap here?
+    Ok(Some(
+        result
+            .items
+            .first()
+            .unwrap()
+            .status
+            .load_balancer
+            .ingress
+            .first()
+            .unwrap()
+            .ip
+            .clone(),
+    ))
 }
 
 pub fn kubectl_exec_get_external_ingress_hostname<P>(

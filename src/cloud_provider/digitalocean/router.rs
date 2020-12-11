@@ -5,6 +5,7 @@ use crate::cloud_provider::service::{
     Action, Create, Delete, Pause, Router as RRouter, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::helm::Timeout;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::{Context, Listeners};
@@ -145,7 +146,7 @@ impl Router {
             Ok(kubernetes_config_file_path_string) => {
                 // Default domain
                 let external_ingress_hostname_default =
-                    crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
+                    crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                         kubernetes_config_file_path_string.as_str(),
                         "nginx-ingress",
                         "app=nginx-ingress,component=controller",
@@ -163,14 +164,14 @@ impl Router {
                         }
                     }
                     _ => {
-                        error!("can't fetch kubernetes config file - what's wrong? This must never happened");
+                        error!("can't fetch external ingress ip");
                     }
                 }
 
                 // Check if there is a custom domain first
                 if !self.custom_domains.is_empty() {
                     let external_ingress_hostname_custom =
-                        crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
+                        crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                             kubernetes_config_file_path_string.as_str(),
                             environment.namespace(),
                             "app=nginx-ingress,component=controller",
@@ -192,7 +193,7 @@ impl Router {
                             }
                         }
                         _ => {
-                            error!("can't fetch kubernetes config file - what's wrong? This must never happened");
+                            error!("can't fetch external_ingress_hostname_custom - what's wrong? This must never happened");
                         }
                     }
                     context.insert("app_id", kubernetes.id());
@@ -401,8 +402,8 @@ impl Create for Router {
             let external_ingress_hostname_custom_result = retry::retry(
                 Fibonacci::from_millis(3000).take(10),
                 || {
-                    let external_ingress_hostname_custom =
-                        crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
+                    let external_ingress_ip_custom =
+                        crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                             kubernetes_config_file_path.as_str(),
                             environment.namespace(),
                             format!(
@@ -413,9 +414,9 @@ impl Create for Router {
                             do_credentials_envs.clone(),
                         );
 
-                    match external_ingress_hostname_custom {
-                        Ok(external_ingress_hostname_custom) => {
-                            OperationResult::Ok(external_ingress_hostname_custom)
+                    match external_ingress_ip_custom {
+                        Ok(external_ingress_ip_custom) => {
+                            OperationResult::Ok(external_ingress_ip_custom)
                         }
                         Err(err) => {
                             error!(
@@ -428,15 +429,48 @@ impl Create for Router {
             );
 
             match external_ingress_hostname_custom_result {
-                Ok(elb) => {
+                Ok(do_lb_ip) => {
                     //put it in the context
-                    context.insert("nlb_ingress_hostname", &elb);
+                    context.insert("do_lb_ingress_ip", &do_lb_ip);
                 }
                 Err(_) => error!("Error getting the NLB endpoint to be able to configure TLS"),
             }
         }
 
-        //TODO install and configure TLS
+        let from_dir = format!(
+            "{}/digitalocean/charts/q-ingress-tls",
+            self.context.lib_root_dir()
+        );
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                from_dir.as_str(),
+                workspace_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        // do exec helm upgrade and return the last deployment status
+        let helm_history_row = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::cmd::helm::helm_exec_with_upgrade_history(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                helm_release_name.as_str(),
+                workspace_dir.as_str(),
+                Timeout::Default,
+                do_credentials_envs.clone(),
+            ),
+        )?;
+
+        if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
+            return Err(self.engine_error(
+                EngineErrorCause::Internal,
+                "Router has failed to be deployed".into(),
+            ));
+        }
 
         Ok(())
     }

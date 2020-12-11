@@ -18,13 +18,13 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   set {
-    name = "image.tag"
-    value = data.external.get_engine_version_to_use.result.version
+    name = "volumes.storageClassName"
+    value = "aws-ebs-gp2-0"
   }
 
   set {
-    name = "environmentVariables.ENGINE_RES_URL"
-    value = "https://prod-qengine-resources.s3.eu-west-3.amazonaws.com/${data.external.get_engine_version_to_use.result.version}-lib.tgz"
+    name = "image.tag"
+    value = data.external.get_engine_version_to_use.result.version
   }
 
   set {

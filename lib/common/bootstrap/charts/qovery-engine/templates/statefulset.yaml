@@ -1,6 +1,6 @@
 {{- $kubefullname := include "qovery-engine.fullname" . }}
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: qovery-engine
   namespace: {{ .Values.namespace }}
@@ -8,6 +8,7 @@ metadata:
     {{- include "qovery-engine.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  serviceName: qovery-engine
   selector:
     matchLabels:
       {{- include "qovery-engine.selectorLabels" . | nindent 6 }}
@@ -28,6 +29,20 @@ spec:
       serviceAccountName: {{ include "qovery-engine.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: clean-data
+          image: busybox:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              rm -Rf {{ .Values.volumes.qoveryWorkspace.path }}/* {{ .Values.volumes.dockerGraphStorage.path }}/*
+              chmod 777 {{ .Values.volumes.qoveryWorkspace.path }} {{ .Values.volumes.dockerGraphStorage.path }}
+          volumeMounts:
+            - name: docker-graph-storage
+              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
+            - name: qovery-workspace
+              mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
       containers:
         - name: qovery-engine
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -42,6 +57,9 @@ spec:
             {{ end }}
           resources:
             {{- toYaml .Values.engineResources | nindent 12 }}
+          volumeMounts:
+            - name: qovery-workspace
+              mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
         - name: docker-build
           image: "{{ .Values.buildContainer.image }}:{{ .Values.buildContainer.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -66,21 +84,7 @@ spec:
           {{- toYaml .Values.buildResources | nindent 12 }}
           volumeMounts:
             - name: docker-graph-storage
-              mountPath: /var/lib/docker
-            - name: qovery-workspace
-              mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
-      dnsPolicy: "None"
-      dnsConfig:
-        nameservers:
-          - 1.1.1.1
-          - 8.8.8.8
-        searches:
-          - cluster.local
-          - svc.cluster.local
-        options:
-          - name: ndots
-            value: "3"
-          - name: edns0
+              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -93,9 +97,26 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      volumes:
-      - name: docker-graph-storage
-        emptyDir: {}
-      - name: qovery-workspace
-        emptyDir:
-          sizeLimit: {{ .Values.volumes.qoveryWorkspace.size }}
+  volumeClaimTemplates:
+  - metadata:
+      name: docker-graph-storage
+      labels:
+        {{- include "qovery-engine.labels" . | nindent 8 }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: {{ .Values.volumes.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.volumes.dockerGraphStorage.size }}
+  - metadata:
+      name: qovery-workspace
+      labels:
+        {{- include "qovery-engine.labels" . | nindent 8 }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: {{ .Values.volumes.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.volumes.qoveryWorkspace.size }}
