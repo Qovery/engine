@@ -1,5 +1,6 @@
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::databases::utilities::generate_supported_version;
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -12,8 +13,9 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
+use std::collections::HashMap;
 
 pub struct MySQL {
     context: Context,
@@ -584,5 +586,94 @@ impl Backup for MySQL {
 
     fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
+    }
+}
+
+fn get_mysql_version(
+    requested_version: &str,
+    is_managed_service: bool,
+) -> Result<String, StringError> {
+    let mut supported_mysql_versions = HashMap::new();
+    let mut database_name = "MySQL";
+
+    if is_managed_service {
+        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
+        database_name = "RDS MySQL";
+
+        // v56
+        let mut v56 = generate_supported_version(5, 6, 6, Some(34), Some(49), None);
+        v56.remove("5.6.47");
+        v56.remove("5.6.45");
+        v56.remove("5.6.42");
+        v56.remove("5.6.38");
+        v56.remove("5.6.36");
+        supported_mysql_versions.extend(v56);
+
+        // v5.7
+        let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
+        v57.remove("5.7.29");
+        v57.remove("5.7.27");
+        v57.remove("5.7.20");
+        v57.remove("5.7.18");
+        supported_mysql_versions.extend(v57);
+
+        // v8
+        let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
+        v8.remove("8.0.18");
+        v8.remove("8.0.14");
+        v8.remove("8.0.12");
+        supported_mysql_versions.extend(v8);
+    } else {
+        // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
+
+        // v5.6
+        let mut v56 = generate_supported_version(5, 6, 6, Some(34), Some(49), None);
+        supported_mysql_versions.extend(v56);
+
+        // v5.7
+        let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
+        supported_mysql_versions.extend(v57);
+
+        // v8
+        let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
+        supported_mysql_versions.extend(v8);
+    }
+
+    utilities::get_supported_version_to_use(
+        database_name,
+        supported_mysql_versions,
+        requested_version,
+    )
+}
+
+#[cfg(test)]
+mod tests_mysql {
+    use crate::cloud_provider::aws::databases::mysql::get_mysql_version;
+    use std::collections::HashMap;
+
+    #[test]
+    fn check_mysql_version() {
+        // managed version
+        assert_eq!(get_mysql_version("8", true).unwrap(), "8.0.21");
+        assert_eq!(get_mysql_version("8.0", true).unwrap(), "8.0.21");
+        assert_eq!(get_mysql_version("8.0.16", true).unwrap(), "8.0.16");
+        assert_eq!(
+            get_mysql_version("8.0.18", true)
+                .unwrap_err()
+                .message
+                .as_str(),
+            "this RDS MySQL 8.0.18 version is not supported"
+        );
+        // self-hosted version
+        assert_eq!(get_mysql_version("5", false).unwrap(), "5.7.31");
+        assert_eq!(get_mysql_version("5.7", false).unwrap(), "5.7.31");
+        assert_eq!(get_mysql_version("5.7.31", false).unwrap(), "5.7.31");
+        assert_eq!(
+            get_mysql_version("1.0", false)
+                .unwrap_err()
+                .message
+                .as_str(),
+            "this MySQL 1.0 version is not supported"
+        );
     }
 }

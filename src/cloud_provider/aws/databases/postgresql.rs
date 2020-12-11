@@ -1,5 +1,6 @@
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::databases::utilities::generate_supported_version;
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -12,8 +13,9 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
+use std::collections::HashMap;
 
 pub struct PostgreSQL {
     context: Context,
@@ -595,5 +597,89 @@ impl Backup for PostgreSQL {
 
     fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
+    }
+}
+
+fn get_postgres_version(
+    requested_version: &str,
+    is_managed_service: bool,
+) -> Result<String, StringError> {
+    let mut supported_postgres_versions = HashMap::new();
+
+    if is_managed_service {
+        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
+
+        // v10
+        let mut v10 = generate_supported_version(10, 1, 14, None, None, None);
+        v10.remove("10.2"); // non supported version by AWS
+        v10.remove("10.8"); // non supported version by AWS
+        supported_postgres_versions.extend(v10);
+
+        // v11
+        let mut v11 = generate_supported_version(11, 1, 9, None, None, None);
+        v11.remove("11.3"); // non supported version by AWS
+        supported_postgres_versions.extend(v11);
+
+        // v12
+        let v12 = generate_supported_version(12, 2, 4, None, None, None);
+        supported_postgres_versions.extend(v12);
+    } else {
+        // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
+
+        // v10
+        let mut v10 = generate_supported_version(10, 1, 14, Some(0), Some(0), None);
+        supported_postgres_versions.extend(v10);
+
+        // v11
+        let mut v11 = generate_supported_version(11, 1, 9, Some(0), Some(0), None);
+        supported_postgres_versions.extend(v11);
+
+        // v12
+        let v12 = generate_supported_version(12, 2, 4, Some(0), Some(0), None);
+        supported_postgres_versions.extend(v12);
+    }
+
+    utilities::get_supported_version_to_use(
+        "Postgresql",
+        supported_postgres_versions,
+        requested_version,
+    )
+}
+
+#[cfg(test)]
+mod tests_postgres {
+    use crate::cloud_provider::aws::databases::postgresql::get_postgres_version;
+    use std::collections::HashMap;
+
+    #[test]
+    fn check_postgres_version() {
+        // managed version
+        assert_eq!(get_postgres_version("12", true).unwrap(), "12.4");
+        assert_eq!(get_postgres_version("12.3", true).unwrap(), "12.3");
+        assert_eq!(
+            get_postgres_version("12.3.0", true)
+                .unwrap_err()
+                .message
+                .as_str(),
+            "this Postgresql 12.3.0 version is not supported"
+        );
+        assert_eq!(
+            get_postgres_version("11.3", true)
+                .unwrap_err()
+                .message
+                .as_str(),
+            "this Postgresql 11.3 version is not supported"
+        );
+        // self-hosted version
+        assert_eq!(get_postgres_version("12", false).unwrap(), "12.4.0");
+        assert_eq!(get_postgres_version("12.3", false).unwrap(), "12.3.0");
+        assert_eq!(get_postgres_version("12.3.0", false).unwrap(), "12.3.0");
+        assert_eq!(
+            get_postgres_version("1.0", false)
+                .unwrap_err()
+                .message
+                .as_str(),
+            "this Postgresql 1.0 version is not supported"
+        );
     }
 }
