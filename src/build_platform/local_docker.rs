@@ -2,7 +2,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
-use crate::error::{EngineError, EngineErrorCause};
+use crate::error::{EngineError, EngineErrorCause, SimpleError};
 use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
 use crate::models::{
@@ -10,6 +10,8 @@ use crate::models::{
     ProgressScope,
 };
 use crate::{cmd, git};
+use fs2::FsStats;
+use futures::io::Error;
 
 /// use Docker in local
 pub struct LocalDocker {
@@ -228,6 +230,25 @@ impl BuildPlatform for LocalDocker {
             None => vec![],
         };
 
+        // ensure there is enough disk space left before building a new image
+        let docker_path = Path::new("/var/lib/docker");
+        let docker_path_size_info = fs2::statvfs(docker_path).unwrap();
+        let docker_max_disk_percentage_usage_before_purge = 50; // arbitrary percentage that should make the job anytime
+
+        let docker_percentage_used =
+            docker_path_size_info.available_space() * 100 / docker_path_size_info.total_space();
+
+        if docker_percentage_used > docker_max_disk_percentage_usage_before_purge {
+            warn!(
+                "Docker disk usage is higher than {}%, requesting cleaning",
+                docker_max_disk_percentage_usage_before_purge
+            );
+            match docker_prune_images(envs.clone()) {
+                Err(e) => error!("error while purging docker images: {:?}", e.message),
+                _ => info!("docker images have been purged"),
+            };
+        };
+
         // docker build
         let exit_status = cmd::utilities::exec_with_envs_and_output(
             "docker",
@@ -313,4 +334,23 @@ impl BuildPlatform for LocalDocker {
         // FIXME
         Err(self.engine_error(EngineErrorCause::Internal, message))
     }
+}
+
+pub fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
+    let mut docker_args = vec!["image", "prune", "-a", "-f"];
+    let envs = Vec::new();
+
+    cmd::utilities::exec_with_envs_and_output(
+        "docker",
+        docker_args,
+        envs,
+        |line| {
+            let line_string = line.unwrap();
+            debug!("{}", line_string.as_str());
+        },
+        |line| {
+            let line_string = line.unwrap();
+            debug!("{}", line_string.as_str());
+        },
+    )
 }
