@@ -30,45 +30,45 @@ variable "test_cluster" {
   type = string
 }
 
-// kubernetes MASTER cluster
-variable "oks_master_name" {
+// kubernetes first worker cluster
+variable "doks_master_name" {
   default = "{{ oks_master_name }}"
   type    = string
 }
 
-variable "oks_version" {
+variable "doks_version" {
   default = "{{ oks_version }}"
   type    = string
 }
 
-variable "oks_cluster_id" {
+variable "doks_cluster_id" {
   default = "{{ oks_cluster_id }}"
   type    = string
 }
 
-variable "oks_master_size" {
+variable "doks_master_size" {
   default = "{{ oks_master_size }}"
   type    = string
 }
 
-variable "oks_master_node_count" {
+variable "doks_master_node_count" {
   default = 5
   type = number
 }
 
-variable "oks_master_autoscale" {
-  default = false
+variable "doks_master_autoscale" {
+  default = true
   type    = bool
 }
 
-// kubernetes WORKER cluster
-variable "oks_pool_name" {
+// kubernetes WORKER second cluster
+variable "doks_pool_name" {
   default = "{{ oks_master_name }}"
   type    = string
 }
 
-variable "oks_pool_autoscale" {
-  default = false
+variable "doks_pool_autoscale" {
+  default = true
   type    = bool
 }
 
