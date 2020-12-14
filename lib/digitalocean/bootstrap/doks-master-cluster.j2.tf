@@ -10,6 +10,7 @@ resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
   {% for doks_worker_node in doks_worker_nodes %}
   {%- if loop.index == 1  %}
     size = "{{ doks_worker_node.instance_type }}"
+    # don't need to deploy cluster auto-scaler it's integrated into digitalocean
     auto_scale = true
     min_nodes  = "{{ doks_worker_node.min_size }}"
     max_nodes  = "{{ doks_worker_node.max_size }}"
