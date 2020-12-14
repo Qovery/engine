@@ -90,7 +90,6 @@ pub fn do_kubernetes_nodes() -> Vec<Node> {
         Node::new_with_cpu_and_mem(4, 8),
         Node::new_with_cpu_and_mem(4, 8),
         Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
     ]
 }
 
