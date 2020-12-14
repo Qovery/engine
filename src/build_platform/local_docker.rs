@@ -2,7 +2,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
+use crate::error::{EngineError, EngineErrorCause, SimpleError};
 use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
 use crate::models::{
