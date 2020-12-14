@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::thread;
 
+use crate::build_platform::BuildResult;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Application, Service};
 use crate::container_registry::PushResult;
@@ -138,57 +139,50 @@ impl<'a> Transaction<'a> {
             .external_services
             .iter()
             // build only applications that are set with Action: Create
-            .filter(|es| es.action == Action::Create)
-            .filter(|es| {
-                // get useful services only
-                if option.force_build {
-                    // forcing build means building all services
-                    true
-                } else {
-                    let image = es.to_image();
-                    // return service only if it does not exist on the targeted container registry
-                    !self.engine.container_registry().does_image_exists(&image)
-                }
-            });
+            .filter(|es| es.action == Action::Create);
 
         let external_service_and_result_tuples = external_services_to_build
             .map(|es| {
-                (
-                    es,
+                let image = es.to_image();
+                let build_result = if option.force_build
+                    || !self.engine.container_registry().does_image_exists(&image)
+                {
+                    // only if the build is forced OR if the image does not exist in the registry
                     self.engine
                         .build_platform()
-                        .build(es.to_build(), option.force_build),
-                )
+                        .build(es.to_build(), option.force_build)
+                } else {
+                    // use the cache
+                    Ok(BuildResult::new(es.to_build()))
+                };
+
+                (es, build_result)
             })
             .collect::<Vec<_>>();
 
         // do the same for applications
-
         let apps_to_build = environment
             .applications
             .iter()
             // build only applications that are set with Action: Create
-            .filter(|app| app.action == Action::Create)
-            .filter(|app| {
-                // get useful services only
-                if option.force_build {
-                    // forcing build means building all services
-                    true
-                } else {
-                    let image = app.to_image();
-                    // return service only if it does not exist on the targeted container registry
-                    !self.engine.container_registry().does_image_exists(&image)
-                }
-            });
+            .filter(|app| app.action == Action::Create);
 
         let application_and_result_tuples = apps_to_build
             .map(|app| {
-                (
-                    app,
+                let image = app.to_image();
+                let build_result = if option.force_build
+                    || !self.engine.container_registry().does_image_exists(&image)
+                {
+                    // only if the build is forced OR if the image does not exist in the registry
                     self.engine
                         .build_platform()
-                        .build(app.to_build(), option.force_build),
-                )
+                        .build(app.to_build(), option.force_build)
+                } else {
+                    // use the cache
+                    Ok(BuildResult::new(app.to_build()))
+                };
+
+                (app, build_result)
             })
             .collect::<Vec<_>>();
 
@@ -214,7 +208,7 @@ impl<'a> Transaction<'a> {
                 &build_result.build.image,
                 self.engine.cloud_provider(),
             ) {
-                Some(x) => applications.push(x),
+                Some(app) => applications.push(app),
                 None => {}
             }
         }
@@ -238,7 +232,7 @@ impl<'a> Transaction<'a> {
                 &build_result.build.image,
                 self.engine.cloud_provider(),
             ) {
-                Some(x) => applications.push(x),
+                Some(app) => applications.push(app),
                 None => {}
             }
         }

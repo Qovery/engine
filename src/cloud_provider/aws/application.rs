@@ -14,7 +14,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
