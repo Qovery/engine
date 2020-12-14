@@ -12,14 +12,12 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::cmd::structs::{HelmHistoryRow, LabelsContent};
+use crate::cmd::structs::LabelsContent;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::container_registry::docr::{
     get_current_registry_name, subscribe_kube_cluster_to_container_registry,
 };
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError,
-};
+use crate::error::{cast_simple_error_to_engine_error, EngineError};
 use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -229,9 +227,9 @@ impl Create for Application {
                     Timeout::Value(self.start_timeout_in_seconds),
                     digitalocean_envs.clone(),
                 ) {
-                    Ok(upgrade) => {
+                    Ok(_) => {
                         let selector = format!("app={}", self.name());
-                        crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
+                        let _ = crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
                             path.as_str(),
                             environment.namespace(),
                             selector.as_str(),

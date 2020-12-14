@@ -6,9 +6,7 @@ use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::common::{
-    get_stateless_resource_information_for_user, kubernetes_config_path,
-};
+use crate::cloud_provider::aws::common::kubernetes_config_path;
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -19,13 +17,11 @@ use crate::cloud_provider::kubernetes::{
 use crate::cloud_provider::service::Service;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
-use crate::cmd::kubectl::{
-    kubectl_exec_delete_namespace, kubectl_exec_describe_pod, kubectl_exec_get_all_namespaces,
-};
+use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -746,7 +742,7 @@ impl<'a> Kubernetes for EKS<'a> {
         info!("Delete all remaining deployed helm applications");
         match cmd::helm::helm_list(&kubernetes_config_file_path2, aws_credentials_envs.clone()) {
             Ok(helm_list) => {
-                cmd::helm::helm_uninstall_list(
+                let _ = cmd::helm::helm_uninstall_list(
                     &kubernetes_config_file_path2,
                     helm_list,
                     aws_credentials_envs.clone(),
@@ -769,7 +765,8 @@ impl<'a> Kubernetes for EKS<'a> {
                 info!("Deleting S3 Bucket containing Kubeconfig");
                 let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
                 let _region = Region::from_str(self.region()).unwrap();
-                s3::delete_bucket(
+
+                let _ = s3::delete_bucket(
                     self.cloud_provider.access_key_id.as_str(),
                     self.cloud_provider.secret_access_key.as_str(),
                     s3_kubeconfig_bucket.clone().as_str(),

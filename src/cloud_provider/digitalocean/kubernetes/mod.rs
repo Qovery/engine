@@ -1,4 +1,4 @@
-use crate::cloud_provider::common::workerNodeDataTemplate::WorkerNodeDataTemplate;
+use crate::cloud_provider::common::worker_node_data_template::WorkerNodeDataTemplate;
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
@@ -13,11 +13,9 @@ use crate::models::{
     ProgressScope,
 };
 use crate::string::terraform_list_format;
-use digitalocean::api::Region;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
-use std::str::FromStr;
 use std::thread;
 use tera::Context as TeraContext;
 
@@ -50,7 +48,7 @@ pub struct DOKS<'a> {
     region: String,
     cloud_provider: &'a DO,
     nodes: Vec<Node>,
-    dns_provider: &'a DnsProvider,
+    dns_provider: &'a dyn DnsProvider,
     template_directory: String,
     options: Options,
     listeners: Listeners,
@@ -64,7 +62,7 @@ impl<'a> DOKS<'a> {
         version: &str,
         region: &str,
         cloud_provider: &'a DO,
-        dns_provider: &'a DnsProvider,
+        dns_provider: &'a dyn DnsProvider,
         options: Options,
         nodes: Vec<Node>,
     ) -> Self {

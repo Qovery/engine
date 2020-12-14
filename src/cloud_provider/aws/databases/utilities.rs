@@ -34,7 +34,7 @@ pub fn create_namespace_without_labels(namespace: &str, kube_config: &str, aws: 
         (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
         (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
     ];
-    kubectl_exec_create_namespace(kube_config, namespace, None, aws_credentials_envs);
+    let _ = kubectl_exec_create_namespace(kube_config, namespace, None, aws_credentials_envs);
 }
 
 pub fn delete_terraform_tfstate_secret(
@@ -64,7 +64,12 @@ pub fn delete_terraform_tfstate_secret(
     match kubernetes_config_file_path {
         Ok(kube_config) => {
             //create the namespace to insert the tfstate in secrets
-            kubectl_exec_delete_secret(kube_config, "tfstate-default-state", aws_credentials_envs);
+            let _ = kubectl_exec_delete_secret(
+                kube_config,
+                "tfstate-default-state",
+                aws_credentials_envs,
+            );
+
             Ok(())
         }
         Err(e) => {

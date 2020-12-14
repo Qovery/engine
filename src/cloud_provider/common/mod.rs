@@ -1,1 +1,1 @@
-pub mod workerNodeDataTemplate;
+pub mod worker_node_data_template;

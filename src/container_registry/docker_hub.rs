@@ -1,4 +1,3 @@
-
 use crate::build_platform::Image;
 use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
@@ -6,7 +5,7 @@ use crate::error::EngineErrorCause;
 use crate::models::{Context, Listener, Listeners};
 extern crate reqwest;
 
-use reqwest::{StatusCode};
+use reqwest::StatusCode;
 pub struct DockerHub {
     context: Context,
     id: String,
@@ -49,7 +48,7 @@ impl ContainerRegistry for DockerHub {
     fn is_valid(&self) -> Result<(), EngineError> {
         // check the version of docker and print it as info
         let mut output_from_cmd = String::new();
-        cmd::utilities::exec_with_output(
+        let _ = cmd::utilities::exec_with_output(
             "docker",
             vec!["--version"],
             |r_out| match r_out {
@@ -61,6 +60,7 @@ impl ContainerRegistry for DockerHub {
                 Err(e) => error!("Error while getting stderr from docker {}", e),
             },
         );
+
         info!("Using Docker: {}", output_from_cmd);
         Ok(())
     }

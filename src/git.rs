@@ -71,7 +71,7 @@ pub fn checkout(repo: &Repository, commit_id: &str, repo_url: &str) -> Result<()
         Ok(o) => o,
     };
 
-    repo.checkout_tree(&obj, None);
+    let _ = repo.checkout_tree(&obj, None);
 
     repo.set_head(&("refs/heads/".to_owned() + &commit_id))
 }

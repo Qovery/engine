@@ -393,15 +393,15 @@ impl<'a> Transaction<'a> {
 
                 let action = match failover_environment.action {
                     Action::Create => {
-                        kubernetes.deploy_environment_error(&target_qe_environment);
+                        let _ = kubernetes.deploy_environment_error(&target_qe_environment);
                         kubernetes.deploy_environment(&failover_qe_environment)
                     }
                     Action::Pause => {
-                        kubernetes.pause_environment_error(&target_qe_environment);
+                        let _ = kubernetes.pause_environment_error(&target_qe_environment);
                         kubernetes.pause_environment(&failover_qe_environment)
                     }
                     Action::Delete => {
-                        kubernetes.delete_environment_error(&target_qe_environment);
+                        let _ = kubernetes.delete_environment_error(&target_qe_environment);
                         kubernetes.delete_environment(&failover_qe_environment)
                     }
                     Action::Nothing => Ok(()),

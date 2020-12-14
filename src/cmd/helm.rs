@@ -1,9 +1,9 @@
-use std::io::Error;
-use std::path::Path;
-use tracing::{debug, error, info, span, warn, Level};
 use crate::cmd::structs::{Helm, HelmHistoryRow};
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::error::{SimpleError, SimpleErrorKind};
+use std::io::Error;
+use std::path::Path;
+use tracing::{debug, error, info, span, warn, Level};
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
 
@@ -168,7 +168,7 @@ where
                 } else {
                     error!("{}", line)
                 }
-            },
+            }
             Err(err) => error!("{:?}", err),
         },
     ) {
@@ -320,7 +320,7 @@ where
     P: AsRef<Path>,
 {
     let mut output_vec: Vec<String> = Vec::new();
-    helm_exec_with_output(
+    let _ = helm_exec_with_output(
         vec![
             "list",
             "-A",
@@ -339,9 +339,11 @@ where
             Err(err) => error!("{}", err),
         },
     );
+
     let output_string: String = output_vec.join("");
     let values = serde_json::from_str::<Vec<Helm>>(output_string.as_str());
     let mut helms_name: Vec<String> = Vec::new();
+
     match values {
         Ok(all_helms) => {
             for helm in all_helms {
@@ -354,6 +356,7 @@ where
             return Err(SimpleError::new(SimpleErrorKind::Other, Some(message)));
         }
     }
+
     Ok(helms_name)
 }
 
@@ -362,10 +365,10 @@ pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleE
         args,
         envs,
         |line| {
-            span!(Level::INFO, "{}","{}", line.unwrap());
+            span!(Level::INFO, "{}", "{}", line.unwrap());
         },
         |line_err| {
-            span!(Level::INFO, "{}","{}", line_err.unwrap());
+            span!(Level::INFO, "{}", "{}", line_err.unwrap());
         },
     )
 }

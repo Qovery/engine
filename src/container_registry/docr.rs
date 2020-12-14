@@ -3,6 +3,11 @@ extern crate digitalocean;
 use std::rc::Rc;
 
 use digitalocean::DigitalOcean;
+use reqwest::blocking::{Client, Response};
+use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{header, StatusCode};
+use serde::{Deserialize, Serialize};
+use serde_json::Error;
 
 use crate::build_platform::Image;
 use crate::cmd;
@@ -11,11 +16,6 @@ use crate::error::{EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorK
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
-use reqwest::blocking::{Client, Response};
-use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{header, StatusCode};
-use serde::{Deserialize, Serialize};
-use serde_json::Error;
 
 // TODO : use --output json
 // see https://www.digitalocean.com/community/tutorials/how-to-use-doctl-the-official-digitalocean-command-line-client
@@ -85,8 +85,8 @@ pub struct Tier {
     pub monthly_price_in_cents: i64,
 }
 
-pub const cr_api_path: &str = "https://api.digitalocean.com/v2/registry";
-pub const cr_cluster_api_path: &str = "https://api.digitalocean.com/v2/kubernetes/registry";
+pub const CR_API_PATH: &str = "https://api.digitalocean.com/v2/registry";
+pub const CR_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/registry";
 
 impl DOCR {
     pub fn new(context: Context, id: &str, registry_name: &str, api_key: &str) -> Self {
@@ -114,7 +114,7 @@ impl DOCR {
         match to_create_repo {
             Ok(repo_res) => {
                 let res = reqwest::blocking::Client::new()
-                    .post(cr_api_path)
+                    .post(CR_API_PATH)
                     .headers(headers)
                     .body(repo_res)
                     .send();
@@ -141,7 +141,7 @@ impl DOCR {
                                 "failed to create repository {} : {:?}",
                                 &self.registry_name, e,
                             ),
-                        ))
+                        ));
                     }
                 }
             }
@@ -152,7 +152,7 @@ impl DOCR {
                         "Unable to initialize DO Registry {} : {:?}",
                         &self.registry_name, e,
                     ),
-                ))
+                ));
             }
         }
     }
@@ -214,7 +214,7 @@ impl DOCR {
     pub fn delete_repository(&self, _image: &Image) -> Result<(), EngineError> {
         let mut headers = get_header_with_bearer(&self.api_key);
         let res = reqwest::blocking::Client::new()
-            .delete(cr_api_path)
+            .delete(CR_API_PATH)
             .headers(headers)
             .send();
         match res {
@@ -239,7 +239,7 @@ impl DOCR {
                         "No response from the Digital Ocean API {} : {:?}",
                         &self.registry_name, e,
                     ),
-                ))
+                ));
             }
         }
     }
@@ -436,45 +436,46 @@ pub fn subscribe_kube_cluster_to_container_registry(
     cluster_uuid: &str,
 ) -> Result<(), SimpleError> {
     let mut headers = get_header_with_bearer(api_key);
-    let clusterIds = DO_API_Subecribe_to_Kube_Cluster {
+    let cluster_ids = DO_API_Subecribe_to_Kube_Cluster {
         cluster_uuids: vec![cluster_uuid.to_string()],
     };
-    let res_cluster_to_link = serde_json::to_string(&clusterIds);
-    match res_cluster_to_link {
+
+    let res_cluster_to_link = serde_json::to_string(&cluster_ids);
+    return match res_cluster_to_link {
         Ok(cluster_to_link) => {
             let res = reqwest::blocking::Client::new()
-                .post(cr_cluster_api_path)
+                .post(CR_CLUSTER_API_PATH)
                 .headers(headers)
                 .body(cluster_to_link)
                 .send();
             match res {
                 Ok(output) => match output.status() {
-                    StatusCode::NO_CONTENT => return Ok(()),
+                    StatusCode::NO_CONTENT => Ok(()),
                     status => {
                         warn!("status from DO registry API {}", status);
-                        return Err(SimpleError::new(SimpleErrorKind::Other,Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")));
+                        Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
                     }
                 },
                 Err(e) => {
                     error!("{:?}", e);
-                    return Err(SimpleError::new(SimpleErrorKind::Other,Some("Unable to call Digital Ocean when tyring to subscribe repository to cluster")));
+                    Err(SimpleError::new(SimpleErrorKind::Other, Some("Unable to call Digital Ocean when tyring to subscribe repository to cluster")))
                 }
             }
         }
         Err(e) => {
             error!("{:?}", e);
-            return Err(SimpleError::new(
+            Err(SimpleError::new(
                 SimpleErrorKind::Other,
                 Some("Unable to Serialize digital ocean cluster uuids"),
-            ));
+            ))
         }
-    }
+    };
 }
 
 pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
     let headers = get_header_with_bearer(api_key);
     let res = reqwest::blocking::Client::new()
-        .get(cr_api_path)
+        .get(CR_API_PATH)
         .headers(headers)
         .send();
     match res {
@@ -495,7 +496,7 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
             }
             status => {
                 warn!("status from DO registry API {}", status);
-                return Err(SimpleError::new(SimpleErrorKind::Other,Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")));
+                return Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")));
             }
         },
         Err(e) => {

@@ -95,7 +95,7 @@ fn archive_workspace_directory(
 
 pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) {
     let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id);
-    std::fs::remove_dir_all(workspace_dir);
+    let _ = std::fs::remove_dir_all(workspace_dir);
 }
 
 pub fn create_workspace_archive(

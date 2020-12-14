@@ -1,3 +1,12 @@
+extern crate serde_json;
+
+use std::fs;
+use std::fs::File;
+use std::os::unix::fs::PermissionsExt;
+
+use reqwest::StatusCode;
+use tokio::runtime::Runtime;
+
 use crate::cloud_provider::digitalocean::api_structs::clusters::Clusters;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
@@ -6,12 +15,6 @@ use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::container_registry::docr::get_header_with_bearer;
 use crate::error::{SimpleError, SimpleErrorKind};
 use crate::object_storage::do_space::download_space_object;
-use reqwest::StatusCode;
-use std::os::unix::fs::PermissionsExt;
-extern crate serde_json;
-use std::fs;
-use std::fs::File;
-use tokio::runtime::Runtime;
 
 pub fn kubernetes_config_path(
     workspace_directory: &str,
@@ -50,7 +53,7 @@ pub fn kubernetes_config_path(
     Ok(kubernetes_config_file_path.clone())
 }
 
-pub const do_cluster_api_path: &str = "https://api.digitalocean.com/v2/kubernetes/clusters";
+pub const DO_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/clusters";
 
 /*
 Waiting for https://github.com/pandaman64/serde-query/issues/2
@@ -71,18 +74,19 @@ pub fn get_uuid_of_cluster_from_name(
 ) -> Result<String, SimpleError> {
     let mut headers = get_header_with_bearer(token);
     let res = reqwest::blocking::Client::new()
-        .get(do_cluster_api_path)
+        .get(DO_CLUSTER_API_PATH)
         .headers(headers)
         .send();
-    match res {
+
+    return match res {
         Ok(response) => match response.status() {
             StatusCode::OK => {
                 let content = response.text().unwrap();
-                let res_clusters  = serde_json::from_str::<Clusters>(&content);
-                match res_clusters{
-                    Ok(clusters) => match search_uuid_cluster_for(kube_cluster_name,clusters){
-                        Some(uuid) => return Ok(uuid),
-                        None => return Err(SimpleError::new(
+                let res_clusters = serde_json::from_str::<Clusters>(&content);
+                match res_clusters {
+                    Ok(clusters) => match search_uuid_cluster_for(kube_cluster_name, clusters) {
+                        Some(uuid) => Ok(uuid),
+                        None => Err(SimpleError::new(
                             SimpleErrorKind::Other,
                             Some(
                                 "Unable to retrieve cluster id from this name",
@@ -91,16 +95,16 @@ pub fn get_uuid_of_cluster_from_name(
                     }
                     Err(e) => {
                         print!("{}", e);
-                        return Err(SimpleError::new(
+                        Err(SimpleError::new(
                             SimpleErrorKind::Other,
                             Some(
                                 "While trying to deserialize json received from Digital Ocean API",
                             ),
-                        ));
-                    },
+                        ))
+                    }
                 }
             }
-            _ => return Err(SimpleError::new(
+            _ => Err(SimpleError::new(
                 SimpleErrorKind::Other,
                 Some(
                     "Receive weird status Code from Digital Ocean while retrieving the cluster list",
@@ -108,17 +112,17 @@ pub fn get_uuid_of_cluster_from_name(
             )),
         },
         Err(_) => {
-            return Err(SimpleError::new(
+            Err(SimpleError::new(
                 SimpleErrorKind::Other,
                 Some("Unable to get any responses from Digital Ocean"),
             ))
         }
-    }
+    };
 }
 
-fn search_uuid_cluster_for(kubeName: &str, clusters: Clusters) -> Option<String> {
+fn search_uuid_cluster_for(kube_name: &str, clusters: Clusters) -> Option<String> {
     for cluster in clusters.kubernetes_clusters {
-        match cluster.name.eq(kubeName) {
+        match cluster.name.eq(kube_name) {
             true => return Some(cluster.id),
             _ => {}
         }

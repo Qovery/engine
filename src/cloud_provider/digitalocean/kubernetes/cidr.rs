@@ -41,7 +41,7 @@ fn get_forbidden_cidr_per_region() -> HashMap<&'static str, &'static str, Random
 
 pub fn get_used_cidr_on_region(token: &str) {
     let mut output_from_cli = String::new();
-    utilities::exec_with_output(
+    let _ = utilities::exec_with_output(
         "doctl",
         vec!["vpcs", "list", "--output", "json", "-t", token],
         |r_out| match r_out {
@@ -49,14 +49,17 @@ pub fn get_used_cidr_on_region(token: &str) {
             Err(e) => error!("DOCTL Cli not respond well{}", e),
         },
         |r_err| match r_err {
-            Ok(s) => error!("DOCTL Cli error from cmd inserted, please check vpcs list command{}",
+            Ok(s) => error!(
+                "DOCTL Cli error from cmd inserted, please check vpcs list command{}",
                 s
             ),
             Err(e) => error!("DOCTL Cli not respond good {}", e),
         },
     );
+
     let buff = output_from_cli.borrow();
     let array: Vec<DoVpc> = serde_json::from_str(&buff).expect("JSON was not well-formatted");
+
     for elem in array.iter() {
         let reg = &elem.region;
         let ip = &elem.ip_range;

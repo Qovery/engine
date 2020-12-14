@@ -197,7 +197,7 @@ impl PostgreSQL {
                 ) {
                     Ok(_) => {
                         info!("Deleting secrets containing tfstates");
-                        utilities::delete_terraform_tfstate_secret(
+                        let _ = utilities::delete_terraform_tfstate_secret(
                             *kubernetes,
                             environment,
                             self.workspace_directory().as_str(),

@@ -186,7 +186,7 @@ where
 // return the output of "binary_name" --version
 pub fn run_version_command_for(binary_name: &str) -> String {
     let mut output_from_cmd = String::new();
-    exec_with_output(
+    let _ = exec_with_output(
         binary_name,
         vec!["--version"],
         |r_out| match r_out {
@@ -198,6 +198,7 @@ pub fn run_version_command_for(binary_name: &str) -> String {
             Err(e) => error!("Error while getting stderr from {} {}", binary_name, e),
         },
     );
+
     output_from_cmd
 }
 

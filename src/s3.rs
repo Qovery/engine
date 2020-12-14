@@ -1,17 +1,16 @@
+use std::fs;
 use std::fs::{read_to_string, File};
 use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::str::FromStr;
-use std::{fs};
 
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    GetObjectError, GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request,
-    S3Client, S3,
+    GetObjectError, GetObjectRequest, ListObjectsV2Output, ListObjectsV2Request, S3Client, S3,
 };
 
 use crate::cmd::utilities::exec_with_envs;
@@ -71,7 +70,7 @@ pub fn get_object(
     match r {
         Ok(x) => {
             let mut s = String::new();
-            x.body.unwrap().into_blocking_read().read_to_string(&mut s);
+            let _ = x.body.unwrap().into_blocking_read().read_to_string(&mut s);
 
             if s.is_empty() {
                 // this handle a case where the request succeeds but contains an empty body.
