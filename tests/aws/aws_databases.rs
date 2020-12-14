@@ -130,7 +130,6 @@ fn postgresql_failover_development_environment_with_all_options() {
             app
         })
         .collect::<Vec<qovery_engine::models::Application>>();
-    //let env_to_check = environment.clone();
     let mut environment_delete =
         test_utilities::aws::environnement_2_app_2_routers_1_psql(&context_for_deletion);
 
