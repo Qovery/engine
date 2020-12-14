@@ -60,6 +60,9 @@ spec:
           volumeMounts:
             - name: qovery-workspace
               mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
+              # Required for image cleaning
+            - name: docker-graph-storage
+              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
         - name: docker-build
           image: "{{ .Values.buildContainer.image }}:{{ .Values.buildContainer.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -83,9 +86,6 @@ spec:
           resources:
           {{- toYaml .Values.buildResources | nindent 12 }}
           volumeMounts:
-            - name: docker-graph-storage
-              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
-            # Required for image cleaning
             - name: docker-graph-storage
               mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
       {{- with .Values.nodeSelector }}
