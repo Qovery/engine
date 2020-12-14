@@ -22,14 +22,13 @@ pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
 }
 
 pub fn init() {
-    let collector = tracing_subscriber::fmt()
-        // filter spans/events with level TRACE or higher.
-        .with_max_level(Level::INFO)
-        // build but do not install the subscriber.
-        .finish();
-    collector.try_init();
+    tracing_subscriber::fmt()
+        .json()
+        .with_max_level(tracing::Level::TRACE)
+        .with_current_span(false)
+        .init();
 
-    println!(
+    info!(
         "running from current directory: {}",
         std::env::current_dir().unwrap().to_str().unwrap()
     );
