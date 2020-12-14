@@ -158,73 +158,7 @@ fn postgresql_failover_development_environment_with_all_options() {
         TransactionResult::Rollback(_) => assert!(true),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
-    match is_pod_restarted_aws_env(environment_check.clone(), database_name.as_str()) {
-        (true, _) => assert!(true),
-        (false, _) => assert!(false),
-    }
-
-    match delete_environment(&context_for_deletion, &ea_for_deletion) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
-#[ignore]
-fn postgresql_failover_development_environment_with_all_options() {
-    init();
-
-    let span = span!(
-        Level::INFO,
-        "postgresql_deploy_a_working_development_environment_with_all_options"
-    );
-    let _enter = span.enter();
-
-    let context = context();
-    let context_for_deletion = context.clone_not_same_execution_id();
-
-    let mut environment = test_utilities::aws::environnement_2_app_2_routers_1_psql(&context);
-    let environment_check = environment.clone();
-    let mut environment_never_up = environment.clone();
-
-    environment_never_up.applications = environment_never_up
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.private_port = Some(4789);
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
-    //let env_to_check = environment.clone();
-    let mut environment_delete =
-        test_utilities::aws::environnement_2_app_2_routers_1_psql(&context_for_deletion);
-
-    environment.kind = Kind::Development;
-    environment_delete.kind = Kind::Development;
-    environment_delete.action = Action::Delete;
-
-    let ea = EnvironmentAction::Environment(environment.clone());
-    let ea_fail_ok =
-        EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
-    let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-    // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-    let database_name = format!("{}-0", &environment_check.databases[0].name);
-    match is_pod_restarted_aws_env(environment_check.clone(), database_name.as_str()) {
-        (true, _) => assert!(true),
-        (false, _) => assert!(false),
-    }
-    match deploy_environment(&context, &ea_fail_ok) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(true),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+    // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY EVEN IF FAIL
     match is_pod_restarted_aws_env(environment_check.clone(), database_name.as_str()) {
         (true, _) => assert!(true),
         (false, _) => assert!(false),
