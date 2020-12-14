@@ -103,6 +103,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
     };
 }
 
+// this test ensure containers databases are never restarted, even in failover environment case
 #[test]
 #[ignore]
 fn postgresql_failover_development_environment_with_all_options() {
@@ -120,7 +121,7 @@ fn postgresql_failover_development_environment_with_all_options() {
     let mut environment = test_utilities::aws::environnement_2_app_2_routers_1_psql(&context);
     let environment_check = environment.clone();
     let mut environment_never_up = environment.clone();
-
+    // error in ports, these applications will never be up !!
     environment_never_up.applications = environment_never_up
         .applications
         .into_iter()
