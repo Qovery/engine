@@ -85,6 +85,9 @@ spec:
           volumeMounts:
             - name: docker-graph-storage
               mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
+            # Required for image cleaning
+            - name: docker-graph-storage
+              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -338,7 +338,6 @@ impl BuildPlatform for LocalDocker {
 
 pub fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
     let mut docker_args = vec!["image", "prune", "-a", "-f"];
-    let envs = Vec::new();
 
     cmd::utilities::exec_with_envs_and_output(
         "docker",
