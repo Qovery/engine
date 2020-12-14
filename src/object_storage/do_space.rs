@@ -44,7 +44,7 @@ pub(crate) async fn download_space_object(
                     Ok(_) => info!("File {} is well downloaded", path_to_download),
                     Err(e) => error!("{:?}", e),
                 },
-                Err(e) => error!("Unable to create file"),
+                Err(e) => error!("Unable to create file, maybe this file already exists..."),
             }
         }
         Err(e) => error!("{:?}", e),

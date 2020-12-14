@@ -41,8 +41,14 @@ pub struct Annotations {
     pub meta_helm_sh_release_name: String,
     #[serde(rename = "meta.helm.sh/release-namespace")]
     pub meta_helm_sh_release_namespace: String,
-    #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol")]
-    pub service_beta_kubernetes_io_do_loadbalancer_enable_proxy_protocol: String,
+    #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-algorithm")]
+    pub service_beta_kubernetes_io_do_loadbalancer_algorithm: String,
+    #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-name")]
+    pub service_beta_kubernetes_io_do_loadbalancer_name: String,
+    #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-protocol")]
+    pub service_beta_kubernetes_io_do_loadbalancer_protocol: String,
+    #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-size-slug")]
+    pub service_beta_kubernetes_io_do_loadbalancer_size_slug: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
