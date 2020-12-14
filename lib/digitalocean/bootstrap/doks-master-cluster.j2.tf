@@ -7,9 +7,13 @@ resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
   node_pool {
     tags = [digitalocean_tag.cluster_tag.id]
     name = var.doks_master_name
-    size = "{{ (index .doks_worker_node 0).instance_type }}"
+  {% for doks_worker_node in doks_worker_nodes %}
+  {%- if loop.index == 1  %}
+    size = "{{ doks_worker_node.instance_type }}"
     auto_scale = true
-    min_nodes  = "{{ (index .doks_worker_node 0).min_size }}"
-    max_nodes  = "{{ (index .doks_worker_node 0).max_size }}"
+    min_nodes  = "{{ doks_worker_node.min_size }}"
+    max_nodes  = "{{ doks_worker_node.max_size }}"
+{%- endif %}
+{% endfor %}
   }
 }

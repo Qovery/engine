@@ -252,7 +252,7 @@ impl<'a> DOKS<'a> {
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
 
-        context.insert("oks_worker_nodes", &worker_nodes);
+        context.insert("doks_worker_nodes", &worker_nodes);
 
         context
     }

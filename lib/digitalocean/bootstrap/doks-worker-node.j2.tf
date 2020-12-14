@@ -1,6 +1,6 @@
 # This ressource block is usefull to add another worker to the cluster
 # The first worker node is create into digitalocean_kubernetes_cluster terraform resource
-{%- if doks_worker_nodes|length >= 2  %}
+{%- if doks_worker_nodes|length > 1  %}
 {% for doks_worker_node in doks_worker_nodes %}
 {%- if loop.index > 1  %}
 resource "digitalocean_kubernetes_node_pool" "app_node_pool_{{ loop.index }}" {
