@@ -74,6 +74,12 @@ pub struct BuildResult {
     pub build: Build,
 }
 
+impl BuildResult {
+    pub fn new(build: Build) -> Self {
+        BuildResult { build }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
