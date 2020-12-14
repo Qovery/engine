@@ -152,7 +152,7 @@ pub struct Application {
     pub name: String,
     pub action: Action,
     pub git_url: String,
-    pub git_credentials: GitCredentials,
+    pub git_credentials: Option<GitCredentials>,
     pub branch: String,
     pub commit_id: String,
     pub dockerfile_path: String,
@@ -291,10 +291,13 @@ impl Application {
         Build {
             git_repository: GitRepository {
                 url: self.git_url.clone(),
-                credentials: Some(Credentials {
-                    login: self.git_credentials.login.clone(),
-                    password: self.git_credentials.access_token.clone(),
-                }),
+                credentials: match &self.git_credentials {
+                    Some(credentials) => Some(Credentials {
+                        login: credentials.login.clone(),
+                        password: credentials.access_token.clone(),
+                    }),
+                    _ => None,
+                },
                 commit_id: self.commit_id.clone(),
                 dockerfile_path: self.dockerfile_path.clone(),
             },
@@ -610,7 +613,7 @@ pub struct ExternalService {
     pub total_cpus: String,
     pub total_ram_in_mib: u32,
     pub git_url: String,
-    pub git_credentials: GitCredentials,
+    pub git_credentials: Option<GitCredentials>,
     pub branch: String,
     pub commit_id: String,
     pub on_create_dockerfile_path: String,
@@ -690,10 +693,13 @@ impl ExternalService {
         Build {
             git_repository: GitRepository {
                 url: self.git_url.clone(),
-                credentials: Some(Credentials {
-                    login: self.git_credentials.login.clone(),
-                    password: self.git_credentials.access_token.clone(),
-                }),
+                credentials: match &self.git_credentials {
+                    Some(credentials) => Some(Credentials {
+                        login: credentials.login.clone(),
+                        password: credentials.access_token.clone(),
+                    }),
+                    _ => None,
+                },
                 commit_id: self.commit_id.clone(),
                 dockerfile_path: match self.action {
                     Action::Create => self.on_create_dockerfile_path.clone(),

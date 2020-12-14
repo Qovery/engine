@@ -2,7 +2,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
-use crate::error::{EngineError, EngineErrorCause, SimpleError};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
 use crate::models::{
@@ -10,8 +10,6 @@ use crate::models::{
     ProgressScope,
 };
 use crate::{cmd, git};
-use fs2::FsStats;
-use futures::io::Error;
 
 /// use Docker in local
 pub struct LocalDocker {
@@ -232,7 +230,13 @@ impl BuildPlatform for LocalDocker {
 
         // ensure there is enough disk space left before building a new image
         let docker_path = Path::new("/var/lib/docker");
-        let docker_path_size_info = fs2::statvfs(docker_path).unwrap();
+        let docker_path_size_info = match fs2::statvfs(docker_path) {
+            Ok(fs_stats) => fs_stats,
+            Err(err) => {
+                return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
+            }
+        };
+
         let docker_max_disk_percentage_usage_before_purge = 50; // arbitrary percentage that should make the job anytime
 
         let docker_percentage_used =
