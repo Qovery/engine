@@ -109,10 +109,9 @@ impl<'a> DOKS<'a> {
         };
 
         // OKS
-        context.insert("oks_cluster_id", &self.id());
-        context.insert("oks_master_name", &self.name());
-        context.insert("oks_version", &self.version());
-        context.insert("oks_master_size", "s-4vcpu-8gb");
+        context.insert("doks_cluster_id", &self.id());
+        context.insert("doks_master_name", &self.name());
+        context.insert("doks_version", &self.version());
 
         // Network
         context.insert("vpc_name", self.options.vpc_name.as_str());
