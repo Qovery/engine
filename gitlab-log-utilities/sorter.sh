@@ -13,6 +13,8 @@ if [ -p /dev/stdin ]; then
         filename=$( echo $line | jq -r '.spans[].name' )
         echo "$line" >> "gitlab-log-utilities/output/$filename"
       fi
+    elif
+      echo $line
     fi
   done
 fi
