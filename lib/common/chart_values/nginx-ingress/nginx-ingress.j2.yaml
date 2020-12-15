@@ -26,8 +26,6 @@ controller:
     client_max_body_size: 100m
     proxy-body-size: 100m
     server-tokens: "false"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-headers: DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,x-csrftoke
 
   # Maxmind license key to download GeoLite2 Databases
   # https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases
