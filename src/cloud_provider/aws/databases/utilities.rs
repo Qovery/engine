@@ -40,6 +40,7 @@ pub fn create_namespace_without_labels(namespace: &str, kube_config: &str, aws: 
 pub fn delete_terraform_tfstate_secret(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
+    secret_name: &str,
     workspace_dir: &str,
 ) -> Result<(), SimpleError> {
     let aws = kubernetes
@@ -64,11 +65,7 @@ pub fn delete_terraform_tfstate_secret(
     match kubernetes_config_file_path {
         Ok(kube_config) => {
             //create the namespace to insert the tfstate in secrets
-            let _ = kubectl_exec_delete_secret(
-                kube_config,
-                "tfstate-default-state",
-                aws_credentials_envs,
-            );
+            let _ = kubectl_exec_delete_secret(kube_config, secret_name, aws_credentials_envs);
 
             Ok(())
         }
@@ -217,4 +214,26 @@ pub fn generate_supported_version(
     supported_versions.insert(major.to_string(), latest_major_version);
 
     supported_versions
+}
+
+pub fn get_tfstate_suffix(service_id: &str) -> String {
+    return format!("{}", service_id.clone());
+}
+
+// Name generated from TF secret suffix
+// https://www.terraform.io/docs/backends/types/kubernetes.html#secret_suffix
+// As mention the doc: Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}.
+pub fn get_tfstate_name(service_id: &str) -> String {
+    return format!("tfstate-default-{}", service_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::aws::databases::utilities::{get_tfstate_name, get_tfstate_suffix};
+
+    #[test]
+    fn check_tfstate_name() {
+        assert_eq!(get_tfstate_name("randomid"), "tfstate-default-randomid");
+        assert_eq!(get_tfstate_suffix("randomid"), "randomid");
+    }
 }

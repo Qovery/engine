@@ -1,6 +1,8 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::databases::utilities::generate_supported_version;
+use crate::cloud_provider::aws::databases::utilities::{
+    generate_supported_version, get_tfstate_name, get_tfstate_suffix,
+};
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -122,6 +124,8 @@ impl MySQL {
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
+        context.insert("tfstate_suffix_name", &get_tfstate_suffix(&self.id()));
+        context.insert("tfstate_name", &get_tfstate_name(&self.id()));
 
         context.insert(
             "delete_automated_backups",
@@ -200,6 +204,7 @@ impl MySQL {
                         let _ = utilities::delete_terraform_tfstate_secret(
                             *kubernetes,
                             environment,
+                            &get_tfstate_name(&self.id()),
                             self.workspace_directory().as_str(),
                         );
                     }
