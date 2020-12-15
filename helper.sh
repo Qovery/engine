@@ -301,15 +301,14 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   nb_treads=$2
   export RUST_LOG=info
   export_env
-  prepare_engine
+  #prepare_engine
   prepare_tests
   cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
-  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | ./$GITLAB_LOG_UTILITIES_DIR/sorter.sh
+  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | ../$GITLAB_LOG_UTILITIES_DIR/sorter.sh
   TESTS_STATUS="${PIPESTATUS[0]}"
   # uncomment this when test logs will be in json format
   #./gitlab-log-utilities/failed_test_printer.sh
-  cat $GITLAB_LOG_OUTPUT_DIR/junit-report.json
   return $TESTS_STATUS
 }
 
