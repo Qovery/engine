@@ -3,6 +3,20 @@
 OUTPUT_DIR_TESTS_FILES="gitlab-log-utilities/output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
 
+echo "===================================================="
+echo "OUTPUT TESTS"
+echo "===================================================="
+    for entry in "$OUTPUT_DIR_TESTS_FILES"*
+    do
+      f="$(basename $entry)"
+      if [[ $test_name =~ $f ]]; then
+        cat $entry
+      fi
+    done
+
+echo "===================================================="
+echo "FAILED TESTS"
+echo "===================================================="
 while IFS= read -r line
 do
  test_status=$(echo $line | jq .event)
