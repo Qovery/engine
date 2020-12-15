@@ -294,6 +294,7 @@ function all_tests(){ ## Run all tests on qovery-engine
 }
 
 function fast_tests(){ ## Run fast tests only on qovery-engine
+
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info
@@ -302,9 +303,10 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   prepare_tests
   cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
-  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
+  cargo test --color always -- --color always --test-threads=2 -Z unstable-options --format json | ./gitlab-log-utilities/sorter.sh
   TESTS_STATUS="${PIPESTATUS[0]}"
-  cat results.json | cargo2junit > results.xml
+  ./gitlab-log-utilities/failed_test_printer.sh
+  cat gitlab-log-utilities/output/junit-report.json | cargo2junit > results.xml
   return $TESTS_STATUS
 }
 
