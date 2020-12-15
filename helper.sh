@@ -296,8 +296,8 @@ function all_tests(){ ## Run all tests on qovery-engine
 }
 
 function fast_tests(){ ## Run fast tests only on qovery-engine
-
-  GITHUB_ENGINE_BRANCH_NAME=$1
+  #GITHUB_ENGINE_BRANCH_NAME=$1
+  GITHUB_ENGINE_BRANCH_NAME="organize-logs-in-json"
   nb_treads=$2
   export RUST_LOG=info
   export_env
