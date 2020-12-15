@@ -309,7 +309,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   TESTS_STATUS="${PIPESTATUS[0]}"
   # uncomment this when test logs will be in json format
   #./gitlab-log-utilities/failed_test_printer.sh
-  cat $GITLAB_LOG_OUTPUT_DIR/junit-report.json | cargo2junit > results.xml
+  cat $GITLAB_LOG_OUTPUT_DIR/junit-report.json
   return $TESTS_STATUS
 }
 
