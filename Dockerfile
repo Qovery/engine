@@ -28,6 +28,7 @@ ENV HOME_DIR="/home/qovery"
 ENV BIN_DIR=$HOME_DIR/binaries
 ENV TF_PLUGIN_CACHE_DIR=$HOME_DIR/.terraform.d/plugin-cache
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
+ENV ARCHIVE_BUCKET_NAME=qovery-engine-deployment-archive
 
 RUN apt-get update && \
     apt-get -y install curl docker.io vim awscli procps netcat-openbsd iproute2 && \

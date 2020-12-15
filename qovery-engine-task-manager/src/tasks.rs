@@ -1,12 +1,12 @@
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 use std::rc::Rc;
 use std::sync::Arc;
 
 use crossbeam_channel::Sender;
-use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use qovery_engine::models::{
     Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
 };
@@ -16,6 +16,7 @@ use qovery_engine::transaction::{RollbackError, TransactionResult};
 use crate::models::{Action, Request};
 use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task};
 use chrono::{DateTime, Utc};
+use std::fs;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -158,7 +159,7 @@ impl Task for InfrastructureTask {
             engine.context().workspace_root_dir(),
             engine.context().execution_id(),
         ) {
-            Ok(file) => upload_s3_file(
+            Ok(file) => match upload_s3_file(
                 self.request.organization_id.as_str(),
                 file.as_str(),
                 self.request
@@ -171,7 +172,14 @@ impl Task for InfrastructureTask {
                     .terraform_state_credentials
                     .access_key_id
                     .as_str(),
-            ),
+            ) {
+                Ok(_) => {
+                    fs::remove_file(file);
+                }
+                Err(e) => {
+                    error!("While uploading archive {:?}", e)
+                }
+            },
             Err(err) => error!("{:?}", err),
         };
 
@@ -335,7 +343,7 @@ impl Task for EnvironmentTask {
             engine.context().workspace_root_dir(),
             engine.context().execution_id(),
         ) {
-            Ok(file) => upload_s3_file(
+            Ok(file) => match upload_s3_file(
                 self.request.organization_id.as_str(),
                 file.as_str(),
                 self.request
@@ -348,7 +356,14 @@ impl Task for EnvironmentTask {
                     .terraform_state_credentials
                     .access_key_id
                     .as_str(),
-            ),
+            ) {
+                Ok(_) => {
+                    fs::remove_file(file);
+                }
+                Err(e) => {
+                    error!("while uploading archive {:?}", e)
+                }
+            },
             Err(err) => error!("{:?}", err),
         };
 
@@ -668,14 +683,26 @@ Join us on Discord (https://discord.qovery.com) if you need support
     }
 }
 
+pub fn get_archive_bucket_name() -> String {
+    std::env::var("ARCHIVE_BUCKET_NAME").expect("env var ARCHIVE_BUCKET_NAME is mandatory")
+}
+
+fn basename(path: &str, sep: char) -> Cow<str> {
+    let pieces = path.split(sep);
+    match pieces.last() {
+        Some(p) => p.into(),
+        None => path.into(),
+    }
+}
+
 fn upload_s3_file(
     organization_id: &str,
     file_path: &str,
     secrets_access_key: &str,
     access_key_id: &str,
-) {
-    let object_key = format!("archives/{}/{}", organization_id, file_path);
-    let bucket_name = "qovery-terrafom-tfstates";
+) -> Result<(), SimpleError> {
+    let object_key = format!("archives/{}/{}", organization_id, basename(file_path, '/'));
+    let bucket_name = get_archive_bucket_name();
     info!(
         "Sending file {} to bucket {} object {} wth {} {}",
         file_path,
@@ -688,11 +715,17 @@ fn upload_s3_file(
     match s3::push_object(
         access_key_id,
         secrets_access_key,
-        bucket_name,
+        bucket_name.as_str(),
         object_key.as_str(),
         file_path,
     ) {
-        Ok(_) => info!("Archive successfully pushed to Qovery S3"),
-        Err(e) => warn!("Error while pushing archive to s3, {:?}", e),
+        Ok(_) => {
+            info!("Archive successfully pushed to Qovery S3");
+            return Ok(());
+        }
+        Err(e) => {
+            warn!("Error while pushing archive to s3, {:?}", e);
+            return Err(e);
+        }
     };
 }
