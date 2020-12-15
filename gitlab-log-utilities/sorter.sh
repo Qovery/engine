@@ -20,7 +20,7 @@ if [ -p /dev/stdin ]; then
         filename=$( echo $line | jq -r '.spans[].name' )
         echo "$line" >> "$OUTPUT_DIR_TESTS_FILES/$filename"
       fi
-    elif
+    else
       # test are not in json format ? print them all anyway
       echo $line
     fi
