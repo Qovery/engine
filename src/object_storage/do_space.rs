@@ -1,4 +1,3 @@
-use crate::s3::get_object;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, S3Client, S3};
@@ -14,12 +13,10 @@ pub(crate) async fn download_space_object(
     path_to_download: &str,
 ) {
     match Path::new(path_to_download.clone()).exists() {
-        true => {
-            info!(
-                "File {} already exist, nothing to do",
-                path_to_download.clone()
-            )
-        }
+        true => info!(
+            "File {} already exist, nothing to do",
+            path_to_download.clone()
+        ),
         false => {
             //Digital ocean doesn't implement any space download, it use the generic AWS SDK
             let region = Region::Custom {
@@ -62,14 +59,12 @@ pub(crate) async fn download_space_object(
                         ),
                     }
                 }
-                Err(e) => {
-                    error!(
-                        "Unable to download file {} from  Space name {} Error: {:?}",
-                        path_to_download.clone(),
-                        bucket_name.clone(),
-                        e
-                    )
-                }
+                Err(e) => error!(
+                    "Unable to download file {} from  Space name {} Error: {:?}",
+                    path_to_download.clone(),
+                    bucket_name.clone(),
+                    e
+                ),
             };
         }
     }

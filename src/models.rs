@@ -217,7 +217,6 @@ impl Application {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            _ => None,
             //TODO to implement
         }
     }
@@ -272,7 +271,6 @@ impl Application {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            _ => None,
             //TODO to implement
         }
     }
@@ -466,7 +464,6 @@ impl Router {
                     ));
                 Some(router)
             }
-            _ => None,
         }
     }
 }
@@ -587,7 +584,6 @@ impl Database {
 
                     Some(db)
                 }
-                _ => None,
             },
             CPKind::GCP => None,
             _ => None,

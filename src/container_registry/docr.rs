@@ -1,18 +1,14 @@
 extern crate digitalocean;
 
-use std::rc::Rc;
-
 use digitalocean::DigitalOcean;
-use reqwest::blocking::{Client, Response};
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{header, StatusCode};
 use serde::{Deserialize, Serialize};
-use serde_json::Error;
 
 use crate::build_platform::Image;
 use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
-use crate::error::{EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind};
+use crate::error::{EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -29,19 +25,19 @@ pub struct DOCR {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-struct DO_API_Create_repository {
+struct DoApiCreateRepository {
     name: String,
     subscription_tier_slug: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-struct DO_API_Subecribe_to_Kube_Cluster {
+struct DoApiSubscribeToKubeCluster {
     cluster_uuids: Vec<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DO_API_get_container_registry {
+pub struct DoApiGetContainerRegistry {
     pub registry: Registry,
     pub subscription: Subscription,
 }
@@ -103,10 +99,10 @@ impl DOCR {
     }
 
     pub fn create_repository(&self, _image: &Image) -> Result<(), EngineError> {
-        let mut headers = get_header_with_bearer(&self.api_key);
+        let headers = get_header_with_bearer(&self.api_key);
         // subscription_tier_slug: https://www.digitalocean.com/products/container-registry/
         // starter and basic tiers are too limited on repository creation
-        let repo = DO_API_Create_repository {
+        let repo = DoApiCreateRepository {
             name: self.registry_name.clone(),
             subscription_tier_slug: "professional".to_owned(),
         };
@@ -212,7 +208,7 @@ impl DOCR {
     }
 
     pub fn delete_repository(&self, _image: &Image) -> Result<(), EngineError> {
-        let mut headers = get_header_with_bearer(&self.api_key);
+        let headers = get_header_with_bearer(&self.api_key);
         let res = reqwest::blocking::Client::new()
             .delete(CR_API_PATH)
             .headers(headers)
@@ -309,7 +305,7 @@ impl ContainerRegistry for DOCR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        let mut headers = get_header_with_bearer(self.api_key.as_str());
+        let headers = get_header_with_bearer(self.api_key.as_str());
         let res = reqwest::blocking::Client::new()
             .get(
                 path_to_retrieve_all_tags_from_registry(
@@ -435,8 +431,8 @@ pub fn subscribe_kube_cluster_to_container_registry(
     api_key: &str,
     cluster_uuid: &str,
 ) -> Result<(), SimpleError> {
-    let mut headers = get_header_with_bearer(api_key);
-    let cluster_ids = DO_API_Subecribe_to_Kube_Cluster {
+    let headers = get_header_with_bearer(api_key);
+    let cluster_ids = DoApiSubscribeToKubeCluster {
         cluster_uuids: vec![cluster_uuid.to_string()],
     };
 
@@ -482,7 +478,7 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
         Ok(output) => match output.status() {
             StatusCode::OK => {
                 let content = output.text().unwrap();
-                let res_registry = serde_json::from_str::<DO_API_get_container_registry>(&content);
+                let res_registry = serde_json::from_str::<DoApiGetContainerRegistry>(&content);
 
                 match res_registry {
                     Ok(registry) => return Ok(registry.registry.name),

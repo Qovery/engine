@@ -14,7 +14,6 @@ use crate::cloud_provider::kubernetes::{
     check_kubernetes_has_enough_resources_to_deploy_environment, check_kubernetes_service_error,
     Kind, Kubernetes, KubernetesNode, Resources,
 };
-use crate::cloud_provider::service::Service;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
 use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
@@ -1107,7 +1106,7 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         )?;
 
-        kubectl_exec_delete_namespace(
+        let _ = kubectl_exec_delete_namespace(
             kubernetes_config_file_path,
             &environment.namespace(),
             aws_credentials_envs,

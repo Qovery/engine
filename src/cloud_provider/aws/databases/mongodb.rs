@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities::generate_supported_version;
@@ -15,7 +17,6 @@ use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
-use std::collections::HashMap;
 
 pub struct MongoDB {
     context: Context,
@@ -398,7 +399,7 @@ impl Create for MongoDB {
 
                 // define labels to add to namespace
                 let namespace_labels = match self.context.resource_expiration_in_seconds() {
-                    Some(v) => Some(vec![
+                    Some(_) => Some(vec![
                         (LabelsContent {
                             name: "ttl".to_string(),
                             value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
@@ -457,10 +458,10 @@ impl Create for MongoDB {
                         return Err(self.engine_error(
                             EngineErrorCause::Internal,
                             format!(
-                            "MongoDB database {} with id {} failed to start after several retries",
-                            self.name(),
-                            self.id()
-                        ),
+                                "MongoDB database {} with id {} failed to start after several retries",
+                                self.name(),
+                                self.id()
+                            ),
                         ));
                     }
                 }
@@ -474,7 +475,7 @@ impl Create for MongoDB {
         Ok(())
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.MongoDB.on_create_error() called for {}", self.name());
         Ok(())
     }
@@ -513,7 +514,7 @@ impl Delete for MongoDB {
         Ok(())
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.MongoDB.on_create_error() called for {}", self.name());
         Ok(())
     }
@@ -597,29 +598,29 @@ fn get_mongodb_version(
     if is_managed_service {
         database_name = "DocumentDB";
         // v3.6.0
-        let mut mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(0), None);
+        let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(0), None);
         supported_mondogb_versions.extend(mongo_version);
 
         // v4.0.0
-        let mut mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(0), None);
+        let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(0), None);
         supported_mondogb_versions.extend(mongo_version);
     } else {
         // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
 
         // v3.6
-        let mut mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(21), None);
+        let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(21), None);
         supported_mondogb_versions.extend(mongo_version);
 
         // v4.0
-        let mut mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(21), None);
+        let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(21), None);
         supported_mondogb_versions.extend(mongo_version);
 
         // v4.2
-        let mut mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(11), None);
+        let mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(11), None);
         supported_mondogb_versions.extend(mongo_version);
 
         // v4.4
-        let mut mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(2), None);
+        let mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(2), None);
         supported_mondogb_versions.extend(mongo_version);
     }
 
@@ -631,12 +632,13 @@ fn get_mongodb_version(
 }
 
 #[cfg(test)]
-mod tests_mondogb {
-    use crate::cloud_provider::aws::databases::mongodb::get_mongodb_version;
+mod tests_mongodb {
     use std::collections::HashMap;
 
+    use crate::cloud_provider::aws::databases::mongodb::get_mongodb_version;
+
     #[test]
-    fn check_mondogb_version() {
+    fn check_mongodb_version() {
         // managed version
         assert_eq!(get_mongodb_version("4", true).unwrap(), "4.0.0");
         assert_eq!(get_mongodb_version("4.0", true).unwrap(), "4.0.0");

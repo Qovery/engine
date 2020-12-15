@@ -3,7 +3,7 @@ use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::error::{SimpleError, SimpleErrorKind};
 use std::io::Error;
 use std::path::Path;
-use tracing::{debug, error, info, span, warn, Level};
+use tracing::{error, info, span, Level};
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
 

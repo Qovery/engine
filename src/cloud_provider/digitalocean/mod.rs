@@ -8,13 +8,12 @@ pub(crate) mod router;
 extern crate digitalocean;
 
 use std::any::Any;
-use std::rc::Rc;
 
 use digitalocean::DigitalOcean;
 
 use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::error::{EngineError, EngineErrorCause};
-use crate::models::{Context, Listener, Listeners, ProgressListener};
+use crate::models::{Context, Listener, Listeners};
 
 pub struct DO {
     context: Context,

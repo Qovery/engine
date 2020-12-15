@@ -193,7 +193,7 @@ impl Create for Application {
 
         // define labels to add to namespace
         let namespace_labels = match self.context.resource_expiration_in_seconds() {
-            Some(v) => Some(vec![
+            Some(_) => Some(vec![
                 (LabelsContent {
                     name: "ttl".to_string(),
                     value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
@@ -249,13 +249,13 @@ impl Create for Application {
         unimplemented!()
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 }
 
 impl Delete for Application {
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 
@@ -263,13 +263,13 @@ impl Delete for Application {
         unimplemented!()
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 }
 
 impl Pause for Application {
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 
@@ -277,7 +277,7 @@ impl Pause for Application {
         unimplemented!()
     }
 
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 }
@@ -334,7 +334,7 @@ impl Service for Application {
         self.total_instances
     }
 
-    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
+    fn debug_logs(&self, _deployment_target: &DeploymentTarget) -> Vec<String> {
         Vec::new()
     }
 }

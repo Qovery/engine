@@ -9,6 +9,7 @@ use rusoto_dynamodb::{
 
 use crate::runtime::async_run;
 
+#[warn(unused_must_use)]
 pub fn create_terraform_table(
     access_key_id: &str,
     secret_access_key: &str,

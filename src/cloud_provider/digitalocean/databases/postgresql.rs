@@ -58,7 +58,11 @@ impl PostgreSQL {
             format!("databases/{}", self.name),
         )
     }
-    fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+    fn tera_context(
+        &self,
+        _kubernetes: &dyn Kubernetes,
+        _environment: &Environment,
+    ) -> TeraContext {
         let mut context = TeraContext::new();
         //TODO generate the context
         context
@@ -71,10 +75,10 @@ impl Create for PostgreSQL {
             "DigitalOcean.PostgreSQL.on_create() called for {}",
             self.name
         );
-        let workspace_dir = self.workspace_directory();
+        let _workspace_dir = self.workspace_directory();
 
         match target {
-            DeploymentTarget::ManagedServices(kubernetes, environment) => {
+            DeploymentTarget::ManagedServices(_kubernetes, _environment) => {
                 // use terraform
                 info!(
                     "deploy postgresql on Digital Ocean Managed Services for {}",
@@ -82,7 +86,7 @@ impl Create for PostgreSQL {
                 );
                 unimplemented!()
             }
-            DeploymentTarget::SelfHosted(kubernetes, environment) => {
+            DeploymentTarget::SelfHosted(_kubernetes, _environment) => {
                 // use helm
                 info!("deploy PostgreSQL on Kubernetes for {}", self.name);
                 unimplemented!()
@@ -94,7 +98,7 @@ impl Create for PostgreSQL {
         unimplemented!()
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
 }

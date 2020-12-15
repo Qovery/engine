@@ -5,7 +5,6 @@ use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::error::{SimpleError, SimpleErrorKind};
 use retry::delay::Fixed;
 use retry::OperationResult;
-use tracing::{span, Level};
 
 fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleError> {
     // terraform init
@@ -17,7 +16,7 @@ fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleEr
         }
     });
 
-    match result {
+    let _ = match result {
         Err(err) => match err {
             retry::Error::Operation {
                 error: _,
@@ -40,7 +39,7 @@ fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleEr
                     error!("While trying to Terraform plan the rendered templates");
                     return Err(e);
                 }
-                Ok(rs) => {}
+                Ok(_) => {}
             };
         }
     };

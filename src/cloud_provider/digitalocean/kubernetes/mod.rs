@@ -650,19 +650,19 @@ impl<'a> Kubernetes for DOKS<'a> {
         Ok(())
     }
 
-    fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn pause_environment(&self, _environment: &Environment) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn pause_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn delete_environment(&self, _environment: &Environment) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn delete_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
         unimplemented!()
     }
 }

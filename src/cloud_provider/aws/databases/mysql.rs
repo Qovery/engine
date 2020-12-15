@@ -197,7 +197,7 @@ impl MySQL {
                 ) {
                     Ok(_) => {
                         info!("Deleting secrets containing tfstates");
-                        utilities::delete_terraform_tfstate_secret(
+                        let _ = utilities::delete_terraform_tfstate_secret(
                             *kubernetes,
                             environment,
                             self.workspace_directory().as_str(),
@@ -398,7 +398,7 @@ impl Create for MySQL {
 
                 // define labels to add to namespace
                 let namespace_labels = match self.context.resource_expiration_in_seconds() {
-                    Some(v) => Some(vec![
+                    Some(_) => Some(vec![
                         (LabelsContent {
                             name: "ttl".to_string(),
                             value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
@@ -475,7 +475,7 @@ impl Create for MySQL {
         Ok(())
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.MySQL.on_create_error() called for {}", self.name());
 
         Ok(())
@@ -515,7 +515,7 @@ impl Delete for MySQL {
         Ok(())
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.MySQL.on_create_error() called for {}", self.name());
         Ok(())
     }
@@ -627,15 +627,15 @@ fn get_mysql_version(
         // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
 
         // v5.6
-        let mut v56 = generate_supported_version(5, 6, 6, Some(34), Some(49), None);
+        let v56 = generate_supported_version(5, 6, 6, Some(34), Some(49), None);
         supported_mysql_versions.extend(v56);
 
         // v5.7
-        let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
+        let v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
         supported_mysql_versions.extend(v57);
 
         // v8
-        let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
+        let v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
         supported_mysql_versions.extend(v8);
     }
 

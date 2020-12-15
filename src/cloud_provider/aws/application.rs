@@ -305,7 +305,7 @@ impl Create for Application {
 
         // define labels to add to namespace
         let namespace_labels = match self.context.resource_expiration_in_seconds() {
-            Some(v) => Some(vec![
+            Some(_) => Some(vec![
                 (LabelsContent {
                     name: "ttl".to_string(),
                     value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},

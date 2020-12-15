@@ -180,7 +180,7 @@ impl Service for ExternalService {
         1
     }
 
-    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
+    fn debug_logs(&self, _deployment_target: &DeploymentTarget) -> Vec<String> {
         Vec::new()
     }
 }

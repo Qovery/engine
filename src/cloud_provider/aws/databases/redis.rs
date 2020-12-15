@@ -386,7 +386,7 @@ impl Create for Redis {
 
                 // define labels to add to namespace
                 let namespace_labels = match self.context.resource_expiration_in_seconds() {
-                    Some(v) => Some(vec![
+                    Some(_) => Some(vec![
                         (LabelsContent {
                             name: "ttl".to_string(),
                             value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
@@ -463,7 +463,7 @@ impl Create for Redis {
         Ok(())
     }
 
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.Redis.on_create_error() called for {}", self.name());
         Ok(())
     }
@@ -502,7 +502,7 @@ impl Delete for Redis {
         Ok(())
     }
 
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.Redis.on_create_error() called for {}", self.name());
         Ok(())
     }
