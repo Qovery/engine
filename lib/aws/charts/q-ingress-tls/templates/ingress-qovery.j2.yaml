@@ -19,7 +19,7 @@ metadata:
     kubernetes.io/ingress.class: "nginx-qovery"
     ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-headers: DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,x-csrftoken
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,x-csrftoken"
 spec:
   tls:
     - hosts:
