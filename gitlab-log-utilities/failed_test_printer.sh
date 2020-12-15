@@ -9,10 +9,10 @@ do
  case $test_status in
   "\"ok\"")
     test_name=$(echo $line | jq .name)
-    echo "Passed test $test_name" ;;
+    echo "\e[32mPassed test : $test_name" ;;
   "\"failed\"")
     # check if a log file exist
-    echo "Failed test $test_name"
+    echo "\e[31mFailed test $test_name"
     test_name=$(echo $line | jq .name)
     for entry in "$OUTPUT_DIR_TESTS_FILES"*
     do
