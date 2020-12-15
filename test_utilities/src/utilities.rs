@@ -26,7 +26,7 @@ pub fn init() {
         .json()
         .with_max_level(tracing::Level::TRACE)
         .with_current_span(false)
-        .init();
+        .try_init();
 
     info!(
         "running from current directory: {}",
