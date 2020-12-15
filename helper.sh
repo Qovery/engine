@@ -301,7 +301,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   nb_treads=$2
   export RUST_LOG=info
   export_env
-  #prepare_engine
+  prepare_engine
   prepare_tests
   cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
