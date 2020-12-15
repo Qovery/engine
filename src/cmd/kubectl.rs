@@ -480,41 +480,6 @@ where
 }
 
 // used for testing the does_contain_terraform_tfstate
-
-pub fn create_sample_secret_terraform_in_namespace<P>(
-    kubernetes_config: P,
-    namespace_to_override: &str,
-    envs: &Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    let mut output_vec: Vec<String> = Vec::new();
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
-    let _ = kubectl_exec_with_output(
-        vec![
-            "create",
-            "secret",
-            "tfstate-default-state",
-            "--from-literal=blablablabla",
-            "--namespace",
-            namespace_to_override,
-        ],
-        _envs,
-        |out| match out {
-            Ok(_line) => output_vec.push(_line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(_line) => {}
-            Err(err) => error!("{:?}", err),
-        },
-    );
-    Ok(output_vec.join(""))
-}
-
 pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -524,27 +489,33 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
-    let mut exist = true;
-    let _ = kubectl_exec_with_output(
+
+    let result = kubectl_exec::<P, KubernetesList<Item>>(
         vec![
-            "describe",
-            "secrets/tfstate-default-state",
+            "get",
+            "secrets",
             "--namespace",
             namespace,
+            "-l",
+            "app.kubernetes.io/managed-by=terraform,tfstate=true",
+            "-o",
+            "json",
         ],
+        kubernetes_config,
         _envs,
-        |out| match out {
-            Ok(_line) => exist = true,
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(_line) => {}
-            Err(err) => error!("{:?}", err),
-        },
-    )?;
-    Ok(exist)
+    );
+
+    match result {
+        Ok(out) => {
+            if out.items.len() == 0 {
+                Ok(false)
+            } else {
+                Ok(true)
+            }
+        }
+        Err(e) => return Err(e),
+    }
 }
 
 pub fn kubectl_exec_get_all_namespaces<P>(
