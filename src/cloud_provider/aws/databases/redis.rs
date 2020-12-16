@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities::{get_tfstate_name, get_tfstate_suffix};
@@ -17,7 +19,6 @@ use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, StringError,
 };
 use crate::models::Context;
-use std::collections::HashMap;
 
 pub struct Redis {
     context: Context,
@@ -70,6 +71,7 @@ impl Redis {
         &self,
         kubernetes: &dyn Kubernetes,
         environment: &Environment,
+        is_managed_services: bool,
     ) -> Result<TeraContext, EngineError> {
         let mut context = self.default_tera_context(kubernetes, environment);
 
@@ -120,7 +122,7 @@ impl Redis {
                     EngineErrorCause::Internal,
                     EngineErrorScope::Engine,
                     self.id(),
-                    Some(e.message),
+                    Some(e),
                 ));
             }
         };
@@ -131,6 +133,10 @@ impl Redis {
         );
 
         context.insert("namespace", environment.namespace());
+        context.insert(
+            "version",
+            &self.matching_correct_version(is_managed_services),
+        );
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
@@ -163,12 +169,34 @@ impl Redis {
         Ok(context)
     }
 
+    fn matching_correct_version(&self, is_managed_services: bool) -> String {
+        match get_redis_version(self.version(), is_managed_services) {
+            Ok(version) => {
+                info!(
+                    "version {} has been requested by the user; but matching version is {}",
+                    self.version(),
+                    version
+                );
+
+                version
+            }
+            Err(err) => {
+                error!("{}", err);
+                warn!(
+                    "fallback on the version {} provided by the user",
+                    self.version()
+                );
+                self.version().to_string()
+            }
+        }
+    }
+
     fn delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let workspace_dir = self.workspace_directory();
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                let context = self.tera_context(*kubernetes, *environment)?;
+                let context = self.tera_context(*kubernetes, *environment, true)?;
 
                 // deploy before destroy to avoid missing elements
                 self.on_create(target)?;
@@ -283,8 +311,8 @@ impl Create for Redis {
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
-                info!("deploy Redis on AWS Elasticcache for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment)?;
+                info!("deploy Redis on AWS ElasticCache for {}", self.name());
+                let context = self.tera_context(*kubernetes, *environment, true)?;
 
                 let workspace_dir = self.workspace_directory();
 
@@ -335,7 +363,7 @@ impl Create for Redis {
                 // use helm
                 info!("deploy Redis on Kubernetes for {}", self.name());
 
-                let context = self.tera_context(*kubernetes, *environment)?;
+                let context = self.tera_context(*kubernetes, *environment, false)?;
                 let workspace_dir = self.workspace_directory();
 
                 let aws = kubernetes
@@ -610,8 +638,9 @@ fn get_redis_version(
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::databases::redis::get_redis_version;
     use std::collections::HashMap;
+
+    use crate::cloud_provider::aws::databases::redis::get_redis_version;
 
     #[test]
     fn check_redis_version() {

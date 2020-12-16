@@ -66,7 +66,12 @@ impl PostgreSQL {
         crate::string::cut(format!("postgresql-{}", self.id()), 50)
     }
 
-    fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+    fn tera_context(
+        &self,
+        kubernetes: &dyn Kubernetes,
+        environment: &Environment,
+        is_managed_services: bool,
+    ) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
 
         // FIXME: is there an other way than downcast a pointer?
@@ -105,6 +110,10 @@ impl PostgreSQL {
         }
 
         context.insert("namespace", environment.namespace());
+        context.insert(
+            "version",
+            &self.matching_correct_version(is_managed_services),
+        );
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
@@ -141,12 +150,34 @@ impl PostgreSQL {
         context
     }
 
+    fn matching_correct_version(&self, is_managed_services: bool) -> String {
+        match get_postgres_version(self.version(), is_managed_services) {
+            Ok(version) => {
+                info!(
+                    "version {} has been requested by the user; but matching version is {}",
+                    self.version(),
+                    version
+                );
+
+                version
+            }
+            Err(err) => {
+                error!("{}", err);
+                warn!(
+                    "fallback on the version {} provided by the user",
+                    self.version()
+                );
+                self.version().to_string()
+            }
+        }
+    }
+
     fn delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let workspace_dir = self.workspace_directory();
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                let context = self.tera_context(*kubernetes, *environment);
+                let context = self.tera_context(*kubernetes, *environment, true);
 
                 let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
@@ -301,7 +332,7 @@ impl Create for PostgreSQL {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy postgresql on AWS RDS for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment);
+                let context = self.tera_context(*kubernetes, *environment, true);
 
                 let workspace_dir = self.workspace_directory();
 
@@ -352,7 +383,7 @@ impl Create for PostgreSQL {
                 // use helm
                 info!("deploy PostgreSQL on Kubernetes for {}", self.name());
 
-                let context = self.tera_context(*kubernetes, *environment);
+                let context = self.tera_context(*kubernetes, *environment, false);
 
                 let aws = kubernetes
                     .cloud_provider()
