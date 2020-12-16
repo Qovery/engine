@@ -112,7 +112,6 @@ impl Router {
 
         let kubernetes_config_file_path = common::kubernetes_config_path(
             workspace_dir.as_str(),
-            environment.organization_id.as_str(),
             kubernetes.id(),
             aws.access_key_id.as_str(),
             aws.secret_access_key.as_str(),
@@ -338,7 +337,6 @@ impl Create for Router {
             self.context.execution_id(),
             common::kubernetes_config_path(
                 workspace_dir.as_str(),
-                environment.organization_id.as_str(),
                 kubernetes.id(),
                 aws.access_key_id.as_str(),
                 aws.secret_access_key.as_str(),

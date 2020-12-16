@@ -438,7 +438,6 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
             common::kubernetes_config_path(
                 self.context.workspace_root_dir(),
-                environment.organization_id.as_str(),
                 &self.id,
                 aws.access_key_id.as_str(),
                 aws.secret_access_key.as_str(),
@@ -645,7 +644,6 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
             kubernetes_config_path(
                 self.context.workspace_root_dir(),
-                self.cloud_provider.organization_id.as_str(),
                 self.id(),
                 self.cloud_provider.access_key_id.as_str(),
                 self.cloud_provider.secret_access_key.as_str(),
@@ -671,7 +669,6 @@ impl<'a> Kubernetes for EKS<'a> {
                         self.context.execution_id(),
                         kubernetes_config_path(
                             self.context.workspace_root_dir(),
-                            self.cloud_provider.organization_id.as_str(),
                             self.id(),
                             self.cloud_provider.access_key_id.as_str(),
                             self.cloud_provider.secret_access_key.as_str(),
@@ -711,7 +708,6 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
             kubernetes_config_path(
                 self.context.workspace_root_dir(),
-                self.cloud_provider.organization_id.as_str(),
                 self.id(),
                 self.cloud_provider.access_key_id.as_str(),
                 self.cloud_provider.secret_access_key.as_str(),
@@ -1098,7 +1094,6 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
             common::kubernetes_config_path(
                 &self.context.workspace_root_dir(),
-                &environment.organization_id.as_str(),
                 &self.id,
                 &self.cloud_provider.access_key_id.as_str(),
                 &self.cloud_provider.secret_access_key.as_str(),
