@@ -11,6 +11,13 @@ use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::context;
 use test_utilities::utilities::{init, is_pod_restarted_aws_env};
 use tracing::{span, Level};
+
+/**
+**
+** Global database tests
+**
+**/
+
 // to check overload between several databases and apps
 #[test]
 #[ignore]
@@ -52,61 +59,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
     };
 }
 
-/**
-**
-** PostgreSQL tests
-**
-**/
-
-#[test]
-#[ignore]
-fn postgresql_deploy_a_working_development_environment_with_all_options() {
-    init();
-
-    let span = span!(
-        Level::INFO,
-        "postgresql_deploy_a_working_development_environment_with_all_options"
-    );
-    let _enter = span.enter();
-
-    let context = context();
-    let context_for_deletion = context.clone_not_same_execution_id();
-
-    let mut environment = test_utilities::aws::environnement_2_app_2_routers_1_psql(&context);
-    //let env_to_check = environment.clone();
-    let mut environment_delete =
-        test_utilities::aws::environnement_2_app_2_routers_1_psql(&context_for_deletion);
-
-    environment.kind = Kind::Development;
-    environment_delete.kind = Kind::Development;
-    environment_delete.action = Action::Delete;
-
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-    // TODO: should be uncommented as soon as cert-manager is fixed
-    // for the moment this assert report a SSL issue on the second router, so it's works well
-    /*    let connections = test_utilities::utilities::check_all_connections(&env_to_check);
-    for con in connections {
-        assert_eq!(con, true);
-    }*/
-
-    match delete_environment(&context_for_deletion, &ea_for_deletion) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
 // this test ensure containers databases are never restarted, even in failover environment case
 #[test]
 #[ignore]
-fn postgresql_failover_development_environment_with_all_options() {
+fn postgresql_failover_dev_environment_with_all_options() {
     init();
 
     let span = span!(
@@ -171,95 +127,53 @@ fn postgresql_failover_development_environment_with_all_options() {
     };
 }
 
+// Ensure a full environment can run correctly
 #[test]
-fn postgresql_deploy_a_working_environment() {
+#[ignore]
+fn postgresql_deploy_a_working_development_environment_with_all_options() {
     init();
 
-    let span = span!(Level::INFO, "postgresql_deploy_a_working_environment");
+    let span = span!(
+        Level::INFO,
+        "postgresql_deploy_a_working_development_environment_with_all_options"
+    );
     let _enter = span.enter();
 
     let context = context();
-    let context_for_delete = context.clone_not_same_execution_id();
+    let context_for_deletion = context.clone_not_same_execution_id();
 
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    let mut environment = test_utilities::aws::environnement_2_app_2_routers_1_psql(&context);
+    //let env_to_check = environment.clone();
+    let mut environment_delete =
+        test_utilities::aws::environnement_2_app_2_routers_1_psql(&context_for_deletion);
 
-    let database_host =
-        "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
-    let database_port = 5432;
-    let database_db_name = "my-postgres".to_string();
-    let database_username = "superuser".to_string();
-    let database_password = generate_id();
-    environment.databases = vec![Database {
-        kind: DatabaseKind::Postgresql,
-        action: Action::Create,
-        id: generate_id(),
-        name: database_db_name.clone(),
-        version: "11.8.0".to_string(),
-        fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
-        fqdn: database_host.clone(),
-        port: database_port.clone(),
-        username: database_username.clone(),
-        password: database_password.clone(),
-        total_cpus: "500m".to_string(),
-        total_ram_in_mib: 512,
-        disk_size_in_gib: 10,
-        database_instance_type: "db.t2.micro".to_string(),
-        database_disk_type: "gp2".to_string(),
-    }];
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.branch = "postgres-app".to_string();
-            app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
-            app.private_port = Some(1234);
-            app.environment_variables = vec![
-                EnvironmentVariable {
-                    key: "PG_HOST".to_string(),
-                    value: database_host.clone(),
-                },
-                EnvironmentVariable {
-                    key: "PG_PORT".to_string(),
-                    value: database_port.clone().to_string(),
-                },
-                EnvironmentVariable {
-                    key: "PG_DBNAME".to_string(),
-                    value: database_db_name.clone(),
-                },
-                EnvironmentVariable {
-                    key: "PG_USERNAME".to_string(),
-                    value: database_username.clone(),
-                },
-                EnvironmentVariable {
-                    key: "PG_PASSWORD".to_string(),
-                    value: database_password.clone(),
-                },
-            ];
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = "postgres-app".to_string();
-
-    let mut environment_delete = environment.clone();
+    environment.kind = Kind::Development;
+    environment_delete.kind = Kind::Development;
     environment_delete.action = Action::Delete;
+
     let ea = EnvironmentAction::Environment(environment);
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
+    let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
 
     match deploy_environment(&context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+    // TODO: should be uncommented as soon as cert-manager is fixed
+    // for the moment this assert report a SSL issue on the second router, so it's works well
+    /*    let connections = test_utilities::utilities::check_all_connections(&env_to_check);
+    for con in connections {
+        assert_eq!(con, true);
+    }*/
 
-    // todo: check the database disk is here and with correct size
-
-    match delete_environment(&context_for_delete, &ea_delete) {
+    match delete_environment(&context_for_deletion, &ea_for_deletion) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
 }
 
+// Ensure redeploy works as expected
 #[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
     init();
@@ -365,35 +279,37 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
     };
 }
 
-#[test]
-#[ignore]
-fn postgresql_deploy_a_working_production_environment() {
+/**
+**
+** PostgreSQL tests
+**
+**/
+
+fn test_postgresql_configuration(context: Context, mut environment: Environment, version: &str) {
     init();
 
-    let span = span!(
-        Level::INFO,
-        "postgresql_deploy_a_working_production_environment"
-    );
+    let span = span!(Level::INFO, "test_postgresql_configuration");
     let _enter = span.enter();
-
-    let context = context();
     let context_for_delete = context.clone_not_same_execution_id();
 
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
-    environment.kind = Kind::Production;
-
     let database_host =
-        "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+        "postgres-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; //
     let database_port = 5432;
     let database_db_name = "postgres".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
+
+    let is_rds = match environment.kind {
+        Kind::Production => true,
+        Kind::Development => false,
+    };
+
     environment.databases = vec![Database {
         kind: DatabaseKind::Postgresql,
         action: Action::Create,
         id: generate_id(),
         name: database_db_name.clone(),
-        version: "12.4".to_string(),
+        version: version.to_string(),
         fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
         fqdn: database_host.clone(),
         port: database_port.clone(),
@@ -410,8 +326,9 @@ fn postgresql_deploy_a_working_production_environment() {
         .into_iter()
         .map(|mut app| {
             app.branch = "postgres-app".to_string();
-            app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
+            app.commit_id = "ad2c556b1b64195ba025e658cb3b6e5182b920b0".to_string();
             app.private_port = Some(1234);
+            app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
                 EnvironmentVariable {
                     key: "PG_HOST".to_string(),
@@ -457,6 +374,64 @@ fn postgresql_deploy_a_working_production_environment() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
     };
+}
+
+// Postgres environment environment
+#[test]
+#[ignore]
+fn postgresql_v10_deploy_a_working_dev_environment() {
+    let context = context();
+    const TEST_NAME: &str = "postgresql_v10_dev";
+    let environment = test_utilities::aws::working_minimal_environment(&context);
+    test_postgresql_configuration(context, environment, "10");
+}
+
+#[test]
+#[ignore]
+fn postgresql_v11_deploy_a_working_dev_environment() {
+    let context = context();
+    const TEST_NAME: &str = "postgresql_v11_dev";
+    let environment = test_utilities::aws::working_minimal_environment(&context);
+    test_postgresql_configuration(context, environment, "11");
+}
+
+#[test]
+fn postgresql_v12_deploy_a_working_dev_environment() {
+    let context = context();
+    const TEST_NAME: &str = "postgresql_v12_dev";
+    let environment = test_utilities::aws::working_minimal_environment(&context);
+    test_postgresql_configuration(context, environment, "12");
+}
+
+// Postgres production environment
+#[test]
+#[ignore]
+fn postgresql_v10_deploy_a_working_prod_environment() {
+    let context = context();
+    const TEST_NAME: &str = "postgresql_v10_prod";
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    environment.kind = Kind::Production;
+    test_postgresql_configuration(context, environment, "10");
+}
+
+#[test]
+#[ignore]
+fn postgresql_v11_deploy_a_working_prod_environment() {
+    let context = context();
+    const TEST_NAME: &str = "postgresql_v11_prod";
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    environment.kind = Kind::Production;
+    test_postgresql_configuration(context, environment, "11");
+}
+
+#[test]
+#[ignore]
+fn postgresql_v12_deploy_a_working_prod_environment() {
+    let context = context();
+    const TEST_NAME: &str = "postgresql_v12_prod";
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    environment.kind = Kind::Production;
+    test_postgresql_configuration(context, environment, "12");
 }
 
 /**
@@ -576,9 +551,9 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
     };
 }
 
-/// test mongodb v3.6 with development environment
+// development environment
 #[test]
-fn mongodb_v3_6_deploy_a_working_environment() {
+fn mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "3.6");
@@ -586,33 +561,31 @@ fn mongodb_v3_6_deploy_a_working_environment() {
 
 #[test]
 #[ignore]
-fn mongodb_v4_0_deploy_a_working_environment() {
+fn mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.0");
 }
 
-/// test mongodb v4.2 with development environment
 #[test]
 #[ignore]
-fn mongodb_v4_2_deploy_a_working_environment() {
+fn mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.2");
 }
 
-/// test mongodb v4.4 with development environment
 #[test]
-fn mongodb_v4_4_deploy_a_working_environment() {
+fn mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "4.4");
 }
 
-/// test mongodb v3.6 with production environment (DocumentDB)
+// MongoDB production environment (DocumentDB)
 #[test]
 #[ignore]
-fn mongodb_v3_6_deploy_a_working_environment_with_production() {
+fn mongodb_v3_6_deploy_a_working_prod_environment() {
     let context = context();
 
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -623,7 +596,7 @@ fn mongodb_v3_6_deploy_a_working_environment_with_production() {
 
 #[test]
 #[ignore]
-fn mongodb_v4_0_deploy_a_working_environment_with_production() {
+fn mongodb_v4_0_deploy_a_working_prod_environment() {
     let context = context();
 
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -638,31 +611,32 @@ fn mongodb_v4_0_deploy_a_working_environment_with_production() {
 **
 **/
 
-#[test]
-#[ignore]
-fn mysql_deploy_a_working_environment() {
+fn test_mysql_configuration(context: Context, mut environment: Environment, version: &str) {
     init();
 
     let span = span!(Level::INFO, "mysql_deploy_a_working_environment");
     let _enter = span.enter();
 
-    let context = context();
     let deletion_context = context.clone_not_same_execution_id();
-
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
     let database_host =
         "mysql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 3306;
-    let database_db_name = "mydb".to_string();
+    let database_db_name = "my-mysql".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
+
+    let is_rds = match environment.kind {
+        Kind::Production => true,
+        Kind::Development => false,
+    };
+
     environment.databases = vec![Database {
         kind: DatabaseKind::Mysql,
         action: Action::Create,
         id: generate_id(),
         name: database_db_name.clone(),
-        version: "5.7.30".to_string(),
+        version: version.to_string(),
         fqdn_id: "mysql-".to_string() + generate_id().as_str(),
         fqdn: database_host.clone(),
         port: database_port.clone(),
@@ -679,9 +653,18 @@ fn mysql_deploy_a_working_environment() {
         .into_iter()
         .map(|mut app| {
             app.branch = "mysql-app".to_string();
-            app.commit_id = "222295112d58d78227c21060d3a707687302e86f".to_string();
+            app.commit_id = "241e91dcbf82e8b00df9c79ab2db94b1d04ad3f8".to_string();
             app.private_port = Some(1234);
+            app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
+                // EnvironmentVariable {
+                //     key: "ENABLE_DEBUG".to_string(),
+                //     value: "true".to_string(),
+                // },
+                // EnvironmentVariable {
+                //     key: "DEBUG_PAUSE".to_string(),
+                //     value: "true".to_string(),
+                // },
                 EnvironmentVariable {
                     key: "MYSQL_HOST".to_string(),
                     value: database_host.clone(),
@@ -726,100 +709,44 @@ fn mysql_deploy_a_working_environment() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+}
 
-    //Todo: remove the namespace (or project)
+// MySQL self-hosted environment
+#[test]
+fn mysql_v5_7_deploy_a_working_dev_environment() {
+    let context = context();
+    const TEST_NAME: &str = "mysql_v5_7_dev";
+    let environment = test_utilities::aws::working_minimal_environment(&context);
+    test_mysql_configuration(context, environment, "5.7");
+}
+
+#[test]
+fn mysql_v8_deploy_a_working_dev_environment() {
+    let context = context();
+    const TEST_NAME: &str = "mysql_v8_dev";
+    let environment = test_utilities::aws::working_minimal_environment(&context);
+    test_mysql_configuration(context, environment, "8.0");
+}
+
+// MySQL production environment (RDS)
+#[test]
+#[ignore]
+fn mysql_v5_7_deploy_a_working_prod_environment() {
+    let context = context();
+    const TEST_NAME: &str = "mysql_v5_7_production";
+    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+    environment.kind = Kind::Production;
+    test_mysql_configuration(context, environment, "5.7");
 }
 
 #[test]
 #[ignore]
-/// Tests the creation of a simple environment on AWS, with the DB provisioned on RDS.
-fn mysql_deploy_a_working_production_environment() {
-    init();
-
-    let span = span!(Level::INFO, "mysql_deploy_a_working_production_environment");
-    let _enter = span.enter();
-
+fn mysql_v8_0_deploy_a_working_prod_environment() {
     let context = context();
-    let deletion_context = context.clone_not_same_execution_id();
-
+    const TEST_NAME: &str = "mysql_v8_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
-    environment.kind = Production;
-
-    let database_host =
-        "mysql-app-".to_string() + generate_id().as_str() + "-svc.CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
-    let database_port = 3306;
-    let database_db_name = "mysql".to_string();
-    let database_username = "superuser".to_string();
-    let database_password = generate_id();
-    environment.databases = vec![Database {
-        kind: DatabaseKind::Mysql,
-        action: Action::Create,
-        id: generate_id(),
-        name: database_db_name.clone(),
-        version: "5.7.30".to_string(),
-        fqdn_id: "mysql-".to_string() + generate_id().as_str(),
-        fqdn: database_host.clone(),
-        port: database_port.clone(),
-        username: database_username.clone(),
-        password: database_password.clone(),
-        total_cpus: "500m".to_string(),
-        total_ram_in_mib: 512,
-        disk_size_in_gib: 10,
-        database_instance_type: "db.t2.micro".to_string(),
-        database_disk_type: "gp2".to_string(),
-    }];
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.branch = "mysql-app".to_string();
-            app.commit_id = "222295112d58d78227c21060d3a707687302e86f".to_string();
-            app.private_port = Some(1234);
-            app.environment_variables = vec![
-                EnvironmentVariable {
-                    key: "MYSQL_HOST".to_string(),
-                    value: database_host.clone(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_PORT".to_string(),
-                    value: database_port.clone().to_string(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_DBNAME".to_string(),
-                    value: database_db_name.clone(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_USERNAME".to_string(),
-                    value: database_username.clone(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_PASSWORD".to_string(),
-                    value: database_password.clone(),
-                },
-            ];
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = "mysql-app".to_string();
-
-    let mut environment_delete = environment.clone();
-    environment_delete.action = Action::Delete;
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    // todo: check the database disk is here and with correct size
-
-    match delete_environment(&deletion_context, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+    environment.kind = Kind::Production;
+    test_mysql_configuration(context, environment, "8.0");
 }
 
 /**
@@ -841,7 +768,7 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
     let database_db_name = "my-redis".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
-    // while waiting the info to be given directly in the database info, we're using this
+
     let is_elasticache = match environment.kind {
         Kind::Production => true,
         Kind::Development => false,
@@ -928,39 +855,40 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
     };
 }
 
-#[test]
-fn redis_v5_deploy_a_working_environment() {
-    let context = context();
-    const test_name: &str = "redis_v6_dev";
-    let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_redis_configuration(context, environment, "5.0");
-}
-
-#[test]
-fn redis_v6_deploy_a_working_environment() {
-    let context = context();
-    const test_name: &str = "redis_v6_0_dev";
-    let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_redis_configuration(context, environment, "6.0");
-}
-
-// test Redis 5.0 with production environment (Elasticache)
+// Redis self-hosted environment
 #[test]
 #[ignore]
-fn redis_v5_0_deploy_a_working_environment_with_production() {
+fn redis_v5_deploy_a_working_dev_environment() {
     let context = context();
-    const test_name: &str = "redis_v5_0_production";
+    const TEST_NAME: &str = "redis_v5_0_dev";
+    let environment = test_utilities::aws::working_minimal_environment(&context);
+    test_redis_configuration(context, environment, "5");
+}
+
+#[test]
+fn redis_v6_deploy_a_working_dev_environment() {
+    let context = context();
+    const TEST_NAME: &str = "redis_v6_0_dev";
+    let environment = test_utilities::aws::working_minimal_environment(&context);
+    test_redis_configuration(context, environment, "6");
+}
+
+// Redis production environment (Elasticache)
+#[test]
+#[ignore]
+fn redis_v5_deploy_a_working_prod_environment() {
+    let context = context();
+    const TEST_NAME: &str = "redis_v5_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
     test_redis_configuration(context, environment, "5");
 }
 
-// test Redis 5.0 with production environment (Elasticache)
 #[test]
 #[ignore]
-fn redis_v6_0_deploy_a_working_environment_with_production() {
+fn redis_v6_deploy_a_working_prod_environment() {
     let context = context();
-    const test_name: &str = "redis_v6_0_production";
+    const TEST_NAME: &str = "redis_v6_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
     test_redis_configuration(context, environment, "6");
