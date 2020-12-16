@@ -177,6 +177,14 @@ pub struct KubernetesEvent {
     pub type_: String,
     pub message: Option<String>,
     pub reason: String,
+    pub involved_object: KubernetesInvolvedObject,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesInvolvedObject {
+    pub kind: String,
+    pub name: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]

@@ -207,6 +207,8 @@ where
                 String::from("<no debug logs>")
             };
 
+            debug!("{}", debug_logs_string);
+
             listeners_helper.error(ProgressInfo::new(
                 service.progress_scope(),
                 ProgressLevel::Info,

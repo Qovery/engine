@@ -709,15 +709,23 @@ where
 pub fn kubectl_exec_get_event<P>(
     kubernetes_config: P,
     namespace: &str,
-    selector: &str,
     envs: Vec<(&str, &str)>,
+    field_selector: &str,
 ) -> Result<KubernetesList<KubernetesEvent>, SimpleError>
 where
     P: AsRef<Path>,
 {
+    // Note: can't use app selector with kubectl get event..
     kubectl_exec::<P, KubernetesList<KubernetesEvent>>(
         vec![
-            "get", "event", "-o", "json", "-n", namespace, "-l", selector,
+            "get",
+            "event",
+            "-o",
+            "json",
+            "-n",
+            namespace,
+            "--field-selector",
+            field_selector,
         ],
         kubernetes_config,
         envs,

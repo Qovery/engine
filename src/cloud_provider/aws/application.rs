@@ -232,13 +232,12 @@ impl Service for Application {
         };
 
         let workspace_dir = self.workspace_directory();
-        let selector = format!("app={}", self.name());
 
         match get_stateless_resource_information_for_user(
             kubernetes,
             environment,
             workspace_dir.as_str(),
-            selector.as_str(),
+            self,
         ) {
             Ok(lines) => lines,
             Err(err) => {

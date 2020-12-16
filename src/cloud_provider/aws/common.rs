@@ -5,6 +5,7 @@ use rusoto_core::Region;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::service::Service;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::SimpleError;
 
@@ -46,13 +47,15 @@ pub fn get_stateless_resource_information_for_user(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     workspace_dir: &str,
-    selector: &str,
+    service: &dyn Service,
 ) -> Result<Vec<String>, SimpleError> {
     let aws = kubernetes
         .cloud_provider()
         .as_any()
         .downcast_ref::<AWS>()
         .unwrap();
+
+    let selector = format!("app={}", service.name());
 
     let kubernetes_config_file_path = kubernetes_config_path(
         workspace_dir,
@@ -67,13 +70,13 @@ pub fn get_stateless_resource_information_for_user(
         (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
     ];
 
-    let mut result = Vec::with_capacity(20);
+    let mut result = Vec::with_capacity(50);
 
     // get logs
     let logs = crate::cmd::kubectl::kubectl_exec_logs(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
-        selector,
+        selector.as_str(),
         aws_credentials_envs.clone(),
     )?;
 
@@ -83,12 +86,12 @@ pub fn get_stateless_resource_information_for_user(
     let pods = crate::cmd::kubectl::kubectl_exec_get_pod(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
-        selector,
+        selector.as_str(),
         aws_credentials_envs.clone(),
     )?;
 
-    for item in pods.items {
-        for container_status in item.status.container_statuses {
+    for pod in pods.items {
+        for container_status in pod.status.container_statuses {
             if let Some(last_state) = container_status.last_state {
                 if let Some(terminated) = last_state.terminated {
                     if let Some(message) = terminated.message {
@@ -114,13 +117,18 @@ pub fn get_stateless_resource_information_for_user(
     let events = crate::cmd::kubectl::kubectl_exec_get_event(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
-        selector,
         aws_credentials_envs.clone(),
+        "involvedObject.kind=Pod",
     )?;
 
+    let pod_name_start = format!("{}-", service.name());
     for event in events.items {
-        if let Some(message) = event.message {
-            result.push(message);
+        if event.type_.to_lowercase() != "normal"
+            && event.involved_object.name.starts_with(&pod_name_start)
+        {
+            if let Some(message) = event.message {
+                result.push(format!("{}: {}", event.type_, message));
+            }
         }
     }
 

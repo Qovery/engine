@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::rc::Rc;
 
+use fs2::FsStats;
+
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
 use crate::error::{EngineError, EngineErrorCause, SimpleError};
 use crate::fs::workspace_directory;
@@ -230,28 +232,18 @@ impl BuildPlatform for LocalDocker {
 
         // ensure there is enough disk space left before building a new image
         let docker_path = Path::new("/var/lib/docker");
-        let docker_path_size_info = match fs2::statvfs(docker_path) {
-            Ok(fs_stats) => fs_stats,
-            Err(err) => {
-                return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
-            }
-        };
 
-        let docker_max_disk_percentage_usage_before_purge = 50; // arbitrary percentage that should make the job anytime
-
-        let docker_percentage_used =
-            docker_path_size_info.available_space() * 100 / docker_path_size_info.total_space();
-
-        if docker_percentage_used > docker_max_disk_percentage_usage_before_purge {
-            warn!(
-                "Docker disk usage is higher than {}%, requesting cleaning",
-                docker_max_disk_percentage_usage_before_purge
-            );
-            match docker_prune_images(envs.clone()) {
-                Err(e) => error!("error while purging docker images: {:?}", e.message),
-                _ => info!("docker images have been purged"),
+        if docker_path.exists() {
+            // only used in production on Linux OS
+            let docker_path_size_info = match fs2::statvfs(docker_path) {
+                Ok(fs_stats) => fs_stats,
+                Err(err) => {
+                    return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
+                }
             };
-        };
+
+            check_docker_space_usage_and_clean(docker_path_size_info, envs.clone());
+        }
 
         // docker build
         let exit_status = cmd::utilities::exec_with_envs_and_output(
@@ -340,7 +332,26 @@ impl BuildPlatform for LocalDocker {
     }
 }
 
-pub fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
+fn check_docker_space_usage_and_clean(docker_path_size_info: FsStats, envs: Vec<(&str, &str)>) {
+    let docker_max_disk_percentage_usage_before_purge = 50; // arbitrary percentage that should make the job anytime
+
+    let docker_percentage_used =
+        docker_path_size_info.available_space() * 100 / docker_path_size_info.total_space();
+
+    if docker_percentage_used > docker_max_disk_percentage_usage_before_purge {
+        warn!(
+            "Docker disk usage is higher than {}%, requesting cleaning",
+            docker_max_disk_percentage_usage_before_purge
+        );
+
+        match docker_prune_images(envs) {
+            Err(e) => error!("error while purging docker images: {:?}", e.message),
+            _ => info!("docker images have been purged"),
+        };
+    };
+}
+
+fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
     let mut docker_args = vec!["image", "prune", "-a", "-f"];
 
     cmd::utilities::exec_with_envs_and_output(
