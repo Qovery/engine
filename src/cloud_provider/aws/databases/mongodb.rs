@@ -7,7 +7,7 @@ use crate::cloud_provider::aws::databases::utilities::{
 };
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
 use crate::cloud_provider::aws::{common, AWS};
-use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::environment::{Environment, Kind};
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
     Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause,
@@ -71,8 +71,7 @@ impl MongoDB {
         &self,
         kubernetes: &dyn Kubernetes,
         environment: &Environment,
-        is_managed_services: bool,
-    ) -> TeraContext {
+    ) -> Result<TeraContext, EngineError> {
         let mut context = self.default_tera_context(kubernetes, environment);
         // FIXME: is there an other way than downcast a pointer?
         let cp = kubernetes
@@ -80,6 +79,11 @@ impl MongoDB {
             .as_any()
             .downcast_ref::<AWS>()
             .expect("Could not downcast kubernetes.cloud_provider() to AWS");
+
+        let is_managed_services = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
 
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kubernetes_config_file_path = utilities::get_kubernetes_config_path(
@@ -110,10 +114,9 @@ impl MongoDB {
         }
 
         context.insert("namespace", environment.namespace());
-        context.insert(
-            "version",
-            &self.matching_correct_version(is_managed_services),
-        );
+
+        let version = self.matching_correct_version(is_managed_services)?;
+        context.insert("version", &version);
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
@@ -143,10 +146,10 @@ impl MongoDB {
             )
         }
 
-        context
+        Ok(context)
     }
 
-    fn matching_correct_version(&self, is_managed_services: bool) -> String {
+    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         match get_mongodb_version(self.version(), is_managed_services) {
             Ok(version) => {
                 info!(
@@ -155,7 +158,7 @@ impl MongoDB {
                     version
                 );
 
-                version
+                Ok(version)
             }
             Err(err) => {
                 error!("{}", err);
@@ -164,7 +167,13 @@ impl MongoDB {
                     self.version()
                 );
 
-                self.version().to_string()
+                Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "The provided MongoDB version is not supported, please refer to the \
+                documentation https://docs.qovery.com",
+                    ),
+                    err,
+                ))
             }
         }
     }
@@ -174,7 +183,7 @@ impl MongoDB {
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                let context = self.tera_context(*kubernetes, *environment, true);
+                let context = self.tera_context(*kubernetes, *environment)?;
 
                 let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
@@ -329,7 +338,7 @@ impl Create for MongoDB {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy mongodb on AWS DocumentDB for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment, true);
+                let context = self.tera_context(*kubernetes, *environment)?;
                 let workspace_dir = self.workspace_directory();
 
                 let _ = cast_simple_error_to_engine_error(
@@ -379,7 +388,7 @@ impl Create for MongoDB {
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 // use helm
                 info!("deploy MongoDB on Kubernetes for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment, false);
+                let context = self.tera_context(*kubernetes, *environment)?;
 
                 let aws = kubernetes
                     .cloud_provider()
@@ -684,7 +693,7 @@ mod tests_mongodb {
                 .unwrap_err()
                 .message
                 .as_str(),
-            "this DocumentDB 4.4 version is not supported"
+            "DocumentDB 4.4 version is not supported"
         );
         // self-hosted version
         assert_eq!(get_mongodb_version("4", false).unwrap(), "4.4.2");
@@ -694,7 +703,7 @@ mod tests_mongodb {
                 .unwrap_err()
                 .message
                 .as_str(),
-            "this MongoDB 3.4 version is not supported"
+            "MongoDB 3.4 version is not supported"
         );
     }
 }

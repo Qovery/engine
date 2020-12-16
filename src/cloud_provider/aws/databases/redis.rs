@@ -15,9 +15,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, StringError,
-};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
 
 pub struct Redis {
@@ -71,7 +69,6 @@ impl Redis {
         &self,
         kubernetes: &dyn Kubernetes,
         environment: &Environment,
-        is_managed_services: bool,
     ) -> Result<TeraContext, EngineError> {
         let mut context = self.default_tera_context(kubernetes, environment);
 
@@ -110,33 +107,32 @@ impl Redis {
             ),
         }
 
-        let is_managed_version = match environment.kind {
+        let is_managed_services = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
         };
 
-        let database_version = match get_redis_version(&self.version(), is_managed_version) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    EngineErrorScope::Engine,
-                    self.id(),
-                    Some(e),
-                ));
-            }
+        let version = self.matching_correct_version(is_managed_services)?;
+
+        let parameter_group_name = if version.starts_with("5.") {
+            "default.redis5.0"
+        } else if version.starts_with("6.") {
+            "default.redis6.x"
+        } else {
+            return Err(self.engine_error(
+                EngineErrorCause::Internal,
+                "Elasticache parameter group name unknown".to_string(),
+            ));
         };
-        context.insert("database_version", database_version.as_str());
+
         context.insert(
-            "database_version_major",
-            &database_version.chars().next().unwrap(),
+            "database_elasticache_parameter_group_name",
+            parameter_group_name,
         );
 
         context.insert("namespace", environment.namespace());
-        context.insert(
-            "version",
-            &self.matching_correct_version(is_managed_services),
-        );
+
+        context.insert("database_version", &version); // TODO change to `version` key
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
@@ -169,7 +165,7 @@ impl Redis {
         Ok(context)
     }
 
-    fn matching_correct_version(&self, is_managed_services: bool) -> String {
+    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         match get_redis_version(self.version(), is_managed_services) {
             Ok(version) => {
                 info!(
@@ -178,7 +174,7 @@ impl Redis {
                     version
                 );
 
-                version
+                Ok(version)
             }
             Err(err) => {
                 error!("{}", err);
@@ -186,7 +182,14 @@ impl Redis {
                     "fallback on the version {} provided by the user",
                     self.version()
                 );
-                self.version().to_string()
+
+                Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "The provided Redis version is not supported, please refer to the \
+                documentation https://docs.qovery.com",
+                    ),
+                    err,
+                ))
             }
         }
     }
@@ -196,7 +199,7 @@ impl Redis {
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                let context = self.tera_context(*kubernetes, *environment, true)?;
+                let context = self.tera_context(*kubernetes, *environment)?;
 
                 // deploy before destroy to avoid missing elements
                 self.on_create(target)?;
@@ -311,8 +314,8 @@ impl Create for Redis {
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
-                info!("deploy Redis on AWS ElasticCache for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment, true)?;
+                info!("deploy Redis on AWS Elasticache for {}", self.name());
+                let context = self.tera_context(*kubernetes, *environment)?;
 
                 let workspace_dir = self.workspace_directory();
 
@@ -363,7 +366,7 @@ impl Create for Redis {
                 // use helm
                 info!("deploy Redis on Kubernetes for {}", self.name());
 
-                let context = self.tera_context(*kubernetes, *environment, false)?;
+                let context = self.tera_context(*kubernetes, *environment)?;
                 let workspace_dir = self.workspace_directory();
 
                 let aws = kubernetes
@@ -649,7 +652,7 @@ mod tests {
         assert_eq!(get_redis_version("5", true).unwrap(), "5.0.6");
         assert_eq!(
             get_redis_version("1.0", true).unwrap_err().message.as_str(),
-            "this Elasticache 1.0 version is not supported"
+            "Elasticache 1.0 version is not supported"
         );
 
         // self-hosted version
@@ -660,7 +663,7 @@ mod tests {
                 .unwrap_err()
                 .message
                 .as_str(),
-            "this Redis 1.0 version is not supported"
+            "Redis 1.0 version is not supported"
         );
     }
 }

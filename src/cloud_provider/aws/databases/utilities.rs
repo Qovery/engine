@@ -100,7 +100,7 @@ pub fn get_supported_version_to_use<'a>(
             Some(version) => Ok(version.to_string()),
             None => {
                 return Err(format!(
-                    "this {} {} version is not supported",
+                    "{} {} version is not supported",
                     database_name, version_to_check
                 ))
             }
@@ -115,7 +115,7 @@ pub fn get_supported_version_to_use<'a>(
             Some(version) => Ok(version.to_string()),
             None => {
                 return Err(format!(
-                    "this {} {} version is not supported",
+                    "{} {} version is not supported",
                     database_name, version_to_check
                 ))
             }
@@ -127,7 +127,7 @@ pub fn get_supported_version_to_use<'a>(
         Some(version) => Ok(version.to_string()),
         None => {
             return Err(format!(
-                "this {} {} version is not supported",
+                "{} {} version is not supported",
                 database_name, version_to_check
             ))
         }
