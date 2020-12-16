@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities::{
@@ -5,7 +7,7 @@ use crate::cloud_provider::aws::databases::utilities::{
 };
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
 use crate::cloud_provider::aws::{common, AWS};
-use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::environment::{Environment, Kind};
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
     Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause,
@@ -17,7 +19,6 @@ use crate::cmd::structs::LabelsContent;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
-use std::collections::HashMap;
 
 pub struct PostgreSQL {
     context: Context,
@@ -70,8 +71,7 @@ impl PostgreSQL {
         &self,
         kubernetes: &dyn Kubernetes,
         environment: &Environment,
-        is_managed_services: bool,
-    ) -> TeraContext {
+    ) -> Result<TeraContext, EngineError> {
         let mut context = self.default_tera_context(kubernetes, environment);
 
         // FIXME: is there an other way than downcast a pointer?
@@ -80,6 +80,11 @@ impl PostgreSQL {
             .as_any()
             .downcast_ref::<AWS>()
             .expect("Could not downcast kubernetes.cloud_provider() to AWS");
+
+        let is_managed_services = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
 
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kubernetes_config_file_path = utilities::get_kubernetes_config_path(
@@ -110,10 +115,9 @@ impl PostgreSQL {
         }
 
         context.insert("namespace", environment.namespace());
-        context.insert(
-            "version",
-            &self.matching_correct_version(is_managed_services),
-        );
+
+        let version = self.matching_correct_version(is_managed_services)?;
+        context.insert("version", &version);
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
@@ -147,10 +151,10 @@ impl PostgreSQL {
             )
         }
 
-        context
+        Ok(context)
     }
 
-    fn matching_correct_version(&self, is_managed_services: bool) -> String {
+    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         match get_postgres_version(self.version(), is_managed_services) {
             Ok(version) => {
                 info!(
@@ -159,7 +163,7 @@ impl PostgreSQL {
                     version
                 );
 
-                version
+                Ok(version)
             }
             Err(err) => {
                 error!("{}", err);
@@ -167,7 +171,14 @@ impl PostgreSQL {
                     "fallback on the version {} provided by the user",
                     self.version()
                 );
-                self.version().to_string()
+
+                Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "The provided PostgreSQL version is not supported, please refer to the \
+                documentation https://docs.qovery.com",
+                    ),
+                    err,
+                ))
             }
         }
     }
@@ -177,7 +188,7 @@ impl PostgreSQL {
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                let context = self.tera_context(*kubernetes, *environment, true);
+                let context = self.tera_context(*kubernetes, *environment)?;
 
                 let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
@@ -332,7 +343,7 @@ impl Create for PostgreSQL {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy postgresql on AWS RDS for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment, true);
+                let context = self.tera_context(*kubernetes, *environment)?;
 
                 let workspace_dir = self.workspace_directory();
 
@@ -383,7 +394,7 @@ impl Create for PostgreSQL {
                 // use helm
                 info!("deploy PostgreSQL on Kubernetes for {}", self.name());
 
-                let context = self.tera_context(*kubernetes, *environment, false);
+                let context = self.tera_context(*kubernetes, *environment)?;
 
                 let aws = kubernetes
                     .cloud_provider()
@@ -684,8 +695,9 @@ fn get_postgres_version(
 
 #[cfg(test)]
 mod tests_postgres {
-    use crate::cloud_provider::aws::databases::postgresql::get_postgres_version;
     use std::collections::HashMap;
+
+    use crate::cloud_provider::aws::databases::postgresql::get_postgres_version;
 
     #[test]
     fn check_postgres_version() {
@@ -697,14 +709,14 @@ mod tests_postgres {
                 .unwrap_err()
                 .message
                 .as_str(),
-            "this Postgresql 12.3.0 version is not supported"
+            "Postgresql 12.3.0 version is not supported"
         );
         assert_eq!(
             get_postgres_version("11.3", true)
                 .unwrap_err()
                 .message
                 .as_str(),
-            "this Postgresql 11.3 version is not supported"
+            "Postgresql 11.3 version is not supported"
         );
         // self-hosted version
         assert_eq!(get_postgres_version("12", false).unwrap(), "12.4.0");
@@ -715,7 +727,7 @@ mod tests_postgres {
                 .unwrap_err()
                 .message
                 .as_str(),
-            "this Postgresql 1.0 version is not supported"
+            "Postgresql 1.0 version is not supported"
         );
     }
 }

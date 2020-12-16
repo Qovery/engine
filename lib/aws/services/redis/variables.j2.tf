@@ -58,7 +58,7 @@ variable "elasticache_version" {
 
 variable "parameter_group_name" {
   description = "Elasticache parameter group name"
-  default = "{% if database_version_major == '6' %}default.redis6.x{% else %}default.redis5.0{% endif %}"
+  default = "{{ database_elasticache_parameter_group_name }}"
   type = string
 }
 
