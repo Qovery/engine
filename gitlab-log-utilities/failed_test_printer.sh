@@ -3,12 +3,12 @@
 OUTPUT_DIR_TESTS_FILES="output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
 
-cd $OUTPUT_DIR_TESTS_FILES
-
 echo "===================================================="
 echo "            GENERATED OUTPUT TESTS"
 echo "===================================================="
-for entry in *
+dirlist=(`ls ${OUTPUT_DIR_TESTS_FILES}/*`)
+
+for entry in ${dirlist[@]}
 do
   f="$(basename $entry)"
   echo $f
@@ -29,7 +29,7 @@ do
     echo -e "\e[31mFailed test $test_name"
     test_name=$(echo $line | jq .name)
 
-    for entry in *
+    for entry in ${dirlist[@]}
     do
       f="$(basename $entry)"
       if [[ $test_name =~ $f ]]; then
