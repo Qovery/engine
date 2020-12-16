@@ -308,7 +308,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | ../$GITLAB_LOG_UTILITIES_DIR/sorter.sh
   TESTS_STATUS="${PIPESTATUS[0]}"
   # uncomment this when test logs will be in json format
-  ../gitlab-log-utilities/failed_test_printer.sh
+  ../$GITLAB_LOG_UTILITIES_DIR/failed_test_printer.sh
   return $TESTS_STATUS
 }
 
