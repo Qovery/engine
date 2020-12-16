@@ -645,15 +645,6 @@ fn get_mysql_version(
         // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
         database_name = "RDS MySQL";
 
-        // v56
-        let mut v56 = generate_supported_version(5, 6, 6, Some(34), Some(49), None);
-        v56.remove("5.6.47");
-        v56.remove("5.6.45");
-        v56.remove("5.6.42");
-        v56.remove("5.6.38");
-        v56.remove("5.6.36");
-        supported_mysql_versions.extend(v56);
-
         // v5.7
         let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
         v57.remove("5.7.29");
@@ -670,10 +661,6 @@ fn get_mysql_version(
         supported_mysql_versions.extend(v8);
     } else {
         // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
-
-        // v5.6
-        let v56 = generate_supported_version(5, 6, 6, Some(34), Some(49), None);
-        supported_mysql_versions.extend(v56);
 
         // v5.7
         let v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
