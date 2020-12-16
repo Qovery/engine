@@ -5,6 +5,8 @@ JUNIT_REPORT="junit-report.json"
 
 
 cd $OUTPUT_DIR_TESTS_FILES
+pwd
+ls
 
 echo "===================================================="
 echo "            GENERATED OUTPUT TESTS"
