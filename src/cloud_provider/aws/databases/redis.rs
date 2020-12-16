@@ -131,8 +131,7 @@ impl Redis {
         );
 
         context.insert("namespace", environment.namespace());
-
-        context.insert("database_version", &version); // TODO change to `version` key
+        context.insert("version", &version);
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);

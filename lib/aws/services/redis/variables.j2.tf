@@ -52,7 +52,7 @@ variable "elasticache_identifier" {
 
 variable "elasticache_version" {
   description = "Elasticache version"
-  default = "{{ database_version }}"
+  default = "{{ version }}"
   type = string
 }
 
