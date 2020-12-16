@@ -13,7 +13,6 @@ pub type Describe = String;
 
 pub fn kubernetes_config_path(
     workspace_directory: &str,
-    organization_id: &str,
     kubernetes_cluster_id: &str,
     access_key_id: &str,
     secret_access_key: &str,
@@ -57,7 +56,6 @@ pub fn get_stateless_resource_information_for_user(
 
     let kubernetes_config_file_path = kubernetes_config_path(
         workspace_dir,
-        environment.organization_id.as_str(),
         kubernetes.id(),
         aws.access_key_id.as_str(),
         aws.secret_access_key.as_str(),
@@ -144,7 +142,6 @@ pub fn get_stateless_resource_information(
 
     let kubernetes_config_file_path = kubernetes_config_path(
         workspace_dir,
-        environment.organization_id.as_str(),
         kubernetes.id(),
         aws.access_key_id.as_str(),
         aws.secret_access_key.as_str(),
@@ -207,7 +204,6 @@ pub fn do_stateless_service_cleanup(
 
     let kubernetes_config_file_path = kubernetes_config_path(
         workspace_dir,
-        environment.organization_id.as_str(),
         kubernetes.id(),
         aws.access_key_id.as_str(),
         aws.secret_access_key.as_str(),

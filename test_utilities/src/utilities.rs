@@ -115,7 +115,6 @@ pub fn is_pod_restarted_aws_env(
 
     let kubernetes_config = common::kubernetes_config_path(
         "/tmp",
-        &environment_check.organization_id.as_str(),
         KUBE_CLUSTER_ID,
         aws_access_key_id().as_str(),
         aws_secret_access_key().as_str(),

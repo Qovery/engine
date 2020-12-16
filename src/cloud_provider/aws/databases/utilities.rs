@@ -21,7 +21,6 @@ pub fn get_kubernetes_config_path(
 
     common::kubernetes_config_path(
         workspace,
-        environment.organization_id.as_str(),
         kubernetes.id(),
         aws.access_key_id.as_str(),
         aws.secret_access_key.as_str(),
@@ -55,7 +54,6 @@ pub fn delete_terraform_tfstate_secret(
 
     let kubernetes_config_file_path = common::kubernetes_config_path(
         workspace_dir,
-        environment.organization_id.as_str(),
         kubernetes.id(),
         aws.access_key_id.as_str(),
         aws.secret_access_key.as_str(),
