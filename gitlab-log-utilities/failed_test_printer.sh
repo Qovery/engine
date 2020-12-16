@@ -33,7 +33,7 @@ do
         echo "****************************************************"
         echo -e "\e[31m LOGS FOR TEST $test_name"
         echo "****************************************************"
-        cat $entry
+        jq -c ' "\(.timestamp) ===> \(.fields.message)"' $entry
       fi
     done
   ;;
