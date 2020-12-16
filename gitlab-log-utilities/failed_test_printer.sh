@@ -2,10 +2,16 @@
 
 OUTPUT_DIR_TESTS_FILES="output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
+
+echo "--"
 pwd
+ls
+ls output
+echo "--"
 echo "===================================================="
 echo "            GENERATED OUTPUT TESTS"
 echo "===================================================="
+
 dirlist=(`ls ${OUTPUT_DIR_TESTS_FILES}/*`)
 
 for entry in ${dirlist[@]}
