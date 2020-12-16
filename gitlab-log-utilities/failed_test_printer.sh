@@ -3,16 +3,14 @@
 OUTPUT_DIR_TESTS_FILES="output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
 
-echo "--"
-pwd
-ls
-ls output
-echo "--"
+
+cd $OUTPUT_DIR_TESTS_FILES
+
 echo "===================================================="
 echo "            GENERATED OUTPUT TESTS"
 echo "===================================================="
 
-dirlist=(`ls ${OUTPUT_DIR_TESTS_FILES}/*`)
+dirlist=(`ls`)
 
 for entry in ${dirlist[@]}
 do
