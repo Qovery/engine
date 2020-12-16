@@ -67,7 +67,12 @@ impl MongoDB {
         crate::string::cut(format!("mongodb-{}", self.id()), 50)
     }
 
-    fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+    fn tera_context(
+        &self,
+        kubernetes: &dyn Kubernetes,
+        environment: &Environment,
+        is_managed_services: bool,
+    ) -> TeraContext {
         let mut context = self.default_tera_context(kubernetes, environment);
         // FIXME: is there an other way than downcast a pointer?
         let cp = kubernetes
@@ -105,6 +110,10 @@ impl MongoDB {
         }
 
         context.insert("namespace", environment.namespace());
+        context.insert(
+            "version",
+            &self.matching_correct_version(is_managed_services),
+        );
 
         context.insert("aws_access_key", &cp.access_key_id);
         context.insert("aws_secret_key", &cp.secret_access_key);
@@ -137,12 +146,35 @@ impl MongoDB {
         context
     }
 
+    fn matching_correct_version(&self, is_managed_services: bool) -> String {
+        match get_mongodb_version(self.version(), is_managed_services) {
+            Ok(version) => {
+                info!(
+                    "version {} has been requested by the user; but matching version is {}",
+                    self.version(),
+                    version
+                );
+
+                version
+            }
+            Err(err) => {
+                error!("{}", err);
+                warn!(
+                    "fallback on the version {} provided by the user",
+                    self.version()
+                );
+
+                self.version().to_string()
+            }
+        }
+    }
+
     fn delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let workspace_dir = self.workspace_directory();
 
         match target {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                let context = self.tera_context(*kubernetes, *environment);
+                let context = self.tera_context(*kubernetes, *environment, true);
 
                 let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
@@ -297,7 +329,7 @@ impl Create for MongoDB {
             DeploymentTarget::ManagedServices(kubernetes, environment) => {
                 // use terraform
                 info!("deploy mongodb on AWS DocumentDB for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment);
+                let context = self.tera_context(*kubernetes, *environment, true);
                 let workspace_dir = self.workspace_directory();
 
                 let _ = cast_simple_error_to_engine_error(
@@ -347,7 +379,7 @@ impl Create for MongoDB {
             DeploymentTarget::SelfHosted(kubernetes, environment) => {
                 // use helm
                 info!("deploy MongoDB on Kubernetes for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment);
+                let context = self.tera_context(*kubernetes, *environment, false);
 
                 let aws = kubernetes
                     .cloud_provider()
@@ -597,41 +629,41 @@ fn get_mongodb_version(
     requested_version: &str,
     is_managed_service: bool,
 ) -> Result<String, StringError> {
-    let mut supported_mondogb_versions = HashMap::new();
+    let mut supported_mongodb_versions = HashMap::new();
     let mut database_name = "MongoDB";
 
     if is_managed_service {
         database_name = "DocumentDB";
         // v3.6.0
         let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(0), None);
-        supported_mondogb_versions.extend(mongo_version);
+        supported_mongodb_versions.extend(mongo_version);
 
         // v4.0.0
         let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(0), None);
-        supported_mondogb_versions.extend(mongo_version);
+        supported_mongodb_versions.extend(mongo_version);
     } else {
         // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
 
         // v3.6
         let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(21), None);
-        supported_mondogb_versions.extend(mongo_version);
+        supported_mongodb_versions.extend(mongo_version);
 
         // v4.0
         let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(21), None);
-        supported_mondogb_versions.extend(mongo_version);
+        supported_mongodb_versions.extend(mongo_version);
 
         // v4.2
         let mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(11), None);
-        supported_mondogb_versions.extend(mongo_version);
+        supported_mongodb_versions.extend(mongo_version);
 
         // v4.4
         let mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(2), None);
-        supported_mondogb_versions.extend(mongo_version);
+        supported_mongodb_versions.extend(mongo_version);
     }
 
     utilities::get_supported_version_to_use(
         database_name,
-        supported_mondogb_versions,
+        supported_mongodb_versions,
         requested_version,
     )
 }

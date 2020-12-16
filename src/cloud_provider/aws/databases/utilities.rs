@@ -99,10 +99,10 @@ pub fn get_supported_version_to_use<'a>(
         )) {
             Some(version) => Ok(version.to_string()),
             None => {
-                return Err(StringError::new(format!(
+                return Err(format!(
                     "this {} {} version is not supported",
                     database_name, version_to_check
-                )))
+                ))
             }
         };
     }
@@ -114,10 +114,10 @@ pub fn get_supported_version_to_use<'a>(
         {
             Some(version) => Ok(version.to_string()),
             None => {
-                return Err(StringError::new(format!(
+                return Err(format!(
                     "this {} {} version is not supported",
                     database_name, version_to_check
-                )))
+                ))
             }
         };
     };
@@ -126,10 +126,10 @@ pub fn get_supported_version_to_use<'a>(
     match all_supported_versions.get(&version.major) {
         Some(version) => Ok(version.to_string()),
         None => {
-            return Err(StringError::new(format!(
+            return Err(format!(
                 "this {} {} version is not supported",
                 database_name, version_to_check
-            )))
+            ))
         }
     }
 }
