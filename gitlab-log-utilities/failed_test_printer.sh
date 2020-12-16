@@ -1,6 +1,6 @@
 #!/bin/bash
 
-OUTPUT_DIR_TESTS_FILES="../gitlab-log-utilities/output"
+OUTPUT_DIR_TESTS_FILES="output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
 pwd
 echo "===================================================="
