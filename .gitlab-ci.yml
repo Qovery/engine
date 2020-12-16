@@ -34,6 +34,9 @@ wip-fast-tests:
     when: always
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+    expire_in: 1 week
 
 wip-full-tests:
   stage: tests
