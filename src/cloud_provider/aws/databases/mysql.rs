@@ -703,10 +703,7 @@ mod tests_mysql {
         assert_eq!(get_mysql_version("8.0", true).unwrap(), "8.0.21");
         assert_eq!(get_mysql_version("8.0.16", true).unwrap(), "8.0.16");
         assert_eq!(
-            get_mysql_version("8.0.18", true)
-                .unwrap_err()
-                .message
-                .as_str(),
+            get_mysql_version("8.0.18", true).unwrap_err().as_str(),
             "RDS MySQL 8.0.18 version is not supported"
         );
         // self-hosted version
@@ -714,10 +711,7 @@ mod tests_mysql {
         assert_eq!(get_mysql_version("5.7", false).unwrap(), "5.7.31");
         assert_eq!(get_mysql_version("5.7.31", false).unwrap(), "5.7.31");
         assert_eq!(
-            get_mysql_version("1.0", false)
-                .unwrap_err()
-                .message
-                .as_str(),
+            get_mysql_version("1.0", false).unwrap_err().as_str(),
             "MySQL 1.0 version is not supported"
         );
     }

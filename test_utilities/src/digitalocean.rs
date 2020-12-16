@@ -114,7 +114,7 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
 }
 
 pub fn get_kube_cluster_name_from_uuid(uuid: &str) -> String {
-    let mut headers = get_header_with_bearer(digital_ocean_token().as_str());
+    let headers = get_header_with_bearer(digital_ocean_token().as_str());
     let path = format!(
         "https://api.digitalocean.com/v2/kubernetes/clusters/{}",
         uuid
