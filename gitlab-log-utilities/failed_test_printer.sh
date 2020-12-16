@@ -35,7 +35,7 @@ do
         echo "****************************************************"
         echo -e "\e[31m LOGS FOR TEST $test_name"
         echo "****************************************************"
-        jq -c ' "\(.timestamp) ===> \(.fields.message)"' $entry
+        jq -c ' "\(.timestamp) : \(.target) ===> \(.fields.message)"' $entry
       fi
     done
   ;;
