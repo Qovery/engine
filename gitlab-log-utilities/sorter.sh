@@ -17,8 +17,10 @@ if [ -p /dev/stdin ]; then
         echo -e "\e[31$line"
       elif [ "$(echo "$line" | jq 'has("spans")')" == "true" ]; then
         # it's a test log line
+        echo "TEST LOGGG"
         filename=$( echo $line | jq -r '.spans[].name' )
         echo "$line" >> "$OUTPUT_DIR_TESTS_FILES/$filename"
+        readlink -f "$OUTPUT_DIR_TESTS_FILES/$filename"
       fi
     else
       # test are not in json format ? print them all anyway
