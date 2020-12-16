@@ -26,3 +26,6 @@ if [ -p /dev/stdin ]; then
     fi
   done
 fi
+
+ls $OUTPUT_DIR_TESTS_FILES
+readlink $JUNIT_REPORT
