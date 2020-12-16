@@ -1,7 +1,7 @@
 #!/bin/bash
 
 OUTPUT_DIR_TESTS_FILES="output"
-JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
+JUNIT_REPORT="junit-report.json"
 
 
 cd $OUTPUT_DIR_TESTS_FILES
