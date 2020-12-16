@@ -2,7 +2,7 @@
 
 OUTPUT_DIR_TESTS_FILES="output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
-
+pwd
 echo "===================================================="
 echo "            GENERATED OUTPUT TESTS"
 echo "===================================================="
