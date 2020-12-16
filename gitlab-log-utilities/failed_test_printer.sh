@@ -2,11 +2,13 @@
 
 OUTPUT_DIR_TESTS_FILES="../gitlab-log-utilities/output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
+pwd
 echo "===================================================="
 echo "OUTPUT TESTS GENERATED"
 echo "===================================================="
     for entry in "$OUTPUT_DIR_TESTS_FILES"/*
     do
+      pwd
       f="$(basename $entry)"
       echo $f
     done
