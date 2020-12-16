@@ -678,8 +678,6 @@ fn get_mongodb_version(
 
 #[cfg(test)]
 mod tests_mongodb {
-    use std::collections::HashMap;
-
     use crate::cloud_provider::aws::databases::mongodb::get_mongodb_version;
 
     #[test]
@@ -688,20 +686,14 @@ mod tests_mongodb {
         assert_eq!(get_mongodb_version("4", true).unwrap(), "4.0.0");
         assert_eq!(get_mongodb_version("4.0", true).unwrap(), "4.0.0");
         assert_eq!(
-            get_mongodb_version("4.4", true)
-                .unwrap_err()
-                .message
-                .as_str(),
+            get_mongodb_version("4.4", true).unwrap_err().as_str(),
             "DocumentDB 4.4 version is not supported"
         );
         // self-hosted version
         assert_eq!(get_mongodb_version("4", false).unwrap(), "4.4.2");
         assert_eq!(get_mongodb_version("4.2", false).unwrap(), "4.2.11");
         assert_eq!(
-            get_mongodb_version("3.4", false)
-                .unwrap_err()
-                .message
-                .as_str(),
+            get_mongodb_version("3.4", false).unwrap_err().as_str(),
             "MongoDB 3.4 version is not supported"
         );
     }
