@@ -19,9 +19,6 @@ if [ -p /dev/stdin ]; then
         # it's a test log line
         filename=$( echo $line | jq -r '.spans[].name' )
         echo "$line" >> "$OUTPUT_DIR_TESTS_FILES/$filename"
-        echo "****************"
-        cat "$OUTPUT_DIR_TESTS_FILES/$filename"
-        echo "****************"
       fi
     else
       # test are not in json format ? print them all anyway

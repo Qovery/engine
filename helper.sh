@@ -305,7 +305,8 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   prepare_tests
   cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
-  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json | ../$GITLAB_LOG_UTILITIES_DIR/sorter.sh
+  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee tests.log
+  cat tests.log | ../$GITLAB_LOG_UTILITIES_DIR/sorter.sh
   TESTS_STATUS="${PIPESTATUS[0]}"
   cd ../$GITLAB_LOG_UTILITIES_DIR
   # uncomment this when test logs will be in json format
