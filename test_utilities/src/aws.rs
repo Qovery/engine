@@ -30,7 +30,7 @@ pub fn aws_access_key_id() -> String {
     std::env::var("AWS_ACCESS_KEY_ID").expect("env var AWS_ACCESS_KEY_ID is mandatory")
 }
 
-pub fn aws_secret_access_key() -> String {
+pub fn aws_secret_key() -> String {
     std::env::var("AWS_SECRET_ACCESS_KEY").expect("env var AWS_SECRET_ACCESS_KEY is mandatory")
 }
 
@@ -60,7 +60,7 @@ pub fn container_registry_ecr(context: &Context) -> ECR {
         "default-ecr-registry-Qovery Test",
         "ea59qe62xaw3wjai",
         aws_access_key_id().as_str(),
-        aws_secret_access_key().as_str(),
+        aws_secret_key().as_str(),
         aws_default_region().as_str(),
     )
 }
@@ -97,7 +97,7 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
         ORGANIZATION_ID,
         "QoveryTest",
         aws_access_key_id().as_str(),
-        aws_secret_access_key().as_str(),
+        aws_secret_key().as_str(),
         TerraformStateCredentials {
             access_key_id: terraform_aws_access_key_id().to_string(),
             secret_access_key: terraform_aws_secret_access_key().to_string(),

@@ -1,19 +1,21 @@
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
+use std::fs::read_to_string;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
-use std::fs::read_to_string;
-use std::fs::File;
-use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
 use tracing::info;
 use tracing_subscriber;
 
+use crate::aws::{aws_access_key_id, aws_default_region, aws_secret_key, KUBE_CLUSTER_ID};
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cmd;
 use qovery_engine::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
@@ -22,7 +24,6 @@ use qovery_engine::models::{Context, Environment, Metadata};
 extern crate time;
 use time::Instant;
 
-use crate::aws::{aws_access_key_id, aws_secret_access_key, KUBE_CLUSTER_ID};
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
@@ -225,7 +226,7 @@ pub fn is_pod_restarted_aws_env(environment_check: Environment, pod_to_check: &s
     );
 
     let access_key = aws_access_key_id();
-    let secret_key = aws_secret_access_key();
+    let secret_key = aws_secret_key();
     let aws_credentials_envs = vec![
         ("AWS_ACCESS_KEY_ID", access_key.as_str()),
         ("AWS_SECRET_ACCESS_KEY", secret_key.as_str()),
@@ -235,7 +236,12 @@ pub fn is_pod_restarted_aws_env(environment_check: Environment, pod_to_check: &s
         "/tmp",
         KUBE_CLUSTER_ID,
         aws_access_key_id().as_str(),
+<<<<<<< HEAD
         aws_secret_access_key().as_str(),
+=======
+        aws_secret_key().as_str(),
+        aws_default_region().as_str(),
+>>>>>>> be0952b... remove role generation from the helper
     );
 
     match kubernetes_config {

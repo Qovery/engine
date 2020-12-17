@@ -419,11 +419,17 @@ impl<'a> Kubernetes for EKS<'a> {
         ));
 
         // create AWS IAM roles
-        let default_role_to_create = get_default_roles_to_create();
-        for role in default_role_to_create {
-            match role.create_service_linked_role() {
-                Ok(_) => info!("Role {}, is successfully linked"),
-                Err(_) => error!("Role {}, isn't well linked"),
+        let already_created_roles = get_default_roles_to_create();
+        for role in already_created_roles {
+            match role.create_service_linked_role(
+                self.cloud_provider.access_key_id.as_str(),
+                self.cloud_provider.secret_access_key.as_str(),
+            ) {
+                Ok(_) => info!("Role {} already exist, or just created", role.role_name),
+                Err(e) => error!(
+                    "Wile getting, or creating the role {} : causing by {:?}",
+                    role.role_name, e
+                ),
             }
         }
 
