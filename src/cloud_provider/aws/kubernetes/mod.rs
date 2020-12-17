@@ -17,11 +17,12 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
 use crate::error::EngineErrorCause::Internal;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
+use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
@@ -30,6 +31,7 @@ use retry::Error::Operation;
 use retry::OperationResult;
 
 pub mod node;
+pub mod roles;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Options {
@@ -415,6 +417,15 @@ impl<'a> Kubernetes for EKS<'a> {
             )),
             self.context.execution_id(),
         ));
+
+        // create AWS IAM roles
+        let default_role_to_create = get_default_roles_to_create();
+        for role in default_role_to_create {
+            match role.create_service_linked_role() {
+                Ok(_) => info!("Role {}, is successfully linked"),
+                Err(_) => error!("Role {}, isn't well linked"),
+            }
+        }
 
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
