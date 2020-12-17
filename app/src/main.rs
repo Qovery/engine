@@ -604,8 +604,6 @@ pub fn using_json_path_parameter(
         task_manager.lock().unwrap().add_task(task);
         let _ = task_manager.lock().unwrap().run();
     }
-
-    Ok(())
 }
 
 // the engine can be autonomous using the nats server to receive actions

@@ -146,13 +146,9 @@ impl TaskManager {
 
         let _ = thread::spawn(move || loop {
             let _ = match self_it_receiver.try_lock() {
-                Ok(it_receiver) => {
-                    let _ = match it_receiver.try_recv() {
+                Ok(self_it_receiver) => {
+                    let _ = match self_it_receiver.try_recv() {
                         Ok(internal_task) => {
-                            let self_it_receiver = self_it_receiver
-                                .lock()
-                                .expect("Could not lock internal task receiver"); // safe?
-
                             // does the task is validated to be run?
                             match internal_task.task.pre_run() {
                                 PreRun::Yes => {
@@ -241,7 +237,7 @@ impl TaskManager {
                         _ => {}
                     };
                 }
-                _ => {}
+                Err(_) => {}
             };
 
             debug!("no task to run, wait for 1 sec");
