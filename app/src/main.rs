@@ -119,7 +119,7 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> PreR
                 Err(err) => panic!(err),
             };
 
-        msg.respond(Response::new(None).as_json_string());
+        let _ = msg.respond(Response::new(None).as_json_string());
 
         if is_task_running {
             warn!(
@@ -178,7 +178,7 @@ fn listen_for_task_running_check_events(
 
 /// check if the current task is the next one to run
 /// ask to other Engine if they have a task that must be launched sooner
-/// this is a way to lazily order tasks  
+/// this is a way to lazily order tasks
 fn is_the_next_task_to_run(task: &dyn Task, nc: Connection, mode: Mode) -> PreRun {
     let subject_name = subject(&mode, ENGINE_TASK_ORDER_EXECUTION_CHECK_SUBJECT);
     let request =
@@ -203,7 +203,7 @@ fn is_the_next_task_to_run(task: &dyn Task, nc: Connection, mode: Mode) -> PreRu
                 Err(err) => panic!(err),
             };
 
-        msg.respond(Response::new(None).as_json_string());
+        let _ = msg.respond(Response::new(None).as_json_string());
 
         if !is_first_place {
             warn!(
@@ -287,7 +287,7 @@ fn listen_for_events(
         Environment(_) => "environment",
     };
 
-    thread::Builder::new()
+    let _ = thread::Builder::new()
         .name(format!("nats-event-receiver-{}", ts_str))
         .spawn(move || {
             let nc = nc.clone();
@@ -318,7 +318,7 @@ fn listen_for_events(
                                 req.metadata.clone(),
                             );
 
-                            tx.send(match task_selector {
+                            let _ = tx.send(match task_selector {
                                 TaskSelector::Infrastructure(_) => Box::new(
                                     InfrastructureTask::new(context, req, pre_run_callback),
                                 ),
@@ -326,7 +326,8 @@ fn listen_for_events(
                                     Box::new(EnvironmentTask::new(context, req, pre_run_callback))
                                 }
                             });
-                            msg.respond(Response::new(None).as_json_string());
+
+                            let _ = msg.respond(Response::new(None).as_json_string());
                         }
                         Err(err) => {
                             error!("{}", msg);
@@ -334,7 +335,9 @@ fn listen_for_events(
                                 "receiving request but JSON decoding error occurred: {:?}",
                                 err
                             );
-                            msg.respond(Response::new(Some(err.to_string())).as_json_string());
+
+                            let response = Response::new(Some(err.to_string()));
+                            let _ = msg.respond(response.as_json_string());
                         }
                     };
                 }
@@ -348,7 +351,7 @@ fn listen_for_events(
 /// if the server does not respond - then retry 10 times (with fibonacci retry) -
 /// if it does not respond after all attempts, then gracefully restart the service.
 fn watchdog(name: String, nc: Connection, sig_term_tx: Sender<bool>) {
-    thread::Builder::new().name("watchdog".to_string()).spawn(move || {
+    let _ = thread::Builder::new().name("watchdog".to_string()).spawn(move || {
         let engine_started_at = Utc::now();
 
         loop {
@@ -380,7 +383,7 @@ fn watchdog(name: String, nc: Connection, sig_term_tx: Sender<bool>) {
                     error!("--------------------------------------------------");
                     error!("ping KO!! What's wrong? Let's shutdown the service");
                     error!("--------------------------------------------------");
-                    sig_term_tx.send(true);
+                    let _ = sig_term_tx.send(true);
                 }
             }
         }
@@ -564,7 +567,7 @@ pub fn using_json_path_parameter(
                 req.metadata.clone(),
             );
 
-            tx_task.send(Box::new(InfrastructureTask::new(
+            let _ = tx_task.send(Box::new(InfrastructureTask::new(
                 context,
                 req,
                 pre_run_callback,
@@ -575,7 +578,7 @@ pub fn using_json_path_parameter(
     loop {
         let task = rx_task.recv().unwrap();
         task_manager.lock().unwrap().add_task(task);
-        task_manager.lock().unwrap().run();
+        let _ = task_manager.lock().unwrap().run();
     }
     Ok(())
 }
@@ -628,12 +631,12 @@ pub fn using_nats_server(
     let task_manager = Arc::new(Mutex::new(TaskManager::new()));
     let t1_task_manager = task_manager.clone();
 
-    thread::Builder::new()
+    let _ = thread::Builder::new()
         .name("tm-task-adder".to_string())
         .spawn(move || {
             let rx_status = t1_task_manager.lock().unwrap().run();
 
-            thread::Builder::new()
+            let _ = thread::Builder::new()
                 .name("t-status-core-updater".to_string())
                 .spawn(move || {
                     let rx_status = rx_status.unwrap();
@@ -662,12 +665,12 @@ pub fn using_nats_server(
 
             let task_manager_is_terminated_rx = t1_task_manager.lock().unwrap().is_terminated();
 
-            thread::Builder::new()
+            let _ = thread::Builder::new()
                 .name("tm-ta-quit-handler".to_string())
                 .spawn(move || {
                     // waiting for sig term to quit gracefully by waiting that there is no remaining tasks to execute.
                     let _ = task_manager_is_terminated_rx.recv();
-                    tx_quit.send(true);
+                    let _ = tx_quit.send(true);
                 });
 
             loop {
@@ -704,7 +707,7 @@ pub fn using_nats_server(
     // ping pong
     watchdog(name.clone(), nc.clone(), sig_term_tx.clone());
 
-    thread::Builder::new()
+    let _ = thread::Builder::new()
         .name("sigterm-dispatcher".to_string())
         .spawn(move || {
             let _ = sig_term_rx.recv();
@@ -720,7 +723,7 @@ pub fn using_nats_server(
         });
 
     ctrlc::set_handler(move || {
-        sig_term_tx.send(true);
+        let _ = sig_term_tx.send(true);
     })
     .expect("Error setting Ctrl-C (SIGTERM) handler");
 

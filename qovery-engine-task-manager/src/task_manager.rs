@@ -51,10 +51,20 @@ impl TaskManager {
     }
 
     pub fn add_task(&mut self, task: Box<dyn Task>) {
+        let self_it_receiver = if !self.it_receiver.is_poisoned() {
+            // FIXME, is_poisoned is not 100% safe...
+            self.it_receiver.lock().unwrap()
+        } else {
+            warn!("error while getting lock to add a task - let's retry in 1s");
+            thread::sleep(Duration::from_secs(1));
+            return self.add_task(task);
+        };
+
         add_task(
             &self.end_task_sig_receiver,
             &self.status_by_task_id_w,
             &self.it_sender,
+            &self_it_receiver,
             task,
         );
     }
@@ -194,26 +204,14 @@ impl TaskManager {
                                 start_time.elapsed()
                             );
 
-                            if self_it_receiver.len() == 0
-                                && self_end_task_sig_receiver.try_recv().is_ok()
+                            let remaining_tasks = self_it_receiver.len();
+
+                            if remaining_tasks == 0 && self_end_task_sig_receiver.try_recv().is_ok()
                             {
                                 info!("no remaining task to run - shutdown task manager");
                                 self_task_terminated_sender.send(true);
-                            } else if self_it_receiver.len() > 0 {
-                                info!("it remains {} tasks to run", self_it_receiver.len());
-
-                                let status = Status::new(
-                                    State::DeploymentError,
-                                    Some("Your task is queued and will start once a worker is available.".to_string()),
-                                    ActionContext::new(
-                                        ProgressScope::Queued,
-                                        ProgressLevel::Info,
-                                        task_id_2,
-                                        task_created_at,
-                                    ),
-                                );
-
-                                send_status(i_task, &tx_run_msg, status);
+                            } else if remaining_tasks > 0 {
+                                info!("it remains {} tasks to run", remaining_tasks);
                             }
                         }
                         _ => {
@@ -229,6 +227,7 @@ impl TaskManager {
                                 &self_end_task_sig_receiver,
                                 &status_by_task_id_w_2,
                                 &self_it_sender,
+                                &self_it_receiver,
                                 internal_task.task,
                             );
 
@@ -256,10 +255,9 @@ fn add_task(
     end_task_sig_receiver: &Receiver<bool>,
     status_by_task_id_w: &Arc<Mutex<WriteHandle<Id, Status>>>,
     it_sender: &Sender<InternalTask>,
+    it_receiver: &Receiver<InternalTask>,
     task: Box<dyn Task>,
 ) {
-    // TODO notify task has been queued
-
     let _ = match end_task_sig_receiver.try_recv() {
         Ok(x) => {
             if x {
@@ -272,11 +270,33 @@ fn add_task(
         Err(_) => (),
     };
 
+    // notify task has been queued
     let task_id = task.id().to_string();
+    let remaining_tasks = it_receiver.len();
+
+    let message = if remaining_tasks > 0 {
+        // the task is going to be queue
+        let remaining_task_sentence = if remaining_tasks > 1 {
+            format!("{} tasks remained.", remaining_tasks)
+        } else {
+            format!("{} task remained.", remaining_tasks)
+        };
+
+        let message = format!(
+            "Your task is queued and will start once a worker \
+                                    is available. {}",
+            remaining_task_sentence
+        );
+
+        Some(message)
+    } else {
+        // the task is going to be executed right away
+        None
+    };
 
     let status = Status::new(
         State::Waiting,
-        None,
+        message,
         ActionContext::new(
             ProgressScope::Queued,
             ProgressLevel::Info,
@@ -288,7 +308,7 @@ fn add_task(
     status_by_task_id_w
         .lock()
         //TODO: handle lock failure
-        .expect("could not lock task status writer whin trying to add task")
+        .expect("could not lock task status writer while trying to add task")
         .insert(task_id.to_string(), status.clone())
         .refresh();
 
