@@ -50,14 +50,14 @@ impl TaskManager {
         }
     }
 
-    pub fn add_task(&mut self, task: Box<dyn Task>) {
-        let self_it_receiver = if !self.it_receiver.is_poisoned() {
-            // FIXME, is_poisoned is not 100% safe...
-            self.it_receiver.lock().unwrap()
-        } else {
-            warn!("error while getting lock to add a task - let's retry in 1s");
-            thread::sleep(Duration::from_secs(1));
-            return self.add_task(task);
+    pub fn add_task(&self, task: Box<dyn Task>) {
+        let self_it_receiver = match self.it_receiver.lock() {
+            Ok(it) => it,
+            Err(_) => {
+                warn!("error while getting lock to add a task - let's retry in 1s");
+                thread::sleep(Duration::from_secs(1));
+                return self.add_task(task);
+            }
         };
 
         add_task(
@@ -274,24 +274,35 @@ fn add_task(
     let task_id = task.id().to_string();
     let remaining_tasks = it_receiver.len();
 
-    let message = if remaining_tasks > 0 {
-        // the task is going to be queue
-        let remaining_task_sentence = if remaining_tasks > 1 {
-            format!("{} tasks remained.", remaining_tasks)
-        } else {
-            format!("{} task remained.", remaining_tasks)
-        };
+    let message = match remaining_tasks {
+        0 => {
+            // the task is going to be executed right away
+            debug!("add received task and execute it right away, there is no pending task");
+            None
+        }
+        1 => {
+            debug!(
+                "add received task but wait until the task manager is able to execute it. \
+            1 remaining task."
+            );
 
-        let message = format!(
-            "Your task is queued and will start once a worker \
-                                    is available. {}",
-            remaining_task_sentence
-        );
+            Some(format!(
+                "Your task is queued ({} task remained) and will start as soon as a worker is available.",
+                remaining_tasks
+            ))
+        }
+        _ => {
+            debug!(
+                "add received task but wait until the task manager is able to execute it. \
+            {} remaining tasks.",
+                remaining_tasks
+            );
 
-        Some(message)
-    } else {
-        // the task is going to be executed right away
-        None
+            Some(format!(
+                "Your task is queued ({} tasks remained) and will start as soon as a worker is available.",
+                remaining_tasks
+            ))
+        }
     };
 
     let status = Status::new(

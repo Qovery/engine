@@ -605,7 +605,7 @@ fn format_engine_error_output(
         EngineErrorScope::Environment(id, name) => {
             format!("Environment '{}' with id '{}'", name, id)
         }
-        EngineErrorScope::Database(id, type_, name) => {
+        EngineErrorScope::Database(id, _type, name) => {
             format!("Database '{}' with id '{}'", name, id)
         }
         EngineErrorScope::Application(id, name) => {

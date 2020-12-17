@@ -552,11 +552,13 @@ pub fn using_json_path_parameter(
         }
         true => info! {"Using {} configuration file", deploy_from_file},
     }
+
     let (tx_task, rx_task) = unbounded::<Box<dyn Task>>();
     let task_manager = Arc::new(Mutex::new(TaskManager::new()));
     let file = File::open(deploy_from_file)?;
     let reader = BufReader::new(file);
     let json_from_file: Result<Request, _> = serde_json::from_reader(reader);
+
     match json_from_file {
         Ok(req) => {
             let context = Context::new(
@@ -575,11 +577,13 @@ pub fn using_json_path_parameter(
         }
         _ => error!("Error parsing the json conf file given in parameter"),
     }
+
     loop {
         let task = rx_task.recv().unwrap();
         task_manager.lock().unwrap().add_task(task);
         let _ = task_manager.lock().unwrap().run();
     }
+
     Ok(())
 }
 
