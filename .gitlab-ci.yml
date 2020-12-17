@@ -11,8 +11,8 @@ stages:
   - release
   - deploy
 
-before_script:
-  - test -z $KUBERNETES_PORT || export DOCKER_HOST=tcp://127.0.0.1:2375
+variables:
+  - DOCKER_HOST: tcp://127.0.0.1:2375
 
 # Feat/fix branches
 
