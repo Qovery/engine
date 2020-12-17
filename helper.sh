@@ -150,14 +150,17 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
     $sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/$provider/*
   done
 
+  set +e
   if [ ! -z $DOCKER_HOST ] ; then
     return_code=1
     while [ $return_code -ne 0 ] ; do
       echo "waiting docker port 2375 to be available..."
       sleep 2
-      return_code=$(nc -zv localhost 2375)
+      nc -zv localhost 2375 2>/dev/null
+      return_code=$?
     done
   fi
+  set -e
 
   docker build -t qoveryrd/engine:${tag} .
 
