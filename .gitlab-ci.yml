@@ -1,6 +1,8 @@
 image: qoveryrd/ci:6ffaa74-31b20d3
+
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
+  DOCKER_HOST: tcp://127.0.0.1:2375
 
 services:
   - docker:dind
@@ -10,9 +12,6 @@ stages:
   - build
   - release
   - deploy
-
-variables:
-  - DOCKER_HOST: tcp://127.0.0.1:2375
 
 # Feat/fix branches
 
