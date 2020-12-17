@@ -108,6 +108,7 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> PreR
                 task.id(),
                 task.group_id()
             );
+
             return PreRun::NoAndQueueTail;
         }
     };
@@ -127,6 +128,7 @@ fn is_the_same_task_running(task: &dyn Task, nc: Connection, mode: Mode) -> PreR
                 task.group_id(),
                 task.id()
             );
+
             return PreRun::NoAndQueueTail;
         }
     }
@@ -167,6 +169,15 @@ fn listen_for_task_running_check_events(
                 true
             }
         };
+
+        info!(
+            "task with group id {} is {} here",
+            group_id,
+            match is_running {
+                true => "running",
+                false => "not running",
+            }
+        );
 
         let _ = msg.respond(CheckTaskRunningResponse::new(is_running).as_json_string());
 
@@ -254,9 +265,19 @@ fn listen_for_task_order_execution_check(
             }
             Err(_) => {
                 // if there is a lock error, we prefer to delay the deployment to not take any risk
+                info!("lock error - delay the deployment to not take any risk");
                 false
             }
         };
+
+        info!(
+            "task with group id {} is {} to be executed here",
+            req.group_id,
+            match is_first_place {
+                true => "in first position",
+                false => "not in first position",
+            }
+        );
 
         let _ = msg.respond(CheckTaskOrderResponse::new(is_first_place).as_json_string());
 
@@ -401,7 +422,7 @@ pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
                 false => Ok(()),
             }
         }
-        Err(e) => return Err(EngineInitError::Regular(ErrorKind::LibsPathsMissing)),
+        Err(_) => return Err(EngineInitError::Regular(ErrorKind::LibsPathsMissing)),
     }
 }
 
@@ -474,7 +495,7 @@ pub fn main() -> io::Result<()> {
     info!("workspace root dir: {}", workspace_root_dir.as_str());
 
     match check_libs_directory(lib_root_dir.clone()) {
-        Ok(e) => info!("Libs directory is not empty"),
+        Ok(_) => info!("Libs directory is not empty"),
         Err(e) => {
             error!("Error while initializing the Engine {}", e);
             process::exit(1);

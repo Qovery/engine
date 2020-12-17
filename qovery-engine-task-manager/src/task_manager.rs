@@ -1,5 +1,5 @@
 use std::mem::ManuallyDrop;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError};
 use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -139,112 +139,117 @@ impl TaskManager {
                             }
                         }
                     }
-                    Err(err) => {} // FIXME: handle this?
+                    Err(_) => {} // FIXME: handle this?
                 }
             }
         });
 
         let _ = thread::spawn(move || loop {
-            // TODO: Handle lock failure
-            let self_it_receiver = self_it_receiver
-                .lock()
-                .expect("Could not lock internal task receiver");
+            let _ = match self_it_receiver.try_lock() {
+                Ok(it_receiver) => {
+                    let _ = match it_receiver.try_recv() {
+                        Ok(internal_task) => {
+                            let self_it_receiver = self_it_receiver
+                                .lock()
+                                .expect("Could not lock internal task receiver"); // safe?
 
-            let _ = match self_it_receiver.try_recv() {
-                Ok(internal_task) => {
-                    // does the task is validated to be run?
-                    match internal_task.task.pre_run() {
-                        PreRun::Yes => {
-                            let start_time = Instant::now();
+                            // does the task is validated to be run?
+                            match internal_task.task.pre_run() {
+                                PreRun::Yes => {
+                                    // run task
+                                    let start_time = Instant::now();
 
-                            // run task
-                            let task_id = String::from(internal_task.task.id());
-                            let task_id_2 = task_id.clone();
-                            let task_created_at = internal_task.task.created_at().clone();
-                            let i_task = Arc::new(Mutex::new(internal_task));
-                            let thread_task = i_task.clone();
-                            let thread_tx_run_msg = tx_run_msg.clone();
+                                    let task_id = String::from(internal_task.task.id());
+                                    let task_id_2 = task_id.clone();
+                                    let task_created_at = internal_task.task.created_at().clone();
+                                    let i_task = Arc::new(Mutex::new(internal_task));
+                                    let thread_task = i_task.clone();
+                                    let thread_tx_run_msg = tx_run_msg.clone();
 
-                            // prevent exec failure - run task in another thread
-                            // TODO: return an appropriate error, compatible with dyn std::error::Error + 'static.
-                            //       This should make error reporting easier
-                            let join_handle = thread::spawn(move || {
-                                thread_task
-                                    .lock()
-                                    .expect("Could not lock task for execution!")
-                                    .task
-                                    .run(thread_tx_run_msg);
-                            });
+                                    // prevent exec failure - run task in another thread
+                                    // TODO: return an appropriate error, compatible with dyn std::error::Error + 'static.
+                                    //       This should make error reporting easier
+                                    let join_handle = thread::spawn(move || {
+                                        thread_task
+                                            .lock()
+                                            .expect("Could not lock task for execution!")
+                                            .task
+                                            .run(thread_tx_run_msg);
+                                    });
 
-                            let join_handle_result = join_handle.join();
-                            match join_handle_result {
-                                Ok(_) => {}
-                                Err(err) => {
-                                    warn!("The task {} caused a panic while executing! This error happened: {:?}", &task_id, err);
+                                    let join_handle_result = join_handle.join();
+                                    match join_handle_result {
+                                        Ok(_) => {}
+                                        Err(err) => {
+                                            warn!("The task {} caused a panic while executing! This error happened: {:?}", &task_id, err);
 
-                                    let status = Status::new(
-                                        State::DeploymentError,
-                                        Some(format!("task caused a panic!: {:?}", err)),
-                                        ActionContext::new(
-                                            // TODO: create a more appropriate scope?
-                                            ProgressScope::Queued,
-                                            ProgressLevel::Error,
-                                            task_id,
-                                            task_created_at,
-                                        ),
+                                            let status = Status::new(
+                                                State::DeploymentError,
+                                                Some(format!("task caused a panic!: {:?}", err)),
+                                                ActionContext::new(
+                                                    // TODO: create a more appropriate scope?
+                                                    ProgressScope::Queued,
+                                                    ProgressLevel::Error,
+                                                    task_id,
+                                                    task_created_at,
+                                                ),
+                                            );
+
+                                            send_status(i_task.clone(), &tx_run_msg, status);
+                                        }
+                                    };
+
+                                    info!(
+                                        "task {} took {:?} to be executed",
+                                        task_id_2,
+                                        start_time.elapsed()
                                     );
 
-                                    send_status(i_task.clone(), &tx_run_msg, status);
+                                    let remaining_tasks = self_it_receiver.len();
+
+                                    if remaining_tasks == 0
+                                        && self_end_task_sig_receiver.try_recv().is_ok()
+                                    {
+                                        info!("no remaining task to run - shutdown task manager");
+                                        self_task_terminated_sender.send(true);
+                                    } else if remaining_tasks > 0 {
+                                        info!("it remains {} tasks to run", remaining_tasks);
+                                    }
                                 }
-                            };
+                                _ => {
+                                    // postpone the task
+                                    info!(
+                                        "postpone task group id {} with id {}",
+                                        internal_task.task.group_id(),
+                                        internal_task.task.id()
+                                    );
 
-                            info!(
-                                "task {} took {:?} to be executed",
-                                task_id_2,
-                                start_time.elapsed()
-                            );
+                                    // re-add the task
+                                    add_task(
+                                        &self_end_task_sig_receiver,
+                                        &status_by_task_id_w_2,
+                                        &self_it_sender,
+                                        &self_it_receiver,
+                                        internal_task.task,
+                                    );
 
-                            let remaining_tasks = self_it_receiver.len();
-
-                            if remaining_tasks == 0 && self_end_task_sig_receiver.try_recv().is_ok()
-                            {
-                                info!("no remaining task to run - shutdown task manager");
-                                self_task_terminated_sender.send(true);
-                            } else if remaining_tasks > 0 {
-                                info!("it remains {} tasks to run", remaining_tasks);
+                                    // wait a few seconds
+                                    thread::sleep(Duration::from_secs(5))
+                                }
                             }
                         }
-                        _ => {
-                            // postpone the task
-                            info!(
-                                "postpone task group id {} with id {}",
-                                internal_task.task.group_id(),
-                                internal_task.task.id()
-                            );
-
-                            // re-add the task
-                            add_task(
-                                &self_end_task_sig_receiver,
-                                &status_by_task_id_w_2,
-                                &self_it_sender,
-                                &self_it_receiver,
-                                internal_task.task,
-                            );
-
-                            // wait a few seconds
-                            thread::sleep(Duration::from_secs(5))
-                        }
-                    }
+                        _ => {}
+                    };
                 }
-                Err(_) => {
-                    debug!("no task to run, wait for 1 sec");
-                    sleep(Duration::from_secs(1));
-                    if self_end_task_sig_receiver.try_recv().is_ok() {
-                        info!("shutdown task manager");
-                        self_task_terminated_sender.send(true);
-                    }
-                }
+                _ => {}
             };
+
+            debug!("no task to run, wait for 1 sec");
+            sleep(Duration::from_secs(1));
+            if self_end_task_sig_receiver.try_recv().is_ok() {
+                info!("shutdown task manager");
+                self_task_terminated_sender.send(true);
+            }
         });
 
         Ok(rx_run_msg_2)
@@ -277,11 +282,11 @@ fn add_task(
     let message = match remaining_tasks {
         0 => {
             // the task is going to be executed right away
-            debug!("add received task and execute it right away, there is no pending task");
+            info!("add received task and execute it right away, there is no pending task");
             None
         }
         1 => {
-            debug!(
+            info!(
                 "add received task but wait until the task manager is able to execute it. \
             1 remaining task."
             );
@@ -292,7 +297,7 @@ fn add_task(
             ))
         }
         _ => {
-            debug!(
+            info!(
                 "add received task but wait until the task manager is able to execute it. \
             {} remaining tasks.",
                 remaining_tasks
