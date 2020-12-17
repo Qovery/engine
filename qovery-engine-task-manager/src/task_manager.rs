@@ -1,15 +1,15 @@
 use std::mem::ManuallyDrop;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use chrono::{DateTime, Utc};
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use evmap::{ReadHandle, WriteHandle};
-use qovery_engine::models::{ProgressLevel, ProgressScope};
 use serde::{Deserialize, Serialize};
 
-use chrono::{DateTime, Utc};
+use qovery_engine::models::{ProgressLevel, ProgressScope};
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -146,6 +146,7 @@ impl TaskManager {
                     match internal_task.task.pre_run() {
                         PreRun::Yes => {
                             let start_time = Instant::now();
+
                             // run task
                             let task_id = String::from(internal_task.task.id());
                             let task_id_2 = task_id.clone();
@@ -153,6 +154,7 @@ impl TaskManager {
                             let i_task = Arc::new(Mutex::new(internal_task));
                             let thread_task = i_task.clone();
                             let thread_tx_run_msg = tx_run_msg.clone();
+
                             // prevent exec failure - run task in another thread
                             // TODO: return an appropriate error, compatible with dyn std::error::Error + 'static.
                             //       This should make error reporting easier
@@ -182,19 +184,7 @@ impl TaskManager {
                                         ),
                                     );
 
-                                    match i_task.lock() {
-                                        Ok(it) => {
-                                            it.task.send_status(&tx_run_msg, status);
-                                        }
-                                        Err(e) => {
-                                            // Mutex poisoning is rare, but let's be careful
-                                            warn!(
-                                                "Could not lock a task (which panicked previously), \
-                                                attempting recovery by sending status to the core"
-                                            );
-                                            e.into_inner().task.send_status(&tx_run_msg, status);
-                                        }
-                                    }
+                                    send_status(i_task.clone(), &tx_run_msg, status);
                                 }
                             };
 
@@ -211,6 +201,19 @@ impl TaskManager {
                                 self_task_terminated_sender.send(true);
                             } else if self_it_receiver.len() > 0 {
                                 info!("it remains {} tasks to run", self_it_receiver.len());
+
+                                let status = Status::new(
+                                    State::DeploymentError,
+                                    Some("Your task is queued and will start once a worker is available.".to_string()),
+                                    ActionContext::new(
+                                        ProgressScope::Queued,
+                                        ProgressLevel::Info,
+                                        task_id_2,
+                                        task_created_at,
+                                    ),
+                                );
+
+                                send_status(i_task, &tx_run_msg, status);
                             }
                         }
                         _ => {
@@ -290,6 +293,28 @@ fn add_task(
         .refresh();
 
     let _ = it_sender.send(InternalTask { task, status });
+}
+
+/// send status from an internal task
+fn send_status(
+    internal_task: Arc<Mutex<InternalTask>>,
+    tx_run_msg: &Sender<Message>,
+    status: Status,
+) {
+    match internal_task.lock() {
+        Ok(it) => {
+            // notice user about his task being queued
+            it.task.send_status(&tx_run_msg, status);
+        }
+        Err(e) => {
+            // Mutex poisoning is rare, but let's be careful
+            warn!(
+                "Could not lock a task (which panicked previously), \
+                                                attempting recovery by sending status to the core"
+            );
+            e.into_inner().task.send_status(&tx_run_msg, status);
+        }
+    };
 }
 
 pub trait Task: Send {

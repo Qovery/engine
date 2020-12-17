@@ -9,7 +9,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
 
-use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use qovery_engine::models::{
     Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
 };
