@@ -139,6 +139,7 @@ impl TaskManager {
             let self_it_receiver = self_it_receiver
                 .lock()
                 .expect("Could not lock internal task receiver");
+
             let _ = match self_it_receiver.try_recv() {
                 Ok(internal_task) => {
                     // does the task is validated to be run?
@@ -165,7 +166,7 @@ impl TaskManager {
 
                             let join_handle_result = join_handle.join();
                             match join_handle_result {
-                                Ok(r) => {}
+                                Ok(_) => {}
                                 Err(err) => {
                                     warn!("The task {} caused a panic while executing! This error happened: {:?}", &task_id, err);
 
@@ -233,7 +234,7 @@ impl TaskManager {
                         }
                     }
                 }
-                Err(err) => {
+                Err(_) => {
                     debug!("no task to run, wait for 1 sec");
                     sleep(Duration::from_secs(1));
                     if self_end_task_sig_receiver.try_recv().is_ok() {

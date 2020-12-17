@@ -2,11 +2,14 @@
 #![feature(fn_traits)]
 
 use std::borrow::{Borrow, Cow};
+use std::fs;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
-use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
+
+use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::models::{
     Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
 };
@@ -15,8 +18,6 @@ use qovery_engine::transaction::{RollbackError, TransactionResult};
 
 use crate::models::{Action, Request};
 use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task};
-use chrono::{DateTime, Utc};
-use std::fs;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -176,9 +177,7 @@ impl Task for InfrastructureTask {
                 Ok(_) => {
                     fs::remove_file(file);
                 }
-                Err(e) => {
-                    error!("While uploading archive {:?}", e)
-                }
+                Err(e) => error!("While uploading archive {:?}", e),
             },
             Err(err) => error!("{:?}", err),
         };
@@ -360,9 +359,7 @@ impl Task for EnvironmentTask {
                 Ok(_) => {
                     fs::remove_file(file);
                 }
-                Err(e) => {
-                    error!("while uploading archive {:?}", e)
-                }
+                Err(e) => error!("while uploading archive {:?}", e),
             },
             Err(err) => error!("{:?}", err),
         };
