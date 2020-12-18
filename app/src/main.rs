@@ -563,7 +563,7 @@ pub fn using_json_path_parameter(
     lib_root_dir: String,
     docker_host: Option<String>,
 ) -> Result<(), Error> {
-    let pre_run_callback = Box::new(|task: &dyn Task| PreRun::Yes);
+    let pre_run_callback = Box::new(|_task: &dyn Task| PreRun::Yes);
 
     // check if file json config file exist
     match check_if_file_exist(&deploy_from_file) {
