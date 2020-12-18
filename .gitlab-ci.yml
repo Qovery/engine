@@ -28,6 +28,8 @@ wip-fast-tests:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+  tags:
+    - engine-dedicated
   artifacts:
     when: always
     reports:
@@ -45,6 +47,8 @@ wip-full-tests:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+  tags:
+    - engine-dedicated
   artifacts:
     when: always
     reports:
@@ -59,6 +63,8 @@ dev-full-test-from-github:
     - ./helper.sh all_tests $LIB_COMMIT_ID
   rules:
     - if: '$TESTS_TYPE == "full"'
+  tags:
+    - engine-dedicated
   artifacts:
     when: always
     reports:
@@ -71,6 +77,8 @@ dev-fast-test-from-github:
     - ./helper.sh fast_tests $LIB_COMMIT_ID
   rules:
     - if: '$TESTS_TYPE == "fast"'
+  tags:
+    - engine-dedicated
   artifacts:
     when: always
     reports:
@@ -86,6 +94,8 @@ dev-full-tests:
       - dev
     variables:
       - $TESTS_TYPE == null
+  tags:
+    - engine-dedicated
   artifacts:
     when: always
     reports:
