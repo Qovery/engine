@@ -17,9 +17,7 @@ pub type Message = Result<InternalTask, Error>;
 
 pub struct TaskManager {
     it_sender: Sender<InternalTask>,
-    // Arc + Mutex used to avoid to get 2 receivers and miss messages (Receiver is not a Bus).
-    // Because the receiver is passed to another thread
-    it_receiver: Arc<Mutex<Receiver<InternalTask>>>,
+    it_receiver: Receiver<InternalTask>,
     end_task_sig_sender: Sender<bool>,
     end_task_sig_receiver: Receiver<bool>,
     task_terminated_sender: Sender<bool>,
@@ -39,7 +37,7 @@ impl TaskManager {
 
         TaskManager {
             it_sender,
-            it_receiver: Arc::new(Mutex::new(it_receiver)),
+            it_receiver,
             end_task_sig_sender,
             end_task_sig_receiver,
             task_terminated_sender,
@@ -51,27 +49,18 @@ impl TaskManager {
     }
 
     pub fn add_task(&self, task: Box<dyn Task>) {
-        let self_it_receiver = match self.it_receiver.lock() {
-            Ok(it) => it,
-            Err(_) => {
-                warn!("error while getting lock to add a task - let's retry in 1s");
-                thread::sleep(Duration::from_secs(1));
-                return self.add_task(task);
-            }
-        };
-
         add_task(
             &self.end_task_sig_receiver,
             &self.status_by_task_id_w,
             &self.it_sender,
-            &self_it_receiver,
+            self.it_receiver.len(),
             task,
         );
     }
 
     pub fn remaining_tasks_to_run(&self) -> usize {
         //TODO: rewrite me to retry locking
-        self.it_receiver.lock().expect("Could not lock internal task receiver when trying to get the number of remaining tasks").len()
+        self.it_receiver.len()
     }
 
     pub fn is_terminated(&self) -> Receiver<bool> {
@@ -145,64 +134,59 @@ impl TaskManager {
         });
 
         let _ = thread::spawn(move || loop {
-            let _ = match self_it_receiver.try_lock() {
-                Ok(self_it_receiver) => {
-                    let _ = match self_it_receiver.try_recv() {
-                        Ok(internal_task) => {
-                            // does the task is validated to be run?
-                            match internal_task.task.pre_run() {
-                                PreRun::Yes => {
-                                    // run task
-                                    let start_time = Instant::now();
-                                    let task_id = String::from(internal_task.task.id());
+            let _ = match self_it_receiver.try_recv() {
+                Ok(internal_task) => {
+                    // does the task is validated to be run?
+                    match internal_task.task.pre_run() {
+                        PreRun::Yes => {
+                            // run task
+                            let start_time = Instant::now();
+                            let task_id = String::from(internal_task.task.id());
 
-                                    // send status contained inside the internal task
-                                    internal_task.send_status(&tx_run_msg);
+                            // send status contained inside the internal task
+                            internal_task.send_status(&tx_run_msg);
 
-                                    // exec task
-                                    internal_task.task.run(tx_run_msg.clone());
+                            // exec task
+                            internal_task.task.run(tx_run_msg.clone());
 
-                                    info!(
-                                        "task {} took {:?} to be executed",
-                                        task_id,
-                                        start_time.elapsed()
-                                    );
+                            info!(
+                                "task {} took {:?} to be executed",
+                                task_id,
+                                start_time.elapsed()
+                            );
 
-                                    let remaining_tasks = self_it_receiver.len();
+                            let remaining_tasks = self_it_receiver.len();
 
-                                    if remaining_tasks == 0
-                                        && self_end_task_sig_receiver.try_recv().is_ok()
-                                    {
-                                        info!("no remaining task to run - shutdown task manager");
-                                        self_task_terminated_sender.send(true);
-                                    } else if remaining_tasks > 0 {
-                                        info!("it remains {} tasks to run", remaining_tasks);
-                                    }
-                                }
-                                _ => {
-                                    // postpone the task
-                                    info!(
-                                        "postpone task group id {} with id {}",
-                                        internal_task.task.group_id(),
-                                        internal_task.task.id()
-                                    );
-
-                                    // send status contained inside the internal task
-                                    internal_task.send_status(&tx_run_msg);
-
-                                    // re-add the task
-                                    add_task(
-                                        &self_end_task_sig_receiver,
-                                        &status_by_task_id_w_2,
-                                        &self_it_sender,
-                                        &self_it_receiver,
-                                        internal_task.task,
-                                    );
-
-                                    // wait a few seconds
-                                    thread::sleep(Duration::from_secs(5))
-                                }
+                            if remaining_tasks == 0 && self_end_task_sig_receiver.try_recv().is_ok()
+                            {
+                                info!("no remaining task to run - shutdown task manager");
+                                self_task_terminated_sender.send(true);
+                            } else if remaining_tasks > 0 {
+                                info!("it remains {} tasks to run", remaining_tasks);
                             }
+                        }
+                        _ => {
+                            // postpone the task
+                            info!(
+                                "postpone task group id {} with id {}",
+                                internal_task.task.group_id(),
+                                internal_task.task.id()
+                            );
+
+                            // send status contained inside the internal task
+                            internal_task.send_status(&tx_run_msg);
+
+                            // re-add the task
+                            add_task(
+                                &self_end_task_sig_receiver,
+                                &status_by_task_id_w_2,
+                                &self_it_sender,
+                                self_it_receiver.len(),
+                                internal_task.task,
+                            );
+
+                            // wait a few seconds
+                            thread::sleep(Duration::from_secs(5))
                         }
                         _ => {}
                     };
@@ -226,7 +210,7 @@ fn add_task(
     end_task_sig_receiver: &Receiver<bool>,
     status_by_task_id_w: &Arc<Mutex<WriteHandle<Id, Status>>>,
     it_sender: &Sender<InternalTask>,
-    it_receiver: &Receiver<InternalTask>,
+    remaining_tasks: usize,
     task: Box<dyn Task>,
 ) {
     let _ = match end_task_sig_receiver.try_recv() {
@@ -243,12 +227,11 @@ fn add_task(
 
     // notify task has been queued
     let task_id = task.id().to_string();
-    let remaining_tasks = it_receiver.len();
 
     let message = match remaining_tasks {
         0 => {
             // the task is going to be executed right away
-            info!("add received task and execute it right away, there is no pending task");
+            info!("add received task to the current Task Manager and execute it right away, there is no pending task");
             None
         }
         1 => {

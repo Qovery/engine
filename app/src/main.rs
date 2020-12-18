@@ -3,11 +3,10 @@ extern crate log;
 #[macro_use]
 extern crate serde;
 
-use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error, Write};
 use std::path::Path;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, thread};
