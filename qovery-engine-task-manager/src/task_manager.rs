@@ -154,50 +154,17 @@ impl TaskManager {
                                 PreRun::Yes => {
                                     // run task
                                     let start_time = Instant::now();
-
                                     let task_id = String::from(internal_task.task.id());
-                                    let task_id_2 = task_id.clone();
-                                    let task_created_at = internal_task.task.created_at().clone();
-                                    let i_task = Arc::new(Mutex::new(internal_task));
-                                    let thread_task = i_task.clone();
-                                    let thread_tx_run_msg = tx_run_msg.clone();
 
-                                    // prevent exec failure - run task in another thread
-                                    // TODO: return an appropriate error, compatible with dyn std::error::Error + 'static.
-                                    //       This should make error reporting easier
-                                    let join_handle = thread::spawn(move || {
-                                        thread_task
-                                            .lock()
-                                            .expect("Could not lock task for execution!")
-                                            .task
-                                            .run(thread_tx_run_msg);
-                                    });
+                                    // send status contained inside the internal task
+                                    internal_task.send_status(&tx_run_msg);
 
-                                    let join_handle_result = join_handle.join();
-                                    match join_handle_result {
-                                        Ok(_) => {}
-                                        Err(err) => {
-                                            warn!("The task {} caused a panic while executing! This error happened: {:?}", &task_id, err);
-
-                                            let status = Status::new(
-                                                State::DeploymentError,
-                                                Some(format!("task caused a panic!: {:?}", err)),
-                                                ActionContext::new(
-                                                    // TODO: create a more appropriate scope?
-                                                    ProgressScope::Queued,
-                                                    ProgressLevel::Error,
-                                                    task_id,
-                                                    task_created_at,
-                                                ),
-                                            );
-
-                                            send_status(i_task.clone(), &tx_run_msg, status);
-                                        }
-                                    };
+                                    // exec task
+                                    internal_task.task.run(tx_run_msg.clone());
 
                                     info!(
                                         "task {} took {:?} to be executed",
-                                        task_id_2,
+                                        task_id,
                                         start_time.elapsed()
                                     );
 
@@ -219,6 +186,9 @@ impl TaskManager {
                                         internal_task.task.group_id(),
                                         internal_task.task.id()
                                     );
+
+                                    // send status contained inside the internal task
+                                    internal_task.send_status(&tx_run_msg);
 
                                     // re-add the task
                                     add_task(
@@ -327,28 +297,6 @@ fn add_task(
     let _ = it_sender.send(InternalTask { task, status });
 }
 
-/// send status from an internal task
-fn send_status(
-    internal_task: Arc<Mutex<InternalTask>>,
-    tx_run_msg: &Sender<Message>,
-    status: Status,
-) {
-    match internal_task.lock() {
-        Ok(it) => {
-            // notice user about his task being queued
-            it.task.send_status(&tx_run_msg, status);
-        }
-        Err(e) => {
-            // Mutex poisoning is rare, but let's be careful
-            warn!(
-                "Could not lock a task (which panicked previously), \
-                                                attempting recovery by sending status to the core"
-            );
-            e.into_inner().task.send_status(&tx_run_msg, status);
-        }
-    };
-}
-
 pub trait Task: Send {
     fn created_at(&self) -> &DateTime<Utc>;
     fn group_id(&self) -> &str;
@@ -363,6 +311,12 @@ pub trait Task: Send {
 pub struct InternalTask {
     pub task: Box<dyn Task>,
     pub status: Status,
+}
+
+impl InternalTask {
+    pub fn send_status(&self, sender: &Sender<Message>) {
+        self.task.send_status(sender, self.status.clone());
+    }
 }
 
 pub enum PreRun {
