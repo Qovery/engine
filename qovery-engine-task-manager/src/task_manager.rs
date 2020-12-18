@@ -24,6 +24,8 @@ pub struct TaskManager {
     task_terminated_receiver: Receiver<bool>,
     status_by_task_id_r: ReadHandle<Id, Status>,
     status_by_task_id_w: Arc<Mutex<WriteHandle<Id, Status>>>,
+    message_sender: Sender<Message>,
+    message_receiver: Receiver<Message>,
     running: bool,
 }
 
@@ -34,6 +36,7 @@ impl TaskManager {
         let (task_terminated_sender, task_terminated_receiver) = unbounded::<bool>();
         let (status_by_task_id_r, status_by_task_id_w) = evmap::new::<Id, Status>();
         let status_by_task_id_w = Arc::new(Mutex::new(status_by_task_id_w));
+        let (message_sender, message_receiver) = unbounded::<Message>();
 
         TaskManager {
             it_sender,
@@ -44,6 +47,8 @@ impl TaskManager {
             task_terminated_receiver,
             status_by_task_id_r,
             status_by_task_id_w,
+            message_sender,
+            message_receiver,
             running: false,
         }
     }
@@ -53,6 +58,7 @@ impl TaskManager {
             &self.end_task_sig_receiver,
             &self.status_by_task_id_w,
             &self.it_sender,
+            &self.message_sender,
             self.it_receiver.len(),
             task,
         );
@@ -94,13 +100,14 @@ impl TaskManager {
         // only one run allowed
         self.running = true;
 
-        let (tx_run_msg, rx_run_msg) = unbounded::<Message>();
+        let (self_message_sender, self_message_receiver) =
+            (self.message_sender.clone(), self.message_receiver.clone());
+
         let (tx_run_msg_2, rx_run_msg_2) = unbounded::<Message>();
         let self_it_sender = self.it_sender.clone();
         let self_it_receiver = self.it_receiver.clone();
         let self_end_task_sig_receiver = self.end_task_sig_receiver.clone();
         let self_task_terminated_sender = self.task_terminated_sender.clone();
-
         let status_by_task_id_w_1 = self.status_by_task_id_w.clone();
         let status_by_task_id_w_2 = self.status_by_task_id_w.clone();
 
@@ -108,7 +115,7 @@ impl TaskManager {
             let tx_run_msg_2 = tx_run_msg_2;
 
             loop {
-                match rx_run_msg.recv() {
+                match self_message_receiver.recv() {
                     Ok(msg) => {
                         match msg {
                             Ok(it) => {
@@ -134,6 +141,7 @@ impl TaskManager {
         });
 
         let _ = thread::spawn(move || loop {
+            // execute received tasks
             let _ = match self_it_receiver.try_recv() {
                 Ok(internal_task) => {
                     // does the task is validated to be run?
@@ -143,11 +151,8 @@ impl TaskManager {
                             let start_time = Instant::now();
                             let task_id = String::from(internal_task.task.id());
 
-                            // send status contained inside the internal task
-                            internal_task.send_status(&tx_run_msg);
-
                             // exec task
-                            internal_task.task.run(tx_run_msg.clone());
+                            internal_task.task.run(&self_message_sender);
 
                             info!(
                                 "task {} took {:?} to be executed",
@@ -174,13 +179,14 @@ impl TaskManager {
                             );
 
                             // send status contained inside the internal task
-                            internal_task.send_status(&tx_run_msg);
+                            internal_task.send_status(&self_message_sender);
 
                             // re-add the task
                             add_task(
                                 &self_end_task_sig_receiver,
                                 &status_by_task_id_w_2,
                                 &self_it_sender,
+                                &self_message_sender,
                                 self_it_receiver.len(),
                                 internal_task.task,
                             );
@@ -210,6 +216,7 @@ fn add_task(
     end_task_sig_receiver: &Receiver<bool>,
     status_by_task_id_w: &Arc<Mutex<WriteHandle<Id, Status>>>,
     it_sender: &Sender<InternalTask>,
+    message_sender: &Sender<Message>,
     remaining_tasks: usize,
     task: Box<dyn Task>,
 ) {
@@ -225,15 +232,8 @@ fn add_task(
         Err(_) => (),
     };
 
-    // notify task has been queued
-    let task_id = task.id().to_string();
-
     let message = match remaining_tasks {
-        0 => {
-            // the task is going to be executed right away
-            info!("add received task to the current Task Manager and execute it right away, there is no pending task");
-            None
-        }
+        0 => None,
         1 => {
             info!(
                 "add received task but wait until the task manager is able to execute it. \
@@ -265,7 +265,7 @@ fn add_task(
         ActionContext::new(
             ProgressScope::Queued,
             ProgressLevel::Info,
-            task_id.to_string(),
+            task.id().to_string(),
             task.created_at().clone(),
         ),
     );
@@ -274,10 +274,19 @@ fn add_task(
         .lock()
         //TODO: handle lock failure
         .expect("could not lock task status writer while trying to add task")
-        .insert(task_id.to_string(), status.clone())
+        .insert(task.id().to_string(), status.clone())
         .refresh();
 
-    let _ = it_sender.send(InternalTask { task, status });
+    let internal_task = InternalTask {
+        task,
+        status: status.clone(),
+    };
+
+    // send status contained inside the internal task
+    internal_task.send_status(message_sender);
+
+    // add internal task to queue
+    let _ = it_sender.send(internal_task);
 }
 
 pub trait Task: Send {
@@ -288,7 +297,7 @@ pub trait Task: Send {
     /// return true if you want to run it now, or false if you want to run this task later.
     /// this function is called just before `run()` is called.
     fn pre_run(&self) -> PreRun;
-    fn run(&self, sender: Sender<Message>);
+    fn run(&self, sender: &Sender<Message>);
 }
 
 pub struct InternalTask {

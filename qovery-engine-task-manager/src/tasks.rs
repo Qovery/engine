@@ -85,7 +85,7 @@ impl Task for InfrastructureTask {
         (self.pre_run_callback)(self)
     }
 
-    fn run(&self, sender: Sender<Message>) {
+    fn run(&self, sender: &Sender<Message>) {
         info!(
             "infrastructure task {} started with infrastructure id {}",
             self.id(),
@@ -95,7 +95,7 @@ impl Task for InfrastructureTask {
         send_progress(
             self,
             &self.request,
-            &sender,
+            sender,
             self.action_context(ProgressLevel::Info),
             None,
             false,
@@ -116,7 +116,7 @@ impl Task for InfrastructureTask {
                 send_progress(
                     self,
                     &self.request,
-                    &sender,
+                    sender,
                     self.action_context(ProgressLevel::Error),
                     Some(format!("failed to get engine session {:?}", err)),
                     true,
@@ -153,7 +153,7 @@ impl Task for InfrastructureTask {
             self,
             &self.request,
             self.action_context(ProgressLevel::Info),
-            &sender,
+            sender,
         );
 
         match qovery_engine::fs::create_workspace_archive(
@@ -254,13 +254,13 @@ impl Task for EnvironmentTask {
         (self.pre_run_callback)(self)
     }
 
-    fn run(&self, sender: Sender<Message>) {
+    fn run(&self, sender: &Sender<Message>) {
         info!("environment task {} started", self.id());
 
         send_progress(
             self,
             &self.request,
-            &sender,
+            sender,
             self.action_context(ProgressLevel::Info),
             None,
             false,
@@ -282,7 +282,7 @@ impl Task for EnvironmentTask {
                 send_progress(
                     self,
                     &self.request,
-                    &sender,
+                    sender,
                     self.action_context(ProgressLevel::Error),
                     Some(format!("failed to get engine session {:?}", err)),
                     true,
@@ -313,7 +313,7 @@ impl Task for EnvironmentTask {
                 send_progress(
                     self,
                     &self.request,
-                    &sender,
+                    sender,
                     self.action_context(ProgressLevel::Error),
                     Some("failed to get environment action, self.request.environment_action() returned None variant".to_string()),
                     true,
@@ -335,7 +335,7 @@ impl Task for EnvironmentTask {
             self,
             &self.request,
             self.action_context(ProgressLevel::Info),
-            &sender,
+            sender,
         );
 
         match qovery_engine::fs::create_workspace_archive(
