@@ -258,7 +258,7 @@ fn add_task(
             );
 
             Some(format!(
-                "Your task is queued ({} task remained) and will start as soon as a worker is available.",
+                "Your task is queued ({} task remaining) and will start as soon as a worker is available.",
                 remaining_tasks
             ))
         }
@@ -270,7 +270,7 @@ fn add_task(
             );
 
             Some(format!(
-                "Your task is queued ({} tasks remained) and will start as soon as a worker is available.",
+                "Your task is queued ({} tasks remaining) and will start as soon as a worker is available.",
                 remaining_tasks
             ))
         }

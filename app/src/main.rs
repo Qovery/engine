@@ -5,7 +5,7 @@ extern crate serde;
 
 use std::borrow::Borrow;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Error, Read, Write};
+use std::io::{BufRead, BufReader, Error, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::sleep;
@@ -630,7 +630,7 @@ pub fn using_nats_server(
     //let mut f_content = String::new();
     //f.read_to_string(&mut f_content);
 
-    let tls_connector = TlsConnector::builder()
+    let _tls_connector = TlsConnector::builder()
         //.add_root_certificate(nats::tls::Certificate::from_pem(f_content.as_bytes()).unwrap())
         .danger_accept_invalid_certs(true)
         .danger_accept_invalid_hostnames(true)
