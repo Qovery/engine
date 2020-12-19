@@ -285,10 +285,15 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 **
 **/
 
-fn test_postgresql_configuration(context: Context, mut environment: Environment, version: &str) {
+fn test_postgresql_configuration(
+    context: Context,
+    mut environment: Environment,
+    version: &str,
+    test_name: &str,
+) {
     init();
 
-    let span = span!(Level::INFO, "test_postgresql_configuration");
+    let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
     let context_for_delete = context.clone_not_same_execution_id();
 
@@ -381,26 +386,38 @@ fn test_postgresql_configuration(context: Context, mut environment: Environment,
 #[ignore]
 fn postgresql_v10_deploy_a_working_dev_environment() {
     let context = context();
-    const TEST_NAME: &str = "postgresql_v10_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_postgresql_configuration(context, environment, "10");
+    test_postgresql_configuration(
+        context,
+        environment,
+        "10",
+        "postgresql_v10_deploy_a_working_dev_environment",
+    );
 }
 
 #[test]
 #[ignore]
 fn postgresql_v11_deploy_a_working_dev_environment() {
     let context = context();
-    const TEST_NAME: &str = "postgresql_v11_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_postgresql_configuration(context, environment, "11");
+    test_postgresql_configuration(
+        context,
+        environment,
+        "11",
+        "postgresql_v11_deploy_a_working_dev_environment",
+    );
 }
 
 #[test]
 fn postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
-    const TEST_NAME: &str = "postgresql_v12_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_postgresql_configuration(context, environment, "12");
+    test_postgresql_configuration(
+        context,
+        environment,
+        "12",
+        "postgresql_v12_deploy_a_working_dev_environment",
+    );
 }
 
 // Postgres production environment
@@ -408,30 +425,42 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
 #[ignore]
 fn postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
-    const TEST_NAME: &str = "postgresql_v10_prod";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-    test_postgresql_configuration(context, environment, "10");
+    test_postgresql_configuration(
+        context,
+        environment,
+        "10",
+        "postgresql_v10_deploy_a_working_prod_environment",
+    );
 }
 
 #[test]
 #[ignore]
 fn postgresql_v11_deploy_a_working_prod_environment() {
     let context = context();
-    const TEST_NAME: &str = "postgresql_v11_prod";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-    test_postgresql_configuration(context, environment, "11");
+    test_postgresql_configuration(
+        context,
+        environment,
+        "11",
+        "postgresql_v11_deploy_a_working_prod_environment",
+    );
 }
 
 #[test]
 #[ignore]
 fn postgresql_v12_deploy_a_working_prod_environment() {
     let context = context();
-    const TEST_NAME: &str = "postgresql_v12_prod";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-    test_postgresql_configuration(context, environment, "12");
+    test_postgresql_configuration(
+        context,
+        environment,
+        "12",
+        "postgresql_v12_deploy_a_working_prod_environment",
+    );
 }
 
 /**
@@ -440,10 +469,15 @@ fn postgresql_v12_deploy_a_working_prod_environment() {
 **
 **/
 
-fn test_mongodb_configuration(context: Context, mut environment: Environment, version: &str) {
+fn test_mongodb_configuration(
+    context: Context,
+    mut environment: Environment,
+    version: &str,
+    test_name: &str,
+) {
     init();
 
-    let span = span!(Level::INFO, "test_mongodb_configuration");
+    let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
     let context_for_delete = context.clone_not_same_execution_id();
 
@@ -556,7 +590,12 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 fn mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_mongodb_configuration(context, environment, "3.6");
+    test_mongodb_configuration(
+        context,
+        environment,
+        "3.6",
+        "mongodb_v3_6_deploy_a_working_dev_environment",
+    );
 }
 
 #[test]
@@ -564,7 +603,12 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
 fn mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_mongodb_configuration(context, environment, "4.0");
+    test_mongodb_configuration(
+        context,
+        environment,
+        "4.0",
+        "mongodb_v4_0_deploy_a_working_dev_environment",
+    );
 }
 
 #[test]
@@ -572,14 +616,24 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
 fn mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_mongodb_configuration(context, environment, "4.2");
+    test_mongodb_configuration(
+        context,
+        environment,
+        "4.2",
+        "mongodb_v4_2_deploy_a_working_dev_environment",
+    );
 }
 
 #[test]
 fn mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_mongodb_configuration(context, environment, "4.4");
+    test_mongodb_configuration(
+        context,
+        environment,
+        "4.4",
+        "mongodb_v4_4_deploy_a_working_dev_environment",
+    );
 }
 
 // MongoDB production environment (DocumentDB)
@@ -587,22 +641,28 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
 #[ignore]
 fn mongodb_v3_6_deploy_a_working_prod_environment() {
     let context = context();
-
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-
-    test_mongodb_configuration(context, environment, "3.6");
+    test_mongodb_configuration(
+        context,
+        environment,
+        "3.6",
+        "mongodb_v3_6_deploy_a_working_prod_environment",
+    );
 }
 
 #[test]
 #[ignore]
 fn mongodb_v4_0_deploy_a_working_prod_environment() {
     let context = context();
-
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-
-    test_mongodb_configuration(context, environment, "4.0");
+    test_mongodb_configuration(
+        context,
+        environment,
+        "4.0",
+        "mongodb_v4_0_deploy_a_working_prod_environment",
+    );
 }
 
 /**
@@ -611,10 +671,15 @@ fn mongodb_v4_0_deploy_a_working_prod_environment() {
 **
 **/
 
-fn test_mysql_configuration(context: Context, mut environment: Environment, version: &str) {
+fn test_mysql_configuration(
+    context: Context,
+    mut environment: Environment,
+    version: &str,
+    test_name: &str,
+) {
     init();
 
-    let span = span!(Level::INFO, "mysql_deploy_a_working_environment");
+    let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
 
     let deletion_context = context.clone_not_same_execution_id();
@@ -715,17 +780,25 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
 #[test]
 fn mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
-    const TEST_NAME: &str = "mysql_v5_7_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_mysql_configuration(context, environment, "5.7");
+    test_mysql_configuration(
+        context,
+        environment,
+        "5.7",
+        "mysql_v5_7_deploy_a_working_dev_environment",
+    );
 }
 
 #[test]
 fn mysql_v8_deploy_a_working_dev_environment() {
     let context = context();
-    const TEST_NAME: &str = "mysql_v8_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_mysql_configuration(context, environment, "8.0");
+    test_mysql_configuration(
+        context,
+        environment,
+        "8.0",
+        "mysql_v8_deploy_a_working_dev_environment",
+    );
 }
 
 // MySQL production environment (RDS)
@@ -733,20 +806,28 @@ fn mysql_v8_deploy_a_working_dev_environment() {
 #[ignore]
 fn mysql_v5_7_deploy_a_working_prod_environment() {
     let context = context();
-    const TEST_NAME: &str = "mysql_v5_7_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-    test_mysql_configuration(context, environment, "5.7");
+    test_mysql_configuration(
+        context,
+        environment,
+        "5.7",
+        "mysql_v5_7_deploy_a_working_prod_environment",
+    );
 }
 
 #[test]
 #[ignore]
 fn mysql_v8_0_deploy_a_working_prod_environment() {
     let context = context();
-    const TEST_NAME: &str = "mysql_v8_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-    test_mysql_configuration(context, environment, "8.0");
+    test_mysql_configuration(
+        context,
+        environment,
+        "8.0",
+        "mysql_v8_0_deploy_a_working_prod_environment",
+    );
 }
 
 /**
@@ -755,9 +836,14 @@ fn mysql_v8_0_deploy_a_working_prod_environment() {
 **
 **/
 
-fn test_redis_configuration(context: Context, mut environment: Environment, version: &str) {
+fn test_redis_configuration(
+    context: Context,
+    mut environment: Environment,
+    version: &str,
+    test_name: &str,
+) {
     init();
-    let span = span!(Level::INFO, "test_redis_configuration");
+    let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
 
     let context_for_delete = context.clone_not_same_execution_id();
@@ -860,9 +946,13 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
 #[ignore]
 fn redis_v5_deploy_a_working_dev_environment() {
     let context = context();
-    const TEST_NAME: &str = "redis_v5_0_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_redis_configuration(context, environment, "5");
+    test_redis_configuration(
+        context,
+        environment,
+        "5",
+        "redis_v5_deploy_a_working_dev_environment",
+    );
 }
 
 #[test]
@@ -870,7 +960,12 @@ fn redis_v6_deploy_a_working_dev_environment() {
     let context = context();
     const TEST_NAME: &str = "redis_v6_0_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
-    test_redis_configuration(context, environment, "6");
+    test_redis_configuration(
+        context,
+        environment,
+        "6",
+        "redis_v6_deploy_a_working_dev_environment",
+    );
 }
 
 // Redis production environment (Elasticache)
@@ -878,18 +973,26 @@ fn redis_v6_deploy_a_working_dev_environment() {
 #[ignore]
 fn redis_v5_deploy_a_working_prod_environment() {
     let context = context();
-    const TEST_NAME: &str = "redis_v5_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-    test_redis_configuration(context, environment, "5");
+    test_redis_configuration(
+        context,
+        environment,
+        "5",
+        "redis_v5_deploy_a_working_prod_environment",
+    );
 }
 
 #[test]
 #[ignore]
 fn redis_v6_deploy_a_working_prod_environment() {
     let context = context();
-    const TEST_NAME: &str = "redis_v6_0_production";
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
-    test_redis_configuration(context, environment, "6");
+    test_redis_configuration(
+        context,
+        environment,
+        "6",
+        "redis_v6_deploy_a_working_prod_environment",
+    );
 }
