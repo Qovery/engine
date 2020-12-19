@@ -81,23 +81,23 @@ impl TaskManager {
     }
 
     pub fn add_task(&self, task: Box<dyn Task>) {
-        let running_tasks = match self.running_tasks.try_lock() {
-            Ok(counter) => counter.get(),
-            Err(_) => 0,
-        };
-
         add_task(
             &self.end_task_sig_receiver,
             &self.status_by_task_id_w,
             &self.it_sender,
             &self.message_sender,
-            self.remaining_tasks_to_run() + running_tasks,
+            self.remaining_tasks_to_run(),
             task,
         );
     }
 
     pub fn remaining_tasks_to_run(&self) -> usize {
-        self.it_receiver.len()
+        let running_tasks = match self.running_tasks.try_lock() {
+            Ok(counter) => counter.get(),
+            Err(_) => 0,
+        };
+
+        self.it_receiver.len() + running_tasks
     }
 
     pub fn is_terminated(&self) -> Receiver<bool> {
