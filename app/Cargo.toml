@@ -10,12 +10,12 @@ edition = "2018"
 qovery-engine = { path = "../cloned-engine" }
 qovery-engine-shared = { path = "../qovery-engine-shared" }
 qovery-engine-task-manager = { path = "../qovery-engine-task-manager" }
-crossbeam-channel = "0.4.4"
-nats = "0.6.0"
+crossbeam-channel = "0.5.0"
+nats = "0.8.6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "0.8", features = ["v4"] }
-chrono = "0.4.13"
+chrono = "0.4.19"
 ctrlc = { version = "3.1.4", features = ["termination"] } # sig term handler wrapper
 retry = "1.0.0"
 dirs = "3.0.1"
@@ -23,5 +23,5 @@ openssl-sys = "0.9"
 openssl = { version = "0.10", features = ["vendored"] }
 
 # logger
-env_logger = "0.7.1"
-log = "0.4.8"
+env_logger = "0.8.2"
+log = "0.4.11"

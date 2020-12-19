@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError};
 use std::thread;
@@ -15,6 +16,30 @@ pub type Id = String;
 pub type GroupId = Id;
 pub type Message = Result<InternalTask, Error>;
 
+struct RunningTaskCounter {
+    running_tasks: usize,
+}
+
+impl RunningTaskCounter {
+    pub fn new(init: usize) -> Self {
+        RunningTaskCounter {
+            running_tasks: init,
+        }
+    }
+
+    pub fn get(&self) -> usize {
+        self.running_tasks
+    }
+
+    pub fn increment(&mut self) {
+        self.running_tasks = self.running_tasks + 1;
+    }
+
+    pub fn decrement(&mut self) {
+        self.running_tasks = self.running_tasks - 1;
+    }
+}
+
 pub struct TaskManager {
     it_sender: Sender<InternalTask>,
     it_receiver: Receiver<InternalTask>,
@@ -26,6 +51,7 @@ pub struct TaskManager {
     status_by_task_id_w: Arc<Mutex<WriteHandle<Id, Status>>>,
     message_sender: Sender<Message>,
     message_receiver: Receiver<Message>,
+    running_tasks: Arc<Mutex<RunningTaskCounter>>,
     running: bool,
 }
 
@@ -49,23 +75,28 @@ impl TaskManager {
             status_by_task_id_w,
             message_sender,
             message_receiver,
+            running_tasks: Arc::new(Mutex::new(RunningTaskCounter::new(0))),
             running: false,
         }
     }
 
     pub fn add_task(&self, task: Box<dyn Task>) {
+        let running_tasks = match self.running_tasks.try_lock() {
+            Ok(counter) => counter.get(),
+            Err(_) => 0,
+        };
+
         add_task(
             &self.end_task_sig_receiver,
             &self.status_by_task_id_w,
             &self.it_sender,
             &self.message_sender,
-            self.it_receiver.len(),
+            self.remaining_tasks_to_run() + running_tasks,
             task,
         );
     }
 
     pub fn remaining_tasks_to_run(&self) -> usize {
-        //TODO: rewrite me to retry locking
         self.it_receiver.len()
     }
 
@@ -110,6 +141,7 @@ impl TaskManager {
         let self_task_terminated_sender = self.task_terminated_sender.clone();
         let status_by_task_id_w_1 = self.status_by_task_id_w.clone();
         let status_by_task_id_w_2 = self.status_by_task_id_w.clone();
+        let self_running_tasks = self.running_tasks.clone();
 
         thread::spawn(move || {
             let tx_run_msg_2 = tx_run_msg_2;
@@ -140,71 +172,97 @@ impl TaskManager {
             }
         });
 
-        let _ = thread::spawn(move || loop {
-            // execute received tasks
-            let _ = match self_it_receiver.try_recv() {
-                Ok(internal_task) => {
-                    // does the task is validated to be run?
-                    match internal_task.task.pre_run() {
-                        PreRun::Yes => {
-                            // run task
-                            let start_time = Instant::now();
-                            let task_id = String::from(internal_task.task.id());
+        let _ = thread::spawn(move || {
+            let self_running_tasks = self_running_tasks;
 
-                            // exec task
-                            internal_task.task.run(&self_message_sender);
+            loop {
+                // execute received tasks
+                let _ = match self_it_receiver.try_recv() {
+                    Ok(internal_task) => {
+                        // does the task is validated to be run?
+                        match internal_task.task.pre_run() {
+                            PreRun::Yes => {
+                                // run task
+                                let start_time = Instant::now();
+                                let task_id = String::from(internal_task.task.id());
 
-                            info!(
-                                "task {} took {:?} to be executed",
-                                task_id,
-                                start_time.elapsed()
-                            );
+                                // increment running tasks counter
+                                match self_running_tasks.lock() {
+                                    Ok(mut running_tasks) => {
+                                        running_tasks.increment();
+                                    }
+                                    Err(_) => {}
+                                }
 
-                            let remaining_tasks = self_it_receiver.len();
+                                // exec task
+                                internal_task.task.run(&self_message_sender);
 
-                            if remaining_tasks == 0 && self_end_task_sig_receiver.try_recv().is_ok()
-                            {
-                                info!("no remaining task to run - shutdown task manager");
-                                self_task_terminated_sender.send(true);
-                            } else if remaining_tasks > 0 {
-                                info!("it remains {} tasks to run", remaining_tasks);
+                                // decrement running tasks counter
+                                match self_running_tasks.lock() {
+                                    Ok(mut running_tasks) => {
+                                        running_tasks.decrement();
+                                    }
+                                    Err(_) => {}
+                                }
+
+                                info!(
+                                    "task {} took {:?} to be executed",
+                                    task_id,
+                                    start_time.elapsed()
+                                );
+
+                                let remaining_tasks = self_it_receiver.len();
+
+                                if remaining_tasks == 0
+                                    && self_end_task_sig_receiver.try_recv().is_ok()
+                                {
+                                    info!("no remaining task to run - shutdown task manager");
+                                    self_task_terminated_sender.send(true);
+                                } else if remaining_tasks > 0 {
+                                    info!("it remains {} tasks to run", remaining_tasks);
+                                }
                             }
-                        }
-                        _ => {
-                            // postpone the task
-                            info!(
-                                "postpone task group id {} with id {}",
-                                internal_task.task.group_id(),
-                                internal_task.task.id()
-                            );
+                            _ => {
+                                // postpone the task
+                                info!(
+                                    "postpone task group id {} with id {}",
+                                    internal_task.task.group_id(),
+                                    internal_task.task.id()
+                                );
 
-                            // send status contained inside the internal task
-                            internal_task.send_status(&self_message_sender);
+                                // send status contained inside the internal task
+                                internal_task.send_status(&self_message_sender);
 
-                            // re-add the task
-                            add_task(
-                                &self_end_task_sig_receiver,
-                                &status_by_task_id_w_2,
-                                &self_it_sender,
-                                &self_message_sender,
-                                self_it_receiver.len(),
-                                internal_task.task,
-                            );
+                                let running_tasks = match self_running_tasks.try_lock() {
+                                    Ok(counter) => counter.get(),
+                                    Err(_) => 0,
+                                };
 
-                            // wait a few seconds
-                            thread::sleep(Duration::from_secs(5))
-                        }
-                        _ => {}
-                    };
+                                // re-add the task
+                                add_task(
+                                    &self_end_task_sig_receiver,
+                                    &status_by_task_id_w_2,
+                                    &self_it_sender,
+                                    &self_message_sender,
+                                    self_it_receiver.len() + running_tasks,
+                                    internal_task.task,
+                                );
+
+                                // wait a few seconds
+                                thread::sleep(Duration::from_secs(5))
+                            }
+                            _ => {}
+                        };
+                    }
+                    Err(_) => {}
+                };
+
+                debug!("no task to run, wait for 1 sec");
+                sleep(Duration::from_secs(1));
+                if self_end_task_sig_receiver.try_recv().is_ok() {
+                    info!("shutdown task manager");
+                    self_task_terminated_sender.send(true);
                 }
-                Err(_) => {}
-            };
-
-            debug!("no task to run, wait for 1 sec");
-            sleep(Duration::from_secs(1));
-            if self_end_task_sig_receiver.try_recv().is_ok() {
-                info!("shutdown task manager");
-                self_task_terminated_sender.send(true);
             }
         });
 
@@ -387,7 +445,7 @@ pub enum State {
     DeleteError,
 }
 
-impl evmap::ShallowCopy for Status {
+impl evmap::shallow_copy::ShallowCopy for Status {
     unsafe fn shallow_copy(&self) -> ManuallyDrop<Self> {
         ManuallyDrop::new(self.clone())
     }

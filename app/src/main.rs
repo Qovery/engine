@@ -4,7 +4,7 @@ extern crate log;
 extern crate serde;
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, Error, Write};
+use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -15,7 +15,6 @@ use std::{fs, io, process};
 use chrono::{DateTime, Utc};
 use crossbeam_channel::{unbounded, Sender};
 use dirs::home_dir;
-use nats::tls::{Identity, TlsConnector, TlsConnectorBuilder};
 use nats::{Connection, Subscription};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
@@ -629,12 +628,12 @@ pub fn using_nats_server(
     //let mut f_content = String::new();
     //f.read_to_string(&mut f_content);
 
-    let _tls_connector = TlsConnector::builder()
-        //.add_root_certificate(nats::tls::Certificate::from_pem(f_content.as_bytes()).unwrap())
-        .danger_accept_invalid_certs(true)
-        .danger_accept_invalid_hostnames(true)
-        .build()
-        .unwrap();
+    /*let _tls_connector = TlsConnector::builder()
+    //.add_root_certificate(nats::tls::Certificate::from_pem(f_content.as_bytes()).unwrap())
+    .danger_accept_invalid_certs(true)
+    .danger_accept_invalid_hostnames(true)
+    .build()
+    .unwrap();*/
 
     info!("connect to the NATS server...");
 

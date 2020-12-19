@@ -8,9 +8,9 @@ edition = "2018"
 
 [dependencies]
 qovery-engine = { path = "../cloned-engine" }
-crossbeam-channel = "0.4.4"
-evmap = "11.0.0-alpha.1"
+crossbeam-channel = "0.5.0"
+evmap = "10.0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-chrono = "0.4.11"
-log = "0.4.8"
+chrono = "0.4.19"
+log = "0.4.11"
