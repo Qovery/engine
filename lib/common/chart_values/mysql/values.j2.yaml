@@ -13,7 +13,7 @@
 ##
 image:
   debug: false
-  registry: docker.io
+  registry: quay.io
   repository: bitnami/mysql
   tag: "{{ version }}"
 

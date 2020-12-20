@@ -13,7 +13,7 @@
 image:
   ## Bitnami MongoDB registry
   ##
-  registry: docker.io
+  registry: quay.io
   ## Bitnami MongoDB image name
   ##
   repository: bitnami/mongodb
