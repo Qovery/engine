@@ -13,7 +13,7 @@ global:
 ## ref: https://hub.docker.com/r/bitnami/postgresql/tags/
 ##
 image:
-  registry: docker.io
+  registry: quay.io
   repository: bitnami/postgresql
   tag: "{{ version }}"
   ## Specify a imagePullPolicy

@@ -331,7 +331,7 @@ fn test_postgresql_configuration(
         .into_iter()
         .map(|mut app| {
             app.branch = "postgres-app".to_string();
-            app.commit_id = "ad2c556b1b64195ba025e658cb3b6e5182b920b0".to_string();
+            app.commit_id = "ad65b24a0470e7e8aa0983e036fb9a05928fd973".to_string();
             app.private_port = Some(1234);
             app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
@@ -519,7 +519,7 @@ fn test_mongodb_configuration(
         .into_iter()
         .map(|mut app| {
             app.branch = "mongodb-app".to_string();
-            app.commit_id = "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string();
+            app.commit_id = "3fdc7e784c1d98b80446be7ff25e35370306d9a8".to_string();
             app.private_port = Some(1234);
             app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
@@ -718,7 +718,7 @@ fn test_mysql_configuration(
         .into_iter()
         .map(|mut app| {
             app.branch = "mysql-app".to_string();
-            app.commit_id = "241e91dcbf82e8b00df9c79ab2db94b1d04ad3f8".to_string();
+            app.commit_id = "e53fbb2535fa2c4a75a3918eaa173c1177c4d4e3".to_string();
             app.private_port = Some(1234);
             app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
@@ -883,7 +883,7 @@ fn test_redis_configuration(
         .map(|mut app| {
             app.name = "redis-app".to_string();
             app.branch = "redis-app".to_string();
-            app.commit_id = "2bd35d61941df2d9f5c4ce085481334f0845a2fb".to_string();
+            app.commit_id = "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string();
             app.private_port = Some(1234);
             app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![
