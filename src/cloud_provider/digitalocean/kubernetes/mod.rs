@@ -118,10 +118,12 @@ impl<'a> DOKS<'a> {
             "engine_version_controller_token",
             &self.options.engine_version_controller_token,
         );
+
         context.insert(
             "agent_version_controller_token",
             &self.options.agent_version_controller_token,
         );
+
         context.insert("test_cluster", &test_cluster);
         context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
         context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
@@ -144,6 +146,7 @@ impl<'a> DOKS<'a> {
             true => "https://acme-staging-v02.api.letsencrypt.org/directory",
             false => "https://acme-v02.api.letsencrypt.org/directory",
         };
+
         context.insert("acme_server_url", lets_encrypt_url);
         context.insert("dns_email_report", &self.options.tls_email_report);
 
@@ -152,22 +155,27 @@ impl<'a> DOKS<'a> {
         let managed_dns_domains_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
         let managed_dns_domains_terraform_format =
             terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+
         let managed_dns_resolvers: Vec<String> = self
             .dns_provider
             .resolvers()
             .iter()
             .map(|x| format!("{}", x.clone().to_string()))
             .collect();
+
         let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
+
         context.insert("managed_dns", &managed_dns_list);
         context.insert(
             "managed_dns_domains_helm_format",
             &managed_dns_domains_helm_format,
         );
+
         context.insert(
             "managed_dns_domains_terraform_format",
             &managed_dns_domains_terraform_format,
         );
+
         context.insert(
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
@@ -188,6 +196,7 @@ impl<'a> DOKS<'a> {
         // Sapces Credentiales
         context.insert("spaces_access_id", &self.cloud_provider.spaces_access_id);
         context.insert("spaces_secret_key", &self.cloud_provider.spaces_secret_key);
+
         let space_kubeconfig_bucket = get_space_bucket_kubeconfig_name(self.id.clone());
         context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
 
@@ -207,6 +216,7 @@ impl<'a> DOKS<'a> {
                 .secret_access_key
                 .as_str(),
         );
+
         context.insert(
             "aws_region_tfstates_account",
             self.cloud_provider()
@@ -219,6 +229,7 @@ impl<'a> DOKS<'a> {
             "aws_terraform_backend_dynamodb_table",
             "qovery-terrafom-tfstates",
         );
+
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
 
         // kubernetes workers
@@ -235,6 +246,7 @@ impl<'a> DOKS<'a> {
                 min_size: nodes.len().to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
+
         context.insert("oks_worker_nodes", &worker_nodes);
 
         context

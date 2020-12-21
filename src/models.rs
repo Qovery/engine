@@ -197,7 +197,6 @@ impl Application {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            CPKind::GCP => None,
             CPKind::DO => Some(Box::new(
                 crate::cloud_provider::digitalocean::application::Application::new(
                     context.clone(),
@@ -217,7 +216,6 @@ impl Application {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            //TODO to implement
         }
     }
 
@@ -251,7 +249,6 @@ impl Application {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            CPKind::GCP => None,
             CPKind::DO => Some(Box::new(
                 crate::cloud_provider::digitalocean::application::Application::new(
                     context.clone(),
@@ -271,7 +268,6 @@ impl Application {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            //TODO to implement
         }
     }
 
@@ -435,9 +431,6 @@ impl Router {
                     ));
                 Some(router)
             }
-
-            CPKind::GCP => None,
-
             CPKind::DO => {
                 let router: Box<dyn StatelessService> =
                     Box::new(crate::cloud_provider::digitalocean::router::Router::new(
@@ -585,9 +578,7 @@ impl Database {
                     Some(db)
                 }
             },
-            CPKind::GCP => None,
-            _ => None,
-            //TODO to implement
+            CPKind::DO => None,
         }
     }
 }
@@ -641,9 +632,7 @@ impl ExternalService {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            CPKind::GCP => None,
             _ => None,
-            //TODO to implement
         }
     }
 
@@ -669,9 +658,7 @@ impl ExternalService {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            CPKind::GCP => None,
             _ => None,
-            //TODO to implement
         }
     }
 
