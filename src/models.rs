@@ -773,6 +773,10 @@ pub trait ProgressListener {
     fn delete_error(&self, info: ProgressInfo);
 }
 
+pub trait Listen {
+    fn listeners(&self) -> &Listeners;
+}
+
 pub type Listener = Rc<Box<dyn ProgressListener>>;
 pub type Listeners = Vec<Listener>;
 

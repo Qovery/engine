@@ -7,7 +7,11 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, ProgressScope};
+use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use retry::delay::Fixed;
+use retry::OperationResult;
+use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::Resolver;
 
 pub trait Service {
     fn context(&self) -> &Context;
@@ -169,8 +173,105 @@ pub trait ExternalService: StatelessService {
     }
 }
 
-pub trait Router: StatelessService {
-    fn check_domains(&self) -> Result<(), EngineError>;
+pub trait Router: StatelessService + Listen {
+    fn domains(&self) -> Vec<&str>;
+    fn check_domains(&self) -> Result<(), EngineError> {
+        let listeners_helper = ListenersHelper::new(self.listeners());
+
+        for domain in self.domains() {
+            listeners_helper.start_in_progress(ProgressInfo::new(
+                ProgressScope::Router {
+                    id: self.id().into(),
+                },
+                ProgressLevel::Info,
+                Some(format!(
+                    "Let's check domain resolution for '{}'. Please wait, it can take some time...",
+                    self.name_with_id()
+                )),
+                self.context().execution_id(),
+            ));
+
+            let mut resolver_options = ResolverOpts::default();
+            resolver_options.cache_size = 0;
+            resolver_options.use_hosts_file = false;
+
+            let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
+                Ok(resolver) => resolver,
+                Err(err) => {
+                    error!("{:?}", err);
+                    return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        format!(
+                            "can't get domain resolver for '{}'; Error: {:?}",
+                            domain, err
+                        ),
+                    ));
+                }
+            };
+
+            let check_result = retry::retry(Fixed::from_millis(3000).take(200), || match resolver
+                .lookup_ip(domain)
+            {
+                Ok(lookup_ip) => OperationResult::Ok(lookup_ip),
+                Err(err) => {
+                    let x = format!(
+                        "Domain resolution check for '{}' is still in progress...",
+                        domain
+                    );
+
+                    info!("{}", x);
+
+                    listeners_helper.start_in_progress(ProgressInfo::new(
+                        ProgressScope::Router {
+                            id: self.id().into(),
+                        },
+                        ProgressLevel::Info,
+                        Some(x),
+                        self.context().execution_id(),
+                    ));
+
+                    OperationResult::Retry(err)
+                }
+            });
+
+            match check_result {
+                Ok(_) => {
+                    let x = format!("Domain {} is ready! ⚡️", domain);
+
+                    info!("{}", x);
+
+                    listeners_helper.start_in_progress(ProgressInfo::new(
+                        ProgressScope::Router {
+                            id: self.id().into(),
+                        },
+                        ProgressLevel::Info,
+                        Some(x),
+                        self.context().execution_id(),
+                    ));
+                }
+                Err(_) => {
+                    let message = format!(
+                        "Unable to check domain availability for '{}'. It can be due to a \
+                        too long domain propagation. Note: this is not critical.",
+                        domain
+                    );
+
+                    warn!("{}", message);
+
+                    listeners_helper.error(ProgressInfo::new(
+                        ProgressScope::Router {
+                            id: self.id().into(),
+                        },
+                        ProgressLevel::Warn,
+                        Some(message),
+                        self.context().execution_id(),
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::Router(self.id().to_string(), self.name().to_string())
     }

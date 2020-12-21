@@ -1,3 +1,8 @@
+use retry::delay::Fibonacci;
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
+use tera::Context as TeraContext;
+
 use crate::cloud_provider::digitalocean::{common, DO};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -8,11 +13,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
-use crate::models::{Context, Listeners};
-use retry::delay::Fibonacci;
-use retry::OperationResult;
-use serde::{Deserialize, Serialize};
-use tera::Context as TeraContext;
+use crate::models::{Context, Listen, Listeners};
 
 pub struct Router {
     context: Context,
@@ -23,6 +24,7 @@ pub struct Router {
     routes: Vec<Route>,
     listeners: Listeners,
 }
+
 pub struct CustomDomain {
     pub domain: String,
     pub target_domain: String,
@@ -295,10 +297,23 @@ impl Service for Router {
 }
 
 impl crate::cloud_provider::service::Router for Router {
-    fn check_domains(&self) -> Result<(), EngineError> {
-        Ok(())
+    fn domains(&self) -> Vec<&str> {
+        let mut _domains = vec![self.default_domain.as_str()];
+
+        for domain in &self.custom_domains {
+            _domains.push(domain.domain.as_str());
+        }
+
+        _domains
     }
 }
+
+impl Listen for Router {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+}
+
 impl StatelessService for Router {}
 
 impl Create for Router {

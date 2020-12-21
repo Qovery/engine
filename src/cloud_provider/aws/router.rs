@@ -1,12 +1,7 @@
-use futures::io::Error;
-use retry::delay::{Fibonacci, Fixed};
+use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::error::ResolveError;
-use trust_dns_resolver::lookup_ip::LookupIp;
-use trust_dns_resolver::Resolver;
 
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -18,9 +13,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
-use crate::models::{
-    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::models::{Context, Listen, Listeners};
 
 pub struct Router {
     context: Context,
@@ -287,99 +280,20 @@ impl Service for Router {
 }
 
 impl crate::cloud_provider::service::Router for Router {
-    fn check_domains(&self) -> Result<(), EngineError> {
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+    fn domains(&self) -> Vec<&str> {
+        let mut _domains = vec![self.default_domain.as_str()];
 
-        listeners_helper.start_in_progress(ProgressInfo::new(
-            ProgressScope::Router {
-                id: self.id().into(),
-            },
-            ProgressLevel::Info,
-            Some(format!(
-                "Let's check that {} domain is ready. Please wait, it can take some time...",
-                self.name_with_id()
-            )),
-            self.context.execution_id(),
-        ));
-
-        let mut resolver_options = ResolverOpts::default();
-        resolver_options.cache_size = 0;
-        resolver_options.use_hosts_file = false;
-
-        let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
-            Ok(resolver) => resolver,
-            Err(err) => {
-                error!("{:?}", err);
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!("can't get DNS resolver {:?}", err),
-                ));
-            }
-        };
-
-        let check_result = retry::retry(Fixed::from_millis(3000).take(200), || {
-            match resolver.lookup_ip(self.default_domain.as_str()) {
-                Ok(x) => OperationResult::Ok(x),
-                Err(err) => {
-                    let x = format!(
-                        "Check for {} domain still in progress...",
-                        self.default_domain.as_str()
-                    );
-
-                    warn!("{}", x);
-
-                    listeners_helper.start_in_progress(ProgressInfo::new(
-                        ProgressScope::Router {
-                            id: self.id().into(),
-                        },
-                        ProgressLevel::Info,
-                        Some(x),
-                        self.context.execution_id(),
-                    ));
-
-                    OperationResult::Retry(err)
-                }
-            }
-        });
-
-        match check_result {
-            Ok(_) => {
-                let x = format!("Domain {} is ready! ⚡️", self.default_domain.as_str());
-
-                info!("{}", x);
-
-                listeners_helper.start_in_progress(ProgressInfo::new(
-                    ProgressScope::Router {
-                        id: self.id().into(),
-                    },
-                    ProgressLevel::Info,
-                    Some(x),
-                    self.context.execution_id(),
-                ));
-
-                Ok(())
-            }
-            Err(_) => {
-                let message = format!(
-                    "Wasn't able to check domain availability for {}. \
-                It can be due to a too long DNS propagation. This is not critical.",
-                    self.default_domain.as_str()
-                );
-
-                warn!("{}", message);
-
-                listeners_helper.error(ProgressInfo::new(
-                    ProgressScope::Router {
-                        id: self.id().into(),
-                    },
-                    ProgressLevel::Warn,
-                    Some(message),
-                    self.context.execution_id(),
-                ));
-
-                Ok(())
-            }
+        for domain in &self.custom_domains {
+            _domains.push(domain.domain.as_str());
         }
+
+        _domains
+    }
+}
+
+impl Listen for Router {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
     }
 }
 
