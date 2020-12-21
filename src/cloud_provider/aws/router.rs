@@ -1,8 +1,14 @@
-use dns_lookup::lookup_host;
-use retry::delay::Fibonacci;
+use futures::io::Error;
+use retry::delay::{Fibonacci, Fixed};
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
+use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::error::ResolveError;
+use trust_dns_resolver::lookup_ip::LookupIp;
+use trust_dns_resolver::Resolver;
+
+use dns_lookup::lookup_host;
 
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
@@ -14,7 +20,9 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
-use crate::models::{Context, Listeners};
+use crate::models::{
+    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+};
 
 pub struct Router {
     context: Context,
@@ -479,51 +487,100 @@ impl Create for Router {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        // FIXME remove this
-        return Ok(());
-        //
-        // // TODO -------------------------------------------------------------
-        // // TODO integration tests required before using DNS propagation check
-        // // TODO -------------------------------------------------------------
-        // let listeners_helper = ListenersHelper::new(&self.listeners);
-        // // Todo: inform the client about the fact we're going to check for a certain amount of time
-        //
-        // let check_result = retry::retry(Fixed::from_millis(3000).take(200), || {
-        //     let rs_ips = lookup_host(self.default_domain.as_str());
-        //     match rs_ips {
-        //         Ok(ips) => {
-        //             info!("Records from DNS are successfully retrieved.");
-        //             OperationResult::Ok(ips)
-        //         }
-        //         Err(err) => {
-        //             warn!(
-        //                 "Failed to retrieve record from DNS '{}', retrying...",
-        //                 self.default_domain.as_str()
-        //             );
-        //             warn!("DNS lookup error: {:?}", err);
-        //             OperationResult::Retry(err)
-        //         }
-        //     }
-        // });
-        //
-        // match check_result {
-        //     Ok(_) => Ok(()),
-        //     Err(_) => {
-        //         let message = format!("Wasn't able to check DNS availability '{}', can be due to a too long DNS propagation. Please retry and contact your administrator if the problem persists", self.default_domain.as_str());
-        //         error!("{}", message);
-        //
-        //         listeners_helper.error(ProgressInfo::new(
-        //             ProgressScope::Router {
-        //                 id: self.id().into(),
-        //             },
-        //             ProgressLevel::Error,
-        //             Some("DNS propagation goes wrong."),
-        //             self.context.execution_id(),
-        //         ));
-        //         // TODO: fixme I shouldn't return OK but I think I have a cache issue
-        //         Ok(())
-        //     }
-        // }
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        listeners_helper.start_in_progress(ProgressInfo::new(
+            ProgressScope::Router {
+                id: self.id().into(),
+            },
+            ProgressLevel::Info,
+            Some(format!(
+                "Let's check that {} domain is ready. Please wait, it can take some time...",
+                self.name_with_id()
+            )),
+            self.context.execution_id(),
+        ));
+
+        let mut resolver_options = ResolverOpts::default();
+        resolver_options.cache_size = 0;
+        resolver_options.use_hosts_file = false;
+
+        let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
+            Ok(resolver) => resolver,
+            Err(err) => {
+                error!("{:?}", err);
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!("can't get DNS resolver {:?}", err),
+                ));
+            }
+        };
+
+        let check_result = retry::retry(Fixed::from_millis(3000).take(200), || {
+            match resolver.lookup_ip(self.default_domain.as_str()) {
+                Ok(x) => OperationResult::Ok(x),
+                Err(err) => {
+                    let x = format!(
+                        "Check for {} domain still in progress...",
+                        self.default_domain.as_str()
+                    );
+
+                    warn!("{}", x);
+
+                    listeners_helper.start_in_progress(ProgressInfo::new(
+                        ProgressScope::Router {
+                            id: self.id().into(),
+                        },
+                        ProgressLevel::Info,
+                        Some(x),
+                        self.context.execution_id(),
+                    ));
+
+                    OperationResult::Retry(err)
+                }
+            }
+        });
+
+        match check_result {
+            Ok(_) => {
+                let x = format!("Domain {} is ready! ⚡️", self.default_domain.as_str());
+
+                info!("{}", x);
+
+                listeners_helper.start_in_progress(ProgressInfo::new(
+                    ProgressScope::Router {
+                        id: self.id().into(),
+                    },
+                    ProgressLevel::Info,
+                    Some(x),
+                    self.context.execution_id(),
+                ));
+
+                Ok(())
+            }
+            Err(_) => {
+                let message = format!(
+                    "Wasn't able to check domain availability for {}. \
+                It can be due to a too long DNS propagation. \
+                Please retry and contact your administrator \
+                if the problem persists",
+                    self.default_domain.as_str()
+                );
+
+                error!("{}", message);
+
+                listeners_helper.error(ProgressInfo::new(
+                    ProgressScope::Router {
+                        id: self.id().into(),
+                    },
+                    ProgressLevel::Error,
+                    Some(message),
+                    self.context.execution_id(),
+                ));
+
+                Ok(())
+            }
+        }
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {

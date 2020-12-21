@@ -19,7 +19,7 @@ pub fn deploy_environment_on_do(
     let dns_provider = dns_provider_cloudflare(context);
     let k = test_utilities::digitalocean::do_kubernetes_ks(&context, &cp, &dns_provider, nodes);
 
-    tx.deploy_environment_with_options(
+    let _ = tx.deploy_environment_with_options(
         &k,
         &environment_action,
         DeploymentOption {

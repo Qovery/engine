@@ -8,12 +8,12 @@ use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listener};
 
 pub mod aws;
+mod common;
 pub mod digitalocean;
 pub mod environment;
 pub mod gcp;
 pub mod kubernetes;
 pub mod service;
-mod common;
 
 pub trait CloudProvider {
     fn context(&self) -> &Context;
@@ -44,7 +44,6 @@ pub trait CloudProvider {
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
     AWS,
-    GCP,
     DO,
 }
 

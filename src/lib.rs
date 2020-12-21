@@ -1,6 +1,7 @@
+extern crate tera;
 #[macro_use]
 extern crate tracing;
-extern crate tera;
+extern crate trust_dns_resolver;
 
 pub mod build_platform;
 pub mod cloud_provider;
@@ -16,6 +17,7 @@ pub mod error;
 pub mod fs;
 pub mod git;
 pub mod models;
+mod object_storage;
 mod runtime;
 pub mod s3;
 pub mod session;
@@ -24,4 +26,3 @@ mod template;
 pub mod transaction;
 mod unit_conversion;
 mod utilities;
-mod object_storage;

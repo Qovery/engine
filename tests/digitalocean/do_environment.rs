@@ -36,6 +36,7 @@ fn deploy_a_working_environment_with_no_router_on_do() {
         commit_id: "".to_string(),
         registry_url: None,
     };
+
     assert!(!registry.does_image_exists(&image));
 
     match deploy_environment_on_do(&context, &ea) {
@@ -51,9 +52,10 @@ fn deploy_a_working_environment_with_no_router_on_do() {
             .unwrap()
             .as_str()
     );
+
     assert!(registry.does_image_exists(&image));
     /*
-    TODO: delete environement is not implemented yet
+    TODO: delete environment is not implemented yet
     match deploy_environment_on_do(&context_for_delete, &ea_delete) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
