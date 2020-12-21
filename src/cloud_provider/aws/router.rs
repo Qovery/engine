@@ -8,8 +8,6 @@ use trust_dns_resolver::error::ResolveError;
 use trust_dns_resolver::lookup_ip::LookupIp;
 use trust_dns_resolver::Resolver;
 
-use dns_lookup::lookup_host;
-
 use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -290,34 +288,98 @@ impl Service for Router {
 
 impl crate::cloud_provider::service::Router for Router {
     fn check_domains(&self) -> Result<(), EngineError> {
-        let check_result = retry::retry(Fibonacci::from_millis(3000).take(1), || {
-            // TODO send information back to the core
-            info!("check custom domain {}", self.default_domain.as_str());
-            match lookup_host(self.default_domain.as_str()) {
-                Ok(_) => OperationResult::Ok(()),
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        listeners_helper.start_in_progress(ProgressInfo::new(
+            ProgressScope::Router {
+                id: self.id().into(),
+            },
+            ProgressLevel::Info,
+            Some(format!(
+                "Let's check that {} domain is ready. Please wait, it can take some time...",
+                self.name_with_id()
+            )),
+            self.context.execution_id(),
+        ));
+
+        let mut resolver_options = ResolverOpts::default();
+        resolver_options.cache_size = 0;
+        resolver_options.use_hosts_file = false;
+
+        let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
+            Ok(resolver) => resolver,
+            Err(err) => {
+                error!("{:?}", err);
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!("can't get DNS resolver {:?}", err),
+                ));
+            }
+        };
+
+        let check_result = retry::retry(Fixed::from_millis(3000).take(200), || {
+            match resolver.lookup_ip(self.default_domain.as_str()) {
+                Ok(x) => OperationResult::Ok(x),
                 Err(err) => {
-                    debug!("{:?}", err);
-                    OperationResult::Retry(())
+                    let x = format!(
+                        "Check for {} domain still in progress...",
+                        self.default_domain.as_str()
+                    );
+
+                    warn!("{}", x);
+
+                    listeners_helper.start_in_progress(ProgressInfo::new(
+                        ProgressScope::Router {
+                            id: self.id().into(),
+                        },
+                        ProgressLevel::Info,
+                        Some(x),
+                        self.context.execution_id(),
+                    ));
+
+                    OperationResult::Retry(err)
                 }
             }
         });
 
-        // TODO - check custom domains? if yes, why wasting time waiting for user setting up the custom domain?
-
         match check_result {
-            Ok(_) => {}
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "domain {} is still not ready after several retries",
-                        self.default_domain.as_str()
-                    ),
+            Ok(_) => {
+                let x = format!("Domain {} is ready! ⚡️", self.default_domain.as_str());
+
+                info!("{}", x);
+
+                listeners_helper.start_in_progress(ProgressInfo::new(
+                    ProgressScope::Router {
+                        id: self.id().into(),
+                    },
+                    ProgressLevel::Info,
+                    Some(x),
+                    self.context.execution_id(),
                 ));
+
+                Ok(())
+            }
+            Err(_) => {
+                let message = format!(
+                    "Wasn't able to check domain availability for {}. \
+                It can be due to a too long DNS propagation. This is not critical.",
+                    self.default_domain.as_str()
+                );
+
+                warn!("{}", message);
+
+                listeners_helper.error(ProgressInfo::new(
+                    ProgressScope::Router {
+                        id: self.id().into(),
+                    },
+                    ProgressLevel::Warn,
+                    Some(message),
+                    self.context.execution_id(),
+                ));
+
+                Ok(())
             }
         }
-
-        Ok(())
     }
 }
 
@@ -487,98 +549,7 @@ impl Create for Router {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        listeners_helper.start_in_progress(ProgressInfo::new(
-            ProgressScope::Router {
-                id: self.id().into(),
-            },
-            ProgressLevel::Info,
-            Some(format!(
-                "Let's check that {} domain is ready. Please wait, it can take some time...",
-                self.name_with_id()
-            )),
-            self.context.execution_id(),
-        ));
-
-        let mut resolver_options = ResolverOpts::default();
-        resolver_options.cache_size = 0;
-        resolver_options.use_hosts_file = false;
-
-        let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
-            Ok(resolver) => resolver,
-            Err(err) => {
-                error!("{:?}", err);
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!("can't get DNS resolver {:?}", err),
-                ));
-            }
-        };
-
-        let check_result = retry::retry(Fixed::from_millis(3000).take(200), || {
-            match resolver.lookup_ip(self.default_domain.as_str()) {
-                Ok(x) => OperationResult::Ok(x),
-                Err(err) => {
-                    let x = format!(
-                        "Check for {} domain still in progress...",
-                        self.default_domain.as_str()
-                    );
-
-                    warn!("{}", x);
-
-                    listeners_helper.start_in_progress(ProgressInfo::new(
-                        ProgressScope::Router {
-                            id: self.id().into(),
-                        },
-                        ProgressLevel::Info,
-                        Some(x),
-                        self.context.execution_id(),
-                    ));
-
-                    OperationResult::Retry(err)
-                }
-            }
-        });
-
-        match check_result {
-            Ok(_) => {
-                let x = format!("Domain {} is ready! ⚡️", self.default_domain.as_str());
-
-                info!("{}", x);
-
-                listeners_helper.start_in_progress(ProgressInfo::new(
-                    ProgressScope::Router {
-                        id: self.id().into(),
-                    },
-                    ProgressLevel::Info,
-                    Some(x),
-                    self.context.execution_id(),
-                ));
-
-                Ok(())
-            }
-            Err(_) => {
-                let message = format!(
-                    "Wasn't able to check domain availability for {}. \
-                It can be due to a too long DNS propagation. This is not critical.",
-                    self.default_domain.as_str()
-                );
-
-                warn!("{}", message);
-
-                listeners_helper.error(ProgressInfo::new(
-                    ProgressScope::Router {
-                        id: self.id().into(),
-                    },
-                    ProgressLevel::Warn,
-                    Some(message),
-                    self.context.execution_id(),
-                ));
-
-                Ok(())
-            }
-        }
+        self.check_domains()
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
