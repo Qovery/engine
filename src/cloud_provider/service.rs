@@ -178,6 +178,25 @@ pub trait Router: StatelessService + Listen {
     fn check_domains(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(self.listeners());
 
+        let mut resolver_options = ResolverOpts::default();
+        resolver_options.cache_size = 0;
+        resolver_options.use_hosts_file = false;
+
+        let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
+            Ok(resolver) => resolver,
+            Err(err) => {
+                error!("{:?}", err);
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "can't get domain resolver for router '{}'; Error: {:?}",
+                        self.name_with_id(),
+                        err
+                    ),
+                ));
+            }
+        };
+
         for domain in self.domains() {
             listeners_helper.start_in_progress(ProgressInfo::new(
                 ProgressScope::Router {
@@ -186,32 +205,13 @@ pub trait Router: StatelessService + Listen {
                 ProgressLevel::Info,
                 Some(format!(
                     "Let's check domain resolution for '{}'. Please wait, it can take some time...",
-                    self.name_with_id()
+                    domain
                 )),
                 self.context().execution_id(),
             ));
 
-            let mut resolver_options = ResolverOpts::default();
-            resolver_options.cache_size = 0;
-            resolver_options.use_hosts_file = false;
-
-            let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
-                Ok(resolver) => resolver,
-                Err(err) => {
-                    error!("{:?}", err);
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        format!(
-                            "can't get domain resolver for '{}'; Error: {:?}",
-                            domain, err
-                        ),
-                    ));
-                }
-            };
-
-            let check_result = retry::retry(Fixed::from_millis(3000).take(200), || match resolver
-                .lookup_ip(domain)
-            {
+            let fixed_iterable = Fixed::from_millis(3000).take(400);
+            let check_result = retry::retry(fixed_iterable, || match resolver.lookup_ip(domain) {
                 Ok(lookup_ip) => OperationResult::Ok(lookup_ip),
                 Err(err) => {
                     let x = format!(

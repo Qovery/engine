@@ -4,6 +4,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::error::EngineError;
 use crate::models::{Action, Context, Environment};
 use tera::Context as TeraContext;
+
 pub struct PostgreSQL {
     context: Context,
     id: String,
@@ -63,7 +64,7 @@ impl PostgreSQL {
         _kubernetes: &dyn Kubernetes,
         _environment: &Environment,
     ) -> TeraContext {
-        let mut context = TeraContext::new();
+        let context = TeraContext::new();
         //TODO generate the context
         context
     }

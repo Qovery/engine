@@ -347,9 +347,9 @@ impl ContainerRegistry for DOCR {
                         }
                         false
                     }
-                    Err(e) => {
+                    Err(_) => {
                         error!(
-                            "Unable to deserialize tags from  DigitalOcean API for image {}",
+                            "Unable to deserialize tags from DigitalOcean API for image {}",
                             &image.tag
                         );
                         return false;

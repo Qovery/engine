@@ -352,7 +352,7 @@ fn check_docker_space_usage_and_clean(docker_path_size_info: FsStats, envs: Vec<
 }
 
 fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
-    let mut docker_args = vec!["image", "prune", "-a", "-f"];
+    let docker_args = vec!["image", "prune", "-a", "-f"];
 
     cmd::utilities::exec_with_envs_and_output(
         "docker",

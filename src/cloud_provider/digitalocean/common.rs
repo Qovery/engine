@@ -72,7 +72,7 @@ pub fn get_uuid_of_cluster_from_name(
     token: &str,
     kube_cluster_name: &str,
 ) -> Result<String, SimpleError> {
-    let mut headers = get_header_with_bearer(token);
+    let headers = get_header_with_bearer(token);
     let res = reqwest::blocking::Client::new()
         .get(DO_CLUSTER_API_PATH)
         .headers(headers)
