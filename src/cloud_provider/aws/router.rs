@@ -561,19 +561,17 @@ impl Create for Router {
             Err(_) => {
                 let message = format!(
                     "Wasn't able to check domain availability for {}. \
-                It can be due to a too long DNS propagation. \
-                Please retry and contact your administrator \
-                if the problem persists",
+                It can be due to a too long DNS propagation. This is not critical.",
                     self.default_domain.as_str()
                 );
 
-                error!("{}", message);
+                warn!("{}", message);
 
                 listeners_helper.error(ProgressInfo::new(
                     ProgressScope::Router {
                         id: self.id().into(),
                     },
-                    ProgressLevel::Error,
+                    ProgressLevel::Warn,
                     Some(message),
                     self.context.execution_id(),
                 ));
