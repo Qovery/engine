@@ -5,6 +5,7 @@ use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCredentials};
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::EngineErrorCause;
 use crate::models::{Context, Listener, Listeners};
 use crate::runtime::async_run;
@@ -104,6 +105,13 @@ impl CloudProvider for AWS {
 
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
+    }
+
+    fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
+        vec![
+            (AWS_ACCESS_KEY_ID, self.access_key_id.as_str()),
+            (AWS_SECRET_ACCESS_KEY, self.secret_access_key.as_str()),
+        ]
     }
 
     fn terraform_state_credentials(&self) -> &TerraformStateCredentials {

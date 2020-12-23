@@ -474,15 +474,16 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
         .get(CR_API_PATH)
         .headers(headers)
         .send();
-    match res {
+
+    return match res {
         Ok(output) => match output.status() {
             StatusCode::OK => {
                 let content = output.text().unwrap();
                 let res_registry = serde_json::from_str::<DoApiGetContainerRegistry>(&content);
 
                 match res_registry {
-                    Ok(registry) => return Ok(registry.registry.name),
-                    Err(e) => return Err(SimpleError::new(
+                    Ok(registry) => Ok(registry.registry.name),
+                    Err(_) => Err(SimpleError::new(
                         SimpleErrorKind::Other,
                         Some(
                             "While trying to deserialize Registry describe json received from Digital Ocean API",
@@ -492,19 +493,19 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
             }
             status => {
                 warn!("status from DO registry API {}", status);
-                return Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")));
+                Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
             }
         },
         Err(e) => {
             error!("{:?}", e);
-            return Err(SimpleError::new(
+            Err(SimpleError::new(
                 SimpleErrorKind::Other,
                 Some(
                     "Unable to call Digital Ocean when tyring to fetch the container registry name",
                 ),
-            ));
+            ))
         }
-    }
+    };
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]

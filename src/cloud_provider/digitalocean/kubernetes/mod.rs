@@ -1,23 +1,24 @@
+use std::fs::File;
+
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use tera::Context as TeraContext;
+
 use crate::cloud_provider::common::worker_node_data_template::WorkerNodeDataTemplate;
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode, Resources};
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
 use crate::error::{cast_simple_error_to_engine_error, EngineError};
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope,
 };
 use crate::string::terraform_list_format;
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
-use std::rc::Rc;
-use std::thread;
-use tera::Context as TeraContext;
 
 pub mod cidr;
 pub mod node;
@@ -87,7 +88,7 @@ impl<'a> DOKS<'a> {
         s.retain(|c| !c.is_whitespace());
     }
 
-    // create a context to render tf files (terraform) contained in lib/digitalocan/
+    // create a context to render tf files (terraform) contained in lib/digitalocean/
     fn tera_context(&self) -> TeraContext {
         let mut context = TeraContext::new();
 
@@ -193,14 +194,14 @@ impl<'a> DOKS<'a> {
         context.insert("digitalocean_token", &self.cloud_provider.token);
         context.insert("do_region", &self.region);
 
-        // Sapces Credentiales
+        // Spaces Credentials
         context.insert("spaces_access_id", &self.cloud_provider.spaces_access_id);
         context.insert("spaces_secret_key", &self.cloud_provider.spaces_secret_key);
 
         let space_kubeconfig_bucket = get_space_bucket_kubeconfig_name(self.id.clone());
         context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
 
-        // AWS S3 tfstate storage tfstates
+        // AWS S3 tfstates storage tfstates
         context.insert(
             "aws_access_key_tfstates_account",
             self.cloud_provider()
@@ -294,23 +295,20 @@ impl<'a> Kubernetes for DOKS<'a> {
         Ok(())
     }
 
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
-        self.listeners.push(listener);
+    fn config_file(&self) -> Result<(String, File), EngineError> {
+        unimplemented!()
     }
 
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
+    fn config_file_path(&self) -> Result<String, EngineError> {
+        unimplemented!()
     }
 
-    fn resources(&self, environment: &Environment) -> Result<Resources, EngineError> {
+    fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
         unimplemented!()
     }
 
     fn on_create(&self) -> Result<(), EngineError> {
-        info!(
-            "DigitalOceaan kube cluster.on_create() called for {}",
-            self.name()
-        );
+        info!("DOKS.on_create() called for {}", self.name());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -375,19 +373,19 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn on_upgrade(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn on_upgrade_error(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn on_downgrade(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn on_delete(&self) -> Result<(), EngineError> {
@@ -395,286 +393,44 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn on_delete_error(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("DOKS.deploy_environment() called for {}", self.name());
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        let stateful_deployment_target = match environment.kind {
-            crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(self, environment)
-            }
-            crate::cloud_provider::environment::Kind::Development => {
-                DeploymentTarget::SelfHosted(self, environment)
-            }
-        };
-        //TODO: Do I have enough ressources to run this ?
-
-        // create all stateful services (database)
-        for service in &environment.stateful_services {
-            let progress_scope = service.progress_scope();
-
-            listeners_helper.start_in_progress(ProgressInfo::new(
-                progress_scope.clone(),
-                ProgressLevel::Info,
-                Some(format!(
-                    "let's deploy {} {}",
-                    service.service_type().name().to_lowercase(),
-                    service.name()
-                )),
-                self.context.execution_id(),
-            ));
-
-            match service.exec_action(&stateful_deployment_target) {
-                Err(err) => {
-                    error!(
-                        "error with stateful service {} , id: {} => {:?}",
-                        service.name(),
-                        service.id(),
-                        err
-                    );
-
-                    listeners_helper.error(ProgressInfo::new(
-                        progress_scope,
-                        ProgressLevel::Error,
-                        Some(format!(
-                            "error while deploying {} {} : error => {:?}",
-                            service.service_type().name().to_lowercase(),
-                            service.name(),
-                            err
-                        )),
-                        self.context.execution_id(),
-                    ));
-
-                    return Err(err);
-                }
-                _ => {
-                    listeners_helper.start_in_progress(ProgressInfo::new(
-                        progress_scope,
-                        ProgressLevel::Info,
-                        Some(format!(
-                            "deployment succeeded for {} {}",
-                            service.service_type().name().to_lowercase(),
-                            service.name()
-                        )),
-                        self.context.execution_id(),
-                    ));
-                }
-            }
-        }
-        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
-        // TODO: create all stateless services (router, application...)
-        // create all stateless services (router, application...)
-        for service in &environment.stateless_services {
-            let progress_scope = service.progress_scope();
-
-            listeners_helper.start_in_progress(ProgressInfo::new(
-                progress_scope.clone(),
-                ProgressLevel::Info,
-                Some(format!(
-                    "let's deploy {} {}",
-                    service.service_type().name().to_lowercase(),
-                    service.name()
-                )),
-                self.context.execution_id(),
-            ));
-
-            match service.exec_action(&stateless_deployment_target) {
-                Err(err) => {
-                    error!(
-                        "error with stateless service {} , id: {} => {:?}",
-                        service.name(),
-                        service.id(),
-                        err
-                    );
-
-                    listeners_helper.error(ProgressInfo::new(
-                        progress_scope,
-                        ProgressLevel::Error,
-                        Some(format!(
-                            "error while deploying {} {} : error => {:?}",
-                            service.service_type().name().to_lowercase(),
-                            service.name(),
-                            err
-                        )),
-                        self.context.execution_id(),
-                    ));
-
-                    return Err(err);
-                }
-                _ => {
-                    listeners_helper.start_in_progress(ProgressInfo::new(
-                        progress_scope,
-                        ProgressLevel::Info,
-                        Some(format!(
-                            "deployment succeeded for {} {}",
-                            service.service_type().name().to_lowercase(),
-                            service.name()
-                        )),
-                        self.context.execution_id(),
-                    ));
-                }
-            }
-        }
-        //TODO: check stateless services are well deployed
-        Ok(())
+        kubernetes::deploy_environment(self, environment)
     }
 
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
         warn!("DOKS.deploy_environment_error() called for {}", self.name());
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        listeners_helper.start_in_progress(ProgressInfo::new(
-            ProgressScope::Environment {
-                id: self.context.execution_id().to_string(),
-            },
-            ProgressLevel::Warn,
-            Some(
-                "An error occurred while trying to deploy the environment, so let's revert changes",
-            ),
-            self.context.execution_id(),
-        ));
-
-        let stateful_deployment_target = match environment.kind {
-            crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(self, environment)
-            }
-            crate::cloud_provider::environment::Kind::Development => {
-                DeploymentTarget::SelfHosted(self, environment)
-            }
-        };
-
-        // clean up all stateful services (database)
-        for service in &environment.stateful_services {
-            let progress_scope = service.progress_scope();
-
-            listeners_helper.start_in_progress(ProgressInfo::new(
-                progress_scope.clone(),
-                ProgressLevel::Info,
-                Some(format!(
-                    "reverting changes for {} {}",
-                    service.service_type().name().to_lowercase(),
-                    service.name()
-                )),
-                self.context.execution_id(),
-            ));
-
-            match service.on_create_error(&stateful_deployment_target) {
-                Err(err) => {
-                    error!(
-                        "error with stateful service {} , id: {} => {:?}",
-                        service.name(),
-                        service.id(),
-                        err
-                    );
-
-                    listeners_helper.error(ProgressInfo::new(
-                        progress_scope,
-                        ProgressLevel::Error,
-                        Some(format!(
-                            "error while reverting changes for {} {} : error => {:?}",
-                            service.service_type().name().to_lowercase(),
-                            service.name(),
-                            err
-                        )),
-                        self.context.execution_id(),
-                    ));
-
-                    return Err(err);
-                }
-                _ => {
-                    listeners_helper.start_in_progress(ProgressInfo::new(
-                        progress_scope,
-                        ProgressLevel::Info,
-                        Some(format!(
-                            "reverting changes succeeded for {} {}",
-                            service.service_type().name().to_lowercase(),
-                            service.name()
-                        )),
-                        self.context.execution_id(),
-                    ));
-                }
-            }
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
-        // clean up all stateless services (router, application...)
-        for service in &environment.stateless_services {
-            let progress_scope = service.progress_scope();
-
-            listeners_helper.start_in_progress(ProgressInfo::new(
-                progress_scope.clone(),
-                ProgressLevel::Info,
-                Some(format!(
-                    "reverting changes for {} {}",
-                    service.service_type().name().to_lowercase(),
-                    service.name()
-                )),
-                self.context.execution_id(),
-            ));
-
-            match service.on_create_error(&stateless_deployment_target) {
-                Err(err) => {
-                    error!(
-                        "error with stateless service {} , id: {} => {:?}",
-                        service.name(),
-                        service.id(),
-                        err
-                    );
-
-                    listeners_helper.error(ProgressInfo::new(
-                        progress_scope,
-                        ProgressLevel::Error,
-                        Some(format!(
-                            "error while reverting changes for {} {} : error => {:?}",
-                            service.service_type().name().to_lowercase(),
-                            service.name(),
-                            err
-                        )),
-                        self.context.execution_id(),
-                    ));
-
-                    return Err(err);
-                }
-                _ => {
-                    listeners_helper.start_in_progress(ProgressInfo::new(
-                        progress_scope,
-                        ProgressLevel::Info,
-                        Some(format!(
-                            "reverting changes succeeded for {} {}",
-                            service.service_type().name().to_lowercase(),
-                            service.name()
-                        )),
-                        self.context.execution_id(),
-                    ));
-                }
-            }
-        }
-
-        Ok(())
+        kubernetes::deploy_environment_error(self, environment)
     }
 
-    fn pause_environment(&self, _environment: &Environment) -> Result<(), EngineError> {
-        unimplemented!()
+    fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+        warn!("DOKS.pause_environment() called for {}", self.name());
+        kubernetes::pause_environment(self, environment)
     }
 
     fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        unimplemented!()
+        Ok(())
     }
 
-    fn delete_environment(&self, _environment: &Environment) -> Result<(), EngineError> {
-        unimplemented!()
+    fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+        warn!("DOKS.delete_environment() called for {}", self.name());
+        kubernetes::delete_environment(self, environment)
     }
 
     fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        unimplemented!()
+        Ok(())
+    }
+}
+
+impl<'a> Listen for DOKS<'a> {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }

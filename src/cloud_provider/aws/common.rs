@@ -1,13 +1,7 @@
-use std::str::FromStr;
-
-use rusoto_core::Region;
-
-use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::Service;
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::SimpleError;
+use crate::error::{cast_simple_error_to_engine_error, EngineError, SimpleError};
 
 pub type Logs = String;
 pub type Describe = String;
@@ -17,7 +11,6 @@ pub fn kubernetes_config_path(
     kubernetes_cluster_id: &str,
     access_key_id: &str,
     secret_access_key: &str,
-    region: &str,
 ) -> Result<String, SimpleError> {
     let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", kubernetes_cluster_id);
     let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
@@ -27,12 +20,9 @@ pub fn kubernetes_config_path(
         workspace_directory, kubernetes_cluster_id
     );
 
-    let _region = Region::from_str(region).unwrap();
-
     let _ = crate::s3::get_kubernetes_config_file(
         access_key_id,
         secret_access_key,
-        &_region,
         kubernetes_config_bucket_name.as_str(),
         kubernetes_config_object_key.as_str(),
         kubernetes_config_file_path.as_str(),
@@ -46,48 +36,42 @@ pub fn kubernetes_config_path(
 pub fn get_stateless_resource_information_for_user(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
-    workspace_dir: &str,
     service: &dyn Service,
-) -> Result<Vec<String>, SimpleError> {
-    let aws = kubernetes
-        .cloud_provider()
-        .as_any()
-        .downcast_ref::<AWS>()
-        .unwrap();
-
+) -> Result<Vec<String>, EngineError> {
     let selector = format!("app={}", service.name());
 
-    let kubernetes_config_file_path = kubernetes_config_path(
-        workspace_dir,
-        kubernetes.id(),
-        aws.access_key_id.as_str(),
-        aws.secret_access_key.as_str(),
-        kubernetes.region(),
-    )?;
-
-    let aws_credentials_envs = vec![
-        (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-        (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-    ];
+    let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
     let mut result = Vec::with_capacity(50);
 
     // get logs
-    let logs = crate::cmd::kubectl::kubectl_exec_logs(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        selector.as_str(),
-        aws_credentials_envs.clone(),
+    let logs = cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_logs(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            selector.as_str(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
     )?;
 
     let _ = result.extend(logs);
 
     // get pod state
-    let pods = crate::cmd::kubectl::kubectl_exec_get_pod(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        selector.as_str(),
-        aws_credentials_envs.clone(),
+    let pods = cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_get_pod(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            selector.as_str(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
     )?;
 
     for pod in pods.items {
@@ -114,11 +98,17 @@ pub fn get_stateless_resource_information_for_user(
     }
 
     // get pod events
-    let events = crate::cmd::kubectl::kubectl_exec_get_event(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        aws_credentials_envs.clone(),
-        "involvedObject.kind=Pod",
+    let events = cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_get_event(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+            "involvedObject.kind=Pod",
+        ),
     )?;
 
     let pod_name_start = format!("{}-", service.name());
@@ -139,34 +129,22 @@ pub fn get_stateless_resource_information_for_user(
 pub fn get_stateless_resource_information(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
-    workspace_dir: &str,
     selector: &str,
-) -> Result<(Describe, Logs), SimpleError> {
-    let aws = kubernetes
-        .cloud_provider()
-        .as_any()
-        .downcast_ref::<AWS>()
-        .unwrap();
-
-    let kubernetes_config_file_path = kubernetes_config_path(
-        workspace_dir,
-        kubernetes.id(),
-        aws.access_key_id.as_str(),
-        aws.secret_access_key.as_str(),
-        kubernetes.region(),
-    )?;
-
-    let aws_credentials_envs = vec![
-        (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-        (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-    ];
+) -> Result<(Describe, Logs), EngineError> {
+    let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
     // exec describe pod...
-    let describe = match crate::cmd::kubectl::kubectl_exec_describe_pod(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        selector,
-        aws_credentials_envs.clone(),
+    let describe = match cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_describe_pod(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            selector,
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
     ) {
         Ok(output) => {
             info!("{}", output);
@@ -179,11 +157,17 @@ pub fn get_stateless_resource_information(
     };
 
     // exec logs...
-    let logs = match crate::cmd::kubectl::kubectl_exec_logs(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        selector,
-        aws_credentials_envs.clone(),
+    let logs = match cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_logs(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            selector,
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
     ) {
         Ok(output) => {
             info!("{:?}", output);
@@ -201,44 +185,38 @@ pub fn get_stateless_resource_information(
 pub fn do_stateless_service_cleanup(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
-    workspace_dir: &str,
     helm_release_name: &str,
-) -> Result<(), SimpleError> {
-    let aws = kubernetes
-        .cloud_provider()
-        .as_any()
-        .downcast_ref::<AWS>()
-        .unwrap();
+) -> Result<(), EngineError> {
+    let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
-    let kubernetes_config_file_path = kubernetes_config_path(
-        workspace_dir,
-        kubernetes.id(),
-        aws.access_key_id.as_str(),
-        aws.secret_access_key.as_str(),
-        kubernetes.region(),
-    )?;
-
-    let aws_credentials_envs = vec![
-        (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-        (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-    ];
-
-    let history_rows = crate::cmd::helm::helm_exec_history(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        helm_release_name,
-        aws_credentials_envs.clone(),
+    let history_rows = cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::helm::helm_exec_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name,
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
     )?;
 
     // if there is no valid history - then delete the helm chart
     let first_valid_history_row = history_rows.iter().find(|x| x.is_successfully_deployed());
 
     if first_valid_history_row.is_some() {
-        crate::cmd::helm::helm_exec_uninstall(
-            kubernetes_config_file_path.as_str(),
-            environment.namespace(),
-            helm_release_name,
-            aws_credentials_envs,
+        cast_simple_error_to_engine_error(
+            kubernetes.engine_error_scope(),
+            kubernetes.context().execution_id(),
+            crate::cmd::helm::helm_exec_uninstall(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                helm_release_name,
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
+            ),
         )?;
     }
 

@@ -106,6 +106,7 @@ pub fn is_pod_restarted_aws_env(
         &environment_check.project_id.clone(),
         &environment_check.id.clone(),
     );
+
     let access_key = aws_access_key_id();
     let secret_key = aws_secret_access_key();
     let aws_credentials_envs = vec![
@@ -118,8 +119,8 @@ pub fn is_pod_restarted_aws_env(
         KUBE_CLUSTER_ID,
         aws_access_key_id().as_str(),
         aws_secret_access_key().as_str(),
-        aws_default_region().as_str(),
     );
+
     match kubernetes_config {
         Ok(path) => {
             let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(

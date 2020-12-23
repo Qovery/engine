@@ -112,7 +112,7 @@ impl ContainerRegistry for DockerHub {
         }
     }
 
-    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
+    fn push(&self, image: &Image, _force_push: bool) -> Result<PushResult, EngineError> {
         let envs = match self.context.docker_tcp_socket() {
             Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
             None => vec![],

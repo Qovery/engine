@@ -14,7 +14,6 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
 
@@ -80,11 +79,7 @@ impl Redis {
             .expect("Could not downcast kubernetes.cloud_provider() to AWS");
 
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let kubernetes_config_file_path = utilities::get_kubernetes_config_path(
-            self.workspace_directory().as_str(),
-            kubernetes,
-            environment,
-        );
+        let kubernetes_config_file_path = kubernetes.config_file_path();
 
         match kubernetes_config_file_path {
             Ok(kube_config) => {
@@ -220,9 +215,7 @@ impl Redis {
                         info!("Deleting secrets containing tfstates");
                         let _ = utilities::delete_terraform_tfstate_secret(
                             *kubernetes,
-                            environment,
                             &get_tfstate_name(&self.id()),
-                            self.workspace_directory().as_str(),
                         );
                     }
                     Err(e) => {
@@ -241,15 +234,10 @@ impl Redis {
                 let helm_release_name = self.helm_release_name();
 
                 // clean the resource
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    common::do_stateless_service_cleanup(
-                        *kubernetes,
-                        *environment,
-                        workspace_dir.as_str(),
-                        helm_release_name.as_str(),
-                    ),
+                let _ = common::do_stateless_service_cleanup(
+                    *kubernetes,
+                    *environment,
+                    helm_release_name.as_str(),
                 )?;
             }
         }
@@ -368,23 +356,8 @@ impl Create for Redis {
                 let context = self.tera_context(*kubernetes, *environment)?;
                 let workspace_dir = self.workspace_directory();
 
-                let aws = kubernetes
-                    .cloud_provider()
-                    .as_any()
-                    .downcast_ref::<AWS>()
-                    .unwrap();
+                let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
-                let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    common::kubernetes_config_path(
-                        workspace_dir.as_str(),
-                        kubernetes.id(),
-                        aws.access_key_id.as_str(),
-                        aws.secret_access_key.as_str(),
-                        kubernetes.region(),
-                    ),
-                )?;
                 // default chart
                 let from_dir = format!("{}/common/services/redis", self.context.lib_root_dir());
 
@@ -397,6 +370,7 @@ impl Create for Redis {
                         &context,
                     ),
                 )?;
+
                 // overwrite with our chart values
                 let chart_values =
                     format!("{}/common/chart_values/redis", &self.context.lib_root_dir());
@@ -412,10 +386,6 @@ impl Create for Redis {
                 )?;
 
                 let helm_release_name = self.helm_release_name();
-                let aws_credentials_envs = vec![
-                    (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-                    (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-                ];
 
                 // define labels to add to namespace
                 let namespace_labels = match self.context.resource_expiration_in_seconds() {
@@ -436,7 +406,9 @@ impl Create for Redis {
                         kubernetes_config_file_path.as_str(),
                         environment.namespace(),
                         namespace_labels,
-                        aws_credentials_envs.clone(),
+                        kubernetes
+                            .cloud_provider()
+                            .credentials_environment_variables(),
                     ),
                 )?;
 
@@ -450,7 +422,9 @@ impl Create for Redis {
                         helm_release_name.as_str(),
                         workspace_dir.as_str(),
                         Timeout::Default,
-                        aws_credentials_envs.clone(),
+                        kubernetes
+                            .cloud_provider()
+                            .credentials_environment_variables(),
                     ),
                 )?;
 
@@ -471,7 +445,9 @@ impl Create for Redis {
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     selector.as_str(),
-                    aws_credentials_envs,
+                    kubernetes
+                        .cloud_provider()
+                        .credentials_environment_variables(),
                 ) {
                     Ok(Some(true)) => {}
                     _ => {

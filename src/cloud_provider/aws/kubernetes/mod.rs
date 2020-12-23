@@ -1,33 +1,29 @@
 use std::str::FromStr;
-use std::thread;
 
 use itertools::Itertools;
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::common::kubernetes_config_path;
 use crate::cloud_provider::aws::kubernetes::node::Node;
-use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{
-    check_kubernetes_has_enough_resources_to_deploy_environment, check_kubernetes_service_error,
-    Kind, Kubernetes, KubernetesNode, Resources,
-};
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode, Resources};
+use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
-use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
+    ProgressScope,
 };
 use crate::string::terraform_list_format;
 use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
 use crate::{dns_provider, s3};
+use std::fs::File;
 
 pub mod node;
 
@@ -418,42 +414,48 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
+    fn config_file(&self) -> Result<(String, File), EngineError> {
+        let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
+        let object_key = format!("{}.yaml", self.id());
 
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
+        let workspace_directory = workspace_directory(
+            self.context().workspace_root_dir(),
+            self.context().execution_id(),
+            format!("kubeconfigs/{}", self.name()),
+        );
 
-    fn resources(&self, environment: &Environment) -> Result<Resources, EngineError> {
-        let aws = self
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .unwrap();
+        let config_file_path = format!("{}/kubernetes_config_{}", workspace_directory, self.id());
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
+        let file = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                self.context.workspace_root_dir(),
-                &self.id,
-                aws.access_key_id.as_str(),
-                aws.secret_access_key.as_str(),
-                self.region(),
+            self.context().execution_id(),
+            crate::s3::get_kubernetes_config_file(
+                self.cloud_provider.access_key_id.as_str(),
+                self.cloud_provider.secret_access_key.as_str(),
+                bucket_name.as_str(),
+                object_key.as_str(),
+                config_file_path.as_str(),
             ),
         )?;
 
-        let aws_credentials_envs = vec![
-            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-        ];
+        Ok((config_file_path, file))
+    }
+
+    fn config_file_path(&self) -> Result<String, EngineError> {
+        let (path, _) = self.config_file()?;
+        Ok(path)
+    }
+
+    fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
+        let kubernetes_config_file_path = self.config_file_path()?;
 
         let nodes = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            cmd::kubectl::kubectl_exec_get_node(kubernetes_config_file_path, aws_credentials_envs),
+            cmd::kubectl::kubectl_exec_get_node(
+                kubernetes_config_file_path,
+                self.cloud_provider().credentials_environment_variables(),
+            ),
         )?;
 
         let mut resources = Resources {
@@ -560,22 +562,22 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn on_upgrade(&self) -> Result<(), EngineError> {
         info!("EKS.on_upgrade() called for {}", self.name());
-        unimplemented!()
+        Ok(())
     }
 
     fn on_upgrade_error(&self) -> Result<(), EngineError> {
         warn!("EKS.on_upgrade_error() called for {}", self.name());
-        unimplemented!()
+        Ok(())
     }
 
     fn on_downgrade(&self) -> Result<(), EngineError> {
         info!("EKS.on_downgrade() called for {}", self.name());
-        unimplemented!()
+        Ok(())
     }
 
     fn on_downgrade_error(&self) -> Result<(), EngineError> {
         warn!("EKS.on_downgrade_error() called for {}", self.name());
-        unimplemented!()
+        Ok(())
     }
 
     fn on_delete(&self) -> Result<(), EngineError> {
@@ -628,32 +630,11 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         )?;
 
-        let aws_credentials_envs = vec![
-            (
-                AWS_ACCESS_KEY_ID,
-                self.cloud_provider.access_key_id.as_str(),
-            ),
-            (
-                AWS_SECRET_ACCESS_KEY,
-                &self.cloud_provider.secret_access_key.as_str(),
-            ),
-        ];
-
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            kubernetes_config_path(
-                self.context.workspace_root_dir(),
-                self.id(),
-                self.cloud_provider.access_key_id.as_str(),
-                self.cloud_provider.secret_access_key.as_str(),
-                self.region(),
-            ),
-        )?;
+        let kubernetes_config_file_path = self.config_file_path()?;
 
         let all_namespaces = kubectl_exec_get_all_namespaces(
-            kubernetes_config_file_path,
-            aws_credentials_envs.clone(),
+            &kubernetes_config_file_path,
+            self.cloud_provider().credentials_environment_variables(),
         );
 
         // should make the diff between all namespaces and qovery managed namespaces
@@ -662,24 +643,12 @@ impl<'a> Kubernetes for EKS<'a> {
                 let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
                 let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
 
-                info!("Deleting non Qovery Namespaces");
+                info!("Deleting non Qovery namespaces");
                 for namespace_to_delete in namespaces_to_delete.iter() {
-                    let kubernetes_config_file_path0 = cast_simple_error_to_engine_error(
-                        self.engine_error_scope(),
-                        self.context.execution_id(),
-                        kubernetes_config_path(
-                            self.context.workspace_root_dir(),
-                            self.id(),
-                            self.cloud_provider.access_key_id.as_str(),
-                            self.cloud_provider.secret_access_key.as_str(),
-                            self.region(),
-                        ),
-                    )?;
-
                     let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
-                        &kubernetes_config_file_path0,
+                        &kubernetes_config_file_path,
                         namespace_to_delete,
-                        aws_credentials_envs.clone(),
+                        self.cloud_provider().credentials_environment_variables(),
                     );
 
                     match deletion {
@@ -703,25 +672,13 @@ impl<'a> Kubernetes for EKS<'a> {
 
         info!("Deleting Qovery managed Namespaces");
 
-        let kubernetes_config_file_path2 = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            kubernetes_config_path(
-                self.context.workspace_root_dir(),
-                self.id(),
-                self.cloud_provider.access_key_id.as_str(),
-                self.cloud_provider.secret_access_key.as_str(),
-                self.region(),
-            ),
-        )?;
-
         // TODO use label instead fixed names
         let qovery_namespaces = get_qovery_managed_namespaces();
         for qovery_namespace in qovery_namespaces.iter() {
             let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
-                &kubernetes_config_file_path2,
+                &kubernetes_config_file_path,
                 qovery_namespace,
-                aws_credentials_envs.clone(),
+                self.cloud_provider().credentials_environment_variables(),
             );
             match deletion {
                 Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
@@ -735,12 +692,15 @@ impl<'a> Kubernetes for EKS<'a> {
         }
 
         info!("Delete all remaining deployed helm applications");
-        match cmd::helm::helm_list(&kubernetes_config_file_path2, aws_credentials_envs.clone()) {
+        match cmd::helm::helm_list(
+            &kubernetes_config_file_path,
+            self.cloud_provider().credentials_environment_variables(),
+        ) {
             Ok(helm_list) => {
                 let _ = cmd::helm::helm_uninstall_list(
-                    &kubernetes_config_file_path2,
+                    &kubernetes_config_file_path,
                     helm_list,
-                    aws_credentials_envs.clone(),
+                    self.cloud_provider().credentials_environment_variables(),
                 );
             }
             Err(_) => error!("Unable to get helm list"),
@@ -785,215 +745,17 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.deploy_environment() called for {}", self.name());
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        let stateful_deployment_target = match environment.kind {
-            crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(self, environment)
-            }
-            crate::cloud_provider::environment::Kind::Development => {
-                DeploymentTarget::SelfHosted(self, environment)
-            }
-        };
-
-        // do not deploy if there is not enough resources
-        check_kubernetes_has_enough_resources_to_deploy_environment(self, environment)?;
-
-        // create all stateful services (database)
-        for service in &environment.stateful_services {
-            let _ = check_kubernetes_service_error(
-                service.exec_action(&stateful_deployment_target),
-                self,
-                service,
-                &stateful_deployment_target,
-                &listeners_helper,
-                "deployment",
-            )?;
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
-
-        // create all stateless services (router, application...)
-        for service in &environment.stateless_services {
-            let _ = check_kubernetes_service_error(
-                service.exec_action(&stateless_deployment_target),
-                self,
-                service,
-                &stateless_deployment_target,
-                &listeners_helper,
-                "deployment",
-            )?;
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        // check all deployed services
-        for service in &environment.stateful_services {
-            let _ = check_kubernetes_service_error(
-                service.on_create_check(),
-                self,
-                service,
-                &stateful_deployment_target,
-                &listeners_helper,
-                "check deployment",
-            )?;
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        for service in &environment.stateless_services {
-            let _ = check_kubernetes_service_error(
-                service.on_create_check(),
-                self,
-                service,
-                &stateless_deployment_target,
-                &listeners_helper,
-                "check deployment",
-            )?;
-        }
-
-        Ok(())
+        kubernetes::deploy_environment(self, environment)
     }
 
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
         warn!("EKS.deploy_environment_error() called for {}", self.name());
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        listeners_helper.start_in_progress(ProgressInfo::new(
-            ProgressScope::Environment {
-                id: self.context.execution_id().to_string(),
-            },
-            ProgressLevel::Warn,
-            Some(
-                "An error occurred while trying to deploy the environment, so let's revert changes",
-            ),
-            self.context.execution_id(),
-        ));
-
-        let stateful_deployment_target = match environment.kind {
-            crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(self, environment)
-            }
-            crate::cloud_provider::environment::Kind::Development => {
-                DeploymentTarget::SelfHosted(self, environment)
-            }
-        };
-
-        // clean up all stateful services (database)
-        for service in &environment.stateful_services {
-            let _ = check_kubernetes_service_error(
-                service.on_create_error(&stateful_deployment_target),
-                self,
-                service,
-                &stateful_deployment_target,
-                &listeners_helper,
-                "revert deployment",
-            )?;
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
-
-        // clean up all stateless services (router, application...)
-        for service in &environment.stateless_services {
-            let _ = check_kubernetes_service_error(
-                service.on_create_error(&stateless_deployment_target),
-                self,
-                service,
-                &stateless_deployment_target,
-                &listeners_helper,
-                "revert deployment",
-            )?;
-        }
-
-        Ok(())
+        kubernetes::deploy_environment_error(self, environment)
     }
 
     fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.pause_environment() called for {}", self.name());
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        let stateful_deployment_target = match environment.kind {
-            crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(self, environment)
-            }
-            crate::cloud_provider::environment::Kind::Development => {
-                DeploymentTarget::SelfHosted(self, environment)
-            }
-        };
-
-        // create all stateful services (database)
-        for service in &environment.stateful_services {
-            let _ = check_kubernetes_service_error(
-                service.on_pause(&stateful_deployment_target),
-                self,
-                service,
-                &stateful_deployment_target,
-                &listeners_helper,
-                "pause",
-            )?;
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
-
-        // create all stateless services (router, application...)
-        for service in &environment.stateless_services {
-            let _ = check_kubernetes_service_error(
-                service.on_pause(&stateless_deployment_target),
-                self,
-                service,
-                &stateless_deployment_target,
-                &listeners_helper,
-                "pause",
-            )?;
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        // check all deployed services
-        for service in &environment.stateful_services {
-            let _ = check_kubernetes_service_error(
-                service.on_pause_check(),
-                self,
-                service,
-                &stateful_deployment_target,
-                &listeners_helper,
-                "check pause",
-            )?;
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        for service in &environment.stateless_services {
-            let _ = check_kubernetes_service_error(
-                service.on_pause_check(),
-                self,
-                service,
-                &stateless_deployment_target,
-                &listeners_helper,
-                "check pause",
-            )?;
-        }
-
-        Ok(())
+        kubernetes::pause_environment(self, environment)
     }
 
     fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
@@ -1003,116 +765,22 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
         info!("EKS.delete_environment() called for {}", self.name());
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        let stateful_deployment_target = match environment.kind {
-            crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(self, environment)
-            }
-            crate::cloud_provider::environment::Kind::Development => {
-                DeploymentTarget::SelfHosted(self, environment)
-            }
-        };
-
-        // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-        let stateless_deployment_target = DeploymentTarget::SelfHosted(self, environment);
-        // delete all stateless services (router, application...)
-        for stateless_service in &environment.stateless_services {
-            match stateless_service.on_delete(&stateless_deployment_target) {
-                Err(err) => {
-                    error!(
-                        "error with stateless service {} , id: {} => {:?}",
-                        stateless_service.name(),
-                        stateless_service.id(),
-                        err
-                    );
-
-                    return Err(err);
-                }
-                _ => {}
-            }
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        // delete all stateful services (database)
-        for service in &environment.stateful_services {
-            let _ = check_kubernetes_service_error(
-                service.on_delete(&stateful_deployment_target),
-                self,
-                service,
-                &stateful_deployment_target,
-                &listeners_helper,
-                "delete",
-            )?;
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        // check all deployed services
-        for service in &environment.stateful_services {
-            let _ = check_kubernetes_service_error(
-                service.on_delete_check(),
-                self,
-                service,
-                &stateful_deployment_target,
-                &listeners_helper,
-                "delete check",
-            )?;
-        }
-
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
-
-        for service in &environment.stateless_services {
-            let _ = check_kubernetes_service_error(
-                service.on_delete_check(),
-                self,
-                service,
-                &stateless_deployment_target,
-                &listeners_helper,
-                "delete check",
-            )?;
-        }
-
-        let aws_credentials_envs = vec![
-            (
-                AWS_ACCESS_KEY_ID,
-                self.cloud_provider.access_key_id.as_str(),
-            ),
-            (
-                AWS_SECRET_ACCESS_KEY,
-                &self.cloud_provider.secret_access_key.as_str(),
-            ),
-        ];
-
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                &self.context.workspace_root_dir(),
-                &self.id,
-                &self.cloud_provider.access_key_id.as_str(),
-                &self.cloud_provider.secret_access_key.as_str(),
-                &self.region.name(),
-            ),
-        )?;
-
-        let _ = kubectl_exec_delete_namespace(
-            kubernetes_config_file_path,
-            &environment.namespace(),
-            aws_credentials_envs,
-        );
-
-        Ok(())
+        kubernetes::delete_environment(self, environment)
     }
 
     fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
         warn!("EKS.delete_environment_error() called for {}", self.name());
         Ok(())
+    }
+}
+
+impl<'a> Listen for EKS<'a> {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }
 

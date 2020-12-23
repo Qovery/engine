@@ -13,7 +13,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
-use crate::models::{Context, Listen, Listeners};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
     context: Context,
@@ -291,7 +291,7 @@ impl Service for Router {
         1
     }
 
-    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
+    fn debug_logs(&self, _deployment_target: &DeploymentTarget) -> Vec<String> {
         Vec::new()
     }
 }
@@ -311,6 +311,10 @@ impl crate::cloud_provider::service::Router for Router {
 impl Listen for Router {
     fn listeners(&self) -> &Listeners {
         &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }
 

@@ -5,11 +5,14 @@ use serde::{Deserialize, Serialize};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::Service;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cmd::kubectl;
 use crate::dns_provider::DnsProvider;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel};
+use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use std::fs::File;
+use std::thread;
 
-pub trait Kubernetes {
+pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -22,8 +25,8 @@ pub trait Kubernetes {
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn add_listener(&mut self, listener: Listener);
-    fn listeners(&self) -> &Listeners;
+    fn config_file(&self) -> Result<(String, File), EngineError>;
+    fn config_file_path(&self) -> Result<String, EngineError>;
     fn resources(&self, environment: &Environment) -> Result<Resources, EngineError>;
     fn on_create(&self) -> Result<(), EngineError>;
     fn on_create_error(&self) -> Result<(), EngineError>;
@@ -72,6 +75,315 @@ pub struct Resources {
     pub free_pods: u16,
     pub max_pods: u16,
     pub running_nodes: u16,
+}
+
+/// common function to deploy a complete environment through Kubernetes and the different
+/// managed services.
+pub fn deploy_environment(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+) -> Result<(), EngineError> {
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+
+    let stateful_deployment_target = match environment.kind {
+        crate::cloud_provider::environment::Kind::Production => {
+            DeploymentTarget::ManagedServices(kubernetes, environment)
+        }
+        crate::cloud_provider::environment::Kind::Development => {
+            DeploymentTarget::SelfHosted(kubernetes, environment)
+        }
+    };
+
+    // do not deploy if there is not enough resources
+    check_kubernetes_has_enough_resources_to_deploy_environment(kubernetes, environment)?;
+
+    // create all stateful services (database)
+    for service in &environment.stateful_services {
+        let _ = check_kubernetes_service_error(
+            service.exec_action(&stateful_deployment_target),
+            kubernetes,
+            service,
+            &stateful_deployment_target,
+            &listeners_helper,
+            "deployment",
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
+    let stateless_deployment_target = DeploymentTarget::SelfHosted(kubernetes, environment);
+
+    // create all stateless services (router, application...)
+    for service in &environment.stateless_services {
+        let _ = check_kubernetes_service_error(
+            service.exec_action(&stateless_deployment_target),
+            kubernetes,
+            service,
+            &stateless_deployment_target,
+            &listeners_helper,
+            "deployment",
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    // check all deployed services
+    for service in &environment.stateful_services {
+        let _ = check_kubernetes_service_error(
+            service.on_create_check(),
+            kubernetes,
+            service,
+            &stateful_deployment_target,
+            &listeners_helper,
+            "check deployment",
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    for service in &environment.stateless_services {
+        let _ = check_kubernetes_service_error(
+            service.on_create_check(),
+            kubernetes,
+            service,
+            &stateless_deployment_target,
+            &listeners_helper,
+            "check deployment",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// common function to react to an error when a environment deployment goes wrong
+pub fn deploy_environment_error(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+) -> Result<(), EngineError> {
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+
+    listeners_helper.start_in_progress(ProgressInfo::new(
+        ProgressScope::Environment {
+            id: kubernetes.context().execution_id().to_string(),
+        },
+        ProgressLevel::Warn,
+        Some("An error occurred while trying to deploy the environment, so let's revert changes"),
+        kubernetes.context().execution_id(),
+    ));
+
+    let stateful_deployment_target = match environment.kind {
+        crate::cloud_provider::environment::Kind::Production => {
+            DeploymentTarget::ManagedServices(kubernetes, environment)
+        }
+        crate::cloud_provider::environment::Kind::Development => {
+            DeploymentTarget::SelfHosted(kubernetes, environment)
+        }
+    };
+
+    // clean up all stateful services (database)
+    for service in &environment.stateful_services {
+        let _ = check_kubernetes_service_error(
+            service.on_create_error(&stateful_deployment_target),
+            kubernetes,
+            service,
+            &stateful_deployment_target,
+            &listeners_helper,
+            "revert deployment",
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
+    let stateless_deployment_target = DeploymentTarget::SelfHosted(kubernetes, environment);
+
+    // clean up all stateless services (router, application...)
+    for service in &environment.stateless_services {
+        let _ = check_kubernetes_service_error(
+            service.on_create_error(&stateless_deployment_target),
+            kubernetes,
+            service,
+            &stateless_deployment_target,
+            &listeners_helper,
+            "revert deployment",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// common kubernetes function to pause a complete environment
+pub fn pause_environment(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+) -> Result<(), EngineError> {
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+
+    let stateful_deployment_target = match environment.kind {
+        crate::cloud_provider::environment::Kind::Production => {
+            DeploymentTarget::ManagedServices(kubernetes, environment)
+        }
+        crate::cloud_provider::environment::Kind::Development => {
+            DeploymentTarget::SelfHosted(kubernetes, environment)
+        }
+    };
+
+    // create all stateful services (database)
+    for service in &environment.stateful_services {
+        let _ = check_kubernetes_service_error(
+            service.on_pause(&stateful_deployment_target),
+            kubernetes,
+            service,
+            &stateful_deployment_target,
+            &listeners_helper,
+            "pause",
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
+    let stateless_deployment_target = DeploymentTarget::SelfHosted(kubernetes, environment);
+
+    // create all stateless services (router, application...)
+    for service in &environment.stateless_services {
+        let _ = check_kubernetes_service_error(
+            service.on_pause(&stateless_deployment_target),
+            kubernetes,
+            service,
+            &stateless_deployment_target,
+            &listeners_helper,
+            "pause",
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    // check all deployed services
+    for service in &environment.stateful_services {
+        let _ = check_kubernetes_service_error(
+            service.on_pause_check(),
+            kubernetes,
+            service,
+            &stateful_deployment_target,
+            &listeners_helper,
+            "check pause",
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    for service in &environment.stateless_services {
+        let _ = check_kubernetes_service_error(
+            service.on_pause_check(),
+            kubernetes,
+            service,
+            &stateless_deployment_target,
+            &listeners_helper,
+            "check pause",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// common kubernetes function to delete a complete environment
+pub fn delete_environment(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+) -> Result<(), EngineError> {
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+
+    let stateful_deployment_target = match environment.kind {
+        crate::cloud_provider::environment::Kind::Production => {
+            DeploymentTarget::ManagedServices(kubernetes, environment)
+        }
+        crate::cloud_provider::environment::Kind::Development => {
+            DeploymentTarget::SelfHosted(kubernetes, environment)
+        }
+    };
+
+    // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
+    let stateless_deployment_target = DeploymentTarget::SelfHosted(kubernetes, environment);
+    // delete all stateless services (router, application...)
+    for stateless_service in &environment.stateless_services {
+        match stateless_service.on_delete(&stateless_deployment_target) {
+            Err(err) => {
+                error!(
+                    "error with stateless service {} , id: {} => {:?}",
+                    stateless_service.name(),
+                    stateless_service.id(),
+                    err
+                );
+
+                return Err(err);
+            }
+            _ => {}
+        }
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    // delete all stateful services (database)
+    for service in &environment.stateful_services {
+        let _ = check_kubernetes_service_error(
+            service.on_delete(&stateful_deployment_target),
+            kubernetes,
+            service,
+            &stateful_deployment_target,
+            &listeners_helper,
+            "delete",
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    // check all deployed services
+    for service in &environment.stateful_services {
+        let _ = check_kubernetes_service_error(
+            service.on_delete_check(),
+            kubernetes,
+            service,
+            &stateful_deployment_target,
+            &listeners_helper,
+            "delete check",
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    for service in &environment.stateless_services {
+        let _ = check_kubernetes_service_error(
+            service.on_delete_check(),
+            kubernetes,
+            service,
+            &stateless_deployment_target,
+            &listeners_helper,
+            "delete check",
+        )?;
+    }
+
+    // do not catch potential error - to confirm
+    let _ = kubectl::kubectl_exec_delete_namespace(
+        kubernetes.config_file_path()?,
+        &environment.namespace(),
+        kubernetes
+            .cloud_provider()
+            .credentials_environment_variables(),
+    );
+
+    Ok(())
 }
 
 /// check that there is enough CPU and RAM, and pods resources

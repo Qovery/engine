@@ -1,69 +1,35 @@
-use crate::cloud_provider::aws::{common, AWS};
-use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_secret};
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{SimpleError, StringError};
-use crate::utilities::get_version_number;
 use std::collections::HashMap;
 
-// generate the kubernetes config path
-pub fn get_kubernetes_config_path(
-    workspace: &str,
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-) -> Result<String, SimpleError> {
-    let aws = kubernetes
-        .cloud_provider()
-        .as_any()
-        .downcast_ref::<AWS>()
-        .unwrap();
-
-    common::kubernetes_config_path(
-        workspace,
-        kubernetes.id(),
-        aws.access_key_id.as_str(),
-        aws.secret_access_key.as_str(),
-        kubernetes.region(),
-    )
-}
+use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::CloudProvider;
+use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_secret};
+use crate::error::{EngineError, StringError};
+use crate::utilities::get_version_number;
 
 pub fn create_namespace_without_labels(namespace: &str, kube_config: &str, aws: &AWS) {
-    let aws_credentials_envs = vec![
-        (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-        (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-    ];
-    let _ = kubectl_exec_create_namespace(kube_config, namespace, None, aws_credentials_envs);
+    let _ = kubectl_exec_create_namespace(
+        kube_config,
+        namespace,
+        None,
+        aws.credentials_environment_variables(),
+    );
 }
 
 pub fn delete_terraform_tfstate_secret(
     kubernetes: &dyn Kubernetes,
-    environment: &Environment,
     secret_name: &str,
-    workspace_dir: &str,
-) -> Result<(), SimpleError> {
-    let aws = kubernetes
-        .cloud_provider()
-        .as_any()
-        .downcast_ref::<AWS>()
-        .unwrap();
-    let aws_credentials_envs = vec![
-        (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-        (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-    ];
-
-    let kubernetes_config_file_path = common::kubernetes_config_path(
-        workspace_dir,
-        kubernetes.id(),
-        aws.access_key_id.as_str(),
-        aws.secret_access_key.as_str(),
-        kubernetes.region(),
-    );
-
-    match kubernetes_config_file_path {
+) -> Result<(), EngineError> {
+    match kubernetes.config_file_path() {
         Ok(kube_config) => {
             //create the namespace to insert the tfstate in secrets
-            let _ = kubectl_exec_delete_secret(kube_config, secret_name, aws_credentials_envs);
+            let _ = kubectl_exec_delete_secret(
+                kube_config,
+                secret_name,
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
+            );
 
             Ok(())
         }
@@ -72,6 +38,7 @@ pub fn delete_terraform_tfstate_secret(
                 "Failed to generate the kubernetes config file path: {:?}",
                 e
             );
+
             Err(e)
         }
     }
@@ -100,7 +67,7 @@ pub fn get_supported_version_to_use<'a>(
                 return Err(format!(
                     "{} {} version is not supported",
                     database_name, version_to_check
-                ))
+                ));
             }
         };
     }
@@ -115,7 +82,7 @@ pub fn get_supported_version_to_use<'a>(
                 return Err(format!(
                     "{} {} version is not supported",
                     database_name, version_to_check
-                ))
+                ));
             }
         };
     };
@@ -127,7 +94,7 @@ pub fn get_supported_version_to_use<'a>(
             return Err(format!(
                 "{} {} version is not supported",
                 database_name, version_to_check
-            ))
+            ));
         }
     }
 }

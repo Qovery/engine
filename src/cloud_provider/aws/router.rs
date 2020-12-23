@@ -3,7 +3,7 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::aws::common;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
@@ -11,9 +11,8 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
-use crate::models::{Context, Listen, Listeners};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
     context: Context,
@@ -47,13 +46,6 @@ impl Router {
 
     fn helm_release_name(&self) -> String {
         crate::string::cut(format!("router-{}", self.id()), 50)
-    }
-
-    fn aws_credentials_envs<'x>(&self, aws: &'x AWS) -> [(&'x str, &'x str); 2] {
-        [
-            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-        ]
     }
 
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
@@ -102,20 +94,7 @@ impl Router {
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
-        let workspace_dir = self.workspace_directory();
-        let aws = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .unwrap();
-
-        let kubernetes_config_file_path = common::kubernetes_config_path(
-            workspace_dir.as_str(),
-            kubernetes.id(),
-            aws.access_key_id.as_str(),
-            aws.secret_access_key.as_str(),
-            kubernetes.region(),
-        );
+        let kubernetes_config_file_path = kubernetes.config_file_path();
 
         match kubernetes_config_file_path {
             Ok(kubernetes_config_file_path_string) => {
@@ -125,7 +104,9 @@ impl Router {
                         kubernetes_config_file_path_string.as_str(),
                         "nginx-ingress",
                         "app=nginx-ingress,component=controller",
-                        self.aws_credentials_envs(aws).to_vec(),
+                        kubernetes
+                            .cloud_provider()
+                            .credentials_environment_variables(),
                     );
 
                 match external_ingress_hostname_default {
@@ -151,7 +132,9 @@ impl Router {
                             kubernetes_config_file_path_string.as_str(),
                             environment.namespace(),
                             "app=nginx-ingress,component=controller",
-                            self.aws_credentials_envs(aws).to_vec(),
+                            kubernetes
+                                .cloud_provider()
+                                .credentials_environment_variables(),
                         );
 
                     match external_ingress_hostname_custom {
@@ -215,18 +198,12 @@ impl Router {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::do_stateless_service_cleanup(
-                kubernetes,
-                environment,
-                workspace_dir.as_str(),
-                helm_release_name.as_str(),
-            ),
+        let _ = common::do_stateless_service_cleanup(
+            kubernetes,
+            environment,
+            helm_release_name.as_str(),
         )?;
 
         Ok(())
@@ -295,6 +272,10 @@ impl Listen for Router {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
+    }
 }
 
 impl StatelessService for Router {}
@@ -307,26 +288,10 @@ impl Create for Router {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let aws = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .unwrap();
-
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                kubernetes.id(),
-                aws.access_key_id.as_str(),
-                aws.secret_access_key.as_str(),
-                kubernetes.region(),
-            ),
-        )?;
+        let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
         // respect order - getting the context here and not before is mandatory
         // the nginx-ingress must be available to get the external dns target if necessary
@@ -378,7 +343,9 @@ impl Create for Router {
                     format!("custom-{}", helm_release_name).as_str(),
                     into_dir.as_str(),
                     format!("{}/nginx-ingress.yaml", into_dir.as_str()).as_str(),
-                    self.aws_credentials_envs(aws).to_vec(),
+                    kubernetes
+                        .cloud_provider()
+                        .credentials_environment_variables(),
                 ),
             )?;
 
@@ -402,7 +369,9 @@ impl Create for Router {
                                 helm_release_name
                             )
                             .as_str(),
-                            self.aws_credentials_envs(aws).to_vec(),
+                            kubernetes
+                                .cloud_provider()
+                                .credentials_environment_variables(),
                         );
 
                     match external_ingress_hostname_custom {
@@ -448,7 +417,9 @@ impl Create for Router {
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
                 Timeout::Default,
-                self.aws_credentials_envs(aws).to_vec(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
             ),
         )?;
 

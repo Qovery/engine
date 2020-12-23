@@ -16,14 +16,7 @@ pub fn debug_logs(service: &dyn Service, deployment_target: &DeploymentTarget) -
     match deployment_target {
         DeploymentTarget::ManagedServices(_, _) => Vec::new(),
         DeploymentTarget::SelfHosted(kubernetes, environment) => {
-            let workspace_dir = service.workspace_directory();
-
-            match get_stateless_resource_information_for_user(
-                *kubernetes,
-                *environment,
-                workspace_dir.as_str(),
-                service,
-            ) {
+            match get_stateless_resource_information_for_user(*kubernetes, *environment, service) {
                 Ok(lines) => lines,
                 Err(err) => {
                     error!(

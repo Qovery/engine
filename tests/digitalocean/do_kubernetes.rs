@@ -14,8 +14,6 @@ use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_de
 use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
 use qovery_engine::container_registry::docr::{get_current_registry_name, get_header_with_bearer};
 use qovery_engine::error::SimpleError;
-use qovery_engine::transaction::TransactionResult;
-use reqwest::StatusCode;
 use std::fs::File;
 use std::io::Read;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
@@ -112,9 +110,7 @@ fn create_doks_cluster_in_fra_10() {
                         Err(_) => assert!(false),
                     }
                 }
-                Err(_) => {
-                    assert!(false)
-                }
+                Err(_) => assert!(false),
             }
         }
         Err(_) => assert!(false),

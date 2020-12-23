@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::aws::common;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
@@ -11,7 +11,6 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
 
@@ -92,33 +91,22 @@ impl ExternalService {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
         let selector = format!("app={}", self.name());
 
         if is_error {
-            let _ = cast_simple_error_to_engine_error(
-                crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-                self.context.execution_id(),
-                common::get_stateless_resource_information(
-                    kubernetes,
-                    environment,
-                    workspace_dir.as_str(),
-                    selector.as_str(),
-                ),
+            let _ = common::get_stateless_resource_information(
+                kubernetes,
+                environment,
+                selector.as_str(),
             )?;
         }
 
         // clean the resource
-        let _ = cast_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            common::do_stateless_service_cleanup(
-                kubernetes,
-                environment,
-                workspace_dir.as_str(),
-                helm_release_name.as_str(),
-            ),
+        let _ = common::do_stateless_service_cleanup(
+            kubernetes,
+            environment,
+            helm_release_name.as_str(),
         )?;
 
         Ok(())
@@ -196,12 +184,6 @@ impl Create for ExternalService {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let aws = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .unwrap();
-
         let context = self.context(kubernetes, environment);
         let workspace_dir = self.workspace_directory();
 
@@ -219,22 +201,7 @@ impl Create for ExternalService {
         // render
         // TODO check the rendered files?
         let helm_release_name = self.helm_release_name();
-        let aws_credentials_envs = vec![
-            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-        ];
-
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                kubernetes.id(),
-                aws.access_key_id.as_str(),
-                aws.secret_access_key.as_str(),
-                kubernetes.region(),
-            ),
-        )?;
+        let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
         // do exec helm upgrade and return the last deployment status
         let helm_history_row = cast_simple_error_to_engine_error(
@@ -246,7 +213,9 @@ impl Create for ExternalService {
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
                 Timeout::Default,
-                aws_credentials_envs.clone(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
             ),
         )?;
 
@@ -266,7 +235,9 @@ impl Create for ExternalService {
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             self.name.as_str(),
-            aws_credentials_envs,
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
         ) {
             Ok(Some(true)) => {}
             _ => {
@@ -301,31 +272,7 @@ impl Create for ExternalService {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let workspace_dir = self.workspace_directory();
-
-        let aws = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .unwrap();
-
-        let aws_credentials_envs = vec![
-            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-        ];
-
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                kubernetes.id(),
-                aws.access_key_id.as_str(),
-                aws.secret_access_key.as_str(),
-                kubernetes.region(),
-            ),
-        )?;
-
+        let kubernetes_config_file_path = kubernetes.config_file_path()?;
         let helm_release_name = self.helm_release_name();
 
         let history_rows = cast_simple_error_to_engine_error(
@@ -335,7 +282,9 @@ impl Create for ExternalService {
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 helm_release_name.as_str(),
-                aws_credentials_envs.clone(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
             ),
         )?;
 
@@ -347,7 +296,9 @@ impl Create for ExternalService {
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     helm_release_name.as_str(),
-                    aws_credentials_envs.clone(),
+                    kubernetes
+                        .cloud_provider()
+                        .credentials_environment_variables(),
                 ),
             )?;
         }

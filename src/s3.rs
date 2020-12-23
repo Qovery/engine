@@ -148,7 +148,6 @@ fn get_object_via_aws_cli(
 pub fn get_kubernetes_config_file<P>(
     access_key_id: &str,
     secret_access_key: &str,
-    region: &Region,
     kubernetes_config_bucket_name: &str,
     kubernetes_config_object_key: &str,
     file_path: P,

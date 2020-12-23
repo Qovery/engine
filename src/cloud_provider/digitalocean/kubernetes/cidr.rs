@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoVpc {
     id: String,
@@ -16,7 +17,7 @@ pub struct DoVpc {
 
 fn get_forbidden_cidr_per_region() -> HashMap<&'static str, &'static str, RandomState> {
     // see https://www.digitalocean.com/docs/networking/vpc/
-    let mut forbidden_cidr = HashMap::new();
+    let mut forbidden_cidr = HashMap::with_capacity(40);
     forbidden_cidr.insert("AMS1", "10.11.0.0/16");
     forbidden_cidr.insert("AMS2", "10.14.0.0/16");
     forbidden_cidr.insert("AMS3", "10.18.0.0/16");

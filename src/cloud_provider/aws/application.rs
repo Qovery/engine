@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
+use crate::cloud_provider::aws::common;
 use crate::cloud_provider::aws::common::get_stateless_resource_information_for_user;
-use crate::cloud_provider::aws::{common, AWS};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
@@ -13,7 +13,6 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::Context;
 
@@ -139,33 +138,22 @@ impl Application {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
         let selector = format!("app={}", self.name());
 
         if is_error {
-            let _ = cast_simple_error_to_engine_error(
-                self.engine_error_scope(),
-                self.context.execution_id(),
-                common::get_stateless_resource_information(
-                    kubernetes,
-                    environment,
-                    workspace_dir.as_str(),
-                    selector.as_str(),
-                ),
+            let _ = common::get_stateless_resource_information(
+                kubernetes,
+                environment,
+                selector.as_str(),
             )?;
         }
 
         // clean the resource
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::do_stateless_service_cleanup(
-                kubernetes,
-                environment,
-                workspace_dir.as_str(),
-                helm_release_name.as_str(),
-            ),
+        let _ = common::do_stateless_service_cleanup(
+            kubernetes,
+            environment,
+            helm_release_name.as_str(),
         )?;
 
         Ok(())
@@ -231,14 +219,7 @@ impl Service for Application {
             DeploymentTarget::SelfHosted(k, e) => (*k, *e),
         };
 
-        let workspace_dir = self.workspace_directory();
-
-        match get_stateless_resource_information_for_user(
-            kubernetes,
-            environment,
-            workspace_dir.as_str(),
-            self,
-        ) {
+        match get_stateless_resource_information_for_user(kubernetes, environment, self) {
             Ok(lines) => lines,
             Err(err) => {
                 error!(
@@ -260,12 +241,6 @@ impl Create for Application {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let aws = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .unwrap();
-
         let context = self.context(kubernetes, environment);
         let workspace_dir = self.workspace_directory();
 
@@ -284,22 +259,8 @@ impl Create for Application {
         // render
         // TODO check the rendered files?
         let helm_release_name = self.helm_release_name();
-        let aws_credentials_envs = vec![
-            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-        ];
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                kubernetes.id(),
-                aws.access_key_id.as_str(),
-                aws.secret_access_key.as_str(),
-                kubernetes.region(),
-            ),
-        )?;
+        let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
         // define labels to add to namespace
         let namespace_labels = match self.context.resource_expiration_in_seconds() {
@@ -320,7 +281,9 @@ impl Create for Application {
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 namespace_labels,
-                aws_credentials_envs.clone(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
             ),
         )?;
 
@@ -334,7 +297,9 @@ impl Create for Application {
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
                 Timeout::Value(self.start_timeout_in_seconds),
-                aws_credentials_envs.clone(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
             ),
         )?;
 
@@ -361,7 +326,9 @@ impl Create for Application {
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 selector.as_str(),
-                aws_credentials_envs,
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
             ),
         )?;
 
@@ -383,30 +350,7 @@ impl Create for Application {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let workspace_dir = self.workspace_directory();
-
-        let aws = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .unwrap();
-
-        let aws_credentials_envs = vec![
-            (AWS_ACCESS_KEY_ID, aws.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, aws.secret_access_key.as_str()),
-        ];
-
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                kubernetes.id(),
-                aws.access_key_id.as_str(),
-                aws.secret_access_key.as_str(),
-                kubernetes.region(),
-            ),
-        )?;
+        let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
         let helm_release_name = self.helm_release_name();
 
@@ -417,7 +361,9 @@ impl Create for Application {
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 helm_release_name.as_str(),
-                aws_credentials_envs.clone(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
             ),
         )?;
 
@@ -429,7 +375,9 @@ impl Create for Application {
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     helm_release_name.as_str(),
-                    aws_credentials_envs.clone(),
+                    kubernetes
+                        .cloud_provider()
+                        .credentials_environment_variables(),
                 ),
             )?;
         }

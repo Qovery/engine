@@ -775,6 +775,7 @@ pub trait ProgressListener {
 
 pub trait Listen {
     fn listeners(&self) -> &Listeners;
+    fn add_listener(&mut self, listener: Listener);
 }
 
 pub type Listener = Rc<Box<dyn ProgressListener>>;

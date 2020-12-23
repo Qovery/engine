@@ -5,7 +5,6 @@ use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
 
 use reqwest::StatusCode;
-use tokio::runtime::Runtime;
 
 use crate::cloud_provider::digitalocean::api_structs::clusters::Clusters;
 use crate::cloud_provider::digitalocean::DO;
@@ -15,6 +14,9 @@ use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::container_registry::docr::get_header_with_bearer;
 use crate::error::{SimpleError, SimpleErrorKind};
 use crate::object_storage::do_space::download_space_object;
+use crate::runtime;
+
+pub const DO_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/clusters";
 
 pub fn kubernetes_config_path(
     workspace_directory: &str,
@@ -31,40 +33,27 @@ pub fn kubernetes_config_path(
         workspace_directory, kubernetes_cluster_id
     );
 
-    let future_kubeconfig = download_space_object(
+    // download kubeconfig file
+    let _ = runtime::async_run(download_space_object(
         spaces_access_id,
         spaces_secret_key,
         kubernetes_config_bucket_name.as_str(),
         kubernetes_config_object_key.as_str(),
         region,
         kubernetes_config_file_path.as_str().clone(),
-    );
-    Runtime::new()
-        .expect("Failed to create Tokio runtime to download kubeconfig")
-        .block_on(future_kubeconfig);
-    // removes warning kubeconfig is (world/group) readable
+    ));
 
-    let mut file = File::open(kubernetes_config_file_path.clone().as_str())?;
+    // removes warning kubeconfig is (world/group) readable
+    let file = File::open(kubernetes_config_file_path.clone().as_str())?;
     let metadata = file.metadata()?;
+
     let mut permissions = metadata.permissions();
     permissions.set_mode(0o400);
+
     fs::set_permissions(kubernetes_config_file_path.clone().as_str(), permissions)?;
 
     Ok(kubernetes_config_file_path.clone())
 }
-
-pub const DO_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/clusters";
-
-/*
-Waiting for https://github.com/pandaman64/serde-query/issues/2
-#[derive(serde_query::Deserialize)]
-struct Cluster {
-    #[query(r#".["kubernetes_clusters"].id"#)]
-    cluster_id: String,
-    #[query(r#".["kubernetes_clusters"].name"#)]
-    cluster_name: String,
-}
-*/
 
 // retrieve the digital ocean uuid of the kube cluster from our cluster name
 // each (terraform) apply may change the cluster uuid, so We need to retrieve it from the Digital Ocean API
