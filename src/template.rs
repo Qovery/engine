@@ -1,14 +1,15 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
-use std::io::{Write};
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use crate::error::{SimpleError, SimpleErrorKind};
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
+
+use crate::error::{SimpleError, SimpleErrorKind};
 
 pub fn generate_and_copy_all_files_into_dir<S, P>(
     from_dir: S,

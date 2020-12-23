@@ -1,8 +1,10 @@
-use crate::cmd::utilities;
-use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+
+use crate::cmd::utilities;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoVpc {

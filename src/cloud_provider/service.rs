@@ -1,6 +1,10 @@
 use std::net::TcpStream;
 
+use retry::delay::Fixed;
+use retry::OperationResult;
 use tera::Context as TeraContext;
+use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::Resolver;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
@@ -8,10 +12,6 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
-use retry::delay::Fixed;
-use retry::OperationResult;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::Resolver;
 
 pub trait Service {
     fn context(&self) -> &Context;

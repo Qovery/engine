@@ -1,4 +1,6 @@
 use std::any::Any;
+use std::fs::File;
+use std::thread;
 
 use serde::{Deserialize, Serialize};
 
@@ -9,8 +11,6 @@ use crate::cmd::kubectl;
 use crate::dns_provider::DnsProvider;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
-use std::fs::File;
-use std::thread;
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;

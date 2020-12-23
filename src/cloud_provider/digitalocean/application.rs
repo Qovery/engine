@@ -281,6 +281,7 @@ impl Pause for Application {
         unimplemented!()
     }
 }
+
 impl crate::cloud_provider::service::Application for Application {
     fn image(&self) -> &Image {
         &self.image

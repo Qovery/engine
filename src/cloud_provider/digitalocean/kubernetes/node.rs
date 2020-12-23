@@ -1,5 +1,6 @@
-use crate::cloud_provider::kubernetes::KubernetesNode;
 use std::any::Any;
+
+use crate::cloud_provider::kubernetes::KubernetesNode;
 
 pub struct Node {
     instance_type: String,

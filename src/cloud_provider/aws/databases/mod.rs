@@ -1,10 +1,11 @@
-use crate::cloud_provider::common::kubernetes::get_stateless_resource_information_for_user;
-use crate::cloud_provider::service::Service;
-use crate::cloud_provider::DeploymentTarget;
 pub use mongodb::MongoDB;
 pub use mysql::MySQL;
 pub use postgresql::PostgreSQL;
 pub use redis::Redis;
+
+use crate::cloud_provider::common::kubernetes::get_stateless_resource_information_for_user;
+use crate::cloud_provider::service::Service;
+use crate::cloud_provider::DeploymentTarget;
 
 mod mongodb;
 mod mysql;

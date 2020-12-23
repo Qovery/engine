@@ -1,7 +1,8 @@
-use crate::error::StringError;
 use core::option::Option::{None, Some};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
+
+use crate::error::StringError;
 
 // unfortunately some proposed versions are not SemVer like Elasticache (6.x)
 // this is why we need ot have our own structure

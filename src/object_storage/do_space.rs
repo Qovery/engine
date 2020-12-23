@@ -1,7 +1,8 @@
+use std::path::Path;
+
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, S3Client, S3};
-use std::path::Path;
 use tokio::{fs::File, io};
 
 pub(crate) async fn download_space_object(

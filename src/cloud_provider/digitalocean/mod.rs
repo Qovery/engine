@@ -1,10 +1,3 @@
-pub mod api_structs;
-pub mod application;
-pub mod common;
-pub mod databases;
-pub mod kubernetes;
-pub(crate) mod router;
-
 extern crate digitalocean;
 
 use std::any::Any;
@@ -15,6 +8,13 @@ use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{Context, Listener, Listeners};
+
+pub mod api_structs;
+pub mod application;
+pub mod common;
+pub mod databases;
+pub mod kubernetes;
+pub(crate) mod router;
 
 pub struct DO {
     context: Context,

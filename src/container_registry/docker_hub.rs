@@ -1,11 +1,13 @@
+extern crate reqwest;
+
+use reqwest::StatusCode;
+
 use crate::build_platform::Image;
 use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::EngineErrorCause;
 use crate::models::{Context, Listener, Listeners};
-extern crate reqwest;
 
-use reqwest::StatusCode;
 pub struct DockerHub {
     context: Context,
     id: String,

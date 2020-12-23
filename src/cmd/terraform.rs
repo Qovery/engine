@@ -1,10 +1,10 @@
 use dirs::home_dir;
+use retry::delay::Fixed;
+use retry::OperationResult;
 
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::error::{SimpleError, SimpleErrorKind};
-use retry::delay::Fixed;
-use retry::OperationResult;
 
 fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleError> {
     // terraform init
