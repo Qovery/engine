@@ -47,19 +47,19 @@ pub fn get_used_cidr_on_region(token: &str) {
         vec!["vpcs", "list", "--output", "json", "-t", token],
         |r_out| match r_out {
             Ok(s) => output_from_cli.push_str(&s.to_owned()),
-            Err(e) => error!("DOCTL Cli not respond well{}", e),
+            Err(e) => error!("DOCTL CLI does not respond correctly {}", e),
         },
         |r_err| match r_err {
             Ok(s) => error!(
-                "DOCTL Cli error from cmd inserted, please check vpcs list command{}",
+                "DOCTL CLI error from cmd inserted, please check vpcs list command{}",
                 s
             ),
-            Err(e) => error!("DOCTL Cli not respond good {}", e),
+            Err(e) => error!("DOCTL CLI does not respond correctly {}", e),
         },
     );
 
     let buff = output_from_cli.borrow();
-    let array: Vec<DoVpc> = serde_json::from_str(&buff).expect("JSON was not well-formatted");
+    let array: Vec<DoVpc> = serde_json::from_str(&buff).expect("JSON is not well-formatted");
 
     for elem in array.iter() {
         let reg = &elem.region;

@@ -4,7 +4,8 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities::{get_tfstate_name, get_tfstate_suffix};
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
-use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::common::kubernetes::do_stateless_service_cleanup;
 use crate::cloud_provider::environment::{Environment, Kind};
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
@@ -234,7 +235,7 @@ impl Redis {
                 let helm_release_name = self.helm_release_name();
 
                 // clean the resource
-                let _ = common::do_stateless_service_cleanup(
+                let _ = do_stateless_service_cleanup(
                     *kubernetes,
                     *environment,
                     helm_release_name.as_str(),

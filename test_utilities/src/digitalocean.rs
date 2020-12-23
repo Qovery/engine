@@ -1,22 +1,20 @@
-use digitalocean::DigitalOcean;
+use std::fs::File;
 
+use reqwest::StatusCode;
+
+use qovery_engine::cloud_provider::digitalocean::api_structs::clusters::Cluster;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::container_registry::docr;
+use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docr::{get_header_with_bearer, DOCR};
-use qovery_engine::dns_provider::cloudflare::Cloudflare;
+use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 
 use crate::aws::{terraform_aws_access_key_id, terraform_aws_secret_access_key};
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::build_platform_local_docker;
-use qovery_engine::cloud_provider::digitalocean::api_structs::clusters::Cluster;
-use qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node;
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::cloud_provider::TerraformStateCredentials;
-use qovery_engine::dns_provider::DnsProvider;
-use reqwest::StatusCode;
-use std::fs::File;
 
 pub const ORGANIZATION_ID: &str = "a8nb94c7fwxzr2ja";
 pub const DO_KUBERNETES_VERSION: &str = "1.18.10-do.2";

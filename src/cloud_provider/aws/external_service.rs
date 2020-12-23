@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::aws::common;
+use crate::cloud_provider::common::kubernetes::{
+    do_stateless_service_cleanup, get_stateless_resource_information,
+};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
@@ -95,19 +97,11 @@ impl ExternalService {
         let selector = format!("app={}", self.name());
 
         if is_error {
-            let _ = common::get_stateless_resource_information(
-                kubernetes,
-                environment,
-                selector.as_str(),
-            )?;
+            let _ = get_stateless_resource_information(kubernetes, environment, selector.as_str())?;
         }
 
         // clean the resource
-        let _ = common::do_stateless_service_cleanup(
-            kubernetes,
-            environment,
-            helm_release_name.as_str(),
-        )?;
+        let _ = do_stateless_service_cleanup(kubernetes, environment, helm_release_name.as_str())?;
 
         Ok(())
     }

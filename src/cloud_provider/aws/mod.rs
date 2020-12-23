@@ -10,8 +10,6 @@ use crate::error::EngineErrorCause;
 use crate::models::{Context, Listener, Listeners};
 use crate::runtime::async_run;
 
-pub mod common;
-
 pub mod application;
 pub mod databases;
 pub mod external_service;

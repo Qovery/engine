@@ -12,12 +12,10 @@ use qovery_engine::cloud_provider::digitalocean::common::{
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_namespace};
 use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
-use qovery_engine::container_registry::docr::{get_current_registry_name, get_header_with_bearer};
-use qovery_engine::error::SimpleError;
 use std::fs::File;
 use std::io::Read;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
-use tracing::{debug, error, info, span, warn, Level};
+use tracing::{error, span, Level};
 
 #[test]
 fn create_doks_cluster_in_fra_10() {

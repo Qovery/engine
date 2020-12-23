@@ -1,21 +1,18 @@
+use chrono::Utc;
 use curl::easy::Easy;
-use curl::Error;
+use dirs::home_dir;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-
-use crate::aws::{aws_access_key_id, aws_default_region, aws_secret_access_key, KUBE_CLUSTER_ID};
-use chrono::Utc;
-use dirs::home_dir;
-use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::aws::common;
-use qovery_engine::cmd;
-use qovery_engine::models::{Context, Environment, Metadata};
-
-use crate::aws;
-use tracing::{error, info, span, warn, Level};
+use tracing::Level;
 use tracing_subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::FmtSubscriber;
+
+use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::cmd;
+use qovery_engine::error::SimpleError;
+use qovery_engine::models::{Context, Environment, Metadata};
+
+use crate::aws::{aws_access_key_id, aws_secret_access_key, KUBE_CLUSTER_ID};
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
@@ -97,6 +94,31 @@ pub fn context() -> Context {
     )
 }
 
+fn kubernetes_config_path(
+    workspace_directory: &str,
+    kubernetes_cluster_id: &str,
+    access_key_id: &str,
+    secret_access_key: &str,
+) -> Result<String, SimpleError> {
+    let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", kubernetes_cluster_id);
+    let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
+
+    let kubernetes_config_file_path = format!(
+        "{}/kubernetes_config_{}",
+        workspace_directory, kubernetes_cluster_id
+    );
+
+    let _ = qovery_engine::s3::get_kubernetes_config_file(
+        access_key_id,
+        secret_access_key,
+        kubernetes_config_bucket_name.as_str(),
+        kubernetes_config_object_key.as_str(),
+        kubernetes_config_file_path.as_str(),
+    )?;
+
+    Ok(kubernetes_config_file_path)
+}
+
 pub fn is_pod_restarted_aws_env(
     environment_check: Environment,
     pod_to_check: &str,
@@ -114,7 +136,7 @@ pub fn is_pod_restarted_aws_env(
         ("AWS_SECRET_ACCESS_KEY", secret_key.as_str()),
     ];
 
-    let kubernetes_config = common::kubernetes_config_path(
+    let kubernetes_config = kubernetes_config_path(
         "/tmp",
         KUBE_CLUSTER_ID,
         aws_access_key_id().as_str(),

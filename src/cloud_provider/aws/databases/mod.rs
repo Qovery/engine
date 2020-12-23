@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::common::get_stateless_resource_information_for_user;
+use crate::cloud_provider::common::kubernetes::get_stateless_resource_information_for_user;
 use crate::cloud_provider::service::Service;
 use crate::cloud_provider::DeploymentTarget;
 pub use mongodb::MongoDB;

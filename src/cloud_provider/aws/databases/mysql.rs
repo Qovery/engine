@@ -1,10 +1,13 @@
+use std::collections::HashMap;
+
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities::{
     generate_supported_version, get_tfstate_name, get_tfstate_suffix,
 };
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
-use crate::cloud_provider::aws::{common, AWS};
+use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::common::kubernetes::do_stateless_service_cleanup;
 use crate::cloud_provider::environment::{Environment, Kind};
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
@@ -16,7 +19,6 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
-use std::collections::HashMap;
 
 pub struct MySQL {
     context: Context,
@@ -258,7 +260,7 @@ impl MySQL {
                 let helm_release_name = self.helm_release_name();
 
                 // clean the resource
-                let _ = common::do_stateless_service_cleanup(
+                let _ = do_stateless_service_cleanup(
                     *kubernetes,
                     *environment,
                     helm_release_name.as_str(),
@@ -655,8 +657,9 @@ fn get_mysql_version(
 
 #[cfg(test)]
 mod tests_mysql {
-    use crate::cloud_provider::aws::databases::mysql::get_mysql_version;
     use std::collections::HashMap;
+
+    use crate::cloud_provider::aws::databases::mysql::get_mysql_version;
 
     #[test]
     fn check_mysql_version() {

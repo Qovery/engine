@@ -1,35 +1,10 @@
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::Service;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, SimpleError};
+use crate::error::{cast_simple_error_to_engine_error, EngineError};
 
 pub type Logs = String;
 pub type Describe = String;
-
-pub fn kubernetes_config_path(
-    workspace_directory: &str,
-    kubernetes_cluster_id: &str,
-    access_key_id: &str,
-    secret_access_key: &str,
-) -> Result<String, SimpleError> {
-    let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", kubernetes_cluster_id);
-    let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
-
-    let kubernetes_config_file_path = format!(
-        "{}/kubernetes_config_{}",
-        workspace_directory, kubernetes_cluster_id
-    );
-
-    let _ = crate::s3::get_kubernetes_config_file(
-        access_key_id,
-        secret_access_key,
-        kubernetes_config_bucket_name.as_str(),
-        kubernetes_config_object_key.as_str(),
-        kubernetes_config_file_path.as_str(),
-    )?;
-
-    Ok(kubernetes_config_file_path)
-}
 
 /// return debug information line by line to help the user to understand what's going on,
 /// and why its app does not start
