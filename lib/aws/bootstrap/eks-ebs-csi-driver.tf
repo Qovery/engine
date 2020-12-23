@@ -1,5 +1,5 @@
 resource "aws_iam_policy" "eks_workers_ebs_csi" {
-  name = "qovery-aws-EBS-CSI-Driver-${var.eks_cluster_id}"
+  name = "qovery-aws-EBS-CSI-Driver-${var.kubernetes_cluster_id}"
   description = "Policy for AWS CSI driver"
 
   policy = <<POLICY

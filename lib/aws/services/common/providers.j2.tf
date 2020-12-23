@@ -11,7 +11,7 @@ provider "local" {
 }
 
 data aws_eks_cluster eks_cluster {
-  name = "qovery-{{eks_cluster_id}}"
+  name = "qovery-{{kubernetes_cluster_id}}"
 }
 
 provider "helm" {
@@ -23,7 +23,7 @@ provider "helm" {
     exec {
       api_version = "client.authentication.k8s.io/v1alpha1"
       command = "aws-iam-authenticator"
-      args = ["token", "-i", "qovery-{{eks_cluster_id}}"]
+      args = ["token", "-i", "qovery-{{kubernetes_cluster_id}}"]
       env = {
         AWS_ACCESS_KEY_ID = "{{ aws_access_key }}"
         AWS_SECRET_ACCESS_KEY = "{{ aws_secret_key }}"

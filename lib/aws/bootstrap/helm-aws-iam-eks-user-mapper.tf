@@ -1,5 +1,5 @@
 resource "aws_iam_user" "iam_eks_user_mapper" {
-  name = "qovery-aws-iam-eks-user-mapper-${var.eks_cluster_id}"
+  name = "qovery-aws-iam-eks-user-mapper-${var.kubernetes_cluster_id}"
 
   tags = local.tags_eks
 }

@@ -12,9 +12,9 @@ variable "region" {
   type = string
 }
 
-variable "eks_cluster_id" {
+variable "kubernetes_cluster_id" {
   description = "Kubernetes cluster name with region"
-  default     = "{{ eks_cluster_id }}"
+  default     = "{{ kubernetes_cluster_id }}"
   type        = string
 }
 

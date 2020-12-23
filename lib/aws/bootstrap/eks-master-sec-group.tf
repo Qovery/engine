@@ -1,5 +1,5 @@
 resource "aws_security_group" "eks_cluster" {
-  name        = "qovery-eks-${var.eks_cluster_id}"
+  name        = "qovery-eks-${var.kubernetes_cluster_id}"
   description = "Cluster communication with worker nodes"
   vpc_id      = aws_vpc.eks.id
 

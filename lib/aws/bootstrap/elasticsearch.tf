@@ -66,7 +66,7 @@ resource "aws_route_table_association" "elasticsearch_cluster_zone_c" {
 }
 
 resource "aws_security_group" "elasticsearch" {
-  name = "elasticsearch-${var.eks_cluster_id}"
+  name = "elasticsearch-${var.kubernetes_cluster_id}"
   description = "Elasticsearch security group"
   vpc_id = aws_vpc.eks.id
 

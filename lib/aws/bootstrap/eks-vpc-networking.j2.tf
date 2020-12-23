@@ -5,7 +5,7 @@ locals {
     local.tags_eks,
     {
       Name = "qovery-eks-workers",
-      "kubernetes.io/cluster/qovery-${var.eks_cluster_id}" = "shared",
+      "kubernetes.io/cluster/qovery-${var.kubernetes_cluster_id}" = "shared",
       "kubernetes.io/role/elb" = 1,
     }
   )

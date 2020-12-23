@@ -75,7 +75,7 @@ resource "aws_route_table_association" "rds_cluster_zone_c" {
 }
 
 resource "aws_db_subnet_group" "rds" {
-  description = "RDS linked to ${var.eks_cluster_id}"
+  description = "RDS linked to ${var.kubernetes_cluster_id}"
   name = aws_vpc.eks.id
   subnet_ids = flatten([aws_subnet.rds_zone_a.*.id, aws_subnet.rds_zone_b.*.id, aws_subnet.rds_zone_c.*.id])
 
@@ -84,7 +84,7 @@ resource "aws_db_subnet_group" "rds" {
 
 # IAM
 resource "aws_iam_role" "rds_enhanced_monitoring" {
-  name        = "qovery-rds-enhanced-monitoring-${var.eks_cluster_id}"
+  name        = "qovery-rds-enhanced-monitoring-${var.kubernetes_cluster_id}"
   assume_role_policy = data.aws_iam_policy_document.rds_enhanced_monitoring.json
 
   tags = local.tags_rds

@@ -1,5 +1,5 @@
 resource "aws_iam_user" "iam_aws_limits_exporter" {
-  name = "qovery-aws-limits-exporter-${var.eks_cluster_id}"
+  name = "qovery-aws-limits-exporter-${var.kubernetes_cluster_id}"
 
   tags = local.tags_eks
 }

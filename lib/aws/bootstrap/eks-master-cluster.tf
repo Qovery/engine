@@ -1,7 +1,7 @@
 locals {
   tags_eks = {
-    ClusterId = var.eks_cluster_id,
-    ClusterName = var.eks_cluster_name,
+    ClusterId = var.kubernetes_cluster_id,
+    ClusterName = var.kubernetes_cluster_name,
     Region = var.region
   }
 }
@@ -14,7 +14,7 @@ resource "aws_cloudwatch_log_group" "eks_cloudwatch_log_group" {
 }
 
 resource "aws_eks_cluster" "eks_cluster" {
-  name            = "qovery-${var.eks_cluster_id}"
+  name            = "qovery-${var.kubernetes_cluster_id}"
   role_arn        = aws_iam_role.eks_cluster.arn
   version         = var.eks_k8s_versions.masters
 

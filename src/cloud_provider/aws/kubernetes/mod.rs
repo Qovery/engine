@@ -284,8 +284,8 @@ impl<'a> EKS<'a> {
 
         // AWS - EKS
         context.insert("eks_cidr_subnet", &eks_cidr_subnet.clone());
-        context.insert("eks_cluster_name", &self.name());
-        context.insert("eks_cluster_id", self.id());
+        context.insert("kubernetes_cluster_name", &self.name());
+        context.insert("kubernetes_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
         context.insert("eks_worker_nodes", &worker_nodes);
         context.insert("eks_zone_a_subnet_blocks", &eks_zone_a_subnet_blocks);

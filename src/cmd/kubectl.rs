@@ -5,7 +5,9 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::de::DeserializeOwned;
 
+use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
+use crate::cloud_provider::CloudProvider;
 use crate::cmd::structs::{
     Item, KubernetesEvent, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod,
     KubernetesPodStatusPhase, KubernetesService, LabelsContent,
@@ -371,6 +373,14 @@ where
         Ok(_) => true,
         Err(_) => false,
     }
+}
+
+pub fn kubectl_exec_create_namespace_without_labels(
+    namespace: &str,
+    kube_config: &str,
+    envs: Vec<(&str, &str)>,
+) {
+    let _ = kubectl_exec_create_namespace(kube_config, namespace, None, envs);
 }
 
 pub fn kubectl_exec_create_namespace<P>(

@@ -5,7 +5,7 @@
 */
 
 resource "aws_iam_role_policy" "eks_cluster_ingress_loadbalancer_creation" {
-  name   = "ingress-loadbalancer-creation-${var.eks_cluster_id}"
+  name   = "ingress-loadbalancer-creation-${var.kubernetes_cluster_id}"
   role       = aws_iam_role.eks_cluster.name
 
   policy = <<POLICY

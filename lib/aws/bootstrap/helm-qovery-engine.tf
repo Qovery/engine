@@ -1,5 +1,5 @@
 data "external" "get_engine_version_to_use" {
-  program = ["./helper.sh", "get_engine_version_to_use", var.qovery_engine_info.token, var.qovery_engine_info.api_fqdn, var.eks_cluster_id]
+  program = ["./helper.sh", "get_engine_version_to_use", var.qovery_engine_info.token, var.qovery_engine_info.api_fqdn, var.kubernetes_cluster_id]
 }
 
 resource "helm_release" "qovery_engine_resources" {

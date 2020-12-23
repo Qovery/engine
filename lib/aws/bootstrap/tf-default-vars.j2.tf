@@ -73,15 +73,15 @@ variable "eks_k8s_versions" {
   type = map(string)
 }
 
-variable "eks_cluster_id" {
+variable "kubernetes_cluster_id" {
   description = "Kubernetes cluster name with region"
-  default     = "{{ eks_cluster_id }}"
+  default     = "{{ kubernetes_cluster_id }}"
   type        = string
 }
 
-variable "eks_cluster_name" {
+variable "kubernetes_cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "qovery-{{ eks_cluster_name }}"
+  default     = "qovery-{{ kubernetes_cluster_name }}"
   type        = string
 }
 
@@ -116,7 +116,7 @@ variable "s3_bucket_qengine_resources" {
 variable "ec2_ssh_default_key" {
   description = "Default SSH key"
   default = {
-    "key_name" = "qovery-{{ eks_cluster_id }}"
+    "key_name" = "qovery-{{ kubernetes_cluster_id }}"
     "public_key" = "{{ qovery_ssh_key }}"
   }
   type = map(string)

@@ -1,5 +1,5 @@
 resource "aws_iam_role" "eks_workers" {
-  name = "qovery-eks-workers-${var.eks_cluster_id}"
+  name = "qovery-eks-workers-${var.kubernetes_cluster_id}"
 
   tags = local.tags_eks
 
@@ -35,6 +35,6 @@ resource "aws_iam_role_policy_attachment" "node_AmazonEC2ContainerRegistryReadOn
 }
 
 resource "aws_iam_instance_profile" "workers" {
-  name = "qovery-eks-workers-${var.eks_cluster_id}"
+  name = "qovery-eks-workers-${var.kubernetes_cluster_id}"
   role = aws_iam_role.eks_workers.name
 }

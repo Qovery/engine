@@ -61,7 +61,7 @@ resource "aws_route_table_association" "documentdb_cluster_zone_c" {
 }
 
 resource "aws_docdb_subnet_group" "documentdb" {
-  description = "DocumentDB linked to ${var.eks_cluster_id}"
+  description = "DocumentDB linked to ${var.kubernetes_cluster_id}"
   name = "documentdb-${aws_vpc.eks.id}"
   subnet_ids = flatten([aws_subnet.documentdb_zone_a.*.id, aws_subnet.documentdb_zone_b.*.id, aws_subnet.documentdb_zone_c.*.id])
 

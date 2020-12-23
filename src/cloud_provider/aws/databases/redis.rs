@@ -14,6 +14,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::cmd::kubectl;
 use crate::cmd::structs::LabelsContent;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
 use crate::models::Context;
@@ -84,10 +85,12 @@ impl Redis {
                     .downcast_ref::<AWS>()
                     .unwrap();
 
-                utilities::create_namespace_without_labels(
+                kubectl::kubectl_exec_create_namespace_without_labels(
                     &environment.namespace(),
                     kube_config.as_str(),
-                    aws,
+                    kubernetes
+                        .cloud_provider()
+                        .credentials_environment_variables(),
                 );
             }
             Err(e) => error!(
@@ -129,8 +132,8 @@ impl Redis {
             context.insert(k, v);
         }
 
-        context.insert("eks_cluster_id", kubernetes.id());
-        context.insert("eks_cluster_name", kubernetes.name());
+        context.insert("kubernetes_cluster_id", kubernetes.id());
+        context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());

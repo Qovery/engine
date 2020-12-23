@@ -1,7 +1,7 @@
 data "aws_vpc" "selected" {
   filter {
     name = "tag:ClusterId"
-    values = [var.eks_cluster_id]
+    values = [var.kubernetes_cluster_id]
   }
 }
 
@@ -9,7 +9,7 @@ data "aws_subnet_ids" "k8s_subnet_ids" {
   vpc_id = data.aws_vpc.selected.id
   filter {
     name = "tag:ClusterId"
-    values = [var.eks_cluster_id]
+    values = [var.kubernetes_cluster_id]
   }
   filter {
     name = "tag:Service"
@@ -23,13 +23,13 @@ data "aws_security_group" "selected" {
     values = ["qovery-eks-workers"]
   }
   filter {
-    name   = "tag:kubernetes.io/cluster/${var.eks_cluster_id}"
+    name   = "tag:kubernetes.io/cluster/${var.kubernetes_cluster_id}"
     values = ["owned"]
   }
 }
 
 data "aws_iam_role" "rds_enhanced_monitoring" {
-  name = "qovery-rds-enhanced-monitoring-${var.eks_cluster_id}"
+  name = "qovery-rds-enhanced-monitoring-${var.kubernetes_cluster_id}"
 }
 
 resource "helm_release" "mysql_instance_external_name" {
@@ -63,7 +63,7 @@ resource "aws_db_instance" "mysql_instance" {
 
   tags = {
     cluster_name = var.cluster_name
-    cluster_id = var.eks_cluster_id
+    cluster_id = var.kubernetes_cluster_id
     region = var.region
     q_client_id = var.q_customer_id
     q_environment_id = var.q_environment_id

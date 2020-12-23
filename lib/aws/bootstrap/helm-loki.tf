@@ -1,5 +1,5 @@
 resource "aws_iam_user" "iam_eks_loki" {
-  name = "qovery-logs-${var.eks_cluster_id}"
+  name = "qovery-logs-${var.kubernetes_cluster_id}"
 }
 
 resource "aws_iam_access_key" "iam_eks_loki" {

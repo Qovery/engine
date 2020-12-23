@@ -2,7 +2,7 @@
 resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   cluster_name     = aws_eks_cluster.eks_cluster.name
   version          = var.eks_k8s_versions.workers
-  node_group_name  = "qovery-${var.eks_cluster_id}-{{ loop.index }}"
+  node_group_name  = "qovery-${var.kubernetes_cluster_id}-{{ loop.index }}"
   node_role_arn    = aws_iam_role.eks_workers.arn
   subnet_ids       = flatten([aws_subnet.eks_zone_a[*].id, aws_subnet.eks_zone_b[*].id, aws_subnet.eks_zone_c[*].id])
   instance_types   = ["{{ eks_worker_node.instance_type }}"]

@@ -1,5 +1,5 @@
 resource "aws_iam_user" "iam_grafana_cloudwatch" {
-  name = "qovery-cloudwatch-${var.eks_cluster_id}"
+  name = "qovery-cloudwatch-${var.kubernetes_cluster_id}"
 }
 
 resource "aws_iam_access_key" "iam_grafana_cloudwatch" {

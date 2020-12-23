@@ -50,7 +50,7 @@ resource "helm_release" "aws_vpc_cni" {
   # label ENIs
   set {
     name = "env.CLUSTER_NAME"
-    value = var.eks_cluster_name
+    value = var.kubernetes_cluster_name
   }
 
   ## POD ALLOCATION ##

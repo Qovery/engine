@@ -7,15 +7,6 @@ use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_sec
 use crate::error::{EngineError, StringError};
 use crate::utilities::get_version_number;
 
-pub fn create_namespace_without_labels(namespace: &str, kube_config: &str, aws: &AWS) {
-    let _ = kubectl_exec_create_namespace(
-        kube_config,
-        namespace,
-        None,
-        aws.credentials_environment_variables(),
-    );
-}
-
 pub fn delete_terraform_tfstate_secret(
     kubernetes: &dyn Kubernetes,
     secret_name: &str,
