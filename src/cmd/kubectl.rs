@@ -5,7 +5,7 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::de::DeserializeOwned;
 
-use crate::cloud_provider::digitalocean::api_structs::svc::DOKubernetesList;
+use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
 use crate::cmd::structs::{
     Item, KubernetesEvent, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod,
     KubernetesPodStatusPhase, KubernetesService, LabelsContent,

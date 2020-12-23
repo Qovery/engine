@@ -5,7 +5,7 @@ use qovery_engine::models::{Action, Clone2, EnvironmentAction};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::digitalocean::digital_ocean_token;
 use test_utilities::utilities::{context, init};
-use tracing::{debug, error, info, span, warn, Level};
+use tracing::{span, Level};
 
 // this function tests DOCR as well
 #[test]

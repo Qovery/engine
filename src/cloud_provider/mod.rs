@@ -26,7 +26,10 @@ pub trait CloudProvider {
     }
     fn is_valid(&self) -> Result<(), EngineError>;
     fn add_listener(&mut self, listener: Listener);
+    /// environment variables containing credentials
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;
+    /// environment variables to inject to generate Terraform files from templates
+    fn tera_context_environment_variables(&self) -> Vec<(&str, &str)>;
     fn terraform_state_credentials(&self) -> &TerraformStateCredentials;
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::CloudProvider(self.id().to_string(), self.name().to_string())

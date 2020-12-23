@@ -16,7 +16,7 @@ use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{
     Action, Application, Context, Database, DatabaseKind, Environment, EnvironmentVariable,
-    GitCredentials, Kind, Metadata, Route, Router, Storage, StorageType,
+    GitCredentials, Kind, Route, Router, Storage, StorageType,
 };
 
 use crate::cloudflare::dns_provider_cloudflare;

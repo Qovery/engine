@@ -72,13 +72,6 @@ impl Redis {
     ) -> Result<TeraContext, EngineError> {
         let mut context = self.default_tera_context(kubernetes, environment);
 
-        // FIXME: is there an other way than downcast a pointer?
-        let cp = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .expect("Could not downcast kubernetes.cloud_provider() to AWS");
-
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kubernetes_config_file_path = kubernetes.config_file_path();
 
@@ -129,8 +122,13 @@ impl Redis {
         context.insert("namespace", environment.namespace());
         context.insert("version", &version);
 
-        context.insert("aws_access_key", &cp.access_key_id);
-        context.insert("aws_secret_key", &cp.secret_access_key);
+        for (k, v) in kubernetes
+            .cloud_provider()
+            .tera_context_environment_variables()
+        {
+            context.insert(k, v);
+        }
+
         context.insert("eks_cluster_id", kubernetes.id());
         context.insert("eks_cluster_name", kubernetes.name());
 

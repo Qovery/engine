@@ -1,16 +1,18 @@
 extern crate test_utilities;
 
-use self::test_utilities::utilities::generate_id;
-use crate::aws::aws_environment::{delete_environment, deploy_environment};
-use qovery_engine::models::Kind::Production;
+use test_utilities::utilities::context;
+use test_utilities::utilities::{init, is_pod_restarted_aws_env};
+use tracing::{span, Level};
+
 use qovery_engine::models::{
     Action, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction,
     EnvironmentVariable, Kind,
 };
 use qovery_engine::transaction::TransactionResult;
-use test_utilities::utilities::context;
-use test_utilities::utilities::{init, is_pod_restarted_aws_env};
-use tracing::{span, Level};
+
+use crate::aws::aws_environment::{delete_environment, deploy_environment};
+
+use self::test_utilities::utilities::generate_id;
 
 /**
 **

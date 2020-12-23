@@ -375,6 +375,7 @@ impl Create for Application {
                 ),
             )?;
         }
+
         Ok(())
     }
 }

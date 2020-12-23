@@ -1,21 +1,25 @@
 extern crate test_utilities;
+
+use std::fs::File;
+use std::io::Read;
+
+use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
+use tracing::{error, span, Level};
+
+use qovery_engine::cloud_provider::digitalocean::common::{
+    get_uuid_of_cluster_from_name, kubernetes_config_path,
+};
+use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+use qovery_engine::cloud_provider::digitalocean::models::cluster::Clusters;
+use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_namespace};
+use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
+
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::digitalocean::{
     digital_ocean_spaces_access_id, digital_ocean_spaces_secret_key, digital_ocean_token,
     get_kube_cluster_name_from_uuid,
 };
 use self::test_utilities::utilities::{generate_id, init};
-use qovery_engine::cloud_provider::digitalocean::api_structs::clusters::Clusters;
-use qovery_engine::cloud_provider::digitalocean::common::{
-    get_uuid_of_cluster_from_name, kubernetes_config_path,
-};
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_namespace};
-use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
-use std::fs::File;
-use std::io::Read;
-use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
-use tracing::{error, span, Level};
 
 #[test]
 fn create_doks_cluster_in_fra_10() {

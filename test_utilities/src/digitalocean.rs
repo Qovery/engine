@@ -2,9 +2,9 @@ use std::fs::File;
 
 use reqwest::StatusCode;
 
-use qovery_engine::cloud_provider::digitalocean::api_structs::clusters::Cluster;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+use qovery_engine::cloud_provider::digitalocean::models::cluster::Cluster;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docr::{get_header_with_bearer, DOCR};

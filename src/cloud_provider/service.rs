@@ -61,8 +61,6 @@ pub trait Service {
             if !crate::cmd::utilities::does_binary_exist(binary) {
                 let err = format!("{} binary not found", binary);
 
-                //let cause = EngineErrorCause::Internal;
-
                 return Err(EngineError::new(
                     EngineErrorCause::Internal,
                     EngineErrorScope::Engine,

@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use reqwest::StatusCode;
 
-use crate::cloud_provider::digitalocean::api_structs::clusters::Clusters;
+use crate::cloud_provider::digitalocean::models::cluster::Clusters;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;

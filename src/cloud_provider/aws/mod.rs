@@ -112,6 +112,13 @@ impl CloudProvider for AWS {
         ]
     }
 
+    fn tera_context_environment_variables(&self) -> Vec<(&str, &str)> {
+        vec![
+            ("aws_access_key", self.access_key_id.as_str()),
+            ("aws_secret_key", self.secret_access_key.as_str()),
+        ]
+    }
+
     fn terraform_state_credentials(&self) -> &TerraformStateCredentials {
         &self.terraform_state_credentials
     }

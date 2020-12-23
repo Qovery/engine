@@ -9,12 +9,12 @@ use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{Context, Listener, Listeners};
 
-pub mod api_structs;
 pub mod application;
 pub mod common;
 pub mod databases;
 pub mod kubernetes;
-pub(crate) mod router;
+pub mod models;
+pub mod router;
 
 pub struct DO {
     context: Context,
@@ -99,6 +99,10 @@ impl CloudProvider for DO {
 
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         vec![(DIGITAL_OCEAN_TOKEN, self.token.as_str())]
+    }
+
+    fn tera_context_environment_variables(&self) -> Vec<(&str, &str)> {
+        vec![("digital_ocean_token", self.token.as_str())] // FIXME random key and value; is it good?
     }
 
     fn terraform_state_credentials(&self) -> &TerraformStateCredentials {

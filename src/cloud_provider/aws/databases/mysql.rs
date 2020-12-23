@@ -74,13 +74,6 @@ impl MySQL {
     ) -> Result<TeraContext, EngineError> {
         let mut context = self.default_tera_context(kubernetes, environment);
 
-        // FIXME: is there an other way than downcast a pointer?
-        let cp = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<AWS>()
-            .expect("Could not downcast kubernetes.cloud_provider() to AWS");
-
         let is_managed_services = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
@@ -115,8 +108,13 @@ impl MySQL {
         let version = &self.matching_correct_version(is_managed_services)?;
         context.insert("version", &version);
 
-        context.insert("aws_access_key", &cp.access_key_id);
-        context.insert("aws_secret_key", &cp.secret_access_key);
+        for (k, v) in kubernetes
+            .cloud_provider()
+            .tera_context_environment_variables()
+        {
+            context.insert(k, v);
+        }
+
         context.insert("eks_cluster_id", kubernetes.id());
         context.insert("eks_cluster_name", kubernetes.name());
 
