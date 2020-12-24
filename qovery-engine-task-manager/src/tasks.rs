@@ -13,7 +13,6 @@ use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope, Simp
 use qovery_engine::models::{
     Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
 };
-use qovery_engine::s3;
 use qovery_engine::transaction::{RollbackError, TransactionResult};
 
 use crate::models::{Action, Request};
@@ -615,6 +614,9 @@ fn format_engine_error_output(
         EngineErrorScope::ExternalService(id, name) => {
             format!("External service '{}' with id '{}'", name, id)
         }
+        EngineErrorScope::ObjectStorage(id, name) => {
+            format!("Object Storage '{}' with id '{}'", name, id)
+        }
     };
 
     let rollback_engine_error_message = match rollback_error {
@@ -709,6 +711,7 @@ fn upload_s3_file(
         secrets_access_key.clone(),
     );
 
+    /*
     match s3::push_object(
         access_key_id,
         secrets_access_key,
@@ -718,11 +721,15 @@ fn upload_s3_file(
     ) {
         Ok(_) => {
             info!("Archive successfully pushed to Qovery S3");
-            return Ok(());
+            Ok(())
         }
         Err(e) => {
             warn!("Error while pushing archive to s3, {:?}", e);
-            return Err(e);
+            Err(e)
         }
-    };
+    }*/
+
+    // TODO
+
+    Ok(())
 }

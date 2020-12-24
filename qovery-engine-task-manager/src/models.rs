@@ -315,7 +315,7 @@ impl DnsProvider {
         context: &Context,
     ) -> Box<dyn qovery_engine::dns_provider::DnsProvider> {
         match self.kind {
-            qovery_engine::dns_provider::Kind::CLOUDFLARE => {
+            qovery_engine::dns_provider::Kind::Cloudflare => {
                 let token = self.options.get("cloudflare_api_token").unwrap();
                 let email = self.options.get("cloudflare_email").unwrap();
 
