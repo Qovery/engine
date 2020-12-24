@@ -6,7 +6,6 @@ use crate::cloud_provider::aws::databases::utilities::{
     generate_supported_version, get_tfstate_name, get_tfstate_suffix,
 };
 use crate::cloud_provider::aws::databases::{debug_logs, utilities};
-use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::common::kubernetes::do_stateless_service_cleanup;
 use crate::cloud_provider::environment::{Environment, Kind};
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -86,11 +85,6 @@ impl MySQL {
         match kubernetes_config_file_path {
             Ok(kube_config) => {
                 context.insert("kubeconfig_path", &kube_config.as_str());
-                let aws = kubernetes
-                    .cloud_provider()
-                    .as_any()
-                    .downcast_ref::<AWS>()
-                    .unwrap();
 
                 kubectl::kubectl_exec_create_namespace_without_labels(
                     &environment.namespace(),

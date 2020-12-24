@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::CloudProvider;
-use crate::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_secret};
+use crate::cmd::kubectl::kubectl_exec_delete_secret;
 use crate::error::{EngineError, StringError};
 use crate::utilities::get_version_number;
 

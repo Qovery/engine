@@ -106,6 +106,7 @@ pub fn deploy_environment(
             &stateful_deployment_target,
             &listeners_helper,
             "deployment",
+            CheckAction::Deploy,
         )?;
     }
 
@@ -124,6 +125,7 @@ pub fn deploy_environment(
             &stateless_deployment_target,
             &listeners_helper,
             "deployment",
+            CheckAction::Deploy,
         )?;
     }
 
@@ -139,6 +141,7 @@ pub fn deploy_environment(
             &stateful_deployment_target,
             &listeners_helper,
             "check deployment",
+            CheckAction::Deploy,
         )?;
     }
 
@@ -153,6 +156,7 @@ pub fn deploy_environment(
             &stateless_deployment_target,
             &listeners_helper,
             "check deployment",
+            CheckAction::Deploy,
         )?;
     }
 
@@ -193,6 +197,7 @@ pub fn deploy_environment_error(
             &stateful_deployment_target,
             &listeners_helper,
             "revert deployment",
+            CheckAction::Deploy,
         )?;
     }
 
@@ -211,6 +216,7 @@ pub fn deploy_environment_error(
             &stateless_deployment_target,
             &listeners_helper,
             "revert deployment",
+            CheckAction::Deploy,
         )?;
     }
 
@@ -242,6 +248,7 @@ pub fn pause_environment(
             &stateful_deployment_target,
             &listeners_helper,
             "pause",
+            CheckAction::Pause,
         )?;
     }
 
@@ -260,6 +267,7 @@ pub fn pause_environment(
             &stateless_deployment_target,
             &listeners_helper,
             "pause",
+            CheckAction::Pause,
         )?;
     }
 
@@ -275,6 +283,7 @@ pub fn pause_environment(
             &stateful_deployment_target,
             &listeners_helper,
             "check pause",
+            CheckAction::Pause,
         )?;
     }
 
@@ -289,6 +298,7 @@ pub fn pause_environment(
             &stateless_deployment_target,
             &listeners_helper,
             "check pause",
+            CheckAction::Pause,
         )?;
     }
 
@@ -342,6 +352,7 @@ pub fn delete_environment(
             &stateful_deployment_target,
             &listeners_helper,
             "delete",
+            CheckAction::Delete,
         )?;
     }
 
@@ -357,6 +368,7 @@ pub fn delete_environment(
             &stateful_deployment_target,
             &listeners_helper,
             "delete check",
+            CheckAction::Delete,
         )?;
     }
 
@@ -371,6 +383,7 @@ pub fn delete_environment(
             &stateless_deployment_target,
             &listeners_helper,
             "delete check",
+            CheckAction::Delete,
         )?;
     }
 
@@ -465,6 +478,12 @@ pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
     Ok(())
 }
 
+pub enum CheckAction {
+    Deploy,
+    Pause,
+    Delete,
+}
+
 pub fn check_kubernetes_service_error<T>(
     result: Result<(), EngineError>,
     kubernetes: &dyn Kubernetes,
@@ -472,11 +491,12 @@ pub fn check_kubernetes_service_error<T>(
     deployment_target: &DeploymentTarget,
     listeners_helper: &ListenersHelper,
     action_verb: &str,
+    action: CheckAction,
 ) -> Result<(), EngineError>
 where
     T: Service + ?Sized,
 {
-    listeners_helper.start_in_progress(ProgressInfo::new(
+    let progress_info = ProgressInfo::new(
         service.progress_scope(),
         ProgressLevel::Info,
         Some(format!(
@@ -486,7 +506,13 @@ where
             service.name()
         )),
         kubernetes.context().execution_id(),
-    ));
+    );
+
+    match action {
+        CheckAction::Deploy => listeners_helper.start_in_progress(progress_info),
+        CheckAction::Pause => listeners_helper.pause_in_progress(progress_info),
+        CheckAction::Delete => listeners_helper.delete_in_progress(progress_info),
+    }
 
     match result {
         Err(err) => {
@@ -499,7 +525,7 @@ where
                 err
             );
 
-            listeners_helper.error(ProgressInfo::new(
+            let progress_info = ProgressInfo::new(
                 service.progress_scope(),
                 ProgressLevel::Error,
                 Some(format!(
@@ -510,7 +536,13 @@ where
                     err
                 )),
                 kubernetes.context().execution_id(),
-            ));
+            );
+
+            match action {
+                CheckAction::Deploy => listeners_helper.start_error(progress_info),
+                CheckAction::Pause => listeners_helper.pause_error(progress_info),
+                CheckAction::Delete => listeners_helper.delete_error(progress_info),
+            }
 
             let debug_logs = service.debug_logs(deployment_target);
             let debug_logs_string = if debug_logs.len() > 0 {
@@ -521,17 +553,23 @@ where
 
             info!("{}", debug_logs_string);
 
-            listeners_helper.error(ProgressInfo::new(
+            let progress_info = ProgressInfo::new(
                 service.progress_scope(),
                 ProgressLevel::Info,
                 Some(debug_logs_string),
                 kubernetes.context().execution_id(),
-            ));
+            );
+
+            match action {
+                CheckAction::Deploy => listeners_helper.start_error(progress_info),
+                CheckAction::Pause => listeners_helper.pause_error(progress_info),
+                CheckAction::Delete => listeners_helper.delete_error(progress_info),
+            }
 
             return Err(err);
         }
         _ => {
-            listeners_helper.start_in_progress(ProgressInfo::new(
+            let progress_info = ProgressInfo::new(
                 service.progress_scope(),
                 ProgressLevel::Info,
                 Some(format!(
@@ -541,7 +579,13 @@ where
                     service.name()
                 )),
                 kubernetes.context().execution_id(),
-            ));
+            );
+
+            match action {
+                CheckAction::Deploy => listeners_helper.start_in_progress(progress_info),
+                CheckAction::Pause => listeners_helper.pause_in_progress(progress_info),
+                CheckAction::Delete => listeners_helper.delete_in_progress(progress_info),
+            }
 
             Ok(())
         }

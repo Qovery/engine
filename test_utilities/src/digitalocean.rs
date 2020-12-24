@@ -68,7 +68,7 @@ pub fn do_kubernetes_ks<'a>(
     dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
 ) -> DOKS<'a> {
-    let mut file = File::open("tests/assets/do-options.json").expect("file not found");
+    let file = File::open("tests/assets/do-options.json").expect("file not found");
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     DOKS::<'a>::new(
         context.clone(),
