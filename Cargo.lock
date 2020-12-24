@@ -2746,6 +2746,7 @@ dependencies = [
  "qovery-engine",
  "rand 0.7.3",
  "reqwest 0.10.8",
+ "retry",
  "serde",
  "serde_derive",
  "serde_json",

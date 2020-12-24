@@ -18,6 +18,7 @@ curl = "0.4.34"
 reqwest = { version = "0.10.8", features = ["blocking"] }
 tracing = "0.1"
 tracing-subscriber = "0.2"
+retry = "1.0.0"
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"

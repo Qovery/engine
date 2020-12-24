@@ -1,13 +1,15 @@
-use std::fs::read_to_string;
+use std::fs::{read_to_string, File};
+use std::io::Write;
 
 use chrono::Utc;
 use retry::delay::Fibonacci;
-use retry::OperationResult;
+use retry::{Error, OperationResult};
 
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
-use crate::models::Context;
-use crate::object_storage::{FileContent, Kind, ObjectStorage};
+use crate::models::{Context, StringPath};
+use crate::object_storage::{Kind, ObjectStorage};
+use std::path::{Path, PathBuf};
 
 pub struct S3 {
     context: Context,
@@ -39,36 +41,6 @@ impl S3 {
             (AWS_ACCESS_KEY_ID, self.access_key_id.as_str()),
             (AWS_SECRET_ACCESS_KEY, self.secret_access_key.as_str()),
         ]
-    }
-
-    fn get_object<S>(&self, object_key: S) -> Result<FileContent, EngineError>
-    where
-        S: Into<String>,
-    {
-        // we choose to use the AWS CLI instead of Rusoto S3 due to reliability problems we faced.
-        let s3_url = format!("s3://{}", object_key.into());
-        let local_path = format!("/tmp/{}.s3object", Utc::now().timestamp_millis()); // FIXME: change hardcoded /tmp/
-
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            crate::cmd::utilities::exec_with_envs(
-                "aws",
-                vec!["s3", "cp", &s3_url, &local_path],
-                self.credentials_environment_variables(),
-            ),
-        )?;
-
-        match read_to_string(&local_path) {
-            Ok(file_content) => Ok(file_content),
-            Err(err) => {
-                let message = format!("{:?}", err);
-
-                error!("{}", message);
-
-                Err(self.engine_error(EngineErrorCause::Internal, message))
-            }
-        }
     }
 }
 
@@ -132,41 +104,68 @@ impl ObjectStorage for S3 {
         )
     }
 
-    fn get<S>(&self, object_key: S) -> Result<FileContent, EngineError>
+    fn get<T, S>(&self, bucket_name: T, object_key: S) -> Result<(StringPath, File), EngineError>
     where
+        T: Into<String>,
         S: Into<String>,
     {
+        let bucket_name = bucket_name.into();
         let object_key = object_key.into();
-        let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || match self
-            .get_object(object_key.as_str())
-        {
-            Ok(file_content) => OperationResult::Ok(file_content),
-            Err(err) => {
-                debug!("{:?}", err);
 
-                warn!(
-                    "Can't download object '{}'. Let's retry...",
-                    object_key.as_str()
-                );
+        let workspace_directory = crate::fs::workspace_directory(
+            self.context().workspace_root_dir(),
+            self.context().execution_id(),
+            format!("object-storage/s3/{}", self.name()),
+        );
 
-                OperationResult::Retry(err)
+        let s3_url = format!("s3://{}/{}", bucket_name.as_str(), object_key.as_str());
+        let file_path = format!(
+            "{}/{}/{}",
+            workspace_directory,
+            bucket_name.as_str(),
+            object_key.as_str()
+        );
+
+        let result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
+            // we choose to use the AWS CLI instead of Rusoto S3 due to reliability problems we faced.
+            let result = cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                crate::cmd::utilities::exec_with_envs(
+                    "aws",
+                    vec!["s3", "cp", s3_url.as_str(), file_path.as_str()],
+                    self.credentials_environment_variables(),
+                ),
+            );
+
+            match result {
+                Ok(_) => OperationResult::Ok(()),
+                Err(err) => {
+                    debug!("{:?}", err);
+
+                    warn!(
+                        "Can't download object '{}'. Let's retry...",
+                        object_key.as_str()
+                    );
+
+                    OperationResult::Retry(err)
+                }
             }
         });
 
-        let file_content = match file_content_result {
-            Ok(file_content) => file_content,
-            Err(_) => {
-                let message = "file content is empty (retry \
-                                             failed multiple times) - which is not the \
-                                             expected content - what's wrong?"
-                    .to_string();
-
-                error!("{}", message);
-
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
+        let file = match result {
+            Ok(_) => File::open(file_path.as_str()),
+            Err(err) => {
+                return match err {
+                    Error::Operation { error, .. } => Err(error),
+                    Error::Internal(err) => Err(self.engine_error(EngineErrorCause::Internal, err)),
+                };
             }
         };
 
-        Ok(file_content)
+        match file {
+            Ok(file) => Ok((file_path, file)),
+            Err(err) => Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err))),
+        }
     }
 }

@@ -4,7 +4,6 @@ extern crate serde_derive;
 use std::fs::File;
 
 use chrono::Utc;
-use dirs::home_dir;
 
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;

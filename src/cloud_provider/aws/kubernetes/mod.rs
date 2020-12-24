@@ -21,12 +21,11 @@ use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCa
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    ProgressScope, StringPath,
 };
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
-use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
 use std::io::Write;
 
 pub mod node;
@@ -429,76 +428,16 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
-    fn config_file(&self) -> Result<(String, File), EngineError> {
-        let object_key = format!("qovery-kubeconfigs-{}/{}.yaml", self.id(), self.id());
-        let file_content = self.s3.get(object_key)?;
-
-        let workspace_directory = workspace_directory(
-            self.context().workspace_root_dir(),
-            self.context().execution_id(),
-            format!("kubeconfigs/{}", self.name()),
-        );
-
-        let config_file_path = format!("{}/kubernetes_config_{}", workspace_directory, self.id());
-
-        // write file_content into a file
-        let mut file = match File::create(config_file_path.as_str()) {
-            Ok(file) => file,
-            Err(err) => {
-                let error = format!("{:?}", err);
-                return Err(self.engine_error(EngineErrorCause::Internal, error));
-            }
-        };
-
-        let _ = file.write_all(file_content.as_bytes());
-
-        Ok((config_file_path, file))
+    fn config_file(&self) -> Result<(StringPath, File), EngineError> {
+        self.s3.get(
+            format!("qovery-kubeconfigs-{}", self.id()),
+            format!("{}.yaml", self.id()),
+        )
     }
 
     fn config_file_path(&self) -> Result<String, EngineError> {
         let (path, _) = self.config_file()?;
         Ok(path)
-    }
-
-    fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
-        let kubernetes_config_file_path = self.config_file_path()?;
-
-        let nodes = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            cmd::kubectl::kubectl_exec_get_node(
-                kubernetes_config_file_path,
-                self.cloud_provider().credentials_environment_variables(),
-            ),
-        )?;
-
-        let mut resources = Resources {
-            free_cpu: 0.0,
-            max_cpu: 0.0,
-            free_ram_in_mib: 0,
-            max_ram_in_mib: 0,
-            free_pods: 0,
-            max_pods: 0,
-            running_nodes: 0,
-        };
-
-        for node in nodes.items {
-            resources.free_cpu += cpu_string_to_float(node.status.allocatable.cpu);
-            resources.max_cpu += cpu_string_to_float(node.status.capacity.cpu);
-            resources.free_ram_in_mib += ki_to_mi(node.status.allocatable.memory);
-            resources.max_ram_in_mib += ki_to_mi(node.status.capacity.memory);
-            resources.free_pods = match node.status.allocatable.pods.parse::<u16>() {
-                Ok(v) => v,
-                _ => 0,
-            };
-            resources.max_pods = match node.status.capacity.pods.parse::<u16>() {
-                Ok(v) => v,
-                _ => 0,
-            };
-            resources.running_nodes += 1;
-        }
-
-        Ok(resources)
     }
 
     fn on_create(&self) -> Result<(), EngineError> {

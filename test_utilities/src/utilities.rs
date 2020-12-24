@@ -1,15 +1,24 @@
+use std::fs::read_to_string;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
+use retry::delay::Fibonacci;
+use retry::OperationResult;
+use std::os::unix::fs::PermissionsExt;
 use tracing::Level;
 use tracing_subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cmd;
-use qovery_engine::error::SimpleError;
+use qovery_engine::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Metadata};
 
 use crate::aws::{aws_access_key_id, aws_secret_access_key, KUBE_CLUSTER_ID};
@@ -145,13 +154,7 @@ where
 
         match file_content {
             Ok(file_content) => OperationResult::Ok(file_content),
-            Err(err) => {
-                warn!(
-                    "Can't download the kubernetes config file {} stored on {}, please check access key and secrets",
-                    kubernetes_config_object_key, kubernetes_config_bucket_name
-                );
-                OperationResult::Retry(err)
-            }
+            Err(err) => OperationResult::Retry(err),
         }
     });
 
@@ -166,12 +169,12 @@ where
     };
 
     let mut kubernetes_config_file = File::create(file_path.as_ref())?;
-    let _ = kubernetes_config_file.write(file_content.as_bytes())?;
+    let _ = kubernetes_config_file.write_all(file_content.as_bytes())?;
     // removes warning kubeconfig is (world/group) readable
     let metadata = kubernetes_config_file.metadata()?;
     let mut permissions = metadata.permissions();
     permissions.set_mode(0o400);
-    fs::set_permissions(file_path.as_ref(), permissions)?;
+    std::fs::set_permissions(file_path.as_ref(), permissions)?;
     Ok(kubernetes_config_file)
 }
 
@@ -182,16 +185,16 @@ fn get_object_via_aws_cli(
     secret_access_key: &str,
     bucket_name: &str,
     object_key: &str,
-) -> Result<FileContent, SimpleError> {
+) -> Result<String, SimpleError> {
     let s3_url = format!("s3://{}/{}", bucket_name, object_key);
     let local_path = format!("/tmp/{}", object_key); // FIXME: change hardcoded /tmp/
 
-    exec_with_envs(
+    qovery_engine::cmd::utilities::exec_with_envs(
         "aws",
         vec!["s3", "cp", &s3_url, &local_path],
         vec![
-            (AWS_ACCESS_KEY_ID, &access_key_id),
-            (AWS_SECRET_ACCESS_KEY, &secret_access_key),
+            (AWS_ACCESS_KEY_ID, access_key_id),
+            (AWS_SECRET_ACCESS_KEY, secret_access_key),
         ],
     )?;
 

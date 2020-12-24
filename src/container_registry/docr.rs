@@ -202,11 +202,6 @@ impl DOCR {
         Ok(PushResult { image })
     }
 
-    fn get_or_create_repository(&self, _image: &Image) -> Result<(), EngineError> {
-        // TODO check if repository really exist
-        self.create_repository(&_image)
-    }
-
     pub fn delete_repository(&self, _image: &Image) -> Result<(), EngineError> {
         let headers = get_header_with_bearer(&self.api_key);
         let res = reqwest::blocking::Client::new()

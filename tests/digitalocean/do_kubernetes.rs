@@ -6,9 +6,7 @@ use std::io::Read;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
 use tracing::{error, span, Level};
 
-use qovery_engine::cloud_provider::digitalocean::common::{
-    get_uuid_of_cluster_from_name, kubernetes_config_path,
-};
+use qovery_engine::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::models::cluster::Clusters;
 use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_namespace};
@@ -20,6 +18,7 @@ use self::test_utilities::digitalocean::{
     get_kube_cluster_name_from_uuid,
 };
 use self::test_utilities::utilities::{generate_id, init};
+use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 
 #[test]
 fn create_doks_cluster_in_fra_10() {
@@ -84,13 +83,7 @@ fn create_doks_cluster_in_fra_10() {
 
     //TESTING: Kubeconfig DOWNLOAD
     //TODO: Fix the kubernetes_config_path fn
-    match kubernetes_config_path(
-        context.lib_root_dir().clone(),
-        cluster_id.clone(),
-        region.clone(),
-        digital_ocean_spaces_secret_key().as_str(),
-        digital_ocean_spaces_access_id().as_str(),
-    ) {
+    match kubernetes.config_file_path() {
         Ok(file) => {
             let do_credentials_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalo.token.as_str())];
             // testing kubeconfig file

@@ -183,13 +183,7 @@ impl Create for Application {
             ),
         )?;
 
-        let kubeconfig_path = common::kubernetes_config_path(
-            workspace_dir.as_str(),
-            kubernetes.id(),
-            kubernetes.region(),
-            digitalocean.spaces_secret_key.as_str(),
-            digitalocean.spaces_access_id.as_str(),
-        );
+        let kubeconfig_path = kubernetes.config_file_path();
 
         // define labels to add to namespace
         let namespace_labels = match self.context.resource_expiration_in_seconds() {

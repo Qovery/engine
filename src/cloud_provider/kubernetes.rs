@@ -9,8 +9,13 @@ use crate::cloud_provider::service::Service;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::dns_provider::DnsProvider;
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::error::{
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+};
+use crate::models::{
+    Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath,
+};
+use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;
@@ -25,9 +30,48 @@ pub trait Kubernetes: Listen {
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn config_file(&self) -> Result<(String, File), EngineError>;
+    fn config_file(&self) -> Result<(StringPath, File), EngineError>;
     fn config_file_path(&self) -> Result<String, EngineError>;
-    fn resources(&self, environment: &Environment) -> Result<Resources, EngineError>;
+    fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
+        let kubernetes_config_file_path = self.config_file_path()?;
+
+        let nodes = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context().execution_id(),
+            crate::cmd::kubectl::kubectl_exec_get_node(
+                kubernetes_config_file_path,
+                self.cloud_provider().credentials_environment_variables(),
+            ),
+        )?;
+
+        let mut resources = Resources {
+            free_cpu: 0.0,
+            max_cpu: 0.0,
+            free_ram_in_mib: 0,
+            max_ram_in_mib: 0,
+            free_pods: 0,
+            max_pods: 0,
+            running_nodes: 0,
+        };
+
+        for node in nodes.items {
+            resources.free_cpu += cpu_string_to_float(node.status.allocatable.cpu);
+            resources.max_cpu += cpu_string_to_float(node.status.capacity.cpu);
+            resources.free_ram_in_mib += ki_to_mi(node.status.allocatable.memory);
+            resources.max_ram_in_mib += ki_to_mi(node.status.capacity.memory);
+            resources.free_pods = match node.status.allocatable.pods.parse::<u16>() {
+                Ok(v) => v,
+                _ => 0,
+            };
+            resources.max_pods = match node.status.capacity.pods.parse::<u16>() {
+                Ok(v) => v,
+                _ => 0,
+            };
+            resources.running_nodes += 1;
+        }
+
+        Ok(resources)
+    }
     fn on_create(&self) -> Result<(), EngineError>;
     fn on_create_error(&self) -> Result<(), EngineError>;
     fn on_upgrade(&self) -> Result<(), EngineError>;

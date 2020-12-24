@@ -7,50 +7,11 @@ use std::os::unix::fs::PermissionsExt;
 use reqwest::StatusCode;
 
 use crate::cloud_provider::digitalocean::models::cluster::Clusters;
-use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::container_registry::docr::get_header_with_bearer;
 use crate::error::{SimpleError, SimpleErrorKind};
-use crate::object_storage::do_space::download_space_object;
 use crate::runtime;
 
 pub const DO_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/clusters";
-
-pub fn kubernetes_config_path(
-    workspace_directory: &str,
-    kubernetes_cluster_id: &str,
-    region: &str,
-    spaces_secret_key: &str,
-    spaces_access_id: &str,
-) -> Result<String, SimpleError> {
-    let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", kubernetes_cluster_id);
-    let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
-
-    let kubernetes_config_file_path = format!(
-        "{}/kubernetes_config_{}",
-        workspace_directory, kubernetes_cluster_id
-    );
-
-    // download kubeconfig file
-    let _ = runtime::async_run(download_space_object(
-        spaces_access_id,
-        spaces_secret_key,
-        kubernetes_config_bucket_name.as_str(),
-        kubernetes_config_object_key.as_str(),
-        region,
-        kubernetes_config_file_path.as_str().clone(),
-    ));
-
-    // removes warning kubeconfig is (world/group) readable
-    let file = File::open(kubernetes_config_file_path.clone().as_str())?;
-    let metadata = file.metadata()?;
-
-    let mut permissions = metadata.permissions();
-    permissions.set_mode(0o400);
-
-    fs::set_permissions(kubernetes_config_file_path.clone().as_str(), permissions)?;
-
-    Ok(kubernetes_config_file_path.clone())
-}
 
 // retrieve the digital ocean uuid of the kube cluster from our cluster name
 // each (terraform) apply may change the cluster uuid, so We need to retrieve it from the Digital Ocean API

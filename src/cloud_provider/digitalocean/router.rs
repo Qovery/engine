@@ -120,22 +120,7 @@ impl Router {
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
-        let workspace_dir = self.workspace_directory();
-        let digitalocean = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<DO>()
-            .unwrap();
-
-        let kubernetes_config_file_path = common::kubernetes_config_path(
-            workspace_dir.as_str(),
-            kubernetes.id(),
-            kubernetes.region(),
-            digitalocean.spaces_secret_key.as_str(),
-            digitalocean.spaces_access_id.as_str(),
-        );
-
-        let do_credentials_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalocean.token.as_str())];
+        let kubernetes_config_file_path = kubernetes.config_file_path();
 
         match kubernetes_config_file_path {
             Ok(kubernetes_config_file_path_string) => {
@@ -145,7 +130,9 @@ impl Router {
                         kubernetes_config_file_path_string.as_str(),
                         "nginx-ingress",
                         "app=nginx-ingress,component=controller",
-                        do_credentials_envs.clone(),
+                        kubernetes
+                            .cloud_provider()
+                            .credentials_environment_variables(),
                     );
 
                 match external_ingress_hostname_default {
@@ -170,7 +157,9 @@ impl Router {
                             kubernetes_config_file_path_string.as_str(),
                             environment.namespace(),
                             "app=nginx-ingress,component=controller",
-                            do_credentials_envs.clone(),
+                            kubernetes
+                                .cloud_provider()
+                                .credentials_environment_variables(),
                         );
 
                     match external_ingress_hostname_custom {
@@ -330,17 +319,7 @@ impl Create for Router {
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let kubernetes_config_file_path = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::kubernetes_config_path(
-                workspace_dir.as_str(),
-                kubernetes.id(),
-                kubernetes.region(),
-                digitalocean.spaces_secret_key.as_str(),
-                digitalocean.spaces_access_id.as_str(),
-            ),
-        )?;
+        let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
         // respect order - getting the context here and not before is mandatory
         // the nginx-ingress must be available to get the external dns target if necessary

@@ -962,3 +962,6 @@ impl Metadata {
         }
     }
 }
+
+/// Represent a String path instead of passing a PathBuf struct
+pub type StringPath = String;

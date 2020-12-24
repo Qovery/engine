@@ -16,8 +16,10 @@ use crate::error::{cast_simple_error_to_engine_error, EngineError};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    ProgressScope, StringPath,
 };
+use crate::object_storage::spaces::Spaces;
+use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
 
 pub mod cidr;
@@ -50,6 +52,7 @@ pub struct DOKS<'a> {
     cloud_provider: &'a DO,
     nodes: Vec<Node>,
     dns_provider: &'a dyn DnsProvider,
+    spaces: Spaces,
     template_directory: String,
     options: Options,
     listeners: Listeners,
@@ -69,6 +72,15 @@ impl<'a> DOKS<'a> {
     ) -> Self {
         let template_directory = format!("{}/digitalocean/bootstrap", context.lib_root_dir());
 
+        let spaces = Spaces::new(
+            context.clone(),
+            "spaces-temp-id".to_string(),
+            "my-spaces-object-storage".to_string(),
+            cloud_provider.spaces_access_id.clone(),
+            cloud_provider.spaces_secret_key.clone(),
+            "".to_string(),
+        );
+
         DOKS {
             context,
             id: id.to_string(),
@@ -77,15 +89,12 @@ impl<'a> DOKS<'a> {
             region: region.to_string(),
             cloud_provider,
             dns_provider,
+            spaces,
             options,
             nodes,
             template_directory,
             listeners: vec![],
         }
-    }
-
-    fn remove_whitespace(s: &mut String) {
-        s.retain(|c| !c.is_whitespace());
     }
 
     // create a context to render tf files (terraform) contained in lib/digitalocean/
@@ -108,10 +117,8 @@ impl<'a> DOKS<'a> {
         context.insert("oks_master_size", "s-4vcpu-8gb");
 
         // Network
-        let vpc_name = &self.options.vpc_name;
-        context.insert("vpc_name", vpc_name);
-        let vpc_cidr_block = self.options.vpc_cidr_block.clone();
-        context.insert("vpc_cidr_block", &vpc_cidr_block);
+        context.insert("vpc_name", self.options.vpc_name.as_str());
+        context.insert("vpc_cidr_block", self.options.vpc_cidr_block.as_str());
 
         // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
@@ -295,16 +302,16 @@ impl<'a> Kubernetes for DOKS<'a> {
         Ok(())
     }
 
-    fn config_file(&self) -> Result<(String, File), EngineError> {
-        unimplemented!()
+    fn config_file(&self) -> Result<(StringPath, File), EngineError> {
+        self.spaces.get(
+            format!("qovery-kubeconfigs-{}", self.id()),
+            format!("{}.yaml", self.id()),
+        )
     }
 
     fn config_file_path(&self) -> Result<String, EngineError> {
-        unimplemented!()
-    }
-
-    fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
-        unimplemented!()
+        let (path, _) = self.config_file()?;
+        Ok(path)
     }
 
     fn on_create(&self) -> Result<(), EngineError> {
