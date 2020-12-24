@@ -16,7 +16,7 @@ pub mod error;
 pub mod fs;
 pub mod git;
 pub mod models;
-mod object_storage;
+pub mod object_storage;
 mod runtime;
 pub mod session;
 mod string;
