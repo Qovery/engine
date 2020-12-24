@@ -3,6 +3,7 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::common::kubernetes::do_stateless_service_cleanup;
 use crate::cloud_provider::digitalocean::{common, DO};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -232,19 +233,9 @@ impl Router {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            common::do_stateless_service_cleanup(
-                kubernetes,
-                environment,
-                workspace_dir.as_str(),
-                helm_release_name.as_str(),
-            ),
-        )?;
+        let _ = do_stateless_service_cleanup(kubernetes, environment, helm_release_name.as_str())?;
 
         Ok(())
     }

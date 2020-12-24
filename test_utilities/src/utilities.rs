@@ -108,7 +108,7 @@ fn kubernetes_config_path(
         workspace_directory, kubernetes_cluster_id
     );
 
-    let _ = qovery_engine::s3::get_kubernetes_config_file(
+    let _ = get_kubernetes_config_file(
         access_key_id,
         secret_access_key,
         kubernetes_config_bucket_name.as_str(),
@@ -117,6 +117,86 @@ fn kubernetes_config_path(
     )?;
 
     Ok(kubernetes_config_file_path)
+}
+
+fn get_kubernetes_config_file<P>(
+    access_key_id: &str,
+    secret_access_key: &str,
+    kubernetes_config_bucket_name: &str,
+    kubernetes_config_object_key: &str,
+    file_path: P,
+) -> Result<File, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    // return the file if it already exists
+    let _ = match File::open(file_path.as_ref()) {
+        Ok(f) => return Ok(f),
+        Err(_) => {}
+    };
+
+    let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
+        let file_content = get_object_via_aws_cli(
+            access_key_id,
+            secret_access_key,
+            kubernetes_config_bucket_name,
+            kubernetes_config_object_key,
+        );
+
+        match file_content {
+            Ok(file_content) => OperationResult::Ok(file_content),
+            Err(err) => {
+                warn!(
+                    "Can't download the kubernetes config file {} stored on {}, please check access key and secrets",
+                    kubernetes_config_object_key, kubernetes_config_bucket_name
+                );
+                OperationResult::Retry(err)
+            }
+        }
+    });
+
+    let file_content = match file_content_result {
+        Ok(file_content) => file_content,
+        Err(_) => {
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some("file content is empty (retry failed multiple times) - which is not the expected content - what's wrong?"),
+            ));
+        }
+    };
+
+    let mut kubernetes_config_file = File::create(file_path.as_ref())?;
+    let _ = kubernetes_config_file.write(file_content.as_bytes())?;
+    // removes warning kubeconfig is (world/group) readable
+    let metadata = kubernetes_config_file.metadata()?;
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(0o400);
+    fs::set_permissions(file_path.as_ref(), permissions)?;
+    Ok(kubernetes_config_file)
+}
+
+/// gets an aws s3 object using aws-cli
+/// used as a failover when rusoto_s3 acts up
+fn get_object_via_aws_cli(
+    access_key_id: &str,
+    secret_access_key: &str,
+    bucket_name: &str,
+    object_key: &str,
+) -> Result<FileContent, SimpleError> {
+    let s3_url = format!("s3://{}/{}", bucket_name, object_key);
+    let local_path = format!("/tmp/{}", object_key); // FIXME: change hardcoded /tmp/
+
+    exec_with_envs(
+        "aws",
+        vec!["s3", "cp", &s3_url, &local_path],
+        vec![
+            (AWS_ACCESS_KEY_ID, &access_key_id),
+            (AWS_SECRET_ACCESS_KEY, &secret_access_key),
+        ],
+    )?;
+
+    let s = read_to_string(&local_path)?;
+    Ok(s)
 }
 
 pub fn is_pod_restarted_aws_env(

@@ -183,7 +183,7 @@ impl<'a> DOKS<'a> {
         );
 
         match self.dns_provider.kind() {
-            dns_provider::Kind::CLOUDFLARE => {
+            dns_provider::Kind::Cloudflare => {
                 context.insert("external_dns_provider", "cloudflare");
                 context.insert("cloudflare_api_token", self.dns_provider.token());
                 context.insert("cloudflare_email", self.dns_provider.account());

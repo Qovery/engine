@@ -43,6 +43,7 @@ pub enum EngineErrorScope {
     CloudProvider(Id, Name),
     Kubernetes(Id, Name),
     DnsProvider(Id, Name),
+    ObjectStorage(Id, Name),
     Environment(Id, Name),
     Database(Id, Type, Name),
     Application(Id, Name),

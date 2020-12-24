@@ -7,10 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 use reqwest::StatusCode;
 
 use crate::cloud_provider::digitalocean::models::cluster::Clusters;
-use crate::cloud_provider::digitalocean::DO;
-use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::container_registry::docr::get_header_with_bearer;
 use crate::error::{SimpleError, SimpleErrorKind};
 use crate::object_storage::do_space::download_space_object;
@@ -117,48 +114,4 @@ fn search_uuid_cluster_for(kube_name: &str, clusters: Clusters) -> Option<String
         }
     }
     None
-}
-
-pub fn do_stateless_service_cleanup(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-    workspace_dir: &str,
-    helm_release_name: &str,
-) -> Result<(), SimpleError> {
-    let digitalocean = kubernetes
-        .cloud_provider()
-        .as_any()
-        .downcast_ref::<DO>()
-        .unwrap();
-
-    let kubernetes_config_file_path = kubernetes_config_path(
-        workspace_dir,
-        environment.organization_id.as_str(),
-        kubernetes.id(),
-        digitalocean.spaces_secret_key.as_str(),
-        digitalocean.spaces_access_id.as_str(),
-    )?;
-
-    let do_credentials_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalocean.token.as_str())];
-
-    let history_rows = crate::cmd::helm::helm_exec_history(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        helm_release_name,
-        do_credentials_envs.clone(),
-    )?;
-
-    // if there is no valid history - then delete the helm chart
-    let first_valid_history_row = history_rows.iter().find(|x| x.is_successfully_deployed());
-
-    if first_valid_history_row.is_some() {
-        crate::cmd::helm::helm_exec_uninstall(
-            kubernetes_config_file_path.as_str(),
-            environment.namespace(),
-            helm_release_name,
-            do_credentials_envs,
-        )?;
-    }
-
-    Ok(())
 }

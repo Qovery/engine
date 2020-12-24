@@ -9,7 +9,7 @@ pub mod cloudflare;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Kind {
-    CLOUDFLARE,
+    Cloudflare,
 }
 
 pub trait DnsProvider {

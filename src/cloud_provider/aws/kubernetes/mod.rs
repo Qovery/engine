@@ -15,6 +15,7 @@ use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
+use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::fs::workspace_directory;
@@ -22,9 +23,11 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope,
 };
+use crate::object_storage::s3::S3;
+use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
 use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
-use crate::{dns_provider, s3};
+use std::io::Write;
 
 pub mod node;
 
@@ -74,6 +77,7 @@ pub struct EKS<'a> {
     region: Region,
     cloud_provider: &'a AWS,
     dns_provider: &'a dyn DnsProvider,
+    s3: S3,
     nodes: Vec<Node>,
     template_directory: String,
     options: Options,
@@ -94,6 +98,15 @@ impl<'a> EKS<'a> {
     ) -> Self {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
+        // TODO export this
+        let s3 = S3::new(
+            context.clone(),
+            "s3-temp-id".to_string(),
+            "default-s3".to_string(),
+            cloud_provider.access_key_id.clone(),
+            cloud_provider.secret_access_key.clone(),
+        );
+
         EKS {
             context,
             id: id.to_string(),
@@ -102,6 +115,7 @@ impl<'a> EKS<'a> {
             region: Region::from_str(region).unwrap(),
             cloud_provider,
             dns_provider,
+            s3,
             options,
             nodes,
             template_directory,
@@ -228,7 +242,7 @@ impl<'a> EKS<'a> {
         );
 
         match self.dns_provider.kind() {
-            dns_provider::Kind::CLOUDFLARE => {
+            dns_provider::Kind::Cloudflare => {
                 context.insert("external_dns_provider", "cloudflare");
                 context.insert("cloudflare_api_token", self.dns_provider.token());
                 context.insert("cloudflare_email", self.dns_provider.account());
@@ -416,8 +430,8 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn config_file(&self) -> Result<(String, File), EngineError> {
-        let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
-        let object_key = format!("{}.yaml", self.id());
+        let object_key = format!("qovery-kubeconfigs-{}/{}.yaml", self.id(), self.id());
+        let file_content = self.s3.get(object_key)?;
 
         let workspace_directory = workspace_directory(
             self.context().workspace_root_dir(),
@@ -427,17 +441,16 @@ impl<'a> Kubernetes for EKS<'a> {
 
         let config_file_path = format!("{}/kubernetes_config_{}", workspace_directory, self.id());
 
-        let file = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            crate::s3::get_kubernetes_config_file(
-                self.cloud_provider.access_key_id.as_str(),
-                self.cloud_provider.secret_access_key.as_str(),
-                bucket_name.as_str(),
-                object_key.as_str(),
-                config_file_path.as_str(),
-            ),
-        )?;
+        // write file_content into a file
+        let mut file = match File::create(config_file_path.as_str()) {
+            Ok(file) => file,
+            Err(err) => {
+                let error = format!("{:?}", err);
+                return Err(self.engine_error(EngineErrorCause::Internal, error));
+            }
+        };
+
+        let _ = file.write_all(file_content.as_bytes());
 
         Ok((config_file_path, file))
     }
@@ -720,13 +733,7 @@ impl<'a> Kubernetes for EKS<'a> {
             Ok(_) => {
                 info!("Deleting S3 Bucket containing Kubeconfig");
                 let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
-                let _region = Region::from_str(self.region()).unwrap();
-
-                let _ = s3::delete_bucket(
-                    self.cloud_provider.access_key_id.as_str(),
-                    self.cloud_provider.secret_access_key.as_str(),
-                    s3_kubeconfig_bucket.clone().as_str(),
-                );
+                let _ = self.s3.delete_bucket(s3_kubeconfig_bucket)?;
             }
             _ => {
                 error!("Something is wrong with terraform destroy, Kubeconfig S3 location will not be deleting preventing to loose kube accessibility");

@@ -5,7 +5,7 @@ use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use tokio::{fs::File, io};
 
-pub(crate) async fn download_space_object(
+pub async fn download_space_object(
     access_key_id: &str,
     secret_access_key: &str,
     bucket_name: &str,
@@ -24,6 +24,7 @@ pub(crate) async fn download_space_object(
                 name: region.to_string(),
                 endpoint: format!("https://{}.digitaloceanspaces.com", region),
             };
+
             let credentials = StaticProvider::new(
                 access_key_id.to_string(),
                 secret_access_key.to_string(),

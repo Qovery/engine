@@ -39,7 +39,7 @@ impl DnsProvider for Cloudflare {
     }
 
     fn kind(&self) -> Kind {
-        Kind::CLOUDFLARE
+        Kind::Cloudflare
     }
 
     fn id(&self) -> &str {
