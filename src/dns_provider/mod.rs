@@ -8,6 +8,7 @@ use crate::models::Context;
 pub mod cloudflare;
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Cloudflare,
 }
