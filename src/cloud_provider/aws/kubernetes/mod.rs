@@ -424,20 +424,12 @@ impl<'a> Kubernetes for EKS<'a> {
         self.dns_provider
     }
 
+    fn config_file_store(&self) -> &dyn ObjectStorage {
+        &self.s3
+    }
+
     fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
-    }
-
-    fn config_file(&self) -> Result<(StringPath, File), EngineError> {
-        self.s3.get(
-            format!("qovery-kubeconfigs-{}", self.id()),
-            format!("{}.yaml", self.id()),
-        )
-    }
-
-    fn config_file_path(&self) -> Result<String, EngineError> {
-        let (path, _) = self.config_file()?;
-        Ok(path)
     }
 
     fn on_create(&self) -> Result<(), EngineError> {
@@ -672,7 +664,7 @@ impl<'a> Kubernetes for EKS<'a> {
             Ok(_) => {
                 info!("Deleting S3 Bucket containing Kubeconfig");
                 let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
-                let _ = self.s3.delete_bucket(s3_kubeconfig_bucket)?;
+                let _ = self.s3.delete_bucket(s3_kubeconfig_bucket.as_str())?;
             }
             _ => {
                 error!("Something is wrong with terraform destroy, Kubeconfig S3 location will not be deleting preventing to loose kube accessibility");

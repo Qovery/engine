@@ -22,16 +22,9 @@ pub trait ObjectStorage {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn create_bucket<S>(&self, bucket_name: S) -> Result<(), EngineError>
-    where
-        S: Into<String>;
-    fn delete_bucket<S>(&self, bucket_name: S) -> Result<(), EngineError>
-    where
-        S: Into<String>;
-    fn get<T, S>(&self, bucket_name: T, object_key: S) -> Result<(StringPath, File), EngineError>
-    where
-        T: Into<String>,
-        S: Into<String>;
+    fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError>;
+    fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError>;
+    fn get(&self, bucket_name: &str, object_key: &str) -> Result<(StringPath, File), EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::ObjectStorage(self.id().to_string(), self.name().to_string())
     }

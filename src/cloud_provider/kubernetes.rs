@@ -15,7 +15,9 @@ use crate::error::{
 use crate::models::{
     Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath,
 };
+use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
+use std::os::unix::fs::PermissionsExt;
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;
@@ -29,9 +31,32 @@ pub trait Kubernetes: Listen {
     fn region(&self) -> &str;
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
+    fn config_file_store(&self) -> &dyn ObjectStorage;
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn config_file(&self) -> Result<(StringPath, File), EngineError>;
-    fn config_file_path(&self) -> Result<String, EngineError>;
+    fn config_file(&self) -> Result<(StringPath, File), EngineError> {
+        let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
+        let object_key = format!("{}.yaml", self.id());
+
+        let (string_path, mut file) = self
+            .config_file_store()
+            .get(bucket_name.as_str(), object_key.as_str())?;
+
+        let metadata = match file.metadata() {
+            Ok(metadata) => metadata,
+            Err(err) => {
+                return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
+            }
+        };
+
+        let mut permissions = metadata.permissions();
+        permissions.set_mode(0o400);
+
+        Ok((string_path, file))
+    }
+    fn config_file_path(&self) -> Result<String, EngineError> {
+        let (path, _) = self.config_file()?;
+        Ok(path)
+    }
     fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
         let kubernetes_config_file_path = self.config_file_path()?;
 
@@ -139,7 +164,7 @@ pub fn deploy_environment(
     };
 
     // do not deploy if there is not enough resources
-    check_kubernetes_has_enough_resources_to_deploy_environment(kubernetes, environment)?;
+    let _ = check_kubernetes_has_enough_resources_to_deploy_environment(kubernetes, environment)?;
 
     // create all stateful services (database)
     for service in &environment.stateful_services {

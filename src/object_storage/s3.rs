@@ -1,4 +1,4 @@
-use std::fs::{read_to_string, File};
+use std::fs::File;
 use std::io::Write;
 
 use chrono::Utc;
@@ -9,7 +9,6 @@ use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::models::{Context, StringPath};
 use crate::object_storage::{Kind, ObjectStorage};
-use std::path::{Path, PathBuf};
 
 pub struct S3 {
     context: Context,
@@ -66,27 +65,19 @@ impl ObjectStorage for S3 {
         Ok(())
     }
 
-    fn create_bucket<S>(&self, bucket_name: S) -> Result<(), EngineError>
-    where
-        S: Into<String>,
-    {
-        let bucket_name = bucket_name.into();
-
+    fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
         cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context().execution_id(),
             crate::cmd::utilities::exec_with_envs(
                 "aws",
-                vec!["s3api", "create-bucket", "--bucket", bucket_name.as_str()],
+                vec!["s3api", "create-bucket", "--bucket", bucket_name],
                 self.credentials_environment_variables(),
             ),
         )
     }
 
-    fn delete_bucket<S>(&self, bucket_name: S) -> Result<(), EngineError>
-    where
-        S: Into<String>,
-    {
+    fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
         cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context().execution_id(),
@@ -97,34 +88,22 @@ impl ObjectStorage for S3 {
                     "rb",
                     "--force",
                     "--bucket",
-                    format!("s3://{}", bucket_name.into()).as_str(),
+                    format!("s3://{}", bucket_name).as_str(),
                 ],
                 self.credentials_environment_variables(),
             ),
         )
     }
 
-    fn get<T, S>(&self, bucket_name: T, object_key: S) -> Result<(StringPath, File), EngineError>
-    where
-        T: Into<String>,
-        S: Into<String>,
-    {
-        let bucket_name = bucket_name.into();
-        let object_key = object_key.into();
-
+    fn get(&self, bucket_name: &str, object_key: &str) -> Result<(StringPath, File), EngineError> {
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),
             format!("object-storage/s3/{}", self.name()),
         );
 
-        let s3_url = format!("s3://{}/{}", bucket_name.as_str(), object_key.as_str());
-        let file_path = format!(
-            "{}/{}/{}",
-            workspace_directory,
-            bucket_name.as_str(),
-            object_key.as_str()
-        );
+        let s3_url = format!("s3://{}/{}", bucket_name, object_key);
+        let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
 
         let result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
             // we choose to use the AWS CLI instead of Rusoto S3 due to reliability problems we faced.
@@ -143,10 +122,7 @@ impl ObjectStorage for S3 {
                 Err(err) => {
                     debug!("{:?}", err);
 
-                    warn!(
-                        "Can't download object '{}'. Let's retry...",
-                        object_key.as_str()
-                    );
+                    warn!("Can't download object '{}'. Let's retry...", object_key);
 
                     OperationResult::Retry(err)
                 }

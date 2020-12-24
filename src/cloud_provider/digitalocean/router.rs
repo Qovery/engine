@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::common::kubernetes::do_stateless_service_cleanup;
-use crate::cloud_provider::digitalocean::{common, DO};
+use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{

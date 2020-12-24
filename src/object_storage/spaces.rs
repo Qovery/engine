@@ -1,7 +1,6 @@
-use std::fs::{read_to_string, File};
+use std::fs::File;
 use std::path::Path;
 
-use chrono::Utc;
 use retry::delay::Fibonacci;
 use retry::{Error, OperationResult};
 use rusoto_core::{Client, HttpClient, Region};
@@ -9,7 +8,7 @@ use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use tokio::io;
 
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{Context, StringPath};
 use crate::object_storage::{Kind, ObjectStorage};
 use crate::runtime;
@@ -120,56 +119,35 @@ impl ObjectStorage for Spaces {
         Ok(())
     }
 
-    fn create_bucket<S>(&self, bucket_name: S) -> Result<(), EngineError>
-    where
-        S: Into<String>,
-    {
+    fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn delete_bucket<S>(&self, bucket_name: S) -> Result<(), EngineError>
-    where
-        S: Into<String>,
-    {
+    fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn get<T, S>(&self, bucket_name: T, object_key: S) -> Result<(StringPath, File), EngineError>
-    where
-        T: Into<String>,
-        S: Into<String>,
-    {
-        let bucket_name = bucket_name.into();
-        let object_key = object_key.into();
-
+    fn get(&self, bucket_name: &str, object_key: &str) -> Result<(StringPath, File), EngineError> {
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),
             format!("object-storage/s3/{}", self.name()),
         );
 
-        let file_path = format!(
-            "{}/{}/{}",
-            workspace_directory,
-            bucket_name.as_str(),
-            object_key.as_str()
-        );
+        let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
 
         let result = retry::retry(
             Fibonacci::from_millis(3000).take(5),
             || match runtime::async_run(self.get_object(
-                bucket_name.as_str(),
-                object_key.as_str(),
+                bucket_name,
+                object_key,
                 file_path.as_str(),
             )) {
                 Ok(file) => OperationResult::Ok(file),
                 Err(err) => {
                     debug!("{:?}", err);
 
-                    warn!(
-                        "Can't download object '{}'. Let's retry...",
-                        object_key.as_str()
-                    );
+                    warn!("Can't download object '{}'. Let's retry...", object_key);
 
                     OperationResult::Retry(err)
                 }
@@ -190,23 +168,5 @@ impl ObjectStorage for Spaces {
             Ok(file) => Ok((file_path, file)),
             Err(err) => Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err))),
         }
-    }
-}
-
-// TODO to cleanup
-pub async fn download_space_object(
-    access_key_id: &str,
-    secret_access_key: &str,
-    bucket_name: &str,
-    object_key: &str,
-    region: &str,
-    path_to_download: &str,
-) {
-    match Path::new(path_to_download.clone()).exists() {
-        true => info!(
-            "File {} already exist, nothing to do",
-            path_to_download.clone()
-        ),
-        false => {}
     }
 }

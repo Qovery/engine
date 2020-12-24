@@ -8,7 +8,7 @@ use crate::cloud_provider::common::worker_node_data_template::WorkerNodeDataTemp
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode, Resources};
+use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
@@ -16,7 +16,7 @@ use crate::error::{cast_simple_error_to_engine_error, EngineError};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope, StringPath,
+    ProgressScope,
 };
 use crate::object_storage::spaces::Spaces;
 use crate::object_storage::ObjectStorage;
@@ -78,7 +78,7 @@ impl<'a> DOKS<'a> {
             "my-spaces-object-storage".to_string(),
             cloud_provider.spaces_access_id.clone(),
             cloud_provider.spaces_secret_key.clone(),
-            "".to_string(),
+            region.to_string(),
         );
 
         DOKS {
@@ -298,20 +298,12 @@ impl<'a> Kubernetes for DOKS<'a> {
         self.dns_provider
     }
 
+    fn config_file_store(&self) -> &dyn ObjectStorage {
+        &self.spaces
+    }
+
     fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
-    }
-
-    fn config_file(&self) -> Result<(StringPath, File), EngineError> {
-        self.spaces.get(
-            format!("qovery-kubeconfigs-{}", self.id()),
-            format!("{}.yaml", self.id()),
-        )
-    }
-
-    fn config_file_path(&self) -> Result<String, EngineError> {
-        let (path, _) = self.config_file()?;
-        Ok(path)
     }
 
     fn on_create(&self) -> Result<(), EngineError> {
