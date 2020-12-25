@@ -174,7 +174,7 @@ impl Application {
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
         match cloud_provider.kind() {
-            CPKind::AWS => Some(Box::new(
+            CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::application::Application::new(
                     context.clone(),
                     self.id.as_str(),
@@ -197,7 +197,7 @@ impl Application {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            CPKind::DO => Some(Box::new(
+            CPKind::Do => Some(Box::new(
                 crate::cloud_provider::digitalocean::application::Application::new(
                     context.clone(),
                     self.id.as_str(),
@@ -226,7 +226,7 @@ impl Application {
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
         match cloud_provider.kind() {
-            CPKind::AWS => Some(Box::new(
+            CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::application::Application::new(
                     context.clone(),
                     self.id.as_str(),
@@ -249,7 +249,7 @@ impl Application {
                         .collect::<Vec<_>>(),
                 ),
             )),
-            CPKind::DO => Some(Box::new(
+            CPKind::Do => Some(Box::new(
                 crate::cloud_provider::digitalocean::application::Application::new(
                     context.clone(),
                     self.id.as_str(),
@@ -407,7 +407,7 @@ impl Router {
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
         match cloud_provider.kind() {
-            CPKind::AWS => {
+            CPKind::Aws => {
                 let router: Box<dyn StatelessService> =
                     Box::new(crate::cloud_provider::aws::router::Router::new(
                         context.clone(),
@@ -431,7 +431,7 @@ impl Router {
                     ));
                 Some(router)
             }
-            CPKind::DO => {
+            CPKind::Do => {
                 let router: Box<dyn StatelessService> =
                     Box::new(crate::cloud_provider::digitalocean::router::Router::new(
                         context.clone(),
@@ -508,7 +508,7 @@ impl Database {
         };
 
         match cloud_provider.kind() {
-            CPKind::AWS => match self.kind {
+            CPKind::Aws => match self.kind {
                 DatabaseKind::Postgresql => {
                     let db: Box<dyn StatefulService> = Box::new(PostgreSQL::new(
                         context.clone(),
@@ -578,7 +578,7 @@ impl Database {
                     Some(db)
                 }
             },
-            CPKind::DO => None,
+            CPKind::Do => None,
         }
     }
 }
@@ -617,7 +617,7 @@ impl ExternalService {
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
         match cloud_provider.kind() {
-            CPKind::AWS => Some(Box::new(
+            CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::external_service::ExternalService::new(
                     context.clone(),
                     self.id.as_str(),
@@ -643,7 +643,7 @@ impl ExternalService {
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<(dyn crate::cloud_provider::service::StatelessService)>> {
         match cloud_provider.kind() {
-            CPKind::AWS => Some(Box::new(
+            CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::external_service::ExternalService::new(
                     context.clone(),
                     self.id.as_str(),

@@ -236,7 +236,7 @@ impl ContainerRegistry for ECR {
     }
 
     fn kind(&self) -> Kind {
-        Kind::ECR
+        Kind::Ecr
     }
 
     fn id(&self) -> &str {

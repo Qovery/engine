@@ -46,9 +46,10 @@ pub trait CloudProvider {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
-    AWS,
-    DO,
+    Aws,
+    Do,
 }
 
 pub struct TerraformStateCredentials {

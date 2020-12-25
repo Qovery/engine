@@ -397,7 +397,7 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn kind(&self) -> Kind {
-        Kind::EKS
+        Kind::Eks
     }
 
     fn id(&self) -> &str {

@@ -269,7 +269,7 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn kind(&self) -> Kind {
-        Kind::DOKS
+        Kind::Doks
     }
 
     fn id(&self) -> &str {

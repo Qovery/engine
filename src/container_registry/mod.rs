@@ -46,6 +46,6 @@ pub struct PushResult {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     DockerHub,
-    ECR,
-    DOCR,
+    Ecr,
+    Docr,
 }

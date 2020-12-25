@@ -263,7 +263,7 @@ impl ContainerRegistry for DOCR {
     }
 
     fn kind(&self) -> Kind {
-        Kind::DOCR
+        Kind::Docr
     }
 
     fn id(&self) -> &str {

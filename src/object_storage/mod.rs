@@ -7,12 +7,6 @@ use std::fs::File;
 pub mod s3;
 pub mod spaces;
 
-#[derive(Serialize, Deserialize, Clone)]
-pub enum Kind {
-    S3,
-    Spaces,
-}
-
 pub trait ObjectStorage {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
@@ -41,4 +35,11 @@ pub trait ObjectStorage {
             Some(message),
         )
     }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Kind {
+    S3,
+    Spaces,
 }

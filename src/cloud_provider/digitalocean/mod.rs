@@ -63,7 +63,7 @@ impl CloudProvider for DO {
     }
 
     fn kind(&self) -> Kind {
-        Kind::DO
+        Kind::Do
     }
 
     fn id(&self) -> &str {

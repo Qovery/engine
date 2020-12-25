@@ -69,7 +69,7 @@ impl CloudProvider for AWS {
     }
 
     fn kind(&self) -> Kind {
-        Kind::AWS
+        Kind::Aws
     }
 
     fn id(&self) -> &str {
