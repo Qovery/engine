@@ -406,20 +406,22 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        warn!("DOKS.pause_environment() called for {}", self.name());
+        info!("DOKS.pause_environment() called for {}", self.name());
         kubernetes::pause_environment(self, environment)
     }
 
     fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
+        warn!("DOKS.pause_environment_error() called for {}", self.name());
         Ok(())
     }
 
     fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        warn!("DOKS.delete_environment() called for {}", self.name());
+        info!("DOKS.delete_environment() called for {}", self.name());
         kubernetes::delete_environment(self, environment)
     }
 
     fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
+        warn!("DOKS.delete_environment_error() called for {}", self.name());
         Ok(())
     }
 }

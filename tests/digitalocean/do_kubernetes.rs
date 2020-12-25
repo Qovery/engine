@@ -37,7 +37,7 @@ fn create_doks_cluster_in_fra_10() {
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let digitalo = test_utilities::digitalocean::cloud_provider_digitalocean(&context);
+    let digitalocean = test_utilities::digitalocean::cloud_provider_digitalocean(&context);
     let nodes = test_utilities::digitalocean::do_kubernetes_nodes();
 
     let cloudflare = dns_provider_cloudflare(&context);
@@ -56,7 +56,7 @@ fn create_doks_cluster_in_fra_10() {
         cluster_name.clone(),
         DO_KUBERNETES_VERSION,
         region.clone(),
-        &digitalo,
+        &digitalocean,
         &cloudflare,
         options_result.expect("Oh my satan an error in test... Options options options"),
         nodes,
@@ -85,7 +85,7 @@ fn create_doks_cluster_in_fra_10() {
     //TODO: Fix the kubernetes_config_path fn
     match kubernetes.config_file_path() {
         Ok(file) => {
-            let do_credentials_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalo.token.as_str())];
+            let do_credentials_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalocean.token.as_str())];
             // testing kubeconfig file
             let namespace_to_test = generate_id();
             match kubectl_exec_create_namespace(

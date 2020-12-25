@@ -122,6 +122,10 @@ impl<'a> EKS<'a> {
         }
     }
 
+    fn kubeconfig_bucket_name(&self) -> String {
+        format!("qovery-kubeconfigs-{}", self.id())
+    }
+
     fn tera_context(&self) -> TeraContext {
         let format_ips = |ips: &Vec<String>| -> Vec<String> {
             ips.iter()
@@ -183,8 +187,6 @@ impl<'a> EKS<'a> {
                 min_size: nodes.len().to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
-
-        let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
 
         let qovery_api_url = self.options.qovery_api_url.clone();
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
@@ -293,7 +295,7 @@ impl<'a> EKS<'a> {
             "qovery-terrafom-tfstates",
         );
         context.insert("vpc_cidr_block", &vpc_cidr_block.clone());
-        context.insert("s3_kubeconfig_bucket", &s3_kubeconfig_bucket);
+        context.insert("s3_kubeconfig_bucket", &self.kubeconfig_bucket_name());
 
         // AWS - EKS
         context.insert("eks_cidr_subnet", &eks_cidr_subnet.clone());
@@ -663,7 +665,7 @@ impl<'a> Kubernetes for EKS<'a> {
         match terraform_result {
             Ok(_) => {
                 info!("Deleting S3 Bucket containing Kubeconfig");
-                let s3_kubeconfig_bucket = get_s3_kubeconfig_bucket_name(self.id.clone());
+                let s3_kubeconfig_bucket = self.kubeconfig_bucket_name();
                 let _ = self.s3.delete_bucket(s3_kubeconfig_bucket.as_str())?;
             }
             _ => {
@@ -721,8 +723,4 @@ impl<'a> Listen for EKS<'a> {
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
-}
-
-fn get_s3_kubeconfig_bucket_name(id: String) -> String {
-    format!("qovery-kubeconfigs-{}", id)
 }

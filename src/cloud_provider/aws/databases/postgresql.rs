@@ -388,6 +388,7 @@ impl Create for PostgreSQL {
                     "{}/common/chart_values/postgresql",
                     &self.context.lib_root_dir()
                 );
+
                 // default chart
                 let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
