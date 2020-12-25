@@ -33,7 +33,8 @@ pub fn init() {
         .with_max_level(Level::INFO)
         // build but do not install the subscriber.
         .finish();
-    collector.try_init();
+
+    let _ = collector.try_init();
 
     println!(
         "running from current directory: {}",

@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::str::FromStr;
 
 use itertools::Itertools;
@@ -10,7 +9,7 @@ use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::common::worker_node_data_template::WorkerNodeDataTemplate;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode, Resources};
+use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
@@ -21,12 +20,11 @@ use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCa
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope, StringPath,
+    ProgressScope,
 };
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
-use std::io::Write;
 
 pub mod node;
 

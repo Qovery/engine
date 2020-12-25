@@ -37,9 +37,9 @@ pub trait Kubernetes: Listen {
         let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
         let object_key = format!("{}.yaml", self.id());
 
-        let (string_path, mut file) = self
-            .config_file_store()
-            .get(bucket_name.as_str(), object_key.as_str())?;
+        let (string_path, mut file) =
+            self.config_file_store()
+                .get(bucket_name.as_str(), object_key.as_str(), true)?;
 
         let metadata = match file.metadata() {
             Ok(metadata) => metadata,

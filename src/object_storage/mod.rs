@@ -24,7 +24,12 @@ pub trait ObjectStorage {
     fn is_valid(&self) -> Result<(), EngineError>;
     fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError>;
     fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError>;
-    fn get(&self, bucket_name: &str, object_key: &str) -> Result<(StringPath, File), EngineError>;
+    fn get(
+        &self,
+        bucket_name: &str,
+        object_key: &str,
+        use_cache: bool,
+    ) -> Result<(StringPath, File), EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::ObjectStorage(self.id().to_string(), self.name().to_string())
     }

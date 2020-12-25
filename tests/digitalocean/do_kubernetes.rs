@@ -13,10 +13,7 @@ use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_de
 use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::digitalocean::{
-    digital_ocean_spaces_access_id, digital_ocean_spaces_secret_key, digital_ocean_token,
-    get_kube_cluster_name_from_uuid,
-};
+use self::test_utilities::digitalocean::{digital_ocean_token, get_kube_cluster_name_from_uuid};
 use self::test_utilities::utilities::{generate_id, init};
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 

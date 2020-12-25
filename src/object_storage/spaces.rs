@@ -127,7 +127,12 @@ impl ObjectStorage for Spaces {
         unimplemented!()
     }
 
-    fn get(&self, bucket_name: &str, object_key: &str) -> Result<(StringPath, File), EngineError> {
+    fn get(
+        &self,
+        bucket_name: &str,
+        object_key: &str,
+        use_cache: bool,
+    ) -> Result<(StringPath, File), EngineError> {
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),
@@ -136,6 +141,18 @@ impl ObjectStorage for Spaces {
 
         let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
 
+        if use_cache {
+            // does config file already exists?
+            match File::open(file_path.as_str()) {
+                Ok(file) => {
+                    debug!("{} cache hit", file_path.as_str());
+                    return Ok((file_path, file));
+                }
+                Err(_) => debug!("{} cache miss", file_path.as_str()),
+            }
+        }
+
+        // retrieve config file from object storage
         let result = retry::retry(
             Fibonacci::from_millis(3000).take(5),
             || match runtime::async_run(self.get_object(

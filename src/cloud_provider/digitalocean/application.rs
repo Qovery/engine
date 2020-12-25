@@ -3,7 +3,7 @@ use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
-use crate::cloud_provider::digitalocean::{common, DO};
+use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
