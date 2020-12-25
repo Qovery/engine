@@ -127,7 +127,7 @@ impl CloudProvider {
             };
 
         match self.kind {
-            qovery_engine::cloud_provider::Kind::AWS => Box::new(AWS::new(
+            qovery_engine::cloud_provider::Kind::Aws => Box::new(AWS::new(
                 context.clone(),
                 self.id.as_str(),
                 organization_id,
@@ -136,7 +136,7 @@ impl CloudProvider {
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
                 terraform_state_credentials,
             )),
-            qovery_engine::cloud_provider::Kind::DO => Box::new(DO::new(
+            qovery_engine::cloud_provider::Kind::Do => Box::new(DO::new(
                 context.clone(),
                 self.id.as_str(),
                 organization_id,
@@ -178,7 +178,7 @@ impl Kubernetes {
         nodes: &Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>>,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a> {
         match self.kind {
-            qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(EKS::new(
+            qovery_engine::cloud_provider::kubernetes::Kind::Eks => Box::new(EKS::new(
                 context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
@@ -199,7 +199,7 @@ impl Kubernetes {
                     })
                     .collect::<Vec<_>>(),
             )),
-            qovery_engine::cloud_provider::kubernetes::Kind::DOKS => Box::new(DOKS::new(
+            qovery_engine::cloud_provider::kubernetes::Kind::Doks => Box::new(DOKS::new(
                 context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
@@ -245,12 +245,12 @@ impl Node {
         kubernetes: &Kubernetes,
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode> {
         match kubernetes.kind {
-            qovery_engine::cloud_provider::kubernetes::Kind::EKS => Box::new(
+            qovery_engine::cloud_provider::kubernetes::Kind::Eks => Box::new(
                 qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(
                     &self.instance_type,
                 ),
             ),
-            qovery_engine::cloud_provider::kubernetes::Kind::DOKS => Box::new(
+            qovery_engine::cloud_provider::kubernetes::Kind::Doks => Box::new(
                 qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
                     &self.instance_type,
                 ),
@@ -281,7 +281,7 @@ impl ContainerRegistry {
                 self.options.login.as_ref().unwrap().as_str(),
                 self.options.password.as_ref().unwrap().as_str(),
             )),
-            qovery_engine::container_registry::Kind::ECR => Box::new(ECR::new(
+            qovery_engine::container_registry::Kind::Ecr => Box::new(ECR::new(
                 context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
@@ -289,7 +289,7 @@ impl ContainerRegistry {
                 self.options.secret_access_key.as_ref().unwrap().as_str(),
                 self.options.region.as_ref().unwrap().as_str(),
             )),
-            qovery_engine::container_registry::Kind::DOCR => Box::new(DOCR::new(
+            qovery_engine::container_registry::Kind::Docr => Box::new(DOCR::new(
                 context.clone(),
                 self.id.as_str(),
                 self.name.as_str(),
