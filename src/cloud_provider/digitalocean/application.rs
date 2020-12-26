@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
+use crate::cloud_provider::common::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
@@ -19,18 +19,6 @@ use crate::container_registry::docr::{
 };
 use crate::error::{cast_simple_error_to_engine_error, EngineError};
 use crate::models::Context;
-
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub struct EnvironmentVariable {
-    pub key: String,
-    pub value: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct EnvironmentVariableDataTemplate {
-    pub key: String,
-    pub value: String,
-}
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
@@ -109,7 +97,7 @@ impl Application {
 
         context.insert("environment_variables", &environment_variables);
 
-        // retreive the registry name
+        // retrieve the registry name
         let digitalocean = kubernetes
             .cloud_provider()
             .as_any()
@@ -128,6 +116,60 @@ impl Application {
         context.insert("start_timeout_in_seconds", &self.start_timeout_in_seconds);
 
         context
+    }
+}
+
+impl crate::cloud_provider::service::Application for Application {
+    fn image(&self) -> &Image {
+        &self.image
+    }
+
+    fn set_image(&mut self, image: Image) {
+        self.image = image;
+    }
+}
+
+impl StatelessService for Application {}
+
+impl Service for Application {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn service_type(&self) -> ServiceType {
+        ServiceType::Application
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        self.image.commit_id.as_str()
+    }
+
+    fn action(&self) -> &Action {
+        &self.action
+    }
+
+    fn private_port(&self) -> Option<u16> {
+        self.private_port
+    }
+
+    fn total_cpus(&self) -> String {
+        self.total_cpus.to_string()
+    }
+
+    fn total_ram_in_mib(&self) -> u32 {
+        self.total_ram_in_mib
+    }
+
+    fn total_instances(&self) -> u16 {
+        self.total_instances
     }
 }
 
@@ -156,13 +198,14 @@ impl Create for Application {
         let kube_name = kubernetes.name();
         let cluster_uuid_res =
             get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kube_name);
+
         match cluster_uuid_res {
             // ensure DO registry is linked to k8s cluster
             Ok(uuid) => match subscribe_kube_cluster_to_container_registry(
                 digitalocean.token.as_str(),
                 uuid.as_str(),
             ) {
-                Ok(_) => info!("Container registry is well linked with the Cluster "),
+                Ok(_) => info!("Container registry is well linked with the Cluster"),
                 Err(e) => error!("Unable to link cluster to registry {:?}", e.message),
             },
             Err(e) => error!("Unable to get cluster uuid {:?}", e.message),
@@ -273,63 +316,5 @@ impl Pause for Application {
 
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
-    }
-}
-
-impl crate::cloud_provider::service::Application for Application {
-    fn image(&self) -> &Image {
-        &self.image
-    }
-
-    fn set_image(&mut self, image: Image) {
-        self.image = image;
-    }
-}
-
-impl StatelessService for Application {}
-
-impl Service for Application {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn service_type(&self) -> ServiceType {
-        ServiceType::Application
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        self.image.commit_id.as_str()
-    }
-
-    fn action(&self) -> &Action {
-        &self.action
-    }
-
-    fn private_port(&self) -> Option<u16> {
-        self.private_port
-    }
-
-    fn total_cpus(&self) -> String {
-        self.total_cpus.to_string()
-    }
-
-    fn total_ram_in_mib(&self) -> u32 {
-        self.total_ram_in_mib
-    }
-
-    fn total_instances(&self) -> u16 {
-        self.total_instances
-    }
-
-    fn debug_logs(&self, _deployment_target: &DeploymentTarget) -> Vec<String> {
-        Vec::new()
     }
 }

@@ -8,7 +8,7 @@ use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listener};
 
 pub mod aws;
-mod common;
+pub(crate) mod common;
 pub mod digitalocean;
 pub mod environment;
 pub mod gcp;

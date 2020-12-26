@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::databases::utilities;
 use crate::cloud_provider::aws::databases::utilities::{
     generate_supported_version, get_tfstate_name, get_tfstate_suffix,
 };
-use crate::cloud_provider::aws::databases::{debug_logs, utilities};
 use crate::cloud_provider::common::kubernetes::do_stateless_service_cleanup;
 use crate::cloud_provider::environment::{Environment, Kind};
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -308,10 +308,6 @@ impl Service for MySQL {
 
     fn total_instances(&self) -> u16 {
         1
-    }
-
-    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
-        debug_logs(self, deployment_target)
     }
 }
 

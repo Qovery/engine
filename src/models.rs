@@ -193,7 +193,7 @@ impl Application {
                         .collect::<Vec<_>>(),
                     self.environment_variables
                         .iter()
-                        .map(|ev| ev.to_aws_application_environment_variable())
+                        .map(|ev| ev.to_environment_variable())
                         .collect::<Vec<_>>(),
                 ),
             )),
@@ -212,7 +212,7 @@ impl Application {
                     image.clone(),
                     self.environment_variables
                         .iter()
-                        .map(|ev| ev.to_do_application_environment_variable())
+                        .map(|ev| ev.to_environment_variable())
                         .collect::<Vec<_>>(),
                 ),
             )),
@@ -245,7 +245,7 @@ impl Application {
                         .collect::<Vec<_>>(),
                     self.environment_variables
                         .iter()
-                        .map(|ev| ev.to_aws_application_environment_variable())
+                        .map(|ev| ev.to_environment_variable())
                         .collect::<Vec<_>>(),
                 ),
             )),
@@ -264,7 +264,7 @@ impl Application {
                     image,
                     self.environment_variables
                         .iter()
-                        .map(|ev| ev.to_do_application_environment_variable())
+                        .map(|ev| ev.to_environment_variable())
                         .collect::<Vec<_>>(),
                 ),
             )),
@@ -317,28 +317,10 @@ pub struct EnvironmentVariable {
 }
 
 impl EnvironmentVariable {
-    pub fn to_aws_application_environment_variable(
+    pub fn to_environment_variable(
         &self,
-    ) -> crate::cloud_provider::aws::application::EnvironmentVariable {
-        crate::cloud_provider::aws::application::EnvironmentVariable {
-            key: self.key.clone(),
-            value: self.value.clone(),
-        }
-    }
-
-    pub fn to_do_application_environment_variable(
-        &self,
-    ) -> crate::cloud_provider::digitalocean::application::EnvironmentVariable {
-        crate::cloud_provider::digitalocean::application::EnvironmentVariable {
-            key: self.key.clone(),
-            value: self.value.clone(),
-        }
-    }
-
-    pub fn to_aws_external_service_environment_variable(
-        &self,
-    ) -> crate::cloud_provider::aws::external_service::EnvironmentVariable {
-        crate::cloud_provider::aws::external_service::EnvironmentVariable {
+    ) -> crate::cloud_provider::common::models::EnvironmentVariable {
+        crate::cloud_provider::common::models::EnvironmentVariable {
             key: self.key.clone(),
             value: self.value.clone(),
         }
@@ -372,8 +354,12 @@ pub enum StorageType {
 }
 
 impl Storage {
-    pub fn to_aws_storage(&self) -> crate::cloud_provider::aws::application::Storage {
-        crate::cloud_provider::aws::application::Storage {
+    pub fn to_aws_storage(
+        &self,
+    ) -> crate::cloud_provider::common::models::Storage<
+        crate::cloud_provider::aws::application::StorageType,
+    > {
+        crate::cloud_provider::common::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
             storage_type: match self.storage_type {
@@ -628,7 +614,7 @@ impl ExternalService {
                     image.clone(),
                     self.environment_variables
                         .iter()
-                        .map(|ev| ev.to_aws_external_service_environment_variable())
+                        .map(|ev| ev.to_environment_variable())
                         .collect::<Vec<_>>(),
                 ),
             )),
@@ -654,7 +640,7 @@ impl ExternalService {
                     image,
                     self.environment_variables
                         .iter()
-                        .map(|ev| ev.to_aws_external_service_environment_variable())
+                        .map(|ev| ev.to_environment_variable())
                         .collect::<Vec<_>>(),
                 ),
             )),

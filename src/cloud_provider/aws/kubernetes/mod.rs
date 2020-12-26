@@ -7,7 +7,7 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::AWS;
-use crate::cloud_provider::common::worker_node_data_template::WorkerNodeDataTemplate;
+use crate::cloud_provider::common::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::{kubernetes, CloudProvider};

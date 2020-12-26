@@ -1,7 +1,5 @@
 extern crate serde_json;
 
-use std::os::unix::fs::PermissionsExt;
-
 use reqwest::StatusCode;
 
 use crate::cloud_provider::digitalocean::models::cluster::Clusters;
@@ -33,7 +31,7 @@ pub fn get_uuid_of_cluster_from_name(
                         None => Err(SimpleError::new(
                             SimpleErrorKind::Other,
                             Some(
-                                "Unable to retrieve cluster id from this name",
+                                format!("Unable to retrieve cluster id from the cluster name {}", kube_cluster_name),
                             ),
                         ))
                     }
@@ -42,7 +40,7 @@ pub fn get_uuid_of_cluster_from_name(
                         Err(SimpleError::new(
                             SimpleErrorKind::Other,
                             Some(
-                                "While trying to deserialize json received from Digital Ocean API",
+                                "While trying to deserialize json received from Digital Ocean Kubernetes API",
                             ),
                         ))
                     }
@@ -51,14 +49,14 @@ pub fn get_uuid_of_cluster_from_name(
             _ => Err(SimpleError::new(
                 SimpleErrorKind::Other,
                 Some(
-                    "Receive weird status Code from Digital Ocean while retrieving the cluster list",
+                    "Receive unknown status code from Digital Ocean Kubernetes API while retrieving clusters list",
                 ),
             )),
         },
         Err(_) => {
             Err(SimpleError::new(
                 SimpleErrorKind::Other,
-                Some("Unable to get any responses from Digital Ocean"),
+                Some("Unable to get a response from Digital Ocean Kubernetes API"),
             ))
         }
     };

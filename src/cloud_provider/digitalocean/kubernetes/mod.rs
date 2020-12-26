@@ -2,7 +2,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::common::worker_node_data_template::WorkerNodeDataTemplate;
+use crate::cloud_provider::common::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;

@@ -1,10 +1,10 @@
-use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::common::kubernetes::{
     do_stateless_service_cleanup, get_stateless_resource_information,
 };
+use crate::cloud_provider::common::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
@@ -160,10 +160,6 @@ impl Service for ExternalService {
 
     fn total_instances(&self) -> u16 {
         1
-    }
-
-    fn debug_logs(&self, _deployment_target: &DeploymentTarget) -> Vec<String> {
-        Vec::new()
     }
 }
 
@@ -340,16 +336,4 @@ impl Delete for ExternalService {
         );
         self.delete(target, true)
     }
-}
-
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub struct EnvironmentVariable {
-    pub key: String,
-    pub value: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct EnvironmentVariableDataTemplate {
-    pub key: String,
-    pub value: String,
 }

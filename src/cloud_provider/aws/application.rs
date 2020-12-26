@@ -1,10 +1,11 @@
-use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::common::kubernetes::{
     do_stateless_service_cleanup, get_stateless_resource_information,
-    get_stateless_resource_information_for_user,
+};
+use crate::cloud_provider::common::models::{
+    EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -31,7 +32,7 @@ pub struct Application {
     total_instances: u16,
     start_timeout_in_seconds: u32,
     image: Image,
-    storage: Vec<Storage>,
+    storage: Vec<Storage<StorageType>>,
     environment_variables: Vec<EnvironmentVariable>,
 }
 
@@ -48,7 +49,7 @@ impl Application {
         total_instances: u16,
         start_timeout_in_seconds: u32,
         image: Image,
-        storage: Vec<Storage>,
+        storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
     ) -> Self {
         Application {
@@ -205,25 +206,6 @@ impl Service for Application {
 
     fn total_instances(&self) -> u16 {
         self.total_instances
-    }
-
-    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
-        let (kubernetes, environment) = match deployment_target {
-            DeploymentTarget::ManagedServices(k, e) => (*k, *e),
-            DeploymentTarget::SelfHosted(k, e) => (*k, *e),
-        };
-
-        match get_stateless_resource_information_for_user(kubernetes, environment, self) {
-            Ok(lines) => lines,
-            Err(err) => {
-                error!(
-                    "error while retrieving debug logs from application {}; error: {:?}",
-                    self.name(),
-                    err
-                );
-                Vec::new()
-            }
-        }
     }
 }
 
@@ -419,41 +401,9 @@ impl Delete for Application {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
-pub struct EnvironmentVariable {
-    pub key: String,
-    pub value: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct EnvironmentVariableDataTemplate {
-    pub key: String,
-    pub value: String,
-}
-
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub struct Storage {
-    pub id: String,
-    pub name: String,
-    pub storage_type: StorageType,
-    pub size_in_gib: u16,
-    pub mount_point: String,
-    pub snapshot_retention_in_days: u16,
-}
-
-#[derive(Clone, Eq, PartialEq, Hash)]
 pub enum StorageType {
     SC1,
     ST1,
     GP2,
     IO1,
-}
-
-#[derive(Serialize, Deserialize)]
-struct StorageDataTemplate {
-    pub id: String,
-    pub name: String,
-    pub storage_type: String,
-    pub size_in_gib: u16,
-    pub mount_point: String,
-    pub snapshot_retention_in_days: u16,
 }

@@ -7,6 +7,7 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::Resolver;
 
 use crate::build_platform::Image;
+use crate::cloud_provider::aws::databases::debug_logs;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
@@ -41,7 +42,9 @@ pub trait Service {
     fn total_cpus(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
-    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String>;
+    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
+        debug_logs(self, deployment_target)
+    }
     fn is_listening(&self, ip: &str) -> bool {
         let private_port = match self.private_port() {
             Some(private_port) => private_port,
@@ -147,6 +150,7 @@ pub trait Application: StatelessService {
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::Application(self.id().to_string(), self.name().to_string())
     }
+
     fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
         EngineError::new(
             cause,

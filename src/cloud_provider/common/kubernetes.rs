@@ -8,11 +8,14 @@ pub type Describe = String;
 
 /// return debug information line by line to help the user to understand what's going on,
 /// and why its app does not start
-pub fn get_stateless_resource_information_for_user(
+pub fn get_stateless_resource_information_for_user<T>(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
-    service: &dyn Service,
-) -> Result<Vec<String>, EngineError> {
+    service: &T,
+) -> Result<Vec<String>, EngineError>
+where
+    T: Service + ?Sized,
+{
     let selector = format!("app={}", service.name());
 
     let kubernetes_config_file_path = kubernetes.config_file_path()?;

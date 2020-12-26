@@ -270,10 +270,6 @@ impl Service for Router {
     fn total_instances(&self) -> u16 {
         1
     }
-
-    fn debug_logs(&self, _deployment_target: &DeploymentTarget) -> Vec<String> {
-        Vec::new()
-    }
 }
 
 impl crate::cloud_provider::service::Router for Router {

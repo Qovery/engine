@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::databases::utilities;
 use crate::cloud_provider::aws::databases::utilities::{
     generate_supported_version, get_tfstate_name, get_tfstate_suffix,
 };
-use crate::cloud_provider::aws::databases::{debug_logs, utilities};
 use crate::cloud_provider::common::kubernetes::do_stateless_service_cleanup;
 use crate::cloud_provider::environment::{Environment, Kind};
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -309,10 +309,6 @@ impl Service for PostgreSQL {
     fn total_instances(&self) -> u16 {
         1
     }
-
-    fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
-        debug_logs(self, deployment_target)
-    }
 }
 
 impl Database for PostgreSQL {}
@@ -384,6 +380,7 @@ impl Create for PostgreSQL {
 
                 let from_dir =
                     format!("{}/common/services/postgresql", self.context.lib_root_dir());
+
                 let chart_values = format!(
                     "{}/common/chart_values/postgresql",
                     &self.context.lib_root_dir()
@@ -399,6 +396,7 @@ impl Create for PostgreSQL {
                         &context,
                     ),
                 )?;
+
                 // overwrite with our chart values
                 let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
