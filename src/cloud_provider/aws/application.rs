@@ -1,7 +1,6 @@
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
@@ -12,7 +11,7 @@ use crate::cloud_provider::service::{
     StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
-use crate::error::{cast_simple_error_to_engine_error, EngineError};
+use crate::error::EngineError;
 use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]

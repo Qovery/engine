@@ -7,17 +7,15 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
-    Action, Application as CApplication, Create, Delete, Pause, Service, ServiceType,
+    delete_stateless_service, deploy_application, deploy_application_error, Action,
+    Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
     StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::helm::Timeout;
-use crate::cmd::structs::LabelsContent;
-use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::container_registry::docr::{
     get_current_registry_name, subscribe_kube_cluster_to_container_registry,
 };
-use crate::error::{cast_simple_error_to_engine_error, EngineError};
+use crate::error::{EngineError, EngineErrorCause};
 use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -67,11 +65,11 @@ impl Application {
         }
     }
 
-    fn helm_release_name(&self) -> String {
-        crate::string::cut(format!("application-{}-{}", self.name, self.id), 50)
-    }
-
-    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+    fn context(
+        &self,
+        kubernetes: &dyn Kubernetes,
+        environment: &Environment,
+    ) -> Result<TeraContext, EngineError> {
         let mut context = self.default_tera_context(kubernetes, environment);
         let commit_id = self.image.commit_id.as_str();
 
@@ -107,15 +105,19 @@ impl Application {
         let current_registry_name = get_current_registry_name(&digitalocean.token);
         match current_registry_name {
             Ok(registry_name) => context.insert("registry_name", &registry_name),
-            _ => error!("Unable to fetch the registry name !"),
+            Err(err) => {
+                error!("Unable to get the registry name !");
+                return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
+            }
         }
+
         let is_storage = false;
         context.insert("is_storage", &is_storage);
 
         context.insert("clone", &false);
         context.insert("start_timeout_in_seconds", &self.start_timeout_in_seconds);
 
-        context
+        Ok(context)
     }
 }
 
@@ -130,6 +132,12 @@ impl crate::cloud_provider::service::Application for Application {
 
     fn start_timeout_in_seconds(&self) -> u32 {
         self.start_timeout_in_seconds
+    }
+}
+
+impl Helm for Application {
+    fn helm_release_name(&self) -> String {
+        crate::string::cut(format!("application-{}-{}", self.name, self.id), 50)
     }
 }
 
@@ -179,10 +187,7 @@ impl Service for Application {
 
 impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!(
-            "DigitalOcean.application.on_create() called for {}",
-            self.name
-        );
+        info!("DO.application.on_create() called for {}", self.name);
 
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
@@ -195,13 +200,11 @@ impl Create for Application {
             .downcast_ref::<DO>()
             .unwrap();
 
-        let context = self.context(kubernetes, environment);
-        let workspace_dir = self.workspace_directory();
+        let context = self.context(kubernetes, environment)?;
 
         // retrieve the cluster uuid, useful to link DO registry to k8s cluster
-        let kube_name = kubernetes.name();
         let cluster_uuid_res =
-            get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kube_name);
+            get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
 
         match cluster_uuid_res {
             // ensure DO registry is linked to k8s cluster
@@ -215,110 +218,58 @@ impl Create for Application {
             Err(e) => error!("Unable to get cluster uuid {:?}", e.message),
         };
 
-        let from_dir = format!(
+        let charts_dir = format!(
             "{}/digitalocean/charts/q-application",
             self.context.lib_root_dir()
         );
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                from_dir.as_str(),
-                workspace_dir.as_str(),
-                &context,
-            ),
-        )?;
-
-        let kubeconfig_path = kubernetes.config_file_path();
-
-        // define labels to add to namespace
-        let namespace_labels = match self.context.resource_expiration_in_seconds() {
-            Some(_) => Some(vec![
-                (LabelsContent {
-                    name: "ttl".to_string(),
-                    value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
-                }),
-            ]),
-            None => None,
-        };
-
-        match kubeconfig_path {
-            Ok(path) => {
-                let helm_release_name = self.helm_release_name();
-                let digitalocean_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalocean.token.as_str())];
-
-                // create a namespace with labels if do not exists
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::cmd::kubectl::kubectl_exec_create_namespace(
-                        path.as_str(),
-                        environment.namespace(),
-                        namespace_labels,
-                        digitalocean_envs.clone(),
-                    ),
-                )?;
-
-                match crate::cmd::helm::helm_exec_with_upgrade_history(
-                    path.as_str(),
-                    environment.namespace(),
-                    helm_release_name.as_str(),
-                    workspace_dir.as_str(),
-                    Timeout::Value(self.start_timeout_in_seconds),
-                    digitalocean_envs.clone(),
-                ) {
-                    Ok(_) => {
-                        let selector = format!("app={}", self.name());
-                        let _ = crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
-                            path.as_str(),
-                            environment.namespace(),
-                            selector.as_str(),
-                            digitalocean_envs.clone(),
-                        );
-                    }
-                    Err(e) => error!("Helm upgrade {:?}", e.message),
-                }
-            }
-            Err(e) => error!("Retreiving the kubeconfig {:?}", e.message),
-        }
-
-        Ok(())
+        deploy_application(target, self, charts_dir.as_str(), &context)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        Ok(())
     }
 
-    fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-}
-
-impl Delete for Application {
-    fn on_delete(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_delete_check(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
+    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        warn!(
+            "DO.application.on_create_error() called for {}",
+            self.name()
+        );
+        deploy_application_error(target, self)
     }
 }
 
 impl Pause for Application {
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        info!("DO.application.on_pause() called for {}", self.name());
+        delete_stateless_service(target, self, false)
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
-        unimplemented!()
+        Ok(())
     }
 
-    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
+    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        warn!("DO.application.on_pause_error() called for {}", self.name());
+        delete_stateless_service(target, self, true)
+    }
+}
+
+impl Delete for Application {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        info!("DO.application.on_delete() called for {}", self.name());
+        delete_stateless_service(target, self, false)
+    }
+
+    fn on_delete_check(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        warn!(
+            "DO.application.on_delete_error() called for {}",
+            self.name()
+        );
+        delete_stateless_service(target, self, true)
     }
 }
