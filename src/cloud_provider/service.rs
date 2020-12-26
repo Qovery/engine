@@ -8,8 +8,8 @@ use trust_dns_resolver::Resolver;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{get_stateless_resource_information_for_user, Kubernetes};
-use crate::cloud_provider::DeploymentTarget;
+use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
 use crate::error::cast_simple_error_to_engine_error;
@@ -430,8 +430,7 @@ where
 
 /// deploy an app on Kubernetes
 pub fn deploy_application<T>(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
+    target: &DeploymentTarget,
     application: &T,
     charts_dir: &str,
     tera_context: &TeraContext,
@@ -439,6 +438,11 @@ pub fn deploy_application<T>(
 where
     T: Application + Helm,
 {
+    let (kubernetes, environment) = match target {
+        DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+    };
+
     let workspace_dir = application.workspace_directory();
 
     let _ = cast_simple_error_to_engine_error(
@@ -526,6 +530,391 @@ where
                 .credentials_environment_variables(),
         ),
     )?;
+
+    Ok(())
+}
+
+/// do specific operations on app deployment error
+pub fn deploy_application_error<T>(
+    target: &DeploymentTarget,
+    application: &T,
+) -> Result<(), EngineError>
+where
+    T: Application + Helm,
+{
+    let (kubernetes, environment) = match target {
+        DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+    };
+
+    let kubernetes_config_file_path = kubernetes.config_file_path()?;
+    let helm_release_name = application.helm_release_name();
+
+    let history_rows = cast_simple_error_to_engine_error(
+        application.engine_error_scope(),
+        application.context().execution_id(),
+        crate::cmd::helm::helm_exec_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name.as_str(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
+    )?;
+
+    if history_rows.len() == 1 {
+        cast_simple_error_to_engine_error(
+            application.engine_error_scope(),
+            application.context().execution_id(),
+            crate::cmd::helm::helm_exec_uninstall(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                helm_release_name.as_str(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
+            ),
+        )?;
+    }
+
+    Ok(())
+}
+
+pub fn delete_stateless_service<T>(
+    target: &DeploymentTarget,
+    application: &T,
+    is_error: bool,
+) -> Result<(), EngineError>
+where
+    T: Application + Helm,
+{
+    let (kubernetes, environment) = match target {
+        DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+    };
+
+    let helm_release_name = application.helm_release_name();
+    let selector = format!("app={}", application.name());
+
+    if is_error {
+        let _ = get_stateless_resource_information(kubernetes, environment, selector.as_str())?;
+    }
+
+    // clean the resource
+    let _ = do_stateless_service_cleanup(kubernetes, environment, helm_release_name.as_str())?;
+
+    Ok(())
+}
+
+pub enum CheckAction {
+    Deploy,
+    Pause,
+    Delete,
+}
+
+pub fn check_kubernetes_service_error<T>(
+    result: Result<(), EngineError>,
+    kubernetes: &dyn Kubernetes,
+    service: &Box<T>,
+    deployment_target: &DeploymentTarget,
+    listeners_helper: &ListenersHelper,
+    action_verb: &str,
+    action: CheckAction,
+) -> Result<(), EngineError>
+where
+    T: Service + ?Sized,
+{
+    let progress_info = ProgressInfo::new(
+        service.progress_scope(),
+        ProgressLevel::Info,
+        Some(format!(
+            "{} {} {}",
+            action_verb,
+            service.service_type().name().to_lowercase(),
+            service.name()
+        )),
+        kubernetes.context().execution_id(),
+    );
+
+    match action {
+        CheckAction::Deploy => listeners_helper.start_in_progress(progress_info),
+        CheckAction::Pause => listeners_helper.pause_in_progress(progress_info),
+        CheckAction::Delete => listeners_helper.delete_in_progress(progress_info),
+    }
+
+    match result {
+        Err(err) => {
+            error!(
+                "{} error with {} {} , id: {} => {:?}",
+                action_verb,
+                service.service_type().name(),
+                service.name(),
+                service.id(),
+                err
+            );
+
+            let progress_info = ProgressInfo::new(
+                service.progress_scope(),
+                ProgressLevel::Error,
+                Some(format!(
+                    "{} error {} {} : error => {:?}",
+                    action_verb,
+                    service.service_type().name().to_lowercase(),
+                    service.name(),
+                    err
+                )),
+                kubernetes.context().execution_id(),
+            );
+
+            match action {
+                CheckAction::Deploy => listeners_helper.start_error(progress_info),
+                CheckAction::Pause => listeners_helper.pause_error(progress_info),
+                CheckAction::Delete => listeners_helper.delete_error(progress_info),
+            }
+
+            let debug_logs = service.debug_logs(deployment_target);
+            let debug_logs_string = if debug_logs.len() > 0 {
+                debug_logs.join("\n")
+            } else {
+                String::from("<no debug logs>")
+            };
+
+            info!("{}", debug_logs_string);
+
+            let progress_info = ProgressInfo::new(
+                service.progress_scope(),
+                ProgressLevel::Info,
+                Some(debug_logs_string),
+                kubernetes.context().execution_id(),
+            );
+
+            match action {
+                CheckAction::Deploy => listeners_helper.start_error(progress_info),
+                CheckAction::Pause => listeners_helper.pause_error(progress_info),
+                CheckAction::Delete => listeners_helper.delete_error(progress_info),
+            }
+
+            return Err(err);
+        }
+        _ => {
+            let progress_info = ProgressInfo::new(
+                service.progress_scope(),
+                ProgressLevel::Info,
+                Some(format!(
+                    "{} succeeded for {} {}",
+                    action_verb,
+                    service.service_type().name().to_lowercase(),
+                    service.name()
+                )),
+                kubernetes.context().execution_id(),
+            );
+
+            match action {
+                CheckAction::Deploy => listeners_helper.start_in_progress(progress_info),
+                CheckAction::Pause => listeners_helper.pause_in_progress(progress_info),
+                CheckAction::Delete => listeners_helper.delete_in_progress(progress_info),
+            }
+
+            Ok(())
+        }
+    }
+}
+
+pub type Logs = String;
+pub type Describe = String;
+
+/// return debug information line by line to help the user to understand what's going on,
+/// and why its app does not start
+pub fn get_stateless_resource_information_for_user<T>(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+    service: &T,
+) -> Result<Vec<String>, EngineError>
+where
+    T: Service + ?Sized,
+{
+    let selector = format!("app={}", service.name());
+
+    let kubernetes_config_file_path = kubernetes.config_file_path()?;
+
+    let mut result = Vec::with_capacity(50);
+
+    // get logs
+    let logs = cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_logs(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            selector.as_str(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
+    )?;
+
+    let _ = result.extend(logs);
+
+    // get pod state
+    let pods = cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_get_pod(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            selector.as_str(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
+    )?;
+
+    for pod in pods.items {
+        for container_status in pod.status.container_statuses {
+            if let Some(last_state) = container_status.last_state {
+                if let Some(terminated) = last_state.terminated {
+                    if let Some(message) = terminated.message {
+                        result.push(format!("terminated state message: {}", message));
+                    }
+
+                    result.push(format!(
+                        "terminated state exit code: {}",
+                        terminated.exit_code
+                    ));
+                }
+
+                if let Some(waiting) = last_state.waiting {
+                    if let Some(message) = waiting.message {
+                        result.push(format!("waiting state message: {}", message));
+                    }
+                }
+            }
+        }
+    }
+
+    // get pod events
+    let events = cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_get_event(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+            "involvedObject.kind=Pod",
+        ),
+    )?;
+
+    let pod_name_start = format!("{}-", service.name());
+    for event in events.items {
+        if event.type_.to_lowercase() != "normal"
+            && event.involved_object.name.starts_with(&pod_name_start)
+        {
+            if let Some(message) = event.message {
+                result.push(format!("{}: {}", event.type_, message));
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// show different output (kubectl describe, log..) for debug purpose
+pub fn get_stateless_resource_information(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+    selector: &str,
+) -> Result<(Describe, Logs), EngineError> {
+    let kubernetes_config_file_path = kubernetes.config_file_path()?;
+
+    // exec describe pod...
+    let describe = match cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_describe_pod(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            selector,
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
+    ) {
+        Ok(output) => {
+            info!("{}", output);
+            output
+        }
+        Err(err) => {
+            error!("{:?}", err);
+            return Err(err);
+        }
+    };
+
+    // exec logs...
+    let logs = match cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_logs(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            selector,
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
+    ) {
+        Ok(output) => {
+            info!("{:?}", output);
+            output.join("\n")
+        }
+        Err(err) => {
+            error!("{:?}", err);
+            return Err(err);
+        }
+    };
+
+    Ok((describe, logs))
+}
+
+pub fn do_stateless_service_cleanup(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+    helm_release_name: &str,
+) -> Result<(), EngineError> {
+    let kubernetes_config_file_path = kubernetes.config_file_path()?;
+
+    let history_rows = cast_simple_error_to_engine_error(
+        kubernetes.engine_error_scope(),
+        kubernetes.context().execution_id(),
+        crate::cmd::helm::helm_exec_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name,
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
+    )?;
+
+    // if there is no valid history - then delete the helm chart
+    let first_valid_history_row = history_rows.iter().find(|x| x.is_successfully_deployed());
+
+    if first_valid_history_row.is_some() {
+        cast_simple_error_to_engine_error(
+            kubernetes.engine_error_scope(),
+            kubernetes.context().execution_id(),
+            crate::cmd::helm::helm_exec_uninstall(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                helm_release_name,
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
+            ),
+        )?;
+    }
 
     Ok(())
 }

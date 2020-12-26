@@ -5,9 +5,10 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{do_stateless_service_cleanup, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Action, Create, Delete, Pause, Router as RRouter, Service, ServiceType, StatelessService,
+    do_stateless_service_cleanup, Action, Create, Delete, Pause, Router as RRouter, Service,
+    ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;

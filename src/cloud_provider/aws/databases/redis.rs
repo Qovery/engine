@@ -5,10 +5,10 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::aws::databases::utilities;
 use crate::cloud_provider::aws::databases::utilities::{get_tfstate_name, get_tfstate_suffix};
 use crate::cloud_provider::environment::{Environment, Kind};
-use crate::cloud_provider::kubernetes::{do_stateless_service_cleanup, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{
-    Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Pause,
-    Service, ServiceType, StatefulService, Upgrade,
+    do_stateless_service_cleanup, Action, Backup, Create, Database, DatabaseOptions, DatabaseType,
+    Delete, Downgrade, Pause, Service, ServiceType, StatefulService, Upgrade,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;

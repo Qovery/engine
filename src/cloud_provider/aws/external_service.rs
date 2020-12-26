@@ -2,13 +2,11 @@ use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{
-    do_stateless_service_cleanup, get_stateless_resource_information, Kubernetes,
-};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
-    Action, Application as AApplication, Create, Delete, Pause, Service, ServiceType,
-    StatelessService,
+    do_stateless_service_cleanup, get_stateless_resource_information, Action,
+    Application as AApplication, Create, Delete, Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;

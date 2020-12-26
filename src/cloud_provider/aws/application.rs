@@ -2,15 +2,14 @@ use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{
-    do_stateless_service_cleanup, get_stateless_resource_information, Kubernetes,
-};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{
-    deploy_application, Action, Application as CApplication, Create, Delete, Helm, Pause, Service,
-    ServiceType, StatelessService,
+    delete_stateless_service, deploy_application, deploy_application_error, Action,
+    Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
+    StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::error::{cast_simple_error_to_engine_error, EngineError};
@@ -66,7 +65,12 @@ impl Application {
         }
     }
 
-    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+    fn context(&self, target: &DeploymentTarget) -> TeraContext {
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        };
+
         let mut context = self.default_tera_context(kubernetes, environment);
         let commit_id = self.image().commit_id.as_str();
 
@@ -126,25 +130,6 @@ impl Application {
         }
 
         context
-    }
-
-    fn delete(&self, target: &DeploymentTarget, is_error: bool) -> Result<(), EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let helm_release_name = self.helm_release_name();
-        let selector = format!("app={}", self.name());
-
-        if is_error {
-            let _ = get_stateless_resource_information(kubernetes, environment, selector.as_str())?;
-        }
-
-        // clean the resource
-        let _ = do_stateless_service_cleanup(kubernetes, environment, helm_release_name.as_str())?;
-
-        Ok(())
     }
 }
 
@@ -215,15 +200,9 @@ impl Service for Application {
 impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.application.on_create() called for {}", self.name());
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let context = self.context(kubernetes, environment);
+        let context = self.context(target);
         let charts_dir = format!("{}/aws/charts/q-application", self.context.lib_root_dir());
-
-        deploy_application(kubernetes, environment, self, charts_dir.as_str(), &context)
+        deploy_application(target, self, charts_dir.as_str(), &context)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -235,52 +214,14 @@ impl Create for Application {
             "AWS.application.on_create_error() called for {}",
             self.name()
         );
-
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let kubernetes_config_file_path = kubernetes.config_file_path()?;
-
-        let helm_release_name = self.helm_release_name();
-
-        let history_rows = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::cmd::helm::helm_exec_history(
-                kubernetes_config_file_path.as_str(),
-                environment.namespace(),
-                helm_release_name.as_str(),
-                kubernetes
-                    .cloud_provider()
-                    .credentials_environment_variables(),
-            ),
-        )?;
-
-        if history_rows.len() == 1 {
-            cast_simple_error_to_engine_error(
-                self.engine_error_scope(),
-                self.context.execution_id(),
-                crate::cmd::helm::helm_exec_uninstall(
-                    kubernetes_config_file_path.as_str(),
-                    environment.namespace(),
-                    helm_release_name.as_str(),
-                    kubernetes
-                        .cloud_provider()
-                        .credentials_environment_variables(),
-                ),
-            )?;
-        }
-
-        Ok(())
+        deploy_application_error(target, self)
     }
 }
 
 impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.application.on_pause() called for {}", self.name());
-        self.delete(target, false)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -292,14 +233,14 @@ impl Pause for Application {
             "AWS.application.on_pause_error() called for {}",
             self.name()
         );
-        self.delete(target, true)
+        delete_stateless_service(target, self, true)
     }
 }
 
 impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.application.on_delete() called for {}", self.name());
-        self.delete(target, false)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -311,7 +252,7 @@ impl Delete for Application {
             "AWS.application.on_delete_error() called for {}",
             self.name()
         );
-        self.delete(target, true)
+        delete_stateless_service(target, self, true)
     }
 }
 
