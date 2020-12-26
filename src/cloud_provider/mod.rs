@@ -8,11 +8,11 @@ use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listener};
 
 pub mod aws;
-pub(crate) mod common;
 pub mod digitalocean;
 pub mod environment;
 pub mod gcp;
 pub mod kubernetes;
+pub mod models;
 pub mod service;
 
 pub trait CloudProvider {

@@ -7,10 +7,12 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::Resolver;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::aws::databases::debug_logs;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::kubernetes::{get_stateless_resource_information_for_user, Kubernetes};
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::helm::Timeout;
+use crate::cmd::structs::LabelsContent;
+use crate::error::cast_simple_error_to_engine_error;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 
@@ -147,10 +149,10 @@ pub trait StatefulService:
 pub trait Application: StatelessService {
     fn image(&self) -> &Image;
     fn set_image(&mut self, image: Image);
+    fn start_timeout_in_seconds(&self) -> u32;
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::Application(self.id().to_string(), self.name().to_string())
     }
-
     fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
         EngineError::new(
             cause,
@@ -350,6 +352,10 @@ pub trait Downgrade {
     fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
 }
 
+pub trait Helm {
+    fn helm_release_name(&self) -> String;
+}
+
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub enum Action {
     Create,
@@ -398,4 +404,128 @@ impl<'a> ServiceType<'a> {
             ServiceType::Router => "Router",
         }
     }
+}
+
+pub fn debug_logs<T>(service: &T, deployment_target: &DeploymentTarget) -> Vec<String>
+where
+    T: Service + ?Sized,
+{
+    match deployment_target {
+        DeploymentTarget::ManagedServices(_, _) => Vec::new(), // TODO retrieve logs from managed service?
+        DeploymentTarget::SelfHosted(kubernetes, environment) => {
+            match get_stateless_resource_information_for_user(*kubernetes, *environment, service) {
+                Ok(lines) => lines,
+                Err(err) => {
+                    error!(
+                        "error while retrieving debug logs from database {}; error: {:?}",
+                        service.name(),
+                        err
+                    );
+                    Vec::new()
+                }
+            }
+        }
+    }
+}
+
+/// deploy an app on Kubernetes
+pub fn deploy_application<T>(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+    application: &T,
+    charts_dir: &str,
+    tera_context: &TeraContext,
+) -> Result<(), EngineError>
+where
+    T: Application + Helm,
+{
+    let workspace_dir = application.workspace_directory();
+
+    let _ = cast_simple_error_to_engine_error(
+        application.engine_error_scope(),
+        application.context().execution_id(),
+        crate::template::generate_and_copy_all_files_into_dir(
+            charts_dir,
+            workspace_dir.as_str(),
+            tera_context,
+        ),
+    )?;
+
+    let helm_release_name = application.helm_release_name();
+    let kubernetes_config_file_path = kubernetes.config_file_path()?;
+
+    // define labels to add to namespace
+    let namespace_labels = match application.context().resource_expiration_in_seconds() {
+        Some(_) => Some(vec![
+            (LabelsContent {
+                name: "ttl".to_string(),
+                value: format! {"{}", application.context().resource_expiration_in_seconds().unwrap()},
+            }),
+        ]),
+        None => None,
+    };
+
+    // create a namespace with labels if do not exists
+    let _ = cast_simple_error_to_engine_error(
+        application.engine_error_scope(),
+        application.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_create_namespace(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            namespace_labels,
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
+    )?;
+
+    // do exec helm upgrade and return the last deployment status
+    let helm_history_row = cast_simple_error_to_engine_error(
+        application.engine_error_scope(),
+        application.context().execution_id(),
+        crate::cmd::helm::helm_exec_with_upgrade_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name.as_str(),
+            workspace_dir.as_str(),
+            Timeout::Value(application.start_timeout_in_seconds()),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
+    )?;
+
+    // check deployment status
+    if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
+        return Err(application.engine_error(
+            EngineErrorCause::User(
+                "Your application didn't start for some reason. \
+                Are you sure your application is correctly running? You can give a try by running \
+                locally `qovery run`. You can also check the application log from the web \
+                interface or the CLI with `qovery log`",
+            ),
+            format!(
+                "Application {} has failed to start ⤬",
+                application.name_with_id()
+            ),
+        ));
+    }
+
+    // check app status
+    let selector = format!("app={}", application.name());
+
+    let _ = cast_simple_error_to_engine_error(
+        application.engine_error_scope(),
+        application.context().execution_id(),
+        crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            selector.as_str(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        ),
+    )?;
+
+    Ok(())
 }

@@ -399,6 +399,7 @@ impl ContainerRegistry for DOCR {
             self.registry_name.as_str(),
             image.name_with_tag()
         );
+
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let info_message = format!(
             "image {:?} does not exist into DOCR {} repository - let's upload it",
@@ -414,11 +415,14 @@ impl ContainerRegistry for DOCR {
             Some(info_message),
             self.context.execution_id(),
         ));
+
         self.push_image(dest, &image)
     }
 
-    fn push_error(&self, _image: &Image) -> Result<PushResult, EngineError> {
-        unimplemented!()
+    fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
+        Ok(PushResult {
+            image: image.clone(),
+        })
     }
 }
 

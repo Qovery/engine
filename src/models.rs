@@ -7,7 +7,10 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
-use crate::cloud_provider::aws::databases::{MongoDB, MySQL, PostgreSQL, Redis};
+use crate::cloud_provider::aws::databases::mongodb::MongoDB;
+use crate::cloud_provider::aws::databases::mysql::MySQL;
+use crate::cloud_provider::aws::databases::postgresql::PostgreSQL;
+use crate::cloud_provider::aws::databases::redis::Redis;
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
@@ -317,10 +320,8 @@ pub struct EnvironmentVariable {
 }
 
 impl EnvironmentVariable {
-    pub fn to_environment_variable(
-        &self,
-    ) -> crate::cloud_provider::common::models::EnvironmentVariable {
-        crate::cloud_provider::common::models::EnvironmentVariable {
+    pub fn to_environment_variable(&self) -> crate::cloud_provider::models::EnvironmentVariable {
+        crate::cloud_provider::models::EnvironmentVariable {
             key: self.key.clone(),
             value: self.value.clone(),
         }
@@ -356,10 +357,9 @@ pub enum StorageType {
 impl Storage {
     pub fn to_aws_storage(
         &self,
-    ) -> crate::cloud_provider::common::models::Storage<
-        crate::cloud_provider::aws::application::StorageType,
-    > {
-        crate::cloud_provider::common::models::Storage {
+    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::aws::application::StorageType>
+    {
+        crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
             storage_type: match self.storage_type {

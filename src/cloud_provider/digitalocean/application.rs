@@ -1,11 +1,11 @@
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::common::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
     Action, Application as CApplication, Create, Delete, Pause, Service, ServiceType,
     StatelessService,
@@ -126,6 +126,10 @@ impl crate::cloud_provider::service::Application for Application {
 
     fn set_image(&mut self, image: Image) {
         self.image = image;
+    }
+
+    fn start_timeout_in_seconds(&self) -> u32 {
+        self.start_timeout_in_seconds
     }
 }
 

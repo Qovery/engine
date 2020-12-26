@@ -1,12 +1,11 @@
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::common::kubernetes::{
-    do_stateless_service_cleanup, get_stateless_resource_information,
-};
-use crate::cloud_provider::common::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::kubernetes::{
+    do_stateless_service_cleanup, get_stateless_resource_information, Kubernetes,
+};
+use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
     Action, Application as AApplication, Create, Delete, Pause, Service, ServiceType,
     StatelessService,
@@ -116,6 +115,10 @@ impl crate::cloud_provider::service::Application for ExternalService {
 
     fn set_image(&mut self, image: Image) {
         self.image = image;
+    }
+
+    fn start_timeout_in_seconds(&self) -> u32 {
+        30 // TODO export this?
     }
 }
 

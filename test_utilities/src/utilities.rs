@@ -75,7 +75,7 @@ fn curl_path(path: &str) -> bool {
     easy.url(path).unwrap();
     let res = easy.perform();
     match res {
-        Ok(out) => return true,
+        Ok(_) => return true,
 
         Err(e) => {
             println!("TEST Error : while trying to call {}", e);
