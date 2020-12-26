@@ -13,7 +13,9 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::constants::DIGITAL_OCEAN_TOKEN;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+};
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
@@ -270,6 +272,10 @@ impl Service for Router {
     fn total_instances(&self) -> u16 {
         1
     }
+
+    fn engine_error_scope(&self) -> EngineErrorScope {
+        EngineErrorScope::Router(self.id().to_string(), self.name().to_string())
+    }
 }
 
 impl crate::cloud_provider::service::Router for Router {
@@ -294,7 +300,11 @@ impl Listen for Router {
     }
 }
 
-impl StatelessService for Router {}
+impl StatelessService for Router {
+    fn start_timeout(&self) -> Timeout<u32> {
+        Timeout::Default
+    }
+}
 
 impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {

@@ -14,7 +14,9 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::cmd::structs::LabelsContent;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, StringError};
+use crate::error::{
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, StringError,
+};
 use crate::models::Context;
 
 pub struct Redis {
@@ -282,6 +284,14 @@ impl Service for Redis {
 
     fn total_instances(&self) -> u16 {
         1
+    }
+
+    fn engine_error_scope(&self) -> EngineErrorScope {
+        EngineErrorScope::Database(
+            self.id().to_string(),
+            self.service_type().name().to_string(),
+            self.name().to_string(),
+        )
     }
 }
 

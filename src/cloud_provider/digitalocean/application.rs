@@ -7,15 +7,16 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
-    delete_stateless_service, deploy_application, deploy_application_error, Action,
+    delete_stateless_service, deploy_stateless_service, deploy_stateless_service_error, Action,
     Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
     StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::helm::Timeout;
 use crate::container_registry::docr::{
     get_current_registry_name, subscribe_kube_cluster_to_container_registry,
 };
-use crate::error::{EngineError, EngineErrorCause};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -129,10 +130,6 @@ impl crate::cloud_provider::service::Application for Application {
     fn set_image(&mut self, image: Image) {
         self.image = image;
     }
-
-    fn start_timeout_in_seconds(&self) -> u32 {
-        self.start_timeout_in_seconds
-    }
 }
 
 impl Helm for Application {
@@ -141,7 +138,11 @@ impl Helm for Application {
     }
 }
 
-impl StatelessService for Application {}
+impl StatelessService for Application {
+    fn start_timeout(&self) -> Timeout<u32> {
+        Timeout::Value(self.start_timeout_in_seconds)
+    }
+}
 
 impl Service for Application {
     fn context(&self) -> &Context {
@@ -183,6 +184,10 @@ impl Service for Application {
     fn total_instances(&self) -> u16 {
         self.total_instances
     }
+
+    fn engine_error_scope(&self) -> EngineErrorScope {
+        EngineErrorScope::Application(self.id().to_string(), self.name().to_string())
+    }
 }
 
 impl Create for Application {
@@ -223,7 +228,7 @@ impl Create for Application {
             self.context.lib_root_dir()
         );
 
-        deploy_application(target, self, charts_dir.as_str(), &context)
+        deploy_stateless_service(target, self, charts_dir.as_str(), &context)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -235,7 +240,7 @@ impl Create for Application {
             "DO.application.on_create_error() called for {}",
             self.name()
         );
-        deploy_application_error(target, self)
+        deploy_stateless_service_error(target, self)
     }
 }
 
