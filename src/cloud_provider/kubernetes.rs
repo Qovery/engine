@@ -6,7 +6,7 @@ use std::thread;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::service::{CheckAction, Service};
+use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::dns_provider::DnsProvider;

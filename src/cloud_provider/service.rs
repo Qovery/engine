@@ -9,7 +9,7 @@ use trust_dns_resolver::Resolver;
 use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
+use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::structs::LabelsContent;
 use crate::error::cast_simple_error_to_engine_error;
@@ -386,7 +386,7 @@ where
     }
 }
 
-/// deploy an app on Kubernetes
+/// deploy a stateless service (app, router, database...) on Kubernetes
 pub fn deploy_stateless_service<T>(
     target: &DeploymentTarget,
     stateless_service: &T,
@@ -467,7 +467,8 @@ where
                 interface or the CLI with `qovery log`",
             ),
             format!(
-                "Application {} has failed to start ⤬",
+                "{} {} has failed to start ⤬",
+                stateless_service.service_type().name(),
                 stateless_service.name_with_id()
             ),
         ));
@@ -492,7 +493,7 @@ where
     Ok(())
 }
 
-/// do specific operations on app deployment error
+/// do specific operations on a stateless service deployment error
 pub fn deploy_stateless_service_error<T>(
     target: &DeploymentTarget,
     stateless_service: &T,

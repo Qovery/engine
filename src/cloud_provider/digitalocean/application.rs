@@ -8,8 +8,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
     delete_stateless_service, deploy_stateless_service, deploy_stateless_service_error, Action,
-    Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
-    StatelessService,
+    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;

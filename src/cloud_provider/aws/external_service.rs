@@ -1,18 +1,15 @@
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
-    delete_stateless_service, deploy_stateless_service_error, Action, Application as AApplication,
-    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
+    delete_stateless_service, deploy_stateless_service, deploy_stateless_service_error, Action,
+    Application as AApplication, Create, Delete, Helm, Pause, Service, ServiceType,
+    StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
-};
+use crate::error::{EngineError, EngineErrorScope};
 use crate::models::Context;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -50,7 +47,12 @@ impl ExternalService {
         }
     }
 
-    fn context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+    fn context(&self, target: &DeploymentTarget) -> TeraContext {
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        };
+
         let mut context = self.default_tera_context(kubernetes, environment);
         let commit_id = self.image().commit_id.as_str();
 
@@ -159,83 +161,9 @@ impl Create for ExternalService {
             "AWS.external_service.on_create() called for {}",
             self.name()
         );
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let context = self.context(kubernetes, environment);
-        let workspace_dir = self.workspace_directory();
-
-        let from_dir = format!("{}/common/services/q-job", self.context.lib_root_dir());
-        let _ = cast_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                from_dir.as_str(),
-                workspace_dir.as_str(),
-                &context,
-            ),
-        )?;
-
-        // render
-        // TODO check the rendered files?
-        let helm_release_name = self.helm_release_name();
-        let kubernetes_config_file_path = kubernetes.config_file_path()?;
-
-        // do exec helm upgrade and return the last deployment status
-        let helm_history_row = cast_simple_error_to_engine_error(
-            crate::cloud_provider::service::ExternalService::engine_error_scope(self),
-            self.context.execution_id(),
-            crate::cmd::helm::helm_exec_with_upgrade_history(
-                kubernetes_config_file_path.as_str(),
-                environment.namespace(),
-                helm_release_name.as_str(),
-                workspace_dir.as_str(),
-                Timeout::Default,
-                kubernetes
-                    .cloud_provider()
-                    .credentials_environment_variables(),
-            ),
-        )?;
-
-        // check deployment status
-        if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(crate::cloud_provider::service::ExternalService::engine_error(self, EngineErrorCause::User(
-                "Your External Service didn't start for some reason. \
-                Are you sure your External Service is correctly running? You can give a try by running \
-                locally `docker run`. You can also check the External Service log from the web \
-                interface or the CLI with `qovery log`",
-            ), format!("External Service {} has failed to start ⤬", self.name_with_id()),
-            ));
-        }
-
-        // check job status
-        match crate::cmd::kubectl::kubectl_exec_is_job_ready_with_retry(
-            kubernetes_config_file_path.as_str(),
-            environment.namespace(),
-            self.name.as_str(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
-        ) {
-            Ok(Some(true)) => {}
-            _ => {
-                return Err(
-                    crate::cloud_provider::service::ExternalService::engine_error(
-                        self,
-                        EngineErrorCause::Internal,
-                        format!(
-                            "External Service {} with id {} failed to start after several retries",
-                            self.name(),
-                            self.id()
-                        ),
-                    ),
-                );
-            }
-        }
-
-        Ok(())
+        let context = self.context(target);
+        let charts_dir = format!("{}/common/services/q-job", self.context.lib_root_dir());
+        deploy_stateless_service(target, self, charts_dir.as_str(), &context)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {

@@ -176,6 +176,12 @@ impl Application {
         image: &Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
+        let environment_variables = self
+            .environment_variables
+            .iter()
+            .map(|ev| ev.to_environment_variable())
+            .collect::<Vec<_>>();
+
         match cloud_provider.kind() {
             CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::application::Application::new(
@@ -194,10 +200,7 @@ impl Application {
                         .iter()
                         .map(|s| s.to_aws_storage())
                         .collect::<Vec<_>>(),
-                    self.environment_variables
-                        .iter()
-                        .map(|ev| ev.to_environment_variable())
-                        .collect::<Vec<_>>(),
+                    environment_variables,
                 ),
             )),
             CPKind::Do => Some(Box::new(
@@ -213,10 +216,7 @@ impl Application {
                     self.total_instances,
                     self.start_timeout_in_seconds,
                     image.clone(),
-                    self.environment_variables
-                        .iter()
-                        .map(|ev| ev.to_environment_variable())
-                        .collect::<Vec<_>>(),
+                    environment_variables,
                 ),
             )),
         }
@@ -228,6 +228,12 @@ impl Application {
         image: Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
+        let environment_variables = self
+            .environment_variables
+            .iter()
+            .map(|ev| ev.to_environment_variable())
+            .collect::<Vec<_>>();
+
         match cloud_provider.kind() {
             CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::application::Application::new(
@@ -246,10 +252,7 @@ impl Application {
                         .iter()
                         .map(|s| s.to_aws_storage())
                         .collect::<Vec<_>>(),
-                    self.environment_variables
-                        .iter()
-                        .map(|ev| ev.to_environment_variable())
-                        .collect::<Vec<_>>(),
+                    environment_variables,
                 ),
             )),
             CPKind::Do => Some(Box::new(
@@ -265,10 +268,7 @@ impl Application {
                     self.total_instances,
                     self.start_timeout_in_seconds,
                     image,
-                    self.environment_variables
-                        .iter()
-                        .map(|ev| ev.to_environment_variable())
-                        .collect::<Vec<_>>(),
+                    environment_variables,
                 ),
             )),
         }
@@ -392,6 +392,24 @@ impl Router {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
+        let custom_domains = self
+            .custom_domains
+            .iter()
+            .map(|x| crate::cloud_provider::models::CustomDomain {
+                domain: x.domain.clone(),
+                target_domain: x.target_domain.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        let routes = self
+            .routes
+            .iter()
+            .map(|x| crate::cloud_provider::models::Route {
+                path: x.path.clone(),
+                application_name: x.application_name.clone(),
+            })
+            .collect::<Vec<_>>();
+
         match cloud_provider.kind() {
             CPKind::Aws => {
                 let router: Box<dyn StatelessService> =
@@ -400,20 +418,8 @@ impl Router {
                         self.id.as_str(),
                         self.name.as_str(),
                         self.default_domain.as_str(),
-                        self.custom_domains
-                            .iter()
-                            .map(|x| crate::cloud_provider::aws::router::CustomDomain {
-                                domain: x.domain.clone(),
-                                target_domain: x.target_domain.clone(),
-                            })
-                            .collect::<Vec<_>>(),
-                        self.routes
-                            .iter()
-                            .map(|x| crate::cloud_provider::aws::router::Route {
-                                path: x.path.clone(),
-                                application_name: x.application_name.clone(),
-                            })
-                            .collect::<Vec<_>>(),
+                        custom_domains,
+                        routes,
                     ));
                 Some(router)
             }
@@ -424,22 +430,8 @@ impl Router {
                         self.id.as_str(),
                         self.name.as_str(),
                         self.default_domain.as_str(),
-                        self.custom_domains
-                            .iter()
-                            .map(
-                                |x| crate::cloud_provider::digitalocean::router::CustomDomain {
-                                    domain: x.domain.clone(),
-                                    target_domain: x.target_domain.clone(),
-                                },
-                            )
-                            .collect::<Vec<_>>(),
-                        self.routes
-                            .iter()
-                            .map(|x| crate::cloud_provider::digitalocean::router::Route {
-                                path: x.path.clone(),
-                                application_name: x.application_name.clone(),
-                            })
-                            .collect::<Vec<_>>(),
+                        custom_domains,
+                        routes,
                     ));
                 Some(router)
             }
@@ -602,6 +594,12 @@ impl ExternalService {
         image: &Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
+        let environment_variables = self
+            .environment_variables
+            .iter()
+            .map(|ev| ev.to_environment_variable())
+            .collect::<Vec<_>>();
+
         match cloud_provider.kind() {
             CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::external_service::ExternalService::new(
@@ -612,10 +610,7 @@ impl ExternalService {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     image.clone(),
-                    self.environment_variables
-                        .iter()
-                        .map(|ev| ev.to_environment_variable())
-                        .collect::<Vec<_>>(),
+                    environment_variables,
                 ),
             )),
             _ => None,
@@ -628,6 +623,12 @@ impl ExternalService {
         image: Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<(dyn crate::cloud_provider::service::StatelessService)>> {
+        let environment_variables = self
+            .environment_variables
+            .iter()
+            .map(|ev| ev.to_environment_variable())
+            .collect::<Vec<_>>();
+
         match cloud_provider.kind() {
             CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::external_service::ExternalService::new(
@@ -638,10 +639,7 @@ impl ExternalService {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     image,
-                    self.environment_variables
-                        .iter()
-                        .map(|ev| ev.to_environment_variable())
-                        .collect::<Vec<_>>(),
+                    environment_variables,
                 ),
             )),
             _ => None,

@@ -1,12 +1,14 @@
 use retry::delay::Fibonacci;
 use retry::OperationResult;
-use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::models::{
+    CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate,
+};
 use crate::cloud_provider::service::{
-    do_stateless_service_cleanup, Action, Create, Delete, Pause, Router as RRouter, Service,
+    delete_stateless_service, Action, Create, Delete, Helm, Pause, Router as RRouter, Service,
     ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
@@ -44,10 +46,6 @@ impl Router {
             routes,
             listeners: vec![],
         }
-    }
-
-    fn helm_release_name(&self) -> String {
-        crate::string::cut(format!("router-{}", self.id()), 50)
     }
 
     fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
@@ -193,18 +191,6 @@ impl Router {
 
         context
     }
-
-    fn delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let helm_release_name = self.helm_release_name();
-        let _ = do_stateless_service_cleanup(kubernetes, environment, helm_release_name.as_str())?;
-
-        Ok(())
-    }
 }
 
 impl Service for Router {
@@ -262,6 +248,12 @@ impl crate::cloud_provider::service::Router for Router {
         }
 
         _domains
+    }
+}
+
+impl Helm for Router {
+    fn helm_release_name(&self) -> String {
+        crate::string::cut(format!("router-{}", self.id()), 50)
     }
 }
 
@@ -440,31 +432,30 @@ impl Create for Router {
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_create_error() called for {}", self.name());
-        self.delete(target)
+        delete_stateless_service(target, self, true)
     }
 }
 
 impl Pause for Router {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.router.on_pause() called for {}", self.name());
-        self.delete(target)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
-        warn!("AWS.router.on_pause_error() called for {}", self.name());
-        // TODO check resource has been cleaned?
         Ok(())
     }
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        self.delete(target)
+        warn!("AWS.router.on_pause_error() called for {}", self.name());
+        delete_stateless_service(target, self, true)
     }
 }
 
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.router.on_delete() called for {}", self.name());
-        self.delete(target)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -473,30 +464,6 @@ impl Delete for Router {
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_delete_error() called for {}", self.name());
-        self.delete(target)
+        delete_stateless_service(target, self, true)
     }
-}
-
-pub struct CustomDomain {
-    pub domain: String,
-    pub target_domain: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct CustomDomainDataTemplate {
-    pub domain: String,
-    pub domain_hash: String,
-    pub target_domain: String,
-}
-
-pub struct Route {
-    pub path: String,
-    pub application_name: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct RouteDataTemplate {
-    pub path: String,
-    pub application_name: String,
-    pub application_port: u16,
 }

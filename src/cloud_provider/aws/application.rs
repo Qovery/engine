@@ -1,7 +1,6 @@
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
