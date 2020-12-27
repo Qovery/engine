@@ -199,7 +199,7 @@ pub trait Router: StatelessService + Listen {
                 self.context().execution_id(),
             ));
 
-            let fixed_iterable = Fixed::from_millis(3000).take(100);
+            let fixed_iterable = Fixed::from_millis(3000).take(20);
             let check_result = retry::retry(fixed_iterable, || match resolver.lookup_ip(domain) {
                 Ok(lookup_ip) => OperationResult::Ok(lookup_ip),
                 Err(err) => {
