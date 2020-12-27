@@ -7,8 +7,8 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
-    delete_stateless_service, deploy_stateless_service, deploy_stateless_service_error, Action,
-    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
+    delete_service, deploy_service_error, deploy_user_service, Action, Create, Delete, Helm, Pause,
+    Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -137,11 +137,7 @@ impl Helm for Application {
     }
 }
 
-impl StatelessService for Application {
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Value(self.start_timeout_in_seconds)
-    }
-}
+impl StatelessService for Application {}
 
 impl Service for Application {
     fn context(&self) -> &Context {
@@ -170,6 +166,10 @@ impl Service for Application {
 
     fn private_port(&self) -> Option<u16> {
         self.private_port
+    }
+
+    fn start_timeout(&self) -> Timeout<u32> {
+        Timeout::Value(self.start_timeout_in_seconds)
     }
 
     fn total_cpus(&self) -> String {
@@ -227,7 +227,7 @@ impl Create for Application {
             self.context.lib_root_dir()
         );
 
-        deploy_stateless_service(target, self, charts_dir.as_str(), &context)
+        deploy_user_service(target, self, charts_dir.as_str(), &context)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -239,14 +239,14 @@ impl Create for Application {
             "DO.application.on_create_error() called for {}",
             self.name()
         );
-        deploy_stateless_service_error(target, self)
+        deploy_service_error(target, self)
     }
 }
 
 impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.application.on_pause() called for {}", self.name());
-        delete_stateless_service(target, self, false)
+        delete_service(target, self, false)
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -255,14 +255,14 @@ impl Pause for Application {
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("DO.application.on_pause_error() called for {}", self.name());
-        delete_stateless_service(target, self, true)
+        delete_service(target, self, true)
     }
 }
 
 impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.application.on_delete() called for {}", self.name());
-        delete_stateless_service(target, self, false)
+        delete_service(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -274,6 +274,6 @@ impl Delete for Application {
             "DO.application.on_delete_error() called for {}",
             self.name()
         );
-        delete_stateless_service(target, self, true)
+        delete_service(target, self, true)
     }
 }

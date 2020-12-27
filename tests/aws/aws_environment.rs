@@ -85,7 +85,7 @@ pub fn delete_environment(
     let dns_provider = dns_provider_cloudflare(context);
     let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
-    tx.delete_environment(&k, &environment_action);
+    let _ = tx.delete_environment(&k, &environment_action);
 
     tx.commit()
 }

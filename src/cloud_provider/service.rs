@@ -41,6 +41,7 @@ pub trait Service {
     fn version(&self) -> &str;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
+    fn start_timeout(&self) -> Timeout<u32>;
     fn total_cpus(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
@@ -131,7 +132,6 @@ pub trait Service {
 }
 
 pub trait StatelessService: Service + Create + Pause + Delete {
-    fn start_timeout(&self) -> Timeout<u32>;
     fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
         match self.action() {
             crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
@@ -386,26 +386,59 @@ where
     }
 }
 
-/// deploy a stateless service (app, router, database...) on Kubernetes
-pub fn deploy_stateless_service<T>(
+/// deploy a stateless service created by the user (E.g: App or External Service)
+/// the difference with `deploy_service(..)` is that this function provides the thrown error in case of failure
+pub fn deploy_user_service<T>(
     target: &DeploymentTarget,
-    stateless_service: &T,
+    service: &T,
     charts_dir: &str,
     tera_context: &TeraContext,
 ) -> Result<(), EngineError>
 where
-    T: StatelessService + Helm,
+    T: Service + Helm,
+{
+    deploy_service(
+        target,
+        service,
+        charts_dir,
+        tera_context,
+        service.engine_error(
+            EngineErrorCause::User(
+                "Your application didn't start for some reason. \
+                Are you sure your application is correctly running? You can give a try by running \
+                locally `qovery run`. You can also check the application log from the web \
+                interface or the CLI with `qovery log`",
+            ),
+            format!(
+                "{} {} has failed to start ⤬",
+                service.service_type().name(),
+                service.name_with_id()
+            ),
+        ),
+    )
+}
+
+/// deploy a stateless service (app, router, database...) on Kubernetes
+pub fn deploy_service<T>(
+    target: &DeploymentTarget,
+    service: &T,
+    charts_dir: &str,
+    tera_context: &TeraContext,
+    thrown_error: EngineError,
+) -> Result<(), EngineError>
+where
+    T: Service + Helm,
 {
     let (kubernetes, environment) = match target {
         DeploymentTarget::ManagedServices(k, env) => (*k, *env),
         DeploymentTarget::SelfHosted(k, env) => (*k, *env),
     };
 
-    let workspace_dir = stateless_service.workspace_directory();
+    let workspace_dir = service.workspace_directory();
 
     let _ = cast_simple_error_to_engine_error(
-        stateless_service.engine_error_scope(),
-        stateless_service.context().execution_id(),
+        service.engine_error_scope(),
+        service.context().execution_id(),
         crate::template::generate_and_copy_all_files_into_dir(
             charts_dir,
             workspace_dir.as_str(),
@@ -413,15 +446,15 @@ where
         ),
     )?;
 
-    let helm_release_name = stateless_service.helm_release_name();
+    let helm_release_name = service.helm_release_name();
     let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
     // define labels to add to namespace
-    let namespace_labels = match stateless_service.context().resource_expiration_in_seconds() {
+    let namespace_labels = match service.context().resource_expiration_in_seconds() {
         Some(_) => Some(vec![
             (LabelsContent {
                 name: "ttl".to_string(),
-                value: format! {"{}", stateless_service.context().resource_expiration_in_seconds().unwrap()},
+                value: format! {"{}", service.context().resource_expiration_in_seconds().unwrap()},
             }),
         ]),
         None => None,
@@ -429,8 +462,8 @@ where
 
     // create a namespace with labels if do not exists
     let _ = cast_simple_error_to_engine_error(
-        stateless_service.engine_error_scope(),
-        stateless_service.context().execution_id(),
+        service.engine_error_scope(),
+        service.context().execution_id(),
         crate::cmd::kubectl::kubectl_exec_create_namespace(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
@@ -443,14 +476,14 @@ where
 
     // do exec helm upgrade and return the last deployment status
     let helm_history_row = cast_simple_error_to_engine_error(
-        stateless_service.engine_error_scope(),
-        stateless_service.context().execution_id(),
+        service.engine_error_scope(),
+        service.context().execution_id(),
         crate::cmd::helm::helm_exec_with_upgrade_history(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
             workspace_dir.as_str(),
-            stateless_service.start_timeout(),
+            service.start_timeout(),
             kubernetes
                 .cloud_provider()
                 .credentials_environment_variables(),
@@ -459,27 +492,15 @@ where
 
     // check deployment status
     if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-        return Err(stateless_service.engine_error(
-            EngineErrorCause::User(
-                "Your application didn't start for some reason. \
-                Are you sure your application is correctly running? You can give a try by running \
-                locally `qovery run`. You can also check the application log from the web \
-                interface or the CLI with `qovery log`",
-            ),
-            format!(
-                "{} {} has failed to start ⤬",
-                stateless_service.service_type().name(),
-                stateless_service.name_with_id()
-            ),
-        ));
+        return Err(thrown_error);
     }
 
     // check app status
-    let selector = format!("app={}", stateless_service.name());
+    let selector = format!("app={}", service.name());
 
     let _ = cast_simple_error_to_engine_error(
-        stateless_service.engine_error_scope(),
-        stateless_service.context().execution_id(),
+        service.engine_error_scope(),
+        service.context().execution_id(),
         crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
@@ -494,12 +515,9 @@ where
 }
 
 /// do specific operations on a stateless service deployment error
-pub fn deploy_stateless_service_error<T>(
-    target: &DeploymentTarget,
-    stateless_service: &T,
-) -> Result<(), EngineError>
+pub fn deploy_service_error<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
 where
-    T: StatelessService + Helm,
+    T: Service + Helm,
 {
     let (kubernetes, environment) = match target {
         DeploymentTarget::ManagedServices(k, env) => (*k, *env),
@@ -507,11 +525,11 @@ where
     };
 
     let kubernetes_config_file_path = kubernetes.config_file_path()?;
-    let helm_release_name = stateless_service.helm_release_name();
+    let helm_release_name = service.helm_release_name();
 
     let history_rows = cast_simple_error_to_engine_error(
-        stateless_service.engine_error_scope(),
-        stateless_service.context().execution_id(),
+        service.engine_error_scope(),
+        service.context().execution_id(),
         crate::cmd::helm::helm_exec_history(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
@@ -524,8 +542,8 @@ where
 
     if history_rows.len() == 1 {
         cast_simple_error_to_engine_error(
-            stateless_service.engine_error_scope(),
-            stateless_service.context().execution_id(),
+            service.engine_error_scope(),
+            service.context().execution_id(),
             crate::cmd::helm::helm_exec_uninstall(
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
@@ -540,21 +558,21 @@ where
     Ok(())
 }
 
-pub fn delete_stateless_service<T>(
+pub fn delete_service<T>(
     target: &DeploymentTarget,
-    stateless_service: &T,
+    service: &T,
     is_error: bool,
 ) -> Result<(), EngineError>
 where
-    T: StatelessService + Helm,
+    T: Service + Helm,
 {
     let (kubernetes, environment) = match target {
         DeploymentTarget::ManagedServices(k, env) => (*k, *env),
         DeploymentTarget::SelfHosted(k, env) => (*k, *env),
     };
 
-    let helm_release_name = stateless_service.helm_release_name();
-    let selector = format!("app={}", stateless_service.name());
+    let helm_release_name = service.helm_release_name();
+    let selector = format!("app={}", service.name());
 
     if is_error {
         let _ = get_stateless_resource_information(kubernetes, environment, selector.as_str())?;

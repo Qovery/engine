@@ -299,6 +299,10 @@ impl Service for PostgreSQL {
         Some(self.options.port)
     }
 
+    fn start_timeout(&self) -> Timeout<u32> {
+        Timeout::Default
+    }
+
     fn total_cpus(&self) -> String {
         self.total_cpus.to_string()
     }
@@ -668,6 +672,11 @@ fn get_postgres_version(
         supported_postgres_versions,
         requested_version,
     )
+}
+
+fn get_self_hosted_supported_postgres_version() -> HashMap<String, String> {
+    // TODO
+    unimplemented!()
 }
 
 #[cfg(test)]

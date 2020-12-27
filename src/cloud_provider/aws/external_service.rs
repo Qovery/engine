@@ -3,9 +3,8 @@ use tera::Context as TeraContext;
 use crate::build_platform::Image;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
-    delete_stateless_service, deploy_stateless_service, deploy_stateless_service_error, Action,
-    Application as AApplication, Create, Delete, Helm, Pause, Service, ServiceType,
-    StatelessService,
+    delete_service, deploy_service_error, deploy_user_service, Action, Application as AApplication,
+    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -103,11 +102,7 @@ impl Helm for ExternalService {
     }
 }
 
-impl StatelessService for ExternalService {
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
-    }
-}
+impl StatelessService for ExternalService {}
 
 impl Service for ExternalService {
     fn context(&self) -> &Context {
@@ -138,6 +133,10 @@ impl Service for ExternalService {
         None
     }
 
+    fn start_timeout(&self) -> Timeout<u32> {
+        Timeout::Default
+    }
+
     fn total_cpus(&self) -> String {
         self.total_cpus.to_string()
     }
@@ -163,7 +162,7 @@ impl Create for ExternalService {
         );
         let context = self.context(target);
         let charts_dir = format!("{}/common/services/q-job", self.context.lib_root_dir());
-        deploy_stateless_service(target, self, charts_dir.as_str(), &context)
+        deploy_user_service(target, self, charts_dir.as_str(), &context)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -175,14 +174,14 @@ impl Create for ExternalService {
             "AWS.external_service.on_create_error() called for {}",
             self.name()
         );
-        deploy_stateless_service_error(target, self)
+        deploy_service_error(target, self)
     }
 }
 
 impl Pause for ExternalService {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.external_service.on_pause() called for {}", self.name());
-        delete_stateless_service(target, self, false)
+        delete_service(target, self, false)
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -194,7 +193,7 @@ impl Pause for ExternalService {
             "AWS.external_service.on_pause_error() called for {}",
             self.name()
         );
-        delete_stateless_service(target, self, true)
+        delete_service(target, self, true)
     }
 }
 
@@ -204,7 +203,7 @@ impl Delete for ExternalService {
             "AWS.external_service.on_delete() called for {}",
             self.name()
         );
-        delete_stateless_service(target, self, false)
+        delete_service(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -216,6 +215,6 @@ impl Delete for ExternalService {
             "AWS.external_service.on_delete_error() called for {}",
             self.name()
         );
-        delete_stateless_service(target, self, true)
+        delete_service(target, self, true)
     }
 }

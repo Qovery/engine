@@ -299,6 +299,10 @@ impl Service for MySQL {
         Some(self.options.port)
     }
 
+    fn start_timeout(&self) -> Timeout<u32> {
+        Timeout::Default
+    }
+
     fn total_cpus(&self) -> String {
         self.total_cpus.to_string()
     }
