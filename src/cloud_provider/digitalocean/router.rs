@@ -2,7 +2,6 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::models::{
     CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate,
 };
@@ -12,7 +11,6 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
 };
@@ -302,14 +300,6 @@ impl Create for Router {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let digitalocean = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<DO>()
-            .unwrap();
-
-        let do_credentials_envs = vec![(DIGITAL_OCEAN_TOKEN, digitalocean.token.as_str())];
-
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
@@ -355,7 +345,9 @@ impl Create for Router {
                     format!("custom-{}", helm_release_name).as_str(),
                     into_dir.as_str(),
                     format!("{}/nginx-ingress.yaml", into_dir.as_str()).as_str(),
-                    do_credentials_envs.clone(),
+                    kubernetes
+                        .cloud_provider()
+                        .credentials_environment_variables(),
                 ),
             )?;
 
@@ -380,7 +372,9 @@ impl Create for Router {
                                 helm_release_name
                             )
                             .as_str(),
-                            do_credentials_envs.clone(),
+                            kubernetes
+                                .cloud_provider()
+                                .credentials_environment_variables(),
                         );
 
                     match external_ingress_ip_custom {
@@ -430,7 +424,9 @@ impl Create for Router {
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
                 Timeout::Default,
-                do_credentials_envs.clone(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
             ),
         )?;
 

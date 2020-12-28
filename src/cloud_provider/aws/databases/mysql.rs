@@ -15,7 +15,6 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::cmd::structs::LabelsContent;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
 use crate::models::Context;
 
