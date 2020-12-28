@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::databases::utilities;
-use crate::cloud_provider::aws::databases::utilities::{get_tfstate_name, get_tfstate_suffix};
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateful_service, deploy_stateful_service, Action, Backup, Create,
-    Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType,
-    StatefulService, Terraform, Upgrade,
+    default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
+    get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete,
+    Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
+};
+use crate::cloud_provider::utilities::{
+    get_self_hosted_redis_version, get_supported_version_to_use,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -205,8 +206,8 @@ impl Service for Redis {
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
-        context.insert("tfstate_suffix_name", &get_tfstate_suffix(&self.id()));
-        context.insert("tfstate_name", &get_tfstate_name(&self.id()));
+        context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
+        context.insert("tfstate_name", &get_tfstate_name(self));
 
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
@@ -388,34 +389,25 @@ fn get_redis_version(
     requested_version: &str,
     is_managed_service: bool,
 ) -> Result<String, StringError> {
-    let mut supported_redis_versions = HashMap::with_capacity(2);
-    let mut database_name = "Redis";
-
     if is_managed_service {
-        // https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/supported-engine-versions.html
-        database_name = "Elasticache";
-
-        supported_redis_versions.insert("6".to_string(), "6.x".to_string());
-        supported_redis_versions.insert("5".to_string(), "5.0.6".to_string());
+        get_managed_redis_version(requested_version)
     } else {
-        // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
-        supported_redis_versions.insert("6".to_string(), "6.0.9".to_string());
-        supported_redis_versions.insert("6.0".to_string(), "6.0.9".to_string());
-        supported_redis_versions.insert("5".to_string(), "5.0.10".to_string());
-        supported_redis_versions.insert("5.0".to_string(), "5.0.10".to_string());
+        get_self_hosted_redis_version(requested_version)
     }
+}
 
-    utilities::get_supported_version_to_use(
-        database_name,
-        supported_redis_versions,
-        requested_version,
-    )
+fn get_managed_redis_version(requested_version: &str) -> Result<String, StringError> {
+    let mut supported_redis_versions = HashMap::with_capacity(2);
+    // https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/supported-engine-versions.html
+
+    supported_redis_versions.insert("6".to_string(), "6.x".to_string());
+    supported_redis_versions.insert("5".to_string(), "5.0.6".to_string());
+
+    get_supported_version_to_use("Elasticache", supported_redis_versions, requested_version)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use crate::cloud_provider::aws::databases::redis::get_redis_version;
 
     #[test]

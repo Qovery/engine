@@ -2,15 +2,14 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::databases::utilities;
-use crate::cloud_provider::aws::databases::utilities::{
-    generate_supported_version, get_tfstate_name, get_tfstate_suffix,
-};
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateful_service, deploy_stateful_service, Action, Backup, Create,
-    Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType,
-    StatefulService, Terraform, Upgrade,
+    default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
+    get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete,
+    Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
+};
+use crate::cloud_provider::utilities::{
+    generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -191,8 +190,8 @@ impl Service for PostgreSQL {
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
-        context.insert("tfstate_suffix_name", &get_tfstate_suffix(&self.id()));
-        context.insert("tfstate_name", &get_tfstate_name(&self.id()));
+        context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
+        context.insert("tfstate_name", &get_tfstate_name(self));
 
         context.insert(
             "delete_automated_backups",
@@ -389,51 +388,34 @@ fn get_postgres_version(
     requested_version: &str,
     is_managed_service: bool,
 ) -> Result<String, StringError> {
-    let mut supported_postgres_versions = HashMap::new();
-
     if is_managed_service {
-        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
-
-        // v10
-        let mut v10 = generate_supported_version(10, 1, 14, None, None, None);
-        v10.remove("10.2"); // non supported version by AWS
-        v10.remove("10.8"); // non supported version by AWS
-        supported_postgres_versions.extend(v10);
-
-        // v11
-        let mut v11 = generate_supported_version(11, 1, 9, None, None, None);
-        v11.remove("11.3"); // non supported version by AWS
-        supported_postgres_versions.extend(v11);
-
-        // v12
-        let v12 = generate_supported_version(12, 2, 4, None, None, None);
-        supported_postgres_versions.extend(v12);
+        get_managed_postgres_version(requested_version)
     } else {
-        // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
-
-        // v10
-        let v10 = generate_supported_version(10, 1, 14, Some(0), Some(0), None);
-        supported_postgres_versions.extend(v10);
-
-        // v11
-        let v11 = generate_supported_version(11, 1, 9, Some(0), Some(0), None);
-        supported_postgres_versions.extend(v11);
-
-        // v12
-        let v12 = generate_supported_version(12, 2, 4, Some(0), Some(0), None);
-        supported_postgres_versions.extend(v12);
+        get_self_hosted_postgres_version(requested_version)
     }
-
-    utilities::get_supported_version_to_use(
-        "Postgresql",
-        supported_postgres_versions,
-        requested_version,
-    )
 }
 
-fn get_self_hosted_supported_postgres_version() -> HashMap<String, String> {
-    // TODO
-    unimplemented!()
+fn get_managed_postgres_version(requested_version: &str) -> Result<String, StringError> {
+    let mut supported_postgres_versions = HashMap::new();
+
+    // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
+
+    // v10
+    let mut v10 = generate_supported_version(10, 1, 14, None, None, None);
+    v10.remove("10.2"); // non supported version by AWS
+    v10.remove("10.8"); // non supported version by AWS
+    supported_postgres_versions.extend(v10);
+
+    // v11
+    let mut v11 = generate_supported_version(11, 1, 9, None, None, None);
+    v11.remove("11.3"); // non supported version by AWS
+    supported_postgres_versions.extend(v11);
+
+    // v12
+    let v12 = generate_supported_version(12, 2, 4, None, None, None);
+    supported_postgres_versions.extend(v12);
+
+    get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
 
 #[cfg(test)]

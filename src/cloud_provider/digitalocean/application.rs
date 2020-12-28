@@ -17,7 +17,6 @@ use crate::container_registry::docr::{
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::Context;
 
-#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     context: Context,
     id: String,

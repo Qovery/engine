@@ -2,15 +2,14 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::databases::utilities;
-use crate::cloud_provider::aws::databases::utilities::{
-    generate_supported_version, get_tfstate_name, get_tfstate_suffix,
-};
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateful_service, deploy_stateful_service, Action, Backup, Create,
-    Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType,
-    StatefulService, Terraform, Upgrade,
+    default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
+    get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete,
+    Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
+};
+use crate::cloud_provider::utilities::{
+    generate_supported_version, get_self_hosted_mongodb_version, get_supported_version_to_use,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -191,8 +190,8 @@ impl Service for MongoDB {
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
-        context.insert("tfstate_suffix_name", &get_tfstate_suffix(&self.id()));
-        context.insert("tfstate_name", &get_tfstate_name(&self.id()));
+        context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
+        context.insert("tfstate_name", &get_tfstate_name(self));
 
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
@@ -376,43 +375,25 @@ fn get_mongodb_version(
     requested_version: &str,
     is_managed_service: bool,
 ) -> Result<String, StringError> {
-    let mut supported_mongodb_versions = HashMap::new();
-    let mut database_name = "MongoDB";
-
     if is_managed_service {
-        database_name = "DocumentDB";
-        // v3.6.0
-        let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(0), None);
-        supported_mongodb_versions.extend(mongo_version);
-
-        // v4.0.0
-        let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(0), None);
-        supported_mongodb_versions.extend(mongo_version);
+        get_managed_mongodb_version(requested_version)
     } else {
-        // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
-
-        // v3.6
-        let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(21), None);
-        supported_mongodb_versions.extend(mongo_version);
-
-        // v4.0
-        let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(21), None);
-        supported_mongodb_versions.extend(mongo_version);
-
-        // v4.2
-        let mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(11), None);
-        supported_mongodb_versions.extend(mongo_version);
-
-        // v4.4
-        let mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(2), None);
-        supported_mongodb_versions.extend(mongo_version);
+        get_self_hosted_mongodb_version(requested_version)
     }
+}
 
-    utilities::get_supported_version_to_use(
-        database_name,
-        supported_mongodb_versions,
-        requested_version,
-    )
+fn get_managed_mongodb_version(requested_version: &str) -> Result<String, StringError> {
+    let mut supported_mongodb_versions = HashMap::new();
+
+    // v3.6.0
+    let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(0), None);
+    supported_mongodb_versions.extend(mongo_version);
+
+    // v4.0.0
+    let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(0), None);
+    supported_mongodb_versions.extend(mongo_version);
+
+    get_supported_version_to_use("DocumentDB", supported_mongodb_versions, requested_version)
 }
 
 #[cfg(test)]

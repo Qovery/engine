@@ -2,15 +2,14 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::databases::utilities;
-use crate::cloud_provider::aws::databases::utilities::{
-    generate_supported_version, get_tfstate_name, get_tfstate_suffix,
-};
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateful_service, deploy_stateful_service, Action, Backup, Create,
-    Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType,
-    StatefulService, Terraform, Upgrade,
+    default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
+    get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete,
+    Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
+};
+use crate::cloud_provider::utilities::{
+    generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -191,8 +190,8 @@ impl Service for MySQL {
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
         context.insert("database_id", &self.id());
-        context.insert("tfstate_suffix_name", &get_tfstate_suffix(&self.id()));
-        context.insert("tfstate_name", &get_tfstate_name(&self.id()));
+        context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
+        context.insert("tfstate_name", &get_tfstate_name(self));
 
         context.insert(
             "delete_automated_backups",
@@ -379,50 +378,37 @@ fn get_mysql_version(
     requested_version: &str,
     is_managed_service: bool,
 ) -> Result<String, StringError> {
-    let mut supported_mysql_versions = HashMap::new();
-    let mut database_name = "MySQL";
-
     if is_managed_service {
-        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
-        database_name = "RDS MySQL";
-
-        // v5.7
-        let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
-        v57.remove("5.7.29");
-        v57.remove("5.7.27");
-        v57.remove("5.7.20");
-        v57.remove("5.7.18");
-        supported_mysql_versions.extend(v57);
-
-        // v8
-        let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
-        v8.remove("8.0.18");
-        v8.remove("8.0.14");
-        v8.remove("8.0.12");
-        supported_mysql_versions.extend(v8);
+        get_managed_mysql_version(requested_version)
     } else {
-        // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
-
-        // v5.7
-        let v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
-        supported_mysql_versions.extend(v57);
-
-        // v8
-        let v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
-        supported_mysql_versions.extend(v8);
+        get_self_hosted_mysql_version(requested_version)
     }
+}
 
-    utilities::get_supported_version_to_use(
-        database_name,
-        supported_mysql_versions,
-        requested_version,
-    )
+fn get_managed_mysql_version(requested_version: &str) -> Result<String, StringError> {
+    let mut supported_mysql_versions = HashMap::new();
+    // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
+
+    // v5.7
+    let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
+    v57.remove("5.7.29");
+    v57.remove("5.7.27");
+    v57.remove("5.7.20");
+    v57.remove("5.7.18");
+    supported_mysql_versions.extend(v57);
+
+    // v8
+    let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
+    v8.remove("8.0.18");
+    v8.remove("8.0.14");
+    v8.remove("8.0.12");
+    supported_mysql_versions.extend(v8);
+
+    get_supported_version_to_use("RDS MySQL", supported_mysql_versions, requested_version)
 }
 
 #[cfg(test)]
 mod tests_mysql {
-    use std::collections::HashMap;
-
     use crate::cloud_provider::aws::databases::mysql::get_mysql_version;
 
     #[test]

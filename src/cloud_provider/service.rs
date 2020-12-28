@@ -7,12 +7,11 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::Resolver;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::aws::databases::utilities;
-use crate::cloud_provider::aws::databases::utilities::get_tfstate_name;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::cmd::kubectl::kubectl_exec_delete_secret;
 use crate::cmd::structs::LabelsContent;
 use crate::error::cast_simple_error_to_engine_error;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
@@ -823,10 +822,8 @@ where
             ) {
                 Ok(_) => {
                     info!("let's delete secrets containing tfstates");
-                    let _ = utilities::delete_terraform_tfstate_secret(
-                        *kubernetes,
-                        &get_tfstate_name(service.id()),
-                    );
+                    let _ =
+                        delete_terraform_tfstate_secret(*kubernetes, &get_tfstate_name(service));
                 }
                 Err(e) => {
                     let message = format!("{:?}", e);
@@ -847,6 +844,24 @@ where
             )?;
         }
     }
+
+    Ok(())
+}
+
+fn delete_terraform_tfstate_secret(
+    kubernetes: &dyn Kubernetes,
+    secret_name: &str,
+) -> Result<(), EngineError> {
+    let config_file_path = kubernetes.config_file_path()?;
+
+    //create the namespace to insert the tfstate in secrets
+    let _ = kubectl_exec_delete_secret(
+        config_file_path,
+        secret_name,
+        kubernetes
+            .cloud_provider()
+            .credentials_environment_variables(),
+    );
 
     Ok(())
 }
@@ -1161,4 +1176,15 @@ pub fn do_stateless_service_cleanup(
     }
 
     Ok(())
+}
+
+pub fn get_tfstate_suffix(service: &dyn Service) -> String {
+    format!("{}", service.id())
+}
+
+// Name generated from TF secret suffix
+// https://www.terraform.io/docs/backends/types/kubernetes.html#secret_suffix
+// As mention the doc: Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}.
+pub fn get_tfstate_name(service: &dyn Service) -> String {
+    format!("tfstate-default-{}", service.id())
 }

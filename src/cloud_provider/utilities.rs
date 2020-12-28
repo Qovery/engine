@@ -1,39 +1,80 @@
 use std::collections::HashMap;
 
-use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cmd::kubectl::kubectl_exec_delete_secret;
-use crate::error::{EngineError, StringError};
+use crate::error::StringError;
 use crate::utilities::get_version_number;
 
-pub fn delete_terraform_tfstate_secret(
-    kubernetes: &dyn Kubernetes,
-    secret_name: &str,
-) -> Result<(), EngineError> {
-    match kubernetes.config_file_path() {
-        Ok(kube_config) => {
-            //create the namespace to insert the tfstate in secrets
-            let _ = kubectl_exec_delete_secret(
-                kube_config,
-                secret_name,
-                kubernetes
-                    .cloud_provider()
-                    .credentials_environment_variables(),
-            );
+pub fn get_self_hosted_postgres_version(requested_version: &str) -> Result<String, StringError> {
+    let mut supported_postgres_versions = HashMap::new();
 
-            Ok(())
-        }
-        Err(e) => {
-            error!(
-                "Failed to generate the kubernetes config file path: {:?}",
-                e
-            );
+    // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
 
-            Err(e)
-        }
-    }
+    // v10
+    let v10 = generate_supported_version(10, 1, 14, Some(0), Some(0), None);
+    supported_postgres_versions.extend(v10);
+
+    // v11
+    let v11 = generate_supported_version(11, 1, 9, Some(0), Some(0), None);
+    supported_postgres_versions.extend(v11);
+
+    // v12
+    let v12 = generate_supported_version(12, 2, 4, Some(0), Some(0), None);
+    supported_postgres_versions.extend(v12);
+
+    get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
 
-pub fn get_supported_version_to_use<'a>(
+pub fn get_self_hosted_mysql_version(requested_version: &str) -> Result<String, StringError> {
+    let mut supported_mysql_versions = HashMap::new();
+    // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
+
+    // v5.7
+    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
+    supported_mysql_versions.extend(v57);
+
+    // v8
+    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
+    supported_mysql_versions.extend(v8);
+
+    get_supported_version_to_use("MySQL", supported_mysql_versions, requested_version)
+}
+
+pub fn get_self_hosted_mongodb_version(requested_version: &str) -> Result<String, StringError> {
+    let mut supported_mongodb_versions = HashMap::new();
+
+    // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
+
+    // v3.6
+    let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(21), None);
+    supported_mongodb_versions.extend(mongo_version);
+
+    // v4.0
+    let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(21), None);
+    supported_mongodb_versions.extend(mongo_version);
+
+    // v4.2
+    let mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(11), None);
+    supported_mongodb_versions.extend(mongo_version);
+
+    // v4.4
+    let mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(2), None);
+    supported_mongodb_versions.extend(mongo_version);
+
+    get_supported_version_to_use("MongoDB", supported_mongodb_versions, requested_version)
+}
+
+pub fn get_self_hosted_redis_version(requested_version: &str) -> Result<String, StringError> {
+    let mut supported_redis_versions = HashMap::with_capacity(4);
+    // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
+
+    supported_redis_versions.insert("6".to_string(), "6.0.9".to_string());
+    supported_redis_versions.insert("6.0".to_string(), "6.0.9".to_string());
+    supported_redis_versions.insert("5".to_string(), "5.0.10".to_string());
+    supported_redis_versions.insert("5.0".to_string(), "5.0.10".to_string());
+
+    get_supported_version_to_use("Redis", supported_redis_versions, requested_version)
+}
+
+pub fn get_supported_version_to_use(
     database_name: &str,
     all_supported_versions: HashMap<String, String>,
     version_to_check: &str,
@@ -168,26 +209,4 @@ pub fn generate_supported_version(
     supported_versions.insert(major.to_string(), latest_major_version);
 
     supported_versions
-}
-
-pub fn get_tfstate_suffix(service_id: &str) -> String {
-    return format!("{}", service_id.clone());
-}
-
-// Name generated from TF secret suffix
-// https://www.terraform.io/docs/backends/types/kubernetes.html#secret_suffix
-// As mention the doc: Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}.
-pub fn get_tfstate_name(service_id: &str) -> String {
-    return format!("tfstate-default-{}", service_id);
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::cloud_provider::aws::databases::utilities::{get_tfstate_name, get_tfstate_suffix};
-
-    #[test]
-    fn check_tfstate_name() {
-        assert_eq!(get_tfstate_name("randomid"), "tfstate-default-randomid");
-        assert_eq!(get_tfstate_suffix("randomid"), "randomid");
-    }
 }
