@@ -12,8 +12,8 @@ use test_utilities::utilities::context;
 use test_utilities::utilities::{init, is_pod_restarted_aws_env};
 use tracing::{span, Level};
 // to check overload between several databases and apps
-#[test]
-#[ignore]
+
+
 fn deploy_an_environment_with_3_databases_and_3_apps() {
     init();
 
@@ -58,8 +58,8 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 **
 **/
 
+
 #[test]
-#[ignore]
 fn postgresql_deploy_a_working_development_environment_with_all_options() {
     init();
 
@@ -297,8 +297,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
     };
 }
 
+
 #[test]
-#[ignore]
 fn postgresql_deploy_a_working_production_environment() {
     init();
 
@@ -509,15 +509,15 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 }
 
 /// test mongodb v3.6 with development environment
-#[test]
+
 fn mongodb_v3_6_deploy_a_working_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_mongodb_configuration(context, environment, "3.6");
 }
 
-#[test]
-#[ignore]
+
+
 fn mongodb_v4_0_deploy_a_working_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -525,8 +525,8 @@ fn mongodb_v4_0_deploy_a_working_environment() {
 }
 
 /// test mongodb v4.2 with development environment
-#[test]
-#[ignore]
+
+
 fn mongodb_v4_2_deploy_a_working_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -534,7 +534,7 @@ fn mongodb_v4_2_deploy_a_working_environment() {
 }
 
 /// test mongodb v4.4 with development environment
-#[test]
+
 fn mongodb_v4_4_deploy_a_working_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -542,8 +542,8 @@ fn mongodb_v4_4_deploy_a_working_environment() {
 }
 
 /// test mongodb v3.6 with production environment (DocumentDB)
-#[test]
-#[ignore]
+
+
 fn mongodb_v3_6_deploy_a_working_environment_with_production() {
     let context = context();
 
@@ -553,8 +553,8 @@ fn mongodb_v3_6_deploy_a_working_environment_with_production() {
     test_mongodb_configuration(context, environment, "3.6");
 }
 
-#[test]
-#[ignore]
+
+
 fn mongodb_v4_0_deploy_a_working_environment_with_production() {
     let context = context();
 
@@ -570,8 +570,8 @@ fn mongodb_v4_0_deploy_a_working_environment_with_production() {
 **
 **/
 
-#[test]
-#[ignore]
+
+
 fn mysql_deploy_a_working_environment() {
     init();
 
@@ -662,8 +662,8 @@ fn mysql_deploy_a_working_environment() {
     //Todo: remove the namespace (or project)
 }
 
-#[test]
-#[ignore]
+
+
 /// Tests the creation of a simple environment on AWS, with the DB provisioned on RDS.
 fn mysql_deploy_a_working_production_environment() {
     init();
@@ -860,7 +860,7 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
     };
 }
 
-#[test]
+
 fn redis_v5_deploy_a_working_environment() {
     let context = context();
     const test_name: &str = "redis_v6_dev";
@@ -868,7 +868,7 @@ fn redis_v5_deploy_a_working_environment() {
     test_redis_configuration(context, environment, "5.0");
 }
 
-#[test]
+
 fn redis_v6_deploy_a_working_environment() {
     let context = context();
     const test_name: &str = "redis_v6_0_dev";
@@ -877,8 +877,8 @@ fn redis_v6_deploy_a_working_environment() {
 }
 
 // test Redis 5.0 with production environment (Elasticache)
-#[test]
-#[ignore]
+
+
 fn redis_v5_0_deploy_a_working_environment_with_production() {
     let context = context();
     const test_name: &str = "redis_v5_0_production";
@@ -888,8 +888,8 @@ fn redis_v5_0_deploy_a_working_environment_with_production() {
 }
 
 // test Redis 5.0 with production environment (Elasticache)
-#[test]
-#[ignore]
+
+
 fn redis_v6_0_deploy_a_working_environment_with_production() {
     let context = context();
     const test_name: &str = "redis_v6_0_production";
