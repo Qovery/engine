@@ -17,8 +17,8 @@ PROC="$$"
 QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=cloned-engine
-GITLAB_LOG_UTILITIES_DIR="gitlab-log-utilities"
-GITLAB_LOG_OUTPUT_DIR="../gitlab-log-utilities/output"
+GITLAB_LOG_UTILITIES_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
+GITLAB_LOG_OUTPUT_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
 export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
 export RUNNING_ON_CI=0
 export ENGINE_BRANCH=""
@@ -305,10 +305,12 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   prepare_tests
   cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
-  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee tests.log
-  cat tests.log | ../$GITLAB_LOG_UTILITIES_DIR/sorter.sh
+  touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
+  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee $GITLAB_LOG_OUTPUT_DIR/tests.log
   TESTS_STATUS="${PIPESTATUS[0]}"
-  cd ../$GITLAB_LOG_UTILITIES_DIR
+  #sorts logs into multiple files
+  cat $GITLAB_LOG_OUTPUT_DIR/tests.log | $GITLAB_LOG_UTILITIES_DIR/sorter.sh
+  cd $GITLAB_LOG_UTILITIES_DIR
   # uncomment this when test logs will be in json format
   ./failed_test_printer.sh
   return $TESTS_STATUS
