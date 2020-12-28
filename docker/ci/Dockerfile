@@ -3,9 +3,8 @@ FROM rust:1.48.0-buster
 ARG BIN_DEST_FOLDER="/binaries"
 ENV BIN_DIR=$BIN_DEST_FOLDER
 
-### Qovery
+RUN apt-get update && apt-get install -y docker.io awscli curl libssh-dev pkg-config unzip make netcat-openbsd jq
 
-RUN apt-get update && apt-get install -y docker.io awscli curl libssh-dev pkg-config unzip make netcat-openbsd
 RUN cargo install cargo2junit
 ENV PATH="/root/.cargo/bin/:${PATH}"
 
