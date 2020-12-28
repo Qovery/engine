@@ -179,7 +179,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
   cp docker/bin_versions docker/ci/bin_versions
 
   cd docker/ci
-  DOCKER_BUILDKIT=1 docker build --no-cache -t qoveryrd/ci:${tag} .
+   DOCKER_BUILDKIT=1 docker build --no-cache -t qoveryrd/ci:${tag} .
   cd ..
 
   rm -f docker/ci/load.sh
@@ -289,15 +289,19 @@ function all_tests(){ ## Run all tests on qovery-engine
   prepare_tests
   cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
-  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee results.json
+  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
-  cat results.json | cargo2junit > results.xml
+  # Log management part
+  cd $GITLAB_LOG_UTILITIES_DIR
+  # sorts logs into multiple files
+  ./sorter.sh $GITLAB_LOG_OUTPUT_DIR/output.log
+  # print failed tests
+  ./failed_test_printer.sh
   return $TESTS_STATUS
 }
 
 function fast_tests(){ ## Run fast tests only on qovery-engine
-  #GITHUB_ENGINE_BRANCH_NAME=$1
-  GITHUB_ENGINE_BRANCH_NAME="organize-logs-in-json"
+  GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info
   export_env
@@ -309,9 +313,9 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
-  # sorts logs into multiple files
+  # Log management part
   cd $GITLAB_LOG_UTILITIES_DIR
-  # sort them
+  # sorts logs into multiple files
   ./sorter.sh $GITLAB_LOG_OUTPUT_DIR/output.log
   # print failed tests
   ./failed_test_printer.sh

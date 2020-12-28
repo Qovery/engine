@@ -10,12 +10,8 @@ dirlist=(`ls`)
 for entry in ${dirlist[@]}
 do
   f="$(basename $entry)"
-  echo $f
 done
 
-echo "===================================================="
-echo "                 FAILED TESTS"
-echo "===================================================="
 while IFS= read -r line
 do
  test_status=$(echo $line | jq .event)
@@ -32,7 +28,7 @@ do
       f="$(basename $entry)"
       if [[ $test_name =~ $f ]]; then
         echo "****************************************************"
-        echo -e "\e[31m LOGS FOR TEST $test_name"
+        echo -e "\e[31m LOGS FOR FAILED TEST $test_name"
         echo "****************************************************"
         jq -c ' "\(.timestamp) : \(.target) ===> \(.fields.message)"' $entry
       fi
