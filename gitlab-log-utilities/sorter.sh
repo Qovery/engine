@@ -6,7 +6,7 @@ JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
 touch JUNIT_REPORT
 
 while IFS= read -r line; do
-if js -e . >/dev/null 2>&1 <<<"$line"; then
+if jq -e . >/dev/null 2>&1 <<<"$line"; then
     # this is a json line
     if [ "$(echo "$line" | jq 'has("type")')" == "true" ]; then
       # it's junit report file
