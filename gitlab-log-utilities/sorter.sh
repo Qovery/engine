@@ -3,6 +3,10 @@ set -o pipefail
 
 OUTPUT_DIR_TESTS_FILES="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
+touch JUNIT_REPORT
+echo "-------------------"
+echo "Reading $1 file"
+echo "-------------------"
 
 while IFS= read -r line; do
 if jq -e . >/dev/null 2>&1 <<<"$line"; then
@@ -21,3 +25,5 @@ else
     echo $line
 fi
 done < $1
+
+ls $OUTPUT_DIR_TESTS_FILES
