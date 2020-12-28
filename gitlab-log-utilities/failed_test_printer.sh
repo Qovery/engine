@@ -3,17 +3,7 @@
 OUTPUT_DIR_TESTS_FILES="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
 
-echo "===================================================="
-echo "            DEBUG"
-echo "===================================================="
-
 cd $OUTPUT_DIR_TESTS_FILES
-pwd
-ls
-
-echo "===================================================="
-echo "            GENERATED OUTPUT TESTS"
-echo "===================================================="
 
 dirlist=(`ls`)
 
@@ -35,9 +25,8 @@ do
     echo -e "\e[32mPassed test : $test_name" ;;
   "\"failed\"")
     # check if a log file exist
-    echo -e "\e[31mFailed test $test_name"
     test_name=$(echo $line | jq .name)
-
+    echo -e "\e[31mFailed test $test_name"
     for entry in ${dirlist[@]}
     do
       f="$(basename $entry)"
