@@ -3,8 +3,9 @@ use tera::Context as TeraContext;
 use crate::build_platform::Image;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
-    delete_service, deploy_service_error, deploy_user_service, Action, Application as AApplication,
-    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, deploy_stateless_service_error,
+    deploy_user_stateless_service, Action, Application as AApplication, Create, Delete, Helm,
+    Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -45,40 +46,6 @@ impl ExternalService {
             environment_variables,
         }
     }
-
-    fn context(&self, target: &DeploymentTarget) -> TeraContext {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let mut context = self.default_tera_context(kubernetes, environment);
-        let commit_id = self.image().commit_id.as_str();
-
-        context.insert("helm_app_version", &commit_id[..7]);
-
-        match &self.image().registry_url {
-            Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
-            None => {
-                let image_name_with_tag = self.image().name_with_tag();
-                warn!("there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
-                context.insert("image_name_with_tag", image_name_with_tag.as_str());
-            }
-        }
-
-        let environment_variables = self
-            .environment_variables
-            .iter()
-            .map(|ev| EnvironmentVariableDataTemplate {
-                key: ev.key.clone(),
-                value: ev.value.clone(),
-            })
-            .collect::<Vec<_>>();
-
-        context.insert("environment_variables", &environment_variables);
-
-        context
-    }
 }
 
 impl crate::cloud_provider::service::ExternalService for ExternalService {}
@@ -99,6 +66,18 @@ impl Helm for ExternalService {
             format!("external-service-{}-{}", self.name(), self.id()),
             50,
         )
+    }
+
+    fn helm_chart_dir(&self) -> String {
+        format!("{}/common/services/q-job", self.context.lib_root_dir())
+    }
+
+    fn helm_chart_values_dir(&self) -> String {
+        String::new()
+    }
+
+    fn helm_chart_external_name_service_dir(&self) -> String {
+        String::new()
     }
 }
 
@@ -149,6 +128,40 @@ impl Service for ExternalService {
         1
     }
 
+    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        };
+
+        let mut context = default_tera_context(self, kubernetes, environment);
+        let commit_id = self.image().commit_id.as_str();
+
+        context.insert("helm_app_version", &commit_id[..7]);
+
+        match &self.image().registry_url {
+            Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
+            None => {
+                let image_name_with_tag = self.image().name_with_tag();
+                warn!("there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
+                context.insert("image_name_with_tag", image_name_with_tag.as_str());
+            }
+        }
+
+        let environment_variables = self
+            .environment_variables
+            .iter()
+            .map(|ev| EnvironmentVariableDataTemplate {
+                key: ev.key.clone(),
+                value: ev.value.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        context.insert("environment_variables", &environment_variables);
+
+        Ok(context)
+    }
+
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::ExternalService(self.id().to_string(), self.name().to_string())
     }
@@ -160,9 +173,7 @@ impl Create for ExternalService {
             "AWS.external_service.on_create() called for {}",
             self.name()
         );
-        let context = self.context(target);
-        let charts_dir = format!("{}/common/services/q-job", self.context.lib_root_dir());
-        deploy_user_service(target, self, charts_dir.as_str(), &context)
+        deploy_user_stateless_service(target, self)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -174,14 +185,14 @@ impl Create for ExternalService {
             "AWS.external_service.on_create_error() called for {}",
             self.name()
         );
-        deploy_service_error(target, self)
+        deploy_stateless_service_error(target, self)
     }
 }
 
 impl Pause for ExternalService {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.external_service.on_pause() called for {}", self.name());
-        delete_service(target, self, false)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -193,7 +204,7 @@ impl Pause for ExternalService {
             "AWS.external_service.on_pause_error() called for {}",
             self.name()
         );
-        delete_service(target, self, true)
+        delete_stateless_service(target, self, true)
     }
 }
 
@@ -203,7 +214,7 @@ impl Delete for ExternalService {
             "AWS.external_service.on_delete() called for {}",
             self.name()
         );
-        delete_service(target, self, false)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -215,6 +226,6 @@ impl Delete for ExternalService {
             "AWS.external_service.on_delete_error() called for {}",
             self.name()
         );
-        delete_service(target, self, true)
+        delete_stateless_service(target, self, true)
     }
 }

@@ -42,7 +42,7 @@ pub fn deploy_environment(
     let dns_provider = dns_provider_cloudflare(context);
     let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
 
-    tx.deploy_environment_with_options(
+    let _ = tx.deploy_environment_with_options(
         &k,
         &environment_action,
         DeploymentOption {

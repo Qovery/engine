@@ -5,8 +5,9 @@ use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{
-    delete_service, deploy_service_error, deploy_user_service, Action, Application as CApplication,
-    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, deploy_stateless_service_error,
+    deploy_user_stateless_service, Action, Application as CApplication, Create, Delete, Helm,
+    Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -62,14 +63,90 @@ impl Application {
             environment_variables,
         }
     }
+}
 
-    fn context(&self, target: &DeploymentTarget) -> TeraContext {
+impl crate::cloud_provider::service::Application for Application {
+    fn image(&self) -> &Image {
+        &self.image
+    }
+
+    fn set_image(&mut self, image: Image) {
+        self.image = image;
+    }
+}
+
+impl Helm for Application {
+    fn helm_release_name(&self) -> String {
+        crate::string::cut(format!("application-{}-{}", self.name(), self.id()), 50)
+    }
+
+    fn helm_chart_dir(&self) -> String {
+        format!("{}/aws/charts/q-application", self.context.lib_root_dir())
+    }
+
+    fn helm_chart_values_dir(&self) -> String {
+        String::new()
+    }
+
+    fn helm_chart_external_name_service_dir(&self) -> String {
+        String::new()
+    }
+}
+
+impl StatelessService for Application {}
+
+impl Service for Application {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn service_type(&self) -> ServiceType {
+        ServiceType::Application
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        self.image.commit_id.as_str()
+    }
+
+    fn action(&self) -> &Action {
+        &self.action
+    }
+
+    fn private_port(&self) -> Option<u16> {
+        self.private_port
+    }
+
+    fn start_timeout(&self) -> Timeout<u32> {
+        Timeout::Value(self.start_timeout_in_seconds)
+    }
+
+    fn total_cpus(&self) -> String {
+        self.total_cpus.to_string()
+    }
+
+    fn total_ram_in_mib(&self) -> u32 {
+        self.total_ram_in_mib
+    }
+
+    fn total_instances(&self) -> u16 {
+        self.total_instances
+    }
+
+    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let mut context = self.default_tera_context(kubernetes, environment);
+        let mut context = default_tera_context(self, kubernetes, environment);
         let commit_id = self.image().commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
@@ -127,71 +204,7 @@ impl Application {
             )
         }
 
-        context
-    }
-}
-
-impl crate::cloud_provider::service::Application for Application {
-    fn image(&self) -> &Image {
-        &self.image
-    }
-
-    fn set_image(&mut self, image: Image) {
-        self.image = image;
-    }
-}
-
-impl Helm for Application {
-    fn helm_release_name(&self) -> String {
-        crate::string::cut(format!("application-{}-{}", self.name(), self.id()), 50)
-    }
-}
-
-impl StatelessService for Application {}
-
-impl Service for Application {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn service_type(&self) -> ServiceType {
-        ServiceType::Application
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        self.image.commit_id.as_str()
-    }
-
-    fn action(&self) -> &Action {
-        &self.action
-    }
-
-    fn private_port(&self) -> Option<u16> {
-        self.private_port
-    }
-
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Value(self.start_timeout_in_seconds)
-    }
-
-    fn total_cpus(&self) -> String {
-        self.total_cpus.to_string()
-    }
-
-    fn total_ram_in_mib(&self) -> u32 {
-        self.total_ram_in_mib
-    }
-
-    fn total_instances(&self) -> u16 {
-        self.total_instances
+        Ok(context)
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -202,9 +215,7 @@ impl Service for Application {
 impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.application.on_create() called for {}", self.name());
-        let context = self.context(target);
-        let charts_dir = format!("{}/aws/charts/q-application", self.context.lib_root_dir());
-        deploy_user_service(target, self, charts_dir.as_str(), &context)
+        deploy_user_stateless_service(target, self)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -216,14 +227,14 @@ impl Create for Application {
             "AWS.application.on_create_error() called for {}",
             self.name()
         );
-        deploy_service_error(target, self)
+        deploy_stateless_service_error(target, self)
     }
 }
 
 impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.application.on_pause() called for {}", self.name());
-        delete_service(target, self, false)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -235,14 +246,14 @@ impl Pause for Application {
             "AWS.application.on_pause_error() called for {}",
             self.name()
         );
-        delete_service(target, self, true)
+        delete_stateless_service(target, self, true)
     }
 }
 
 impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.application.on_delete() called for {}", self.name());
-        delete_service(target, self, false)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -254,7 +265,7 @@ impl Delete for Application {
             "AWS.application.on_delete_error() called for {}",
             self.name()
         );
-        delete_service(target, self, true)
+        delete_stateless_service(target, self, true)
     }
 }
 

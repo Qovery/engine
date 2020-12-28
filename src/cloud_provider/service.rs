@@ -7,6 +7,8 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::Resolver;
 
 use crate::build_platform::Image;
+use crate::cloud_provider::aws::databases::utilities;
+use crate::cloud_provider::aws::databases::utilities::get_tfstate_name;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
@@ -45,6 +47,7 @@ pub trait Service {
     fn total_cpus(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
+    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;
     fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
         debug_logs(self, deployment_target)
     }
@@ -87,36 +90,6 @@ pub trait Service {
         // TODO check lib directories available
 
         Ok(())
-    }
-
-    fn default_tera_context(
-        &self,
-        kubernetes: &dyn Kubernetes,
-        environment: &Environment,
-    ) -> TeraContext {
-        let mut context = TeraContext::new();
-
-        context.insert("id", self.id());
-        context.insert("owner_id", environment.owner_id.as_str());
-        context.insert("project_id", environment.project_id.as_str());
-        context.insert("organization_id", environment.organization_id.as_str());
-        context.insert("environment_id", environment.id.as_str());
-        context.insert("region", kubernetes.region());
-        context.insert("name", self.name());
-        context.insert("namespace", environment.namespace());
-        context.insert("cluster_name", kubernetes.name());
-        context.insert("total_cpus", &self.total_cpus());
-        context.insert("total_ram_in_mib", &self.total_ram_in_mib());
-        context.insert("total_instances", &self.total_instances());
-
-        context.insert("is_private_port", &self.private_port().is_some());
-        if self.private_port().is_some() {
-            context.insert("private_port", &self.private_port().unwrap());
-        }
-
-        context.insert("version", self.version());
-
-        context
     }
 
     fn progress_scope(&self) -> ProgressScope {
@@ -310,8 +283,16 @@ pub trait Downgrade {
     fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
 }
 
+pub trait Terraform {
+    fn terraform_common_resource_dir_path(&self) -> String;
+    fn terraform_resource_dir_path(&self) -> String;
+}
+
 pub trait Helm {
     fn helm_release_name(&self) -> String;
+    fn helm_chart_dir(&self) -> String;
+    fn helm_chart_values_dir(&self) -> String;
+    fn helm_chart_external_name_service_dir(&self) -> String;
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -386,22 +367,48 @@ where
     }
 }
 
+pub fn default_tera_context(
+    service: &dyn Service,
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+) -> TeraContext {
+    let mut context = TeraContext::new();
+
+    context.insert("id", service.id());
+    context.insert("owner_id", environment.owner_id.as_str());
+    context.insert("project_id", environment.project_id.as_str());
+    context.insert("organization_id", environment.organization_id.as_str());
+    context.insert("environment_id", environment.id.as_str());
+    context.insert("region", kubernetes.region());
+    context.insert("name", service.name());
+    context.insert("namespace", environment.namespace());
+    context.insert("cluster_name", kubernetes.name());
+    context.insert("total_cpus", &service.total_cpus());
+    context.insert("total_ram_in_mib", &service.total_ram_in_mib());
+    context.insert("total_instances", &service.total_instances());
+
+    context.insert("is_private_port", &service.private_port().is_some());
+    if service.private_port().is_some() {
+        context.insert("private_port", &service.private_port().unwrap());
+    }
+
+    context.insert("version", service.version());
+
+    context
+}
+
 /// deploy a stateless service created by the user (E.g: App or External Service)
 /// the difference with `deploy_service(..)` is that this function provides the thrown error in case of failure
-pub fn deploy_user_service<T>(
+pub fn deploy_user_stateless_service<T>(
     target: &DeploymentTarget,
     service: &T,
-    charts_dir: &str,
-    tera_context: &TeraContext,
 ) -> Result<(), EngineError>
 where
     T: Service + Helm,
 {
-    deploy_service(
+    deploy_stateless_service(
         target,
         service,
-        charts_dir,
-        tera_context,
         service.engine_error(
             EngineErrorCause::User(
                 "Your application didn't start for some reason. \
@@ -419,11 +426,9 @@ where
 }
 
 /// deploy a stateless service (app, router, database...) on Kubernetes
-pub fn deploy_service<T>(
+pub fn deploy_stateless_service<T>(
     target: &DeploymentTarget,
     service: &T,
-    charts_dir: &str,
-    tera_context: &TeraContext,
     thrown_error: EngineError,
 ) -> Result<(), EngineError>
 where
@@ -435,14 +440,15 @@ where
     };
 
     let workspace_dir = service.workspace_directory();
+    let tera_context = service.tera_context(target)?;
 
     let _ = cast_simple_error_to_engine_error(
         service.engine_error_scope(),
         service.context().execution_id(),
         crate::template::generate_and_copy_all_files_into_dir(
-            charts_dir,
+            service.helm_chart_dir(),
             workspace_dir.as_str(),
-            tera_context,
+            &tera_context,
         ),
     )?;
 
@@ -515,7 +521,10 @@ where
 }
 
 /// do specific operations on a stateless service deployment error
-pub fn deploy_service_error<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
+pub fn deploy_stateless_service_error<T>(
+    target: &DeploymentTarget,
+    service: &T,
+) -> Result<(), EngineError>
 where
     T: Service + Helm,
 {
@@ -558,7 +567,7 @@ where
     Ok(())
 }
 
-pub fn delete_service<T>(
+pub fn delete_stateless_service<T>(
     target: &DeploymentTarget,
     service: &T,
     is_error: bool,
@@ -580,6 +589,264 @@ where
 
     // clean the resource
     let _ = do_stateless_service_cleanup(kubernetes, environment, helm_release_name.as_str())?;
+
+    Ok(())
+}
+
+pub fn deploy_stateful_service<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
+where
+    T: StatefulService + Helm + Terraform,
+{
+    let workspace_dir = service.workspace_directory();
+
+    match target {
+        DeploymentTarget::ManagedServices(kubernetes, _) => {
+            // use terraform
+            info!(
+                "deploy {} with name {} on {}",
+                service.service_type().name(),
+                service.name_with_id(),
+                kubernetes.cloud_provider().kind().name()
+            );
+
+            let context = service.tera_context(target)?;
+
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    service.terraform_common_resource_dir_path(),
+                    &workspace_dir,
+                    &context,
+                ),
+            )?;
+
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    service.terraform_resource_dir_path(),
+                    workspace_dir.as_str(),
+                    &context,
+                ),
+            )?;
+
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    service.helm_chart_external_name_service_dir(),
+                    format!("{}/{}", workspace_dir, "external-name-svc"),
+                    &context,
+                ),
+            )?;
+
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+                    workspace_dir.as_str(),
+                    service.context().is_dry_run_deploy(),
+                ),
+            )?;
+        }
+        DeploymentTarget::SelfHosted(kubernetes, environment) => {
+            // use helm
+            info!(
+                "deploy {} with name {} on {:?} Kubernetes cluster id {}",
+                service.service_type().name(),
+                service.name_with_id(),
+                kubernetes.cloud_provider().kind().name(),
+                kubernetes.id()
+            );
+
+            let context = service.tera_context(target)?;
+            let kubernetes_config_file_path = kubernetes.config_file_path()?;
+
+            // default chart
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    service.helm_chart_dir(),
+                    workspace_dir.as_str(),
+                    &context,
+                ),
+            )?;
+
+            // overwrite with our chart values
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    service.helm_chart_values_dir(),
+                    workspace_dir.as_str(),
+                    &context,
+                ),
+            )?;
+
+            // define labels to add to namespace
+            let namespace_labels = match service.context().resource_expiration_in_seconds() {
+                Some(_) => Some(vec![
+                    (LabelsContent {
+                        name: "ttl".into(),
+                        value: format!(
+                            "{}",
+                            service.context().resource_expiration_in_seconds().unwrap()
+                        ),
+                    }),
+                ]),
+                None => None,
+            };
+
+            // create a namespace with labels if it does not exist
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::cmd::kubectl::kubectl_exec_create_namespace(
+                    kubernetes_config_file_path.as_str(),
+                    environment.namespace(),
+                    namespace_labels,
+                    kubernetes
+                        .cloud_provider()
+                        .credentials_environment_variables(),
+                ),
+            )?;
+
+            // do exec helm upgrade and return the last deployment status
+            let helm_history_row = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::cmd::helm::helm_exec_with_upgrade_history(
+                    kubernetes_config_file_path.as_str(),
+                    environment.namespace(),
+                    service.helm_release_name().as_str(),
+                    workspace_dir.as_str(),
+                    service.start_timeout(),
+                    kubernetes
+                        .cloud_provider()
+                        .credentials_environment_variables(),
+                ),
+            )?;
+
+            // check deployment status
+            if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
+                return Err(service.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "{} service fails to be deployed (before start)",
+                        service.service_type().name()
+                    ),
+                ));
+            }
+
+            // check app status
+            let selector = format!("app={}", service.name());
+
+            match crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                selector.as_str(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables(),
+            ) {
+                Ok(Some(true)) => {}
+                _ => {
+                    return Err(service.engine_error(
+                        EngineErrorCause::Internal,
+                        format!(
+                            "{} database {} failed to start after several retries",
+                            service.service_type().name(),
+                            service.name_with_id()
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub fn delete_stateful_service<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
+where
+    T: StatefulService + Helm + Terraform,
+{
+    match target {
+        DeploymentTarget::ManagedServices(kubernetes, _) => {
+            let workspace_dir = service.workspace_directory();
+            let tera_context = service.tera_context(target)?;
+
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    service.terraform_common_resource_dir_path(),
+                    workspace_dir.as_str(),
+                    &tera_context,
+                ),
+            )?;
+
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    service.terraform_resource_dir_path(),
+                    workspace_dir.as_str(),
+                    &tera_context,
+                ),
+            )?;
+
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    service.helm_chart_external_name_service_dir(),
+                    format!("{}/{}", workspace_dir, "external-name-svc"),
+                    &tera_context,
+                ),
+            )?;
+
+            let _ = cast_simple_error_to_engine_error(
+                service.engine_error_scope(),
+                service.context().execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    service.helm_chart_external_name_service_dir(),
+                    workspace_dir.as_str(),
+                    &tera_context,
+                ),
+            )?;
+
+            match crate::cmd::terraform::terraform_exec_with_init_plan_apply_destroy(
+                workspace_dir.as_str(),
+            ) {
+                Ok(_) => {
+                    info!("let's delete secrets containing tfstates");
+                    let _ = utilities::delete_terraform_tfstate_secret(
+                        *kubernetes,
+                        &get_tfstate_name(service.id()),
+                    );
+                }
+                Err(e) => {
+                    let message = format!("{:?}", e);
+                    error!("{}", message);
+
+                    return Err(service.engine_error(EngineErrorCause::Internal, message));
+                }
+            }
+        }
+        DeploymentTarget::SelfHosted(kubernetes, environment) => {
+            let helm_release_name = service.helm_release_name();
+
+            // clean the resource
+            let _ = do_stateless_service_cleanup(
+                *kubernetes,
+                *environment,
+                helm_release_name.as_str(),
+            )?;
+        }
+    }
 
     Ok(())
 }

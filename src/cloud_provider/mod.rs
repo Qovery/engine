@@ -52,6 +52,15 @@ pub enum Kind {
     Do,
 }
 
+impl Kind {
+    pub fn name(&self) -> &str {
+        match self {
+            Kind::Aws => "AWS",
+            Kind::Do => "Digital Ocean",
+        }
+    }
+}
+
 pub struct TerraformStateCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,

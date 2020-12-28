@@ -4,19 +4,16 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities;
 use crate::cloud_provider::aws::databases::utilities::{get_tfstate_name, get_tfstate_suffix};
-use crate::cloud_provider::environment::{Environment, Kind};
-use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
-    do_stateless_service_cleanup, Action, Backup, Create, Database, DatabaseOptions, DatabaseType,
-    Delete, Downgrade, Pause, Service, ServiceType, StatefulService, Upgrade,
+    default_tera_context, delete_stateful_service, deploy_stateful_service, Action, Backup, Create,
+    Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType,
+    StatefulService, Terraform, Upgrade,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::cmd::structs::LabelsContent;
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, StringError,
-};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
 use crate::models::Context;
 
 pub struct Redis {
@@ -62,42 +59,107 @@ impl Redis {
         }
     }
 
-    fn helm_release_name(&self) -> String {
-        crate::string::cut(format!("redis-{}", self.id()), 50)
+    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
+        match get_redis_version(self.version(), is_managed_services) {
+            Ok(version) => {
+                info!(
+                    "version {} has been requested by the user; but matching version is {}",
+                    self.version(),
+                    version
+                );
+
+                Ok(version)
+            }
+            Err(err) => {
+                error!("{}", err);
+                warn!(
+                    "fallback on the version {} provided by the user",
+                    self.version()
+                );
+
+                Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "The provided Redis version is not supported, please refer to the \
+                documentation https://docs.qovery.com",
+                    ),
+                    err,
+                ))
+            }
+        }
+    }
+}
+
+impl StatefulService for Redis {}
+
+impl Service for Redis {
+    fn context(&self) -> &Context {
+        &self.context
     }
 
-    fn tera_context(
-        &self,
-        kubernetes: &dyn Kubernetes,
-        environment: &Environment,
-    ) -> Result<TeraContext, EngineError> {
-        let mut context = self.default_tera_context(kubernetes, environment);
+    fn service_type(&self) -> ServiceType {
+        ServiceType::Database(DatabaseType::Redis(&self.options))
+    }
 
-        // we need the kubernetes config file to store tfstates file in kube secrets
-        let kubernetes_config_file_path = kubernetes.config_file_path();
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
 
-        match kubernetes_config_file_path {
-            Ok(kube_config) => {
-                context.insert("kubeconfig_path", &kube_config.as_str());
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
-                kubectl::kubectl_exec_create_namespace_without_labels(
-                    &environment.namespace(),
-                    kube_config.as_str(),
-                    kubernetes
-                        .cloud_provider()
-                        .credentials_environment_variables(),
-                );
-            }
-            Err(e) => error!(
-                "Failed to generate the kubernetes config file path: {:?}",
-                e
-            ),
-        }
+    fn version(&self) -> &str {
+        self.version.as_str()
+    }
+
+    fn action(&self) -> &Action {
+        &self.action
+    }
+
+    fn private_port(&self) -> Option<u16> {
+        Some(self.options.port)
+    }
+
+    fn start_timeout(&self) -> Timeout<u32> {
+        Timeout::Default
+    }
+
+    fn total_cpus(&self) -> String {
+        self.total_cpus.to_string()
+    }
+
+    fn total_ram_in_mib(&self) -> u32 {
+        self.total_ram_in_mib
+    }
+
+    fn total_instances(&self) -> u16 {
+        1
+    }
+
+    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        };
 
         let is_managed_services = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
         };
+
+        let mut context = default_tera_context(self, kubernetes, environment);
+
+        // we need the kubernetes config file to store tfstates file in kube secrets
+        let kube_config_file_path = kubernetes.config_file_path()?;
+        context.insert("kubeconfig_path", &kube_config_file_path);
+
+        kubectl::kubectl_exec_create_namespace_without_labels(
+            &environment.namespace(),
+            kube_config_file_path.as_str(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables(),
+        );
 
         let version = self.matching_correct_version(is_managed_services)?;
 
@@ -156,140 +218,6 @@ impl Redis {
         Ok(context)
     }
 
-    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
-        match get_redis_version(self.version(), is_managed_services) {
-            Ok(version) => {
-                info!(
-                    "version {} has been requested by the user; but matching version is {}",
-                    self.version(),
-                    version
-                );
-
-                Ok(version)
-            }
-            Err(err) => {
-                error!("{}", err);
-                warn!(
-                    "fallback on the version {} provided by the user",
-                    self.version()
-                );
-
-                Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "The provided Redis version is not supported, please refer to the \
-                documentation https://docs.qovery.com",
-                    ),
-                    err,
-                ))
-            }
-        }
-    }
-
-    fn delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let workspace_dir = self.workspace_directory();
-
-        match target {
-            DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                let context = self.tera_context(*kubernetes, *environment)?;
-
-                // deploy before destroy to avoid missing elements
-                self.on_create(target)?;
-
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
-                        &workspace_dir,
-                        &context,
-                    ),
-                )?;
-
-                match crate::cmd::terraform::terraform_exec_with_init_plan_apply_destroy(
-                    workspace_dir.as_str(),
-                ) {
-                    Ok(_) => {
-                        info!("Deleting secrets containing tfstates");
-                        let _ = utilities::delete_terraform_tfstate_secret(
-                            *kubernetes,
-                            &get_tfstate_name(&self.id()),
-                        );
-                    }
-                    Err(e) => {
-                        let message = format!(
-                            "Error while destroying infrastructure {}",
-                            e.message.unwrap_or("".into())
-                        );
-
-                        error!("{}", message);
-
-                        return Err(self.engine_error(EngineErrorCause::Internal, message));
-                    }
-                }
-            }
-            DeploymentTarget::SelfHosted(kubernetes, environment) => {
-                let helm_release_name = self.helm_release_name();
-
-                // clean the resource
-                let _ = do_stateless_service_cleanup(
-                    *kubernetes,
-                    *environment,
-                    helm_release_name.as_str(),
-                )?;
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl StatefulService for Redis {}
-
-impl Service for Redis {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn service_type(&self) -> ServiceType {
-        ServiceType::Database(DatabaseType::Redis(&self.options))
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        self.version.as_str()
-    }
-
-    fn action(&self) -> &Action {
-        &self.action
-    }
-
-    fn private_port(&self) -> Option<u16> {
-        Some(self.options.port)
-    }
-
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
-    }
-
-    fn total_cpus(&self) -> String {
-        self.total_cpus.to_string()
-    }
-
-    fn total_ram_in_mib(&self) -> u32 {
-        self.total_ram_in_mib
-    }
-
-    fn total_instances(&self) -> u16 {
-        1
-    }
-
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::Database(
             self.id().to_string(),
@@ -301,175 +229,41 @@ impl Service for Redis {
 
 impl Database for Redis {}
 
+impl Helm for Redis {
+    fn helm_release_name(&self) -> String {
+        crate::string::cut(format!("redis-{}", self.id()), 50)
+    }
+
+    fn helm_chart_dir(&self) -> String {
+        format!("{}/common/services/redis", self.context.lib_root_dir())
+    }
+
+    fn helm_chart_values_dir(&self) -> String {
+        format!("{}/common/chart_values/redis", self.context.lib_root_dir())
+    }
+
+    fn helm_chart_external_name_service_dir(&self) -> String {
+        format!(
+            "{}/aws/charts/external-name-svc",
+            self.context.lib_root_dir()
+        )
+    }
+}
+
+impl Terraform for Redis {
+    fn terraform_common_resource_dir_path(&self) -> String {
+        format!("{}/aws/services/common", self.context.lib_root_dir())
+    }
+
+    fn terraform_resource_dir_path(&self) -> String {
+        format!("{}/aws/services/redis", self.context.lib_root_dir())
+    }
+}
+
 impl Create for Redis {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        match target {
-            DeploymentTarget::ManagedServices(kubernetes, environment) => {
-                // use terraform
-                info!("deploy Redis on AWS Elasticache for {}", self.name());
-                let context = self.tera_context(*kubernetes, *environment)?;
-
-                let workspace_dir = self.workspace_directory();
-
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!("{}/aws/services/common", self.context.lib_root_dir()).as_str(),
-                        &workspace_dir,
-                        &context,
-                    ),
-                )?;
-
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!("{}/aws/services/redis", self.context.lib_root_dir()).as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
-                )?;
-
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        format!(
-                            "{}/aws/charts/external-name-svc",
-                            self.context.lib_root_dir()
-                        )
-                        .as_str(),
-                        format!("{}/{}", workspace_dir, "external-name-svc").as_str(),
-                        &context,
-                    ),
-                )?;
-
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
-                        workspace_dir.as_str(),
-                        self.context.is_dry_run_deploy(),
-                    ),
-                )?;
-            }
-            DeploymentTarget::SelfHosted(kubernetes, environment) => {
-                // use helm
-                info!("deploy Redis on Kubernetes for {}", self.name());
-
-                let context = self.tera_context(*kubernetes, *environment)?;
-                let workspace_dir = self.workspace_directory();
-
-                let kubernetes_config_file_path = kubernetes.config_file_path()?;
-
-                // default chart
-                let from_dir = format!("{}/common/services/redis", self.context.lib_root_dir());
-
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        from_dir.as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
-                )?;
-
-                // overwrite with our chart values
-                let chart_values =
-                    format!("{}/common/chart_values/redis", &self.context.lib_root_dir());
-
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        chart_values.as_str(),
-                        workspace_dir.as_str(),
-                        &context,
-                    ),
-                )?;
-
-                let helm_release_name = self.helm_release_name();
-
-                // define labels to add to namespace
-                let namespace_labels = match self.context.resource_expiration_in_seconds() {
-                    Some(_) => Some(vec![
-                        (LabelsContent {
-                            name: "ttl".to_string(),
-                            value: format! {"{}", self.context.resource_expiration_in_seconds().unwrap()},
-                        }),
-                    ]),
-                    None => None,
-                };
-
-                // create a namespace with labels if do not exists
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::cmd::kubectl::kubectl_exec_create_namespace(
-                        kubernetes_config_file_path.as_str(),
-                        environment.namespace(),
-                        namespace_labels,
-                        kubernetes
-                            .cloud_provider()
-                            .credentials_environment_variables(),
-                    ),
-                )?;
-
-                // do exec helm upgrade and return the last deployment status
-                let helm_history_row = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::cmd::helm::helm_exec_with_upgrade_history(
-                        kubernetes_config_file_path.as_str(),
-                        environment.namespace(),
-                        helm_release_name.as_str(),
-                        workspace_dir.as_str(),
-                        Timeout::Default,
-                        kubernetes
-                            .cloud_provider()
-                            .credentials_environment_variables(),
-                    ),
-                )?;
-
-                // check deployment status
-                if helm_history_row.is_none()
-                    || !helm_history_row.unwrap().is_successfully_deployed()
-                {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        "Redis database fails to be deployed (before start)".into(),
-                    ));
-                }
-
-                // check app status
-                let selector = format!("app={}", self.name());
-
-                match crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
-                    kubernetes_config_file_path.as_str(),
-                    environment.namespace(),
-                    selector.as_str(),
-                    kubernetes
-                        .cloud_provider()
-                        .credentials_environment_variables(),
-                ) {
-                    Ok(Some(true)) => {}
-                    _ => {
-                        return Err(self.engine_error(
-                            EngineErrorCause::Internal,
-                            format!(
-                                "Redis database {} with id {} failed to start after several retries",
-                                self.name(),
-                                self.id()
-                            ),
-                        ));
-                    }
-                }
-            }
-        }
-
-        Ok(())
+        info!("AWS.Redis.on_create() called for {}", self.name());
+        deploy_stateful_service(target, self)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -509,7 +303,7 @@ impl Pause for Redis {
 impl Delete for Redis {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.Redis.on_delete() called for {}", self.name());
-        self.delete(target)
+        delete_stateful_service(target, self)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {

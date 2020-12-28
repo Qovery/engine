@@ -17,11 +17,11 @@ pub fn generate_and_copy_all_files_into_dir<S, P>(
     context: &Context,
 ) -> Result<(), SimpleError>
 where
-    S: AsRef<Path> + Copy,
-    P: AsRef<Path> + Copy,
+    S: AsRef<Path>,
+    P: AsRef<Path>,
 {
     // generate j2 templates
-    let rendered_templates = match generate_j2_template_files(from_dir, context) {
+    let rendered_templates = match generate_j2_template_files(from_dir.as_ref(), context) {
         Ok(rt) => rt,
         Err(e) => {
             let error_msg = match e.kind {

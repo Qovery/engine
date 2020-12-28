@@ -2,14 +2,12 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{
     CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate,
 };
 use crate::cloud_provider::service::{
-    delete_service, Action, Create, Delete, Helm, Pause, Router as RRouter, Service, ServiceType,
-    StatelessService,
+    default_tera_context, delete_stateless_service, Action, Create, Delete, Helm, Pause,
+    Router as RRouter, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -47,9 +45,60 @@ impl Router {
             listeners: vec![],
         }
     }
+}
 
-    fn tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
-        let mut context = self.default_tera_context(kubernetes, environment);
+impl Service for Router {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn service_type(&self) -> ServiceType {
+        ServiceType::Router
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        "1.0"
+    }
+
+    fn action(&self) -> &Action {
+        &Action::Create
+    }
+
+    fn private_port(&self) -> Option<u16> {
+        None
+    }
+
+    fn start_timeout(&self) -> Timeout<u32> {
+        Timeout::Default
+    }
+
+    fn total_cpus(&self) -> String {
+        "1".to_string()
+    }
+
+    fn total_ram_in_mib(&self) -> u32 {
+        1
+    }
+
+    fn total_instances(&self) -> u16 {
+        1
+    }
+
+    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+        let (kubernetes, environment) = match target {
+            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        };
+
+        let mut context = default_tera_context(self, kubernetes, environment);
 
         let applications = environment
             .stateless_services
@@ -189,53 +238,7 @@ impl Router {
         };
         context.insert("spec_acme_server", lets_encrypt_url);
 
-        context
-    }
-}
-
-impl Service for Router {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn service_type(&self) -> ServiceType {
-        ServiceType::Router
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        "1.0"
-    }
-
-    fn action(&self) -> &Action {
-        &Action::Create
-    }
-
-    fn private_port(&self) -> Option<u16> {
-        None
-    }
-
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
-    }
-
-    fn total_cpus(&self) -> String {
-        "1".to_string()
-    }
-
-    fn total_ram_in_mib(&self) -> u32 {
-        1
-    }
-
-    fn total_instances(&self) -> u16 {
-        1
+        Ok(context)
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -258,6 +261,24 @@ impl crate::cloud_provider::service::Router for Router {
 impl Helm for Router {
     fn helm_release_name(&self) -> String {
         crate::string::cut(format!("router-{}", self.id()), 50)
+    }
+
+    fn helm_chart_dir(&self) -> String {
+        format!(
+            "{}/common/charts/nginx-ingress",
+            self.context().lib_root_dir()
+        )
+    }
+
+    fn helm_chart_values_dir(&self) -> String {
+        format!(
+            "{}/common/chart_values/nginx-ingress",
+            self.context.lib_root_dir()
+        )
+    }
+
+    fn helm_chart_external_name_service_dir(&self) -> String {
+        String::new()
     }
 }
 
@@ -288,7 +309,7 @@ impl Create for Router {
 
         // respect order - getting the context here and not before is mandatory
         // the nginx-ingress must be available to get the external dns target if necessary
-        let mut context = self.tera_context(kubernetes, environment);
+        let mut context = self.tera_context(target)?;
 
         if !self.custom_domains.is_empty() {
             // custom domains? create an NGINX ingress
@@ -300,15 +321,11 @@ impl Create for Router {
                 "routers/nginx-ingress",
             );
 
-            let from_dir = format!(
-                "{}/common/chart_values/nginx-ingress",
-                self.context.lib_root_dir()
-            );
             let _ = cast_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context.execution_id(),
                 crate::template::generate_and_copy_all_files_into_dir(
-                    from_dir.as_str(),
+                    self.helm_chart_values_dir(),
                     into_dir.as_str(),
                     &context,
                 ),
@@ -317,13 +334,7 @@ impl Create for Router {
             let _ = cast_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context.execution_id(),
-                crate::template::copy_non_template_files(
-                    format!(
-                        "{}/common/charts/nginx-ingress",
-                        self.context().lib_root_dir()
-                    ),
-                    into_dir.as_str(),
-                ),
+                crate::template::copy_non_template_files(self.helm_chart_dir(), into_dir.as_str()),
             )?;
 
             // do exec helm upgrade and return the last deployment status
@@ -432,14 +443,14 @@ impl Create for Router {
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_create_error() called for {}", self.name());
-        delete_service(target, self, true)
+        delete_stateless_service(target, self, true)
     }
 }
 
 impl Pause for Router {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.router.on_pause() called for {}", self.name());
-        delete_service(target, self, false)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -448,14 +459,14 @@ impl Pause for Router {
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_pause_error() called for {}", self.name());
-        delete_service(target, self, true)
+        delete_stateless_service(target, self, true)
     }
 }
 
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.router.on_delete() called for {}", self.name());
-        delete_service(target, self, false)
+        delete_stateless_service(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -464,6 +475,6 @@ impl Delete for Router {
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_delete_error() called for {}", self.name());
-        delete_service(target, self, true)
+        delete_stateless_service(target, self, true)
     }
 }
