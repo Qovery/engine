@@ -309,11 +309,11 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
-  #sorts logs into multiple files
+  # sorts logs into multiple files
   cd $GITLAB_LOG_UTILITIES_DIR
   # sort them
-  cat $GITLAB_LOG_OUTPUT_DIR/output.log | ./sorter.sh
-  # print failed
+  ./sorter.sh $GITLAB_LOG_OUTPUT_DIR/output.log
+  # print failed tests
   ./failed_test_printer.sh
   return $TESTS_STATUS
 }
