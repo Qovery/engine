@@ -427,7 +427,7 @@ impl<'a> Kubernetes for EKS<'a> {
             ) {
                 Ok(_) => info!("Role {} already exist, or just created", role.role_name),
                 Err(e) => error!(
-                    "Wile getting, or creating the role {} : causing by {:?}",
+                    "While getting, or creating the role {} : causing by {:?}",
                     role.role_name, e
                 ),
             }
