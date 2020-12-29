@@ -17,7 +17,7 @@ use self::test_utilities::digitalocean::{digital_ocean_token, get_kube_cluster_n
 use self::test_utilities::utilities::{generate_id, init};
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 
-#[test]
+//#[test]
 fn create_doks_cluster_in_fra_10() {
     init();
 
