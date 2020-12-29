@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use crate::error::StringError;
-use crate::utilities::get_version_number;
+use core::option::Option::{None, Some};
+use core::result::Result;
+use core::result::Result::{Err, Ok};
 
 pub fn get_self_hosted_postgres_version(requested_version: &str) -> Result<String, StringError> {
     let mut supported_postgres_versions = HashMap::new();
@@ -209,4 +211,37 @@ pub fn generate_supported_version(
     supported_versions.insert(major.to_string(), latest_major_version);
 
     supported_versions
+}
+
+// unfortunately some proposed versions are not SemVer like Elasticache (6.x)
+// this is why we need ot have our own structure
+pub struct VersionsNumber {
+    pub(crate) major: String,
+    pub(crate) minor: Option<String>,
+    pub(crate) patch: Option<String>,
+}
+
+fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
+    let mut version_split = version.split(".");
+
+    let major = match version_split.next() {
+        Some(major) => major.to_string(),
+        _ => return Err("please check the version you've sent, it can't be checked".to_string()),
+    };
+
+    let minor = match version_split.next() {
+        Some(minor) => Some(minor.to_string()),
+        _ => None,
+    };
+
+    let patch = match version_split.next() {
+        Some(patch) => Some(patch.to_string()),
+        _ => None,
+    };
+
+    Ok(VersionsNumber {
+        major,
+        minor,
+        patch,
+    })
 }

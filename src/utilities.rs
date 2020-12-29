@@ -1,38 +1,13 @@
-use core::option::Option::{None, Some};
-use core::result::Result;
-use core::result::Result::{Err, Ok};
+use reqwest::header;
+use reqwest::header::{HeaderMap, HeaderValue};
 
-use crate::error::StringError;
-
-// unfortunately some proposed versions are not SemVer like Elasticache (6.x)
-// this is why we need ot have our own structure
-pub struct VersionsNumber {
-    pub(crate) major: String,
-    pub(crate) minor: Option<String>,
-    pub(crate) patch: Option<String>,
-}
-
-pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
-    let mut version_split = version.split(".");
-
-    let major = match version_split.next() {
-        Some(major) => major.to_string(),
-        _ => return Err("please check the version you've sent, it can't be checked".to_string()),
-    };
-
-    let minor = match version_split.next() {
-        Some(minor) => Some(minor.to_string()),
-        _ => None,
-    };
-
-    let patch = match version_split.next() {
-        Some(patch) => Some(patch.to_string()),
-        _ => None,
-    };
-
-    Ok(VersionsNumber {
-        major,
-        minor,
-        patch,
-    })
+// generate the right header for digital ocean with token
+pub fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
+    let mut headers = header::HeaderMap::new();
+    headers.insert("Content-Type", "application/json".parse().unwrap());
+    headers.insert(
+        "Authorization",
+        format!("Bearer {}", token).parse().unwrap(),
+    );
+    headers
 }

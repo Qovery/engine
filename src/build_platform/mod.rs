@@ -61,6 +61,10 @@ pub struct Image {
     pub name: String,
     pub tag: String,
     pub commit_id: String,
+    // registry name where the image has been pushed
+    // (this is not mandatory; only used by DOCR implementation today)
+    pub registry_name: Option<String>,
+    // complete registry URL where the image has been pushed
     pub registry_url: Option<String>,
 }
 

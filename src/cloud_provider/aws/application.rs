@@ -171,6 +171,16 @@ impl Service for Application {
 
         context.insert("environment_variables", &environment_variables);
 
+        match self.image.registry_name.as_ref() {
+            Some(registry_name) => {
+                context.insert("is_registry_name", &true);
+                context.insert("registry_name", registry_name);
+            }
+            None => {
+                context.insert("is_registry_name", &false);
+            }
+        };
+
         let storage = self
             .storage
             .iter()

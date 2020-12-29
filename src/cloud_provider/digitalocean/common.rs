@@ -3,8 +3,8 @@ extern crate serde_json;
 use reqwest::StatusCode;
 
 use crate::cloud_provider::digitalocean::models::cluster::Clusters;
-use crate::container_registry::docr::get_header_with_bearer;
 use crate::error::{SimpleError, SimpleErrorKind};
+use crate::utilities::get_header_with_bearer;
 
 pub const DO_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/clusters";
 

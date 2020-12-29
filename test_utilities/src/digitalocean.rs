@@ -7,7 +7,7 @@ use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::models::cluster::Cluster;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
-use qovery_engine::container_registry::docr::{get_header_with_bearer, DOCR};
+use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
@@ -112,7 +112,7 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
 }
 
 pub fn get_kube_cluster_name_from_uuid(uuid: &str) -> String {
-    let headers = get_header_with_bearer(digital_ocean_token().as_str());
+    let headers = qovery_engine::utilities::get_header_with_bearer(digital_ocean_token().as_str());
     let path = format!(
         "https://api.digitalocean.com/v2/kubernetes/clusters/{}",
         uuid

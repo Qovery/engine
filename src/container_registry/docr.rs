@@ -1,27 +1,467 @@
 extern crate digitalocean;
 
-use digitalocean::DigitalOcean;
-use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{header, StatusCode};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
-use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
-use crate::error::{EngineErrorCause, SimpleError, SimpleErrorKind};
+use crate::error::{
+    cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind,
+};
 use crate::models::{
     Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
+use crate::{cmd, utilities};
+
+const CR_API_PATH: &str = "https://api.digitalocean.com/v2/registry";
+const CR_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/registry";
 
 // TODO : use --output json
 // see https://www.digitalocean.com/community/tutorials/how-to-use-doctl-the-official-digitalocean-command-line-client
 
 pub struct DOCR {
     pub context: Context,
-    pub registry_name: String,
+    pub name: String,
     pub api_key: String,
     pub id: String,
     pub listeners: Listeners,
+}
+
+impl DOCR {
+    pub fn new(context: Context, id: &str, name: &str, api_key: &str) -> Self {
+        DOCR {
+            context,
+            name: name.into(),
+            api_key: api_key.into(),
+            id: id.into(),
+            listeners: vec![],
+        }
+    }
+
+    fn get_repository_name(&self, image: &Image) -> Result<String, EngineError> {
+        let registry_name = match image.registry_name.as_ref() {
+            Some(registry_name) => registry_name.clone(),
+            None => cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                get_current_registry_name(self.api_key.as_str()),
+            )?,
+        };
+
+        Ok(registry_name)
+    }
+
+    fn create_repository(&self, image: &Image) -> Result<(), EngineError> {
+        let registry_name = match image.registry_name.as_ref() {
+            Some(registry_name) => registry_name.clone(),
+            None => self.name.clone(),
+        };
+
+        let headers = utilities::get_header_with_bearer(&self.api_key);
+        // subscription_tier_slug: https://www.digitalocean.com/products/container-registry/
+        // starter and basic tiers are too limited on repository creation
+        let repo = DoApiCreateRepository {
+            name: registry_name.clone(),
+            subscription_tier_slug: "professional".to_string(),
+        };
+
+        match serde_json::to_string(&repo) {
+            Ok(repo_res) => {
+                let res = reqwest::blocking::Client::new()
+                    .post(CR_API_PATH)
+                    .headers(headers)
+                    .body(repo_res)
+                    .send();
+
+                match res {
+                    Ok(output) => match output.status() {
+                        StatusCode::OK => Ok(()),
+                        StatusCode::CREATED => Ok(()),
+                        status => {
+                            warn!("status from DO registry API {}", status);
+                            return Err(self.engine_error(
+                                EngineErrorCause::Internal,
+                                format!(
+                                    "Bad status code : {} returned by the DO registry API for creating DO CR {}",
+                                    status,
+                                    registry_name.as_str(),
+                                ),
+                            ));
+                        }
+                    },
+                    Err(e) => {
+                        return Err(self.engine_error(
+                            EngineErrorCause::Internal,
+                            format!(
+                                "failed to create DOCR repository {} : {:?}",
+                                registry_name.as_str(),
+                                e,
+                            ),
+                        ));
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "Unable to initialize DO Registry {} : {:?}",
+                        registry_name.as_str(),
+                        e,
+                    ),
+                ));
+            }
+        }
+    }
+
+    fn push_image(
+        &self,
+        registry_name: String,
+        dest: String,
+        image: &Image,
+    ) -> Result<PushResult, EngineError> {
+        match cmd::utilities::exec(
+            "docker",
+            vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
+        ) {
+            Err(_) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "failed to tag image ({}) {:?}",
+                        image.name_with_tag(),
+                        image,
+                    ),
+                ));
+            }
+            _ => {}
+        };
+
+        match cmd::utilities::exec_with_output(
+            "docker",
+            vec!["push", dest.as_str()],
+            |r_out| match r_out {
+                Ok(line) => info!("{}", line),
+                Err(line) => error!("{}", line),
+            },
+            |r_out| match r_out {
+                Ok(line) => info!("{}", line),
+                Err(line) => error!("{}", line),
+            },
+        ) {
+            Err(_) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "failed to push image {:?} into DOCR {}",
+                        image,
+                        self.name_with_id(),
+                    ),
+                ));
+            }
+            _ => {}
+        };
+
+        let mut image = image.clone();
+        image.registry_name = Some(registry_name);
+        image.registry_url = Some(dest);
+
+        Ok(PushResult { image })
+    }
+
+    pub fn delete_repository(&self) -> Result<(), EngineError> {
+        let headers = utilities::get_header_with_bearer(&self.api_key);
+        let res = reqwest::blocking::Client::new()
+            .delete(CR_API_PATH)
+            .headers(headers)
+            .send();
+
+        match res {
+            Ok(out) => match out.status() {
+                StatusCode::NO_CONTENT => Ok(()),
+                status => {
+                    warn!("delete status from DO registry API {}", status);
+                    return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        format!(
+                            "Bad status code : {} returned by the DO registry API for deleting DOCR repository",
+                            status,
+                        ),
+                    ));
+                }
+            },
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!("No response from the Digital Ocean API : {:?}", e),
+                ));
+            }
+        }
+    }
+}
+
+impl ContainerRegistry for DOCR {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn kind(&self) -> Kind {
+        Kind::Docr
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn is_valid(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
+    }
+
+    fn on_create(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_create_error(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_delete(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_delete_error(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn does_image_exists(&self, image: &Image) -> bool {
+        let registry_name = match self.get_repository_name(image) {
+            Ok(registry_name) => registry_name,
+            Err(err) => {
+                warn!("{:?}", err);
+                return false;
+            }
+        };
+
+        let headers = utilities::get_header_with_bearer(self.api_key.as_str());
+        let url = format!(
+            "https://api.digitalocean.com/v2/registry/{}/repositories/{}/tags",
+            registry_name,
+            image.name.as_str()
+        );
+
+        let res = reqwest::blocking::Client::new()
+            .get(url.as_str())
+            .headers(headers)
+            .send();
+
+        let body = match res {
+            Ok(output) => match output.status() {
+                StatusCode::OK => output.text(),
+                _ => {
+                    error!(
+                        "While tyring to get all tags for image: {}, maybe this image not exist !",
+                        &image.name
+                    );
+                    return false;
+                }
+            },
+            Err(_) => {
+                error!(
+                    "While trying to communicate with DigitalOcean API to retrieve all tags for image {}",
+                    &image.name
+                );
+                return false;
+            }
+        };
+
+        match body {
+            Ok(out) => {
+                let body_de = serde_json::from_str::<DescribeTagsForImage>(&out);
+                match body_de {
+                    Ok(tags_list) => {
+                        for tag_element in tags_list.tags {
+                            if tag_element.tag.eq(&image.tag) {
+                                return true;
+                            }
+                        }
+                        false
+                    }
+                    Err(_) => {
+                        error!(
+                            "Unable to deserialize tags from DigitalOcean API for image {}",
+                            &image.tag
+                        );
+                        return false;
+                    }
+                }
+            }
+            _ => {
+                error!(
+                    "while retrieving tags for image {} Unable to get output from DigitalOcean API",
+                    &image.name
+                );
+                return false;
+            }
+        }
+    }
+
+    // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
+    fn push(&self, image: &Image, _force_push: bool) -> Result<PushResult, EngineError> {
+        let registry_name = self.get_repository_name(image)?;
+
+        match self.create_repository(&image) {
+            Ok(_) => info!(
+                "Digital Ocean Container registry {} is created",
+                registry_name.as_str()
+            ),
+            Err(_) => warn!(
+                "Unable to create Container registry {} - Does it already exist?",
+                registry_name.as_str()
+            ),
+        };
+
+        match cmd::utilities::exec(
+            "doctl",
+            vec![
+                "registry",
+                "login",
+                self.name.as_str(),
+                "-t",
+                self.api_key.as_str(),
+            ],
+        ) {
+            Err(_) => {
+                return Err(
+                    self.engine_error(
+                        EngineErrorCause::User("Your DOCR account seems to be no longer valid (bad Credentials). \
+                    Please contact your Organization administrator to fix or change the Credentials."),
+                        format!("failed to login to DOCR {}", self.name_with_id()))
+                );
+            }
+            _ => {}
+        };
+
+        //TODO: check if image doesn't exist before pushing it!
+
+        let dest = format!(
+            "registry.digitalocean.com/{}/{}",
+            registry_name.as_str(),
+            image.name_with_tag()
+        );
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let info_message = format!(
+            "image {:?} does not exist into DOCR {} repository - let's upload it",
+            image, registry_name
+        );
+
+        listeners_helper.start_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
+
+        self.push_image(registry_name, dest, &image)
+    }
+
+    fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
+        Ok(PushResult {
+            image: image.clone(),
+        })
+    }
+}
+
+pub fn subscribe_kube_cluster_to_container_registry(
+    api_key: &str,
+    cluster_uuid: &str,
+) -> Result<(), SimpleError> {
+    let headers = utilities::get_header_with_bearer(api_key);
+    let cluster_ids = DoApiSubscribeToKubeCluster {
+        cluster_uuids: vec![cluster_uuid.to_string()],
+    };
+
+    let res_cluster_to_link = serde_json::to_string(&cluster_ids);
+    return match res_cluster_to_link {
+        Ok(cluster_to_link) => {
+            let res = reqwest::blocking::Client::new()
+                .post(CR_CLUSTER_API_PATH)
+                .headers(headers)
+                .body(cluster_to_link)
+                .send();
+
+            match res {
+                Ok(output) => match output.status() {
+                    StatusCode::NO_CONTENT => Ok(()),
+                    status => {
+                        warn!("status from DO registry API {}", status);
+                        Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
+                    }
+                },
+                Err(e) => {
+                    error!("{:?}", e);
+                    Err(SimpleError::new(SimpleErrorKind::Other, Some("Unable to call Digital Ocean when tyring to subscribe repository to cluster")))
+                }
+            }
+        }
+        Err(e) => {
+            error!("{:?}", e);
+            Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some("Unable to Serialize digital ocean cluster uuids"),
+            ))
+        }
+    };
+}
+
+pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
+    let headers = utilities::get_header_with_bearer(api_key);
+    let res = reqwest::blocking::Client::new()
+        .get(CR_API_PATH)
+        .headers(headers)
+        .send();
+
+    return match res {
+        Ok(output) => match output.status() {
+            StatusCode::OK => {
+                let content = output.text().unwrap();
+                let res_registry = serde_json::from_str::<DoApiGetContainerRegistry>(&content);
+
+                match res_registry {
+                    Ok(registry) => Ok(registry.registry.name),
+                    Err(err) => Err(SimpleError::new(
+                        SimpleErrorKind::Other,
+                        Some(
+                            format!("An error occurred while deserializing JSON coming from Digital Ocean API: error: {:?}", err),
+                        ),
+                    )),
+                }
+            }
+            status => {
+                warn!("status from Digital Ocean Registry API {}", status);
+                Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
+            }
+        },
+        Err(e) => {
+            error!("{:?}", e);
+            Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some(
+                    "Unable to call Digital Ocean when tyring to fetch the container registry name",
+                ),
+            ))
+        }
+    };
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -79,432 +519,6 @@ pub struct Tier {
     pub included_bandwidth_bytes: i64,
     #[serde(rename = "monthly_price_in_cents")]
     pub monthly_price_in_cents: i64,
-}
-
-pub const CR_API_PATH: &str = "https://api.digitalocean.com/v2/registry";
-pub const CR_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/registry";
-
-impl DOCR {
-    pub fn new(context: Context, id: &str, registry_name: &str, api_key: &str) -> Self {
-        DOCR {
-            context,
-            registry_name: registry_name.to_string(),
-            api_key: api_key.to_string(),
-            id: id.to_string(),
-            listeners: vec![],
-        }
-    }
-    pub fn client(&self) -> DigitalOcean {
-        DigitalOcean::new(self.api_key.as_str()).unwrap()
-    }
-
-    pub fn create_repository(&self, _image: &Image) -> Result<(), EngineError> {
-        let headers = get_header_with_bearer(&self.api_key);
-        // subscription_tier_slug: https://www.digitalocean.com/products/container-registry/
-        // starter and basic tiers are too limited on repository creation
-        let repo = DoApiCreateRepository {
-            name: self.registry_name.clone(),
-            subscription_tier_slug: "professional".to_owned(),
-        };
-        let to_create_repo = serde_json::to_string(&repo);
-        match to_create_repo {
-            Ok(repo_res) => {
-                let res = reqwest::blocking::Client::new()
-                    .post(CR_API_PATH)
-                    .headers(headers)
-                    .body(repo_res)
-                    .send();
-                match res {
-                    Ok(output) => match output.status() {
-                        StatusCode::OK => Ok(()),
-                        StatusCode::CREATED => Ok(()),
-                        status => {
-                            warn!("status from DO registry API {}", status);
-                            return Err(self.engine_error(
-                                EngineErrorCause::Internal,
-                                format!(
-                                    "Bad status code : {} returned by the DO registry API for creating DO CR {}",
-                                    status,
-                                    &self.registry_name,
-                                ),
-                            ));
-                        }
-                    },
-                    Err(e) => {
-                        return Err(self.engine_error(
-                            EngineErrorCause::Internal,
-                            format!(
-                                "failed to create repository {} : {:?}",
-                                &self.registry_name, e,
-                            ),
-                        ));
-                    }
-                }
-            }
-            Err(e) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "Unable to initialize DO Registry {} : {:?}",
-                        &self.registry_name, e,
-                    ),
-                ));
-            }
-        }
-    }
-
-    pub fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, EngineError> {
-        match cmd::utilities::exec(
-            "docker",
-            vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
-        ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to tag image ({}) {:?}",
-                        image.name_with_tag(),
-                        image,
-                    ),
-                ));
-            }
-            _ => {}
-        };
-
-        match cmd::utilities::exec_with_output(
-            "docker",
-            vec!["push", dest.as_str()],
-            |r_out| match r_out {
-                Ok(line) => info!("{}", line),
-                Err(line) => error!("{}", line),
-            },
-            |r_out| match r_out {
-                Ok(line) => info!("{}", line),
-                Err(line) => error!("{}", line),
-            },
-        ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to push image {:?} into DOCR {}",
-                        image,
-                        self.name_with_id(),
-                    ),
-                ));
-            }
-            _ => {}
-        };
-
-        let mut image = image.clone();
-        image.registry_url = Some(dest);
-
-        Ok(PushResult { image })
-    }
-
-    pub fn delete_repository(&self, _image: &Image) -> Result<(), EngineError> {
-        let headers = get_header_with_bearer(&self.api_key);
-        let res = reqwest::blocking::Client::new()
-            .delete(CR_API_PATH)
-            .headers(headers)
-            .send();
-        match res {
-            Ok(out) => match out.status() {
-                StatusCode::NO_CONTENT => Ok(()),
-                status => {
-                    warn!("delete status from DO registry API {}", status);
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        format!(
-                            "Bad status code : {} returned by the DO registry API for deleting DO CR {}",
-                            status,
-                            &self.registry_name,
-                        ),
-                    ));
-                }
-            },
-            Err(e) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "No response from the Digital Ocean API {} : {:?}",
-                        &self.registry_name, e,
-                    ),
-                ));
-            }
-        }
-    }
-}
-
-pub fn path_to_retrieve_all_tags_from_registry(
-    registry_name: String,
-    repository_name: String,
-) -> String {
-    format!(
-        "https://api.digitalocean.com/v2/registry/{}/repositories/{}/tags",
-        registry_name, repository_name
-    )
-}
-
-// generate the right header for digital ocean with token
-pub fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
-    let mut headers = header::HeaderMap::new();
-    headers.insert("Content-Type", "application/json".parse().unwrap());
-    headers.insert(
-        "Authorization",
-        format!("Bearer {}", token).parse().unwrap(),
-    );
-    headers
-}
-
-impl ContainerRegistry for DOCR {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn kind(&self) -> Kind {
-        Kind::Docr
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.registry_name.as_str()
-    }
-
-    fn is_valid(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
-    fn on_create(&self) -> Result<(), EngineError> {
-        info!("DOCR.on_create() called");
-        Ok(())
-    }
-
-    fn on_create_error(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_delete(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_delete_error(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn does_image_exists(&self, image: &Image) -> bool {
-        let headers = get_header_with_bearer(self.api_key.as_str());
-        let res = reqwest::blocking::Client::new()
-            .get(
-                path_to_retrieve_all_tags_from_registry(
-                    self.registry_name.clone(),
-                    image.name.clone(),
-                )
-                .as_str(),
-            )
-            .headers(headers)
-            .send();
-        let body = match res {
-            Ok(output) => match output.status() {
-                StatusCode::OK => output.text(),
-                _ => {
-                    error!(
-                        "While tyring to get all tags for image: {}, maybe this image not exist !",
-                        &image.name
-                    );
-                    return false;
-                }
-            },
-            Err(_) => {
-                error!(
-                    "While trying to communicate with DigitalOcean API to retrieve all tags for image {}",
-                    &image.name
-                );
-                return false;
-            }
-        };
-        match body {
-            Ok(out) => {
-                let body_de = serde_json::from_str::<DescribeTagsForImage>(&out);
-                match body_de {
-                    Ok(tags_list) => {
-                        for tag_element in tags_list.tags {
-                            if tag_element.tag.eq(&image.tag) {
-                                return true;
-                            }
-                        }
-                        false
-                    }
-                    Err(_) => {
-                        error!(
-                            "Unable to deserialize tags from DigitalOcean API for image {}",
-                            &image.tag
-                        );
-                        return false;
-                    }
-                }
-            }
-            _ => {
-                error!(
-                    "while retrieving tags for image {} Unable to get output from DigitalOcean API",
-                    &image.name
-                );
-                return false;
-            }
-        }
-    }
-
-    // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
-    fn push(&self, image: &Image, _force_push: bool) -> Result<PushResult, EngineError> {
-        let image = image.clone();
-        match self.create_repository(&image) {
-            Ok(_) => info!(
-                "Digital Ocean Container registry {} is created",
-                self.registry_name
-            ),
-            Err(_) => warn!("Unable to create Container registry {}", self.registry_name),
-        };
-
-        match cmd::utilities::exec(
-            "doctl",
-            vec![
-                "registry",
-                "login",
-                self.registry_name.as_str(),
-                "-t",
-                self.api_key.as_str(),
-            ],
-        ) {
-            Err(_) => {
-                return Err(
-                    self.engine_error(
-                        EngineErrorCause::User("Your DOCR account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials."),
-                        format!("failed to login to DOCR {}", self.name_with_id()))
-                );
-            }
-            _ => {}
-        };
-        //TODO: check if image doesn't exist before pushing it!
-
-        let dest = format!(
-            "registry.digitalocean.com/{}/{}",
-            self.registry_name.as_str(),
-            image.name_with_tag()
-        );
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-        let info_message = format!(
-            "image {:?} does not exist into DOCR {} repository - let's upload it",
-            image,
-            self.name()
-        );
-
-        listeners_helper.start_in_progress(ProgressInfo::new(
-            ProgressScope::Application {
-                id: image.application_id.clone(),
-            },
-            ProgressLevel::Info,
-            Some(info_message),
-            self.context.execution_id(),
-        ));
-
-        self.push_image(dest, &image)
-    }
-
-    fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
-        Ok(PushResult {
-            image: image.clone(),
-        })
-    }
-}
-
-pub fn subscribe_kube_cluster_to_container_registry(
-    api_key: &str,
-    cluster_uuid: &str,
-) -> Result<(), SimpleError> {
-    let headers = get_header_with_bearer(api_key);
-    let cluster_ids = DoApiSubscribeToKubeCluster {
-        cluster_uuids: vec![cluster_uuid.to_string()],
-    };
-
-    let res_cluster_to_link = serde_json::to_string(&cluster_ids);
-    return match res_cluster_to_link {
-        Ok(cluster_to_link) => {
-            let res = reqwest::blocking::Client::new()
-                .post(CR_CLUSTER_API_PATH)
-                .headers(headers)
-                .body(cluster_to_link)
-                .send();
-            match res {
-                Ok(output) => match output.status() {
-                    StatusCode::NO_CONTENT => Ok(()),
-                    status => {
-                        warn!("status from DO registry API {}", status);
-                        Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
-                    }
-                },
-                Err(e) => {
-                    error!("{:?}", e);
-                    Err(SimpleError::new(SimpleErrorKind::Other, Some("Unable to call Digital Ocean when tyring to subscribe repository to cluster")))
-                }
-            }
-        }
-        Err(e) => {
-            error!("{:?}", e);
-            Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("Unable to Serialize digital ocean cluster uuids"),
-            ))
-        }
-    };
-}
-
-pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
-    let headers = get_header_with_bearer(api_key);
-    let res = reqwest::blocking::Client::new()
-        .get(CR_API_PATH)
-        .headers(headers)
-        .send();
-
-    return match res {
-        Ok(output) => match output.status() {
-            StatusCode::OK => {
-                let content = output.text().unwrap();
-                let res_registry = serde_json::from_str::<DoApiGetContainerRegistry>(&content);
-
-                match res_registry {
-                    Ok(registry) => Ok(registry.registry.name),
-                    Err(_) => Err(SimpleError::new(
-                        SimpleErrorKind::Other,
-                        Some(
-                            "While trying to deserialize Registry describe json received from Digital Ocean API",
-                        ),
-                    )),
-                }
-            }
-            status => {
-                warn!("status from DO registry API {}", status);
-                Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
-            }
-        },
-        Err(e) => {
-            error!("{:?}", e);
-            Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(
-                    "Unable to call Digital Ocean when tyring to fetch the container registry name",
-                ),
-            ))
-        }
-    };
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]

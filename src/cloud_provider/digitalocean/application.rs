@@ -13,10 +13,8 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::container_registry::docr::{
-    get_current_registry_name, subscribe_kube_cluster_to_container_registry,
-};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorScope};
+use crate::container_registry::docr::subscribe_kube_cluster_to_container_registry;
+use crate::error::{EngineError, EngineErrorScope};
 use crate::models::Context;
 
 pub struct Application {
@@ -178,20 +176,15 @@ impl Service for Application {
 
         context.insert("environment_variables", &environment_variables);
 
-        // retrieve the registry name
-        let digitalocean = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<DO>()
-            .unwrap();
-
-        let registry_name = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            get_current_registry_name(&digitalocean.token),
-        )?;
-
-        context.insert("registry_name", &registry_name);
+        match self.image.registry_name.as_ref() {
+            Some(registry_name) => {
+                context.insert("is_registry_name", &true);
+                context.insert("registry_name", registry_name);
+            }
+            None => {
+                context.insert("is_registry_name", &false);
+            }
+        };
 
         let storage = self
             .storage
