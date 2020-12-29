@@ -14,10 +14,21 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --all-features
+      - name: build engine
+        run: |
+          export PATH=$GITHUB_WORKSPACE/bin:$PATH
+          export RUSTC_WRAPPER=$GITHUB_WORKSPACE/bin/sccache
+          export SCCACHE_REDIS=${{ secrets.SCCACHE_REDIS }}
+          mkdir -p $GITHUB_WORKSPACE/bin
+          sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/releases/latest" | sed -r 's/^.+tag\/(.+)">.+/\1/')
+          curl -sLo $GITHUB_WORKSPACE/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache
+          chmod 755 $GITHUB_WORKSPACE/bin/sccache
+          echo "########## SHARED CACHE STATUS ##########"
+          sccache --version
+          sccache --show-stats
+          echo "########## START BUILD ##########"
+          cargo build --release --all-features
+          sccache --show-stats
   functionnal-tests:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
