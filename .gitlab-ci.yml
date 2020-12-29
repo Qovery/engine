@@ -112,6 +112,9 @@ dev-full-tests:
     when: always
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+    expire_in: 1 week
 
 dev-fast-tests-sequential:
   stage: tests
@@ -126,6 +129,9 @@ dev-fast-tests-sequential:
     when: always
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+    expire_in: 1 week
 
 dev-full-tests-sequential:
   stage: tests
@@ -140,6 +146,9 @@ dev-full-tests-sequential:
     when: always
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+    expire_in: 1 week
 
 dev-build:
   stage: build
