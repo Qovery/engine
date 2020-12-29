@@ -56,6 +56,9 @@ wip-full-tests:
     when: always
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+    expire_in: 1 week
 
 # Dev branch
 
@@ -72,6 +75,9 @@ dev-full-test-from-github:
     when: always
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+    expire_in: 1 week
 
 dev-fast-test-from-github:
   stage: tests
@@ -86,6 +92,9 @@ dev-fast-test-from-github:
     when: always
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+    expire_in: 1 week
 
 dev-full-tests:
   stage: tests
