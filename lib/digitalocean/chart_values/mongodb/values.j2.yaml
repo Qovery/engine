@@ -139,8 +139,10 @@ service:
   ## Provide any additional annotations which may be required.
   ## The value is evaluated as a template, so, for example, the value can depend on .Release or .Chart
   annotations:
+    service.beta.kubernetes.io/do-loadbalancer-name: "{{ id }}"
     service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
     service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
+    service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
 

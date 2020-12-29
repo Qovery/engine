@@ -242,7 +242,10 @@ controller:
     enabled: true
 
     annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      service.beta.kubernetes.io/do-loadbalancer-name: "{{ id }}"
+      service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
+      service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
+      service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
     labels:
       app_id : "{{ id }}"
 
