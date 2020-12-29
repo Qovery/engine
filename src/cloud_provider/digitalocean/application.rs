@@ -16,9 +16,7 @@ use crate::cmd::helm::Timeout;
 use crate::container_registry::docr::{
     get_current_registry_name, subscribe_kube_cluster_to_container_registry,
 };
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
-};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorScope};
 use crate::models::Context;
 
 pub struct Application {

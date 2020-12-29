@@ -1,20 +1,15 @@
-use std::collections::HashMap;
-
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete,
     Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
 };
-use crate::cloud_provider::utilities::{
-    generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use,
-};
+use crate::cloud_provider::utilities::get_self_hosted_postgres_version;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::Context;
 
 pub struct PostgreSQL {
