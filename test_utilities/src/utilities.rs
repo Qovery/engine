@@ -2,7 +2,7 @@ use std::fs::read_to_string;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-
+use tracing::{info,Level};
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
@@ -11,7 +11,6 @@ use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::os::unix::fs::PermissionsExt;
-use tracing::Level;
 use tracing_subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 
