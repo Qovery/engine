@@ -3,7 +3,9 @@ use tera::Context as TeraContext;
 use crate::build_platform::Image;
 use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
 use crate::cloud_provider::digitalocean::DO;
-use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
+use crate::cloud_provider::models::{
+    EnvironmentVariable, EnvironmentVariableDataTemplate, Storage,
+};
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error,
     deploy_user_stateless_service, Action, Create, Delete, Helm, Pause, Service, ServiceType,
@@ -29,6 +31,7 @@ pub struct Application {
     total_instances: u16,
     start_timeout_in_seconds: u32,
     image: Image,
+    storage: Vec<Storage<StorageType>>,
     environment_variables: Vec<EnvironmentVariable>,
 }
 
@@ -45,6 +48,7 @@ impl Application {
         total_instances: u16,
         start_timeout_in_seconds: u32,
         image: Image,
+        storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
     ) -> Self {
         Application {
@@ -59,6 +63,7 @@ impl Application {
             total_instances,
             start_timeout_in_seconds,
             image,
+            storage,
             environment_variables,
         }
     }
@@ -189,7 +194,7 @@ impl Service for Application {
             }
         }
 
-        let is_storage = false;
+        let is_storage = self.storage.len() > 0;
         context.insert("is_storage", &is_storage);
 
         context.insert("clone", &false);
@@ -283,4 +288,9 @@ impl Delete for Application {
         );
         delete_stateless_service(target, self, true)
     }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum StorageType {
+    Standard,
 }

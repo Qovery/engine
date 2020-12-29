@@ -237,7 +237,7 @@ impl Helm for PostgreSQL {
 
     fn helm_chart_external_name_service_dir(&self) -> String {
         format!(
-            "{}/aws/charts/external-name-svc",
+            "{}/common/charts/external-name-svc",
             self.context.lib_root_dir()
         )
     }
