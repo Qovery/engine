@@ -7,11 +7,6 @@ cd $OUTPUT_DIR_TESTS_FILES
 
 dirlist=(`ls`)
 
-for entry in ${dirlist[@]}
-do
-  f="$(basename $entry)"
-done
-
 while IFS= read -r line
 do
  test_status=$(echo $line | jq .event)
