@@ -225,7 +225,7 @@ impl Helm for PostgreSQL {
 
     fn helm_chart_values_dir(&self) -> String {
         format!(
-            "{}/common/chart_values/postgresql",
+            "{}/digitalocean/chart_values/postgresql",
             self.context.lib_root_dir()
         )
     }

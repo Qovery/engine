@@ -240,7 +240,7 @@ impl Helm for Redis {
     }
 
     fn helm_chart_values_dir(&self) -> String {
-        format!("{}/common/chart_values/redis", self.context.lib_root_dir())
+        format!("{}/aws/chart_values/redis", self.context.lib_root_dir())
     }
 
     fn helm_chart_external_name_service_dir(&self) -> String {

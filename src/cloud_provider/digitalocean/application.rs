@@ -4,7 +4,7 @@ use crate::build_platform::Image;
 use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::models::{
-    EnvironmentVariable, EnvironmentVariableDataTemplate, Storage,
+    EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error,
@@ -16,7 +16,9 @@ use crate::cmd::helm::Timeout;
 use crate::container_registry::docr::{
     get_current_registry_name, subscribe_kube_cluster_to_container_registry,
 };
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use crate::error::{
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+};
 use crate::models::Context;
 
 pub struct Application {
@@ -185,16 +187,33 @@ impl Service for Application {
             .downcast_ref::<DO>()
             .unwrap();
 
-        let current_registry_name = get_current_registry_name(&digitalocean.token);
-        match current_registry_name {
-            Ok(registry_name) => context.insert("registry_name", &registry_name),
-            Err(err) => {
-                error!("Unable to get the registry name !");
-                return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
-            }
-        }
+        let registry_name = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            get_current_registry_name(&digitalocean.token),
+        )?;
 
-        let is_storage = self.storage.len() > 0;
+        context.insert("registry_name", &registry_name);
+
+        let storage = self
+            .storage
+            .iter()
+            .map(|s| StorageDataTemplate {
+                id: s.id.clone(),
+                name: s.name.clone(),
+                storage_type: match s.storage_type {
+                    StorageType::Standard => "do-block-storage",
+                }
+                .to_string(),
+                size_in_gib: s.size_in_gib,
+                mount_point: s.mount_point.clone(),
+                snapshot_retention_in_days: s.snapshot_retention_in_days,
+            })
+            .collect::<Vec<_>>();
+
+        let is_storage = storage.len() > 0;
+
+        context.insert("storage", &storage);
         context.insert("is_storage", &is_storage);
 
         context.insert("clone", &false);
