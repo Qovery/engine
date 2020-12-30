@@ -35,6 +35,7 @@ fn deploy_a_working_environment_with_no_router_on_do() {
         tag: environment.applications.first().unwrap().commit_id.clone(),
         commit_id: "".to_string(),
         registry_name: None,
+        registry_secret: None,
         registry_url: None,
     };
 
