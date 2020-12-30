@@ -1061,7 +1061,6 @@ where
             kubernetes
                 .cloud_provider()
                 .credentials_environment_variables(),
-            "involvedObject.kind=Pod",
         ),
     )?;
 

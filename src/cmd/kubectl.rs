@@ -718,23 +718,13 @@ pub fn kubectl_exec_get_event<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: Vec<(&str, &str)>,
-    field_selector: &str,
 ) -> Result<KubernetesList<KubernetesEvent>, SimpleError>
 where
     P: AsRef<Path>,
 {
     // Note: can't use app selector with kubectl get event..
     kubectl_exec::<P, KubernetesList<KubernetesEvent>>(
-        vec![
-            "get",
-            "event",
-            "-o",
-            "json",
-            "-n",
-            namespace,
-            "--field-selector",
-            field_selector,
-        ],
+        vec!["get", "event", "-o", "json", "-n", namespace],
         kubernetes_config,
         envs,
     )
