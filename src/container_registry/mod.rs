@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listener};
+use crate::models::{Context, Listen};
 
 pub mod docker_hub;
 pub mod docr;
 pub mod ecr;
 
-pub trait ContainerRegistry {
+pub trait ContainerRegistry: Listen {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -17,7 +17,6 @@ pub trait ContainerRegistry {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn add_listener(&mut self, listener: Listener);
     fn on_create(&self) -> Result<(), EngineError>;
     fn on_create_error(&self) -> Result<(), EngineError>;
     fn on_delete(&self) -> Result<(), EngineError>;

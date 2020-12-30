@@ -231,6 +231,7 @@ impl Create for Application {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
+        // FIXME: remove downcast
         let digitalocean = kubernetes
             .cloud_provider()
             .as_any()

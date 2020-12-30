@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listener};
+use crate::models::{Context, Listen};
 
 pub mod aws;
 pub mod digitalocean;
@@ -16,7 +16,7 @@ pub mod models;
 pub mod service;
 pub(crate) mod utilities;
 
-pub trait CloudProvider {
+pub trait CloudProvider: Listen {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -26,7 +26,6 @@ pub trait CloudProvider {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn add_listener(&mut self, listener: Listener);
     /// environment variables containing credentials
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;
     /// environment variables to inject to generate Terraform files from templates

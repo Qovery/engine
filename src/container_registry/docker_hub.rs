@@ -7,7 +7,8 @@ use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::EngineErrorCause;
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
+    ProgressScope,
 };
 
 pub struct DockerHub {
@@ -67,10 +68,6 @@ impl ContainerRegistry for DockerHub {
 
         info!("Using Docker: {}", output_from_cmd);
         Ok(())
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 
     fn on_create(&self) -> Result<(), EngineError> {
@@ -231,5 +228,15 @@ impl ContainerRegistry for DockerHub {
 
     fn push_error(&self, _image: &Image) -> Result<PushResult, EngineError> {
         unimplemented!()
+    }
+}
+
+impl Listen for DockerHub {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }

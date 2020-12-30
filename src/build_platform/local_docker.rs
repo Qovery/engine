@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::rc::Rc;
 
 use fs2::FsStats;
 
@@ -8,7 +7,7 @@ use crate::error::{EngineError, EngineErrorCause, SimpleError};
 use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
 use crate::models::{
-    Context, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressListener,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope,
 };
 use crate::{cmd, git};
@@ -76,10 +75,6 @@ impl BuildPlatform for LocalDocker {
         }
 
         Ok(())
-    }
-
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>) {
-        self.listeners.push(listener);
     }
 
     fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError> {
@@ -329,6 +324,16 @@ impl BuildPlatform for LocalDocker {
 
         // FIXME
         Err(self.engine_error(EngineErrorCause::Internal, message))
+    }
+}
+
+impl Listen for LocalDocker {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }
 

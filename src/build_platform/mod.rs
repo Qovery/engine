@@ -1,14 +1,12 @@
-use std::rc::Rc;
-
 use serde::{Deserialize, Serialize};
 
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::git::Credentials;
-use crate::models::{Context, ProgressListener};
+use crate::models::{Context, Listen};
 
 pub mod local_docker;
 
-pub trait BuildPlatform {
+pub trait BuildPlatform: Listen {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -17,7 +15,6 @@ pub trait BuildPlatform {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn add_listener(&mut self, listener: Rc<Box<dyn ProgressListener>>);
     fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError>;
     fn build_error(&self, build: Build) -> Result<BuildResult, EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {

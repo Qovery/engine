@@ -944,7 +944,7 @@ where
 
             let progress_info = ProgressInfo::new(
                 service.progress_scope(),
-                ProgressLevel::Info,
+                ProgressLevel::Debug,
                 Some(debug_logs_string),
                 kubernetes.context().execution_id(),
             );

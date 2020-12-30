@@ -9,7 +9,8 @@ use crate::error::{
     cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind,
 };
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
+    ProgressScope,
 };
 use crate::{cmd, utilities};
 
@@ -223,10 +224,6 @@ impl ContainerRegistry for DOCR {
         Ok(())
     }
 
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     fn on_create(&self) -> Result<(), EngineError> {
         Ok(())
     }
@@ -403,6 +400,16 @@ impl ContainerRegistry for DOCR {
         Ok(PushResult {
             image: image.clone(),
         })
+    }
+}
+
+impl Listen for DOCR {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }
 

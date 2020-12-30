@@ -7,7 +7,7 @@ use digitalocean::DigitalOcean;
 use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::error::{EngineError, EngineErrorCause};
-use crate::models::{Context, Listener, Listeners};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub mod application;
 pub mod common;
@@ -93,10 +93,6 @@ impl CloudProvider for DO {
         }
     }
 
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         vec![(DIGITAL_OCEAN_TOKEN, self.token.as_str())]
     }
@@ -111,5 +107,15 @@ impl CloudProvider for DO {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+impl Listen for DO {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }

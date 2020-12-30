@@ -91,7 +91,7 @@ impl<'a> DOKS<'a> {
             options,
             nodes,
             template_directory,
-            listeners: vec![],
+            listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
         }
     }
 
@@ -202,7 +202,7 @@ impl<'a> DOKS<'a> {
         context.insert("spaces_access_id", &self.cloud_provider.spaces_access_id);
         context.insert("spaces_secret_key", &self.cloud_provider.spaces_secret_key);
 
-        let space_kubeconfig_bucket = get_space_bucket_kubeconfig_name(self.id.clone());
+        let space_kubeconfig_bucket = format!("qovery-kubeconfigs-{}", self.id.as_str());
         context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
 
         // AWS S3 tfstates storage tfstates
@@ -256,10 +256,6 @@ impl<'a> DOKS<'a> {
 
         context
     }
-}
-
-pub fn get_space_bucket_kubeconfig_name(id: String) -> String {
-    format!("qovery-kubeconfigs-{}", id)
 }
 
 impl<'a> Kubernetes for DOKS<'a> {

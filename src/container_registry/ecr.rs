@@ -14,7 +14,8 @@ use crate::cmd;
 use crate::container_registry::{ContainerRegistry, Kind, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
-    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
+    ProgressScope,
 };
 use crate::runtime::async_run;
 
@@ -263,10 +264,6 @@ impl ContainerRegistry for ECR {
         }
     }
 
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     fn on_create(&self) -> Result<(), EngineError> {
         info!("ECR.on_create() called");
         Ok(())
@@ -429,5 +426,15 @@ impl ContainerRegistry for ECR {
         Ok(PushResult {
             image: image.clone(),
         })
+    }
+}
+
+impl Listen for ECR {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }
