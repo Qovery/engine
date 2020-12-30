@@ -50,6 +50,7 @@ pub trait Kubernetes: Listen {
 
         let mut permissions = metadata.permissions();
         permissions.set_mode(0o400);
+        let _ = std::fs::set_permissions(string_path.as_str(), permissions);
 
         Ok((string_path, file))
     }
