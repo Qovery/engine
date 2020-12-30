@@ -203,6 +203,7 @@ impl Service for Router {
                             error!("can't fetch external_ingress_hostname_custom - what's wrong? This must never happened");
                         }
                     }
+                    // FIXME app_id to appId
                     context.insert("app_id", kubernetes.id());
                 }
             }

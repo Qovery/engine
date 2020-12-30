@@ -6,7 +6,9 @@ use crate::build_platform::Image;
 use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::EngineErrorCause;
-use crate::models::{Context, Listener, Listeners};
+use crate::models::{
+    Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+};
 
 pub struct DockerHub {
     context: Context,
@@ -114,7 +116,7 @@ impl ContainerRegistry for DockerHub {
         }
     }
 
-    fn push(&self, image: &Image, _force_push: bool) -> Result<PushResult, EngineError> {
+    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
         let envs = match self.context.docker_tcp_socket() {
             Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
             None => vec![],
@@ -143,6 +145,48 @@ impl ContainerRegistry for DockerHub {
         };
 
         let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        if !force_push && self.does_image_exists(image) {
+            // check if image does exist - if yes, do not upload it again
+            let info_message = format!(
+                "image {:?} does already exist into DockerHub {} repository - no need to upload it",
+                image,
+                self.name()
+            );
+
+            info!("{}", info_message.as_str());
+
+            listeners_helper.start_in_progress(ProgressInfo::new(
+                ProgressScope::Application {
+                    id: image.application_id.clone(),
+                },
+                ProgressLevel::Info,
+                Some(info_message),
+                self.context.execution_id(),
+            ));
+
+            let mut image = image.clone();
+            image.registry_url = Some(dest);
+
+            return Ok(PushResult { image });
+        }
+
+        let info_message = format!(
+            "image {:?} does not exist into DockerHub {} repository - let's upload it",
+            image,
+            self.name()
+        );
+
+        listeners_helper.start_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
+
         match cmd::utilities::exec_with_envs(
             "docker",
             vec![

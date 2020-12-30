@@ -379,7 +379,7 @@ impl ContainerRegistry for ECR {
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        if !force_push && self.get_image(image).is_some() {
+        if !force_push && self.does_image_exists(image) {
             // check if image does exist - if yes, do not upload it again
             let info_message = format!(
                 "image {:?} does already exist into ECR {} repository - no need to upload it",

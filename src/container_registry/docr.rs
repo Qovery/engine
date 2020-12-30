@@ -294,6 +294,7 @@ impl ContainerRegistry for DOCR {
                                 return true;
                             }
                         }
+
                         false
                     }
                     Err(_) => {
@@ -316,18 +317,12 @@ impl ContainerRegistry for DOCR {
     }
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
-    fn push(&self, image: &Image, _force_push: bool) -> Result<PushResult, EngineError> {
+    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
         let registry_name = self.get_repository_name(image)?;
 
-        match self.create_repository(&image) {
-            Ok(_) => info!(
-                "Digital Ocean Container registry {} is created",
-                registry_name.as_str()
-            ),
-            Err(_) => warn!(
-                "Unable to create Container registry {} - Does it already exist?",
-                registry_name.as_str()
-            ),
+        let _ = match self.create_repository(&image) {
+            Ok(_) => info!("DOCR {} has been created", registry_name.as_str()),
+            Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
         };
 
         match cmd::utilities::exec(
@@ -351,8 +346,6 @@ impl ContainerRegistry for DOCR {
             _ => {}
         };
 
-        //TODO: check if image doesn't exist before pushing it!
-
         let dest = format!(
             "registry.digitalocean.com/{}/{}",
             registry_name.as_str(),
@@ -360,6 +353,35 @@ impl ContainerRegistry for DOCR {
         );
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        if !force_push && self.does_image_exists(image) {
+            // check if image does exist - if yes, do not upload it again
+            let info_message = format!(
+                "image {:?} does already exist into DOCR {} repository - no need to upload it",
+                image,
+                registry_name.as_str()
+            );
+
+            info!("{}", info_message.as_str());
+
+            listeners_helper.start_in_progress(ProgressInfo::new(
+                ProgressScope::Application {
+                    id: image.application_id.clone(),
+                },
+                ProgressLevel::Info,
+                Some(info_message),
+                self.context.execution_id(),
+            ));
+
+            let mut image = image.clone();
+            image.registry_name = Some(registry_name.clone());
+            // on DOCR registry secret is the same as registry name
+            image.registry_secret = Some(registry_name);
+            image.registry_url = Some(dest);
+
+            return Ok(PushResult { image });
+        }
+
         let info_message = format!(
             "image {:?} does not exist into DOCR {} repository - let's upload it",
             image, registry_name
