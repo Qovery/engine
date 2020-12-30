@@ -204,7 +204,7 @@ impl Service for MongoDB {
     }
 
     fn selector(&self) -> String {
-        format!("databaseId={}", self.id())
+        format!("app={}", self.name())
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {

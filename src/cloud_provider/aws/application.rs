@@ -218,7 +218,7 @@ impl Service for Application {
     }
 
     fn selector(&self) -> String {
-        format!("appId={}", self.id())
+        format!("app={}", self.name())
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {

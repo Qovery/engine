@@ -163,7 +163,7 @@ impl Service for ExternalService {
     }
 
     fn selector(&self) -> String {
-        format!("app={}", self.id())
+        format!("app={}", self.name())
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {

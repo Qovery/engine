@@ -241,7 +241,7 @@ impl Service for Router {
     }
 
     fn selector(&self) -> String {
-        format!("routerId={}", self.id())
+        "app=nginx-ingress".to_string()
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -373,7 +373,8 @@ impl Create for Router {
                             kubernetes_config_file_path.as_str(),
                             environment.namespace(),
                             format!(
-                                "app=nginx-ingress,component=controller,release=custom-{}",
+                                "{},component=controller,release=custom-{}",
+                                self.selector(),
                                 helm_release_name
                             )
                             .as_str(),
