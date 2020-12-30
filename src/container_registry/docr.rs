@@ -163,7 +163,9 @@ impl DOCR {
         };
 
         let mut image = image.clone();
-        image.registry_name = Some(registry_name);
+        image.registry_name = Some(registry_name.clone());
+        // on DOCR registry secret is the same as registry name
+        image.registry_secret = Some(registry_name);
         image.registry_url = Some(dest);
 
         Ok(PushResult { image })

@@ -52,7 +52,6 @@ impl Spaces {
         S: Into<String>,
         X: AsRef<Path>,
     {
-        // Digital ocean doesn't implement any space download, it use the generic AWS SDK
         let region = Region::Custom {
             name: self.region.clone(),
             endpoint: format!("https://{}.digitaloceanspaces.com", self.region),
@@ -136,7 +135,7 @@ impl ObjectStorage for Spaces {
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),
-            format!("object-storage/s3/{}", self.name()),
+            format!("object-storage/spaces/{}", self.name()),
         );
 
         let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
@@ -164,7 +163,10 @@ impl ObjectStorage for Spaces {
                 Err(err) => {
                     debug!("{:?}", err);
 
-                    warn!("Can't download object '{}'. Let's retry...", object_key);
+                    warn!(
+                        "Can't download object '{}'/'{}'. Let's retry...",
+                        bucket_name, object_key
+                    );
 
                     OperationResult::Retry(err)
                 }

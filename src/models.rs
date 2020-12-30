@@ -289,6 +289,7 @@ impl Application {
             tag: self.commit_id.clone(),
             commit_id: self.commit_id.clone(),
             registry_name: None,
+            registry_secret: None,
             registry_url: None,
         }
     }
@@ -700,6 +701,7 @@ impl ExternalService {
             tag: self.commit_id.clone(),
             commit_id: self.commit_id.clone(),
             registry_name: None,
+            registry_secret: None,
             registry_url: None,
         }
     }

@@ -178,11 +178,11 @@ impl Service for Application {
 
         match self.image.registry_name.as_ref() {
             Some(registry_name) => {
-                context.insert("is_registry_name", &true);
-                context.insert("registry_name", registry_name);
+                context.insert("is_registry_secret", &true);
+                context.insert("registry_secret", registry_name);
             }
             None => {
-                context.insert("is_registry_name", &false);
+                context.insert("is_registry_secret", &false);
             }
         };
 

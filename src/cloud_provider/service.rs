@@ -355,8 +355,9 @@ where
                 Ok(lines) => lines,
                 Err(err) => {
                     error!(
-                        "error while retrieving debug logs from database {}; error: {:?}",
-                        service.name(),
+                        "error while retrieving debug logs from {} {}; error: {:?}",
+                        service.service_type().name(),
+                        service.name_with_id(),
                         err
                     );
                     Vec::new()
