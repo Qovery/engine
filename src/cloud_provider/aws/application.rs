@@ -217,6 +217,10 @@ impl Service for Application {
         Ok(context)
     }
 
+    fn selector(&self) -> String {
+        format!("appId={}", self.id())
+    }
+
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::Application(self.id().to_string(), self.name().to_string())
     }

@@ -219,6 +219,10 @@ impl Service for Redis {
         Ok(context)
     }
 
+    fn selector(&self) -> String {
+        format!("databaseId={}", self.id())
+    }
+
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::Database(
             self.id().to_string(),

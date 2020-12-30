@@ -241,6 +241,10 @@ impl Service for Router {
         Ok(context)
     }
 
+    fn selector(&self) -> String {
+        format!("routerId={}", self.id())
+    }
+
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::Router(self.id().to_string(), self.name().to_string())
     }

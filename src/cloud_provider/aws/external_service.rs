@@ -162,6 +162,10 @@ impl Service for ExternalService {
         Ok(context)
     }
 
+    fn selector(&self) -> String {
+        format!("app={}", self.id())
+    }
+
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::ExternalService(self.id().to_string(), self.name().to_string())
     }

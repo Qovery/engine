@@ -47,6 +47,8 @@ pub trait Service {
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;
+    // used to retrieve logs by using Kubernetes labels (selector)
+    fn selector(&self) -> String;
     fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
         debug_logs(self, deployment_target)
     }
@@ -501,16 +503,13 @@ where
         return Err(thrown_error);
     }
 
-    // check app status
-    let selector = format!("app={}", service.name());
-
     let _ = cast_simple_error_to_engine_error(
         service.engine_error_scope(),
         service.context().execution_id(),
         crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
-            selector.as_str(),
+            service.selector().as_str(),
             kubernetes
                 .cloud_provider()
                 .credentials_environment_variables(),
@@ -581,10 +580,13 @@ where
     };
 
     let helm_release_name = service.helm_release_name();
-    let selector = format!("app={}", service.name());
 
     if is_error {
-        let _ = get_stateless_resource_information(kubernetes, environment, selector.as_str())?;
+        let _ = get_stateless_resource_information(
+            kubernetes,
+            environment,
+            service.selector().as_str(),
+        )?;
     }
 
     // clean the resource
@@ -741,12 +743,10 @@ where
             }
 
             // check app status
-            let selector = format!("app={}", service.name());
-
             match crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
-                selector.as_str(),
+                service.selector().as_str(),
                 kubernetes
                     .cloud_provider()
                     .credentials_environment_variables(),
@@ -994,10 +994,8 @@ pub fn get_stateless_resource_information_for_user<T>(
 where
     T: Service + ?Sized,
 {
-    let selector = format!("app={}", service.name());
-
+    let selector = service.selector();
     let kubernetes_config_file_path = kubernetes.config_file_path()?;
-
     let mut result = Vec::with_capacity(50);
 
     // get logs
