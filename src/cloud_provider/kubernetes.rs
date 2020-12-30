@@ -17,7 +17,7 @@ use crate::models::{
     Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath,
 };
 use crate::object_storage::ObjectStorage;
-use crate::unit_conversion::{cpu_string_to_float, ki_to_mi};
+use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;
@@ -83,8 +83,8 @@ pub trait Kubernetes: Listen {
         for node in nodes.items {
             resources.free_cpu += cpu_string_to_float(node.status.allocatable.cpu);
             resources.max_cpu += cpu_string_to_float(node.status.capacity.cpu);
-            resources.free_ram_in_mib += ki_to_mi(node.status.allocatable.memory);
-            resources.max_ram_in_mib += ki_to_mi(node.status.capacity.memory);
+            resources.free_ram_in_mib += any_to_mi(node.status.allocatable.memory);
+            resources.max_ram_in_mib += any_to_mi(node.status.capacity.memory);
             resources.free_pods = match node.status.allocatable.pods.parse::<u16>() {
                 Ok(v) => v,
                 _ => 0,
