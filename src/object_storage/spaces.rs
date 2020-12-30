@@ -78,7 +78,15 @@ impl Spaces {
             Ok(mut obj_bod) => {
                 let body = obj_bod.body.take();
                 let mut body = body.unwrap().into_async_read();
+
+                // create parent dir
+                let path = download_into_file_path.as_ref();
+                let parent_dir = path.parent().unwrap();
+                let _ = tokio::fs::create_dir_all(parent_dir).await;
+
+                // create file
                 let file = tokio::fs::File::create(download_into_file_path.as_ref()).await;
+
                 match file {
                     Ok(mut created_file) => match io::copy(&mut body, &mut created_file).await {
                         Ok(_) => Ok(File::open(download_into_file_path.as_ref()).unwrap()),
@@ -164,7 +172,7 @@ impl ObjectStorage for Spaces {
                     debug!("{:?}", err);
 
                     warn!(
-                        "Can't download object '{}'/'{}'. Let's retry...",
+                        "Can't download object '{}/{}'. Let's retry...",
                         bucket_name, object_key
                     );
 
