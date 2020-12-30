@@ -348,7 +348,7 @@ master:
   labels:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
-    databaseId: {{ name }}
+    databaseId: {{ id }}
   annotations: {}
   podLabels: {}
   podAnnotations: {}

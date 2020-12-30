@@ -7,7 +7,8 @@ metadata:
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
-    routerId: {{ name }}
+    routerName: {{ name }}
+    routerId: {{ id }}
     envId: {{ environment_id }}
     fqdn: "{{ router_default_domain }}"
   annotations:
