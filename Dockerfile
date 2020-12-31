@@ -1,22 +1,31 @@
 ARG BIN_DEST_FOLDER="/binaries"
 
 # docker build stage
-FROM rust:1.47-slim-buster as build
+FROM rust:1.48-slim-buster as build
 
 ARG BIN_DEST_FOLDER
+ARG SCCACHE_REDIS_URI
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
+ENV RUSTC_WRAPPER=/usr/bin/sccache
+ENV SCCACHE_REDIS=$SCCACHE_REDIS_URI
 
 RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev
 WORKDIR /usr/src/app
 ADD . .
+
+# sscache
+RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/releases/latest" | sed -r 's/^.+tag\/(.+)">.+/\1/') && \
+    curl -sLo /usr/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache && \
+    chmod 755 /usr/bin/sccache
 
 # run release build
 RUN mkdir -p $TF_PLUGIN_CACHE_DIR
 RUN ./docker/load.sh download
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
+
 RUN cargo build --release
 
 # Final image

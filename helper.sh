@@ -164,7 +164,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   fi
   set -e
 
-  docker build -t qoveryrd/engine:${tag} .
+  docker build --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
@@ -179,7 +179,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
   cp docker/bin_versions docker/ci/bin_versions
 
   cd docker/ci
-   DOCKER_BUILDKIT=1 docker build --no-cache -t qoveryrd/ci:${tag} .
+   DOCKER_BUILDKIT=1 docker build --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t qoveryrd/ci:${tag} .
   cd ..
 
   rm -f docker/ci/load.sh
@@ -251,6 +251,7 @@ resources.requests.memory="2Gi"
 
 function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
   set -e
+
   cat .env | while read item ; do
     key=$(echo $item | $awk -F'=' '{ print $1}')
     value=$(echo $item | $sed -r "s,^\w+='(.+)'$,\1,g" | $sed 's,/,\\\/,g')
@@ -266,11 +267,19 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
   prepare_engine
   prepare_tests
   cargo build --color=always --all --all-targets
+  sccache -s
   cd $ENGINE_DIR
   cargo test --package qovery-engine --test lib $test_name -- --ignored --exact
 }
 
 function export_env() { ## Export environment variables from .env file
+  export RUSTC_WRAPPER=/usr/bin/sccache
+  if [ ! -z $SCCACHE_REDIS_URI ] ; then
+    export SCCACHE_REDIS=$SCCACHE_REDIS_URI
+  fi
+  sccache --version
+  sccache -s
+
   while IFS= read line ; do
     key=$(echo $line | $awk -F'=' '{ print $1}')
     value=$(echo $line | $sed -r "s,^\w+='(.+)'$,\1,g")
@@ -291,6 +300,7 @@ function all_tests(){ ## Run all tests on qovery-engine
   STARTTIME=$(date +%s)
 
   cargo build --color=always --all --all-targets
+  sccache -s
   cd $ENGINE_DIR
   cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
@@ -318,6 +328,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   prepare_tests
   STARTTIME=$(date +%s)
   cargo build --color=always --all --all-targets
+  sccache -s
   cd $ENGINE_DIR
   mkdir -p $GITLAB_LOG_OUTPUT_DIR
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
