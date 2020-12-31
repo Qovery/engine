@@ -90,7 +90,7 @@ pub fn delete_environment(
     tx.commit()
 }
 
-#[test]
+
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
     init();
 
@@ -125,7 +125,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
     };
 }
 
-#[test]
+
 fn deploy_dockerfile_not_exist() {
     init();
 
@@ -166,7 +166,7 @@ fn deploy_dockerfile_not_exist() {
     };
 }
 
-#[test]
+
 fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     init();
 
@@ -201,7 +201,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     };
 }
 
-#[test]
+
 fn deploy_a_working_environment_with_domain() {
     init();
 
@@ -280,8 +280,7 @@ fn deploy_a_working_environment_with_custom_domain() {
     };
 }
 
-#[test]
-#[ignore]
+
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
     init();
 
@@ -335,7 +334,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 }
 
 // to check if app redeploy or not, it shouldn't
-#[test]
+
 fn redeploy_same_app_with_ebs() {
     init();
 
@@ -398,7 +397,7 @@ fn redeploy_same_app_with_ebs() {
     };
 }
 
-// #[test]
+// 
 // fn deploy_a_working_environment_with_external_service() {
 //     init();
 //
@@ -451,8 +450,7 @@ fn redeploy_same_app_with_ebs() {
 //     // TODO: remove the namespace (or project)
 // }
 
-/*#[test]
-#[ignore]
+/*
 fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
     init();
 
@@ -476,7 +474,7 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
     };
 }*/
 
-#[test]
+
 fn deploy_a_not_working_environment_and_after_working_environment() {
     init();
 
@@ -532,7 +530,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
 }
 
 // Todo: temporary comment this test, need to fix it asap
-//#[test]
+//
 fn deploy_ok_fail_fail_ok_environment() {
     init();
 
@@ -607,7 +605,7 @@ fn deploy_ok_fail_fail_ok_environment() {
     };
 }
 
-#[test]
+
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     init();
 
@@ -639,8 +637,6 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     };
 }
 
-#[test]
-#[ignore]
 fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     init();
 
@@ -731,8 +727,7 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 //     };
 // }
 
-#[test]
-#[ignore]
+
 fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
     init();
 
@@ -766,16 +761,14 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
     };
 }
 
-/*#[test]
-#[ignore]
+/*
 fn deploy_a_working_environment_with_a_failing_default_domain_on_aws_eks() {
     init();
 
     // TODO
 }
 
-#[test]
-#[ignore]
+
 fn deploy_but_fail_to_push_image_on_container_registry() {
     init();
 
@@ -799,8 +792,7 @@ fn pause_a_working_development_environment_on_aws_eks() {
     };
 }
 
-#[test]
-#[ignore]
+
 fn pause_a_working_production_environment_on_aws_eks() {
     init();
 
@@ -818,8 +810,7 @@ fn pause_a_working_production_environment_on_aws_eks() {
     };
 }
 
-#[test]
-#[ignore]
+
 fn pause_a_non_working_environment_on_aws_eks() {
     init();
 
@@ -836,8 +827,7 @@ fn pause_a_non_working_environment_on_aws_eks() {
     };
 }
 
-#[test]
-#[ignore]
+
 fn start_and_pause_and_start_and_delete_a_working_environment_on_aws_eks() {
     init();
 
