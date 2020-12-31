@@ -29,7 +29,7 @@ pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
 pub fn init() {
     tracing_subscriber::fmt()
         .json()
-        .with_max_level(tracing::Level::INFO)
+        .with_max_level(tracing::Level::TRACE)
         .with_current_span(false)
         .try_init();
 
