@@ -62,6 +62,8 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 }
 
 // this test ensure containers databases are never restarted, even in failover environment case
+#[test]
+#[ignore]
 fn postgresql_failover_dev_environment_with_all_options() {
     init();
 
@@ -128,6 +130,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
 }
 
 // Ensure a full environment can run correctly
+#[test]
+#[ignore]
 fn postgresql_deploy_a_working_development_environment_with_all_options() {
     init();
 
@@ -172,6 +176,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 }
 
 // Ensure redeploy works as expected
+#[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
     init();
 
@@ -379,6 +384,8 @@ fn test_postgresql_configuration(
 }
 
 // Postgres environment environment
+#[test]
+#[ignore]
 fn postgresql_v10_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -390,6 +397,8 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
     );
 }
 
+#[test]
+#[ignore]
 fn postgresql_v11_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -401,6 +410,7 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
     );
 }
 
+#[test]
 fn postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -413,6 +423,8 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
 }
 
 // Postgres production environment
+#[test]
+#[ignore]
 fn postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -425,6 +437,8 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
     );
 }
 
+#[test]
+#[ignore]
 fn postgresql_v11_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -437,6 +451,8 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
     );
 }
 
+#[test]
+#[ignore]
 fn postgresql_v12_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -572,6 +588,7 @@ fn test_mongodb_configuration(
 }
 
 // development environment
+#[test]
 fn mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -583,6 +600,8 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
     );
 }
 
+#[test]
+#[ignore]
 fn mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -594,6 +613,8 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
     );
 }
 
+#[test]
+#[ignore]
 fn mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -605,6 +626,7 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
     );
 }
 
+#[test]
 fn mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -617,6 +639,8 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
 }
 
 // MongoDB production environment (DocumentDB)
+#[test]
+#[ignore]
 fn mongodb_v3_6_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -629,6 +653,8 @@ fn mongodb_v3_6_deploy_a_working_prod_environment() {
     );
 }
 
+#[test]
+#[ignore]
 fn mongodb_v4_0_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -753,6 +779,7 @@ fn test_mysql_configuration(
 }
 
 // MySQL self-hosted environment
+#[test]
 fn mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -764,6 +791,7 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
     );
 }
 
+#[test]
 fn mysql_v8_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -776,6 +804,8 @@ fn mysql_v8_deploy_a_working_dev_environment() {
 }
 
 // MySQL production environment (RDS)
+#[test]
+#[ignore]
 fn mysql_v5_7_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -788,6 +818,8 @@ fn mysql_v5_7_deploy_a_working_prod_environment() {
     );
 }
 
+#[test]
+#[ignore]
 fn mysql_v8_0_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -912,6 +944,8 @@ fn test_redis_configuration(
 }
 
 // Redis self-hosted environment
+#[test]
+#[ignore]
 fn redis_v5_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -923,6 +957,7 @@ fn redis_v5_deploy_a_working_dev_environment() {
     );
 }
 
+#[test]
 fn redis_v6_deploy_a_working_dev_environment() {
     let context = context();
     const TEST_NAME: &str = "redis_v6_0_dev";
@@ -936,6 +971,8 @@ fn redis_v6_deploy_a_working_dev_environment() {
 }
 
 // Redis production environment (Elasticache)
+#[test]
+#[ignore]
 fn redis_v5_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -948,6 +985,8 @@ fn redis_v5_deploy_a_working_prod_environment() {
     );
 }
 
+#[test]
+#[ignore]
 fn redis_v6_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
