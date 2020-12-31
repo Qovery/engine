@@ -78,48 +78,48 @@ spec:
               cpu: {{ total_cpus }}
               memory: {{ total_ram_in_mib }}Mi
           volumeMounts:
-  {%- for s in storage %}
-- name: {{ s.id }}
-  mountPath: {{ s.mount_point }}
-  {%- endfor %}
-volumeClaimTemplates:
-  {%- for s in storage %}
-  {% if clone %}
-- metadata:
-    name: {{ s.id }}
-    labels:
-      ownerId: {{ owner_id }}
-      envId: {{ environment_id }}
-      appId: {{ id }}
-      app: {{ name }}
-      diskId: {{ s.id }}
-      diskType: {{ s.storage_type }}
-  spec:
-    accessModes:
-      - ReadWriteOnce
-    storageClassName: {{ s.storage_type }}
-    dataSource:
+{%- for s in storage %}
+            - name: {{ s.id }}
+              mountPath: {{ s.mount_point }}
+{%- endfor %}
+  volumeClaimTemplates:
+{%- for s in storage %}
+{% if clone %}
+  - metadata:
       name: {{ s.id }}
-      kind: PersistentVolumeClaim
-    resources:
-      requests:
-        storage: {{ disk.size_in_gib }}Gi
-  {% else %}
-- metadata:
-    name: {{ s.id }}
-    labels:
-      ownerId: {{ owner_id }}
-      envId: {{ environment_id }}
-      appId: {{ id }}
-      diskId: {{ s.id }}
-      diskType: {{ s.storage_type }}
-  spec:
-    accessModes:
-      - ReadWriteOnce
-    storageClassName: {{ s.storage_type }}
-    resources:
-      requests:
-        storage: {{ s.size_in_gib }}Gi
-  {%- endif %}
-  {%- endfor %}
-  {%- endif %}
+      labels:
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ id }}
+        app: {{ name }}
+        diskId: {{ s.id }}
+        diskType: {{ s.storage_type }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: {{ s.storage_type }}
+      dataSource:
+        name: {{ s.id }}
+        kind: PersistentVolumeClaim
+      resources:
+        requests:
+          storage: {{ disk.size_in_gib }}Gi
+{% else %}
+  - metadata:
+      name: {{ s.id }}
+      labels:
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ id }}
+        diskId: {{ s.id }}
+        diskType: {{ s.storage_type }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: {{ s.storage_type }}
+      resources:
+        requests:
+          storage: {{ s.size_in_gib }}Gi
+{%- endif %}
+{%- endfor %}
+{%- endif %}

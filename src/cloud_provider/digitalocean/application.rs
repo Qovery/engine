@@ -206,9 +206,15 @@ impl Service for Application {
 
         context.insert("storage", &storage);
         context.insert("is_storage", &is_storage);
-
         context.insert("clone", &false);
         context.insert("start_timeout_in_seconds", &self.start_timeout_in_seconds);
+
+        if self.context.resource_expiration_in_seconds().is_some() {
+            context.insert(
+                "resource_expiration_in_seconds",
+                &self.context.resource_expiration_in_seconds(),
+            )
+        }
 
         Ok(context)
     }
