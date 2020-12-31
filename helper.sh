@@ -287,38 +287,55 @@ function all_tests(){ ## Run all tests on qovery-engine
   export_env
   prepare_engine
   prepare_tests
+
+  STARTTIME=$(date +%s)
+
   cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
   cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
+
+  ENDTIME=$(date +%s)
+  echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
   # Log management part
   cd $GITLAB_LOG_UTILITIES_DIR
+  STARTTIME=$(date +%s)
   # sorts logs into multiple files
   ./sorter.sh $GITLAB_LOG_OUTPUT_DIR/output.log
   # print failed tests
   ./failed_test_printer.sh
+  ENDTIME=$(date +%s)
+  echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
   return $TESTS_STATUS
 }
 
 function fast_tests(){ ## Run fast tests only on qovery-engine
-  GITHUB_ENGINE_BRANCH_NAME=$1
+  GITHUB_ENGINE_BRANCH_NAME=fix/db_tests
   nb_treads=$2
   export RUST_LOG=info
   export_env
   prepare_engine
   prepare_tests
+  STARTTIME=$(date +%s)
   cargo build --color=always --all --all-targets
   cd $ENGINE_DIR
   mkdir -p $GITLAB_LOG_OUTPUT_DIR
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
+  ENDTIME=$(date +%s)
+  echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
+
   # Log management part
   cd $GITLAB_LOG_UTILITIES_DIR
+  STARTTIME=$(date +%s)
   # sorts logs into multiple files
   ./sorter.sh $GITLAB_LOG_OUTPUT_DIR/output.log
   # print failed tests
   ./failed_test_printer.sh
+  ENDTIME=$(date +%s)
+  echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
+
   return $TESTS_STATUS
 }
 
@@ -365,13 +382,13 @@ get_release_ga)
   get_release_ga
   ;;
 fast_tests)
-  fast_tests $commit_id 10
+  fast_tests $commit_id 20
   ;;
 fast_tests_seq)
   fast_tests $commit_id 1
   ;;
 all_tests)
-  all_tests $commit_id 10
+  all_tests $commit_id 20
   ;;
 all_tests_seq)
   all_tests $commit_id 1
