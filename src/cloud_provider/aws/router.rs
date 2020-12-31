@@ -34,6 +34,7 @@ impl Router {
         default_domain: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
+        listeners: Listeners,
     ) -> Self {
         Router {
             context,
@@ -42,7 +43,7 @@ impl Router {
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,
-            listeners: vec![],
+            listeners,
         }
     }
 }

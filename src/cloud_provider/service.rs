@@ -13,7 +13,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::kubectl_exec_delete_secret;
 use crate::cmd::structs::LabelsContent;
-use crate::error::cast_simple_error_to_engine_error;
+use crate::error::{cast_simple_error_to_engine_error, StringError};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 
@@ -847,6 +847,70 @@ where
     }
 
     Ok(())
+}
+
+pub fn check_service_version<T>(
+    result: Result<String, StringError>,
+    service: &T,
+) -> Result<String, EngineError>
+where
+    T: Service + Listen,
+{
+    let listeners_helper = ListenersHelper::new(service.listeners());
+
+    match result {
+        Ok(version) => {
+            if service.version() != version.as_str() {
+                let message = format!(
+                    "{} version {} has been requested by the user; but matching version is {}",
+                    service.service_type().name(),
+                    service.version(),
+                    version.as_str()
+                );
+
+                info!("{}", message.as_str());
+
+                let progress_info = ProgressInfo::new(
+                    service.progress_scope(),
+                    ProgressLevel::Info,
+                    Some(message),
+                    service.context().execution_id(),
+                );
+
+                listeners_helper.start_in_progress(progress_info);
+            }
+
+            Ok(version)
+        }
+        Err(err) => {
+            let message = format!(
+                "{} version {} is not supported!",
+                service.service_type().name(),
+                service.version(),
+            );
+
+            error!("{}", message.as_str());
+
+            let progress_info = ProgressInfo::new(
+                service.progress_scope(),
+                ProgressLevel::Error,
+                Some(message),
+                service.context().execution_id(),
+            );
+
+            listeners_helper.start_error(progress_info);
+
+            error!("{}", err);
+
+            Err(service.engine_error(
+                EngineErrorCause::User(
+                    "The provided database version is not supported, please refer to the \
+                documentation https://docs.qovery.com",
+                ),
+                err,
+            ))
+        }
+    }
 }
 
 fn delete_terraform_tfstate_secret(

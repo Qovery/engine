@@ -1,24 +1,19 @@
-use std::collections::HashMap;
-
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service,
     get_tfstate_name, get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions,
     DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
     Upgrade,
 };
-use crate::cloud_provider::utilities::{
-    generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use,
-};
+use crate::cloud_provider::utilities::get_self_hosted_mysql_version;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorScope, StringError};
+use crate::error::{EngineError, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners};
 
-pub struct PostgreSQL {
+pub struct MySQL {
     context: Context,
     id: String,
     action: Action,
@@ -33,7 +28,7 @@ pub struct PostgreSQL {
     listeners: Listeners,
 }
 
-impl PostgreSQL {
+impl MySQL {
     pub fn new(
         context: Context,
         id: &str,
@@ -48,7 +43,7 @@ impl PostgreSQL {
         options: DatabaseOptions,
         listeners: Listeners,
     ) -> Self {
-        PostgreSQL {
+        Self {
             context,
             action,
             id: id.to_string(),
@@ -64,23 +59,20 @@ impl PostgreSQL {
         }
     }
 
-    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
-        check_service_version(
-            get_postgres_version(self.version(), is_managed_services),
-            self,
-        )
+    fn matching_correct_version(&self) -> Result<String, EngineError> {
+        check_service_version(get_self_hosted_mysql_version(self.version()), self)
     }
 }
 
-impl StatefulService for PostgreSQL {}
+impl StatefulService for MySQL {}
 
-impl Service for PostgreSQL {
+impl Service for MySQL {
     fn context(&self) -> &Context {
         &self.context
     }
 
     fn service_type(&self) -> ServiceType {
-        ServiceType::Database(DatabaseType::PostgreSQL(&self.options))
+        ServiceType::Database(DatabaseType::MySQL(&self.options))
     }
 
     fn id(&self) -> &str {
@@ -125,11 +117,6 @@ impl Service for PostgreSQL {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let is_managed_services = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
-
         let mut context = default_tera_context(self, kubernetes, environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
@@ -146,7 +133,7 @@ impl Service for PostgreSQL {
 
         context.insert("namespace", environment.namespace());
 
-        let version = self.matching_correct_version(is_managed_services)?;
+        let version = &self.matching_correct_version()?;
         context.insert("version", &version);
 
         for (k, v) in kubernetes
@@ -179,7 +166,6 @@ impl Service for PostgreSQL {
             "delete_automated_backups",
             &self.context().is_test_cluster(),
         );
-
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
                 "resource_expiration_in_seconds",
@@ -203,22 +189,19 @@ impl Service for PostgreSQL {
     }
 }
 
-impl Database for PostgreSQL {}
+impl Database for MySQL {}
 
-impl Helm for PostgreSQL {
+impl Helm for MySQL {
     fn helm_release_name(&self) -> String {
-        crate::string::cut(format!("postgresql-{}", self.id()), 50)
+        crate::string::cut(format!("mysql-{}", self.id()), 50)
     }
 
     fn helm_chart_dir(&self) -> String {
-        format!("{}/common/services/postgresql", self.context.lib_root_dir())
+        format!("{}/common/services/mysql", self.context.lib_root_dir())
     }
 
     fn helm_chart_values_dir(&self) -> String {
-        format!(
-            "{}/aws/chart_values/postgresql",
-            self.context.lib_root_dir()
-        )
+        format!("{}/aws/chart_values/mysql", self.context.lib_root_dir())
     }
 
     fn helm_chart_external_name_service_dir(&self) -> String {
@@ -229,39 +212,37 @@ impl Helm for PostgreSQL {
     }
 }
 
-impl Terraform for PostgreSQL {
+impl Terraform for MySQL {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/aws/services/common", self.context.lib_root_dir())
     }
 
     fn terraform_resource_dir_path(&self) -> String {
-        format!("{}/aws/services/postgresql", self.context.lib_root_dir())
+        format!("{}/aws/services/mysql", self.context.lib_root_dir())
     }
 }
 
-impl Create for PostgreSQL {
+impl Create for MySQL {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.PostgreSQL.on_create() called for {}", self.name());
+        info!("AWS.MySQL.on_create() called for {}", self.name());
         deploy_stateful_service(target, self)
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
+        //FIXME : perform an actual check
         Ok(())
     }
 
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "AWS.PostgreSQL.on_create_error() called for {}",
-            self.name()
-        );
+        warn!("AWS.MySQL.on_create_error() called for {}", self.name());
 
         Ok(())
     }
 }
 
-impl Pause for PostgreSQL {
+impl Pause for MySQL {
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.PostgreSQL.on_pause() called for {}", self.name());
+        info!("AWS.MySQL.on_pause() called for {}", self.name());
 
         // TODO how to pause production? - the goal is to reduce cost, but it is possible to pause a production env?
         // TODO how to pause development? - the goal is also to reduce cost, we can set the number of instances to 0, which will avoid to delete data :)
@@ -274,7 +255,7 @@ impl Pause for PostgreSQL {
     }
 
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.PostgreSQL.on_pause_error() called for {}", self.name());
+        warn!("AWS.MySQL.on_pause_error() called for {}", self.name());
 
         // TODO what to do if there is a pause error?
 
@@ -282,9 +263,9 @@ impl Pause for PostgreSQL {
     }
 }
 
-impl Delete for PostgreSQL {
+impl Delete for MySQL {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.PostgreSQL.on_delete() called for {}", self.name());
+        info!("AWS.MySQL.on_delete() called for {}", self.name());
         delete_stateful_service(target, self)
     }
 
@@ -293,16 +274,12 @@ impl Delete for PostgreSQL {
     }
 
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "AWS.PostgreSQL.on_create_error() called for {}",
-            self.name()
-        );
-
+        warn!("AWS.MySQL.on_create_error() called for {}", self.name());
         Ok(())
     }
 }
 
-impl crate::cloud_provider::service::Clone for PostgreSQL {
+impl crate::cloud_provider::service::Clone for MySQL {
     fn on_clone(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
@@ -316,7 +293,7 @@ impl crate::cloud_provider::service::Clone for PostgreSQL {
     }
 }
 
-impl Upgrade for PostgreSQL {
+impl Upgrade for MySQL {
     fn on_upgrade(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
@@ -330,7 +307,7 @@ impl Upgrade for PostgreSQL {
     }
 }
 
-impl Downgrade for PostgreSQL {
+impl Downgrade for MySQL {
     fn on_downgrade(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
@@ -344,7 +321,7 @@ impl Downgrade for PostgreSQL {
     }
 }
 
-impl Backup for PostgreSQL {
+impl Backup for MySQL {
     fn on_backup(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
     }
@@ -370,76 +347,12 @@ impl Backup for PostgreSQL {
     }
 }
 
-impl Listen for PostgreSQL {
+impl Listen for MySQL {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
 
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
-    }
-}
-
-fn get_postgres_version(
-    requested_version: &str,
-    is_managed_service: bool,
-) -> Result<String, StringError> {
-    if is_managed_service {
-        get_managed_postgres_version(requested_version)
-    } else {
-        get_self_hosted_postgres_version(requested_version)
-    }
-}
-
-fn get_managed_postgres_version(requested_version: &str) -> Result<String, StringError> {
-    let mut supported_postgres_versions = HashMap::new();
-
-    // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
-
-    // v10
-    let mut v10 = generate_supported_version(10, 1, 14, None, None, None);
-    v10.remove("10.2"); // non supported version by AWS
-    v10.remove("10.8"); // non supported version by AWS
-    supported_postgres_versions.extend(v10);
-
-    // v11
-    let mut v11 = generate_supported_version(11, 1, 9, None, None, None);
-    v11.remove("11.3"); // non supported version by AWS
-    supported_postgres_versions.extend(v11);
-
-    // v12
-    let v12 = generate_supported_version(12, 2, 4, None, None, None);
-    supported_postgres_versions.extend(v12);
-
-    get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
-}
-
-#[cfg(test)]
-mod tests_postgres {
-    use std::collections::HashMap;
-
-    use crate::cloud_provider::aws::databases::postgresql::get_postgres_version;
-
-    #[test]
-    fn check_postgres_version() {
-        // managed version
-        assert_eq!(get_postgres_version("12", true).unwrap(), "12.4");
-        assert_eq!(get_postgres_version("12.3", true).unwrap(), "12.3");
-        assert_eq!(
-            get_postgres_version("12.3.0", true).unwrap_err().as_str(),
-            "Postgresql 12.3.0 version is not supported"
-        );
-        assert_eq!(
-            get_postgres_version("11.3", true).unwrap_err().as_str(),
-            "Postgresql 11.3 version is not supported"
-        );
-        // self-hosted version
-        assert_eq!(get_postgres_version("12", false).unwrap(), "12.4.0");
-        assert_eq!(get_postgres_version("12.3", false).unwrap(), "12.3.0");
-        assert_eq!(get_postgres_version("12.3.0", false).unwrap(), "12.3.0");
-        assert_eq!(
-            get_postgres_version("1.0", false).unwrap_err().as_str(),
-            "Postgresql 1.0 version is not supported"
-        );
     }
 }

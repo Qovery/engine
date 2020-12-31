@@ -1,16 +1,17 @@
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
-    get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete,
-    Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
+    check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service,
+    get_tfstate_name, get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions,
+    DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
+    Upgrade,
 };
 use crate::cloud_provider::utilities::get_self_hosted_postgres_version;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::Context;
+use crate::error::{EngineError, EngineErrorScope};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct PostgreSQL {
     context: Context,
@@ -24,6 +25,7 @@ pub struct PostgreSQL {
     total_ram_in_mib: u32,
     database_instance_type: String,
     options: DatabaseOptions,
+    listeners: Listeners,
 }
 
 impl PostgreSQL {
@@ -39,6 +41,7 @@ impl PostgreSQL {
         total_ram_in_mib: u32,
         database_instance_type: &str,
         options: DatabaseOptions,
+        listeners: Listeners,
     ) -> Self {
         PostgreSQL {
             context,
@@ -52,36 +55,12 @@ impl PostgreSQL {
             total_ram_in_mib,
             database_instance_type: database_instance_type.to_string(),
             options,
+            listeners,
         }
     }
 
     fn matching_correct_version(&self) -> Result<String, EngineError> {
-        match get_self_hosted_postgres_version(self.version()) {
-            Ok(version) => {
-                info!(
-                    "version {} has been requested by the user; but matching version is {}",
-                    self.version(),
-                    version
-                );
-
-                Ok(version)
-            }
-            Err(err) => {
-                error!("{}", err);
-                warn!(
-                    "fallback on the version {} provided by the user",
-                    self.version()
-                );
-
-                Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "The provided PostgreSQL version is not supported, please refer to the \
-                documentation https://docs.qovery.com",
-                    ),
-                    err,
-                ))
-            }
-        }
+        check_service_version(get_self_hosted_postgres_version(self.version()), self)
     }
 }
 
@@ -374,5 +353,15 @@ impl Backup for PostgreSQL {
 
     fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
+    }
+}
+
+impl Listen for PostgreSQL {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }

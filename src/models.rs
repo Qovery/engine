@@ -437,6 +437,8 @@ impl Router {
             })
             .collect::<Vec<_>>();
 
+        let listeners = cloud_provider.listeners().clone();
+
         match cloud_provider.kind() {
             CPKind::Aws => {
                 let router: Box<dyn StatelessService> =
@@ -447,6 +449,7 @@ impl Router {
                         self.default_domain.as_str(),
                         custom_domains,
                         routes,
+                        listeners,
                     ));
                 Some(router)
             }
@@ -459,6 +462,7 @@ impl Router {
                         self.default_domain.as_str(),
                         custom_domains,
                         routes,
+                        listeners,
                     ));
                 Some(router)
             }
@@ -512,6 +516,8 @@ impl Database {
             database_disk_type: self.database_disk_type.clone(),
         };
 
+        let listeners = cloud_provider.listeners().clone();
+
         match cloud_provider.kind() {
             CPKind::Aws => match self.kind {
                 DatabaseKind::Postgresql => {
@@ -527,6 +533,7 @@ impl Database {
                         self.total_ram_in_mib,
                         self.database_instance_type.as_str(),
                         database_options,
+                        listeners,
                     ));
 
                     Some(db)
@@ -544,6 +551,7 @@ impl Database {
                         self.total_ram_in_mib,
                         self.database_instance_type.as_str(),
                         database_options,
+                        listeners,
                     ));
 
                     Some(db)
@@ -561,6 +569,7 @@ impl Database {
                         self.total_ram_in_mib,
                         self.database_instance_type.as_str(),
                         database_options,
+                        listeners,
                     ));
 
                     Some(db)
@@ -578,33 +587,75 @@ impl Database {
                         self.total_ram_in_mib,
                         self.database_instance_type.as_str(),
                         database_options,
+                        listeners,
                     ));
 
                     Some(db)
                 }
             },
-            CPKind::Do => {
-                match self.kind {
-                    DatabaseKind::Postgresql => {
-                        let db: Box<dyn StatefulService> = Box::new(crate::cloud_provider::digitalocean::databases::postgresql::PostgreSQL::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                    ));
+            CPKind::Do => match self.kind {
+                DatabaseKind::Postgresql => {
+                    let db: Box<dyn StatefulService> = Box::new(
+                        crate::cloud_provider::digitalocean::databases::postgresql::PostgreSQL::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            self.version.as_str(),
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                        ),
+                    );
 
-                        Some(db)
-                    }
-                    _ => None,
+                    Some(db)
                 }
-            }
+                DatabaseKind::Redis => {
+                    let db: Box<dyn StatefulService> = Box::new(
+                        crate::cloud_provider::digitalocean::databases::redis::Redis::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            self.version.as_str(),
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                        ),
+                    );
+
+                    Some(db)
+                }
+                DatabaseKind::Mongodb => {
+                    let db: Box<dyn StatefulService> = Box::new(
+                        crate::cloud_provider::digitalocean::databases::mongodb::MongoDB::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            self.version.as_str(),
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                        ),
+                    );
+
+                    Some(db)
+                }
+                _ => None,
+            },
         }
     }
 }

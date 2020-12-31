@@ -4,9 +4,10 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
-    get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions, DatabaseType, Delete,
-    Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
+    check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service,
+    get_tfstate_name, get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions,
+    DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
+    Upgrade,
 };
 use crate::cloud_provider::utilities::{
     get_self_hosted_redis_version, get_supported_version_to_use,
@@ -15,7 +16,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
-use crate::models::Context;
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Redis {
     context: Context,
@@ -29,6 +30,7 @@ pub struct Redis {
     total_ram_in_mib: u32,
     database_instance_type: String,
     options: DatabaseOptions,
+    listeners: Listeners,
 }
 
 impl Redis {
@@ -44,6 +46,7 @@ impl Redis {
         total_ram_in_mib: u32,
         database_instance_type: &str,
         options: DatabaseOptions,
+        listeners: Listeners,
     ) -> Self {
         Self {
             context,
@@ -57,36 +60,12 @@ impl Redis {
             total_ram_in_mib,
             database_instance_type: database_instance_type.to_string(),
             options,
+            listeners,
         }
     }
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
-        match get_redis_version(self.version(), is_managed_services) {
-            Ok(version) => {
-                info!(
-                    "version {} has been requested by the user; but matching version is {}",
-                    self.version(),
-                    version
-                );
-
-                Ok(version)
-            }
-            Err(err) => {
-                error!("{}", err);
-                warn!(
-                    "fallback on the version {} provided by the user",
-                    self.version()
-                );
-
-                Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "The provided Redis version is not supported, please refer to the \
-                documentation https://docs.qovery.com",
-                    ),
-                    err,
-                ))
-            }
-        }
+        check_service_version(get_redis_version(self.version(), is_managed_services), self)
     }
 }
 
@@ -386,6 +365,16 @@ impl Backup for Redis {
 
     fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         unimplemented!()
+    }
+}
+
+impl Listen for Redis {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }
 
