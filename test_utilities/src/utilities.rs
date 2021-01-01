@@ -5,6 +5,7 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
+use std::env;
 use std::fs::read_to_string;
 use std::fs::File;
 use std::io::Write;
@@ -27,11 +28,17 @@ pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
 }
 
 pub fn init() {
-    tracing_subscriber::fmt()
-        .json()
-        .with_max_level(tracing::Level::INFO)
-        .with_current_span(false)
-        .try_init();
+    // check if it's currently running on GitHub action or Gitlab CI, using a common env var
+    let ci_var = "CI";
+
+    match env::var_os(ci_var) {
+        Some(_) => tracing_subscriber::fmt()
+            .json()
+            .with_max_level(tracing::Level::INFO)
+            .with_current_span(false)
+            .try_init(),
+        None => tracing_subscriber::fmt().try_init(),
+    };
 
     info!(
         "running from current directory: {}",
