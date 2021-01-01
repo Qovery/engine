@@ -23,14 +23,10 @@ resource "helm_release" "cert_manager" {
     value = "2"
   }
 
+  # https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check
   set {
-    name = "podDnsPolicy"
-    value = "None"
-  }
-
-  set {
-    name = "podDnsConfig.nameservers"
-    value = "{1.1.1.1,8.8.8.8}"
+    name = "extraArgs"
+    value = "{--dns01-recursive-nameservers-only,--dns01-recursive-nameservers=1.1.1.1:53\\,8.8.8.8:53}"
   }
 
   set {
