@@ -1,4 +1,4 @@
-use crate::cloud_provider::service::{StatefulService, StatelessService};
+use crate::cloud_provider::service::{ServiceType, StatefulService, StatelessService};
 use crate::error::EngineError;
 use crate::unit_conversion::cpu_string_to_float;
 
@@ -63,17 +63,20 @@ impl Environment {
     pub fn required_resources(&self) -> EnvironmentResources {
         let mut total_cpu_for_stateless_services: f32 = 0.0;
         let mut total_ram_in_mib_for_stateless_services: u32 = 0;
+        let mut required_pods = self.stateless_services.len() as u16;
 
         for service in &self.stateless_services {
             total_cpu_for_stateless_services += cpu_string_to_float(&service.total_cpus());
             total_ram_in_mib_for_stateless_services += &service.total_ram_in_mib();
+            required_pods += service.total_instances();
         }
 
         let mut total_cpu_for_stateful_services: f32 = 0.0;
         let mut total_ram_in_mib_for_stateful_services: u32 = 0;
+
         match self.kind {
             Kind::Development => {
-                // development means databases are running on Kubernetes
+                // development means stateful services are running on Kubernetes
                 for service in &self.stateful_services {
                     total_cpu_for_stateful_services += cpu_string_to_float(&service.total_cpus());
                     total_ram_in_mib_for_stateful_services += &service.total_ram_in_mib();
@@ -82,7 +85,17 @@ impl Environment {
             Kind::Production => {} // production means databases are running on managed services - so it consumes 0 cpu
         };
 
+        match self.kind {
+            crate::cloud_provider::environment::Kind::Production => {}
+            crate::cloud_provider::environment::Kind::Development => {
+                for service in &self.stateful_services {
+                    required_pods += service.total_instances();
+                }
+            }
+        }
+
         EnvironmentResources {
+            pods: required_pods,
             cpu: total_cpu_for_stateless_services + total_cpu_for_stateful_services,
             ram_in_mib: total_ram_in_mib_for_stateless_services
                 + total_ram_in_mib_for_stateless_services,
@@ -96,6 +109,7 @@ pub enum Kind {
 }
 
 pub struct EnvironmentResources {
+    pub pods: u16,
     pub cpu: f32,
     pub ram_in_mib: u32,
 }

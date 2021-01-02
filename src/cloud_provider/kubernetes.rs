@@ -522,21 +522,12 @@ pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
         return Err(kubernetes.engine_error(cause, message));
     }
 
-    let mut required_pods = environment.stateless_services.len() as u16;
-
-    match environment.kind {
-        crate::cloud_provider::environment::Kind::Production => {}
-        crate::cloud_provider::environment::Kind::Development => {
-            required_pods += environment.stateful_services.len() as u16;
-        }
-    }
-
-    if required_pods > resources.free_pods {
+    if required_resources.pods > resources.free_pods {
         // not enough free pods on the cluster
         let message = format!(
             "There is not enough free Pods ({} required) on the Kubernetes cluster '{}'. \
                 Consider to add one more node or upgrade your nodes configuration.",
-            required_pods,
+            required_resources.pods,
             kubernetes.name(),
         );
 
