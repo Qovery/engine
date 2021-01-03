@@ -30,60 +30,75 @@ variable "test_cluster" {
   type = string
 }
 
-// kubernetes first worker cluster
-variable "doks_master_name" {
-  default = "{{ doks_master_name }}"
-  type    = string
+# Digital Ocean Specific
+
+variable "vpc_name" {
+  description = "VPC name, should be unique"
+  default = "{{ vpc_name }}"
+  type = string
+}
+
+# Kubernetes
+
+variable "cidr_block" {
+  description = "CIDR block for VPC segmentation"
+  default = "{{ vpc_cidr_block }}"
+  type = string
+}
+
+variable "kubernetes_cluster_id" {
+  description = "Kubernetes cluster name"
+  default     = "{{ doks_cluster_id }}"
+  type        = string
+}
+
+variable "kubernetes_cluster_name" {
+  description = "Kubernetes cluster name"
+  default     = "qovery-{{ doks_master_name }}"
+  type        = string
 }
 
 variable "doks_version" {
+  description = "Kubernetes cluster version"
   default = "{{ doks_version }}"
   type    = string
 }
 
-variable "doks_cluster_id" {
-  default = "{{ doks_cluster_id }}"
-  type    = string
-}
+# kubernetes WORKER second cluster
 
-// kubernetes WORKER second cluster
 variable "doks_pool_name" {
   default = "{{ doks_master_name }}"
   type    = string
 }
 
 variable "doks_pool_autoscale" {
+  description = "Enable built-in cluster autoscaler"
   default = true
   type    = bool
 }
 
-// for vpc segmentation see vpc.tf
-variable "cidr_block" {
-  description = "CIDR block for VPC segementation"
-  default = "{{ vpc_cidr_block }}"
-}
-
-variable "vpc_name" {
-  description = "name of vpc, take care to insert unique names"
-  default = "{{ vpc_name }}"
-}
+# Space bucket
 
 variable "space_bucket_kubeconfig" {
-  description = "space bucket with kubeconfigs"
+  description = "Space bucket containing kubeconfigs"
   default = "{{ space_bucket_kubeconfig }}"
+  type = string
 }
 
 variable "space_access_id" {
   description = "credentials space access key"
   default = "{{ spaces_access_id }}"
+  type = string
 }
 
 variable "space_secret_key" {
   description = "credentials space access key"
   default = "{{ spaces_secret_key }}"
+  type = string
 }
 
 # Engine info
+
 variable "qovery_engine_info" {
   description = "Qovery engine info"
   default = {
@@ -117,6 +132,7 @@ variable "qovery_agent_replicas" {
 }
 
 # Helm alert manager discord
+
 variable "discord_api_key" {
   description = "discord url with token for used for alerting"
   default = "{{ discord_api_key }}"

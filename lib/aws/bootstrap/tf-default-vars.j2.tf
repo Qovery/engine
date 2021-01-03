@@ -74,7 +74,7 @@ variable "eks_k8s_versions" {
 }
 
 variable "kubernetes_cluster_id" {
-  description = "Kubernetes cluster name with region"
+  description = "Kubernetes cluster name"
   default     = "{{ kubernetes_cluster_id }}"
   type        = string
 }
@@ -100,14 +100,8 @@ variable "eks_cloudwatch_log_group" {
 # S3 bucket name
 
 variable "s3_bucket_kubeconfig" {
-  description = "S3 bucket with kubeconfigs"
+  description = "S3 bucket containing kubeconfigs"
   default = "{{ s3_kubeconfig_bucket }}"
-  type = string
-}
-
-variable "s3_bucket_qengine_resources" {
-  description = "S3 bucket containing qengine resources (libs)"
-  default = "prod-qengine-resources"
   type = string
 }
 
@@ -261,6 +255,7 @@ variable "elasticsearch_cidr_subnet" {
 }
 
 # Helm alert manager discord
+
 variable "discord_api_key" {
   description = "discord url with token for used for alerting"
   default = "{{ discord_api_key }}"
