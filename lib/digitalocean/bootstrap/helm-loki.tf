@@ -1,7 +1,7 @@
-
 resource "digitalocean_spaces_bucket" "loki_space" {
   name   = "qovery-logs-${var.kubernetes_cluster_id}"
   region = var.region
+  force_destroy = true
 }
 
 resource "helm_release" "loki" {
