@@ -117,7 +117,7 @@ fn listen_for_task_running_check_events(
     sub.clone().with_handler(move |msg| {
         let group_id = String::from_utf8(msg.data.clone()).unwrap();
 
-        let is_running = match task_manager.lock() {
+        let is_running = match task_manager.try_lock() {
             Ok(tm) => match tm.get_task_status_by_group_id(&group_id) {
                 Some(status) => match status.status {
                     State::DeploymentInProgress
@@ -216,7 +216,7 @@ fn listen_for_task_order_execution_check(
             }
         };
 
-        let is_first_place = match task_manager.lock() {
+        let is_first_place = match task_manager.try_lock() {
             Ok(tm) => {
                 // compare the date of the current task to other tasks with the same group id.
                 // if the current task has lower date than other tasks with same group id, it means that it is good to be run 👍
@@ -306,8 +306,6 @@ fn listen_for_incoming_load_balancing_tasks(
 
             loop {
                 for msg in incoming_task_sub.next() {
-                    debug!("{}", msg);
-
                     receive_and_queue_task(
                         msg,
                         workspace_root_dir.clone(),
@@ -335,9 +333,7 @@ fn listen_for_incoming_load_balancing_tasks(
 
             loop {
                 for msg in tm_info_task_sub.next() {
-                    debug!("{}", msg);
-
-                    let remaining_tasks_to_run = match task_manager.lock() {
+                    let remaining_tasks_to_run = match task_manager.try_lock() {
                         Ok(tm) => tm.remaining_tasks_to_run(),
                         Err(_) => 10_000, // set to 10 000 to make the engine unlikely taking a task
                     };
@@ -347,6 +343,8 @@ fn listen_for_incoming_load_balancing_tasks(
                         subject_name.as_str(),
                         remaining_tasks_to_run,
                     );
+
+                    info!("response to current task manager info request: {:?}", res);
 
                     let _ = msg.respond(res.as_json_string());
                 }
@@ -862,7 +860,7 @@ fn using_nats_server(
             loop {
                 let task = rx_task.recv().unwrap();
                 // load balance workload before dispatching the task to the current task manager.
-                match t1_task_manager.lock() {
+                match t1_task_manager.try_lock() {
                     Ok(mut tm) => {
                         // request info from other engines
                         // to know how many remaining tasks to run they have?

@@ -136,7 +136,7 @@ impl<'a> GetTaskManagerInfoRequest<'a> {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GetTaskManagerInfoResponse {
     pub engine_id: String,
     pub incoming_task_subject_name: String,
