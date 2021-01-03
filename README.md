@@ -97,4 +97,4 @@ curl --request POST \
 
 ## Contribute
 
-To active the debugger add the `RUST_LOG=qovery_engine=debug` env var 
+To active the debugger add the `RUST_LOG=qovery_engine=debug` env var
