@@ -30,7 +30,7 @@ pub struct Request {
     pub failover_environment: Option<Environment>,
     pub metadata: Option<Metadata>,
     // this field is used to store the data bytes from the current request send through NATS.
-    #[serde(skip_serializing)]
+    #[serde(skip_serializing, skip_deserializing)]
     pub bytes_payload: Vec<u8>,
 }
 
