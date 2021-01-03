@@ -15,7 +15,6 @@ use std::{fs, io, process};
 use chrono::Utc;
 use crossbeam_channel::{unbounded, Sender};
 use dirs::home_dir;
-use nats::tls::TlsConnector;
 use nats::{Connection, Message, Subscription};
 use qovery_engine::cmd;
 use qovery_engine::models::Context;
@@ -30,11 +29,13 @@ use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::{EngineInitError, ErrorKind};
+use crate::models::TaskSelector::{Environment, Infrastructure};
 use crate::models::{
     CheckTaskOrderRequest, CheckTaskOrderResponse, CheckTaskRunningResponse,
     GetTaskManagerInfoRequest, GetTaskManagerInfoResponse, Ping, Response, StatusResponse,
     TaskSelector,
 };
+use std::borrow::Borrow;
 
 mod constants;
 mod custom_error;
@@ -386,16 +387,17 @@ fn listen_for_events(
                 for msg in sub.next() {
                     debug!("{}", msg);
 
-                receive_and_queue_task(
-                    msg,
-                    workspace_root_dir.clone(),
-                    lib_root_dir.clone(),
-                    docker_tcp_socket.clone(),
-                    &task_selector,
-                    &nc,
-                    &mode,
-                    &tx,
-                );
+                    receive_and_queue_task(
+                        msg,
+                        workspace_root_dir.clone(),
+                        lib_root_dir.clone(),
+                        docker_tcp_socket.clone(),
+                        &task_selector,
+                        &nc,
+                        &mode,
+                        &tx,
+                    );
+                }
             }
         });
 
