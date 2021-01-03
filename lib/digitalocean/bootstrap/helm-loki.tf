@@ -1,6 +1,6 @@
 
 resource "digitalocean_spaces_bucket" "loki_space" {
-  name   = "qovery-logs-${var.doks_cluster_id}"
+  name   = "qovery-logs-${var.kubernetes_cluster_id}"
   region = var.region
 }
 
@@ -27,7 +27,7 @@ resource "helm_release" "loki" {
 
   set {
     name = "config.storage_config.aws.s3"
-    value = "s3://${var.region}.digitaloceanspaces.com/qovery-logs-${var.doks_cluster_id}"
+    value = "s3://${var.region}.digitaloceanspaces.com/qovery-logs-${var.kubernetes_cluster_id}"
   }
 
   set {

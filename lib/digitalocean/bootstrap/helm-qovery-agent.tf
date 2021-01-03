@@ -1,5 +1,5 @@
 data "external" "get_agent_version_to_use" {
-  program = ["./helper.sh", "get_agent_version_to_use", var.qovery_agent_info.token, var.qovery_agent_info.api_fqdn, var.doks_cluster_id]
+  program = ["./helper.sh", "get_agent_version_to_use", var.qovery_agent_info.token, var.qovery_agent_info.api_fqdn, var.kubernetes_cluster_id]
 }
 
 resource "random_id" "qovery_agent_id" {
@@ -63,7 +63,7 @@ resource "helm_release" "qovery_agent_resources" {
 
   set {
     name = "environmentVariables.KUBERNETES_ID"
-    value = var.doks_cluster_id
+    value = var.kubernetes_cluster_id
   }
 
   set {

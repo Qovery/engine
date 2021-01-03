@@ -41,5 +41,6 @@ resource "helm_release" "grafana" {
   depends_on = [
     digitalocean_kubernetes_cluster.kubernetes_cluster,
     helm_release.prometheus_operator,
+    helm_release.q_storageclass,
   ]
 }
