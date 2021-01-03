@@ -8,7 +8,7 @@ use std::io::{Error, Read};
 use crossbeam_channel::unbounded;
 
 use qovery_engine_shared::{subject, Mode};
-use qovery_engine_task_manager::models::{Request, Response};
+use qovery_engine_task_manager::models::Request;
 use qovery_engine_task_manager::task_manager::{Task, TaskManager};
 use qovery_engine_task_manager::tasks::InfrastructureTask;
 
