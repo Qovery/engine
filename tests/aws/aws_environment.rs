@@ -1,7 +1,7 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::generate_id;
+use self::test_utilities::utilities::{generate_id, engine_run_test};
 use qovery_engine::models::{
     Action, Clone2, Context, CustomDomain, Environment, EnvironmentAction, Storage, StorageType,
 };
@@ -92,7 +92,7 @@ pub fn delete_environment(
 
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(
         Level::INFO,
@@ -123,52 +123,55 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+        return "deploy_a_working_environment_with_no_router_on_aws_eks".to_string();
+    })
 }
 
 #[test]
 fn deploy_dockerfile_not_exist() {
-    init();
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "deploy_dockerfile_not_exist");
+        let _enter = span.enter();
 
-    let span = span!(Level::INFO, "deploy_dockerfile_not_exist");
-    let _enter = span.enter();
+        let context = context();
+        let context_for_delete = context.clone_not_same_execution_id();
 
-    let context = context();
-    let context_for_delete = context.clone_not_same_execution_id();
+        let mut environment = test_utilities::aws::working_minimal_environment(&context);
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
+                app.branch = "dockerfile-not-exist".to_string();
+                app.commit_id = "5cd900a07a17c7aa3c14cb5cb82c62e19219d57c".to_string();
+                app.environment_variables = vec![];
+                app.dockerfile_path = "".to_string();
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+        let mut environment_for_delete = environment.clone();
 
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
-            app.branch = "dockerfile-not-exist".to_string();
-            app.commit_id = "5cd900a07a17c7aa3c14cb5cb82c62e19219d57c".to_string();
-            app.environment_variables = vec![];
-            app.dockerfile_path = "".to_string();
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
-    let mut environment_for_delete = environment.clone();
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_delete = EnvironmentAction::Environment(environment_for_delete);
 
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_delete = EnvironmentAction::Environment(environment_for_delete);
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(true),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
 
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(true),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
-
-    match delete_environment(&context_for_delete, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+        match delete_environment(&context_for_delete, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+        return "deploy_dockerfile_not_exist".to_string();
+    })
 }
 
 #[test]
 fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(
         Level::INFO,
@@ -199,11 +202,14 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(true),
     };
+
+    return "deploy_a_not_working_environment_with_no_router_on_aws_eks".to_string();
+})
 }
 
 #[test]
 fn deploy_a_working_environment_with_domain() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(Level::INFO, "deploy_a_working_environment_with_domain");
     let _enter = span.enter();
@@ -229,10 +235,12 @@ fn deploy_a_working_environment_with_domain() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+        return "deploy_a_working_environment_with_domain".to_string();
+    })
 }
 
 fn deploy_a_working_environment_with_custom_domain() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(
         Level::INFO,
@@ -278,12 +286,14 @@ fn deploy_a_working_environment_with_custom_domain() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+        return "deploy_a_working_environment_with_custom_domain".to_string();
+    })
 }
 
 #[test]
 #[ignore]
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(
         Level::INFO,
@@ -332,12 +342,14 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+    return "deploy_a_working_environment_with_storage_on_aws_eks".to_string();
+})
 }
 
 // to check if app redeploy or not, it shouldn't
 #[test]
 fn redeploy_same_app_with_ebs() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(Level::INFO, "redeploy_same_app_with_ebs");
     let _enter = span.enter();
@@ -396,6 +408,8 @@ fn redeploy_same_app_with_ebs() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+        return "redeploy_same_app_with_ebs".to_string();
+    })
 }
 
 // #[test]
@@ -478,7 +492,7 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
 
 #[test]
 fn deploy_a_not_working_environment_and_after_working_environment() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(
         Level::INFO,
@@ -529,6 +543,8 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+        return "deploy_a_not_working_environment_and_after_working_environment".to_string();
+    })
 }
 
 // Todo: temporary comment this test, need to fix it asap
@@ -609,7 +625,7 @@ fn deploy_ok_fail_fail_ok_environment() {
 
 #[test]
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(
         Level::INFO,
@@ -637,6 +653,8 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+        return "deploy_a_non_working_environment_with_no_failover_on_aws_eks".to_string();
+    })
 }
 
 #[test]

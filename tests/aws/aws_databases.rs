@@ -12,7 +12,7 @@ use qovery_engine::transaction::TransactionResult;
 
 use crate::aws::aws_environment::{delete_environment, deploy_environment};
 
-use self::test_utilities::utilities::generate_id;
+use self::test_utilities::utilities::{generate_id, engine_run_test};
 
 /**
 **
@@ -178,107 +178,108 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 // Ensure redeploy works as expected
 #[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
-    init();
-
-    let span = span!(
+    engine_run_test(|| {
+        let span = span!(
         Level::INFO,
         "postgresql_deploy_a_working_environment_and_redeploy"
     );
-    let _enter = span.enter();
+        let _enter = span.enter();
 
-    let context = context();
-    let context_for_redeploy = context.clone_not_same_execution_id();
-    let context_for_delete = context.clone_not_same_execution_id();
+        let context = context();
+        let context_for_redeploy = context.clone_not_same_execution_id();
+        let context_for_delete = context.clone_not_same_execution_id();
 
-    let mut environment = test_utilities::aws::working_minimal_environment(&context);
+        let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
-    let database_host =
-        "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
-    let database_port = 5432;
-    let database_db_name = "my-postgres".to_string();
-    let database_username = "superuser".to_string();
-    let database_password = generate_id();
-    environment.databases = vec![Database {
-        kind: DatabaseKind::Postgresql,
-        action: Action::Create,
-        id: generate_id(),
-        name: database_db_name.clone(),
-        version: "11.8.0".to_string(),
-        fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
-        fqdn: database_host.clone(),
-        port: database_port.clone(),
-        username: database_username.clone(),
-        password: database_password.clone(),
-        total_cpus: "500m".to_string(),
-        total_ram_in_mib: 512,
-        disk_size_in_gib: 10,
-        database_instance_type: "db.t2.micro".to_string(),
-        database_disk_type: "gp2".to_string(),
-    }];
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.branch = "postgres-app".to_string();
-            app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
-            app.private_port = Some(1234);
-            app.environment_variables = vec![
-                EnvironmentVariable {
-                    key: "PG_HOST".to_string(),
-                    value: database_host.clone(),
-                },
-                EnvironmentVariable {
-                    key: "PG_PORT".to_string(),
-                    value: database_port.clone().to_string(),
-                },
-                EnvironmentVariable {
-                    key: "PG_DBNAME".to_string(),
-                    value: database_db_name.clone(),
-                },
-                EnvironmentVariable {
-                    key: "PG_USERNAME".to_string(),
-                    value: database_username.clone(),
-                },
-                EnvironmentVariable {
-                    key: "PG_PASSWORD".to_string(),
-                    value: database_password.clone(),
-                },
-            ];
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = "postgres-app".to_string();
-    let environment_to_redeploy = environment.clone();
-    let environment_check = environment.clone();
-    let ea_redeploy = EnvironmentAction::Environment(environment_to_redeploy);
+        let database_host =
+            "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+        let database_port = 5432;
+        let database_db_name = "my-postgres".to_string();
+        let database_username = "superuser".to_string();
+        let database_password = generate_id();
+        environment.databases = vec![Database {
+            kind: DatabaseKind::Postgresql,
+            action: Action::Create,
+            id: generate_id(),
+            name: database_db_name.clone(),
+            version: "11.8.0".to_string(),
+            fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
+            fqdn: database_host.clone(),
+            port: database_port.clone(),
+            username: database_username.clone(),
+            password: database_password.clone(),
+            total_cpus: "500m".to_string(),
+            total_ram_in_mib: 512,
+            disk_size_in_gib: 10,
+            database_instance_type: "db.t2.micro".to_string(),
+            database_disk_type: "gp2".to_string(),
+        }];
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.branch = "postgres-app".to_string();
+                app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
+                app.private_port = Some(1234);
+                app.environment_variables = vec![
+                    EnvironmentVariable {
+                        key: "PG_HOST".to_string(),
+                        value: database_host.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_PORT".to_string(),
+                        value: database_port.clone().to_string(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_DBNAME".to_string(),
+                        value: database_db_name.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_USERNAME".to_string(),
+                        value: database_username.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_PASSWORD".to_string(),
+                        value: database_password.clone(),
+                    },
+                ];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+        environment.routers[0].routes[0].application_name = "postgres-app".to_string();
+        let environment_to_redeploy = environment.clone();
+        let environment_check = environment.clone();
+        let ea_redeploy = EnvironmentAction::Environment(environment_to_redeploy);
 
-    let mut environment_delete = environment.clone();
-    environment_delete.action = Action::Delete;
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-    match deploy_environment(&context_for_redeploy, &ea_redeploy) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-    // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-    let database_name = format!("{}-0", &environment_check.databases[0].name);
-    match is_pod_restarted_aws_env(environment_check, database_name.as_str()) {
-        (true, _) => assert!(true),
-        (false, _) => assert!(false),
-    }
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+        match deploy_environment(&context_for_redeploy, &ea_redeploy) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+        // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
+        let database_name = format!("{}-0", &environment_check.databases[0].name);
+        match is_pod_restarted_aws_env(environment_check, database_name.as_str()) {
+            (true, _) => assert!(true),
+            (false, _) => assert!(false),
+        }
 
-    match delete_environment(&context_for_delete, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
+        match delete_environment(&context_for_delete, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+        "postgresql_deploy_a_working_environment_and_redeploy".to_string()
+    })
 }
 
 /**
@@ -293,94 +294,95 @@ fn test_postgresql_configuration(
     version: &str,
     test_name: &str,
 ) {
-    init();
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+        let context_for_delete = context.clone_not_same_execution_id();
 
-    let span = span!(Level::INFO, "test", name = test_name);
-    let _enter = span.enter();
-    let context_for_delete = context.clone_not_same_execution_id();
+        let database_host =
+            "postgres-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; //
+        let database_port = 5432;
+        let database_db_name = "postgres".to_string();
+        let database_username = "superuser".to_string();
+        let database_password = generate_id();
 
-    let database_host =
-        "postgres-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; //
-    let database_port = 5432;
-    let database_db_name = "postgres".to_string();
-    let database_username = "superuser".to_string();
-    let database_password = generate_id();
+        let is_rds = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
 
-    let is_rds = match environment.kind {
-        Kind::Production => true,
-        Kind::Development => false,
-    };
+        environment.databases = vec![Database {
+            kind: DatabaseKind::Postgresql,
+            action: Action::Create,
+            id: generate_id(),
+            name: database_db_name.clone(),
+            version: version.to_string(),
+            fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
+            fqdn: database_host.clone(),
+            port: database_port.clone(),
+            username: database_username.clone(),
+            password: database_password.clone(),
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 512,
+            disk_size_in_gib: 10,
+            database_instance_type: "db.t2.micro".to_string(),
+            database_disk_type: "gp2".to_string(),
+        }];
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.branch = "postgres-app".to_string();
+                app.commit_id = "ad65b24a0470e7e8aa0983e036fb9a05928fd973".to_string();
+                app.private_port = Some(1234);
+                app.dockerfile_path = format!("Dockerfile-{}", version);
+                app.environment_variables = vec![
+                    EnvironmentVariable {
+                        key: "PG_HOST".to_string(),
+                        value: database_host.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_PORT".to_string(),
+                        value: database_port.clone().to_string(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_DBNAME".to_string(),
+                        value: database_db_name.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_USERNAME".to_string(),
+                        value: database_username.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_PASSWORD".to_string(),
+                        value: database_password.clone(),
+                    },
+                ];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+        environment.routers[0].routes[0].application_name = "postgres-app".to_string();
 
-    environment.databases = vec![Database {
-        kind: DatabaseKind::Postgresql,
-        action: Action::Create,
-        id: generate_id(),
-        name: database_db_name.clone(),
-        version: version.to_string(),
-        fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
-        fqdn: database_host.clone(),
-        port: database_port.clone(),
-        username: database_username.clone(),
-        password: database_password.clone(),
-        total_cpus: "100m".to_string(),
-        total_ram_in_mib: 512,
-        disk_size_in_gib: 10,
-        database_instance_type: "db.t2.micro".to_string(),
-        database_disk_type: "gp2".to_string(),
-    }];
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.branch = "postgres-app".to_string();
-            app.commit_id = "ad65b24a0470e7e8aa0983e036fb9a05928fd973".to_string();
-            app.private_port = Some(1234);
-            app.dockerfile_path = format!("Dockerfile-{}", version);
-            app.environment_variables = vec![
-                EnvironmentVariable {
-                    key: "PG_HOST".to_string(),
-                    value: database_host.clone(),
-                },
-                EnvironmentVariable {
-                    key: "PG_PORT".to_string(),
-                    value: database_port.clone().to_string(),
-                },
-                EnvironmentVariable {
-                    key: "PG_DBNAME".to_string(),
-                    value: database_db_name.clone(),
-                },
-                EnvironmentVariable {
-                    key: "PG_USERNAME".to_string(),
-                    value: database_username.clone(),
-                },
-                EnvironmentVariable {
-                    key: "PG_PASSWORD".to_string(),
-                    value: database_password.clone(),
-                },
-            ];
-            app
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // todo: check the database disk is here and with correct size
+
+        match delete_environment(&context_for_delete, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+        return test_name.to_string();
         })
-        .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = "postgres-app".to_string();
-
-    let mut environment_delete = environment.clone();
-    environment_delete.action = Action::Delete;
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    // todo: check the database disk is here and with correct size
-
-    match delete_environment(&context_for_delete, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
 }
 
 // Postgres environment environment
@@ -412,6 +414,7 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
 
 #[test]
 fn postgresql_v12_deploy_a_working_dev_environment() {
+
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_postgresql_configuration(
@@ -679,7 +682,7 @@ fn test_mysql_configuration(
     version: &str,
     test_name: &str,
 ) {
-    init();
+    engine_run_test(|| {
 
     let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
@@ -776,6 +779,9 @@ fn test_mysql_configuration(
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+
+    return test_name.to_string();
+})
 }
 
 // MySQL self-hosted environment
@@ -844,103 +850,105 @@ fn test_redis_configuration(
     version: &str,
     test_name: &str,
 ) {
-    init();
-    let span = span!(Level::INFO, "test", name = test_name);
-    let _enter = span.enter();
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    let context_for_delete = context.clone_not_same_execution_id();
+        let context_for_delete = context.clone_not_same_execution_id();
 
-    let database_host =
-        "redis-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
-    let database_port = 6379;
-    let database_db_name = "my-redis".to_string();
-    let database_username = "superuser".to_string();
-    let database_password = generate_id();
+        let database_host =
+            "redis-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+        let database_port = 6379;
+        let database_db_name = "my-redis".to_string();
+        let database_username = "superuser".to_string();
+        let database_password = generate_id();
 
-    let is_elasticache = match environment.kind {
-        Kind::Production => true,
-        Kind::Development => false,
-    };
+        let is_elasticache = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
 
-    environment.databases = vec![Database {
-        kind: DatabaseKind::Redis,
-        action: Action::Create,
-        id: generate_id(),
-        name: database_db_name.clone(),
-        version: version.to_string(),
-        fqdn_id: "redis-".to_string() + generate_id().as_str(),
-        fqdn: database_host.clone(),
-        port: database_port.clone(),
-        username: database_username.clone(),
-        password: database_password.clone(),
-        total_cpus: "500m".to_string(),
-        total_ram_in_mib: 512,
-        disk_size_in_gib: 10,
-        database_instance_type: "cache.t3.micro".to_string(),
-        database_disk_type: "gp2".to_string(),
-    }];
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.name = "redis-app".to_string();
-            app.branch = "redis-app".to_string();
-            app.commit_id = "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string();
-            app.private_port = Some(1234);
-            app.dockerfile_path = format!("Dockerfile-{}", version);
-            app.environment_variables = vec![
-                // EnvironmentVariable {
-                //     key: "ENABLE_DEBUG".to_string(),
-                //     value: "true".to_string(),
-                // },
-                // EnvironmentVariable {
-                //     key: "DEBUG_PAUSE".to_string(),
-                //     value: "true".to_string(),
-                // },
-                EnvironmentVariable {
-                    key: "IS_ELASTICCACHE".to_string(),
-                    value: is_elasticache.to_string(),
-                },
-                EnvironmentVariable {
-                    key: "REDIS_HOST".to_string(),
-                    value: database_host.clone(),
-                },
-                EnvironmentVariable {
-                    key: "REDIS_PORT".to_string(),
-                    value: database_port.clone().to_string(),
-                },
-                EnvironmentVariable {
-                    key: "REDIS_USERNAME".to_string(),
-                    value: database_username.clone(),
-                },
-                EnvironmentVariable {
-                    key: "REDIS_PASSWORD".to_string(),
-                    value: database_password.clone(),
-                },
-            ];
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = "redis-app".to_string();
+        environment.databases = vec![Database {
+            kind: DatabaseKind::Redis,
+            action: Action::Create,
+            id: generate_id(),
+            name: database_db_name.clone(),
+            version: version.to_string(),
+            fqdn_id: "redis-".to_string() + generate_id().as_str(),
+            fqdn: database_host.clone(),
+            port: database_port.clone(),
+            username: database_username.clone(),
+            password: database_password.clone(),
+            total_cpus: "500m".to_string(),
+            total_ram_in_mib: 512,
+            disk_size_in_gib: 10,
+            database_instance_type: "cache.t3.micro".to_string(),
+            database_disk_type: "gp2".to_string(),
+        }];
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.name = "redis-app".to_string();
+                app.branch = "redis-app".to_string();
+                app.commit_id = "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string();
+                app.private_port = Some(1234);
+                app.dockerfile_path = format!("Dockerfile-{}", version);
+                app.environment_variables = vec![
+                    // EnvironmentVariable {
+                    //     key: "ENABLE_DEBUG".to_string(),
+                    //     value: "true".to_string(),
+                    // },
+                    // EnvironmentVariable {
+                    //     key: "DEBUG_PAUSE".to_string(),
+                    //     value: "true".to_string(),
+                    // },
+                    EnvironmentVariable {
+                        key: "IS_ELASTICCACHE".to_string(),
+                        value: is_elasticache.to_string(),
+                    },
+                    EnvironmentVariable {
+                        key: "REDIS_HOST".to_string(),
+                        value: database_host.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "REDIS_PORT".to_string(),
+                        value: database_port.clone().to_string(),
+                    },
+                    EnvironmentVariable {
+                        key: "REDIS_USERNAME".to_string(),
+                        value: database_username.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "REDIS_PASSWORD".to_string(),
+                        value: database_password.clone(),
+                    },
+                ];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+        environment.routers[0].routes[0].application_name = "redis-app".to_string();
 
-    let mut environment_delete = environment.clone();
-    environment_delete.action = Action::Delete;
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
 
-    // todo: check the database disk is here and with correct size
+        // todo: check the database disk is here and with correct size
 
-    match delete_environment(&context_for_delete, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
+        match delete_environment(&context_for_delete, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+        return test_name.to_string();
+    })
 }
 
 // Redis self-hosted environment
