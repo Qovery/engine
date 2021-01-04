@@ -31,7 +31,20 @@ TDOO
 ## Get Started
 
 ### Run locally
-Install [EnvFile](https://plugins.jetbrains.com/plugin/7861-envfile) plugin on Intellij, and add `.env` file to your build and run.
+```shell
+# somewhere on your computer
+# git clone git@github.com:Qovery/engine.git
+ln -s path_to_qovery/engine cloned-engine
+cp docker/bin_versions .
+
+# Modify version if necessary to match your bin_versions file
+curl https://releases.hashicorp.com/terraform/0.13.5/terraform_0.13.5_linux_amd64.zip -o /tmp/terraform.zip
+sudo unzip /tmp/terraform.zip -d /usr/local/bin/
+
+# Ensure /usr/local/bin is in your path
+cargo run 
+```
+
 
 ### Generate a new image version
 To generate a new Engine image version, you have to use Gitlab and GitHub:

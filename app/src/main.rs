@@ -21,6 +21,7 @@ use qovery_engine::models::Context;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use uuid::Uuid;
+use dotenv::dotenv;
 
 use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::Request;
@@ -567,6 +568,9 @@ fn generate_id() -> u32 {
 
 pub fn main() -> io::Result<()> {
     println!("{}", ASCII_BANNER);
+
+    // Load env variable from .env file
+    dotenv().ok();
     env_logger::init();
 
     let engine_id = env::var("ID").unwrap_or(generate_id().to_string());
@@ -574,7 +578,7 @@ pub fn main() -> io::Result<()> {
     let cloud_provider = env::var("CLOUD_PROVIDER");
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let region = env::var("REGION");
-    let nats_server = env::var("NATS_SERVER").expect("NATS_SERVER is mandatory");
+    let nats_server = env::var("QOVERY_NATS_URL").expect("QOVERY_NATS_URL is mandatory");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or("lib".to_string());
     let docker_host = env::var("DOCKER_HOST").ok();
     let workspace_root_dir = env::var("WORKSPACE_ROOT_DIR").unwrap_or(format!(

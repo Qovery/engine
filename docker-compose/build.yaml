@@ -13,7 +13,7 @@ services:
     links:
       - nats
     environment:
-      - "NATS_SERVER=nats://nats:4222"
+      - "QOVERY_NATS_URL=nats://nats:4222"
       - "ENGINE_RES_URL=/qovery_libs"
       - "LOCAL_DEPLOY=true"
     depends_on:

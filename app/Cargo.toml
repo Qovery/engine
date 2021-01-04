@@ -25,3 +25,6 @@ openssl = { version = "0.10", features = ["vendored"] }
 # logger
 env_logger = "0.8.2"
 log = "0.4.11"
+
+# To load .env file into env variables
+dotenv = "0.15.0"

@@ -235,7 +235,7 @@ function release_to_prod() { ## Release GA to prod
   helm upgrade --kubeconfig $AWS_PROD_KUBECONFIG --install --history-max 50 --wait --namespace qovery qovery-engine \
    $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine --set \
 image.tag="$tag",\
-environmentVariables.NATS_SERVER="panic.qovery.com:4242",\
+environmentVariables.QOVERY_NATS_URL="panic.qovery.com:4242",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
