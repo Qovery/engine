@@ -320,7 +320,7 @@ function all_tests(){ ## Run all tests on qovery-engine
 }
 
 function fast_tests(){ ## Run fast tests only on qovery-engine
-  GITHUB_ENGINE_BRANCH_NAME=fix/db_tests
+  GITHUB_ENGINE_BRANCH_NAME=slow-tests
   nb_treads=$2
   export RUST_LOG=info
   export_env
@@ -336,7 +336,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   TESTS_STATUS="${PIPESTATUS[0]}"
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
-
+  jq --version
   # Log management part
   cd $GITLAB_LOG_UTILITIES_DIR
   STARTTIME=$(date +%s)
