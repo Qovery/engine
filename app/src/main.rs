@@ -1,7 +1,7 @@
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate serde;
+#[macro_use] extern crate log;
+#[macro_use] extern crate serde;
+#[macro_use] extern crate prometheus;
+
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
@@ -37,10 +37,12 @@ use crate::models::{
     TaskSelector,
 };
 use std::borrow::Borrow;
+use std::panic::resume_unwind;
 
 mod constants;
 mod custom_error;
 mod models;
+mod webserver;
 
 const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";
 const CORE_PING_SUBJECT: &str = "core.ping";
@@ -566,6 +568,8 @@ fn generate_id() -> u32 {
     Uuid::new_v4().as_fields().0
 }
 
+
+
 pub fn main() -> io::Result<()> {
     println!("{}", ASCII_BANNER);
 
@@ -573,6 +577,7 @@ pub fn main() -> io::Result<()> {
     dotenv().ok();
     env_logger::init();
 
+    let http_listen_on = env::var("HTTP_LISTEN_ON").unwrap_or("0.0.0.0:8080".to_string());
     let engine_id = env::var("ID").unwrap_or(generate_id().to_string());
     let organization = env::var("ORGANIZATION");
     let cloud_provider = env::var("CLOUD_PROVIDER");
@@ -621,6 +626,8 @@ pub fn main() -> io::Result<()> {
             process::exit(1);
         }
     }
+
+    webserver::launch(http_listen_on.as_str());
 
     match &docker_host {
         Some(docker_host) => info!("docker host: {}", docker_host),

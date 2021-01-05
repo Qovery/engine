@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::mem::ManuallyDrop;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -12,33 +12,18 @@ use serde::{Deserialize, Serialize};
 
 use qovery_engine::models::{ProgressLevel, ProgressScope};
 use crate::log_debug_no_spam_builder;
+use prometheus::{self, IntGauge};
 
 pub type Id = String;
 pub type GroupId = Id;
 pub type Message = Result<InternalTask, Error>;
 
-struct RunningTaskCounter {
-    running_tasks: usize,
-}
-
-impl RunningTaskCounter {
-    pub fn new(init: usize) -> Self {
-        RunningTaskCounter {
-            running_tasks: init,
-        }
-    }
-
-    pub fn get(&self) -> usize {
-        self.running_tasks
-    }
-
-    pub fn increment(&mut self) {
-        self.running_tasks = self.running_tasks + 1;
-    }
-
-    pub fn decrement(&mut self) {
-        self.running_tasks = self.running_tasks - 1;
-    }
+lazy_static! {
+    static ref METRICS_NB_RUNNING_TASKS: IntGauge = register_int_gauge!(
+        "taskmanager_nb_running_tasks",
+        "Number of tasks currently running"
+    )
+    .unwrap();
 }
 
 pub struct TaskManager {
@@ -52,7 +37,7 @@ pub struct TaskManager {
     status_by_task_id_w: Arc<Mutex<WriteHandle<Id, Status>>>,
     message_sender: Sender<Message>,
     message_receiver: Receiver<Message>,
-    running_tasks: Arc<Mutex<RunningTaskCounter>>,
+    running_tasks: IntGauge,
     running: bool,
 }
 
@@ -76,7 +61,7 @@ impl TaskManager {
             status_by_task_id_w,
             message_sender,
             message_receiver,
-            running_tasks: Arc::new(Mutex::new(RunningTaskCounter::new(0))),
+            running_tasks: METRICS_NB_RUNNING_TASKS.clone(),
             running: false,
         }
     }
@@ -93,12 +78,7 @@ impl TaskManager {
     }
 
     pub fn remaining_tasks_to_run(&self) -> usize {
-        let running_tasks = match self.running_tasks.try_lock() {
-            Ok(counter) => counter.get(),
-            Err(_) => 0,
-        };
-
-        self.it_receiver.len() + running_tasks
+        self.it_receiver.len() + self.running_tasks.get().min(0) as usize
     }
 
     pub fn is_terminated(&self) -> Receiver<bool> {
@@ -175,7 +155,6 @@ impl TaskManager {
 
         let _ = thread::spawn(move || {
             let self_running_tasks = self_running_tasks;
-            let mut log_debug_wait_new_task = log_debug_no_spam_builder("no task to run, waiting", 60);
 
             loop {
                 // execute received tasks
@@ -188,24 +167,9 @@ impl TaskManager {
                                 let start_time = Instant::now();
                                 let task_id = String::from(internal_task.task.id());
 
-                                // increment running tasks counter
-                                match self_running_tasks.lock() {
-                                    Ok(mut running_tasks) => {
-                                        running_tasks.increment();
-                                    }
-                                    Err(_) => {}
-                                }
-
-                                // exec task
+                                self_running_tasks.inc();
                                 internal_task.task.run(&self_message_sender);
-
-                                // decrement running tasks counter
-                                match self_running_tasks.lock() {
-                                    Ok(mut running_tasks) => {
-                                        running_tasks.decrement();
-                                    }
-                                    Err(_) => {}
-                                }
+                                self_running_tasks.dec();
 
                                 info!(
                                     "task {} took {:?} to be executed",
@@ -235,10 +199,7 @@ impl TaskManager {
                                 // send status contained inside the internal task
                                 internal_task.send_status(&self_message_sender);
 
-                                let running_tasks = match self_running_tasks.try_lock() {
-                                    Ok(counter) => counter.get(),
-                                    Err(_) => 0,
-                                };
+                                let running_tasks = self_running_tasks.get().min(0) as usize;
 
                                 // re-add the task
                                 add_task(
@@ -259,7 +220,7 @@ impl TaskManager {
                     Err(_) => {}
                 };
 
-                log_debug_wait_new_task();
+                debug!("no task to run, wait for 1 sec");
                 sleep(Duration::from_secs(1));
                 if self_end_task_sig_receiver.try_recv().is_ok() {
                     info!("shutdown task manager");
@@ -468,6 +429,87 @@ impl From<RecvError> for Error {
 
 #[cfg(test)]
 mod tests {
+    use crate::task_manager::{TaskManager, Task, Message, Status, PreRun};
+    use chrono::{DateTime, Utc, NaiveDateTime};
+    use crossbeam_channel::Sender;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Barrier};
+    use std::time::Duration;
+
+    #[derive(Clone)]
+    pub struct DummyTask {
+        pub date: DateTime<Utc>,
+        pub bytes: Vec<u8>,
+        pub have_been_run: Arc<AtomicBool>,
+        pub barrier_begin: Arc<Barrier>,
+        pub barrier_end: Arc<Barrier>,
+    }
+
+    impl DummyTask {
+        fn new() -> DummyTask {
+            DummyTask {
+                date: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0,0), Utc),
+                bytes: vec![],
+                have_been_run: Arc::new(AtomicBool::new(false)),
+                barrier_begin: Arc::new(Barrier::new(2)),
+                barrier_end: Arc::new(Barrier::new(2))
+            }
+        }
+    }
+    impl Task for DummyTask {
+        fn created_at(&self) -> &DateTime<Utc> {
+            &self.date
+        }
+
+        fn group_id(&self) -> &str {
+            "0"
+        }
+
+        fn id(&self) -> &str {
+            "0"
+        }
+
+        fn bytes_payload(&self) -> &Vec<u8> {
+            &self.bytes
+        }
+
+        fn send_status(&self, _: &Sender<Message>, _: Status) {
+        }
+
+        fn pre_run(&self) -> PreRun {
+            PreRun::Yes
+        }
+
+        fn run(&self, _: &Sender<Message>) {
+            self.barrier_begin.wait();
+            self.have_been_run.compare_and_swap(false, true, Ordering::AcqRel);
+            self.barrier_end.wait();
+        }
+    }
+
     #[test]
-    fn test() {}
+    fn test_taskmanager_run() {
+        let mut tm = TaskManager::new();
+        let task = DummyTask::new();
+
+        assert_eq!(tm.running_tasks.get(), 0);
+        assert_eq!(task.have_been_run.load(Ordering::Acquire), false);
+        tm.add_task(Box::new(task.clone()));
+        tm.run().expect("Impossible to run task Manager");
+
+        task.barrier_begin.wait();
+        assert_eq!(tm.running_tasks.get(), 1);
+        task.barrier_end.wait();
+
+        tm.stop();
+        // Wait for task to be completed
+        let mut nb_iter = 0;
+        while tm.remaining_tasks_to_run() > 0 {
+            std::thread::sleep(Duration::from_secs(1));
+            nb_iter = nb_iter + 1;
+            assert_ne!(nb_iter, 5);
+        }
+        assert_eq!(task.have_been_run.load(Ordering::Acquire), true);
+        assert_eq!(tm.running_tasks.get(), 0);
+    }
 }
