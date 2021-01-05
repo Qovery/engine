@@ -28,7 +28,7 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   set {
-    name = "environmentVariables.NATS_SERVER"
+    name = "environmentVariables.QOVERY_NATS_URL"
     value = var.qovery_nats_url
   }
 
