@@ -19,4 +19,6 @@ resource "digitalocean_firewall" "qovery_firewall" {
     port_range       = "443"
     source_addresses = ["0.0.0.0/0"]
   }
+
+  depends_on = [digitalocean_vpc.qovery_vpc]
 }
