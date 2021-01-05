@@ -14,12 +14,12 @@ use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::digitalocean::{digital_ocean_token, get_kube_cluster_name_from_uuid};
-use self::test_utilities::utilities::{generate_id, init};
+use self::test_utilities::utilities::{generate_id, init, engine_run_test};
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 
 #[test]
 fn create_doks_cluster_in_fra_10() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(Level::INFO, "create_doks_cluster_in_fra_10");
     let _enter = span.enter();
@@ -107,4 +107,6 @@ fn create_doks_cluster_in_fra_10() {
         }
         Err(_) => assert!(false),
     }
+        return "create_doks_cluster_in_fra_10".to_string();
+    })
 }
