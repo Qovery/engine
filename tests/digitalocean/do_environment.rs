@@ -4,13 +4,13 @@ use qovery_engine::container_registry::docr::get_current_registry_name;
 use qovery_engine::models::{Action, Clone2, EnvironmentAction};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::digitalocean::digital_ocean_token;
-use test_utilities::utilities::{context, init};
+use test_utilities::utilities::{context, init, engine_run_test};
 use tracing::{span, Level};
 
 // this function tests DOCR as well
 #[test]
 fn deploy_a_working_environment_with_no_router_on_do() {
-    init();
+    engine_run_test(|| {
     let span = span!(
         Level::INFO,
         "deploy_a_working_environment_with_no_router_on_do"
@@ -63,11 +63,16 @@ fn deploy_a_working_environment_with_no_router_on_do() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };*/
+
+        return "deploy_a_working_environment_with_no_router_on_do".to_string();
+    })
 }
+
+
 
 #[test]
 fn deploy_a_working_environment_router_and_app_on_do() {
-    init();
+    engine_run_test(|| {
 
     let span = span!(
         Level::INFO,
@@ -85,4 +90,7 @@ fn deploy_a_working_environment_router_and_app_on_do() {
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+
+    return "deploy_a_working_environment_router_and_app_on_do".to_string();
+})
 }
