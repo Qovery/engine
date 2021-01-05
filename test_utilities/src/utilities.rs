@@ -21,7 +21,7 @@ use qovery_engine::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Metadata};
 extern crate time;
-use time::PreciseTime;
+use time::Instant;
 
 use crate::aws::{aws_access_key_id, aws_secret_access_key, KUBE_CLUSTER_ID};
 
@@ -29,7 +29,7 @@ pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
 }
 
-pub fn init() -> PreciseTime {
+pub fn init() -> Instant {
     // check if it's currently running on GitHub action or Gitlab CI, using a common env var
     let ci_var = "CI";
 
@@ -47,12 +47,13 @@ pub fn init() -> PreciseTime {
         std::env::current_dir().unwrap().to_str().unwrap()
     );
 
-    PreciseTime::now()
+    Instant::now()
 }
 
-pub fn teardown(startTime: PreciseTime, testName: String){
-    let end = PreciseTime::now();
-    info!("{} seconds for test {}", startTime.to(end),testName);
+pub fn teardown(startTime: Instant, testName: String){
+    let end = Instant::now();
+    let elapsed = startTime.to(end);
+    info!("{} seconds for test {}", elapsed.as_seconds_f64(),testName);
 }
 
 pub fn engine_run_test<T>(test: T) -> ()
