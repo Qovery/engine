@@ -36,7 +36,7 @@ pub fn init() -> PreciseTime {
     match env::var_os(ci_var) {
         Some(_) => tracing_subscriber::fmt()
             .json()
-            .with_max_level(tracing::Level::INFO)
+            .with_max_level(tracing::Level::TRACE)
             .with_current_span(false)
             .try_init(),
         None => tracing_subscriber::fmt().try_init(),
