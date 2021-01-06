@@ -333,6 +333,7 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   cd $ENGINE_DIR
   mkdir -p $GITLAB_LOG_OUTPUT_DIR
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
+  env
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
   ENDTIME=$(date +%s)
@@ -406,7 +407,7 @@ all_tests_seq)
   ;;
 single_test)
   check_num_args 2
-  single_test $commit_id $2
+  single_test $commit_id
   ;;
 prepare_tests)
   prepare_tests
