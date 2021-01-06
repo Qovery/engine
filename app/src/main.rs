@@ -38,6 +38,7 @@ use crate::models::{
 };
 use std::borrow::Borrow;
 use std::panic::resume_unwind;
+use qovery_engine_task_manager::LogErrorOnDrop;
 
 mod constants;
 mod custom_error;
@@ -293,13 +294,11 @@ fn listen_for_incoming_load_balancing_tasks(
     let mode = mode.clone();
 
     // incoming tasks receiver
+    let thread_name = format!("incoming-lb-task-{}-{}", task_selector.name(), generate_id());
     let _ = thread::Builder::new()
-        .name(format!(
-            "incoming-lb-task-{}-{}",
-            task_selector.name(),
-            generate_id()
-        ))
+        .name(thread_name.clone())
         .spawn(move || {
+            let _drop_logger = LogErrorOnDrop::new(&thread_name);
             let nc = nc.clone();
             let task_selector = task_selector.clone();
             let workspace_root_dir = workspace_root_dir.clone();
@@ -324,13 +323,11 @@ fn listen_for_incoming_load_balancing_tasks(
         });
 
     // respond to get info request on the task manager remaining tasks to run
+    let thread_name = format!("tm-get-info-{}-{}", task_selector.name(), generate_id());
     let _ = thread::Builder::new()
-        .name(format!(
-            "tm-get-info-{}-{}",
-            task_selector.name(),
-            generate_id()
-        ))
+        .name(thread_name.clone())
         .spawn(move || {
+            let _drop_logger = LogErrorOnDrop::new(&thread_name);
             let engine_id = engine_id.clone();
             let subject_name = subject_name.clone();
 
@@ -379,9 +376,11 @@ fn listen_for_events(
         Environment(_) => "environment",
     };
 
+    let thread_name = format!("nats-event-receiver-{}", ts_str);
     let _ = thread::Builder::new()
-        .name(format!("nats-event-receiver-{}", ts_str))
+        .name(thread_name.clone())
         .spawn(move || {
+            let _drop_logger = LogErrorOnDrop::new(&thread_name);
             let nc = nc.clone();
 
             loop {
@@ -465,6 +464,7 @@ fn receive_and_queue_task(
 /// if it does not respond after all attempts, then gracefully restart the service.
 fn watchdog(name: String, nc: Connection, sig_term_tx: Sender<bool>) {
     let _ = thread::Builder::new().name("watchdog".to_string()).spawn(move || {
+        let _drop_logger = LogErrorOnDrop::new("watchdog");
         let engine_started_at = Utc::now();
 
         loop {
@@ -825,11 +825,13 @@ fn using_nats_server(
     let _ = thread::Builder::new()
         .name("tm-task-adder".to_string())
         .spawn(move || {
+            let _drop_logger = LogErrorOnDrop::new("tm-task-adder");
             let rx_status = t1_task_manager.lock().unwrap().run();
 
             let _ = thread::Builder::new()
-                .name("t-status-core-updater".to_string())
+                .name("tm-status-core-updater".to_string())
                 .spawn(move || {
+                    let _drop_logger = LogErrorOnDrop::new("tm-status-core-updater");
                     let rx_status = rx_status.unwrap();
                     let nc = nc_1;
 
@@ -859,6 +861,7 @@ fn using_nats_server(
             let _ = thread::Builder::new()
                 .name("tm-ta-quit-handler".to_string())
                 .spawn(move || {
+                    let _drop_logger = LogErrorOnDrop::new("tm-ta-quit-handler");
                     // waiting for sig term to quit gracefully by waiting that there is no remaining tasks to execute.
                     let _ = task_manager_is_terminated_rx.recv();
                     let _ = tx_quit.send(true);
@@ -972,6 +975,7 @@ fn using_nats_server(
     let _ = thread::Builder::new()
         .name("sigterm-dispatcher".to_string())
         .spawn(move || {
+            let _drop_logger = LogErrorOnDrop::new("sigterm-dispatcher");
             let _ = sig_term_rx.recv();
             warn!("Termination signal received - graceful termination in progress...");
             // unsubscribe listeners

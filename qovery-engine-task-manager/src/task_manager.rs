@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use qovery_engine::models::{ProgressLevel, ProgressScope};
 use crate::log_debug_no_spam_builder;
 use prometheus::{self, IntGauge};
+use crate::LogErrorOnDrop;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -124,8 +125,11 @@ impl TaskManager {
         let status_by_task_id_w_2 = self.status_by_task_id_w.clone();
         let self_running_tasks = self.running_tasks.clone();
 
-        thread::spawn(move || {
+        thread::Builder::new()
+            .name("tm-message-receiver".to_string())
+            .spawn(move || {
             let tx_run_msg_2 = tx_run_msg_2;
+            let _drop_logger = LogErrorOnDrop::new("tm-message-receiver");
 
             loop {
                 match self_message_receiver.recv() {
@@ -153,8 +157,11 @@ impl TaskManager {
             }
         });
 
-        let _ = thread::spawn(move || {
+        let _ = thread::Builder::new()
+            .name("tm-task-receiver".to_string())
+            .spawn(move || {
             let self_running_tasks = self_running_tasks;
+            let _drop_logger = LogErrorOnDrop::new("tm-task-receiver");
 
             loop {
                 // execute received tasks
