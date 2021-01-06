@@ -11,6 +11,7 @@ use evmap::{ReadHandle, WriteHandle};
 use serde::{Deserialize, Serialize};
 
 use qovery_engine::models::{ProgressLevel, ProgressScope};
+use crate::log_debug_no_spam_builder;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -174,6 +175,7 @@ impl TaskManager {
 
         let _ = thread::spawn(move || {
             let self_running_tasks = self_running_tasks;
+            let mut log_debug_wait_new_task = log_debug_no_spam_builder("no task to run, waiting", 60);
 
             loop {
                 // execute received tasks
@@ -257,7 +259,7 @@ impl TaskManager {
                     Err(_) => {}
                 };
 
-                debug!("no task to run, wait for 1 sec");
+                log_debug_wait_new_task();
                 sleep(Duration::from_secs(1));
                 if self_end_task_sig_receiver.try_recv().is_ok() {
                     info!("shutdown task manager");
