@@ -21,7 +21,15 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
         echo -e "\n\n\e[31m###"
         echo "### LOGS FOR FAILED TEST: $test_name"
         echo -e "###\n\n\e[0m"
-        jq -Mc ' "\(.timestamp) | \(.target) | \(.fields.message)"' $test_file
+
+        while read -r line ; do
+          if [ $(echo $line | grep -ci error) -ne 0 ] ; then
+            echo -e "\e[31m$line\e[0m"
+            continue
+          fi
+          echo "$line"
+        done < <(jq -Mc ' "\(.timestamp) | \(.target) | \(.fields.message)"' $test_file)
+
       else
         if [ "$test_file" != "null" ] ; then
           echo "File not found: $test_file" >> $TESTS_NON_HANDLED_ISSUES
