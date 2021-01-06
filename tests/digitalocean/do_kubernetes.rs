@@ -17,8 +17,8 @@ use self::test_utilities::digitalocean::{digital_ocean_token, get_kube_cluster_n
 use self::test_utilities::utilities::{engine_run_test, generate_id, init};
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 
-#[test]
-#[ignore]
+//#[test]
+//#[ignore]
 fn create_doks_cluster_in_fra_10() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "create_doks_cluster_in_fra_10");
