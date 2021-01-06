@@ -36,6 +36,7 @@ wip-fast-tests:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /root/.qovery-workspace
     expire_in: 1 week
 
 wip-full-tests:
@@ -58,6 +59,7 @@ wip-full-tests:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /root/.qovery-workspace
     expire_in: 1 week
 
 # Dev branch
@@ -77,6 +79,7 @@ dev-full-test-from-github:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /root/.qovery-workspace
     expire_in: 1 week
 
 dev-fast-test-from-github:
@@ -94,6 +97,7 @@ dev-fast-test-from-github:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /root/.qovery-workspace
     expire_in: 1 week
 
 dev-full-tests:
@@ -114,6 +118,7 @@ dev-full-tests:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /root/.qovery-workspace
     expire_in: 1 week
 
 dev-fast-tests-sequential:
@@ -131,6 +136,7 @@ dev-fast-tests-sequential:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /root/.qovery-workspace
     expire_in: 1 week
 
 dev-full-tests-sequential:
@@ -148,6 +154,7 @@ dev-full-tests-sequential:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /root/.qovery-workspace
     expire_in: 1 week
 
 dev-build:
