@@ -313,7 +313,7 @@ function all_tests(){ ## Run all tests on qovery-engine
   # sorts logs into multiple files
   ./sorter.sh $GITLAB_LOG_OUTPUT_DIR/output.log
   # print failed tests
-  ./failed_test_printer.sh
+  ./print_tests_status.sh
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
   return $TESTS_STATUS
@@ -335,16 +335,16 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
   ENDTIME=$(date +%s)
-  echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
+  echo -e "\e[95mIt took $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
   # Log management part
   cd $GITLAB_LOG_UTILITIES_DIR
   STARTTIME=$(date +%s)
   # sorts logs into multiple files
   ./sorter.sh $GITLAB_LOG_OUTPUT_DIR/output.log
   # print failed tests
-  ./failed_test_printer.sh
+  ./print_tests_status.sh
   ENDTIME=$(date +%s)
-  echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
+  echo -e "\e[95mIt took $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
 
   return $TESTS_STATUS
 }
