@@ -18,7 +18,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
       test_name=$(echo $line | jq .name)
       test_file=$(echo $test_name | sed -r 's/.+::(.+)"$/\1/')
       if [ -f $test_file ] ; then
-        echo -e "\n\n\e[93m###"
+        echo -e "\n\n\e[36m###"
         echo "### LOGS FOR FAILED TEST: $test_name"
         echo -e "###\n\n\e[0m"
 
@@ -27,7 +27,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
             echo -e "\e[31m$line\e[0m"
             continue
           fi
-          echo "$line"
+          echo -e "$line"
         done < <(jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file)
 
       else
