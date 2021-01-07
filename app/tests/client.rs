@@ -27,6 +27,7 @@ fn send_nats_request(json_file_path: &str, subject: &str) -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "test-functional")]
 #[test]
 fn create_infrastructure() -> Result<(), Error> {
     send_nats_request(
@@ -37,6 +38,7 @@ fn create_infrastructure() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "test-functional")]
 #[test]
 fn create_qovery_infrastructure() -> Result<(), Error> {
     send_nats_request(
@@ -47,6 +49,7 @@ fn create_qovery_infrastructure() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "test-functional")]
 #[test]
 fn create_environment() -> Result<(), Error> {
     send_nats_request(
@@ -57,6 +60,7 @@ fn create_environment() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "test-functional")]
 #[test]
 fn create_non_working_environment() -> Result<(), Error> {
     send_nats_request(

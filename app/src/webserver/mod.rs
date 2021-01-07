@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn test_launch_webserver() {
-        let handle = launch("127.0.0.1:8080");
+        let _handle = launch("127.0.0.1:8080");
         let body = reqwest::blocking::get("http://127.0.0.1:8080/metrics")
             .unwrap()
             .text()

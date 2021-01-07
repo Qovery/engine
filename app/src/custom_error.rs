@@ -13,9 +13,9 @@ pub enum ErrorKind {
     MissingBin,
 }
 
-impl ErrorKind {
-    fn as_str(&self) -> &str {
-        match *self {
+impl Into<&str> for ErrorKind {
+    fn into(self) -> &'static str {
+        match self {
             ErrorKind::LibsPathsMissing => "Libs directory is empty, ensure you have really download, and override the global vars",
             ErrorKind::LibsDirEmpty => "Libs directory is empty, ensure you have really download the libs resources",
             ErrorKind::BinVersion => "Binary version used is not that you should use",

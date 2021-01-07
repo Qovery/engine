@@ -416,6 +416,17 @@ pub enum State {
     DeleteError,
 }
 
+impl State {
+    pub fn is_in_progress(&self) -> bool {
+        match self {
+            State::DeploymentInProgress
+            | State::PauseInProgress
+            | State::DeleteInProgress => true,
+            _ => false
+        }
+    }
+}
+
 impl evmap::shallow_copy::ShallowCopy for Status {
     unsafe fn shallow_copy(&self) -> ManuallyDrop<Self> {
         ManuallyDrop::new(self.clone())

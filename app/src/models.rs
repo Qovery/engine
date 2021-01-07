@@ -161,36 +161,36 @@ impl GetTaskManagerInfoResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct LoadBalanceTaskRequest {
-    pub group_id: String,
-    pub created_at: DateTime<Utc>,
-}
+// #[derive(Serialize, Deserialize, Clone)]
+// pub struct LoadBalanceTaskRequest {
+//     pub group_id: String,
+//     pub created_at: DateTime<Utc>,
+// }
+//
+// impl LoadBalanceTaskRequest {
+//     pub fn new(group_id: String, created_at: DateTime<Utc>) -> Self {
+//         LoadBalanceTaskRequest {
+//             group_id,
+//             created_at,
+//         }
+//     }
+//
+//     pub fn as_json_string(&self) -> String {
+//         serde_json::to_string(self).unwrap()
+//     }
+// }
 
-impl LoadBalanceTaskRequest {
-    pub fn new(group_id: String, created_at: DateTime<Utc>) -> Self {
-        LoadBalanceTaskRequest {
-            group_id,
-            created_at,
-        }
-    }
-
-    pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct LoadBalanceTaskResponse {
-    pub is_first_place: bool,
-}
-
-impl LoadBalanceTaskResponse {
-    pub fn new(is_first_place: bool) -> Self {
-        LoadBalanceTaskResponse { is_first_place }
-    }
-
-    pub fn as_json_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-}
+// #[derive(Serialize, Deserialize, Clone)]
+// pub struct LoadBalanceTaskResponse {
+//     pub is_first_place: bool,
+// }
+//
+// impl LoadBalanceTaskResponse {
+//     pub fn new(is_first_place: bool) -> Self {
+//         LoadBalanceTaskResponse { is_first_place }
+//     }
+//
+//     pub fn as_json_string(&self) -> String {
+//         serde_json::to_string(self).unwrap()
+//     }
+// }

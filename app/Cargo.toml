@@ -6,6 +6,14 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+
+# To split from unit tests
+test-functional = []
+test-full = ["test-functional"]
+
+
 [dependencies]
 qovery-engine = { path = "../cloned-engine" }
 qovery-engine-shared = { path = "../qovery-engine-shared" }
@@ -39,3 +47,5 @@ dotenv = "0.15.0"
 
 [dev-dependencies]
 reqwest = { version = "0.10.8", features = ["blocking"] }
+
+
