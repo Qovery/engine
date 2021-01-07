@@ -18,17 +18,17 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
       test_name=$(echo $line | jq .name)
       test_file=$(echo $test_name | sed -r 's/.+::(.+)"$/\1/')
       if [ -f $test_file ] ; then
-        echo -e "\n\n\e[31m###"
+        echo -e "\n\n\e[93m###"
         echo "### LOGS FOR FAILED TEST: $test_name"
         echo -e "###\n\n\e[0m"
 
         while read -r line ; do
-          if [ $(echo $line | grep -ci error) -ne 0 ] ; then
+          if [ $(echo $line | grep -c ERROR) -ne 0 ] ; then
             echo -e "\e[31m$line\e[0m"
             continue
           fi
           echo "$line"
-        done < <(jq -Mc ' "\(.timestamp) | \(.target) | \(.fields.message)"' $test_file)
+        done < <(jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file)
 
       else
         if [ "$test_file" != "null" ] ; then
@@ -60,7 +60,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
 fi
 
 # Tests issues
-if [ "$(wc -l $TESTS_NON_HANDLED_ISSUES 2>/dev/null | awk '{ print $1 }')" -ne 0 ] ; then
+if [ "$(wc -l $TESTS_NON_HANDLED_ISSUES 2>/dev/null | awk '{ print $1 }')" != "0" ] ; then
   echo -e "\n\n\e[31m****************************************************"
   echo "                OTHER NON HANDLED ISSUES"
   echo -e "****************************************************\n"
