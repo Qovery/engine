@@ -303,7 +303,11 @@ function all_tests(){ ## Run all tests on qovery-engine
   cargo build --color=always --all --all-targets
   sccache -s
   cd $ENGINE_DIR
-  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json | tee $GITLAB_LOG_OUTPUT_DIR/output.log
+  mkdir -p $GITLAB_LOG_OUTPUT_DIR
+  touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
+  env
+
+  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
 
   ENDTIME=$(date +%s)
@@ -317,6 +321,7 @@ function all_tests(){ ## Run all tests on qovery-engine
   ./print_tests_status.sh
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
+
   return $TESTS_STATUS
 }
 
@@ -327,15 +332,19 @@ function fast_tests(){ ## Run fast tests only on qovery-engine
   export_env
   prepare_engine
   prepare_tests
+
   STARTTIME=$(date +%s)
+
   cargo build --color=always --all --all-targets
   sccache -s
   cd $ENGINE_DIR
   mkdir -p $GITLAB_LOG_OUTPUT_DIR
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
   env
+
   cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
+
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt took $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
   # Log management part
