@@ -22,7 +22,6 @@ GITLAB_LOG_OUTPUT_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
 export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
 export RUNNING_ON_CI=0
 export ENGINE_BRANCH=""
-export WORKSPACE_ROOT_DIR="/builds/qovery/qovery-engine/"
 
 function print_help() {
   echo "Usage: $0 <option>"
