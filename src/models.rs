@@ -959,16 +959,16 @@ impl Clone2 for Context {
 
 impl Context {
     pub fn new(
-        execution_id: &str,
-        workspace_root_dir: &str,
-        lib_root_dir: &str,
+        execution_id: String,
+        workspace_root_dir: String,
+        lib_root_dir: String,
         docker_host: Option<String>,
         metadata: Option<Metadata>,
     ) -> Self {
         Context {
-            execution_id: execution_id.to_string(),
-            workspace_root_dir: workspace_root_dir.to_string(),
-            lib_root_dir: lib_root_dir.to_string(),
+            execution_id,
+            workspace_root_dir,
+            lib_root_dir,
             docker_host,
             metadata,
         }
