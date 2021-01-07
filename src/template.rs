@@ -21,7 +21,6 @@ where
     P: AsRef<Path>,
 {
     // generate j2 templates
-    error!("ABCDEFG {} {}", from_dir.as_ref().to_str().unwrap_or(""), std::env::current_dir()?.to_str().unwrap_or(""));
     let rendered_templates = match generate_j2_template_files(from_dir.as_ref(), context) {
         Ok(rt) => rt,
         Err(e) => {
