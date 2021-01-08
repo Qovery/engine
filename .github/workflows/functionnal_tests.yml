@@ -52,7 +52,7 @@ jobs:
           num_labels=$(echo $gh_pr | jq '.labels | length')
           tests_type="fast_tests"
           if [ $num_labels -gt 0 ] ; then
-            if [ $(echo $gh_pr | grep -c 'full-tests') ] ; then
+            if [ $(echo $gh_pr | grep -c 'full-tests') -eq 1 ] ; then
               tests_type="full_tests"
             fi
           fi

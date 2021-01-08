@@ -57,6 +57,10 @@ charts:
   - name: pleco
     version: 0.3.3
     repo_name: pleco
+  - name: do-k8s-token-rotate
+    version: 0.1.3
+    dest: do-bootstrap
+    repo_name: do-k8s-token-rotate
 
 repos:
   - name: stable
@@ -73,11 +77,15 @@ repos:
     url: https://grafana.github.io/loki/charts
   - name: pleco
     url: https://qovery.github.io/pleco/
+  - name: do-k8s-token-rotate
+    url: https://qovery.github.io/do-k8s-token-rotate/
 
 destinations:
   - name: default
     path: common/bootstrap/charts
   - name: aws-bootstrap
     path: aws/bootstrap/charts
+  - name: do-bootstrap
+    path: digitalocean/bootstrap/charts
   - name: services
     path: common/services
