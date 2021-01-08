@@ -38,7 +38,11 @@ function run_tests() {
   test -z $GITLAB_TOKEN && variable_not_found "GITLAB_TOKEN"
   test -z $GITLAB_PERSONAL_TOKEN && variable_not_found "GITLAB_PERSONAL_TOKEN"
   test -z $GITHUB_BRANCH && variable_not_found "GITHUB_BRANCH"
+
   GITLAB_REF="dev"
+  if [ $(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/repository/branches/$GITHUB_BRANCH" | grep -c '404 Branch Not Found') -ne 0 ] ; then
+    GITLAB_REF=$GITHUB_BRANCH
+  fi
 
   echo "Requesting Gitlab pipeline"
   pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
