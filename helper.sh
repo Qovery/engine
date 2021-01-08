@@ -32,6 +32,22 @@ function release() {
   echo "Pipeline ID: $pipeline_id"
 }
 
+urlencode() {
+    old_lc_collate=$LC_COLLATE
+    LC_COLLATE=C
+
+    local length="${#1}"
+    for (( i = 0; i < length; i++ )); do
+        local c="${1:$i:1}"
+        case $c in
+            [a-zA-Z0-9.~_-]) printf '%s' "$c" ;;
+            *) printf '%%%02X' "'$c" ;;
+        esac
+    done
+    
+    LC_COLLATE=$old_lc_collate
+}
+
 function run_tests() {
   TESTS_TYPE=$1
   test -z $GITLAB_PROJECT_ID && variable_not_found "GITLAB_PROJECT_ID"
@@ -40,7 +56,8 @@ function run_tests() {
   test -z $GITHUB_BRANCH && variable_not_found "GITHUB_BRANCH"
 
   GITLAB_REF="dev"
-  if [ $(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/repository/branches/$GITHUB_BRANCH" | grep -c '404 Branch Not Found') -ne 0 ] ; then
+  encoded_branch=$(urlencode $GITLAB_REF)
+  if [ $(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/repository/branches/$encoded_branch" | grep -c '404 Branch Not Found') -ne 0 ] ; then
     GITLAB_REF=$GITHUB_BRANCH
   fi
 
