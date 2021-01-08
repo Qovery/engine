@@ -15,7 +15,8 @@ use crate::cmd::kubectl::kubectl_exec_delete_secret;
 use crate::cmd::structs::LabelsContent;
 use crate::error::{cast_simple_error_to_engine_error, StringError};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, Listeners};
+use crate::cloud_provider::utilities::check_domain_for;
 
 pub trait Service {
     fn context(&self) -> &Context;
@@ -139,105 +140,25 @@ pub trait ExternalService: StatelessService {}
 pub trait Router: StatelessService + Listen {
     fn domains(&self) -> Vec<&str>;
     fn check_domains(&self) -> Result<(), EngineError> {
-        let listeners_helper = ListenersHelper::new(self.listeners());
-
-        let mut resolver_options = ResolverOpts::default();
-        resolver_options.cache_size = 0;
-        resolver_options.use_hosts_file = false;
-
-        let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
-            Ok(resolver) => resolver,
-            Err(err) => {
-                error!("{:?}", err);
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "can't get domain resolver for router '{}'; Error: {:?}",
-                        self.name_with_id(),
-                        err
-                    ),
-                ));
-            }
-        };
-
-        for domain in self.domains() {
-            listeners_helper.start_in_progress(ProgressInfo::new(
-                ProgressScope::Router {
-                    id: self.id().into(),
-                },
-                ProgressLevel::Info,
-                Some(format!(
-                    "Let's check domain resolution for '{}'. Please wait, it can take some time...",
-                    domain
-                )),
-                self.context().execution_id(),
-            ));
-
-            let fixed_iterable = Fixed::from_millis(3000).take(20);
-            let check_result = retry::retry(fixed_iterable, || match resolver.lookup_ip(domain) {
-                Ok(lookup_ip) => OperationResult::Ok(lookup_ip),
-                Err(err) => {
-                    let x = format!(
-                        "Domain resolution check for '{}' is still in progress...",
-                        domain
-                    );
-
-                    info!("{}", x);
-
-                    listeners_helper.start_in_progress(ProgressInfo::new(
-                        ProgressScope::Router {
-                            id: self.id().into(),
-                        },
-                        ProgressLevel::Info,
-                        Some(x),
-                        self.context().execution_id(),
-                    ));
-
-                    OperationResult::Retry(err)
-                }
-            });
-
-            match check_result {
-                Ok(_) => {
-                    let x = format!("Domain {} is ready! ⚡️", domain);
-
-                    info!("{}", x);
-
-                    listeners_helper.start_in_progress(ProgressInfo::new(
-                        ProgressScope::Router {
-                            id: self.id().into(),
-                        },
-                        ProgressLevel::Info,
-                        Some(x),
-                        self.context().execution_id(),
-                    ));
-                }
-                Err(_) => {
-                    let message = format!(
-                        "Unable to check domain availability for '{}'. It can be due to a \
-                        too long domain propagation. Note: this is not critical.",
-                        domain
-                    );
-
-                    warn!("{}", message);
-
-                    listeners_helper.error(ProgressInfo::new(
-                        ProgressScope::Router {
-                            id: self.id().into(),
-                        },
-                        ProgressLevel::Warn,
-                        Some(message),
-                        self.context().execution_id(),
-                    ));
-                }
-            }
-        }
-
+        check_domain_for(ListenersHelper::new(self.listeners())
+                         ,self.name_with_id(),
+                         self.domains(),
+                         self.id().into(),
+                         self.context().execution_id())?;
         Ok(())
     }
 }
 
-pub trait Database: StatefulService {}
+pub trait Database: StatefulService {
+    fn check_domains(&self,listeners: Listeners, domains: Vec<&str>) -> Result<(), EngineError> {
+        check_domain_for(ListenersHelper::new(&listeners)
+                         ,self.name_with_id(),
+                         domains,
+                         self.id().into(),
+                         self.context().execution_id())?;
+        Ok(())
+    }
+}
 
 pub trait Create {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError>;

@@ -1,9 +1,15 @@
 use std::collections::HashMap;
 
-use crate::error::StringError;
+use crate::error::{StringError, EngineError, EngineErrorCause, EngineErrorScope};
 use core::option::Option::{None, Some};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
+use crate::models::{ListenersHelper, ProgressScope, ProgressInfo, ProgressLevel};
+use trust_dns_resolver::config::{ResolverOpts, ResolverConfig};
+use trust_dns_resolver::Resolver;
+use retry::delay::Fixed;
+use retry::OperationResult;
+use itertools::Itertools;
 
 pub fn get_self_hosted_postgres_version(requested_version: &str) -> Result<String, StringError> {
     let mut supported_postgres_versions = HashMap::new();
@@ -244,4 +250,96 @@ fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
         minor,
         patch,
     })
+}
+
+pub fn check_domain_for(listener_helper: ListenersHelper, name_with_id : String, domains_to_check : Vec<&str>, execution_id: &str, context_id: &str) -> Result<(),EngineError>{
+
+    let mut resolver_options = ResolverOpts::default();
+    resolver_options.cache_size = 0;
+    resolver_options.use_hosts_file = false;
+
+    let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
+        Ok(resolver) => resolver,
+        Err(err) => {
+            error!("{:?}", err);
+            let domains = domains_to_check.iter().join(",");
+            return Err(EngineError::new(
+                EngineErrorCause::Internal,
+                EngineErrorScope::Engine,
+               execution_id,
+                Some(format!(
+                    "Let's check domain resolution for '{}'. Please wait, it can take some time...",
+                    domains
+                ))
+            ));
+        }
+    };
+
+    for domain in domains_to_check {
+        listener_helper.start_in_progress(ProgressInfo::new(
+            ProgressScope::Environment {id: execution_id.to_string()},
+            ProgressLevel::Info,
+            Some(format!(
+                "Let's check domain resolution for '{}'. Please wait, it can take some time...",
+                domain
+            )),
+            execution_id,
+        ));
+
+        let fixed_iterable = Fixed::from_millis(3000).take(100);
+        let check_result = retry::retry(fixed_iterable, || match resolver.lookup_ip(domain) {
+            Ok(lookup_ip) => OperationResult::Ok(lookup_ip),
+            Err(err) => {
+                let x = format!(
+                    "Domain resolution check for '{}' is still in progress...",
+                    domain
+                );
+
+                info!("{}", x);
+
+                listener_helper.start_in_progress(ProgressInfo::new(
+                    ProgressScope::Environment {id: execution_id.to_string()},
+                    ProgressLevel::Info,
+                    Some(x),
+                    execution_id.clone().to_string(),
+                ));
+
+                OperationResult::Retry(err)
+            }
+        });
+
+        match check_result {
+            Ok(_) => {
+                let x = format!("Domain {} is ready! ⚡️", domain);
+
+                info!("{}", x);
+
+                listener_helper.start_in_progress(ProgressInfo::new(
+                    ProgressScope::Environment {id: execution_id.to_string()},
+                    ProgressLevel::Info,
+                    Some(x),
+                    context_id,
+                ));
+            }
+            Err(_) => {
+                let message = format!(
+                    "Unable to check domain availability for '{}'. It can be due to a \
+                        too long domain propagation. Note: this is not critical.",
+                    domain
+                );
+
+                warn!("{}", message);
+
+                listener_helper.error(ProgressInfo::new(
+                    ProgressScope::Environment {id: execution_id.to_string()},
+                    ProgressLevel::Warn,
+                    Some(message),
+                    context_id,
+                ));
+            }
+        }
+    }
+
+    Ok(())
+
 }

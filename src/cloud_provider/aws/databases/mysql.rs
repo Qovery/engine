@@ -165,6 +165,7 @@ impl Service for MySQL {
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
         context.insert("database_instance_type", &self.database_instance_type);
         context.insert("database_disk_type", &self.options.database_disk_type);
+        context.insert("database_name",&self.name);
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
@@ -239,8 +240,7 @@ impl Create for MySQL {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        //FIXME : perform an actual check
-        Ok(())
+        self.check_domains(self.listeners.clone(),vec!(self.fqdn.as_str()))
     }
 
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {

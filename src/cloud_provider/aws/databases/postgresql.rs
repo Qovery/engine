@@ -162,6 +162,7 @@ impl Service for PostgreSQL {
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
 
+        context.insert("database_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
@@ -246,7 +247,7 @@ impl Create for PostgreSQL {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        Ok(())
+        self.check_domains(self.listeners.clone(),vec!(self.fqdn.as_str()))
     }
 
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
