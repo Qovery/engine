@@ -3,7 +3,7 @@ use std::path::Path;
 
 use tracing::{error, info, span, Level};
 
-use crate::cmd::structs::{Helm, HelmHistoryRow};
+use crate::cmd::structs::{Helm, HelmHistoryRow, HelmList};
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::error::{SimpleError, SimpleErrorKind};
 
@@ -48,7 +48,8 @@ where
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+    let helm_history_rows =
+        helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
     Ok(match helm_history_rows.first() {
@@ -193,35 +194,46 @@ where
 
 pub fn helm_uninstall_list<P>(
     kubernetes_config: P,
-    helmlist: Vec<String>,
+    helm_list: Vec<HelmList>,
     envs: Vec<(&str, &str)>,
 ) -> Result<String, SimpleError>
 where
     P: AsRef<Path>,
 {
     let mut output_vec: Vec<String> = Vec::new();
-    let helmlist_string = helmlist.join(" ");
-    match helm_exec_with_output(
-        vec![
-            "uninstall",
-            helmlist_string.as_str(),
-            "--kubeconfig",
-            kubernetes_config.as_ref().to_str().unwrap(),
-        ],
-        envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-    ) {
-        Ok(_) => info!("Helm uninstall fail with : {}", helmlist_string.clone()),
-        Err(_) => info!("Helm history found for release name: {}", helmlist_string.clone()),
-    };
-    Ok(output_vec.join(""))
+
+    for chart in helm_list {
+        match helm_exec_with_output(
+            vec![
+                "uninstall",
+                "-n",
+                chart.namespace.as_str(),
+                chart.name.as_str(),
+                "--kubeconfig",
+                kubernetes_config.as_ref().to_str().unwrap(),
+            ],
+            envs.clone(),
+            |out| match out {
+                Ok(line) => output_vec.push(line),
+                Err(err) => error!("{:?}", err),
+            },
+            |out| match out {
+                Ok(line) => error!("{}", line),
+                Err(err) => error!("{:?}", err),
+            },
+        ) {
+            Ok(_) => info!(
+                "Helm uninstall succeed for {} on namespace {}",
+                chart.name, chart.namespace
+            ),
+            Err(_) => info!(
+                "Helm history found for release name {} on namespace {}",
+                chart.name, chart.namespace
+            ),
+        };
+    }
+
+    Ok(output_vec.join("\n"))
 }
 
 pub fn helm_exec_upgrade_with_override_file<P>(
@@ -300,7 +312,8 @@ where
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+    let helm_history_rows =
+        helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
     Ok(match helm_history_rows.first() {
@@ -309,7 +322,10 @@ where
     })
 }
 
-pub fn helm_list<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<Vec<String>, SimpleError>
+pub fn helm_list<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<Vec<HelmList>, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -336,12 +352,12 @@ where
 
     let output_string: String = output_vec.join("");
     let values = serde_json::from_str::<Vec<Helm>>(output_string.as_str());
-    let mut helms_name: Vec<String> = Vec::new();
+    let mut helms_charts: Vec<HelmList> = Vec::new();
 
     match values {
         Ok(all_helms) => {
             for helm in all_helms {
-                helms_name.push(helm.name)
+                helms_charts.push(HelmList::new(helm.name, helm.namespace))
             }
         }
         Err(e) => {
@@ -351,7 +367,7 @@ where
         }
     }
 
-    Ok(helms_name)
+    Ok(helms_charts)
 }
 
 pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {

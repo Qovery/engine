@@ -200,6 +200,17 @@ pub struct Helm {
     pub app_version: String,
 }
 
+pub struct HelmList {
+    pub name: String,
+    pub namespace: String,
+}
+
+impl HelmList {
+    pub fn new(name: String, namespace: String) -> HelmList {
+        HelmList { name, namespace }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct HelmHistoryRow {
     pub revision: u16,

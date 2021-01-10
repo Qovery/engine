@@ -21,7 +21,6 @@ use self::test_utilities::utilities::{engine_run_test, generate_id};
 
 // to check overload between several databases and apps
 #[test]
-#[ignore]
 fn deploy_an_environment_with_3_databases_and_3_apps() {
     init();
 
@@ -59,7 +58,6 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 
 // this test ensure containers databases are never restarted, even in failover environment case
 #[test]
-#[ignore]
 fn postgresql_failover_dev_environment_with_all_options() {
     init();
 
@@ -568,6 +566,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 
 // development environment
 #[test]
+#[ignore]
 fn mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -755,6 +754,7 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
 
 // MySQL self-hosted environment
 #[test]
+#[ignore]
 fn mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);

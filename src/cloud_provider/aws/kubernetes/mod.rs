@@ -535,6 +535,18 @@ impl<'a> Kubernetes for EKS<'a> {
             self.cloud_provider().credentials_environment_variables(),
         );
 
+        // should apply before destroy to be sure destroy will compute on all resources
+        // don't exit on failure, it can happen if we resume a destroy process
+        info!("Running Terraform apply");
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            cmd::terraform::terraform_exec_with_init_validate_plan_apply(temp_dir.as_str(), false),
+        ) {
+            Err(e) => error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message),
+            _ => {}
+        };
+
         // should make the diff between all namespaces and qovery managed namespaces
         match all_namespaces {
             Ok(namespace_vec) => {
@@ -551,8 +563,12 @@ impl<'a> Kubernetes for EKS<'a> {
 
                     match deletion {
                         Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
-                        Err(_) => {
-                            error!("Can't delete the namespace {}, quiting now", namespace_to_delete);
+                        Err(e) => {
+                            if e.message.is_some() && e.message.unwrap().contains("not found") {
+                                {}
+                            } else {
+                                error!("Can't delete the namespace {}", namespace_to_delete);
+                            }
                         }
                     }
                 }
@@ -565,9 +581,41 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         }
 
-        info!("Deleting Qovery managed Namespaces");
+        // https://cert-manager.io/docs/installation/uninstall/kubernetes/
+        // required to avoid namespace stuck on deletion
+        info!("Delete cert-manager related objects to prepare deletion");
+        let cert_manager_objects = vec![
+            "Issuers",
+            "ClusterIssuers",
+            "Certificates",
+            "CertificateRequests",
+            "Orders",
+            "Challenges",
+        ];
+        for object in cert_manager_objects {
+            match kubectl_delete_objects_in_all_namespaces(
+                &kubernetes_config_file_path,
+                object,
+                self.cloud_provider().credentials_environment_variables(),
+            ) {
+                Ok(_) => {}
+                Err(e) => {
+                    let error_message = format!(
+                        "Wasn't able to delete all objects type {}, it's a blocker to then delete cert-manager namespace. {}",
+                        object,
+                        format!("{:?}", e.message)
+                    );
+                    return Err(EngineError::new(
+                        Internal,
+                        self.engine_error_scope(),
+                        self.context().execution_id(),
+                        Some(error_message),
+                    ));
+                }
+            };
+        }
 
-        // TODO use label instead fixed names
+        info!("Deleting Qovery managed Namespaces");
         let qovery_namespaces = get_qovery_managed_namespaces();
         for qovery_namespace in qovery_namespaces.iter() {
             let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
@@ -577,8 +625,12 @@ impl<'a> Kubernetes for EKS<'a> {
             );
             match deletion {
                 Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
-                Err(_) => {
-                    error!("Can't delete the namespace {}, quiting now", qovery_namespace);
+                Err(e) => {
+                    if e.message.is_some() && e.message.unwrap().contains("not found") {
+                        {}
+                    } else {
+                        error!("Can't delete the namespace {}", qovery_namespace);
+                    }
                 }
             }
         }
@@ -588,12 +640,14 @@ impl<'a> Kubernetes for EKS<'a> {
             &kubernetes_config_file_path,
             self.cloud_provider().credentials_environment_variables(),
         ) {
-            Ok(helm_list) => {
-                let _ = cmd::helm::helm_uninstall_list(
-                    &kubernetes_config_file_path,
-                    helm_list,
-                    self.cloud_provider().credentials_environment_variables(),
-                );
+            Ok(helm_charts) => {
+                for chart in helm_charts {
+                    let _ = cmd::helm::helm_uninstall_list(
+                        &kubernetes_config_file_path,
+                        vec![chart],
+                        self.cloud_provider().credentials_environment_variables(),
+                    );
+                }
             }
             Err(_) => error!("Unable to get helm list"),
         }
@@ -602,21 +656,8 @@ impl<'a> Kubernetes for EKS<'a> {
         let terraform_result = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            cmd::terraform::terraform_exec_with_init_plan_apply_destroy(temp_dir.as_str()),
+            cmd::terraform::terraform_exec_with_init_plan_destroy(temp_dir.as_str()),
         );
-
-        // we should delete the bucket containing the kubeconfig after
-        // to prevent to loose connection from terraform to kube cluster
-        match terraform_result {
-            Ok(_) => {
-                info!("Deleting S3 Bucket containing Kubeconfig");
-                let s3_kubeconfig_bucket = self.kubeconfig_bucket_name();
-                let _ = self.s3.delete_bucket(s3_kubeconfig_bucket.as_str())?;
-            }
-            _ => {
-                error!("Something is wrong with terraform destroy, Kubeconfig S3 location will not be deleting preventing to loose kube accessibility");
-            }
-        }
 
         Ok(())
     }

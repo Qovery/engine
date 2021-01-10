@@ -14,9 +14,8 @@ fn minus_namespaces<'a>(all: Vec<&'a str>, to_remove_namespaces: Vec<&str>) -> V
     return reduced;
 }
 
-// TODO: use label instead
-// TODO: create enum: deletion_rule [system, qovery,..]
 pub fn get_qovery_managed_namespaces() -> Vec<&'static str> {
+    // the order is very important because of dependencies
     let mut qovery_managed_namespaces = Vec::with_capacity(5);
     qovery_managed_namespaces.push("logging");
     qovery_managed_namespaces.push("nginx-ingress");
@@ -26,7 +25,6 @@ pub fn get_qovery_managed_namespaces() -> Vec<&'static str> {
     return qovery_managed_namespaces;
 }
 
-// TODO: use label instead
 fn get_never_delete_namespaces() -> Vec<&'static str> {
     let mut kubernetes_never_delete_namespaces = Vec::with_capacity(4);
     kubernetes_never_delete_namespaces.push("default");
