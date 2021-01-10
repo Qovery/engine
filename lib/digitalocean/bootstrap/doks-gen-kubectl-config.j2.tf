@@ -7,6 +7,7 @@ KUBECONFIG
 resource "local_file" "kubeconfig" {
   filename = "${var.space_bucket_kubeconfig}/${var.kubernetes_cluster_id}.yaml"
   content = local.kubeconfig
+  file_permission = "0644"
 }
 
 resource "digitalocean_spaces_bucket_object" "upload_kubeconfig" {

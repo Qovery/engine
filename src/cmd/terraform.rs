@@ -87,6 +87,26 @@ pub fn terraform_exec_with_init_plan_apply_destroy(root_dir: &str) -> Result<(),
     Ok(())
 }
 
+pub fn terraform_exec_with_init_plan_destroy(root_dir: &str) -> Result<(), SimpleError> {
+    match terraform_exec_with_init_validate_plan(root_dir) {
+        Ok(_) => {}
+        Err(e) => {
+            return Err(e);
+        }
+    }
+
+    // terraform destroy
+    match terraform_exec(root_dir, vec!["destroy", "-auto-approve"]) {
+        Ok(_) => {}
+        Err(e) => {
+            error!("Error While trying to Terraform destroy {:?}", e.message);
+            return Err(e);
+        }
+    };
+
+    Ok(())
+}
+
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), SimpleError> {
     let home_dir = home_dir().expect("Could not find $HOME");
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
