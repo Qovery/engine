@@ -621,19 +621,6 @@ impl<'a> Transaction<'a> {
 
         let execution_id = self.engine.context().execution_id();
 
-        // inner function - I use it instead of closure because of ?Sized
-        fn get_final_progress_info<T>(service: &Box<T>, execution_id: &str) -> ProgressInfo
-        where
-            T: Service + ?Sized,
-        {
-            ProgressInfo::new(
-                service.progress_scope(),
-                ProgressLevel::Info,
-                None::<&str>,
-                execution_id,
-            )
-        };
-
         // send the back the right progress status
         fn send_progress<T>(
             kubernetes: &dyn Kubernetes,
@@ -645,7 +632,12 @@ impl<'a> Transaction<'a> {
             T: Service + ?Sized,
         {
             let lh = ListenersHelper::new(kubernetes.listeners());
-            let progress_info = get_final_progress_info(service, execution_id);
+            let progress_info = ProgressInfo::new(
+                service.progress_scope(),
+                ProgressLevel::Info,
+                None::<&str>,
+                execution_id,
+            );
 
             if !is_error {
                 match action {
