@@ -2,9 +2,9 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service,
-    get_tfstate_name, get_tfstate_suffix, Action, Backup, Create, Database, DatabaseOptions,
-    DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
-    Upgrade,
+    get_tfstate_name, get_tfstate_suffix, send_progress_on_long_task, Action, Backup, Create,
+    Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType,
+    StatefulService, Terraform, Upgrade,
 };
 use crate::cloud_provider::utilities::get_self_hosted_redis_version;
 use crate::cloud_provider::DeploymentTarget;
@@ -230,7 +230,12 @@ impl Terraform for Redis {
 impl Create for Redis {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.Redis.on_create() called for {}", self.name());
-        deploy_stateful_service(target, self)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Create,
+            Box::new(|| deploy_stateful_service(target, self)),
+        )
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {

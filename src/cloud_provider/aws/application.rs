@@ -6,15 +6,14 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error,
-    deploy_user_stateless_service, Action, Application as CApplication, Create, Delete, Helm,
-    Pause, Service, ServiceType, StatelessService,
+    deploy_user_stateless_service, send_progress_on_long_task, Action, Application as CApplication,
+    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{EngineError, EngineErrorScope};
-use crate::models::Context;
+use crate::models::{Context, Listen, Listener, Listeners};
 
-#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     context: Context,
     id: String,
@@ -29,6 +28,7 @@ pub struct Application {
     image: Image,
     storage: Vec<Storage<StorageType>>,
     environment_variables: Vec<EnvironmentVariable>,
+    listeners: Listeners,
 }
 
 impl Application {
@@ -46,6 +46,7 @@ impl Application {
         image: Image,
         storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
+        listeners: Listeners,
     ) -> Self {
         Application {
             context,
@@ -61,6 +62,7 @@ impl Application {
             image,
             storage,
             environment_variables,
+            listeners,
         }
     }
 }
@@ -229,7 +231,12 @@ impl Service for Application {
 impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.application.on_create() called for {}", self.name());
-        deploy_user_stateless_service(target, self)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Create,
+            Box::new(|| deploy_user_stateless_service(target, self)),
+        )
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -280,6 +287,16 @@ impl Delete for Application {
             self.name()
         );
         delete_stateless_service(target, self, true)
+    }
+}
+
+impl Listen for Application {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }
 

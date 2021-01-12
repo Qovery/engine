@@ -1,22 +1,25 @@
 use std::net::TcpStream;
+use std::sync::mpsc;
+use std::sync::mpsc::TryRecvError;
+use std::thread;
+use std::time::Duration;
 
-use retry::delay::Fixed;
-use retry::OperationResult;
 use tera::Context as TeraContext;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::Resolver;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::kubectl_exec_delete_secret;
 use crate::cmd::structs::LabelsContent;
 use crate::error::{cast_simple_error_to_engine_error, StringError};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, Listeners};
-use crate::cloud_provider::utilities::check_domain_for;
+use crate::models::ProgressLevel::Info;
+use crate::models::{
+    Context, Listen, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+};
 
 pub trait Service {
     fn context(&self) -> &Context;
@@ -140,22 +143,26 @@ pub trait ExternalService: StatelessService {}
 pub trait Router: StatelessService + Listen {
     fn domains(&self) -> Vec<&str>;
     fn check_domains(&self) -> Result<(), EngineError> {
-        check_domain_for(ListenersHelper::new(self.listeners())
-                         ,self.name_with_id(),
-                         self.domains(),
-                         self.id().into(),
-                         self.context().execution_id())?;
+        check_domain_for(
+            ListenersHelper::new(self.listeners()),
+            self.name_with_id(),
+            self.domains(),
+            self.id().into(),
+            self.context().execution_id(),
+        )?;
         Ok(())
     }
 }
 
 pub trait Database: StatefulService {
-    fn check_domains(&self,listeners: Listeners, domains: Vec<&str>) -> Result<(), EngineError> {
-        check_domain_for(ListenersHelper::new(&listeners)
-                         ,self.name_with_id(),
-                         domains,
-                         self.id().into(),
-                         self.context().execution_id())?;
+    fn check_domains(&self, listeners: Listeners, domains: Vec<&str>) -> Result<(), EngineError> {
+        check_domain_for(
+            ListenersHelper::new(&listeners),
+            self.name_with_id(),
+            domains,
+            self.id().into(),
+            self.context().execution_id(),
+        )?;
         Ok(())
     }
 }
@@ -1159,6 +1166,98 @@ pub fn do_stateless_service_cleanup(
     }
 
     Ok(())
+}
+
+/// This function call (start|pause|delete)_in_progress function every 10 seconds when a
+/// long blocking task is running.
+pub fn send_progress_on_long_task<S, R, F>(service: &S, action: Action, long_task: F) -> R
+where
+    S: Service + Listen,
+    F: Fn() -> R,
+{
+    let waiting_message = match action {
+        Action::Create => Some(format!(
+            "{} '{}' deployment is in progress...",
+            service.service_type().name(),
+            service.name_with_id()
+        )),
+        Action::Pause => Some(format!(
+            "{} '{}' pause is in progress...",
+            service.service_type().name(),
+            service.name_with_id()
+        )),
+        Action::Delete => Some(format!(
+            "{} '{}' deletion is in progress...",
+            service.service_type().name(),
+            service.name_with_id()
+        )),
+        Action::Nothing => None,
+    };
+
+    send_progress_on_long_task_with_message(service, waiting_message, action, long_task)
+}
+
+/// This function call (start|pause|delete)_in_progress function every 10 seconds when a
+/// long blocking task is running.
+pub fn send_progress_on_long_task_with_message<S, M, R, F>(
+    service: &S,
+    waiting_message: Option<M>,
+    action: Action,
+    long_task: F,
+) -> R
+where
+    S: Service + Listen,
+    M: Into<String>,
+    F: Fn() -> R,
+{
+    let listeners = std::clone::Clone::clone(service.listeners());
+
+    let progress_info = ProgressInfo::new(
+        service.progress_scope(),
+        Info,
+        match waiting_message {
+            Some(message) => Some(message.into()),
+            _ => None,
+        },
+        service.context().execution_id(),
+    );
+
+    let (tx, rx) = mpsc::channel();
+
+    // monitor thread to notify user while the blocking task is executed
+    let _ = std::thread::Builder::new()
+        .name("task-monitor".to_string())
+        .spawn(move || {
+            // stop the thread when the blocking task is done
+            let listeners_helper = ListenersHelper::new(&listeners);
+            let action = action;
+            let progress_info = progress_info;
+
+            loop {
+                // do notify users here
+                let progress_info = std::clone::Clone::clone(&progress_info);
+
+                match action {
+                    Action::Create => listeners_helper.start_in_progress(progress_info),
+                    Action::Pause => listeners_helper.pause_in_progress(progress_info),
+                    Action::Delete => listeners_helper.delete_in_progress(progress_info),
+                    Action::Nothing => {} // should not happens
+                };
+
+                thread::sleep(Duration::from_secs(10));
+
+                // watch for thread termination
+                match rx.try_recv() {
+                    Ok(_) | Err(TryRecvError::Disconnected) => break,
+                    Err(TryRecvError::Empty) => {}
+                }
+            }
+        });
+
+    let blocking_task_result = long_task();
+    let _ = tx.send(());
+
+    blocking_task_result
 }
 
 pub fn get_tfstate_suffix(service: &dyn Service) -> String {
