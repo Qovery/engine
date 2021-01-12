@@ -4,15 +4,14 @@ use crate::build_platform::Image;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error,
-    deploy_user_stateless_service, Action, Application as AApplication, Create, Delete, Helm,
-    Pause, Service, ServiceType, StatelessService,
+    deploy_user_stateless_service, send_progress_on_long_task, Action, Application as AApplication,
+    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{EngineError, EngineErrorScope};
-use crate::models::Context;
+use crate::models::{Context, Listen, Listener, Listeners};
 
-#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct ExternalService {
     context: Context,
     id: String,
@@ -22,6 +21,7 @@ pub struct ExternalService {
     total_ram_in_mib: u32,
     image: Image,
     environment_variables: Vec<EnvironmentVariable>,
+    listeners: Listeners,
 }
 
 impl ExternalService {
@@ -34,6 +34,7 @@ impl ExternalService {
         total_ram_in_mib: u32,
         image: Image,
         environment_variables: Vec<EnvironmentVariable>,
+        listeners: Listeners,
     ) -> Self {
         ExternalService {
             context,
@@ -44,6 +45,7 @@ impl ExternalService {
             total_ram_in_mib,
             image,
             environment_variables,
+            listeners,
         }
     }
 }
@@ -177,7 +179,12 @@ impl Create for ExternalService {
             "AWS.external_service.on_create() called for {}",
             self.name()
         );
-        deploy_user_stateless_service(target, self)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Create,
+            Box::new(|| deploy_user_stateless_service(target, self)),
+        )
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -231,5 +238,15 @@ impl Delete for ExternalService {
             self.name()
         );
         delete_stateless_service(target, self, true)
+    }
+}
+
+impl Listen for ExternalService {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 }

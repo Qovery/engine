@@ -1,5 +1,4 @@
 use std::hash::Hash;
-use std::rc::Rc;
 
 use chrono::{DateTime, Utc};
 use rand::distributions::Alphanumeric;
@@ -15,6 +14,7 @@ use crate::cloud_provider::service::{DatabaseOptions, StatefulService, Stateless
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
@@ -182,6 +182,8 @@ impl Application {
             .map(|ev| ev.to_environment_variable())
             .collect::<Vec<_>>();
 
+        let listeners = cloud_provider.listeners().clone();
+
         match cloud_provider.kind() {
             CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::application::Application::new(
@@ -201,6 +203,7 @@ impl Application {
                         .map(|s| s.to_aws_storage())
                         .collect::<Vec<_>>(),
                     environment_variables,
+                    listeners,
                 ),
             )),
             CPKind::Do => Some(Box::new(
@@ -221,6 +224,7 @@ impl Application {
                         .map(|s| s.to_do_storage())
                         .collect::<Vec<_>>(),
                     environment_variables,
+                    listeners,
                 ),
             )),
         }
@@ -238,6 +242,8 @@ impl Application {
             .map(|ev| ev.to_environment_variable())
             .collect::<Vec<_>>();
 
+        let listeners = cloud_provider.listeners().clone();
+
         match cloud_provider.kind() {
             CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::application::Application::new(
@@ -257,6 +263,7 @@ impl Application {
                         .map(|s| s.to_aws_storage())
                         .collect::<Vec<_>>(),
                     environment_variables,
+                    listeners,
                 ),
             )),
             CPKind::Do => Some(Box::new(
@@ -277,6 +284,7 @@ impl Application {
                         .map(|s| s.to_do_storage())
                         .collect::<Vec<_>>(),
                     environment_variables,
+                    listeners,
                 ),
             )),
         }
@@ -699,6 +707,8 @@ impl ExternalService {
             .map(|ev| ev.to_environment_variable())
             .collect::<Vec<_>>();
 
+        let listeners = cloud_provider.listeners().clone();
+
         match cloud_provider.kind() {
             CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::external_service::ExternalService::new(
@@ -710,6 +720,7 @@ impl ExternalService {
                     self.total_ram_in_mib,
                     image.clone(),
                     environment_variables,
+                    listeners,
                 ),
             )),
             _ => None,
@@ -728,6 +739,8 @@ impl ExternalService {
             .map(|ev| ev.to_environment_variable())
             .collect::<Vec<_>>();
 
+        let listeners = cloud_provider.listeners().clone();
+
         match cloud_provider.kind() {
             CPKind::Aws => Some(Box::new(
                 crate::cloud_provider::aws::external_service::ExternalService::new(
@@ -739,6 +752,7 @@ impl ExternalService {
                     self.total_ram_in_mib,
                     image,
                     environment_variables,
+                    listeners,
                 ),
             )),
             _ => None,
@@ -845,7 +859,7 @@ pub enum ProgressLevel {
     Error,
 }
 
-pub trait ProgressListener {
+pub trait ProgressListener: Send + Sync {
     fn start_in_progress(&self, info: ProgressInfo);
     fn pause_in_progress(&self, info: ProgressInfo);
     fn delete_in_progress(&self, info: ProgressInfo);
@@ -863,7 +877,7 @@ pub trait Listen {
     fn add_listener(&mut self, listener: Listener);
 }
 
-pub type Listener = Rc<Box<dyn ProgressListener>>;
+pub type Listener = Arc<Box<dyn ProgressListener>>;
 pub type Listeners = Vec<Listener>;
 
 pub struct ListenersHelper<'a> {

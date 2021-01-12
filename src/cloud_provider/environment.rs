@@ -1,4 +1,4 @@
-use crate::cloud_provider::service::{ServiceType, StatefulService, StatelessService};
+use crate::cloud_provider::service::{StatefulService, StatelessService};
 use crate::error::EngineError;
 use crate::unit_conversion::cpu_string_to_float;
 
