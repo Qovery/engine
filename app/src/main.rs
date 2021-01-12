@@ -389,9 +389,9 @@ fn receive_and_queue_task(
     match serde_json::from_slice::<Request>(&msg.data) {
         Ok(req) => {
             let context = Context::new(
-                req.id.as_str(),
-                workspace_root_dir,
-                lib_root_dir,
+                req.id.to_string(),
+                workspace_root_dir.to_string(),
+                lib_root_dir.to_string(),
                 docker_tcp_socket.clone(),
                 req.metadata.clone(),
             );
@@ -646,9 +646,9 @@ pub fn using_json_path_parameter(
 
     let mut task_manager = TaskManager::new();
     let context = Context::new(
-        req.id.as_str(),
-        workspace_root_dir.as_str(),
-        lib_root_dir.as_str(),
+        req.id.to_string(),
+        workspace_root_dir,
+        lib_root_dir,
         docker_host,
         req.metadata.clone(),
     );
