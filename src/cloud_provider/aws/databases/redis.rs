@@ -291,7 +291,12 @@ impl Pause for Redis {
 impl Delete for Redis {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.Redis.on_delete() called for {}", self.name());
-        delete_stateful_service(target, self)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Delete,
+            Box::new(|| delete_stateful_service(target, self)),
+        )
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {

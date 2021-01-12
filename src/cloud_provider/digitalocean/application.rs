@@ -279,14 +279,24 @@ impl Create for Application {
             "DO.application.on_create_error() called for {}",
             self.name()
         );
-        deploy_stateless_service_error(target, self)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Create,
+            Box::new(|| deploy_stateless_service_error(target, self)),
+        )
     }
 }
 
 impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.application.on_pause() called for {}", self.name());
-        delete_stateless_service(target, self, false)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Pause,
+            Box::new(|| delete_stateless_service(target, self, false)),
+        )
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -295,14 +305,24 @@ impl Pause for Application {
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("DO.application.on_pause_error() called for {}", self.name());
-        delete_stateless_service(target, self, true)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Pause,
+            Box::new(|| delete_stateless_service(target, self, true)),
+        )
     }
 }
 
 impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.application.on_delete() called for {}", self.name());
-        delete_stateless_service(target, self, false)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Delete,
+            Box::new(|| delete_stateless_service(target, self, false)),
+        )
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -314,7 +334,12 @@ impl Delete for Application {
             "DO.application.on_delete_error() called for {}",
             self.name()
         );
-        delete_stateless_service(target, self, true)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Delete,
+            Box::new(|| delete_stateless_service(target, self, true)),
+        )
     }
 }
 
