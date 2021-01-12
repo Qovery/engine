@@ -251,8 +251,7 @@ impl Create for Redis {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        //FIXME : perform an actual check
-        Ok(())
+        self.check_domains(self.listeners.clone(),vec!(self.fqdn.as_str()))
     }
 
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {

@@ -113,5 +113,6 @@ resource "helm_release" "loki" {
     aws_iam_user_policy_attachment.s3_loki_attachment,
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,
+    helm_release.cluster_autoscaler,
   ]
 }

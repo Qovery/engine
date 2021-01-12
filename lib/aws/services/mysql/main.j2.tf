@@ -82,6 +82,7 @@ resource "aws_db_instance" "mysql_instance" {
     delete = "60m"
   }
   password = var.password
+  name = var.database_name
   {%- if snapshot is defined and snapshot["snapshot_id"] %}
   # Snapshot
   snapshot_identifier = var.snapshot_identifier

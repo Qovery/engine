@@ -692,7 +692,7 @@ fn test_mysql_configuration(
     let database_host =
         "mysql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 3306;
-    let database_db_name = "my-mysql".to_string();
+    let database_db_name = "mysqldatabase".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
 
@@ -723,7 +723,7 @@ fn test_mysql_configuration(
         .into_iter()
         .map(|mut app| {
             app.branch = "mysql-app".to_string();
-            app.commit_id = "e53fbb2535fa2c4a75a3918eaa173c1177c4d4e3".to_string();
+            app.commit_id = "fc8a87b39cdee84bb789893fb823e3e62a1999c0".to_string();
             app.private_port = Some(1234);
             app.dockerfile_path = format!("Dockerfile-{}", version);
             app.environment_variables = vec![

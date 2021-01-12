@@ -92,6 +92,12 @@ variable "password" {
   type = string
 }
 
+variable "database_name" {
+  description = "The name of the database to create when the DB instance is created. If this parameter is not specified, no database is created in the DB instance"
+  default = "{{ database_name }}"
+  type = string
+}
+
 # Network
 
 variable "publicly_accessible" {

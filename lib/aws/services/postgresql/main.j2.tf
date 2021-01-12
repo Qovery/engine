@@ -87,6 +87,7 @@ resource "aws_db_instance" "postgresql_instance" {
   snapshot_identifier = var.snapshot_identifier
   {%- else %}
   allocated_storage = var.disk_size
+  name = var.database_name
   storage_type = var.storage_type
   username = var.username
   engine_version = var.postgresql_version

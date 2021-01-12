@@ -35,6 +35,7 @@ resource "helm_release" "externaldns" {
 
   depends_on = [
     aws_eks_cluster.eks_cluster,
+    helm_release.cluster_autoscaler,
     helm_release.aws_vpc_cni,
   ]
 }
