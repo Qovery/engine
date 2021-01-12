@@ -6,8 +6,8 @@ use crate::cloud_provider::models::{
     CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate,
 };
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, Action, Create, Delete, Helm, Pause, Service,
-    ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create,
+    Delete, Helm, Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -453,14 +453,24 @@ impl Create for Router {
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("DO.router.on_create_error() called for {}", self.name());
-        delete_stateless_service(target, self, true)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Create,
+            Box::new(|| delete_stateless_service(target, self, true)),
+        )
     }
 }
 
 impl Pause for Router {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.router.on_pause() called for {}", self.name());
-        delete_stateless_service(target, self, false)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Pause,
+            Box::new(|| delete_stateless_service(target, self, false)),
+        )
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -469,14 +479,24 @@ impl Pause for Router {
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("DO.router.on_pause_error() called for {}", self.name());
-        delete_stateless_service(target, self, true)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Pause,
+            Box::new(|| delete_stateless_service(target, self, true)),
+        )
     }
 }
 
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.router.on_delete() called for {}", self.name());
-        delete_stateless_service(target, self, false)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Delete,
+            Box::new(|| delete_stateless_service(target, self, false)),
+        )
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -485,6 +505,11 @@ impl Delete for Router {
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("DO.router.on_delete_error() called for {}", self.name());
-        delete_stateless_service(target, self, true)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Delete,
+            Box::new(|| delete_stateless_service(target, self, true)),
+        )
     }
 }

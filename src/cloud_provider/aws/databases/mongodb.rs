@@ -278,7 +278,12 @@ impl Pause for MongoDB {
 impl Delete for MongoDB {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.MongoDB.on_delete() called for {}", self.name());
-        delete_stateful_service(target, self)
+
+        send_progress_on_long_task(
+            self,
+            crate::cloud_provider::service::Action::Pause,
+            Box::new(|| delete_stateful_service(target, self)),
+        )
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
