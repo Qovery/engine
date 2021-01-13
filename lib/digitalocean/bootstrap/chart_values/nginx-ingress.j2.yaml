@@ -23,10 +23,9 @@ controller:
 
   # Will add custom configuration options to Nginx https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/
   config:
-    use-forwarded-headers: true
-    compute-full-forwarded-for: true
-    use-proxy-protocol: true
-    client_max_body_size: 100m
+    use-forwarded-headers: "true"
+    compute-full-forwarded-for: "true"
+    use-proxy-protocol: "true"
     proxy-body-size: 100m
     server-tokens: "false"
 
