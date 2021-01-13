@@ -3,16 +3,13 @@
 
 use std::borrow::{Borrow, Cow};
 use std::fs;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
 
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
-use qovery_engine::models::{
-    Context, EnvironmentAction, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope,
-};
+use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::transaction::{RollbackError, TransactionResult};
 
 use crate::models::{Action, Request};
@@ -105,11 +102,10 @@ impl Task for InfrastructureTask {
             false,
         );
 
-        let my_progress_listener: Rc<Box<dyn ProgressListener>> =
-            Rc::new(Box::new(MyProgressListener {
-                task: self.clone(),
-                sender: sender.clone(),
-            }));
+        let my_progress_listener: Arc<Box<dyn ProgressListener>> = Arc::new(Box::new(MyProgressListener {
+            task: self.clone(),
+            sender: sender.clone(),
+        }));
 
         let engine = self.request.engine(&self.context, my_progress_listener);
 
@@ -132,11 +128,7 @@ impl Task for InfrastructureTask {
 
         let mut tx = session.transaction();
 
-        let nodes = self
-            .request
-            .cloud_provider
-            .kubernetes
-            .to_engine_kubernetes_nodes();
+        let nodes = self.request.cloud_provider.kubernetes.to_engine_kubernetes_nodes();
 
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             engine.context(),
@@ -212,13 +204,7 @@ impl EnvironmentTask {
     }
 
     fn action_context(&self, level: ProgressLevel) -> ActionContext {
-        let target_environment_id = self
-            .request
-            .target_environment
-            .as_ref()
-            .unwrap()
-            .id
-            .to_string();
+        let target_environment_id = self.request.target_environment.as_ref().unwrap().id.to_string();
 
         ActionContext::new(
             ProgressScope::Environment {
@@ -274,11 +260,10 @@ impl Task for EnvironmentTask {
             false,
         );
 
-        let my_progress_listener: Rc<Box<dyn ProgressListener>> =
-            Rc::new(Box::new(MyProgressListener {
-                task: self.clone(),
-                sender: sender.clone(),
-            }));
+        let my_progress_listener: Arc<Box<dyn ProgressListener>> = Arc::new(Box::new(MyProgressListener {
+            task: self.clone(),
+            sender: sender.clone(),
+        }));
 
         let engine = self.request.engine(&self.context, my_progress_listener);
 
@@ -302,11 +287,7 @@ impl Task for EnvironmentTask {
 
         let mut tx = session.transaction();
 
-        let nodes = self
-            .request
-            .cloud_provider
-            .kubernetes
-            .to_engine_kubernetes_nodes();
+        let nodes = self.request.cloud_provider.kubernetes.to_engine_kubernetes_nodes();
 
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             engine.context(),
@@ -322,7 +303,10 @@ impl Task for EnvironmentTask {
                     &self.request,
                     sender,
                     self.action_context(ProgressLevel::Error),
-                    Some("failed to get environment action, self.request.environment_action() returned None variant".to_string()),
+                    Some(
+                        "failed to get environment action, self.request.environment_action() returned None variant"
+                            .to_string(),
+                    ),
                     true,
                     false,
                 );
@@ -413,7 +397,7 @@ where
 
 impl<T> ProgressListener for MyProgressListener<T>
 where
-    T: Task + Clone + 'static,
+    T: Task + Clone + 'static + Sync,
 {
     fn start_in_progress(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::new(
@@ -590,41 +574,20 @@ fn handle_transaction_result(
     }
 }
 
-fn format_engine_error_output(
-    engine_error: EngineError,
-    rollback_error: Option<RollbackError>,
-) -> String {
+fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<RollbackError>) -> String {
     let scope = match engine_error.scope {
         EngineErrorScope::Engine => String::from("Engine"),
-        EngineErrorScope::BuildPlatform(id, name) => {
-            format!("Build platform '{}' with id '{}'", name, id)
-        }
-        EngineErrorScope::ContainerRegistry(id, name) => {
-            format!("Container registry '{}' with id '{}'", name, id)
-        }
-        EngineErrorScope::CloudProvider(id, name) => {
-            format!("Cloud provider '{}' with id '{}'", name, id)
-        }
+        EngineErrorScope::BuildPlatform(id, name) => format!("Build platform '{}' with id '{}'", name, id),
+        EngineErrorScope::ContainerRegistry(id, name) => format!("Container registry '{}' with id '{}'", name, id),
+        EngineErrorScope::CloudProvider(id, name) => format!("Cloud provider '{}' with id '{}'", name, id),
         EngineErrorScope::Kubernetes(id, name) => format!("Kubernetes '{}' with id '{}'", name, id),
-        EngineErrorScope::DnsProvider(id, name) => {
-            format!("DNS provider '{}' with id '{}'", name, id)
-        }
-        EngineErrorScope::Environment(id, name) => {
-            format!("Environment '{}' with id '{}'", name, id)
-        }
-        EngineErrorScope::Database(id, type_, name) => {
-            format!("{} Database '{}' with id '{}'", type_, name, id)
-        }
-        EngineErrorScope::Application(id, name) => {
-            format!("Application '{}' with id '{}'", name, id)
-        }
+        EngineErrorScope::DnsProvider(id, name) => format!("DNS provider '{}' with id '{}'", name, id),
+        EngineErrorScope::Environment(id, name) => format!("Environment '{}' with id '{}'", name, id),
+        EngineErrorScope::Database(id, type_, name) => format!("{} Database '{}' with id '{}'", type_, name, id),
+        EngineErrorScope::Application(id, name) => format!("Application '{}' with id '{}'", name, id),
         EngineErrorScope::Router(id, name) => format!("Router '{}' with id '{}'", name, id),
-        EngineErrorScope::ExternalService(id, name) => {
-            format!("External service '{}' with id '{}'", name, id)
-        }
-        EngineErrorScope::ObjectStorage(id, name) => {
-            format!("Object Storage '{}' with id '{}'", name, id)
-        }
+        EngineErrorScope::ExternalService(id, name) => format!("External service '{}' with id '{}'", name, id),
+        EngineErrorScope::ObjectStorage(id, name) => format!("Object Storage '{}' with id '{}'", name, id),
     };
 
     let rollback_engine_error_message = match rollback_error {
