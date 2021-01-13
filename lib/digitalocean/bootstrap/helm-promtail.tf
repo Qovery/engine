@@ -17,6 +17,27 @@ resource "helm_release" "promtail" {
     value = "loki"
   }
 
+  # Limits
+  set {
+    name = "resources.limits.cpu"
+    value = "100m"
+  }
+
+  set {
+    name = "resources.requests.cpu"
+    value = "100m"
+  }
+
+  set {
+    name = "resources.limits.memory"
+    value = "128Mi"
+  }
+
+  set {
+    name = "resources.requests.memory"
+    value = "128Mi"
+  }
+
   depends_on = [
     digitalocean_kubernetes_cluster.kubernetes_cluster,
   ]
