@@ -105,6 +105,27 @@ resource "helm_release" "loki" {
     value = "true"
   }
 
+  # Limits
+  set {
+    name = "resources.limits.cpu"
+    value = "100m"
+  }
+
+  set {
+    name = "resources.requests.cpu"
+    value = "100m"
+  }
+
+  set {
+    name = "resources.limits.memory"
+    value = "2Gi"
+  }
+
+  set {
+    name = "resources.requests.memory"
+    value = "1Gi"
+  }
+
   depends_on = [
     aws_iam_user.iam_eks_loki,
     aws_iam_access_key.iam_eks_loki,

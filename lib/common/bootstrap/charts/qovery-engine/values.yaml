@@ -19,7 +19,7 @@ labels:
 environmentVariables:
   RUST_LOG: DEBUG,rusoto_core::request=info,hyper=info
   #ENGINE_RES_URL: ""
-  #NATS_SERVER: ""
+  #QOVERY_NATS_URL: ""
   #ORGANIZATION: ""
   #CLOUD_PROVIDER: ""
   #REGION: ""

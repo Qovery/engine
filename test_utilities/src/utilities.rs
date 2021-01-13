@@ -121,9 +121,9 @@ pub fn context() -> Context {
     };
 
     Context::new(
-        execution_id.as_str(),
-        home_dir.as_str(),
-        lib_root_dir.as_str(),
+        execution_id,
+        home_dir,
+        lib_root_dir,
         None,
         Option::from(metadata),
     )

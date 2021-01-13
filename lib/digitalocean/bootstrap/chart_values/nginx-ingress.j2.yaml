@@ -23,6 +23,9 @@ controller:
 
   # Will add custom configuration options to Nginx https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/
   config:
+    use-forwarded-headers: true
+    compute-full-forwarded-for: true
+    use-proxy-protocol: true
     client_max_body_size: 100m
     proxy-body-size: 100m
     server-tokens: "false"
@@ -245,10 +248,11 @@ controller:
     enabled: true
 
     annotations:
-      service.beta.kubernetes.io/do-loadbalancer-name: nginx-qovery
+      service.beta.kubernetes.io/do-loadbalancer-name: qovery-nginx-{{ doks_cluster_id }}
       service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
       service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
       service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
+      service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: "true"
 
     labels: {}
     ## Deprecated, instead simply do not provide a clusterIP value

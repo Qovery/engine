@@ -45,6 +45,27 @@ resource "helm_release" "loki" {
     value = var.space_secret_key
   }
 
+  # Limits
+  set {
+    name = "resources.limits.cpu"
+    value = "100m"
+  }
+
+  set {
+    name = "resources.requests.cpu"
+    value = "100m"
+  }
+
+  set {
+    name = "resources.limits.memory"
+    value = "2Gi"
+  }
+
+  set {
+    name = "resources.requests.memory"
+    value = "1Gi"
+  }
+
   depends_on = [
     digitalocean_spaces_bucket.loki_space,
     digitalocean_kubernetes_cluster.kubernetes_cluster,
