@@ -39,8 +39,8 @@ impl<'a> Drop for LogErrorOnDrop<'a> {
     }
 }
 
-pub fn log_debug_no_spam_builder(msg: &str, every_n_times: u32) -> Box<dyn FnMut()> {
-    if log_enabled!(log::Level::Debug) {
+pub fn log_no_spam_builder(log_level: log::Level, msg: &str, every_n_times: u32) -> Box<dyn FnMut()> {
+    if log_enabled!(log_level) {
         let mut loop_counter= 0;
         let msg = msg.to_string();
         Box::new(move || {

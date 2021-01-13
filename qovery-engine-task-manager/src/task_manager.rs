@@ -11,9 +11,10 @@ use evmap::{ReadHandle, WriteHandle};
 use serde::{Deserialize, Serialize};
 
 use qovery_engine::models::{ProgressLevel, ProgressScope};
-use crate::log_debug_no_spam_builder;
+use crate::log_no_spam_builder;
 use prometheus::{self, IntGauge};
 use crate::LogErrorOnDrop;
+use log::Level::Debug;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -162,6 +163,7 @@ impl TaskManager {
             .spawn(move || {
             let self_running_tasks = self_running_tasks;
             let _drop_logger = LogErrorOnDrop::new("tm-task-receiver");
+            let mut log_debug_waiting = log_no_spam_builder(Debug, "no task to run, waiting...", 60);
 
             loop {
                 // execute received tasks
@@ -227,7 +229,7 @@ impl TaskManager {
                     Err(_) => {}
                 };
 
-                debug!("no task to run, wait for 1 sec");
+                log_debug_waiting();
                 sleep(Duration::from_secs(1));
                 if self_end_task_sig_receiver.try_recv().is_ok() {
                     info!("shutdown task manager");
