@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#set -x
+set -x
 
 awk=awk
 sed=sed
@@ -94,22 +94,25 @@ function generate_image_tag() {
 
 function prepare_engine() { ## Ensure github engine repo is present and propose solutions if not
     if [ $RUNNING_ON_CI -eq 1 ] ; then
-      if [ ! -z $GITHUB_ENGINE_BRANCH_NAME ] ; then
-        ENGINE_BRANCH=$GITHUB_ENGINE_BRANCH_NAME
+      # If commit id is given, then use it for the lib
+      if [ ! -z $GITHUB_COMMIT_ID ] ; then
+        ENGINE_BRANCH=$GITHUB_COMMIT_ID
       elif [ ! -z $CI_COMMIT_REF_NAME ] ; then
         ENGINE_BRANCH=$CI_COMMIT_REF_NAME
       else
         echo "Can't get commit ID"
         exit 1
       fi
-      # checkout on the same branch name gitlab <-> github if the same name exists
+      # For the app, checkout on the same branch name gitlab <-> github if the same name exists
       if [ $GITHUB_ENGINE_BRANCH_NAME == "true" ] ; then
         echo "Requested to checkout the $ENGINE_BRANCH instead of dev branch"
-        git checkout $ENGINE_BRANCH
+        git checkout $CI_COMMIT_REF_SLUG
       fi
     else
       ENGINE_BRANCH=$(git branch --show-current)
     fi
+    echo "Using Qovery app commit:"
+    git log -1
 
     if [ -e $ENGINE_DIR ] ; then
       echo "Found $ENGINE_DIR directory, going to use it"
@@ -126,6 +129,8 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
         cd $ENGINE_DIR
         git checkout $ENGINE_BRANCH
         git pull
+        echo "Using Qovery lib commit:"
+        git log -1
         cd -
       fi
     fi
