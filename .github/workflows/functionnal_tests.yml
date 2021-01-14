@@ -19,7 +19,7 @@ jobs:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           GITLAB_PERSONAL_TOKEN: ${{ secrets.GITLAB_PERSONAL_TOKEN }}
         run: |
-          branch=$(echo ${{github.ref}} | sed -r 's/.+\/(.+)/\1/')
+          branch=$(echo ${{github.ref}} | sed -r 's/^refs\/heads\/(.+)/\1/')
           echo "Branch name: $branch"
           env
           export GITHUB_BRANCH=$branch
