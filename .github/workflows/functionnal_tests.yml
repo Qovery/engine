@@ -42,12 +42,12 @@ jobs:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           GITLAB_PERSONAL_TOKEN: ${{ secrets.GITLAB_PERSONAL_TOKEN }}
         run: |
-          branch=$(echo ${{github.ref}} | sed -r 's/.+\/(.+)/\1/')
+          branch=$(echo ${{github.ref}} | sed -r 's/^refs\/heads\/(.+)/\1/')
           echo "Branch name: $branch"
           export GITHUB_BRANCH=$branch
           export GITHUB_COMMIT_ID=$GITHUB_SHA
           gh_json=$(curl -s -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/Qovery/engine/pulls?state=open")
-          gh_pr=$(echo $gh_json | jq --compact-output '.[] | {labels, ref: .head.ref}' | awk "/$branch/")
+          gh_pr=$(echo $gh_json | jq --compact-output '.[] | {labels, ref: .head.ref}' | grep "$branch")
           echo "Pull request info: $(echo $gh_pr)"
           num_labels=$(echo $gh_pr | jq '.labels | length')
           tests_type="fast_tests"
@@ -58,9 +58,3 @@ jobs:
           fi
           echo $tests_type
           ./helper.sh $tests_type
-      - name: automerge
-        uses: "pascalgn/automerge-action@v0.12.0"
-        env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-          MERGE_LABELS: "merge_when_pipeline_succeeds"
-          MERGE_METHOD: "rebase"

@@ -39,9 +39,15 @@ function run_tests() {
   test -z $GITLAB_PERSONAL_TOKEN && variable_not_found "GITLAB_PERSONAL_TOKEN"
   test -z $GITHUB_BRANCH && variable_not_found "GITHUB_BRANCH"
   GITLAB_REF="dev"
+  FORCE_CHECKOUT_CUSTOM_BRANCH='false'
+
+  if [ $(curl -s --header "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/repository/branches/$GITHUB_BRANCH" | grep -c '404 Branch Not Found') -eq 0 ] ; then
+    echo "Same branch name detected on gitlab, requesting to use it instead of dev branch"
+    FORCE_CHECKOUT_CUSTOM_BRANCH='true'
+  fi
 
   echo "Requesting Gitlab pipeline"
-  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
+  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" -F "variables[FORCE_CHECKOUT_CUSTOM_BRANCH]=$FORCE_CHECKOUT_CUSTOM_BRANCH" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
   if [ $(echo $pipeline_id | egrep -c '^[0-9]+$') -eq 0 ] ; then
     echo "Pipeline ID is not correct, we expected a number and got: $pipeline_id"
     exit 1
