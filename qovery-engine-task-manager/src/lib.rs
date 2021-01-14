@@ -46,7 +46,7 @@ pub fn log_no_spam_builder(log_level: log::Level, msg: &str, every_n_times: u32)
         Box::new(move || {
             if loop_counter % every_n_times == 0 {
                 debug!("{}", msg);
-                loop_counter = 1;
+                loop_counter = 0;
             }
             loop_counter +=1;
         })
