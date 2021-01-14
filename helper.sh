@@ -102,6 +102,10 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
         echo "Can't get commit ID"
         exit 1
       fi
+      # checkout on the same branch name gitlab <-> github if the same name exists
+      if [ $GITHUB_ENGINE_BRANCH_NAME == "true" ] ; then
+        git checkout $ENGINE_BRANCH
+      fi
     else
       ENGINE_BRANCH=$(git branch --show-current)
     fi
