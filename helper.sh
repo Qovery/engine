@@ -42,6 +42,7 @@ function run_tests() {
   FORCE_CHECKOUT_CUSTOM_BRANCH='false'
 
   if [ $(curl -s --header "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/repository/branches/$GITHUB_BRANCH" | grep -c '404 Branch Not Found') -eq 0 ] ; then
+    echo "Same branch name detected on gitlab, requesting to use it instead of dev branch"
     FORCE_CHECKOUT_CUSTOM_BRANCH='true'
   fi
 
