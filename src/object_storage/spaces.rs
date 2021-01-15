@@ -8,6 +8,7 @@ use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use tokio::io;
 
+use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{Context, StringPath};
 use crate::object_storage::{Kind, ObjectStorage};
@@ -195,5 +196,9 @@ impl ObjectStorage for Spaces {
             Ok(file) => Ok((file_path, file)),
             Err(err) => Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err))),
         }
+    }
+
+    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), EngineError> {
+        Err(self.engine_error(Internal, "spaces.put(..) is not implemented".to_string()))
     }
 }
