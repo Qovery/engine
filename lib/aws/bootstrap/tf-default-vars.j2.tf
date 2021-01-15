@@ -261,3 +261,22 @@ variable "discord_api_key" {
   default = "{{ discord_api_key }}"
   type = string
 }
+
+# cloudtrail part
+variable "s3_trail_bucket_name" {
+  description = "Specifies the name of the S3 bucket designated for publishing log files."
+  default = "{{ s3_trail_bucket_name }}"
+  type = string
+}
+
+variable "is_multi_region_trail" {
+  description = "Specifies whether the trail is created in the current region or in all regions."
+  default = "{{ is_multi_region_trail }}"
+  type = number
+}
+
+variable "s3_bucket_trail_days_to_expiration" {
+  description = "Specifies how many days we should keep cloudtrails logs"
+  default = "{{ s3_bucket_trail_days_to_expiration }}"
+  type = string
+}

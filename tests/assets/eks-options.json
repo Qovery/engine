@@ -146,5 +146,8 @@
   "discord_api_key": "CHANGE-ME/DISCORD_API_URL",
   "qovery_nats_url": "CHANGE-ME/QOVERY_NATS_URL",
   "qovery_ssh_key": "CHANGE-ME/QOVERY_SSH_USER",
-  "eks_access_cidr_blocks": CHANGE-ME/EKS_ACCESS_CIDR_BLOCKS
+  "eks_access_cidr_blocks": CHANGE-ME/EKS_ACCESS_CIDR_BLOCKS,
+  "s3_trail_bucket_name": "qovery-cloudtrails-logs",
+  "is_multi_region_trail": "true",
+  "s3_bucket_trail_days_to_expiration": "10"
 }

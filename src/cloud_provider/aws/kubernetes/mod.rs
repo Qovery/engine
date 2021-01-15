@@ -64,6 +64,10 @@ pub struct Options {
     pub qovery_ssh_key: String,
     // Others
     pub tls_email_report: String,
+    // Cloudtrails
+    pub s3_trail_bucket_name: String,
+    pub is_multi_region_trail: String,
+    pub s3_bucket_trail_days_to_expiration: String,
 }
 
 pub struct EKS<'a> {
@@ -308,6 +312,11 @@ impl<'a> EKS<'a> {
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
         context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
+
+        // AWS - Cloudtrails
+        context.insert("s3_trail_bucket_name", &self.options.s3_trail_bucket_name);
+        context.insert("is_multi_region_trail", &self.options.is_multi_region_trail);
+        context.insert("s3_bucket_days_to_expiration", &self.options.s3_bucket_trail_days_to_expiration);
 
         // AWS - RDS
         context.insert("rds_cidr_subnet", &rds_cidr_subnet);
