@@ -24,6 +24,7 @@ pub trait ObjectStorage {
         object_key: &str,
         use_cache: bool,
     ) -> Result<(StringPath, File), EngineError>;
+    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::ObjectStorage(self.id().to_string(), self.name().to_string())
     }

@@ -159,4 +159,21 @@ impl ObjectStorage for S3 {
             Err(err) => Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err))),
         }
     }
+
+    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), EngineError> {
+        cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context().execution_id(),
+            crate::cmd::utilities::exec_with_envs(
+                "aws",
+                vec![
+                    "s3",
+                    "cp",
+                    file_path,
+                    format!("s3://{}/{}", bucket_name, object_key).as_str(),
+                ],
+                self.credentials_environment_variables(),
+            ),
+        )
+    }
 }
