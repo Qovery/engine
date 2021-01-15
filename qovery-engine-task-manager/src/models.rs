@@ -7,13 +7,11 @@ use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::cloud_provider::kubernetes::Kind;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
-use qovery_engine::git::clone;
 use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, Metadata};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -29,6 +27,7 @@ pub struct Request {
     pub target_environment: Option<Environment>,
     pub failover_environment: Option<Environment>,
     pub metadata: Option<Metadata>,
+    pub archive: Option<Archive>,
     // this field is used to store the data bytes from the current request send through NATS.
     #[serde(skip_serializing, skip_deserializing)]
     pub bytes_payload: Vec<u8>,
@@ -46,9 +45,7 @@ impl Request {
 
         cloud_provider.add_listener(progress_listener.clone());
 
-        let mut container_registry = self
-            .container_registry
-            .to_engine_container_registry(&context);
+        let mut container_registry = self.container_registry.to_engine_container_registry(&context);
 
         container_registry.add_listener(progress_listener.clone());
 
@@ -94,10 +91,7 @@ pub struct BuildPlatform {
 }
 
 impl BuildPlatform {
-    pub fn to_engine_build_platform(
-        &self,
-        context: &Context,
-    ) -> Box<dyn qovery_engine::build_platform::BuildPlatform> {
+    pub fn to_engine_build_platform(&self, context: &Context) -> Box<dyn qovery_engine::build_platform::BuildPlatform> {
         Box::new(match self.kind {
             qovery_engine::build_platform::Kind::LocalDocker => {
                 LocalDocker::new(context.clone(), self.id.as_str(), self.name.as_str())
@@ -122,12 +116,11 @@ impl CloudProvider {
         context: &Context,
         organization_id: &str,
     ) -> Box<dyn qovery_engine::cloud_provider::CloudProvider> {
-        let terraform_state_credentials =
-            qovery_engine::cloud_provider::TerraformStateCredentials {
-                access_key_id: self.terraform_state_credentials.access_key_id.clone(),
-                secret_access_key: self.terraform_state_credentials.secret_access_key.clone(),
-                region: self.terraform_state_credentials.region.clone(),
-            };
+        let terraform_state_credentials = qovery_engine::cloud_provider::TerraformStateCredentials {
+            access_key_id: self.terraform_state_credentials.access_key_id.clone(),
+            secret_access_key: self.terraform_state_credentials.secret_access_key.clone(),
+            region: self.terraform_state_credentials.region.clone(),
+        };
 
         match self.kind {
             qovery_engine::cloud_provider::Kind::Aws => Box::new(AWS::new(
@@ -189,17 +182,11 @@ impl Kubernetes {
                 self.region.as_str(),
                 cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
                 dns_provider,
-                serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(
-                    self.options.clone(),
-                )
-                .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
+                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 nodes
                     .into_iter()
-                    .map(|x| {
-                        qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(
-                            x.instance_type(),
-                        )
-                    })
+                    .map(|x| qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(x.instance_type()))
                     .collect::<Vec<_>>(),
             )),
             qovery_engine::cloud_provider::kubernetes::Kind::Doks => Box::new(DOKS::new(
@@ -210,16 +197,14 @@ impl Kubernetes {
                 self.region.as_str(),
                 cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
                 dns_provider,
-                serde_json::from_value::<
-                    qovery_engine::cloud_provider::digitalocean::kubernetes::Options,
-                >(self.options.clone())
+                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::Options>(
+                    self.options.clone(),
+                )
                 .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
                 nodes
                     .into_iter()
                     .map(|x| {
-                        qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
-                            x.instance_type(),
-                        )
+                        qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(x.instance_type())
                     })
                     .collect::<Vec<_>>(),
             )),
@@ -249,15 +234,11 @@ impl Node {
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode> {
         match kubernetes.kind {
             qovery_engine::cloud_provider::kubernetes::Kind::Eks => Box::new(
-                qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(
-                    &self.instance_type,
-                ),
+                qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(&self.instance_type),
             ),
-            qovery_engine::cloud_provider::kubernetes::Kind::Doks => Box::new(
-                qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(
-                    &self.instance_type,
-                ),
-            ),
+            qovery_engine::cloud_provider::kubernetes::Kind::Doks => {
+                Box::new(qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(&self.instance_type))
+            }
             _ => unimplemented!(),
         }
     }
@@ -313,10 +294,7 @@ pub struct DnsProvider {
 }
 
 impl DnsProvider {
-    pub fn to_engine_dns_provider(
-        &self,
-        context: &Context,
-    ) -> Box<dyn qovery_engine::dns_provider::DnsProvider> {
+    pub fn to_engine_dns_provider(&self, context: &Context) -> Box<dyn qovery_engine::dns_provider::DnsProvider> {
         match self.kind {
             qovery_engine::dns_provider::Kind::Cloudflare => {
                 let token = self.options.get("cloudflare_api_token").unwrap();
@@ -345,4 +323,11 @@ pub struct Options {
     spaces_secret_key: Option<String>,
     token: Option<String>,
     region: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Archive {
+    pub bucket_name: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
 }
