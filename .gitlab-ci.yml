@@ -4,6 +4,7 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
   DOCKER_HOST: tcp://localhost:2375
   DOCKER_TLS_CERTDIR: ""
+  WORKSPACE_ROOT_DIR: /builds/qovery/qovery-engine
 
 services:
   - docker:dind
