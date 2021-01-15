@@ -142,7 +142,6 @@ impl CloudProvider {
                 self.name.as_str(),
                 terraform_state_credentials,
             )),
-            _ => unimplemented!(),
         }
     }
 }
@@ -208,7 +207,6 @@ impl Kubernetes {
                     })
                     .collect::<Vec<_>>(),
             )),
-            _ => unimplemented!(),
         }
     }
 
@@ -239,7 +237,6 @@ impl Node {
             qovery_engine::cloud_provider::kubernetes::Kind::Doks => {
                 Box::new(qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(&self.instance_type))
             }
-            _ => unimplemented!(),
         }
     }
 }
@@ -279,7 +276,6 @@ impl ContainerRegistry {
                 self.name.as_str(),
                 self.options.token.as_ref().unwrap().as_str(),
             )),
-            _ => unimplemented!(),
         }
     }
 }

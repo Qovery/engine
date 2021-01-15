@@ -1,6 +1,3 @@
-#![feature(unboxed_closures)]
-#![feature(fn_traits)]
-
 use std::borrow::{Borrow, Cow};
 use std::fs;
 use std::sync::Arc;
@@ -163,7 +160,8 @@ impl Task for InfrastructureTask {
                 file.as_str(),
             ) {
                 Ok(_) => {
-                    fs::remove_file(file);
+                    let _ = fs::remove_file(file)
+                        .map_err(|err| error!("Cannot delete file {}", err));
                 }
                 Err(e) => error!("Error while uploading archive {:?}", e),
             },
@@ -333,7 +331,8 @@ impl Task for EnvironmentTask {
                 file.as_str(),
             ) {
                 Ok(_) => {
-                    fs::remove_file(file);
+                    let _ = fs::remove_file(file)
+                        .map_err(|err| error!("Cannot remove file {}", err));
                 }
                 Err(e) => error!("Error while uploading archive {:?}", e),
             },

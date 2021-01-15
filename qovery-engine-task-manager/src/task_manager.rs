@@ -1,12 +1,10 @@
-use std::borrow::Borrow;
 use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
+use crossbeam_channel::{unbounded, Receiver, RecvError, Sender, TryRecvError};
 use evmap::{ReadHandle, WriteHandle};
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +13,8 @@ use crate::log_no_spam_builder;
 use prometheus::{self, IntGauge};
 use crate::LogErrorOnDrop;
 use log::Level::Debug;
+use core::fmt;
+use serde::export::Formatter;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -29,40 +29,40 @@ lazy_static! {
 }
 
 pub struct TaskManager {
-    it_sender: Sender<InternalTask>,
-    it_receiver: Receiver<InternalTask>,
-    end_task_sig_sender: Sender<bool>,
-    end_task_sig_receiver: Receiver<bool>,
-    task_terminated_sender: Sender<bool>,
-    task_terminated_receiver: Receiver<bool>,
+    task_executor_tx: Sender<InternalTask>,
+    task_executor_rx: Receiver<InternalTask>,
+    should_stop_tx: Sender<bool>,
+    should_stop_rx: Receiver<bool>,
+    is_stopped_tx: Sender<bool>,
+    is_stopped_rx: Receiver<bool>,
     status_by_task_id_r: ReadHandle<Id, Status>,
     status_by_task_id_w: Arc<Mutex<WriteHandle<Id, Status>>>,
-    message_sender: Sender<Message>,
-    message_receiver: Receiver<Message>,
+    task_status_tx: Sender<Message>,
+    task_status_rx: Receiver<Message>,
     running_tasks: IntGauge,
     running: bool,
 }
 
 impl TaskManager {
     pub fn new() -> Self {
-        let (it_sender, it_receiver) = unbounded::<InternalTask>();
-        let (end_task_sig_sender, end_task_sig_receiver) = unbounded::<bool>();
-        let (task_terminated_sender, task_terminated_receiver) = unbounded::<bool>();
+        let (task_executor_tx, task_executor_rx) = unbounded::<InternalTask>();
+        let (should_stop_tx, should_stop_rx) = unbounded::<bool>();
+        let (is_stopped_tx, is_stopped_rx) = unbounded::<bool>();
         let (status_by_task_id_r, status_by_task_id_w) = evmap::new::<Id, Status>();
         let status_by_task_id_w = Arc::new(Mutex::new(status_by_task_id_w));
-        let (message_sender, message_receiver) = unbounded::<Message>();
+        let (task_status_tx, task_status_rx) = unbounded::<Message>();
 
         TaskManager {
-            it_sender,
-            it_receiver,
-            end_task_sig_sender,
-            end_task_sig_receiver,
-            task_terminated_sender,
-            task_terminated_receiver,
+            task_executor_tx,
+            task_executor_rx,
+            should_stop_tx,
+            should_stop_rx,
+            is_stopped_tx,
+            is_stopped_rx,
             status_by_task_id_r,
             status_by_task_id_w,
-            message_sender,
-            message_receiver,
+            task_status_tx,
+            task_status_rx,
             running_tasks: METRICS_NB_RUNNING_TASKS.clone(),
             running: false,
         }
@@ -70,28 +70,24 @@ impl TaskManager {
 
     pub fn add_task(&self, task: Box<dyn Task>) {
         add_task(
-            &self.end_task_sig_receiver,
-            &self.status_by_task_id_w,
-            &self.it_sender,
-            &self.message_sender,
+            &self.task_executor_tx,
+            &self.task_status_tx,
             self.remaining_tasks_to_run(),
             task,
         );
     }
 
     pub fn remaining_tasks_to_run(&self) -> usize {
-        self.it_receiver.len() + self.running_tasks.get().min(0) as usize
+        self.task_executor_rx.len() + self.running_tasks.get().min(0) as usize
     }
 
     pub fn is_terminated(&self) -> Receiver<bool> {
-        self.task_terminated_receiver.clone()
+        self.is_stopped_rx.clone()
     }
 
     pub fn get_task_status(&self, id: &Id) -> Option<Status> {
-        match self.status_by_task_id_r.get_one(id) {
-            Some(status) => Some(status.as_ref().clone()),
-            _ => None,
-        }
+        self.status_by_task_id_r.get_one(id)
+            .map(|status| status.as_ref().clone())
     }
 
     pub fn get_task_status_by_group_id(&self, group_id: &GroupId) -> Option<Status> {
@@ -102,8 +98,11 @@ impl TaskManager {
 
     /// gracefully end the remaining tasks but stop accepting new ones
     pub fn stop(&self) {
-        let _ = self.end_task_sig_sender.send(true);
+        self.should_stop_tx.send(true)
+            .map_err(|err| error!("Cannot send stop signal to task manager {}", err))
+            .unwrap();
     }
+
 
     /// run task manager - only a single instance will run
     pub fn run(&mut self) -> Result<Receiver<Message>, Error> {
@@ -114,178 +113,160 @@ impl TaskManager {
         // only one run allowed
         self.running = true;
 
-        let (self_message_sender, self_message_receiver) =
-            (self.message_sender.clone(), self.message_receiver.clone());
+        let (task_status_forwarder_tx, task_status_forwarder_rx) = unbounded::<Message>();
 
-        let (tx_run_msg_2, rx_run_msg_2) = unbounded::<Message>();
-        let self_it_sender = self.it_sender.clone();
-        let self_it_receiver = self.it_receiver.clone();
-        let self_end_task_sig_receiver = self.end_task_sig_receiver.clone();
-        let self_task_terminated_sender = self.task_terminated_sender.clone();
-        let status_by_task_id_w_1 = self.status_by_task_id_w.clone();
-        let status_by_task_id_w_2 = self.status_by_task_id_w.clone();
-        let self_running_tasks = self.running_tasks.clone();
+        // Task Manager keeps track of task status internally.
+        // So we subscribe to the notification channel and update our internal hashmap
+        // Once done, we forward the task's status update to the subscriber of the taskManager (the one calling .run())
+        {
+            let is_stopped_rx = self.is_stopped_rx.clone();
+            let task_status_rx = self.task_status_rx.clone();
+            let status_by_task_id_w = self.status_by_task_id_w.clone();
+            let thread_name = "tm-task-status-updater";
 
-        thread::Builder::new()
-            .name("tm-message-receiver".to_string())
-            .spawn(move || {
-            let tx_run_msg_2 = tx_run_msg_2;
-            let _drop_logger = LogErrorOnDrop::new("tm-message-receiver");
-
-            loop {
-                match self_message_receiver.recv() {
-                    Ok(msg) => {
-                        match msg {
-                            Ok(it) => {
-                                // update task status
-                                // TODO: handle lock failure
-                                status_by_task_id_w_1
-                                    .lock()
-                                    .expect("Could not lock status updater")
-                                    .empty(it.task.id().to_string())
-                                    .insert(it.task.id().to_string(), it.status.clone())
-                                    .refresh();
-
-                                let _ = tx_run_msg_2.send(Ok(it));
-                            }
-                            Err(err) => {
-                                let _ = tx_run_msg_2.send(Err(err));
-                            }
-                        }
+            thread::Builder::new()
+                .name(thread_name.to_string())
+                .spawn(move || {
+                    let _drop_logger = LogErrorOnDrop::new(thread_name);
+                    while is_stopped_rx.is_empty() && handle_task_status_update(&task_status_rx, &task_status_forwarder_tx, &status_by_task_id_w).is_ok() {
+                        // Spinning ;o
                     }
-                    Err(_) => {} // FIXME: handle this?
-                }
-            }
-        });
+                }).unwrap();
+        };
+
+
+
+        let task_status_tx = self.task_status_tx.clone();
+        let task_executor_tx = self.task_executor_tx.clone();
+        let task_executor_rx = self.task_executor_rx.clone();
+        let should_stop_rx = self.should_stop_rx.clone();
+        let is_stopped_tx = self.is_stopped_tx.clone();
+        let nb_running_tasks = self.running_tasks.clone();
 
         let _ = thread::Builder::new()
-            .name("tm-task-receiver".to_string())
+            .name("tm-task-processor".to_string())
             .spawn(move || {
-            let self_running_tasks = self_running_tasks;
-            let _drop_logger = LogErrorOnDrop::new("tm-task-receiver");
+            let _drop_logger = LogErrorOnDrop::new("tm-task-processor");
             let mut log_debug_waiting = log_no_spam_builder(Debug, "no task to run, waiting...", 60);
 
-            loop {
-                // execute received tasks
-                let _ = match self_it_receiver.try_recv() {
-                    Ok(internal_task) => {
-                        // does the task is validated to be run?
-                        match internal_task.task.pre_run() {
-                            PreRun::Yes => {
-                                // run task
-                                let start_time = Instant::now();
-                                let task_id = String::from(internal_task.task.id());
+                while should_stop_rx.is_empty() || task_executor_rx.len() > 0 {
+                    let internal_task = match task_executor_rx.try_recv() {
+                        // Dequeue our task !
+                        Ok(internal_task) => internal_task,
 
-                                self_running_tasks.inc();
-                                internal_task.task.run(&self_message_sender);
-                                self_running_tasks.dec();
+                        // No task to process, sleep and retry later
+                        Err(TryRecvError::Empty) => {
+                            log_debug_waiting();
+                            thread::sleep(Duration::from_secs(1));
+                            continue;
+                        },
 
-                                info!(
-                                    "task {} took {:?} to be executed",
-                                    task_id,
-                                    start_time.elapsed()
-                                );
+                        // Channel is disconnected (dropped in the other end)
+                        // We will not received any message anymore, exiting
+                        Err(err) => {
+                            error!("Cannot retrieve task to execute {}",  err);
+                            let _ = is_stopped_tx.send(true)
+                                .map_err(|err| error!("Cannot send is_stopped signal: {}", err));
+                            return;
+                        }
+                    };
 
-                                let remaining_tasks = self_it_receiver.len();
+                    nb_running_tasks.inc();
+                    match internal_task.task.pre_run() {
+                        PreRun::Yes => {
+                            let start_time = Instant::now();
+                            internal_task.task.run(&task_status_tx);
+                            info!("task {} took {} sec to be executed",
+                                  internal_task.task.id(), start_time.elapsed().as_secs());
+                            info!("it remains {} tasks to be run", task_executor_rx.len());
+                        }
 
-                                if remaining_tasks == 0
-                                    && self_end_task_sig_receiver.try_recv().is_ok()
-                                {
-                                    info!("no remaining task to run - shutdown task manager");
-                                    self_task_terminated_sender.send(true);
-                                } else if remaining_tasks > 0 {
-                                    info!("it remains {} tasks to run", remaining_tasks);
-                                }
-                            }
-                            _ => {
-                                // postpone the task
-                                info!(
-                                    "postpone task group id {} with id {}",
-                                    internal_task.task.group_id(),
-                                    internal_task.task.id()
-                                );
+                        PreRun::NoAndQueueTail => {
+                            // postpone the task
+                            info!("postpone task group id {} with id {}",
+                                  internal_task.task.group_id(), internal_task.task.id());
 
-                                // send status contained inside the internal task
-                                internal_task.send_status(&self_message_sender);
+                            // re-add the task
+                            add_task( &task_executor_tx,
+                                &task_status_tx,
+                                task_executor_rx.len() + nb_running_tasks.get().min(0) as usize,
+                                internal_task.task,
+                            );
+                        }
 
-                                let running_tasks = self_running_tasks.get().min(0) as usize;
-
-                                // re-add the task
-                                add_task(
-                                    &self_end_task_sig_receiver,
-                                    &status_by_task_id_w_2,
-                                    &self_it_sender,
-                                    &self_message_sender,
-                                    self_it_receiver.len() + running_tasks,
-                                    internal_task.task,
-                                );
-
-                                // wait a few seconds
-                                thread::sleep(Duration::from_secs(5))
-                            }
-                            _ => {}
-                        };
+                        PreRun::NoAndRemove => {
+                            warn!("Dropping task as PreRun asked to do it !");
+                            internal_task.send_status(&task_status_tx);
+                        }
                     }
-                    Err(_) => {}
-                };
+                    nb_running_tasks.dec();
 
-                log_debug_waiting();
-                sleep(Duration::from_secs(1));
-                if self_end_task_sig_receiver.try_recv().is_ok() {
-                    info!("shutdown task manager");
-                    self_task_terminated_sender.send(true);
                 }
-            }
-        });
 
-        Ok(rx_run_msg_2)
+                let _ = is_stopped_tx.send(true)
+                    .map_err(|err| error!("Cannot send is_stopped signal: {}", err));
+        }).unwrap();
+
+        Ok(task_status_forwarder_rx)
     }
 }
 
+fn handle_task_status_update(task_status_rx: &Receiver<Message>,
+                             task_status_forwarder_tx: &Sender<Message>,
+                             status_by_task_id_w: &Arc<Mutex<WriteHandle<Id, Status>>>
+) -> Result<(), ()>
+{
+    let msg =  task_status_rx.recv()
+        .map_err(|err| error!("Cannot retrieve task status update: {}", err))?;
+
+    match &msg {
+        Ok(it) => {
+            match it.status.status {
+                State::Error
+                | State::Deployed
+                | State::Deleted
+                | State::DeploymentError
+                | State::DeleteError => {
+                    status_by_task_id_w
+                        .lock()
+                        .expect("Could not lock status updater")
+                        .empty(it.task.id().to_string())
+                        .refresh();
+                }
+
+                _ => {
+                    status_by_task_id_w
+                        .lock()
+                        .expect("Could not lock status updater")
+                        .empty(it.task.id().to_string())
+                        .insert(it.task.id().to_string(), it.status.clone())
+                        .refresh();
+                }
+            }
+        }
+
+        Err(err) => {
+            // FIXME When the task return an error, does it means no further processing will be done ?
+            // If yes the HashMap is going to leak memory as containing garbage data that will never be cleaned
+            error!("Task error received: {}", err);
+        }
+    };
+
+    task_status_forwarder_tx.send(msg)
+        .map_err(|err| error!("Cannot send task status update: {}", err))
+}
+
 fn add_task(
-    end_task_sig_receiver: &Receiver<bool>,
-    status_by_task_id_w: &Arc<Mutex<WriteHandle<Id, Status>>>,
-    it_sender: &Sender<InternalTask>,
-    message_sender: &Sender<Message>,
+    task_processor_tx: &Sender<InternalTask>,
+    task_status_tx: &Sender<Message>,
     remaining_tasks: usize,
     task: Box<dyn Task>,
 ) {
-    let _ = match end_task_sig_receiver.try_recv() {
-        Ok(x) => {
-            if x {
-                // stop accepting new task
-                return;
-            } else {
-                ()
-            }
-        }
-        Err(_) => (),
-    };
-
     let message = match remaining_tasks {
-        0 => None,
-        1 => {
-            info!(
-                "add received task but wait until the task manager is able to execute it. \
-            1 remaining task."
-            );
-
-            Some(format!(
-                "Your task is queued ({} task remaining) and will start as soon as a worker is available.",
-                remaining_tasks
-            ))
-        }
+        0 => Some("Task is going to be executed !".to_string()),
         _ => {
-            info!(
-                "add received task but wait until the task manager is able to execute it. \
-            {} remaining tasks.",
-                remaining_tasks
-            );
-
-            Some(format!(
-                "Your task is queued ({} tasks remaining) and will start as soon as a worker is available.",
-                remaining_tasks
-            ))
+            info!("Task is queued. {} remaining tasks.", remaining_tasks);
+            Some(format!("Task is queued ({} tasks left) and will start when a worker is available.", remaining_tasks))
         }
     };
 
@@ -300,23 +281,14 @@ fn add_task(
         ),
     );
 
-    status_by_task_id_w
-        .lock()
-        //TODO: handle lock failure
-        .expect("could not lock task status writer while trying to add task")
-        .insert(task.id().to_string(), status.clone())
-        .refresh();
-
-    let internal_task = InternalTask {
-        task,
-        status: status.clone(),
-    };
+    let internal_task = InternalTask { task, status };
 
     // send status contained inside the internal task
-    internal_task.send_status(message_sender);
+    internal_task.send_status(task_status_tx);
 
     // add internal task to queue
-    let _ = it_sender.send(internal_task);
+    let _ = task_processor_tx.send(internal_task)
+        .map_err(|err| error!("cannot enqueue task {}", err));
 }
 
 pub trait Task: Send {
@@ -447,17 +419,29 @@ impl From<RecvError> for Error {
     }
 }
 
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::AlreadyRunning => write!(f, "Already Running"),
+            Error::Recv(err) => write!(f, "RecvError {}", err),
+        }
+
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
-    use crate::task_manager::{TaskManager, Task, Message, Status, PreRun};
+    use crate::task_manager::{TaskManager, Task, Message, Status, PreRun, InternalTask, State, ActionContext};
     use chrono::{DateTime, Utc, NaiveDateTime};
     use crossbeam_channel::Sender;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
+    use qovery_engine::models::{ProgressScope, ProgressLevel};
     use std::time::Duration;
 
     #[derive(Clone)]
-    pub struct DummyTask {
+    pub struct WaitingTask {
         pub date: DateTime<Utc>,
         pub bytes: Vec<u8>,
         pub have_been_run: Arc<AtomicBool>,
@@ -465,9 +449,9 @@ mod tests {
         pub barrier_end: Arc<Barrier>,
     }
 
-    impl DummyTask {
-        fn new() -> DummyTask {
-            DummyTask {
+    impl WaitingTask {
+        fn new() -> WaitingTask {
+            WaitingTask {
                 date: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0,0), Utc),
                 bytes: vec![],
                 have_been_run: Arc::new(AtomicBool::new(false)),
@@ -476,7 +460,7 @@ mod tests {
             }
         }
     }
-    impl Task for DummyTask {
+    impl Task for WaitingTask {
         fn created_at(&self) -> &DateTime<Utc> {
             &self.date
         }
@@ -493,7 +477,12 @@ mod tests {
             &self.bytes
         }
 
-        fn send_status(&self, _: &Sender<Message>, _: Status) {
+        fn send_status(&self, task_status_tx: &Sender<Message>, status: Status) {
+            let it = InternalTask {
+                task: Box::new(self.clone()),
+                status,
+            };
+            let _ = task_status_tx.send(Ok(it));
         }
 
         fn pre_run(&self) -> PreRun {
@@ -507,21 +496,41 @@ mod tests {
         }
     }
 
+
+    #[derive(Clone)]
+    struct DummyTask {
+        pub date: DateTime<Utc>,
+    }
+    impl Task for DummyTask {
+        fn created_at(&self) -> &DateTime<Utc> { &self.date }
+        fn group_id(&self) -> &str { "1" }
+        fn id(&self) -> &str { "1" }
+        fn bytes_payload(&self) -> &Vec<u8> { unimplemented!() }
+        fn send_status(&self, _sender: &Sender<Message>, _status: Status) { }
+        fn pre_run(&self) -> PreRun { PreRun::Yes }
+        fn run(&self, _sender: &Sender<Message>) { }
+    }
+
     #[test]
     fn test_taskmanager_run() {
         let mut tm = TaskManager::new();
-        let task = DummyTask::new();
+        tm.running_tasks = prometheus::IntGauge::new("abc", "degf").unwrap();
+        let task = WaitingTask::new();
 
         assert_eq!(tm.running_tasks.get(), 0);
         assert_eq!(task.have_been_run.load(Ordering::Acquire), false);
         tm.add_task(Box::new(task.clone()));
-        tm.run().expect("Impossible to run task Manager");
+
+
+        let task_status_rx = tm.run().expect("Impossible to run task Manager");
+        assert_eq!(task_status_rx.recv().unwrap().is_ok(), true);
 
         task.barrier_begin.wait();
         assert_eq!(tm.running_tasks.get(), 1);
         task.barrier_end.wait();
 
         tm.stop();
+        assert_eq!(tm.should_stop_rx.is_empty(), false);
         // Wait for task to be completed
         let mut nb_iter = 0;
         while tm.remaining_tasks_to_run() > 0 {
@@ -531,5 +540,63 @@ mod tests {
         }
         assert_eq!(task.have_been_run.load(Ordering::Acquire), true);
         assert_eq!(tm.running_tasks.get(), 0);
+
+
+        // Test that we clean the Internal Hashmap
+    }
+
+
+    #[test]
+    fn test_taskmanager_cleanup() {
+        let mut tm = TaskManager::new();
+        tm.running_tasks = prometheus::IntGauge::new("abc", "degf").unwrap();
+        let task = WaitingTask::new();
+        let id = task.id().to_string();
+        let task_status_rx = tm.run().expect("Impossible to run task Manager");
+        tm.add_task(Box::new(task.clone()));
+
+        assert_eq!(task_status_rx.recv().unwrap().unwrap().status.status, State::Waiting);
+        assert_eq!(tm.get_task_status(&id).map(|s| s.status), Some(State::Waiting));
+
+        task.barrier_begin.wait();
+        task.barrier_end.wait();
+
+        task.send_status(&tm.task_status_tx, Status {
+            status: State::Deleted,
+            message: None,
+            context: ActionContext {
+                scope: ProgressScope::Queued,
+                level: ProgressLevel::Debug,
+                execution_id: "".to_string(),
+                task_created_at: DateTime::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc)
+            }
+        });
+
+        assert_eq!(task_status_rx.recv().unwrap().unwrap().status.status, State::Deleted);
+        assert_eq!(tm.get_task_status(&id).map(|s| s.status), None);
+
+        let is_stopped = tm.is_terminated();
+        tm.stop();
+        assert_eq!(is_stopped.recv(), Ok(true));
+    }
+
+
+    #[test]
+    fn test_taskmanager_graceful_shutdown() {
+        let mut tm = TaskManager::new();
+        tm.running_tasks = prometheus::IntGauge::new("abc", "degf").unwrap();
+
+        let task = DummyTask{ date: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0,0), Utc) };
+        tm.add_task(Box::new(task.clone()));
+        tm.add_task(Box::new(task.clone()));
+        tm.add_task(Box::new(task.clone()));
+
+        assert_eq!(tm.remaining_tasks_to_run(), 3);
+        tm.stop();
+        tm.run().expect("Impossible to run task Manager");
+
+        let is_stopped = tm.is_terminated();
+        assert_eq!(is_stopped.recv(), Ok(true));
+        assert_eq!(tm.remaining_tasks_to_run(), 0);
     }
 }
