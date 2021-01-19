@@ -39,9 +39,10 @@ impl DOCR {
         }
     }
 
-    fn get_repository_name(&self, image: &Image) -> Result<String, EngineError> {
+    fn get_registry_name(&self, image: &Image) -> Result<String, EngineError> {
         let registry_name = match image.registry_name.as_ref() {
-            Some(registry_name) => registry_name.clone(),
+            // DOCR does not support upper cases
+            Some(registry_name) => registry_name.to_lowercase().clone(),
             None => cast_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context().execution_id(),
@@ -54,7 +55,8 @@ impl DOCR {
 
     fn create_repository(&self, image: &Image) -> Result<(), EngineError> {
         let registry_name = match image.registry_name.as_ref() {
-            Some(registry_name) => registry_name.clone(),
+            // DOCR does not support upper cases
+            Some(registry_name) => registry_name.to_lowercase().clone(),
             None => self.name.clone(),
         };
 
@@ -241,7 +243,7 @@ impl ContainerRegistry for DOCR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        let registry_name = match self.get_repository_name(image) {
+        let registry_name = match self.get_registry_name(image) {
             Ok(registry_name) => registry_name,
             Err(err) => {
                 warn!("{:?}", err);
@@ -315,7 +317,7 @@ impl ContainerRegistry for DOCR {
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
-        let registry_name = self.get_repository_name(image)?;
+        let registry_name = self.get_registry_name(image)?;
 
         let _ = match self.create_repository(&image) {
             Ok(_) => info!("DOCR {} has been created", registry_name.as_str()),
