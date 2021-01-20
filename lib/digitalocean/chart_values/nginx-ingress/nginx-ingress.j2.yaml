@@ -23,7 +23,7 @@ controller:
 
   # Will add custom configuration options to Nginx https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/
   config:
-    client_max_body_size: 100m
+    use-proxy-protocol: "true"
     proxy-body-size: 100m
     server-tokens: "false"
 
