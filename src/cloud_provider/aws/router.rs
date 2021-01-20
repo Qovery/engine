@@ -112,7 +112,6 @@ impl Service for Router {
             .iter()
             .map(|cd| {
                 let domain_hash = crate::crypto::to_sha1_truncate_16(cd.domain.as_str());
-                //context.insert("target_hostname", cd.domain.clone());
                 CustomDomainDataTemplate {
                     domain: cd.domain.clone(),
                     domain_hash,

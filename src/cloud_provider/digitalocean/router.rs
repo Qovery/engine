@@ -112,7 +112,11 @@ impl Service for Router {
             .iter()
             .map(|cd| {
                 let domain_hash = crate::crypto::to_sha1_truncate_16(cd.domain.as_str());
-                //context.insert("target_hostname", cd.domain.clone());
+
+                // https://github.com/digitalocean/digitalocean-cloud-controller-manager/issues/291
+                // Can only manage 1 host at a time on an DO load balancer
+                context.insert("custom_domain_name", &cd.domain);
+
                 CustomDomainDataTemplate {
                     domain: cd.domain.clone(),
                     domain_hash,
