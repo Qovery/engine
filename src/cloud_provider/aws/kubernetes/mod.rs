@@ -19,8 +19,7 @@ use crate::dns_provider::DnsProvider;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -125,11 +124,8 @@ impl<'a> EKS<'a> {
     }
 
     fn tera_context(&self) -> TeraContext {
-        let format_ips = |ips: &Vec<String>| -> Vec<String> {
-            ips.iter()
-                .map(|ip| format!("\"{}\"", ip))
-                .collect::<Vec<_>>()
-        };
+        let format_ips =
+            |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
 
         let eks_zone_a_subnet_blocks = format_ips(&self.options.eks_zone_a_subnet_blocks);
         let eks_zone_b_subnet_blocks = format_ips(&self.options.eks_zone_b_subnet_blocks);
@@ -138,32 +134,23 @@ impl<'a> EKS<'a> {
         let rds_zone_b_subnet_blocks = format_ips(&self.options.rds_zone_b_subnet_blocks);
         let rds_zone_c_subnet_blocks = format_ips(&self.options.rds_zone_c_subnet_blocks);
 
-        let documentdb_zone_a_subnet_blocks =
-            format_ips(&self.options.documentdb_zone_a_subnet_blocks);
+        let documentdb_zone_a_subnet_blocks = format_ips(&self.options.documentdb_zone_a_subnet_blocks);
 
-        let documentdb_zone_b_subnet_blocks =
-            format_ips(&self.options.documentdb_zone_b_subnet_blocks);
+        let documentdb_zone_b_subnet_blocks = format_ips(&self.options.documentdb_zone_b_subnet_blocks);
 
-        let documentdb_zone_c_subnet_blocks =
-            format_ips(&self.options.documentdb_zone_c_subnet_blocks);
+        let documentdb_zone_c_subnet_blocks = format_ips(&self.options.documentdb_zone_c_subnet_blocks);
 
-        let elasticache_zone_a_subnet_blocks =
-            format_ips(&self.options.elasticache_zone_a_subnet_blocks);
+        let elasticache_zone_a_subnet_blocks = format_ips(&self.options.elasticache_zone_a_subnet_blocks);
 
-        let elasticache_zone_b_subnet_blocks =
-            format_ips(&self.options.elasticache_zone_b_subnet_blocks);
+        let elasticache_zone_b_subnet_blocks = format_ips(&self.options.elasticache_zone_b_subnet_blocks);
 
-        let elasticache_zone_c_subnet_blocks =
-            format_ips(&self.options.elasticache_zone_c_subnet_blocks);
+        let elasticache_zone_c_subnet_blocks = format_ips(&self.options.elasticache_zone_c_subnet_blocks);
 
-        let elasticsearch_zone_a_subnet_blocks =
-            format_ips(&self.options.elasticsearch_zone_a_subnet_blocks);
+        let elasticsearch_zone_a_subnet_blocks = format_ips(&self.options.elasticsearch_zone_a_subnet_blocks);
 
-        let elasticsearch_zone_b_subnet_blocks =
-            format_ips(&self.options.elasticsearch_zone_b_subnet_blocks);
+        let elasticsearch_zone_b_subnet_blocks = format_ips(&self.options.elasticsearch_zone_b_subnet_blocks);
 
-        let elasticsearch_zone_c_subnet_blocks =
-            format_ips(&self.options.elasticsearch_zone_c_subnet_blocks);
+        let elasticsearch_zone_c_subnet_blocks = format_ips(&self.options.elasticsearch_zone_c_subnet_blocks);
 
         let region_cluster_id = format!("{}-{}", self.region(), self.id());
         let vpc_cidr_block = self.options.vpc_cidr_block.clone();
@@ -194,14 +181,15 @@ impl<'a> EKS<'a> {
 
         let managed_dns_list = vec![self.dns_provider.name()];
         let managed_dns_domains_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
-        let managed_dns_domains_terraform_format =
-            terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+
         let managed_dns_resolvers: Vec<String> = self
             .dns_provider
             .resolvers()
             .iter()
             .map(|x| format!("{}", x.clone().to_string()))
             .collect();
+
         let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
         let test_cluster = match self.context.metadata() {
             Some(meta) => match meta.test {
@@ -219,22 +207,23 @@ impl<'a> EKS<'a> {
             "engine_version_controller_token",
             &self.options.engine_version_controller_token,
         );
+
         context.insert(
             "agent_version_controller_token",
             &self.options.agent_version_controller_token,
         );
+
         context.insert("test_cluster", &test_cluster);
 
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);
-        context.insert(
-            "managed_dns_domains_helm_format",
-            &managed_dns_domains_helm_format,
-        );
+        context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
+
         context.insert(
             "managed_dns_domains_terraform_format",
             &managed_dns_domains_terraform_format,
         );
+
         context.insert(
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
@@ -279,19 +268,13 @@ impl<'a> EKS<'a> {
         );
         context.insert(
             "aws_region_tfstates_account",
-            self.cloud_provider()
-                .terraform_state_credentials()
-                .region
-                .as_str(),
+            self.cloud_provider().terraform_state_credentials().region.as_str(),
         );
 
         // TODO URGENT change the behavior of self.bucket_name()
         context.insert("aws_region", &self.region.name());
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
-        context.insert(
-            "aws_terraform_backend_dynamodb_table",
-            "qovery-terrafom-tfstates",
-        );
+        context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
         context.insert("vpc_cidr_block", &vpc_cidr_block.clone());
         context.insert("s3_kubeconfig_bucket", &self.kubeconfig_bucket_name());
 
@@ -317,43 +300,22 @@ impl<'a> EKS<'a> {
 
         // AWS - DocumentDB
         context.insert("documentdb_cidr_subnet", &documentdb_cidr_subnet);
-        context.insert(
-            "documentdb_zone_a_subnet_blocks",
-            &documentdb_zone_a_subnet_blocks,
-        );
+        context.insert("documentdb_zone_a_subnet_blocks", &documentdb_zone_a_subnet_blocks);
 
-        context.insert(
-            "documentdb_zone_b_subnet_blocks",
-            &documentdb_zone_b_subnet_blocks,
-        );
+        context.insert("documentdb_zone_b_subnet_blocks", &documentdb_zone_b_subnet_blocks);
 
-        context.insert(
-            "documentdb_zone_c_subnet_blocks",
-            &documentdb_zone_c_subnet_blocks,
-        );
+        context.insert("documentdb_zone_c_subnet_blocks", &documentdb_zone_c_subnet_blocks);
 
         // AWS - Elasticache
         context.insert("elasticache_cidr_subnet", &elasticache_cidr_subnet);
-        context.insert(
-            "elasticache_zone_a_subnet_blocks",
-            &elasticache_zone_a_subnet_blocks,
-        );
+        context.insert("elasticache_zone_a_subnet_blocks", &elasticache_zone_a_subnet_blocks);
 
-        context.insert(
-            "elasticache_zone_b_subnet_blocks",
-            &elasticache_zone_b_subnet_blocks,
-        );
+        context.insert("elasticache_zone_b_subnet_blocks", &elasticache_zone_b_subnet_blocks);
 
-        context.insert(
-            "elasticache_zone_c_subnet_blocks",
-            &elasticache_zone_c_subnet_blocks,
-        );
+        context.insert("elasticache_zone_c_subnet_blocks", &elasticache_zone_c_subnet_blocks);
 
         // AWS - Elasticsearch
-        context.insert(
-            "elasticsearch_cidr_subnet",
-            &elasticsearch_cidr_subnet.clone(),
-        );
+        context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet.clone());
 
         context.insert(
             "elasticsearch_zone_a_subnet_blocks",
@@ -371,15 +333,9 @@ impl<'a> EKS<'a> {
         );
 
         // grafana credentials
-        context.insert(
-            "grafana_admin_user",
-            self.options.grafana_admin_user.as_str(),
-        );
+        context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
 
-        context.insert(
-            "grafana_admin_password",
-            self.options.grafana_admin_password.as_str(),
-        );
+        context.insert("grafana_admin_password", self.options.grafana_admin_password.as_str());
 
         // qovery
         context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
@@ -443,7 +399,7 @@ impl<'a> Kubernetes for EKS<'a> {
             },
             ProgressLevel::Info,
             Some(format!(
-                "start to delete EKS cluster {} with id {}",
+                "start to create EKS cluster {} with id {}",
                 self.name(),
                 self.id()
             )),
@@ -498,10 +454,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // FIXME
         Err(self.engine_error(
             EngineErrorCause::Internal,
-            format!(
-                "{} Kubernetes cluster rollback not implemented",
-                self.name()
-            ),
+            format!("{} Kubernetes cluster rollback not implemented", self.name()),
         ))
     }
 
@@ -599,10 +552,7 @@ impl<'a> Kubernetes for EKS<'a> {
                     match deletion {
                         Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
                         Err(_) => {
-                            error!(
-                                "Can't delete the namespace {}, quiting now",
-                                namespace_to_delete
-                            );
+                            error!("Can't delete the namespace {}, quiting now", namespace_to_delete);
                         }
                     }
                 }
@@ -628,10 +578,7 @@ impl<'a> Kubernetes for EKS<'a> {
             match deletion {
                 Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
                 Err(_) => {
-                    error!(
-                        "Can't delete the namespace {}, quiting now",
-                        qovery_namespace
-                    );
+                    error!("Can't delete the namespace {}, quiting now", qovery_namespace);
                 }
             }
         }
