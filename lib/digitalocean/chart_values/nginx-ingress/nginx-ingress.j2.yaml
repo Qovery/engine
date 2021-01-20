@@ -87,7 +87,7 @@ controller:
   ## Allows customization of the external service
   ## the ingress will be bound to via DNS
   publishService:
-    enabled: false
+    enabled: true
     ## Allows overriding of the publish service to bind to
     ## Must be <namespace>/<service_name>
     ##
@@ -246,6 +246,7 @@ controller:
       service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
       service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
       service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
+      service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: "true"
     labels:
       app_id : "{{ id }}"
 
