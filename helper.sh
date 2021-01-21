@@ -218,6 +218,7 @@ function new_release() { ## Release a new engine version with commit ID as tagpr
   prepare_engine
   tag=$(generate_image_tag)
 
+  use_sccache
   check_untracked_files
   build_image
   push_image
@@ -282,14 +283,17 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
   cargo test --package qovery-engine --test lib $test_name -- --ignored --exact
 }
 
-function export_env() { ## Export environment variables from .env file
+function use_sccache() {
   export RUSTC_WRAPPER=/usr/bin/sccache
   if [ ! -z $SCCACHE_REDIS_URI ] ; then
     export SCCACHE_REDIS=$SCCACHE_REDIS_URI
   fi
   sccache --version
   sccache -s
+}
 
+function export_env() { ## Export environment variables from .env file
+  use_sccache
   while IFS= read line ; do
     key=$(echo $line | $awk -F'=' '{ print $1}')
     value=$(echo $line | $sed -r "s,^\w+='(.+)'$,\1,g")
