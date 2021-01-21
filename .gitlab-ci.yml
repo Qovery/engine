@@ -194,15 +194,6 @@ dev-release:
 
 # Main branch
 
-main-build:
-  stage: build
-  retry: 1
-  script:
-    - ./helper.sh build_image
-  only:
-    refs:
-      - main
-
 main-release:
   stage: release
   retry: 1
