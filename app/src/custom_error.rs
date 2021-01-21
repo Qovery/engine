@@ -16,10 +16,12 @@ pub enum ErrorKind {
 impl Into<&str> for ErrorKind {
     fn into(self) -> &'static str {
         match self {
-            ErrorKind::LibsPathsMissing => "Libs directory is empty, ensure you have really download, and override the global vars",
+            ErrorKind::LibsPathsMissing => {
+                "Libs directory is empty, ensure you have really download, and override the global vars"
+            }
             ErrorKind::LibsDirEmpty => "Libs directory is empty, ensure you have really download the libs resources",
             ErrorKind::BinVersion => "Binary version used is not that you should use",
-            ErrorKind::MissingBin => "Binary is not installed, please install it!"
+            ErrorKind::MissingBin => "Binary is not installed, please install it!",
         }
     }
 }

@@ -160,8 +160,7 @@ impl Task for InfrastructureTask {
                 file.as_str(),
             ) {
                 Ok(_) => {
-                    let _ = fs::remove_file(file)
-                        .map_err(|err| error!("Cannot delete file {}", err));
+                    let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));
                 }
                 Err(e) => error!("Error while uploading archive {:?}", e),
             },
@@ -331,8 +330,7 @@ impl Task for EnvironmentTask {
                 file.as_str(),
             ) {
                 Ok(_) => {
-                    let _ = fs::remove_file(file)
-                        .map_err(|err| error!("Cannot remove file {}", err));
+                    let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));
                 }
                 Err(e) => error!("Error while uploading archive {:?}", e),
             },

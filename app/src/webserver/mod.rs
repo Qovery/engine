@@ -87,6 +87,9 @@ mod tests {
             .text()
             .unwrap();
 
-        assert!(body.contains("prometheus_endpoint_nb_call 1"), "can't launch properly webserver");
+        assert!(
+            body.contains("prometheus_endpoint_nb_call 1"),
+            "can't launch properly webserver"
+        );
     }
 }
