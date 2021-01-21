@@ -25,10 +25,10 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use uuid::Uuid;
 
-use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::Request;
 use qovery_engine_task_manager::task_manager::{PreRun, Task, TaskManager};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
+use utils::{subject, Mode};
 
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::ErrorKind::BinVersion;
@@ -38,12 +38,13 @@ use crate::models::{
     CheckTaskOrderRequest, CheckTaskOrderResponse, CheckTaskRunningResponse, GetTaskManagerInfoRequest,
     GetTaskManagerInfoResponse, Ping, Response, StatusResponse, TaskSelector,
 };
-use qovery_engine_task_manager::LogErrorOnDrop;
+use qovery_engine_task_manager::utils::LogErrorOnDrop;
 use std::borrow::Borrow;
 
 mod constants;
 mod custom_error;
 mod models;
+mod utils;
 mod webserver;
 
 const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";

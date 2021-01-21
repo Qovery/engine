@@ -16,7 +16,6 @@ test-full = ["test-functional"]
 
 [dependencies]
 qovery-engine = { path = "../cloned-engine" }
-qovery-engine-shared = { path = "../qovery-engine-shared" }
 qovery-engine-task-manager = { path = "../qovery-engine-task-manager" }
 crossbeam-channel = "0.5.0"
 nats = "0.8.6"

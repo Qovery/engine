@@ -8,8 +8,8 @@ use crossbeam_channel::{unbounded, Receiver, RecvError, Sender, TryRecvError};
 use evmap::{ReadHandle, WriteHandle};
 use serde::{Deserialize, Serialize};
 
-use crate::log_no_spam_builder;
-use crate::LogErrorOnDrop;
+use crate::utils::log_no_spam_builder;
+use crate::utils::LogErrorOnDrop;
 use core::fmt;
 use log::Level::Debug;
 use prometheus::{self, IntGauge};

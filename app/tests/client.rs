@@ -1,16 +1,7 @@
-#[macro_use]
 extern crate log;
 
-use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{Error, Read};
-
-use crossbeam_channel::unbounded;
-
-use qovery_engine_shared::{subject, Mode};
-use qovery_engine_task_manager::models::Request;
-use qovery_engine_task_manager::task_manager::{Task, TaskManager};
-use qovery_engine_task_manager::tasks::InfrastructureTask;
 
 fn send_nats_request(json_file_path: &str, subject: &str) -> Result<(), Error> {
     let nc = nats::Options::new()
@@ -22,7 +13,7 @@ fn send_nats_request(json_file_path: &str, subject: &str) -> Result<(), Error> {
     let mut buff = String::new();
     create_cluster_file.read_to_string(&mut buff).unwrap();
 
-    nc.request(subject, buff.as_bytes());
+    nc.request(subject, buff.as_bytes()).unwrap();
 
     Ok(())
 }

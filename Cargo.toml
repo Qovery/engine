@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "qovery-engine-shared",
     "qovery-engine-task-manager",
     "cloned-engine", # Should be cloned from git@github.com:Qovery/engine.git
     "app",

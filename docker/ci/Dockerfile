@@ -14,6 +14,7 @@ RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/relea
     chmod 755 /usr/bin/sccache
 
 RUN cargo install cargo2junit
+RUN rustup component add rustfmt clippy
 ENV PATH="/root/.cargo/bin/:${PATH}"
 
 ADD load.sh /

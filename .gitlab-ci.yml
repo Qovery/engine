@@ -17,20 +17,20 @@ stages:
 
 # Feat/fix branches
 
-linting:
-  stage: tests
-  retry: 0
-  script:
-    - ./helper.sh lint
-  only:
-  - merge_requests
-  when: always
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
-  tags:
-    - engine-dedicated
+# linting:
+#   stage: tests
+#   retry: 0
+#   script:
+#     - ./helper.sh lint
+#   only:
+#   - merge_requests
+#   when: always
+#   except:
+#     variables:
+#       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
+#       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+#   tags:
+#     - engine-dedicated
 
 wip-fast-tests:
   stage: tests

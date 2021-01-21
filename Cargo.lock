@@ -50,7 +50,6 @@ dependencies = [
  "openssl-sys",
  "prometheus",
  "qovery-engine",
- "qovery-engine-shared",
  "qovery-engine-task-manager",
  "reqwest 0.10.8",
  "retry",
@@ -2380,10 +2379,6 @@ dependencies = [
  "trust-dns-resolver",
  "walkdir",
 ]
-
-[[package]]
-name = "qovery-engine-shared"
-version = "0.1.0"
 
 [[package]]
 name = "qovery-engine-task-manager"
