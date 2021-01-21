@@ -334,6 +334,19 @@ function all_tests(){ ## Run all tests on qovery-engine
   return $TESTS_STATUS
 }
 
+function lint() {
+  GITHUB_ENGINE_BRANCH_NAME=$1
+  nb_treads=$2
+  export RUST_LOG=info
+  export_env
+  prepare_engine
+  
+
+  cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
+  # FIXME fix warning in the engine and enable clippy
+  # cargo clippy
+}
+
 function fast_tests(){ ## Run fast tests only on qovery-engine
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
@@ -432,6 +445,9 @@ prepare_tests)
   ;;
 prepare_engine)
   prepare_engine
+  ;;
+lint)
+  lint
   ;;
 *)
   print_help
