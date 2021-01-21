@@ -79,9 +79,7 @@ impl Request {
     }
 
     pub fn environment_action(&self) -> Option<EnvironmentAction> {
-        if self.target_environment.is_none() {
-            return None;
-        }
+        self.target_environment.as_ref()?;
 
         let environment = self.target_environment.as_ref().unwrap().clone();
 
@@ -188,7 +186,7 @@ impl Kubernetes {
         context: &Context,
         cloud_provider: &'a dyn qovery_engine::cloud_provider::CloudProvider,
         dns_provider: &'a dyn qovery_engine::dns_provider::DnsProvider,
-        nodes: &Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>>,
+        nodes: &[Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>],
     ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a> {
         match self.kind {
             qovery_engine::cloud_provider::kubernetes::Kind::Eks => Box::new(EKS::new(
@@ -202,7 +200,7 @@ impl Kubernetes {
                 serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 nodes
-                    .into_iter()
+                    .iter()
                     .map(|x| qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(x.instance_type()))
                     .collect::<Vec<_>>(),
             )),
@@ -219,7 +217,7 @@ impl Kubernetes {
                 )
                 .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
                 nodes
-                    .into_iter()
+                    .iter()
                     .map(|x| {
                         qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(x.instance_type())
                     })

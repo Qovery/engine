@@ -154,7 +154,7 @@ fn listen_for_task_running_check_events(
 /// this is a way to lazily order tasks
 fn is_the_next_task_to_run(task: &dyn Task, nc: &Connection, mode: &Mode) -> PreRun {
     let subject_name = subject(mode, ENGINE_TASK_ORDER_EXECUTION_CHECK_SUBJECT);
-    let request = CheckTaskOrderRequest::new(task.group_id().to_string(), task.created_at().clone());
+    let request = CheckTaskOrderRequest::new(task.group_id().to_string(), *task.created_at());
 
     let sub = nc.request_multi(subject_name.as_str(), request.as_json_string());
     if sub.is_err() {
@@ -280,10 +280,10 @@ fn listen_for_incoming_load_balancing_tasks(
         let thread_name = format!("incoming-lb-task-{}-{}", task_selector.name(), generate_id());
         let incoming_task_sub = incoming_task_sub.clone();
         let nc = nc.clone();
-        let task_selector = task_selector.clone();
-        let workspace_root_dir = workspace_root_dir.clone();
-        let lib_root_dir = lib_root_dir.clone();
-        let docker_tcp_socket = docker_tcp_socket.clone();
+        let task_selector = *task_selector;
+        let workspace_root_dir = workspace_root_dir;
+        let lib_root_dir = lib_root_dir;
+        let docker_tcp_socket = docker_tcp_socket;
         let mode = mode.clone();
 
         thread::Builder::new()
@@ -311,7 +311,7 @@ fn listen_for_incoming_load_balancing_tasks(
     let _ = {
         let thread_name = format!("tm-get-info-{}-{}", task_selector.name(), generate_id());
         let engine_id = engine_id.to_string();
-        let subject_name = tm_info_subject_name.clone();
+        let subject_name = tm_info_subject_name;
         let tm_info_task_sub = tm_info_task_sub.clone();
 
         thread::Builder::new()
@@ -364,7 +364,7 @@ fn listen_for_events(
         let nc = nc.clone();
         let sub = sub.clone();
         let mode = mode.clone();
-        let task_selector = task_selector.clone();
+        let task_selector = *task_selector;
 
         thread::Builder::new()
             .name(thread_name.clone())
@@ -571,14 +571,14 @@ pub fn main() -> io::Result<()> {
     dotenv().ok();
     env_logger::init();
 
-    let http_listen_on = env::var("HTTP_LISTEN_ON").unwrap_or("0.0.0.0:8080".to_string());
-    let engine_id = env::var("ID").unwrap_or(generate_id().to_string());
+    let http_listen_on = env::var("HTTP_LISTEN_ON").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
+    let engine_id = env::var("ID").unwrap_or_else(|_| generate_id().to_string());
     let organization = env::var("ORGANIZATION");
     let cloud_provider = env::var("CLOUD_PROVIDER");
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let region = env::var("REGION");
     let nats_server = env::var("QOVERY_NATS_URL").expect("QOVERY_NATS_URL is mandatory");
-    let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or("lib".to_string());
+    let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
     let docker_host = env::var("DOCKER_HOST").ok();
     let workspace_root_dir = env::var("WORKSPACE_ROOT_DIR")
         .unwrap_or(format!("{}/.qovery-workspace", home_dir().unwrap().to_str().unwrap()));
@@ -691,7 +691,7 @@ pub fn using_json_path_parameter(
         Box::new(|_: &dyn Task| PreRun::Yes),
     ));
 
-    task_manager.add_task(task.clone());
+    task_manager.add_task(task);
     let _ = task_manager.run();
 
     loop {
@@ -977,7 +977,7 @@ fn using_nats_server(
         })
         .unwrap();
 
-    watchdog(name.clone(), nc.clone(), sig_term_tx.clone());
+    watchdog(name, nc, sig_term_tx.clone());
     ctrlc::set_handler(move || {
         let _ = sig_term_tx
             .send(true)

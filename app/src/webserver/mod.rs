@@ -31,13 +31,12 @@ lazy_static! {
 /// Use the static tokio runtime to start a webserver.
 /// Spawn a thread that block until the webserver stop (never)
 pub fn launch(listen_on: &str) -> JoinHandle<()> {
-    let listen_on: SocketAddr = listen_on.parse().expect(
-        format!(
+    let listen_on: SocketAddr = listen_on.parse().unwrap_or_else(|_| {
+        panic!(
             "Cannot parse webserver listen_on parameter, should be ip:port instead {}",
             listen_on
         )
-        .as_str(),
-    );
+    });
 
     info!("Starting tokio runtime");
     TOKIO_RUNTIME.lock().unwrap().spawn(launch_warp(listen_on))

@@ -83,7 +83,7 @@ impl TaskManager {
         self.is_stopped_rx.clone()
     }
 
-    pub fn get_task_status(&self, id: &Id) -> Option<Status> {
+    pub fn get_task_status(&self, id: &str) -> Option<Status> {
         self.status_by_task_id_r
             .lock()
             .unwrap()
@@ -91,7 +91,7 @@ impl TaskManager {
             .map(|status| status.as_ref().clone())
     }
 
-    pub fn get_task_status_by_group_id(&self, group_id: &GroupId) -> Option<Status> {
+    pub fn get_task_status_by_group_id(&self, group_id: &str) -> Option<Status> {
         // id and group_id should be unique (I know, this is crazy assumption, but let's do this:)),
         // so we use the same data structure to store them all
         self.get_task_status(group_id)
@@ -152,7 +152,7 @@ impl TaskManager {
                 let _drop_logger = LogErrorOnDrop::new("tm-task-processor");
                 let mut log_debug_waiting = log_no_spam_builder(Debug, "no task to run, waiting...", 60);
 
-                while should_stop_rx.is_empty() || task_executor_rx.len() > 0 {
+                while should_stop_rx.is_empty() || !task_executor_rx.is_empty() {
                     let internal_task = match task_executor_rx.try_recv() {
                         // Dequeue our task !
                         Ok(internal_task) => internal_task,
@@ -288,7 +288,7 @@ fn add_task(
             ProgressScope::Queued,
             ProgressLevel::Info,
             task.id().to_string(),
-            task.created_at().clone(),
+            *task.created_at(),
         ),
     );
 
@@ -404,10 +404,7 @@ pub enum State {
 
 impl State {
     pub fn is_in_progress(&self) -> bool {
-        match self {
-            State::DeploymentInProgress | State::PauseInProgress | State::DeleteInProgress => true,
-            _ => false,
-        }
+        matches!(self, State::DeploymentInProgress | State::PauseInProgress | State::DeleteInProgress)
     }
 }
 
@@ -551,7 +548,7 @@ mod tests {
         let mut nb_iter = 0;
         while tm.remaining_tasks_to_run() > 0 {
             std::thread::sleep(Duration::from_secs(1));
-            nb_iter = nb_iter + 1;
+            nb_iter += 1;
             assert_ne!(nb_iter, 5);
         }
         assert_eq!(task.have_been_run.load(Ordering::Acquire), true);
@@ -607,7 +604,7 @@ mod tests {
         };
         tm.add_task(Box::new(task.clone()));
         tm.add_task(Box::new(task.clone()));
-        tm.add_task(Box::new(task.clone()));
+        tm.add_task(Box::new(task));
 
         assert_eq!(tm.remaining_tasks_to_run(), 3);
         tm.stop();

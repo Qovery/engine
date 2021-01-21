@@ -40,7 +40,7 @@ impl InfrastructureTask {
             },
             level,
             self.id().to_string(),
-            self.created_at().clone(),
+            *self.created_at(),
         )
     }
 
@@ -214,7 +214,7 @@ impl EnvironmentTask {
             },
             level,
             self.id().to_string(),
-            self.created_at().clone(),
+            *self.created_at(),
         )
     }
 }
@@ -395,12 +395,7 @@ where
     }
 
     fn action_context(&self, info: ProgressInfo) -> ActionContext {
-        ActionContext::new(
-            info.scope,
-            info.level,
-            info.execution_id.to_string(),
-            self.task.created_at().clone(),
-        )
+        ActionContext::new(info.scope, info.level, info.execution_id, *self.task.created_at())
     }
 }
 
@@ -638,7 +633,7 @@ Join us on Discord (https://discord.qovery.com) to have more info and retry late
             engine_error.execution_id,
             scope,
             rollback_message,
-            engine_error.message.unwrap_or("<no error message>".into())
+            engine_error.message.unwrap_or_else(|| "<no error message>".into())
         ),
         EngineErrorCause::User(hint) => format!(
             r#"
@@ -656,7 +651,7 @@ Join us on Discord (https://discord.qovery.com) if you need support
             engine_error.execution_id,
             scope,
             rollback_message,
-            engine_error.message.unwrap_or("<no error message>".into()),
+            engine_error.message.unwrap_or_else(|| "<no error message>".into()),
             hint
         ),
     }
