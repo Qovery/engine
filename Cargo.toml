@@ -4,3 +4,6 @@ members = [
     "cloned-engine", # Should be cloned from git@github.com:Qovery/engine.git
     "app",
 ]
+
+[profile.release]
+debug = true
