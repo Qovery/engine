@@ -50,6 +50,7 @@ where
                 tera::ErrorKind::__Nonexhaustive => format!("non exhaustive error"),
             };
 
+            error!("{}", context.clone().into_json());
             error!("{}", error_msg.as_str());
             return Err(SimpleError::new(SimpleErrorKind::Other, Some(error_msg)));
         }
