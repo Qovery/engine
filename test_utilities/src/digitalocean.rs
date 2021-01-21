@@ -17,8 +17,11 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::build_platform_local_docker;
 
 pub const ORGANIZATION_ID: &str = "a8nb94c7fwxzr2ja";
-pub const DO_KUBERNETES_VERSION: &str = "1.18.10-do.2";
+pub const DO_KUBERNETES_VERSION: &str = "1.18.10-do.3";
 pub const DIGITAL_OCEAN_URL: &str = "https://api.digitalocean.com/v2/";
+pub const DOCR_ID: &str = "gu9ep7t68htdu78l";
+pub const DOKS_CLUSTER_ID: &str = "gqgyb7zy4ykwumak";
+pub const DOKS_CLUSTER_NAME: &str = "QoveryDigitalOceanTest";
 
 pub fn digital_ocean_token() -> String {
     std::env::var("DIGITAL_OCEAN_TOKEN").expect("env var DIGITAL_OCEAN_TOKEN is mandatory")
@@ -37,7 +40,7 @@ pub fn digital_ocean_spaces_secret_key() -> String {
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     DOCR::new(
         context.clone(),
-        "doea59qe62xaw3wj",
+        DOCR_ID,
         "default-docr-registry-qovery-do-test",
         digital_ocean_token().as_str(),
     )
@@ -72,8 +75,8 @@ pub fn do_kubernetes_ks<'a>(
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     DOKS::<'a>::new(
         context.clone(),
-        "my-first-doks-10",
-        "do-kube-cluster-fra1-10",
+        DOKS_CLUSTER_ID,
+        DOKS_CLUSTER_NAME,
         DO_KUBERNETES_VERSION,
         "fra1",
         cloud_provider,
@@ -106,7 +109,7 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
         digital_ocean_token().as_str(),
         digital_ocean_spaces_access_id().as_str(),
         digital_ocean_spaces_secret_key().as_str(),
-        "digital-ocean-test-cluster",
+        DOKS_CLUSTER_NAME,
         TerraformStateCredentials {
             access_key_id: terraform_aws_access_key_id().to_string(),
             secret_access_key: terraform_aws_secret_access_key().to_string(),
