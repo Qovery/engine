@@ -130,7 +130,7 @@ pub trait KubernetesNode {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,
