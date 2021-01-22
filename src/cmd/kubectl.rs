@@ -102,7 +102,7 @@ where
         },
     )?;
 
-    let output_string: String = output_vec.join("");
+    let output_string: String = output_vec.join("\n");
 
     let result = match serde_json::from_str::<DOKubernetesList>(output_string.as_str()) {
         Ok(x) => x,

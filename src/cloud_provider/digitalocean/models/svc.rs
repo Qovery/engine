@@ -404,6 +404,7 @@ pub struct LoadBalancer {
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ingress {
+    #[serde(alias = "hostname")]
     pub ip: String,
 }
 
