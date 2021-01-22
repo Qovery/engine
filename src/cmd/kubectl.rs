@@ -70,14 +70,12 @@ where
     Ok(output_string)
 }
 
-// Get ip external ingress
-// CAUTION: use it only with DigitalOcean
-pub fn do_kubectl_exec_get_external_ingress_ip<P>(
+pub fn do_kubectl_exec_describe_service<P>(
     kubernetes_config: P,
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<String>, SimpleError>
+) -> Result<DOKubernetesList, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -104,8 +102,8 @@ where
 
     let output_string: String = output_vec.join("\n");
 
-    let result = match serde_json::from_str::<DOKubernetesList>(output_string.as_str()) {
-        Ok(x) => x,
+    match serde_json::from_str::<DOKubernetesList>(output_string.as_str()) {
+        Ok(x) => Ok(x),
         Err(err) => {
             error!("{:?}", err);
             error!("{}", output_string.as_str());
@@ -114,35 +112,89 @@ where
                 Some(output_string),
             ));
         }
-    };
-
-    if result.items.is_empty()
-        || result
-            .items
-            .first()
-            .unwrap()
-            .status
-            .load_balancer
-            .ingress
-            .is_empty()
-    {
-        return Ok(None);
     }
+}
 
-    // FIXME unsafe unwrap here?
-    Ok(Some(
-        result
-            .items
-            .first()
-            .unwrap()
-            .status
-            .load_balancer
-            .ingress
-            .first()
-            .unwrap()
-            .ip
-            .clone(),
-    ))
+// Get ip external ingress
+pub fn do_kubectl_exec_get_external_ingress_ip<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<String>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    match do_kubectl_exec_describe_service(kubernetes_config, namespace, selector, envs) {
+        Ok(result) => {
+            if result.items.is_empty()
+                || result
+                    .items
+                    .first()
+                    .unwrap()
+                    .status
+                    .load_balancer
+                    .ingress
+                    .is_empty()
+            {
+                return Ok(None);
+            }
+
+            Ok(Some(
+                result
+                    .items
+                    .first()
+                    .unwrap()
+                    .status
+                    .load_balancer
+                    .ingress
+                    .first()
+                    .unwrap()
+                    .ip
+                    .clone(),
+            ))
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub fn do_kubectl_exec_get_loadbalancer_id<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<String>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    match do_kubectl_exec_describe_service(kubernetes_config, namespace, selector, envs) {
+        Ok(result) => {
+            if result.items.is_empty()
+                || result
+                    .items
+                    .first()
+                    .unwrap()
+                    .status
+                    .load_balancer
+                    .ingress
+                    .is_empty()
+            {
+                return Ok(None);
+            }
+
+            Ok(Some(
+                result
+                    .items
+                    .first()
+                    .unwrap()
+                    .metadata
+                    .annotations
+                    .kubernetes_digitalocean_com_load_balancer_id
+                    .clone(),
+            ))
+        }
+        Err(e) => Err(e),
+    }
 }
 
 pub fn kubectl_exec_get_external_ingress_hostname<P>(
