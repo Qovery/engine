@@ -32,7 +32,7 @@ pub struct TaskManager {
     should_stop_rx: Receiver<bool>,
     is_stopped_tx: Sender<bool>,
     is_stopped_rx: Receiver<bool>,
-    status_by_task_id_r: ReadHandle<Id, Status>,
+    status_by_task_id_r: Mutex<ReadHandle<Id, Status>>,
     status_by_task_id_w: Arc<Mutex<WriteHandle<Id, Status>>>,
     task_status_tx: Sender<Message>,
     task_status_rx: Receiver<Message>,
@@ -46,6 +46,7 @@ impl TaskManager {
         let (should_stop_tx, should_stop_rx) = unbounded::<bool>();
         let (is_stopped_tx, is_stopped_rx) = unbounded::<bool>();
         let (status_by_task_id_r, status_by_task_id_w) = evmap::new::<Id, Status>();
+        let status_by_task_id_r = Mutex::new(status_by_task_id_r);
         let status_by_task_id_w = Arc::new(Mutex::new(status_by_task_id_w));
         let (task_status_tx, task_status_rx) = unbounded::<Message>();
 
@@ -84,6 +85,8 @@ impl TaskManager {
 
     pub fn get_task_status(&self, id: &Id) -> Option<Status> {
         self.status_by_task_id_r
+            .lock()
+            .unwrap()
             .get_one(id)
             .map(|status| status.as_ref().clone())
     }
