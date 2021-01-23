@@ -200,7 +200,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 name: app_name_1.clone(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
-                dockerfile_path: "Dockerfile".to_string(),
+                dockerfile_path: Some("Dockerfile".to_string()),
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
@@ -250,7 +250,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 name: app_name_2.clone(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
-                dockerfile_path: "Dockerfile".to_string(),
+                dockerfile_path: Some("Dockerfile".to_string()),
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
@@ -300,7 +300,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 name: app_name_3.clone(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string(),
-                dockerfile_path: format!("Dockerfile-{}", version_mongo),
+                dockerfile_path: Some(format!("Dockerfile-{}", version_mongo)),
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
@@ -466,7 +466,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
-            dockerfile_path: "Dockerfile".to_string(),
+            dockerfile_path: Some("Dockerfile".to_string()),
             action: Action::Create,
             git_credentials: Some(GitCredentials {
                 login: "x-access-token".to_string(),
@@ -544,7 +544,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 name: format!("{}-{}", "simple-app".to_string(), &suffix),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
-                dockerfile_path: "Dockerfile".to_string(),
+                dockerfile_path: Some("Dockerfile".to_string()),
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
@@ -594,7 +594,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 name: format!("{}-{}", "simple-app-2".to_string(), &suffix),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
-                dockerfile_path: "Dockerfile".to_string(),
+                dockerfile_path: Some("Dockerfile".to_string()),
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
@@ -707,7 +707,7 @@ pub fn echo_app_environment(context: &Context) -> Environment {
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
-            dockerfile_path: "Dockerfile".to_string(),
+            dockerfile_path: Some("Dockerfile".to_string()),
             action: Action::Create,
             git_credentials: Some(GitCredentials {
                 login: "x-access-token".to_string(),
@@ -761,7 +761,7 @@ pub fn environment_only_http_server(context: &Context) -> Environment {
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
-            dockerfile_path: "Dockerfile".to_string(),
+            dockerfile_path: Some("Dockerfile".to_string()),
             action: Action::Create,
             git_credentials: Some(GitCredentials {
                 login: "x-access-token".to_string(),
@@ -801,7 +801,7 @@ pub fn environment_only_http_server_router(context: &Context) -> Environment {
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
-            dockerfile_path: "Dockerfile".to_string(),
+            dockerfile_path: Some("Dockerfile".to_string()),
             action: Action::Create,
             git_credentials: Some(GitCredentials {
                 login: "x-access-token".to_string(),

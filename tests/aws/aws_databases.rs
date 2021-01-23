@@ -12,7 +12,7 @@ use qovery_engine::transaction::TransactionResult;
 
 use crate::aws::aws_environment::{delete_environment, deploy_environment};
 
-use self::test_utilities::utilities::{generate_id, engine_run_test};
+use self::test_utilities::utilities::{engine_run_test, generate_id};
 
 /**
 **
@@ -180,9 +180,9 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 fn postgresql_deploy_a_working_environment_and_redeploy() {
     engine_run_test(|| {
         let span = span!(
-        Level::INFO,
-        "postgresql_deploy_a_working_environment_and_redeploy"
-    );
+            Level::INFO,
+            "postgresql_deploy_a_working_environment_and_redeploy"
+        );
         let _enter = span.enter();
 
         let context = context();
@@ -335,7 +335,7 @@ fn test_postgresql_configuration(
                 app.branch = "postgres-app".to_string();
                 app.commit_id = "ad65b24a0470e7e8aa0983e036fb9a05928fd973".to_string();
                 app.private_port = Some(1234);
-                app.dockerfile_path = format!("Dockerfile-{}", version);
+                app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_variables = vec![
                     EnvironmentVariable {
                         key: "PG_HOST".to_string(),
@@ -382,7 +382,7 @@ fn test_postgresql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
         return test_name.to_string();
-        })
+    })
 }
 
 // Postgres environment environment
@@ -414,7 +414,6 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
 
 #[test]
 fn postgresql_v12_deploy_a_working_dev_environment() {
-
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_postgresql_configuration(
@@ -526,7 +525,7 @@ fn test_mongodb_configuration(
             app.branch = "mongodb-app".to_string();
             app.commit_id = "3fdc7e784c1d98b80446be7ff25e35370306d9a8".to_string();
             app.private_port = Some(1234);
-            app.dockerfile_path = format!("Dockerfile-{}", version);
+            app.dockerfile_path = Some(format!("Dockerfile-{}", version));
             app.environment_variables = vec![
                 // EnvironmentVariable {
                 //     key: "ENABLE_DEBUG".to_string(),
@@ -683,105 +682,104 @@ fn test_mysql_configuration(
     test_name: &str,
 ) {
     engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    let span = span!(Level::INFO, "test", name = test_name);
-    let _enter = span.enter();
+        let deletion_context = context.clone_not_same_execution_id();
 
-    let deletion_context = context.clone_not_same_execution_id();
+        let database_host =
+            "mysql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+        let database_port = 3306;
+        let database_db_name = "mysqldatabase".to_string();
+        let database_username = "superuser".to_string();
+        let database_password = generate_id();
 
-    let database_host =
-        "mysql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
-    let database_port = 3306;
-    let database_db_name = "mysqldatabase".to_string();
-    let database_username = "superuser".to_string();
-    let database_password = generate_id();
+        let is_rds = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
 
-    let is_rds = match environment.kind {
-        Kind::Production => true,
-        Kind::Development => false,
-    };
+        environment.databases = vec![Database {
+            kind: DatabaseKind::Mysql,
+            action: Action::Create,
+            id: generate_id(),
+            name: database_db_name.clone(),
+            version: version.to_string(),
+            fqdn_id: "mysql-".to_string() + generate_id().as_str(),
+            fqdn: database_host.clone(),
+            port: database_port.clone(),
+            username: database_username.clone(),
+            password: database_password.clone(),
+            total_cpus: "500m".to_string(),
+            total_ram_in_mib: 512,
+            disk_size_in_gib: 10,
+            database_instance_type: "db.t2.micro".to_string(),
+            database_disk_type: "gp2".to_string(),
+        }];
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.branch = "mysql-app".to_string();
+                app.commit_id = "fc8a87b39cdee84bb789893fb823e3e62a1999c0".to_string();
+                app.private_port = Some(1234);
+                app.dockerfile_path = Some(format!("Dockerfile-{}", version));
+                app.environment_variables = vec![
+                    // EnvironmentVariable {
+                    //     key: "ENABLE_DEBUG".to_string(),
+                    //     value: "true".to_string(),
+                    // },
+                    // EnvironmentVariable {
+                    //     key: "DEBUG_PAUSE".to_string(),
+                    //     value: "true".to_string(),
+                    // },
+                    EnvironmentVariable {
+                        key: "MYSQL_HOST".to_string(),
+                        value: database_host.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "MYSQL_PORT".to_string(),
+                        value: database_port.clone().to_string(),
+                    },
+                    EnvironmentVariable {
+                        key: "MYSQL_DBNAME".to_string(),
+                        value: database_db_name.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "MYSQL_USERNAME".to_string(),
+                        value: database_username.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "MYSQL_PASSWORD".to_string(),
+                        value: database_password.clone(),
+                    },
+                ];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+        environment.routers[0].routes[0].application_name = "mysql-app".to_string();
 
-    environment.databases = vec![Database {
-        kind: DatabaseKind::Mysql,
-        action: Action::Create,
-        id: generate_id(),
-        name: database_db_name.clone(),
-        version: version.to_string(),
-        fqdn_id: "mysql-".to_string() + generate_id().as_str(),
-        fqdn: database_host.clone(),
-        port: database_port.clone(),
-        username: database_username.clone(),
-        password: database_password.clone(),
-        total_cpus: "500m".to_string(),
-        total_ram_in_mib: 512,
-        disk_size_in_gib: 10,
-        database_instance_type: "db.t2.micro".to_string(),
-        database_disk_type: "gp2".to_string(),
-    }];
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.branch = "mysql-app".to_string();
-            app.commit_id = "fc8a87b39cdee84bb789893fb823e3e62a1999c0".to_string();
-            app.private_port = Some(1234);
-            app.dockerfile_path = format!("Dockerfile-{}", version);
-            app.environment_variables = vec![
-                // EnvironmentVariable {
-                //     key: "ENABLE_DEBUG".to_string(),
-                //     value: "true".to_string(),
-                // },
-                // EnvironmentVariable {
-                //     key: "DEBUG_PAUSE".to_string(),
-                //     value: "true".to_string(),
-                // },
-                EnvironmentVariable {
-                    key: "MYSQL_HOST".to_string(),
-                    value: database_host.clone(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_PORT".to_string(),
-                    value: database_port.clone().to_string(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_DBNAME".to_string(),
-                    value: database_db_name.clone(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_USERNAME".to_string(),
-                    value: database_username.clone(),
-                },
-                EnvironmentVariable {
-                    key: "MYSQL_PASSWORD".to_string(),
-                    value: database_password.clone(),
-                },
-            ];
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = "mysql-app".to_string();
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-    let mut environment_delete = environment.clone();
-    environment_delete.action = Action::Delete;
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
 
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+        // todo: check the database disk is here and with correct size
 
-    // todo: check the database disk is here and with correct size
+        match delete_environment(&deletion_context, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
 
-    match delete_environment(&deletion_context, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    return test_name.to_string();
-})
+        return test_name.to_string();
+    })
 }
 
 // MySQL self-hosted environment
@@ -893,7 +891,7 @@ fn test_redis_configuration(
                 app.branch = "redis-app".to_string();
                 app.commit_id = "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string();
                 app.private_port = Some(1234);
-                app.dockerfile_path = format!("Dockerfile-{}", version);
+                app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_variables = vec![
                     // EnvironmentVariable {
                     //     key: "ENABLE_DEBUG".to_string(),

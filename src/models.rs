@@ -56,10 +56,14 @@ impl Environment {
         let external_services = self
             .external_services
             .iter()
-            .map(|x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
-                Some(app) => x.to_stateless_service(context, app.image().clone(), cloud_provider),
-                _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
-            })
+            .map(
+                |x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
+                    Some(app) => {
+                        x.to_stateless_service(context, app.image().clone(), cloud_provider)
+                    }
+                    _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
+                },
+            )
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -67,10 +71,14 @@ impl Environment {
         let applications = self
             .applications
             .iter()
-            .map(|x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
-                Some(app) => x.to_stateless_service(context, app.image().clone(), cloud_provider),
-                _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
-            })
+            .map(
+                |x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
+                    Some(app) => {
+                        x.to_stateless_service(context, app.image().clone(), cloud_provider)
+                    }
+                    _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
+                },
+            )
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -151,7 +159,7 @@ pub struct Application {
     pub git_credentials: Option<GitCredentials>,
     pub branch: String,
     pub commit_id: String,
-    pub dockerfile_path: String,
+    pub dockerfile_path: Option<String>,
     pub private_port: Option<u16>,
     pub total_cpus: String,
     pub cpu_burst: String,
@@ -179,22 +187,27 @@ impl Application {
         let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
-            CPKind::Aws => Some(Box::new(crate::cloud_provider::aws::application::Application::new(
-                context.clone(),
-                self.id.as_str(),
-                self.action.to_service_action(),
-                self.name.as_str(),
-                self.private_port,
-                self.total_cpus.clone(),
-                self.cpu_burst.clone(),
-                self.total_ram_in_mib,
-                self.total_instances,
-                self.start_timeout_in_seconds,
-                image.clone(),
-                self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
-                environment_variables,
-                listeners,
-            ))),
+            CPKind::Aws => Some(Box::new(
+                crate::cloud_provider::aws::application::Application::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.private_port,
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.total_instances,
+                    self.start_timeout_in_seconds,
+                    image.clone(),
+                    self.storage
+                        .iter()
+                        .map(|s| s.to_aws_storage())
+                        .collect::<Vec<_>>(),
+                    environment_variables,
+                    listeners,
+                ),
+            )),
             CPKind::Do => Some(Box::new(
                 crate::cloud_provider::digitalocean::application::Application::new(
                     context.clone(),
@@ -208,7 +221,10 @@ impl Application {
                     self.total_instances,
                     self.start_timeout_in_seconds,
                     image.clone(),
-                    self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
+                    self.storage
+                        .iter()
+                        .map(|s| s.to_do_storage())
+                        .collect::<Vec<_>>(),
                     environment_variables,
                     listeners,
                 ),
@@ -232,22 +248,27 @@ impl Application {
         let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
-            CPKind::Aws => Some(Box::new(crate::cloud_provider::aws::application::Application::new(
-                context.clone(),
-                self.id.as_str(),
-                self.action.to_service_action(),
-                self.name.as_str(),
-                self.private_port,
-                self.total_cpus.clone(),
-                self.cpu_burst.clone(),
-                self.total_ram_in_mib,
-                self.total_instances,
-                self.start_timeout_in_seconds,
-                image,
-                self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
-                environment_variables,
-                listeners,
-            ))),
+            CPKind::Aws => Some(Box::new(
+                crate::cloud_provider::aws::application::Application::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.private_port,
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.total_instances,
+                    self.start_timeout_in_seconds,
+                    image,
+                    self.storage
+                        .iter()
+                        .map(|s| s.to_aws_storage())
+                        .collect::<Vec<_>>(),
+                    environment_variables,
+                    listeners,
+                ),
+            )),
             CPKind::Do => Some(Box::new(
                 crate::cloud_provider::digitalocean::application::Application::new(
                     context.clone(),
@@ -261,7 +282,10 @@ impl Application {
                     self.total_instances,
                     self.start_timeout_in_seconds,
                     image,
-                    self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
+                    self.storage
+                        .iter()
+                        .map(|s| s.to_do_storage())
+                        .collect::<Vec<_>>(),
                     environment_variables,
                     listeners,
                 ),
@@ -355,7 +379,8 @@ pub enum StorageType {
 impl Storage {
     pub fn to_aws_storage(
         &self,
-    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::aws::application::StorageType> {
+    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::aws::application::StorageType>
+    {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
@@ -373,7 +398,9 @@ impl Storage {
 
     pub fn to_do_storage(
         &self,
-    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::digitalocean::application::StorageType> {
+    ) -> crate::cloud_provider::models::Storage<
+        crate::cloud_provider::digitalocean::application::StorageType,
+    > {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
@@ -426,15 +453,16 @@ impl Router {
 
         match cloud_provider.kind() {
             CPKind::Aws => {
-                let router: Box<dyn StatelessService> = Box::new(crate::cloud_provider::aws::router::Router::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.name.as_str(),
-                    self.default_domain.as_str(),
-                    custom_domains,
-                    routes,
-                    listeners,
-                ));
+                let router: Box<dyn StatelessService> =
+                    Box::new(crate::cloud_provider::aws::router::Router::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.name.as_str(),
+                        self.default_domain.as_str(),
+                        custom_domains,
+                        routes,
+                        listeners,
+                    ));
                 Some(router)
             }
             CPKind::Do => {
@@ -599,8 +627,8 @@ impl Database {
                     Some(db)
                 }
                 DatabaseKind::Redis => {
-                    let db: Box<dyn StatefulService> =
-                        Box::new(crate::cloud_provider::digitalocean::databases::redis::Redis::new(
+                    let db: Box<dyn StatefulService> = Box::new(
+                        crate::cloud_provider::digitalocean::databases::redis::Redis::new(
                             context.clone(),
                             self.id.as_str(),
                             self.action.to_service_action(),
@@ -613,13 +641,14 @@ impl Database {
                             self.database_instance_type.as_str(),
                             database_options,
                             listeners,
-                        ));
+                        ),
+                    );
 
                     Some(db)
                 }
                 DatabaseKind::Mongodb => {
-                    let db: Box<dyn StatefulService> =
-                        Box::new(crate::cloud_provider::digitalocean::databases::mongodb::MongoDB::new(
+                    let db: Box<dyn StatefulService> = Box::new(
+                        crate::cloud_provider::digitalocean::databases::mongodb::MongoDB::new(
                             context.clone(),
                             self.id.as_str(),
                             self.action.to_service_action(),
@@ -632,7 +661,8 @@ impl Database {
                             self.database_instance_type.as_str(),
                             database_options,
                             listeners,
-                        ));
+                        ),
+                    );
 
                     Some(db)
                 }
@@ -759,12 +789,12 @@ impl ExternalService {
                     _ => None,
                 },
                 commit_id: self.commit_id.clone(),
-                dockerfile_path: match self.action {
+                dockerfile_path: Some(match self.action {
                     Action::Create => self.on_create_dockerfile_path.clone(),
                     Action::Pause => self.on_pause_dockerfile_path.clone(),
                     Action::Delete => self.on_delete_dockerfile_path.clone(),
                     Action::Nothing => self.on_create_dockerfile_path.clone(),
-                },
+                }),
             },
             image: self.to_image(),
             options: BuildOptions {
@@ -873,11 +903,15 @@ impl<'a> ListenersHelper<'a> {
     }
 
     pub fn pause_in_progress(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.pause_in_progress(info.clone()));
+        self.listeners
+            .iter()
+            .for_each(|l| l.pause_in_progress(info.clone()));
     }
 
     pub fn delete_in_progress(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.delete_in_progress(info.clone()));
+        self.listeners
+            .iter()
+            .for_each(|l| l.delete_in_progress(info.clone()));
     }
 
     pub fn error(&self, info: ProgressInfo) {
@@ -897,15 +931,21 @@ impl<'a> ListenersHelper<'a> {
     }
 
     pub fn deployment_error(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.deployment_error(info.clone()));
+        self.listeners
+            .iter()
+            .for_each(|l| l.deployment_error(info.clone()));
     }
 
     pub fn pause_error(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.pause_error(info.clone()));
+        self.listeners
+            .iter()
+            .for_each(|l| l.pause_error(info.clone()));
     }
 
     pub fn delete_error(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.delete_error(info.clone()));
+        self.listeners
+            .iter()
+            .for_each(|l| l.delete_error(info.clone()));
     }
 }
 
@@ -1016,7 +1056,11 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub fn new(test: Option<bool>, dry_run_deploy: Option<bool>, resource_expiration_in_seconds: Option<u32>) -> Self {
+    pub fn new(
+        test: Option<bool>,
+        dry_run_deploy: Option<bool>,
+        resource_expiration_in_seconds: Option<u32>,
+    ) -> Self {
         Metadata {
             test,
             dry_run_deploy,

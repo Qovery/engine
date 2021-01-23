@@ -49,7 +49,7 @@ pub struct GitRepository {
     pub url: String,
     pub credentials: Option<Credentials>,
     pub commit_id: String,
-    pub dockerfile_path: String,
+    pub dockerfile_path: Option<String>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

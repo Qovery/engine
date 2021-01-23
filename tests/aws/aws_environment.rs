@@ -144,7 +144,7 @@ fn deploy_dockerfile_not_exist() {
                 app.branch = "dockerfile-not-exist".to_string();
                 app.commit_id = "5cd900a07a17c7aa3c14cb5cb82c62e19219d57c".to_string();
                 app.environment_variables = vec![];
-                app.dockerfile_path = "".to_string();
+                app.dockerfile_path = Some("".to_string());
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();

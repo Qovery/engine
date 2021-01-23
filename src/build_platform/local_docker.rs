@@ -362,13 +362,13 @@ impl BuildPlatform for LocalDocker {
 
         let into_dir_docker_style = format!("{}/.", into_dir.as_str());
 
-        let dockerfile_relative_path = match build.git_repository.dockerfile_path.trim() {
-            "" | "." | "/" | "/." | "./" | "Dockerfile" => "Dockerfile",
-            dockerfile_root_path => dockerfile_root_path,
+        let dockerfile_relative_path = match &build.git_repository.dockerfile_path {
+            Some(dockerfile_relative_path) => match dockerfile_relative_path.trim() {
+                "" | "." | "/" | "/." | "./" | "Dockerfile" => Some("Dockerfile"),
+                dockerfile_root_path => Some(dockerfile_root_path),
+            },
+            None => None,
         };
-
-        let dockerfile_complete_path =
-            format!("{}/{}", into_dir.as_str(), dockerfile_relative_path);
 
         let mut disable_build_cache = false;
 
@@ -402,9 +402,20 @@ impl BuildPlatform for LocalDocker {
 
         let application_id = build.image.application_id.clone();
 
-        let result = match Path::new(dockerfile_complete_path.as_str()).exists() {
+        let dockerfile_exists = match dockerfile_relative_path {
+            Some(path) => Path::new(path).exists(),
+            None => false,
+        };
+
+        let result = match dockerfile_exists {
             true => {
                 // build container from the provided Dockerfile
+                let dockerfile_complete_path = format!(
+                    "{}/{}",
+                    into_dir.as_str(),
+                    dockerfile_relative_path.unwrap()
+                );
+
                 self.build_image_with_docker(
                     build,
                     dockerfile_complete_path.as_str(),
