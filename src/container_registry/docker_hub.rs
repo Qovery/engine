@@ -7,8 +7,7 @@ use crate::cmd;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::EngineErrorCause;
 use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 
 pub struct DockerHub {
@@ -104,10 +103,7 @@ impl ContainerRegistry for DockerHub {
                 _ => false,
             },
             Err(e) => {
-                error!(
-                    "While trying to retrieve if DockerHub repository exist {:?}",
-                    e
-                );
+                error!("While trying to retrieve if DockerHub repository exist {:?}", e);
                 false
             }
         }
@@ -121,22 +117,17 @@ impl ContainerRegistry for DockerHub {
 
         match cmd::utilities::exec_with_envs(
             "docker",
-            vec![
-                "login",
-                "-u",
-                self.login.as_str(),
-                "-p",
-                self.password.as_str(),
-            ],
+            vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
             envs.clone(),
         ) {
             Err(_) => {
-                return Err(
-                    self.engine_error(
-                        EngineErrorCause::User("Your DockerHub account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials."),
-                        format!("failed to login to DockerHub {}", self.name_with_id()))
-                );
+                return Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "Your DockerHub account seems to be no longer valid (bad Credentials). \
+                    Please contact your Organization administrator to fix or change the Credentials.",
+                    ),
+                    format!("failed to login to DockerHub {}", self.name_with_id()),
+                ));
             }
             _ => {}
         };
@@ -154,7 +145,7 @@ impl ContainerRegistry for DockerHub {
 
             info!("{}", info_message.as_str());
 
-            listeners_helper.start_in_progress(ProgressInfo::new(
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
                     id: image.application_id.clone(),
                 },
@@ -175,7 +166,7 @@ impl ContainerRegistry for DockerHub {
             self.name()
         );
 
-        listeners_helper.start_in_progress(ProgressInfo::new(
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
                 id: image.application_id.clone(),
             },
@@ -196,11 +187,7 @@ impl ContainerRegistry for DockerHub {
             Err(_) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
-                    format!(
-                        "failed to tag image ({}) {:?}",
-                        image.name_with_tag(),
-                        image,
-                    ),
+                    format!("failed to tag image ({}) {:?}", image.name_with_tag(), image,),
                 ));
             }
             _ => {}

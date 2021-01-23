@@ -837,14 +837,14 @@ pub enum ProgressLevel {
 }
 
 pub trait ProgressListener: Send + Sync {
-    fn start_in_progress(&self, info: ProgressInfo);
+    fn deployment_in_progress(&self, info: ProgressInfo);
     fn pause_in_progress(&self, info: ProgressInfo);
     fn delete_in_progress(&self, info: ProgressInfo);
     fn error(&self, info: ProgressInfo);
-    fn started(&self, info: ProgressInfo);
+    fn deployed(&self, info: ProgressInfo);
     fn paused(&self, info: ProgressInfo);
     fn deleted(&self, info: ProgressInfo);
-    fn start_error(&self, info: ProgressInfo);
+    fn deployment_error(&self, info: ProgressInfo);
     fn pause_error(&self, info: ProgressInfo);
     fn delete_error(&self, info: ProgressInfo);
 }
@@ -866,8 +866,10 @@ impl<'a> ListenersHelper<'a> {
         ListenersHelper { listeners }
     }
 
-    pub fn start_in_progress(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.start_in_progress(info.clone()));
+    pub fn deployment_in_progress(&self, info: ProgressInfo) {
+        self.listeners
+            .iter()
+            .for_each(|l| l.deployment_in_progress(info.clone()));
     }
 
     pub fn pause_in_progress(&self, info: ProgressInfo) {
@@ -882,8 +884,8 @@ impl<'a> ListenersHelper<'a> {
         self.listeners.iter().for_each(|l| l.error(info.clone()));
     }
 
-    pub fn started(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.started(info.clone()));
+    pub fn deployed(&self, info: ProgressInfo) {
+        self.listeners.iter().for_each(|l| l.deployed(info.clone()));
     }
 
     pub fn paused(&self, info: ProgressInfo) {
@@ -894,8 +896,8 @@ impl<'a> ListenersHelper<'a> {
         self.listeners.iter().for_each(|l| l.deleted(info.clone()));
     }
 
-    pub fn start_error(&self, info: ProgressInfo) {
-        self.listeners.iter().for_each(|l| l.start_error(info.clone()));
+    pub fn deployment_error(&self, info: ProgressInfo) {
+        self.listeners.iter().for_each(|l| l.deployment_error(info.clone()));
     }
 
     pub fn pause_error(&self, info: ProgressInfo) {

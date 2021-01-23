@@ -393,7 +393,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        listeners_helper.start_in_progress(ProgressInfo::new(
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Infrastructure {
                 execution_id: self.context.execution_id().to_string(),
             },

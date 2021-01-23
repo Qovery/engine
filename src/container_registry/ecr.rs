@@ -4,8 +4,7 @@ use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
     CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesRequest, Ecr, EcrClient,
-    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest,
-    Repository,
+    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -14,8 +13,7 @@ use crate::cmd;
 use crate::container_registry::{ContainerRegistry, Kind, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::runtime::async_run;
 
@@ -121,30 +119,18 @@ impl ECR {
             Err(_) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
-                    format!(
-                        "failed to tag image ({}) {:?}",
-                        image.name_with_tag(),
-                        image,
-                    ),
+                    format!("failed to tag image ({}) {:?}", image.name_with_tag(), image,),
                 ));
             }
             _ => {}
         };
 
         // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
-        match cmd::utilities::exec_with_envs(
-            "docker",
-            vec!["push", dest.as_str()],
-            self.docker_envs(),
-        ) {
+        match cmd::utilities::exec_with_envs("docker", vec!["push", dest.as_str()], self.docker_envs()) {
             Err(_) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
-                    format!(
-                        "failed to push image {:?} into ECR {}",
-                        image,
-                        self.name_with_id(),
-                    ),
+                    format!("failed to push image {:?} into ECR {}", image, self.name_with_id(),),
                 ));
             }
             _ => {}
@@ -359,20 +345,19 @@ impl ContainerRegistry for ECR {
             ],
             self.docker_envs(),
         ) {
-            Err(_) => return Err(
-                self.engine_error(
-                    EngineErrorCause::User("Your ECR account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials."),
-                    format!("failed to login to ECR {}", self.name_with_id()))
-            ),
+            Err(_) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "Your ECR account seems to be no longer valid (bad Credentials). \
+                    Please contact your Organization administrator to fix or change the Credentials.",
+                    ),
+                    format!("failed to login to ECR {}", self.name_with_id()),
+                ))
+            }
             _ => {}
         };
 
-        let dest = format!(
-            "{}:{}",
-            repository.repository_uri.unwrap(),
-            image.tag.as_str()
-        );
+        let dest = format!("{}:{}", repository.repository_uri.unwrap(), image.tag.as_str());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -386,7 +371,7 @@ impl ContainerRegistry for ECR {
 
             info!("{}", info_message.as_str());
 
-            listeners_helper.start_in_progress(ProgressInfo::new(
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
                     id: image.application_id.clone(),
                 },
@@ -409,7 +394,7 @@ impl ContainerRegistry for ECR {
 
         info!("{}", info_message.as_str());
 
-        listeners_helper.start_in_progress(ProgressInfo::new(
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
                 id: image.application_id.clone(),
             },
@@ -423,9 +408,7 @@ impl ContainerRegistry for ECR {
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
         // TODO change this
-        Ok(PushResult {
-            image: image.clone(),
-        })
+        Ok(PushResult { image: image.clone() })
     }
 }
 

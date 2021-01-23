@@ -8,8 +8,7 @@ use crate::container_registry::PushResult;
 use crate::engine::Engine;
 use crate::error::EngineError;
 use crate::models::{
-    Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo,
-    ProgressLevel,
+    Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel,
 };
 
 pub struct Transaction<'a> {
@@ -71,12 +70,10 @@ impl<'a> Transaction<'a> {
         let _ = self.check_environment_action(environment_action)?;
 
         // add build step
-        self.steps
-            .push(Step::BuildEnvironment(environment_action, option));
+        self.steps.push(Step::BuildEnvironment(environment_action, option));
 
         // add deployment step
-        self.steps
-            .push(Step::DeployEnvironment(kubernetes, environment_action));
+        self.steps.push(Step::DeployEnvironment(kubernetes, environment_action));
 
         Ok(())
     }
@@ -88,8 +85,7 @@ impl<'a> Transaction<'a> {
     ) -> Result<(), EnvironmentError> {
         let _ = self.check_environment_action(environment_action)?;
 
-        self.steps
-            .push(Step::PauseEnvironment(kubernetes, environment_action));
+        self.steps.push(Step::PauseEnvironment(kubernetes, environment_action));
         Ok(())
     }
 
@@ -100,15 +96,11 @@ impl<'a> Transaction<'a> {
     ) -> Result<(), EnvironmentError> {
         let _ = self.check_environment_action(environment_action)?;
 
-        self.steps
-            .push(Step::DeleteEnvironment(kubernetes, environment_action));
+        self.steps.push(Step::DeleteEnvironment(kubernetes, environment_action));
         Ok(())
     }
 
-    fn check_environment_action(
-        &self,
-        environment_action: &EnvironmentAction,
-    ) -> Result<(), EnvironmentError> {
+    fn check_environment_action(&self, environment_action: &EnvironmentAction) -> Result<(), EnvironmentError> {
         match environment_action {
             EnvironmentAction::Environment(te) => match te.is_valid() {
                 Ok(_) => {}
@@ -144,13 +136,10 @@ impl<'a> Transaction<'a> {
         let external_service_and_result_tuples = external_services_to_build
             .map(|es| {
                 let image = es.to_image();
-                let build_result = if option.force_build
-                    || !self.engine.container_registry().does_image_exists(&image)
+                let build_result = if option.force_build || !self.engine.container_registry().does_image_exists(&image)
                 {
                     // only if the build is forced OR if the image does not exist in the registry
-                    self.engine
-                        .build_platform()
-                        .build(es.to_build(), option.force_build)
+                    self.engine.build_platform().build(es.to_build(), option.force_build)
                 } else {
                     // use the cache
                     Ok(BuildResult::new(es.to_build()))
@@ -170,13 +159,10 @@ impl<'a> Transaction<'a> {
         let application_and_result_tuples = apps_to_build
             .map(|app| {
                 let image = app.to_image();
-                let build_result = if option.force_build
-                    || !self.engine.container_registry().does_image_exists(&image)
+                let build_result = if option.force_build || !self.engine.container_registry().does_image_exists(&image)
                 {
                     // only if the build is forced OR if the image does not exist in the registry
-                    self.engine
-                        .build_platform()
-                        .build(app.to_build(), option.force_build)
+                    self.engine.build_platform().build(app.to_build(), option.force_build)
                 } else {
                     // use the cache
                     Ok(BuildResult::new(app.to_build()))
@@ -186,8 +172,7 @@ impl<'a> Transaction<'a> {
             })
             .collect::<Vec<_>>();
 
-        let mut applications: Vec<Box<dyn Application>> =
-            Vec::with_capacity(application_and_result_tuples.len());
+        let mut applications: Vec<Box<dyn Application>> = Vec::with_capacity(application_and_result_tuples.len());
 
         for (external_service, result) in external_service_and_result_tuples {
             // catch build error, can't do it in Fn
@@ -217,11 +202,7 @@ impl<'a> Transaction<'a> {
             // catch build error, can't do it in Fn
             let build_result = match result {
                 Err(err) => {
-                    error!(
-                        "build error for application {}: {:?}",
-                        application.id.as_str(),
-                        err
-                    );
+                    error!("build error for application {}: {:?}", application.id.as_str(), err);
                     return Err(err);
                 }
                 Ok(build_result) => build_result,
@@ -248,11 +229,7 @@ impl<'a> Transaction<'a> {
         let application_and_push_results: Vec<_> = applications
             .into_iter()
             .map(|mut app| {
-                match self
-                    .engine
-                    .container_registry()
-                    .push(app.image(), option.force_push)
-                {
+                match self.engine.container_registry().push(app.image(), option.force_push) {
                     Ok(push_result) => {
                         // I am not a big fan of doing that but it's the most effective way
                         app.set_image(push_result.image.clone());
@@ -277,10 +254,7 @@ impl<'a> Transaction<'a> {
         Ok(results)
     }
 
-    fn check_environment(
-        &self,
-        environment: &crate::cloud_provider::environment::Environment,
-    ) -> TransactionResult {
+    fn check_environment(&self, environment: &crate::cloud_provider::environment::Environment) -> TransactionResult {
         match environment.is_valid() {
             Err(engine_error) => {
                 warn!("ROLLBACK STARTED! an error occurred {:?}", engine_error);
@@ -350,11 +324,7 @@ impl<'a> Transaction<'a> {
             for application in environment.applications.iter() {
                 let build = application.to_build();
 
-                match application.to_application(
-                    self.engine.context(),
-                    &build.image,
-                    self.engine.cloud_provider(),
-                ) {
+                match application.to_application(self.engine.context(), &build.image, self.engine.cloud_provider()) {
                     Some(x) => _applications.push(x),
                     None => {}
                 }
@@ -363,30 +333,21 @@ impl<'a> Transaction<'a> {
             for external_service in environment.external_services.iter() {
                 let build = external_service.to_build();
 
-                match external_service.to_application(
-                    self.engine.context(),
-                    &build.image,
-                    self.engine.cloud_provider(),
-                ) {
+                match external_service.to_application(self.engine.context(), &build.image, self.engine.cloud_provider())
+                {
                     Some(x) => _applications.push(x),
                     None => {}
                 }
             }
 
-            let qe_environment = environment.to_qe_environment(
-                self.engine.context(),
-                &_applications,
-                self.engine.cloud_provider(),
-            );
+            let qe_environment =
+                environment.to_qe_environment(self.engine.context(), &_applications, self.engine.cloud_provider());
 
             qe_environment
         };
 
         match environment_action {
-            EnvironmentAction::EnvironmentWithFailover(
-                target_environment,
-                failover_environment,
-            ) => {
+            EnvironmentAction::EnvironmentWithFailover(target_environment, failover_environment) => {
                 // let's reverse changes and rollback on the provided failover version
                 let target_qe_environment = qe_environment(&target_environment);
                 let failover_qe_environment = qe_environment(&failover_environment);
@@ -436,8 +397,7 @@ impl<'a> Transaction<'a> {
     }
 
     pub fn commit(&mut self) -> TransactionResult {
-        let mut applications_by_environment: HashMap<&Environment, Vec<Box<dyn Application>>> =
-            HashMap::new();
+        let mut applications_by_environment: HashMap<&Environment, Vec<Box<dyn Application>>> = HashMap::new();
 
         for step in self.steps.iter() {
             // execution loop
@@ -488,8 +448,7 @@ impl<'a> Transaction<'a> {
                     let apps_result = match self._build_applications(target_environment, option) {
                         Ok(applications) => match self._push_applications(applications, option) {
                             Ok(results) => {
-                                let applications =
-                                    results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
+                                let applications = results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
 
                                 Ok(applications)
                             }
@@ -518,28 +477,20 @@ impl<'a> Transaction<'a> {
                     match environment_action {
                         EnvironmentAction::EnvironmentWithFailover(_, fe) => {
                             let apps_result = match self._build_applications(fe, option) {
-                                Ok(applications) => {
-                                    match self._push_applications(applications, option) {
-                                        Ok(results) => {
-                                            let applications = results
-                                                .into_iter()
-                                                .map(|(app, _)| app)
-                                                .collect::<Vec<_>>();
+                                Ok(applications) => match self._push_applications(applications, option) {
+                                    Ok(results) => {
+                                        let applications = results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
 
-                                            Ok(applications)
-                                        }
-                                        Err(err) => Err(err),
+                                        Ok(applications)
                                     }
-                                }
+                                    Err(err) => Err(err),
+                                },
                                 Err(err) => Err(err),
                             };
                             if apps_result.is_err() {
                                 // should never be triggered because core always should ask for working failover environment
                                 let commit_error = apps_result.err().unwrap();
-                                error!(
-                                    "An error occurred on failover application  {:?}",
-                                    commit_error
-                                );
+                                error!("An error occurred on failover application  {:?}", commit_error);
                             }
                         }
                         _ => {}
@@ -641,7 +592,7 @@ impl<'a> Transaction<'a> {
 
             if !is_error {
                 match action {
-                    Action::Create => lh.started(progress_info),
+                    Action::Create => lh.deployed(progress_info),
                     Action::Pause => lh.paused(progress_info),
                     Action::Delete => lh.deleted(progress_info),
                     Action::Nothing => {} // nothing to do here?
@@ -650,7 +601,7 @@ impl<'a> Transaction<'a> {
             }
 
             match action {
-                Action::Create => lh.start_error(progress_info),
+                Action::Create => lh.deployment_error(progress_info),
                 Action::Pause => lh.pause_error(progress_info),
                 Action::Delete => lh.delete_error(progress_info),
                 Action::Nothing => {} // nothing to do here?
@@ -675,23 +626,11 @@ impl<'a> Transaction<'a> {
                 // !!! don't change the order
                 // terminal update
                 for service in &qe_environment.stateful_services {
-                    send_progress(
-                        kubernetes,
-                        &target_environment.action,
-                        service,
-                        execution_id,
-                        true,
-                    );
+                    send_progress(kubernetes, &target_environment.action, service, execution_id, true);
                 }
 
                 for service in &qe_environment.stateless_services {
-                    send_progress(
-                        kubernetes,
-                        &target_environment.action,
-                        service,
-                        execution_id,
-                        true,
-                    );
+                    send_progress(kubernetes, &target_environment.action, service, execution_id, true);
                 }
 
                 return rollback_result;
@@ -699,23 +638,11 @@ impl<'a> Transaction<'a> {
             _ => {
                 // terminal update
                 for service in &qe_environment.stateful_services {
-                    send_progress(
-                        kubernetes,
-                        &target_environment.action,
-                        service,
-                        execution_id,
-                        false,
-                    );
+                    send_progress(kubernetes, &target_environment.action, service, execution_id, false);
                 }
 
                 for service in &qe_environment.stateless_services {
-                    send_progress(
-                        kubernetes,
-                        &target_environment.action,
-                        service,
-                        execution_id,
-                        false,
-                    );
+                    send_progress(kubernetes, &target_environment.action, service, execution_id, false);
                 }
             }
         };

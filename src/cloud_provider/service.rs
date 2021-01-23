@@ -17,9 +17,7 @@ use crate::cmd::structs::LabelsContent;
 use crate::error::{cast_simple_error_to_engine_error, StringError};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::ProgressLevel::Info;
-use crate::models::{
-    Context, Listen, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::models::{Context, Listen, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 
 pub trait Service {
     fn context(&self) -> &Context;
@@ -120,9 +118,7 @@ pub trait StatelessService: Service + Create + Pause + Delete {
     }
 }
 
-pub trait StatefulService:
-    Service + Create + Pause + Delete + Backup + Clone + Upgrade + Downgrade
-{
+pub trait StatefulService: Service + Create + Pause + Delete + Backup + Clone + Upgrade + Downgrade {
     fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
         match self.action() {
             crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
@@ -329,10 +325,7 @@ pub fn default_tera_context(
 
 /// deploy a stateless service created by the user (E.g: App or External Service)
 /// the difference with `deploy_service(..)` is that this function provides the thrown error in case of failure
-pub fn deploy_user_stateless_service<T>(
-    target: &DeploymentTarget,
-    service: &T,
-) -> Result<(), EngineError>
+pub fn deploy_user_stateless_service<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
 where
     T: Service + Helm,
 {
@@ -404,9 +397,7 @@ where
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             namespace_labels,
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
@@ -420,9 +411,7 @@ where
             helm_release_name.as_str(),
             workspace_dir.as_str(),
             service.start_timeout(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
@@ -438,9 +427,7 @@ where
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             service.selector().as_str(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
@@ -448,10 +435,7 @@ where
 }
 
 /// do specific operations on a stateless service deployment error
-pub fn deploy_stateless_service_error<T>(
-    target: &DeploymentTarget,
-    service: &T,
-) -> Result<(), EngineError>
+pub fn deploy_stateless_service_error<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
 where
     T: Service + Helm,
 {
@@ -470,9 +454,7 @@ where
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
@@ -484,9 +466,7 @@ where
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 helm_release_name.as_str(),
-                kubernetes
-                    .cloud_provider()
-                    .credentials_environment_variables(),
+                kubernetes.cloud_provider().credentials_environment_variables(),
             ),
         )?;
     }
@@ -494,11 +474,7 @@ where
     Ok(())
 }
 
-pub fn delete_stateless_service<T>(
-    target: &DeploymentTarget,
-    service: &T,
-    is_error: bool,
-) -> Result<(), EngineError>
+pub fn delete_stateless_service<T>(target: &DeploymentTarget, service: &T, is_error: bool) -> Result<(), EngineError>
 where
     T: Service + Helm,
 {
@@ -510,11 +486,7 @@ where
     let helm_release_name = service.helm_release_name();
 
     if is_error {
-        let _ = get_stateless_resource_information(
-            kubernetes,
-            environment,
-            service.selector().as_str(),
-        )?;
+        let _ = get_stateless_resource_information(kubernetes, environment, service.selector().as_str())?;
     }
 
     // clean the resource
@@ -620,10 +592,7 @@ where
                 Some(_) => Some(vec![
                     (LabelsContent {
                         name: "ttl".into(),
-                        value: format!(
-                            "{}",
-                            service.context().resource_expiration_in_seconds().unwrap()
-                        ),
+                        value: format!("{}", service.context().resource_expiration_in_seconds().unwrap()),
                     }),
                 ]),
                 None => None,
@@ -637,9 +606,7 @@ where
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     namespace_labels,
-                    kubernetes
-                        .cloud_provider()
-                        .credentials_environment_variables(),
+                    kubernetes.cloud_provider().credentials_environment_variables(),
                 ),
             )?;
 
@@ -653,9 +620,7 @@ where
                     service.helm_release_name().as_str(),
                     workspace_dir.as_str(),
                     service.start_timeout(),
-                    kubernetes
-                        .cloud_provider()
-                        .credentials_environment_variables(),
+                    kubernetes.cloud_provider().credentials_environment_variables(),
                 ),
             )?;
 
@@ -675,9 +640,7 @@ where
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 service.selector().as_str(),
-                kubernetes
-                    .cloud_provider()
-                    .credentials_environment_variables(),
+                kubernetes.cloud_provider().credentials_environment_variables(),
             ) {
                 Ok(Some(true)) => {}
                 _ => {
@@ -746,13 +709,10 @@ where
                 ),
             )?;
 
-            match crate::cmd::terraform::terraform_exec_with_init_plan_apply_destroy(
-                workspace_dir.as_str(),
-            ) {
+            match crate::cmd::terraform::terraform_exec_with_init_plan_apply_destroy(workspace_dir.as_str()) {
                 Ok(_) => {
                     info!("let's delete secrets containing tfstates");
-                    let _ =
-                        delete_terraform_tfstate_secret(*kubernetes, &get_tfstate_name(service));
+                    let _ = delete_terraform_tfstate_secret(*kubernetes, &get_tfstate_name(service));
                 }
                 Err(e) => {
                     let message = format!("{:?}", e);
@@ -766,21 +726,14 @@ where
             let helm_release_name = service.helm_release_name();
 
             // clean the resource
-            let _ = do_stateless_service_cleanup(
-                *kubernetes,
-                *environment,
-                helm_release_name.as_str(),
-            )?;
+            let _ = do_stateless_service_cleanup(*kubernetes, *environment, helm_release_name.as_str())?;
         }
     }
 
     Ok(())
 }
 
-pub fn check_service_version<T>(
-    result: Result<String, StringError>,
-    service: &T,
-) -> Result<String, EngineError>
+pub fn check_service_version<T>(result: Result<String, StringError>, service: &T) -> Result<String, EngineError>
 where
     T: Service + Listen,
 {
@@ -805,7 +758,7 @@ where
                     service.context().execution_id(),
                 );
 
-                listeners_helper.start_in_progress(progress_info);
+                listeners_helper.deployment_in_progress(progress_info);
             }
 
             Ok(version)
@@ -826,7 +779,7 @@ where
                 service.context().execution_id(),
             );
 
-            listeners_helper.start_error(progress_info);
+            listeners_helper.deployment_error(progress_info);
 
             error!("{}", err);
 
@@ -841,19 +794,14 @@ where
     }
 }
 
-fn delete_terraform_tfstate_secret(
-    kubernetes: &dyn Kubernetes,
-    secret_name: &str,
-) -> Result<(), EngineError> {
+fn delete_terraform_tfstate_secret(kubernetes: &dyn Kubernetes, secret_name: &str) -> Result<(), EngineError> {
     let config_file_path = kubernetes.config_file_path()?;
 
     //create the namespace to insert the tfstate in secrets
     let _ = kubectl_exec_delete_secret(
         config_file_path,
         secret_name,
-        kubernetes
-            .cloud_provider()
-            .credentials_environment_variables(),
+        kubernetes.cloud_provider().credentials_environment_variables(),
     );
 
     Ok(())
@@ -890,7 +838,7 @@ where
     );
 
     match action {
-        CheckAction::Deploy => listeners_helper.start_in_progress(progress_info),
+        CheckAction::Deploy => listeners_helper.deployment_in_progress(progress_info),
         CheckAction::Pause => listeners_helper.pause_in_progress(progress_info),
         CheckAction::Delete => listeners_helper.delete_in_progress(progress_info),
     }
@@ -920,7 +868,7 @@ where
             );
 
             match action {
-                CheckAction::Deploy => listeners_helper.start_error(progress_info),
+                CheckAction::Deploy => listeners_helper.deployment_error(progress_info),
                 CheckAction::Pause => listeners_helper.pause_error(progress_info),
                 CheckAction::Delete => listeners_helper.delete_error(progress_info),
             }
@@ -942,7 +890,7 @@ where
             );
 
             match action {
-                CheckAction::Deploy => listeners_helper.start_error(progress_info),
+                CheckAction::Deploy => listeners_helper.deployment_error(progress_info),
                 CheckAction::Pause => listeners_helper.pause_error(progress_info),
                 CheckAction::Delete => listeners_helper.delete_error(progress_info),
             }
@@ -963,7 +911,7 @@ where
             );
 
             match action {
-                CheckAction::Deploy => listeners_helper.start_in_progress(progress_info),
+                CheckAction::Deploy => listeners_helper.deployment_in_progress(progress_info),
                 CheckAction::Pause => listeners_helper.pause_in_progress(progress_info),
                 CheckAction::Delete => listeners_helper.delete_in_progress(progress_info),
             }
@@ -998,9 +946,7 @@ where
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             selector.as_str(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
@@ -1014,9 +960,7 @@ where
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             selector.as_str(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
@@ -1028,10 +972,7 @@ where
                         result.push(format!("terminated state message: {}", message));
                     }
 
-                    result.push(format!(
-                        "terminated state exit code: {}",
-                        terminated.exit_code
-                    ));
+                    result.push(format!("terminated state exit code: {}", terminated.exit_code));
                 }
 
                 if let Some(waiting) = last_state.waiting {
@@ -1050,17 +991,13 @@ where
         crate::cmd::kubectl::kubectl_exec_get_event(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
     let pod_name_start = format!("{}-", service.name());
     for event in events.items {
-        if event.type_.to_lowercase() != "normal"
-            && event.involved_object.name.starts_with(&pod_name_start)
-        {
+        if event.type_.to_lowercase() != "normal" && event.involved_object.name.starts_with(&pod_name_start) {
             if let Some(message) = event.message {
                 result.push(format!("{}: {}", event.type_, message));
             }
@@ -1086,9 +1023,7 @@ pub fn get_stateless_resource_information(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             selector,
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     ) {
         Ok(output) => {
@@ -1109,9 +1044,7 @@ pub fn get_stateless_resource_information(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             selector,
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     ) {
         Ok(output) => {
@@ -1141,9 +1074,7 @@ pub fn do_stateless_service_cleanup(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name,
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
@@ -1158,9 +1089,7 @@ pub fn do_stateless_service_cleanup(
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 helm_release_name,
-                kubernetes
-                    .cloud_provider()
-                    .credentials_environment_variables(),
+                kubernetes.cloud_provider().credentials_environment_variables(),
             ),
         )?;
     }
@@ -1238,7 +1167,7 @@ where
                 let progress_info = std::clone::Clone::clone(&progress_info);
 
                 match action {
-                    Action::Create => listeners_helper.start_in_progress(progress_info),
+                    Action::Create => listeners_helper.deployment_in_progress(progress_info),
                     Action::Pause => listeners_helper.pause_in_progress(progress_info),
                     Action::Delete => listeners_helper.delete_in_progress(progress_info),
                     Action::Nothing => {} // should not happens

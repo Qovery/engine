@@ -10,12 +10,8 @@ use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::dns_provider::DnsProvider;
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
-};
-use crate::models::{
-    Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath,
-};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
+use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath};
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 
@@ -37,9 +33,9 @@ pub trait Kubernetes: Listen {
         let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
         let object_key = format!("{}.yaml", self.id());
 
-        let (string_path, mut file) =
-            self.config_file_store()
-                .get(bucket_name.as_str(), object_key.as_str(), true)?;
+        let (string_path, mut file) = self
+            .config_file_store()
+            .get(bucket_name.as_str(), object_key.as_str(), true)?;
 
         let metadata = match file.metadata() {
             Ok(metadata) => metadata,
@@ -150,19 +146,14 @@ pub struct Resources {
 
 /// common function to deploy a complete environment through Kubernetes and the different
 /// managed services.
-pub fn deploy_environment(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-) -> Result<(), EngineError> {
+pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
     let stateful_deployment_target = match environment.kind {
         crate::cloud_provider::environment::Kind::Production => {
             DeploymentTarget::ManagedServices(kubernetes, environment)
         }
-        crate::cloud_provider::environment::Kind::Development => {
-            DeploymentTarget::SelfHosted(kubernetes, environment)
-        }
+        crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
     };
 
     // do not deploy if there is not enough resources
@@ -247,13 +238,10 @@ pub fn deploy_environment(
 }
 
 /// common function to react to an error when a environment deployment goes wrong
-pub fn deploy_environment_error(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-) -> Result<(), EngineError> {
+pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
-    listeners_helper.start_in_progress(ProgressInfo::new(
+    listeners_helper.deployment_in_progress(ProgressInfo::new(
         ProgressScope::Environment {
             id: kubernetes.context().execution_id().to_string(),
         },
@@ -266,9 +254,7 @@ pub fn deploy_environment_error(
         crate::cloud_provider::environment::Kind::Production => {
             DeploymentTarget::ManagedServices(kubernetes, environment)
         }
-        crate::cloud_provider::environment::Kind::Development => {
-            DeploymentTarget::SelfHosted(kubernetes, environment)
-        }
+        crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
     };
 
     // clean up all stateful services (database)
@@ -307,19 +293,14 @@ pub fn deploy_environment_error(
 }
 
 /// common kubernetes function to pause a complete environment
-pub fn pause_environment(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-) -> Result<(), EngineError> {
+pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
     let stateful_deployment_target = match environment.kind {
         crate::cloud_provider::environment::Kind::Production => {
             DeploymentTarget::ManagedServices(kubernetes, environment)
         }
-        crate::cloud_provider::environment::Kind::Development => {
-            DeploymentTarget::SelfHosted(kubernetes, environment)
-        }
+        crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
     };
 
     // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
@@ -389,19 +370,14 @@ pub fn pause_environment(
 }
 
 /// common kubernetes function to delete a complete environment
-pub fn delete_environment(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-) -> Result<(), EngineError> {
+pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
     let stateful_deployment_target = match environment.kind {
         crate::cloud_provider::environment::Kind::Production => {
             DeploymentTarget::ManagedServices(kubernetes, environment)
         }
-        crate::cloud_provider::environment::Kind::Development => {
-            DeploymentTarget::SelfHosted(kubernetes, environment)
-        }
+        crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
     };
 
     // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
@@ -471,9 +447,7 @@ pub fn delete_environment(
     let _ = kubectl::kubectl_exec_delete_namespace(
         kubernetes.config_file_path()?,
         &environment.namespace(),
-        kubernetes
-            .cloud_provider()
-            .credentials_environment_variables(),
+        kubernetes.cloud_provider().credentials_environment_variables(),
     );
 
     Ok(())
@@ -491,9 +465,7 @@ pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
     let cause = EngineErrorCause::User("Contact your Organization administrator and consider to \
             add one more node or upgrade your nodes configuration. If not possible, pause or delete unused environments");
 
-    if required_resources.cpu > resources.free_cpu
-        && required_resources.ram_in_mib > resources.free_ram_in_mib
-    {
+    if required_resources.cpu > resources.free_cpu && required_resources.ram_in_mib > resources.free_ram_in_mib {
         // not enough cpu and ram to deploy environment
         let message = format!(
             "There is not enough CPU and RAM resources on the Kubernetes '{}' cluster. \
