@@ -93,10 +93,7 @@ pub struct CheckTaskOrderRequest {
 
 impl CheckTaskOrderRequest {
     pub fn new(group_id: String, created_at: DateTime<Utc>) -> Self {
-        CheckTaskOrderRequest {
-            group_id,
-            created_at,
-        }
+        CheckTaskOrderRequest { group_id, created_at }
     }
 
     pub fn as_json_string(&self) -> String {
@@ -126,9 +123,7 @@ pub struct GetTaskManagerInfoRequest<'a> {
 
 impl<'a> GetTaskManagerInfoRequest<'a> {
     pub fn new(requester_engine_id: &'a str) -> Self {
-        GetTaskManagerInfoRequest {
-            requester_engine_id,
-        }
+        GetTaskManagerInfoRequest { requester_engine_id }
     }
 
     pub fn as_json_string(&self) -> String {
@@ -144,11 +139,7 @@ pub struct GetTaskManagerInfoResponse {
 }
 
 impl GetTaskManagerInfoResponse {
-    pub fn new<T: Into<String>>(
-        engine_id: T,
-        incoming_task_subject_name: T,
-        remaining_tasks_to_run: usize,
-    ) -> Self {
+    pub fn new<T: Into<String>>(engine_id: T, incoming_task_subject_name: T, remaining_tasks_to_run: usize) -> Self {
         GetTaskManagerInfoResponse {
             engine_id: engine_id.into(),
             incoming_task_subject_name: incoming_task_subject_name.into(),

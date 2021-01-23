@@ -105,7 +105,21 @@ impl Task for InfrastructureTask {
             sender: sender.clone(),
         }));
 
-        let engine = self.request.engine(&self.context, my_progress_listener);
+        let engine = match self.request.engine(&self.context, my_progress_listener) {
+            Ok(engine) => engine,
+            Err(err) => {
+                send_progress(
+                    self,
+                    &self.request,
+                    sender,
+                    self.action_context(ProgressLevel::Error),
+                    Some(format!("failed to create engine {:?}", err)),
+                    true,
+                    true,
+                );
+                return;
+            }
+        };
 
         let session = match engine.session() {
             Ok(session) => session,
@@ -117,7 +131,7 @@ impl Task for InfrastructureTask {
                     self.action_context(ProgressLevel::Error),
                     Some(format!("failed to get engine session {:?}", err)),
                     true,
-                    false,
+                    true,
                 );
 
                 return;
@@ -125,9 +139,7 @@ impl Task for InfrastructureTask {
         };
 
         let mut tx = session.transaction();
-
         let nodes = self.request.cloud_provider.kubernetes.to_engine_kubernetes_nodes();
-
         let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             engine.context(),
             engine.cloud_provider(),
@@ -160,8 +172,7 @@ impl Task for InfrastructureTask {
                 file.as_str(),
             ) {
                 Ok(_) => {
-                    let _ = fs::remove_file(file)
-                        .map_err(|err| error!("Cannot delete file {}", err));
+                    let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));
                 }
                 Err(e) => error!("Error while uploading archive {:?}", e),
             },
@@ -256,7 +267,22 @@ impl Task for EnvironmentTask {
             sender: sender.clone(),
         }));
 
-        let engine = self.request.engine(&self.context, my_progress_listener);
+        let engine = match self.request.engine(&self.context, my_progress_listener) {
+            Ok(engine) => engine,
+            Err(err) => {
+                send_progress(
+                    self,
+                    &self.request,
+                    sender,
+                    self.action_context(ProgressLevel::Error),
+                    Some(format!("failed to create engine {:?}", err)),
+                    true,
+                    true,
+                );
+
+                return;
+            }
+        };
 
         // FIXME - return errors with Sender
         let session = match engine.session() {
@@ -331,8 +357,7 @@ impl Task for EnvironmentTask {
                 file.as_str(),
             ) {
                 Ok(_) => {
-                    let _ = fs::remove_file(file)
-                        .map_err(|err| error!("Cannot remove file {}", err));
+                    let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));
                 }
                 Err(e) => error!("Error while uploading archive {:?}", e),
             },

@@ -218,6 +218,7 @@ function new_release() { ## Release a new engine version with commit ID as tagpr
   prepare_engine
   tag=$(generate_image_tag)
 
+  use_sccache
   check_untracked_files
   build_image
   push_image
@@ -282,14 +283,17 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
   cargo test --package qovery-engine --test lib $test_name -- --ignored --exact
 }
 
-function export_env() { ## Export environment variables from .env file
+function use_sccache() {
   export RUSTC_WRAPPER=/usr/bin/sccache
   if [ ! -z $SCCACHE_REDIS_URI ] ; then
     export SCCACHE_REDIS=$SCCACHE_REDIS_URI
   fi
   sccache --version
   sccache -s
+}
 
+function export_env() { ## Export environment variables from .env file
+  use_sccache
   while IFS= read line ; do
     key=$(echo $line | $awk -F'=' '{ print $1}')
     value=$(echo $line | $sed -r "s,^\w+='(.+)'$,\1,g")
@@ -332,6 +336,19 @@ function all_tests(){ ## Run all tests on qovery-engine
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
 
   return $TESTS_STATUS
+}
+
+function lint() {
+  GITHUB_ENGINE_BRANCH_NAME=$1
+  nb_treads=$2
+  export RUST_LOG=info
+  export_env
+  prepare_engine
+  
+
+  cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
+  # FIXME fix warning in the engine and enable clippy
+  # cargo clippy
 }
 
 function fast_tests(){ ## Run fast tests only on qovery-engine
@@ -432,6 +449,9 @@ prepare_tests)
   ;;
 prepare_engine)
   prepare_engine
+  ;;
+lint)
+  lint
   ;;
 *)
   print_help

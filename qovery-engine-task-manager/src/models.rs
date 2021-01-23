@@ -13,6 +13,7 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, Metadata};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -33,31 +34,48 @@ pub struct Request {
     pub bytes_payload: Vec<u8>,
 }
 
-impl Request {
-    pub fn engine(&self, context: &Context, progress_listener: Listener) -> Engine {
-        let mut build_platform = self.build_platform.to_engine_build_platform(&context);
+#[derive(Debug)]
+pub enum RequestError {
+    CloudProvider(String),
+    ContainerRegistry(String),
+    DnsProvider(String),
+}
 
+impl Request {
+    pub fn engine(&self, context: &Context, progress_listener: Listener) -> Result<Engine, RequestError> {
+        let mut build_platform = self.build_platform.to_engine_build_platform(&context);
         build_platform.add_listener(progress_listener.clone());
 
         let mut cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(&context, self.organization_id.as_str());
+            .to_engine_cloud_provider(context.clone(), self.organization_id.as_str())
+            .ok_or_else(|| RequestError::CloudProvider(format!("Invalid cloud provider info: {:?}", self.cloud_provider)))?;
 
         cloud_provider.add_listener(progress_listener.clone());
 
-        let mut container_registry = self.container_registry.to_engine_container_registry(&context);
+        let mut container_registry = self
+            .container_registry
+            .to_engine_container_registry(context.clone())
+            .ok_or_else(|| {
+                RequestError::ContainerRegistry(format!(
+                    "Invalid container registry info: {:?}",
+                    self.container_registry
+                ))
+            })?;
 
         container_registry.add_listener(progress_listener.clone());
 
-        let dns_provider = self.dns_provider.to_engine_dns_provider(context);
+        let dns_provider = self.dns_provider
+            .to_engine_dns_provider(context.clone())
+            .ok_or_else(|| RequestError::DnsProvider(format!("Invalid DNS provider: {:?}", self.dns_provider)))?;
 
-        Engine::new(
+        Ok(Engine::new(
             context.clone(),
             build_platform,
             container_registry,
             cloud_provider,
             dns_provider,
-        )
+        ))
     }
 
     pub fn environment_action(&self) -> Option<EnvironmentAction> {
@@ -74,7 +92,7 @@ impl Request {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Action {
     Create,
@@ -82,7 +100,7 @@ pub enum Action {
     Delete,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BuildPlatform {
     pub kind: qovery_engine::build_platform::Kind,
     pub id: String,
@@ -100,7 +118,7 @@ impl BuildPlatform {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CloudProvider {
     pub kind: qovery_engine::cloud_provider::Kind,
     pub id: String,
@@ -113,9 +131,9 @@ pub struct CloudProvider {
 impl CloudProvider {
     pub fn to_engine_cloud_provider(
         &self,
-        context: &Context,
+        context: Context,
         organization_id: &str,
-    ) -> Box<dyn qovery_engine::cloud_provider::CloudProvider> {
+    ) -> Option<Box<dyn qovery_engine::cloud_provider::CloudProvider>> {
         let terraform_state_credentials = qovery_engine::cloud_provider::TerraformStateCredentials {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
             secret_access_key: self.terraform_state_credentials.secret_access_key.clone(),
@@ -123,37 +141,37 @@ impl CloudProvider {
         };
 
         match self.kind {
-            qovery_engine::cloud_provider::Kind::Aws => Box::new(AWS::new(
-                context.clone(),
+            qovery_engine::cloud_provider::Kind::Aws => Some(Box::new(AWS::new(
+                context,
                 self.id.as_str(),
                 organization_id,
                 self.name.as_str(),
-                self.options.access_key_id.as_ref().unwrap().as_str(),
-                self.options.secret_access_key.as_ref().unwrap().as_str(),
+                self.options.access_key_id.as_ref()?.as_str(),
+                self.options.secret_access_key.as_ref()?.as_str(),
                 terraform_state_credentials,
-            )),
-            qovery_engine::cloud_provider::Kind::Do => Box::new(DO::new(
-                context.clone(),
+            ))),
+            qovery_engine::cloud_provider::Kind::Do => Some(Box::new(DO::new(
+                context,
                 self.id.as_str(),
                 organization_id,
-                self.options.token.as_ref().unwrap().as_str(),
-                self.options.spaces_access_id.as_ref().unwrap().as_str(),
-                self.options.spaces_secret_key.as_ref().unwrap().as_str(),
+                self.options.token.as_ref()?.as_str(),
+                self.options.spaces_access_id.as_ref()?.as_str(),
+                self.options.spaces_secret_key.as_ref()?.as_str(),
                 self.name.as_str(),
                 terraform_state_credentials,
-            )),
+            ))),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TerraformStateCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,
     pub region: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Kubernetes {
     pub kind: qovery_engine::cloud_provider::kubernetes::Kind,
     pub id: String,
@@ -220,7 +238,7 @@ impl Kubernetes {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Node {
     pub instance_type: String,
 }
@@ -241,7 +259,7 @@ impl Node {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContainerRegistry {
     pub kind: qovery_engine::container_registry::Kind,
     pub id: String,
@@ -252,64 +270,64 @@ pub struct ContainerRegistry {
 impl ContainerRegistry {
     pub fn to_engine_container_registry(
         &self,
-        context: &Context,
-    ) -> Box<dyn qovery_engine::container_registry::ContainerRegistry> {
+        context: Context,
+    ) -> Option<Box<dyn qovery_engine::container_registry::ContainerRegistry>> {
         match self.kind {
-            qovery_engine::container_registry::Kind::DockerHub => Box::new(DockerHub::new(
-                context.clone(),
+            qovery_engine::container_registry::Kind::DockerHub => Some(Box::new(DockerHub::new(
+                context,
                 self.id.as_str(),
                 self.name.as_str(),
-                self.options.login.as_ref().unwrap().as_str(),
-                self.options.password.as_ref().unwrap().as_str(),
-            )),
-            qovery_engine::container_registry::Kind::Ecr => Box::new(ECR::new(
-                context.clone(),
+                self.options.login.as_ref()?.as_str(),
+                self.options.password.as_ref()?.as_str(),
+            ))),
+            qovery_engine::container_registry::Kind::Ecr => Some(Box::new(ECR::new(
+                context,
                 self.id.as_str(),
                 self.name.as_str(),
-                self.options.access_key_id.as_ref().unwrap().as_str(),
-                self.options.secret_access_key.as_ref().unwrap().as_str(),
-                self.options.region.as_ref().unwrap().as_str(),
-            )),
-            qovery_engine::container_registry::Kind::Docr => Box::new(DOCR::new(
-                context.clone(),
+                self.options.access_key_id.as_ref()?.as_str(),
+                self.options.secret_access_key.as_ref()?.as_str(),
+                self.options.region.as_ref()?.as_str(),
+            ))),
+            qovery_engine::container_registry::Kind::Docr => Some(Box::new(DOCR::new(
+                context,
                 self.id.as_str(),
                 self.name.as_str(),
-                self.options.token.as_ref().unwrap().as_str(),
-            )),
+                self.options.token.as_ref()?.as_str(),
+            ))),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DnsProvider {
     pub kind: qovery_engine::dns_provider::Kind,
     pub id: String,
     pub name: String,
     pub domain: String,
-    pub options: Value,
+    pub options: HashMap<String, String>,
 }
 
 impl DnsProvider {
-    pub fn to_engine_dns_provider(&self, context: &Context) -> Box<dyn qovery_engine::dns_provider::DnsProvider> {
+    pub fn to_engine_dns_provider(&self, context: Context) -> Option<Box<dyn qovery_engine::dns_provider::DnsProvider>> {
         match self.kind {
             qovery_engine::dns_provider::Kind::Cloudflare => {
-                let token = self.options.get("cloudflare_api_token").unwrap();
-                let email = self.options.get("cloudflare_email").unwrap();
+                let token  = self.options.get("cloudflare_api_token")?;
+                let email = self.options.get("cloudflare_email")?;
 
-                Box::new(Cloudflare::new(
-                    context.clone(),
+                Some(Box::new(Cloudflare::new(
+                    context,
                     self.id.as_str(),
                     self.name.as_str(),
                     self.domain.as_str(),
-                    token.as_str().unwrap(),
-                    email.as_str().unwrap(),
-                ))
+                    token.as_str(),
+                    email.as_str(),
+                )))
             }
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Options {
     login: Option<String>,
     password: Option<String>,
@@ -321,7 +339,7 @@ pub struct Options {
     region: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Archive {
     pub bucket_name: String,
     pub access_key_id: String,

@@ -5,6 +5,7 @@ variables:
   DOCKER_HOST: tcp://localhost:2375
   DOCKER_TLS_CERTDIR: ""
   WORKSPACE_ROOT_DIR: /builds/qovery/qovery-engine
+  DOCKER_BUILDKIT: 1
 
 services:
   - docker:dind
@@ -16,6 +17,21 @@ stages:
   - deploy
 
 # Feat/fix branches
+
+# linting:
+#   stage: tests
+#   retry: 0
+#   script:
+#     - ./helper.sh lint
+#   only:
+#   - merge_requests
+#   when: always
+#   except:
+#     variables:
+#       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
+#       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+#   tags:
+#     - engine-dedicated
 
 wip-fast-tests:
   stage: tests
@@ -178,15 +194,6 @@ dev-release:
       - dev
 
 # Main branch
-
-main-build:
-  stage: build
-  retry: 1
-  script:
-    - ./helper.sh build_image
-  only:
-    refs:
-      - main
 
 main-release:
   stage: release

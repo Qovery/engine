@@ -8,7 +8,7 @@ extern crate prometheus;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, thread};
@@ -25,10 +25,10 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use uuid::Uuid;
 
-use qovery_engine_shared::{subject, Mode};
 use qovery_engine_task_manager::models::Request;
 use qovery_engine_task_manager::task_manager::{PreRun, Task, TaskManager};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
+use utils::{subject, Mode};
 
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::ErrorKind::BinVersion;
@@ -38,12 +38,13 @@ use crate::models::{
     CheckTaskOrderRequest, CheckTaskOrderResponse, CheckTaskRunningResponse, GetTaskManagerInfoRequest,
     GetTaskManagerInfoResponse, Ping, Response, StatusResponse, TaskSelector,
 };
-use qovery_engine_task_manager::LogErrorOnDrop;
+use qovery_engine_task_manager::utils::LogErrorOnDrop;
 use std::borrow::Borrow;
 
 mod constants;
 mod custom_error;
 mod models;
+mod utils;
 mod webserver;
 
 const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";
@@ -111,7 +112,7 @@ fn is_the_same_task_running(task: &dyn Task, nc: &Connection, mode: &Mode) -> Pr
 ///
 /// TODO: Adapt CheckTaskRunningResponse in order to propagate failure instead of returning True
 fn listen_for_task_running_check_events(
-    task_manager: Arc<Mutex<TaskManager>>,
+    task_manager: Arc<RwLock<TaskManager>>,
     nc: &Connection,
     mode: &Mode,
 ) -> Result<(), Error> {
@@ -122,20 +123,11 @@ fn listen_for_task_running_check_events(
     sub.with_handler(move |msg| {
         let group_id = String::from(String::from_utf8_lossy(&msg.data));
 
-        let is_running = match task_manager.try_lock() {
-            Ok(tm) => tm
-                .get_task_status_by_group_id(&group_id)
-                .map_or(false, |status| status.status.is_in_progress()),
-            Err(err) => {
-                error!(
-                    "Cannot lock taskManager in listen_for_task_running_check_events: {}",
-                    err
-                );
-                // TODO: Fix that
-                // if there is a lock error, we prefer to delay the deployment to not take any risk
-                true
-            }
-        };
+        let is_running = task_manager
+            .read()
+            .unwrap()
+            .get_task_status_by_group_id(&group_id)
+            .map_or(false, |status| status.status.is_in_progress());
 
         info!(
             "task with group id {} is {} here",
@@ -205,7 +197,7 @@ fn is_the_next_task_to_run(task: &dyn Task, nc: &Connection, mode: &Mode) -> Pre
 }
 
 fn listen_for_task_order_execution_check(
-    task_manager: Arc<Mutex<TaskManager>>,
+    task_manager: Arc<RwLock<TaskManager>>,
     nc: &Connection,
     mode: &Mode,
 ) -> Result<(), Error> {
@@ -222,20 +214,14 @@ fn listen_for_task_order_execution_check(
             }
         };
 
-        let is_first_place = match task_manager.try_lock() {
-            Ok(tm) => {
-                // compare the date of the current task to other tasks with the same group id.
-                // if the current task has lower date than other tasks with same group id, it means that it is good to be run 👍
-                // if the current task has higher date than other tasks with same group id, it means that it is not good to be run 👎
-                tm.get_task_status_by_group_id(&req.group_id)
-                    .map_or(true, |status| req.created_at < status.context.task_created_at)
-            }
-            Err(err) => {
-                // if there is a lock error, we prefer to delay the deployment to not take any risk
-                error!("lock error - delay the deployment to not take any risk\n{}", err);
-                false
-            }
-        };
+        // compare the date of the current task to other tasks with the same group id.
+        // if the current task has lower date than other tasks with same group id, it means that it is good to be run 👍
+        // if the current task has higher date than other tasks with same group id, it means that it is not good to be run 👎
+        let is_first_place = task_manager
+            .read()
+            .unwrap()
+            .get_task_status_by_group_id(&req.group_id)
+            .map_or(true, |status| req.created_at < status.context.task_created_at);
 
         info!(
             "task with group id {} is {} to be executed here",
@@ -269,7 +255,7 @@ fn task_manager_info_subject_name(mode: &Mode) -> String {
 /// This function listen for task coming from other engines to load balance them.
 fn listen_for_incoming_load_balancing_tasks(
     engine_id: &str,
-    task_manager: Arc<Mutex<TaskManager>>,
+    task_manager: Arc<RwLock<TaskManager>>,
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_tcp_socket: Option<String>,
@@ -305,19 +291,17 @@ fn listen_for_incoming_load_balancing_tasks(
             .spawn(move || {
                 let _drop_logger = LogErrorOnDrop::new(&thread_name);
 
-                loop {
-                    for msg in incoming_task_sub.next() {
-                        receive_and_queue_task(
-                            msg,
-                            workspace_root_dir.as_ref(),
-                            lib_root_dir.as_str(),
-                            &docker_tcp_socket,
-                            &task_selector,
-                            &nc,
-                            &mode,
-                            &tx,
-                        );
-                    }
+                for msg in incoming_task_sub.messages() {
+                    receive_and_queue_task(
+                        msg,
+                        workspace_root_dir.as_ref(),
+                        lib_root_dir.as_str(),
+                        &docker_tcp_socket,
+                        &task_selector,
+                        &nc,
+                        &mode,
+                        &tx,
+                    );
                 }
             })
             .unwrap()
@@ -337,14 +321,7 @@ fn listen_for_incoming_load_balancing_tasks(
 
                 loop {
                     for msg in tm_info_task_sub.next() {
-                        let remaining_tasks_to_run = match task_manager.try_lock() {
-                            Ok(tm) => tm.remaining_tasks_to_run(),
-                            Err(err) => {
-                                error!("Cannot get lock taskManager in {}: {}", &thread_name, err);
-                                10_000 // set to 10 000 to make the engine unlikely taking a task
-                            }
-                        };
-
+                        let remaining_tasks_to_run = task_manager.read().unwrap().remaining_tasks_to_run();
                         let res = GetTaskManagerInfoResponse::new(
                             engine_id.as_str(),
                             subject_name.as_str(),
@@ -816,19 +793,18 @@ fn using_nats_server(
 
     let (task_tx, task_rx) = unbounded::<Box<dyn Task>>();
     let (quit_tx, quit_rx) = unbounded::<bool>();
-    let task_manager = Arc::new(Mutex::new(TaskManager::new()));
+    let task_manager = Arc::new(RwLock::new(TaskManager::new()));
 
     // Wait for the TaskManager to terminate in order to notify application to exit
     let _ = {
         let thread_name = "tm-ta-quit-handler";
-        let task_manager_is_terminated_rx = task_manager.lock().unwrap().is_terminated();
+        let task_manager_is_terminated_rx = task_manager.read().unwrap().is_terminated();
         let func = move || {
             let _drop_logger = LogErrorOnDrop::new(thread_name);
             // waiting for sig term to quit gracefully by waiting that there is no remaining tasks to execute.
             let _ = task_manager_is_terminated_rx
                 .recv()
                 .map_err(|err| error!("cannot recv sigterm {}", err));
-
             let _ = quit_tx
                 .send(true)
                 .map_err(|err| error!("cannot send terminated {}", err));
@@ -842,7 +818,7 @@ fn using_nats_server(
 
     let _ = {
         let thread_name = "tm-status-core-updater";
-        let status_rx = task_manager.lock().unwrap().run().unwrap();
+        let status_rx = task_manager.write().unwrap().run().unwrap();
         let nc = nc.clone();
         let func = move || {
             let _drop_logger = LogErrorOnDrop::new(thread_name);
@@ -879,32 +855,31 @@ fn using_nats_server(
         let func = move || {
             let _drop_logger = LogErrorOnDrop::new(thread_name);
 
+            // FIXME instead of manually implementing the loadbalincing ourselves between engines
+            // we should just use NATS queue groups and stop picking task when the taskManager
+            // is currently busy.
+            // The issue is that there is no coordination between threads inside the app
+            // and that each one is unqueue tasks from NATS without really knowing if we can
+            // process them downstream.
+            // A quickfix would be to use bounded queue instead of unbounded one to force
+            // upstream thread to block if the engine can't accept new task quickly enough
             loop {
                 let task = task_rx.recv().unwrap();
-                let tm_lock = task_manager.try_lock();
-
-                if let Err(err) = tm_lock {
-                    error!("{}", err);
-                    warn!("wait for 5 seconds prior to try to add task again");
-                    thread::sleep(Duration::from_secs(5));
-                    continue;
-                }
-
                 // load balance workload before dispatching the task to the current task manager.
                 // request info from other engines
                 // to know how many remaining tasks to run they have?
-                let tm = tm_lock.unwrap();
                 let engines =
                     list_engines_task_manager_infos(&mode, &nc, GetTaskManagerInfoRequest::new(engine_id.as_str()));
-
                 match find_the_engine_where_to_dispatch_the_next_task(engines) {
                     // This is a default/fallback choice. Add the task into the local engine. Maybe not the best choice, but better than nothing.
-                    None => tm.add_task(task),
+                    None => task_manager.write().unwrap().add_task(task),
 
                     // FIXME how to prevent ping/pong between engines?
                     // dispatch the task into the best engine
                     // the local engine is less loaded than the others
-                    Some(tm_info) if tm_info.engine_id == engine_id.as_str() => tm.add_task(task),
+                    Some(tm_info) if tm_info.engine_id == engine_id.as_str() => {
+                        task_manager.write().unwrap().add_task(task)
+                    }
                     Some(_tm_info) => {
                         let tm_info_subject_name = task_manager_info_subject_name(&mode);
                         dispatch_task_to_engine(task.borrow(), tm_info_subject_name.as_str(), &nc);
@@ -981,7 +956,7 @@ fn using_nats_server(
             warn!("Termination signal received - graceful termination in progress...");
             // unsubscribe listeners
             // do not unsubscribe "task_running_check_sub - it must be alive during the whole tasks completion"
-            let subscriptions = vec![
+            let subsriptions = vec![
                 infrastructure_sub,
                 environment_sub,
                 lb_infrastructure_incoming_task_sub,
@@ -990,14 +965,14 @@ fn using_nats_server(
                 lb_environment_tm_info_sub,
             ];
 
-            for sub in subscriptions.into_iter() {
+            for sub in subsriptions.into_iter() {
                 let _ = sub
                     .drain()
                     .map_err(|err| error!("Cannot drain/unsubscribe {:?}: {}", sub, err));
             }
 
             info!("Unsubscribed from all subjects");
-            task_manager.lock().unwrap().stop();
+            task_manager.read().unwrap().stop();
             info!("Request to TaskManager to stop receiving new tasks");
         })
         .unwrap();
