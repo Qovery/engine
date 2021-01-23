@@ -1,10 +1,11 @@
 #[macro_use]
 extern crate log;
 #[macro_use]
-extern crate serde;
-#[macro_use]
 extern crate prometheus;
+#[macro_use]
+extern crate serde;
 
+use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
@@ -19,15 +20,16 @@ use crossbeam_channel::{unbounded, Sender};
 use dirs::home_dir;
 use dotenv::dotenv;
 use nats::{Connection, Message, Subscription};
-use qovery_engine::cmd;
-use qovery_engine::models::Context;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use uuid::Uuid;
 
+use qovery_engine::cmd;
+use qovery_engine::models::Context;
 use qovery_engine_task_manager::models::Request;
 use qovery_engine_task_manager::task_manager::{PreRun, Task, TaskManager};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
+use qovery_engine_task_manager::utils::LogErrorOnDrop;
 use utils::{subject, Mode};
 
 use crate::constants::ASCII_BANNER;
@@ -38,8 +40,6 @@ use crate::models::{
     CheckTaskOrderRequest, CheckTaskOrderResponse, CheckTaskRunningResponse, GetTaskManagerInfoRequest,
     GetTaskManagerInfoResponse, Ping, Response, StatusResponse, TaskSelector,
 };
-use qovery_engine_task_manager::utils::LogErrorOnDrop;
-use std::borrow::Borrow;
 
 mod constants;
 mod custom_error;
