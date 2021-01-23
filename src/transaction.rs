@@ -9,6 +9,7 @@ use crate::engine::Engine;
 use crate::error::EngineError;
 use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel,
+    ProgressScope,
 };
 
 pub struct Transaction<'a> {
@@ -406,34 +407,16 @@ impl<'a> Transaction<'a> {
             match step {
                 Step::CreateKubernetes(kubernetes) => {
                     // create kubernetes
-                    match kubernetes.on_create() {
-                        Err(err) => {
-                            warn!("ROLLBACK STARTED! an error occurred {:?}", err);
-                            match self.rollback() {
-                                Ok(_) => TransactionResult::Rollback(err),
-                                Err(e) => {
-                                    error!("ROLLBACK FAILED! fatal error: {:?}", e);
-                                    return TransactionResult::UnrecoverableError(err, e);
-                                }
-                            }
-                        }
-                        _ => TransactionResult::Ok,
+                    match self.commit_infrastructure(*kubernetes, Action::Create, kubernetes.on_create()) {
+                        TransactionResult::Ok => {}
+                        err => return err,
                     };
                 }
                 Step::DeleteKubernetes(kubernetes) => {
                     // delete kubernetes
-                    match kubernetes.on_delete() {
-                        Err(err) => {
-                            warn!("ROLLBACK STARTED! an error occurred {:?}", err);
-                            match self.rollback() {
-                                Ok(_) => TransactionResult::Rollback(err),
-                                Err(e) => {
-                                    error!("ROLLBACK FAILED! fatal error: {:?}", e);
-                                    return TransactionResult::UnrecoverableError(err, e);
-                                }
-                            }
-                        }
-                        _ => TransactionResult::Ok,
+                    match self.commit_infrastructure(*kubernetes, Action::Delete, kubernetes.on_delete()) {
+                        TransactionResult::Ok => {}
+                        err => return err,
                     };
                 }
                 Step::BuildEnvironment(environment_action, option) => {
@@ -538,6 +521,74 @@ impl<'a> Transaction<'a> {
         TransactionResult::Ok
     }
 
+    fn commit_infrastructure(
+        &self,
+        kubernetes: &dyn Kubernetes,
+        action: Action,
+        result: Result<(), EngineError>,
+    ) -> TransactionResult {
+        // send back the right progress status
+        fn send_progress(lh: &ListenersHelper, action: Action, execution_id: &str, is_error: bool) {
+            let progress_info = ProgressInfo::new(
+                ProgressScope::Infrastructure {
+                    execution_id: execution_id.to_string(),
+                },
+                ProgressLevel::Info,
+                None::<&str>,
+                execution_id,
+            );
+
+            if !is_error {
+                match action {
+                    Action::Create => lh.deployed(progress_info),
+                    Action::Pause => lh.paused(progress_info),
+                    Action::Delete => lh.deleted(progress_info),
+                    Action::Nothing => {} // nothing to do here?
+                };
+                return;
+            }
+
+            match action {
+                Action::Create => lh.deployment_error(progress_info),
+                Action::Pause => lh.pause_error(progress_info),
+                Action::Delete => lh.delete_error(progress_info),
+                Action::Nothing => {} // nothing to do here?
+            };
+        }
+
+        let execution_id = self.engine.context().execution_id();
+        let lh = ListenersHelper::new(kubernetes.listeners());
+
+        // 100 ms sleep to avoid race condition on last service status update
+        // Otherwise, the last status sent to the CORE is (sometimes) not the right one.
+        // Even by storing data at the micro seconds precision
+        thread::sleep(std::time::Duration::from_millis(100));
+
+        match result {
+            Err(err) => {
+                warn!("infrastructure ROLLBACK STARTED! an error occurred {:?}", err);
+                match self.rollback() {
+                    Ok(_) => {
+                        // an error occurred on infrastructure deployment BUT rolledback is OK
+                        send_progress(&lh, action, execution_id, true);
+                        TransactionResult::Rollback(err)
+                    }
+                    Err(e) => {
+                        // an error occurred on infrastructure deployment AND rolledback is KO
+                        error!("infrastructure ROLLBACK FAILED! fatal error: {:?}", e);
+                        send_progress(&lh, action, execution_id, true);
+                        return TransactionResult::UnrecoverableError(err, e);
+                    }
+                }
+            }
+            _ => {
+                // infrastructure deployment OK
+                send_progress(&lh, action, execution_id, false);
+                TransactionResult::Ok
+            }
+        }
+    }
+
     fn commit_environment<F>(
         &self,
         kubernetes: &dyn Kubernetes,
@@ -572,7 +623,7 @@ impl<'a> Transaction<'a> {
 
         let execution_id = self.engine.context().execution_id();
 
-        // send the back the right progress status
+        // send back the right progress status
         fn send_progress<T>(
             kubernetes: &dyn Kubernetes,
             action: &Action,
