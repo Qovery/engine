@@ -408,7 +408,7 @@ impl<T> ProgressListener for MyProgressListener<T>
 where
     T: Task + Clone + 'static + Sync,
 {
-    fn start_in_progress(&self, info: ProgressInfo) {
+    fn deployment_in_progress(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::new(
             State::DeploymentInProgress,
             info.message.clone(),
@@ -448,7 +448,7 @@ where
         self.send(it);
     }
 
-    fn started(&self, info: ProgressInfo) {
+    fn deployed(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::new(
             State::Deployed,
             info.message.clone(),
@@ -478,7 +478,7 @@ where
         self.send(it);
     }
 
-    fn start_error(&self, info: ProgressInfo) {
+    fn deployment_error(&self, info: ProgressInfo) {
         let it = self.get_internal_task(Status::new(
             State::DeploymentError,
             info.message.clone(),
