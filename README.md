@@ -52,6 +52,7 @@ To generate a new Engine image version, you have to use Gitlab and GitHub:
 
 Note: naming image tags is made of the first 7 chars Github commit id + a dash + 7 first chars Gitlab commit id 
 
+
 ## Supported connectors
 ### Build Platforms
 TODO
