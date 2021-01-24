@@ -222,6 +222,9 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
             .applications
             .into_iter()
             .map(|mut app| {
+                app.private_port = Some(80);
+                app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
+                app.branch = "simple-node-app".to_string();
                 app.dockerfile_path = None;
                 app
             })
