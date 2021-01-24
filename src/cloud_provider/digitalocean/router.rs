@@ -1,5 +1,5 @@
 use retry::delay::{Fibonacci, Fixed};
-use retry::OperationResult;
+use retry::{Error, OperationResult};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::digitalocean::common::do_get_load_balancer_ip;
@@ -14,7 +14,8 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError,
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
+    SimpleError, SimpleErrorKind,
 };
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
 use tera::ast::ExprVal::Bool;
@@ -128,7 +129,6 @@ impl Service for Router {
 
                 // https://github.com/digitalocean/digitalocean-cloud-controller-manager/issues/291
                 // Can only manage 1 host at a time on an DO load balancer
-                // This
                 context.insert("custom_domain_name", cd.domain.as_str());
 
                 CustomDomainDataTemplate {
@@ -196,45 +196,90 @@ impl Service for Router {
                 }
 
                 // Custom domain
-                if !self.custom_domains.is_empty() && self.is_ingress_deployed.clone() {
-                    // we first need to retrieve the id from the nginx ingress service
-                    let do_load_balancer_id =
-                        crate::cmd::kubectl::do_kubectl_exec_get_loadbalancer_id(
+                if !self.custom_domains.is_empty() {
+                    let deployed_ingress =
+                        match crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                             kubernetes_config_file_path_string.as_str(),
                             environment.namespace(),
                             "app=nginx-ingress,component=controller",
                             kubernetes
                                 .cloud_provider()
                                 .credentials_environment_variables(),
-                        );
+                        ) {
+                            Ok(x) => {
+                                if x.is_some() {
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            _ => false,
+                        };
 
-                    // then we can get the DO Load Balancer IP address which will be used in the custom ingress for the app
-                    match do_load_balancer_id {
-                        Ok(id) => match id {
-                            Some(id) => {
-                                match do_get_load_balancer_ip(
-                                    &digitalocean.token,
-                                    id.as_str(),
-                                ) {
-                                    Ok(ip) => context.insert("do_lb_ingress_ip", &ip.to_string()),
-                                    Err(e) => {
-                                        error!("Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements: {:?}", e);
-                                        return Err(self.engine_error(
-                                                EngineErrorCause::Internal,
-                                                "Error while trying to get Load Balancer IP from Digital Ocean API".into(),
-                                            ));
+                    if deployed_ingress {
+                        let do_load_balancer_ip = retry::retry(
+                            Fixed::from_millis(5000).take(40),
+                            || {
+                                // we first need to retrieve the id from the nginx ingress service
+                                let lb_id =
+                                    crate::cmd::kubectl::do_kubectl_exec_get_loadbalancer_id(
+                                        kubernetes_config_file_path_string.as_str(),
+                                        environment.namespace(),
+                                        "app=nginx-ingress,component=controller",
+                                        kubernetes
+                                            .cloud_provider()
+                                            .credentials_environment_variables(),
+                                    );
+
+                                // then we can get the DO Load Balancer IP address which will be used in the custom ingress for the app
+                                match lb_id {
+                                    Ok(id) => match id {
+                                        Some(id) => {
+                                            match do_get_load_balancer_ip(
+                                                &digitalocean.token,
+                                                id.as_str(),
+                                            ) {
+                                                Ok(ip) => {
+                                                    info!("Got the IP {}", &ip);
+                                                    OperationResult::Ok(ip)
+                                                }
+                                                Err(e) => {
+                                                    error!("Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements");
+                                                    OperationResult::Retry(SimpleError::new(
+                                                        SimpleErrorKind::Other,
+                                                        Some(format!("Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements. {:?}", e)),
+                                                    ))
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            error!("No Load Balancer id from Digital Ocean API was found, mandatory for custom ingress");
+                                            OperationResult::Retry(SimpleError::new(
+                                                SimpleErrorKind::Other,
+                                                Some("No Load Balancer id from Digital Ocean API was found, mandatory for custom ingress"),
+                                            ))
+                                        }
+                                    },
+                                    Err(_) => {
+                                        info!("Can't get Load Balancer id from Digital Ocean API, load balancer may be not ready yet or not yet deployed");
+                                        OperationResult::Retry(SimpleError::new(
+                                            SimpleErrorKind::Other,
+                                            Some("Can't get Load Balancer id from Digital Ocean API, load balancer may be not ready yet or not yet deployed"),
+                                        ))
                                     }
-                                };
+                                }
                             },
-                            None => {
-                                error!("No Load Balancer id from Digital Ocean API was found, mandatory for custom ingress");
+                        );
+                        match do_load_balancer_ip {
+                            Err(e) => {
+                                // "Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements. SimpleError { kind: Other, message: Some("Error While trying to deserialize json received from Digital Ocean Load Balancer API: missing field `id` at line 1 column 1926") }"
                                 return Err(self.engine_error(
                                     EngineErrorCause::Internal,
-                                    "Unexpected information returned from from Digital Ocean API to configure custom router".into(),
+                                    "Wasn't able to get load balancer info, stopping now as ingress rendering will fail".into(),
                                 ));
                             }
-                        },
-                        Err(_) => info!("Can't get Load Balancer id from Digital Ocean API, load balancer may be not ready yet or not yet deployed")
+                            Ok(ip) => context.insert("do_lb_ingress_ip", &ip.to_string()),
+                        }
                     };
 
                     // FIXME app_id to appId
@@ -433,11 +478,10 @@ impl Create for Router {
                     }
                 },
             );
-
-            // respect order - getting the context here and not before is mandatory
-            // the nginx-ingress must be available to get the external dns target if necessary
-            context = self.tera_context(target)?;
         }
+
+        // re-run context to get get lb ip address to use it then in the ingress
+        context = self.tera_context(target)?;
 
         let from_dir = format!(
             "{}/digitalocean/charts/q-ingress-tls",
