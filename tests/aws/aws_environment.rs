@@ -144,7 +144,7 @@ fn deploy_dockerfile_not_exist() {
                 app.branch = "dockerfile-not-exist".to_string();
                 app.commit_id = "5cd900a07a17c7aa3c14cb5cb82c62e19219d57c".to_string();
                 app.environment_variables = vec![];
-                app.dockerfile_path = Some("".to_string());
+                app.dockerfile_path = None;
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -154,9 +154,9 @@ fn deploy_dockerfile_not_exist() {
         let ea_delete = EnvironmentAction::Environment(environment_for_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
         match delete_environment(&context_for_delete, &ea_delete) {
@@ -164,6 +164,7 @@ fn deploy_dockerfile_not_exist() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
         return "deploy_dockerfile_not_exist".to_string();
     })
 }
@@ -202,6 +203,49 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         };
 
         return "deploy_a_not_working_environment_with_no_router_on_aws_eks".to_string();
+    })
+}
+
+#[test]
+fn build_with_buildpacks_and_deploy_a_working_environment() {
+    engine_run_test(|| {
+        let span = span!(
+            Level::INFO,
+            "build_with_buildpacks_and_deploy_a_working_environment"
+        );
+        let _enter = span.enter();
+
+        let context = context();
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let mut environment = test_utilities::aws::working_minimal_environment(&context);
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.dockerfile_path = None;
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        match delete_environment(&context_for_deletion, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        return "build_with_buildpacks_and_deploy_a_working_environment".to_string();
     })
 }
 
