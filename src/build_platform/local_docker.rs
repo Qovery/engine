@@ -398,7 +398,10 @@ impl BuildPlatform for LocalDocker {
         let application_id = build.image.application_id.clone();
 
         let dockerfile_exists = match dockerfile_relative_path {
-            Some(path) => Path::new(path).exists(),
+            Some(path) => {
+                let dockerfile_complete_path = format!("{}/{}", into_dir.as_str(), path);
+                Path::new(dockerfile_complete_path.as_str()).exists()
+            }
             None => false,
         };
 
