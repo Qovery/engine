@@ -24,6 +24,7 @@ where
     let rendered_templates = match generate_j2_template_files(from_dir.as_ref(), context) {
         Ok(rt) => rt,
         Err(e) => {
+            error!("{:?}", &e);
             let error_msg = match e.kind {
                 tera::ErrorKind::TemplateNotFound(x) => format!("template not found: {}", x),
                 tera::ErrorKind::Msg(x) => format!("tera error: {}", x),
