@@ -24,7 +24,8 @@ function download() { ## Download prerequisites binaries for the engine
   mkdir $BIN_DEST_FOLDER
 
   # buildpacks
-  curl -sLo buildpacks.tgz https://github.com/buildpacks/pack/releases/download/v${BUILDPACKS_VERSION}/pack-v${BUILDPACKS_VERSION}-${SYSTEM}.tgz
+  #curl -sLo buildpacks.tgz https://github.com/buildpacks/pack/releases/download/v${BUILDPACKS_VERSION}/pack-v${BUILDPACKS_VERSION}-${SYSTEM}.tgz
+  curl -sLo buildpacks.tgz https://github.com/buildpacks/pack/releases/download/v0.16.0/pack-v0.16.0-linux.tgz
   tar -zxf buildpacks.tgz
   mv pack $BIN_DEST_FOLDER/pack${BUILDPACKS_VERSION}
 
