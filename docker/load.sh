@@ -22,6 +22,12 @@ function download() { ## Download prerequisites binaries for the engine
 
   mkdir -p $TMP_FOLDER && cd $TMP_FOLDER
   mkdir $BIN_DEST_FOLDER
+
+  # buildpacks
+  curl -so buildpacks.tgz https://github.com/buildpacks/pack/releases/download/v${BUILDPACKS_VERSION}/pack-v${BUILDPACKS_VERSION}-linux.tgz
+  tar -zxf buildpacks.tgz
+  mv pack $BIN_DEST_FOLDER/pack${BUILDPACKS_VERSION}
+
   # terraform
   curl -so terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_${SYSTEM}_${ARCH}.zip
   unzip terraform.zip
@@ -70,6 +76,7 @@ function download_terraform_plugins() {
 function install() { ## Make symlinks to install binaries in default PATH
   BIN_DIR=$1
 
+  ln -s $BIN_DIR/pack${BUILDPACKS_VERSION} /usr/bin/pack
   ln -s $BIN_DIR/helm${HELM_VERSION} /usr/bin/helm
   ln -s $BIN_DIR/terraform${TERRAFORM_VERSION} /usr/bin/terraform
   ln -s $BIN_DIR/kubectl${KUBECTL_VERSION} /usr/bin/kubectl
