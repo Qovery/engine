@@ -13,8 +13,7 @@ use crate::dns_provider::DnsProvider;
 use crate::error::{cast_simple_error_to_engine_error, EngineError};
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::object_storage::spaces::Spaces;
 use crate::object_storage::ObjectStorage;
@@ -136,15 +135,9 @@ impl<'a> DOKS<'a> {
         context.insert("discord_api_key", self.options.discord_api_key.as_str());
 
         // grafana credentials
-        context.insert(
-            "grafana_admin_user",
-            self.options.grafana_admin_user.as_str(),
-        );
+        context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
 
-        context.insert(
-            "grafana_admin_password",
-            self.options.grafana_admin_password.as_str(),
-        );
+        context.insert("grafana_admin_password", self.options.grafana_admin_password.as_str());
 
         // TLS
         let lets_encrypt_url = match &test_cluster {
@@ -158,8 +151,7 @@ impl<'a> DOKS<'a> {
         // DNS management
         let managed_dns_list = vec![self.dns_provider.name()];
         let managed_dns_domains_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
-        let managed_dns_domains_terraform_format =
-            terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
 
         let managed_dns_resolvers: Vec<String> = self
             .dns_provider
@@ -171,10 +163,7 @@ impl<'a> DOKS<'a> {
         let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
 
         context.insert("managed_dns", &managed_dns_list);
-        context.insert(
-            "managed_dns_domains_helm_format",
-            &managed_dns_domains_helm_format,
-        );
+        context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
 
         context.insert(
             "managed_dns_domains_terraform_format",
@@ -224,16 +213,10 @@ impl<'a> DOKS<'a> {
 
         context.insert(
             "aws_region_tfstates_account",
-            self.cloud_provider()
-                .terraform_state_credentials()
-                .region
-                .as_str(),
+            self.cloud_provider().terraform_state_credentials().region.as_str(),
         );
 
-        context.insert(
-            "aws_terraform_backend_dynamodb_table",
-            "qovery-terrafom-tfstates",
-        );
+        context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
 
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
 
@@ -304,7 +287,7 @@ impl<'a> Kubernetes for DOKS<'a> {
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        listeners_helper.start_in_progress(ProgressInfo::new(
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Infrastructure {
                 execution_id: self.context.execution_id().to_string(),
             },

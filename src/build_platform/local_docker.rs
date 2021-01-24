@@ -7,8 +7,7 @@ use crate::error::{EngineError, EngineErrorCause, SimpleError};
 use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
 use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::{cmd, git};
 
@@ -68,10 +67,7 @@ impl BuildPlatform for LocalDocker {
 
     fn is_valid(&self) -> Result<(), EngineError> {
         if !crate::cmd::utilities::does_binary_exist("docker") {
-            return Err(self.engine_error(
-                EngineErrorCause::Internal,
-                String::from("docker binary not found"),
-            ));
+            return Err(self.engine_error(EngineErrorCause::Internal, String::from("docker binary not found")));
         }
 
         Ok(())
@@ -83,10 +79,7 @@ impl BuildPlatform for LocalDocker {
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         if !force_build && self.image_does_exist(&build.image)? {
-            info!(
-                "image {:?} does already exist - no need to build it",
-                build.image
-            );
+            info!("image {:?} does already exist - no need to build it", build.image);
 
             return Ok(BuildResult { build });
         }
@@ -158,15 +151,11 @@ impl BuildPlatform for LocalDocker {
             dockerfile_root_path => dockerfile_root_path,
         };
 
-        let dockerfile_complete_path =
-            format!("{}/{}", into_dir.as_str(), dockerfile_relative_path);
+        let dockerfile_complete_path = format!("{}/{}", into_dir.as_str(), dockerfile_relative_path);
 
         match Path::new(dockerfile_complete_path.as_str()).exists() {
             false => {
-                let message = format!(
-                    "Unable to find Dockerfile path {}",
-                    dockerfile_complete_path.as_str()
-                );
+                let message = format!("Unable to find Dockerfile path {}", dockerfile_complete_path.as_str());
 
                 error!("{}", &message);
 
@@ -177,8 +166,7 @@ impl BuildPlatform for LocalDocker {
 
         let mut disable_build_cache = false;
 
-        let mut env_var_args: Vec<String> =
-            Vec::with_capacity(build.options.environment_variables.len());
+        let mut env_var_args: Vec<String> = Vec::with_capacity(build.options.environment_variables.len());
 
         for ev in &build.options.environment_variables {
             if ev.key == "QOVERY_DISABLE_BUILD_CACHE" && ev.value.to_lowercase() == "true" {
@@ -249,7 +237,7 @@ impl BuildPlatform for LocalDocker {
                 let line_string = line.unwrap();
                 info!("{}", line_string.as_str());
 
-                listeners_helper.start_in_progress(ProgressInfo::new(
+                listeners_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Application {
                         id: build.image.application_id.clone(),
                     },
@@ -290,15 +278,12 @@ impl BuildPlatform for LocalDocker {
             }
         }
 
-        listeners_helper.start_in_progress(ProgressInfo::new(
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
                 id: build.image.application_id.clone(),
             },
             ProgressLevel::Info,
-            Some(format!(
-                "container build is done for {} ✔",
-                self.name_with_id()
-            )),
+            Some(format!("container build is done for {} ✔", self.name_with_id())),
             self.context.execution_id(),
         ));
 
@@ -340,8 +325,7 @@ impl Listen for LocalDocker {
 fn check_docker_space_usage_and_clean(docker_path_size_info: FsStats, envs: Vec<(&str, &str)>) {
     let docker_max_disk_percentage_usage_before_purge = 50; // arbitrary percentage that should make the job anytime
 
-    let docker_percentage_used =
-        docker_path_size_info.available_space() * 100 / docker_path_size_info.total_space();
+    let docker_percentage_used = docker_path_size_info.available_space() * 100 / docker_path_size_info.total_space();
 
     if docker_percentage_used > docker_max_disk_percentage_usage_before_purge {
         warn!(

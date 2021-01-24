@@ -5,12 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind,
-};
+use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::{cmd, utilities};
 
@@ -95,11 +92,7 @@ impl DOCR {
                     Err(e) => {
                         return Err(self.engine_error(
                             EngineErrorCause::Internal,
-                            format!(
-                                "failed to create DOCR repository {} : {:?}",
-                                registry_name.as_str(),
-                                e,
-                            ),
+                            format!("failed to create DOCR repository {} : {:?}", registry_name.as_str(), e,),
                         ));
                     }
                 }
@@ -107,34 +100,18 @@ impl DOCR {
             Err(e) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
-                    format!(
-                        "Unable to initialize DO Registry {} : {:?}",
-                        registry_name.as_str(),
-                        e,
-                    ),
+                    format!("Unable to initialize DO Registry {} : {:?}", registry_name.as_str(), e,),
                 ));
             }
         }
     }
 
-    fn push_image(
-        &self,
-        registry_name: String,
-        dest: String,
-        image: &Image,
-    ) -> Result<PushResult, EngineError> {
-        match cmd::utilities::exec(
-            "docker",
-            vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
-        ) {
+    fn push_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PushResult, EngineError> {
+        match cmd::utilities::exec("docker", vec!["tag", image.name_with_tag().as_str(), dest.as_str()]) {
             Err(_) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
-                    format!(
-                        "failed to tag image ({}) {:?}",
-                        image.name_with_tag(),
-                        image,
-                    ),
+                    format!("failed to tag image ({}) {:?}", image.name_with_tag(), image,),
                 ));
             }
             _ => {}
@@ -155,11 +132,7 @@ impl DOCR {
             Err(_) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
-                    format!(
-                        "failed to push image {:?} into DOCR {}",
-                        image,
-                        self.name_with_id(),
-                    ),
+                    format!("failed to push image {:?} into DOCR {}", image, self.name_with_id(),),
                 ));
             }
             _ => {}
@@ -326,21 +299,16 @@ impl ContainerRegistry for DOCR {
 
         match cmd::utilities::exec(
             "doctl",
-            vec![
-                "registry",
-                "login",
-                self.name.as_str(),
-                "-t",
-                self.api_key.as_str(),
-            ],
+            vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
         ) {
             Err(_) => {
-                return Err(
-                    self.engine_error(
-                        EngineErrorCause::User("Your DOCR account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials."),
-                        format!("failed to login to DOCR {}", self.name_with_id()))
-                );
+                return Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "Your DOCR account seems to be no longer valid (bad Credentials). \
+                    Please contact your Organization administrator to fix or change the Credentials.",
+                    ),
+                    format!("failed to login to DOCR {}", self.name_with_id()),
+                ));
             }
             _ => {}
         };
@@ -363,7 +331,7 @@ impl ContainerRegistry for DOCR {
 
             info!("{}", info_message.as_str());
 
-            listeners_helper.start_in_progress(ProgressInfo::new(
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
                     id: image.application_id.clone(),
                 },
@@ -386,7 +354,7 @@ impl ContainerRegistry for DOCR {
             image, registry_name
         );
 
-        listeners_helper.start_in_progress(ProgressInfo::new(
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
                 id: image.application_id.clone(),
             },
@@ -399,9 +367,7 @@ impl ContainerRegistry for DOCR {
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
-        Ok(PushResult {
-            image: image.clone(),
-        })
+        Ok(PushResult { image: image.clone() })
     }
 }
 
@@ -415,10 +381,7 @@ impl Listen for DOCR {
     }
 }
 
-pub fn subscribe_kube_cluster_to_container_registry(
-    api_key: &str,
-    cluster_uuid: &str,
-) -> Result<(), SimpleError> {
+pub fn subscribe_kube_cluster_to_container_registry(api_key: &str, cluster_uuid: &str) -> Result<(), SimpleError> {
     let headers = utilities::get_header_with_bearer(api_key);
     let cluster_ids = DoApiSubscribeToKubeCluster {
         cluster_uuids: vec![cluster_uuid.to_string()],
@@ -443,7 +406,10 @@ pub fn subscribe_kube_cluster_to_container_registry(
                 },
                 Err(e) => {
                     error!("{:?}", e);
-                    Err(SimpleError::new(SimpleErrorKind::Other, Some("Unable to call Digital Ocean when tyring to subscribe repository to cluster")))
+                    Err(SimpleError::new(
+                        SimpleErrorKind::Other,
+                        Some("Unable to call Digital Ocean when tyring to subscribe repository to cluster"),
+                    ))
                 }
             }
         }
@@ -465,33 +431,34 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
         .send();
 
     return match res {
-        Ok(output) => match output.status() {
-            StatusCode::OK => {
-                let content = output.text().unwrap();
-                let res_registry = serde_json::from_str::<DoApiGetContainerRegistry>(&content);
+        Ok(output) => {
+            match output.status() {
+                StatusCode::OK => {
+                    let content = output.text().unwrap();
+                    let res_registry = serde_json::from_str::<DoApiGetContainerRegistry>(&content);
 
-                match res_registry {
-                    Ok(registry) => Ok(registry.registry.name),
-                    Err(err) => Err(SimpleError::new(
-                        SimpleErrorKind::Other,
-                        Some(
-                            format!("An error occurred while deserializing JSON coming from Digital Ocean API: error: {:?}", err),
-                        ),
-                    )),
+                    match res_registry {
+                        Ok(registry) => Ok(registry.registry.name),
+                        Err(err) => Err(SimpleError::new(
+                            SimpleErrorKind::Other,
+                            Some(format!(
+                                "An error occurred while deserializing JSON coming from Digital Ocean API: error: {:?}",
+                                err
+                            )),
+                        )),
+                    }
+                }
+                status => {
+                    warn!("status from Digital Ocean Registry API {}", status);
+                    Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
                 }
             }
-            status => {
-                warn!("status from Digital Ocean Registry API {}", status);
-                Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
-            }
-        },
+        }
         Err(e) => {
             error!("{:?}", e);
             Err(SimpleError::new(
                 SimpleErrorKind::Other,
-                Some(
-                    "Unable to call Digital Ocean when tyring to fetch the container registry name",
-                ),
+                Some("Unable to call Digital Ocean when tyring to fetch the container registry name"),
             ))
         }
     };
