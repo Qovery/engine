@@ -38,16 +38,11 @@ impl LocalDocker {
     }
 
     fn image_does_exist(&self, image: &Image) -> Result<bool, EngineError> {
-        let envs = match self.context.docker_tcp_socket() {
-            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
-            None => vec![],
-        };
-
         Ok(
             match crate::cmd::utilities::exec_with_envs(
                 "docker",
                 vec!["image", "inspect", image.name_with_tag().as_str()],
-                envs,
+                self.get_docker_host_envs(),
             ) {
                 Ok(_) => true,
                 _ => false,
