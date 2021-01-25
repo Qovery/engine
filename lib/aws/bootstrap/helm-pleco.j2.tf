@@ -14,6 +14,11 @@ resource "helm_release" "pleco" {
   }
 
   set {
+    name = "enabledFeatures.awsRegions"
+    value = "{eu-west-3,us-east-2}"
+  }
+
+  set {
     name = "enabledFeatures.rds"
     value = "true"
   }
@@ -25,6 +30,11 @@ resource "helm_release" "pleco" {
 
   set {
     name = "enabledFeatures.elasticache"
+    value = "true"
+  }
+
+  set {
+    name = "enabledFeatures.eks"
     value = "true"
   }
 
@@ -44,11 +54,6 @@ resource "helm_release" "pleco" {
   }
 
   set {
-    name = "environmentVariables.AWS_DEFAULT_REGION"
-    value = "{{ aws_region }}"
-  }
-
-  set {
     name = "environmentVariables.LOG_LEVEL"
     value = "debug"
   }
@@ -57,5 +62,6 @@ resource "helm_release" "pleco" {
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,
     helm_release.cluster_autoscaler,
+    helm_release.prometheus_operator,
   ]
 }
