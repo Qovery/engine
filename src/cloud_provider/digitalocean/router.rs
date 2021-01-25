@@ -18,7 +18,6 @@ use crate::error::{
     SimpleError, SimpleErrorKind,
 };
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
-use tera::ast::ExprVal::Bool;
 
 pub struct Router {
     context: Context,
@@ -28,7 +27,6 @@ pub struct Router {
     custom_domains: Vec<CustomDomain>,
     routes: Vec<Route>,
     listeners: Listeners,
-    is_ingress_deployed: bool,
 }
 
 impl Router {
@@ -49,7 +47,6 @@ impl Router {
             custom_domains,
             routes,
             listeners,
-            is_ingress_deployed: false,
         }
     }
 }
@@ -206,13 +203,7 @@ impl Service for Router {
                                 .cloud_provider()
                                 .credentials_environment_variables(),
                         ) {
-                            Ok(x) => {
-                                if x.is_some() {
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
+                            Ok(x) => x.is_some(),
                             _ => false,
                         };
 
@@ -294,6 +285,8 @@ impl Service for Router {
         let router_default_domain_hash =
             crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
+        let tls_domain = format!("*.{}",kubernetes.dns_provider().domain());
+        context.insert("router_tls_domain", tls_domain.as_str());
         context.insert("router_default_domain", self.default_domain.as_str());
         context.insert(
             "router_default_domain_hash",
