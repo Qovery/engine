@@ -127,50 +127,6 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 }
 
 #[test]
-fn deploy_dockerfile_not_exist() {
-    engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_dockerfile_not_exist");
-        let _enter = span.enter();
-
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
-
-        let mut environment = test_utilities::aws::working_minimal_environment(&context);
-        environment.applications = environment
-            .applications
-            .into_iter()
-            .map(|mut app| {
-                app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
-                app.branch = "dockerfile-not-exist".to_string();
-                app.commit_id = "5cd900a07a17c7aa3c14cb5cb82c62e19219d57c".to_string();
-                app.private_port = Some(80);
-                app.environment_variables = vec![];
-                app.dockerfile_path = None;
-                app
-            })
-            .collect::<Vec<qovery_engine::models::Application>>();
-        let mut environment_for_delete = environment.clone();
-
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(environment_for_delete);
-
-        match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        return "deploy_dockerfile_not_exist".to_string();
-    })
-}
-
-#[test]
 fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     engine_run_test(|| {
         let span = span!(
