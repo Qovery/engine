@@ -46,6 +46,10 @@ spec:
             {{ if .Values.enabledFeatures.kubernetes }}
             - --kube-conn
             - {{ .Values.enabledFeatures.kubernetes }}
+              {{ end }}
+            {{ if .Values.enabledFeatures.awsRegions }}
+            - --aws-regions
+            - "{{ join "," .Values.enabledFeatures.awsRegions }}"
             {{ end }}
             {{ if eq .Values.enabledFeatures.rds true}}
             - --enable-rds
@@ -55,7 +59,16 @@ spec:
             {{ end }}
             {{ if eq .Values.enabledFeatures.documentdb true}}
             - --enable-documentdb
-          {{ end }}
+            {{ end }}
+            {{ if eq .Values.enabledFeatures.eks true}}
+            - --enable-eks
+            {{ end }}
+            {{ if or (eq .Values.enabledFeatures.elb true) (eq .Values.enabledFeatures.eks true)}}
+            - --enable-elb
+            {{ end }}
+            {{ if or (eq .Values.enabledFeatures.ebs true) (eq .Values.enabledFeatures.eks true)}}
+            - --enable-ebs
+            {{ end }}
           env:
             {{ range $key, $value := .Values.environmentVariables -}}
             - name: "{{ $key }}"

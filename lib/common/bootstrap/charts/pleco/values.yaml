@@ -3,13 +3,12 @@ replicaCount: 1
 image:
   repository: qoveryrd/pleco
   pullPolicy: IfNotPresent
-  plecoImageTag: "v0.3.3"
+  plecoImageTag: "0.4.1"
 
 environmentVariables:
   LOG_LEVEL: "info"
   # AWS_ACCESS_KEY_ID: ""
   # AWS_SECRET_ACCESS_KEY: ""
-  # AWS_DEFAULT_REGION: ""
   # KUBECONFIG: ""
 
 enabledFeatures:
@@ -17,9 +16,16 @@ enabledFeatures:
   checkInterval: 120
   # Choose between in/out/off
   kubernetes: "in"
+  # AWS
+  awsRegions: []
+  # - eu-west-3
+  # - us-east-2
   rds: false
   documentdb: false
   elasticache: false
+  eks: false
+  elb: false
+  ebs: false
 
 imagePullSecrets: []
 nameOverride: ""
@@ -48,8 +54,8 @@ securityContext: {}
   # capabilities:
   #   drop:
   #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
+# readOnlyRootFilesystem: true
+# runAsNonRoot: true
 # runAsUser: 1000
 
 resources:

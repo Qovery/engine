@@ -12,6 +12,9 @@ resource "helm_release" "prometheus_operator" {
   name = "prometheus-operator"
   chart = "common/charts/prometheus-operator"
   namespace = local.prometheus_namespace
+  // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
+  // to upgrade because of crd and the number of elements it has to deploy
+  timeout = 600
   create_namespace = true
   atomic = true
   max_history = 50

@@ -79,6 +79,18 @@ resource "helm_release" "cluster_autoscaler" {
     value = "system-cluster-critical"
   }
 
+  # cluster autoscaler options
+
+  set {
+    name = "extraArgs.balance-similar-node-groups"
+    value = "true"
+  }
+
+  set {
+    name = "extraArgs.balance-similar-node-groups"
+    value = "true"
+  }
+
   # observability
   set {
     name = "serviceMonitor.enabled"

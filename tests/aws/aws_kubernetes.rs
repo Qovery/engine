@@ -71,9 +71,8 @@ fn create_and_destroy_eks_cluster(region: &str, test_name: &str) {
         let mut read_buf = String::new();
         file.read_to_string(&mut read_buf).unwrap();
 
-        let options_result = serde_json::from_str::<
-            qovery_engine::cloud_provider::aws::kubernetes::Options,
-        >(read_buf.as_str());
+        let options_result =
+            serde_json::from_str::<qovery_engine::cloud_provider::aws::kubernetes::Options>(read_buf.as_str());
 
         let kubernetes = EKS::new(
             context.clone(),
@@ -121,10 +120,7 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
     create_and_destroy_eks_cluster(
         region.clone(),
-        &format!(
-            "create_and_destroy_eks_cluster_in_{}",
-            region.replace("-", "_")
-        ),
+        &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
     );
 }
 
@@ -134,8 +130,6 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
     let region = "us-east-2";
     create_and_destroy_eks_cluster(
         region.clone(),
-        &format!(
-            "create_and_destroy_eks_cluster_in_{}",
-            region.replace("-", "_")
-        ),
+        &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
     );
+}

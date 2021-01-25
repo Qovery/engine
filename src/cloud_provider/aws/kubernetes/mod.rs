@@ -12,10 +12,11 @@ use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
-use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
+use crate::cmd::kubectl::{kubectl_delete_objects_in_all_namespaces, kubectl_exec_get_all_namespaces};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
+use crate::error::EngineErrorCause::Internal;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
 use crate::fs::workspace_directory;
 use crate::models::{
@@ -24,6 +25,9 @@ use crate::models::{
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
+use retry::delay::Fibonacci;
+use retry::Error::Operation;
+use retry::OperationResult;
 
 pub mod node;
 
@@ -214,6 +218,12 @@ impl<'a> EKS<'a> {
         );
 
         context.insert("test_cluster", &test_cluster);
+        if self.context.resource_expiration_in_seconds().is_some() {
+            context.insert(
+                "resource_expiration_in_seconds",
+                &self.context.resource_expiration_in_seconds(),
+            )
+        }
 
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);
@@ -399,7 +409,7 @@ impl<'a> Kubernetes for EKS<'a> {
             },
             ProgressLevel::Info,
             Some(format!(
-                "start to create EKS cluster {} with id {}",
+                "Preparing EKS {} cluster deployment with id {}",
                 self.name(),
                 self.id()
             )),
@@ -437,24 +447,57 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         )?;
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Info,
+            Some(format!(
+                "Deploying EKS {} cluster deployment with id {}",
+                self.name(),
+                self.id()
+            )),
             self.context.execution_id(),
-            crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
-                temp_dir.as_str(),
-                self.context.is_dry_run_deploy(),
-            ),
-        )?;
+        ));
 
-        Ok(())
+        let terraform_result =
+            retry::retry(
+                Fibonacci::from_millis(60000).take(3),
+                || match cast_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+                        temp_dir.as_str(),
+                        self.context.is_dry_run_deploy(),
+                    ),
+                ) {
+                    Ok(_) => OperationResult::Ok(()),
+                    Err(e) => OperationResult::Retry(e),
+                },
+            );
+
+        match terraform_result {
+            Ok(_) => Ok(()),
+            Err(Operation { error, .. }) => Err(error),
+            Err(retry::Error::Internal(msg)) => Err(EngineError::new(
+                EngineErrorCause::Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                Some(format!(
+                    "rror while deploying cluster {} with id {}. {}",
+                    self.name(),
+                    self.id(),
+                    msg
+                )),
+            )),
+        }
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {
         warn!("EKS.on_create_error() called for {}", self.name());
-        // FIXME
         Err(self.engine_error(
             EngineErrorCause::Internal,
-            format!("{} Kubernetes cluster rollback not implemented", self.name()),
+            format!("{} Kubernetes cluster failed on deployment", self.name()),
         ))
     }
 
@@ -487,9 +530,9 @@ impl<'a> Kubernetes for EKS<'a> {
             ProgressScope::Infrastructure {
                 execution_id: self.context.execution_id().to_string(),
             },
-            ProgressLevel::Warn,
+            ProgressLevel::Info,
             Some(format!(
-                "start to delete EKS cluster {} with id {}",
+                "Preparing to delete EKS cluster {} with id {}",
                 self.name(),
                 self.id()
             )),
@@ -537,6 +580,15 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // should apply before destroy to be sure destroy will compute on all resources
         // don't exit on failure, it can happen if we resume a destroy process
+        listeners_helper.delete_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Info,
+            Some(format!("Ensuring everything is up to date before deleting",)),
+            self.context.execution_id(),
+        ));
+
         info!("Running Terraform apply");
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -548,6 +600,17 @@ impl<'a> Kubernetes for EKS<'a> {
         };
 
         // should make the diff between all namespaces and qovery managed namespaces
+        listeners_helper.delete_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Warn,
+            Some(format!(
+                "Deleting all non-Qovery deployed applications and dependencies",
+            )),
+            self.context.execution_id(),
+        ));
+
         match all_namespaces {
             Ok(namespace_vec) => {
                 let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
@@ -580,6 +643,17 @@ impl<'a> Kubernetes for EKS<'a> {
                 e.message
             ),
         }
+
+        listeners_helper.delete_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Warn,
+            Some(format!(
+                "Deleting all Qovery deployed elements and associated dependencies",
+            )),
+            self.context.execution_id(),
+        ));
 
         // https://cert-manager.io/docs/installation/uninstall/kubernetes/
         // required to avoid namespace stuck on deletion
@@ -653,13 +727,47 @@ impl<'a> Kubernetes for EKS<'a> {
         }
 
         info!("Running Terraform destroy");
-        let terraform_result = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
+        listeners_helper.delete_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Info,
+            Some(format!(
+                "Starting to delete EKS cluster {} with id {}",
+                self.name(),
+                self.id()
+            )),
             self.context.execution_id(),
-            cmd::terraform::terraform_exec_with_init_plan_destroy(temp_dir.as_str()),
-        );
+        ));
 
-        Ok(())
+        let terraform_result =
+            retry::retry(
+                Fibonacci::from_millis(60000).take(3),
+                || match cast_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    cmd::terraform::terraform_exec_with_init_plan_destroy(temp_dir.as_str()),
+                ) {
+                    Ok(_) => OperationResult::Ok(()),
+                    Err(e) => OperationResult::Retry(e),
+                },
+            );
+
+        match terraform_result {
+            Ok(_) => Ok(()),
+            Err(Operation { error, .. }) => Err(error),
+            Err(retry::Error::Internal(msg)) => Err(EngineError::new(
+                EngineErrorCause::Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                Some(format!(
+                    "Error while deleting cluster {} with id {}: {}",
+                    self.name(),
+                    self.id(),
+                    msg
+                )),
+            )),
+        }
     }
 
     fn on_delete_error(&self) -> Result<(), EngineError> {
