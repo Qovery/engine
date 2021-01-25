@@ -24,7 +24,7 @@ metadata:
 spec:
   tls:
     - hosts:
-        - "{{ router_default_domain }}"
+        - "{{ router_tls_domain }}"
       secretName: le-{{ router_default_domain_hash }}-qovery-cert
   rules:
     - host: "{{ router_default_domain }}"
