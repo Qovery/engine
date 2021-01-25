@@ -216,6 +216,8 @@ impl Service for Router {
         let router_default_domain_hash =
             crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
+        let tls_domain = format!("*.{}",kubernetes.dns_provider().domain());
+        context.insert("router_tls_domain", tls_domain.as_str());
         context.insert("router_default_domain", self.default_domain.as_str());
         context.insert(
             "router_default_domain_hash",
