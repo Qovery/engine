@@ -43,6 +43,10 @@ pub struct Annotations {
     pub meta_helm_sh_release_namespace: String,
     #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-algorithm")]
     pub service_beta_kubernetes_io_do_loadbalancer_algorithm: String,
+    #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol")]
+    pub service_beta_kubernetes_io_do_loadbalancer_enable_proxy_protocol: String,
+    #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-hostname")]
+    pub service_beta_kubernetes_io_do_loadbalancer_hostname: Option<String>,
     #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-name")]
     pub service_beta_kubernetes_io_do_loadbalancer_name: String,
     #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-protocol")]
