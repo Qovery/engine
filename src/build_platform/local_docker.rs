@@ -13,10 +13,11 @@ use crate::models::{
 use crate::{cmd, git};
 
 /// https://buildpacks.io/
-const BUILDPACKS_BUILDERS: [&str; 3] = [
+const BUILDPACKS_BUILDERS: [&str; 1] = [
     "heroku/buildpacks:18",
-    "gcr.io/buildpacks/builder:v1",
-    "paketobuildpacks/builder:full",
+    // removed because it does not support dynamic port binding
+    //"gcr.io/buildpacks/builder:v1",
+    //"paketobuildpacks/builder:base",
 ];
 
 /// use Docker in local
