@@ -143,6 +143,7 @@ fn deploy_dockerfile_not_exist() {
                 app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
                 app.branch = "dockerfile-not-exist".to_string();
                 app.commit_id = "5cd900a07a17c7aa3c14cb5cb82c62e19219d57c".to_string();
+                app.private_port = Some(80);
                 app.environment_variables = vec![];
                 app.dockerfile_path = None;
                 app
@@ -222,7 +223,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
             .applications
             .into_iter()
             .map(|mut app| {
-                app.private_port = Some(80);
+                app.private_port = Some(3000);
                 app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
                 app.branch = "simple-node-app".to_string();
                 app.dockerfile_path = None;
