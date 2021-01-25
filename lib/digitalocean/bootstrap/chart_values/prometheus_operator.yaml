@@ -46,7 +46,7 @@ defaultRules:
     kubernetesStorage: true
     kubernetesSystem: true
     kubeScheduler: true
-    kubeStateMetrics: true
+    kubeStateMetrics: false
     network: true
     node: true
     prometheus: true
@@ -1048,7 +1048,7 @@ kubeProxy:
 ## Component scraping kube state metrics
 ##
 kubeStateMetrics:
-  enabled: true
+  enabled: false
   serviceMonitor:
     ## Scrape interval. If not set, the Prometheus default scrape interval is used.
     ##
