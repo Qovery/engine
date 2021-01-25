@@ -50,8 +50,7 @@ To generate a new Engine image version, you have to use Gitlab and GitHub:
 1. On GitHub, ensure your wished commits are stored in dev or master branch.
 2. On Gitlab, run a dev or mmain pipeline to generate images and push to repository
 
-Note: naming image tags is made of the first 7 chars Github commit id + a dash + 7 first chars Gitlab commit id 
-
+Note: naming image tags is made of the first 7 chars Github commit id + a dash + 7 first chars Gitlab commit id
 
 ## Supported connectors
 ### Build Platforms
