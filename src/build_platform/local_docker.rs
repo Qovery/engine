@@ -3,13 +3,22 @@ use std::path::Path;
 use fs2::FsStats;
 
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
-use crate::error::{EngineError, EngineErrorCause, SimpleError};
+use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
 use crate::git::checkout_submodules;
 use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
+    ProgressScope,
 };
 use crate::{cmd, git};
+
+/// https://buildpacks.io/
+const BUILDPACKS_BUILDERS: [&str; 1] = [
+    "heroku/buildpacks:18",
+    // removed because it does not support dynamic port binding
+    //"gcr.io/buildpacks/builder:v1",
+    //"paketobuildpacks/builder:base",
+];
 
 /// use Docker in local
 pub struct LocalDocker {
@@ -30,21 +39,211 @@ impl LocalDocker {
     }
 
     fn image_does_exist(&self, image: &Image) -> Result<bool, EngineError> {
-        let envs = match self.context.docker_tcp_socket() {
-            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
-            None => vec![],
-        };
-
         Ok(
             match crate::cmd::utilities::exec_with_envs(
                 "docker",
                 vec!["image", "inspect", image.name_with_tag().as_str()],
-                envs,
+                self.get_docker_host_envs(),
             ) {
                 Ok(_) => true,
                 _ => false,
             },
         )
+    }
+
+    fn get_docker_host_envs(&self) -> Vec<(&str, &str)> {
+        match self.context.docker_tcp_socket() {
+            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
+            None => vec![],
+        }
+    }
+
+    fn build_image_with_docker(
+        &self,
+        build: Build,
+        dockerfile_complete_path: &str,
+        into_dir_docker_style: &str,
+        env_var_args: Vec<String>,
+        use_build_cache: bool,
+        lh: &ListenersHelper,
+    ) -> Result<BuildResult, EngineError> {
+        let mut docker_args = if !use_build_cache {
+            vec!["build", "--no-cache"]
+        } else {
+            vec!["build"]
+        };
+
+        let name_with_tag = build.image.name_with_tag();
+
+        docker_args.extend(vec![
+            "-f",
+            dockerfile_complete_path,
+            "-t",
+            name_with_tag.as_str(),
+        ]);
+
+        let mut docker_args = if env_var_args.is_empty() {
+            docker_args
+        } else {
+            let mut build_args = vec![];
+            env_var_args.iter().for_each(|x| {
+                build_args.push("--build-arg");
+                build_args.push(x.as_str());
+            });
+
+            docker_args.extend(build_args);
+            docker_args
+        };
+
+        docker_args.push(into_dir_docker_style);
+
+        // docker build
+        let exit_status = cmd::utilities::exec_with_envs_and_output(
+            "docker",
+            docker_args,
+            self.get_docker_host_envs(),
+            |line| {
+                let line_string = line.unwrap();
+                info!("{}", line_string.as_str());
+
+                lh.deployment_in_progress(ProgressInfo::new(
+                    ProgressScope::Application {
+                        id: build.image.application_id.clone(),
+                    },
+                    ProgressLevel::Info,
+                    Some(line_string.as_str()),
+                    self.context.execution_id(),
+                ));
+            },
+            |line| {
+                let line_string = line.unwrap();
+                error!("{}", line_string.as_str());
+
+                lh.error(ProgressInfo::new(
+                    ProgressScope::Application {
+                        id: build.image.application_id.clone(),
+                    },
+                    ProgressLevel::Error,
+                    Some(line_string.as_str()),
+                    self.context.execution_id(),
+                ));
+            },
+        );
+
+        match exit_status {
+            Ok(_) => Ok(BuildResult { build }),
+            Err(err) => Err(self.engine_error(
+                EngineErrorCause::User(
+                    "It looks like your Dockerfile is wrong. Did you consider building \
+                        your container locally using `qovery run` or `docker build --no-cache`?",
+                ),
+                format!(
+                    "error while building container image {}. Error: {:?}",
+                    self.name_with_id(),
+                    err
+                ),
+            )),
+        }
+    }
+
+    fn build_image_with_buildpacks(
+        &self,
+        build: Build,
+        into_dir_docker_style: &str,
+        env_var_args: Vec<String>,
+        use_build_cache: bool,
+        lh: &ListenersHelper,
+    ) -> Result<BuildResult, EngineError> {
+        let name_with_tag = build.image.name_with_tag();
+
+        let mut exit_status: Result<(), SimpleError> = Err(SimpleError::new(
+            SimpleErrorKind::Other,
+            Some("no builder names"),
+        ));
+
+        for builder_name in BUILDPACKS_BUILDERS.iter() {
+            let mut buildpacks_args = if !use_build_cache {
+                vec!["build", name_with_tag.as_str(), "--clear-cache"]
+            } else {
+                vec!["build", name_with_tag.as_str()]
+            };
+
+            buildpacks_args.extend(vec!["--path", into_dir_docker_style]);
+
+            let mut buildpacks_args = if env_var_args.is_empty() {
+                buildpacks_args
+            } else {
+                let mut build_args = vec![];
+
+                env_var_args.iter().for_each(|x| {
+                    build_args.push("--env");
+                    build_args.push(x.as_str());
+                });
+
+                buildpacks_args.extend(build_args);
+                buildpacks_args
+            };
+
+            buildpacks_args.push("-B");
+            buildpacks_args.push(builder_name);
+
+            // buildpacks build
+            exit_status = cmd::utilities::exec_with_envs_and_output(
+                "pack",
+                buildpacks_args,
+                self.get_docker_host_envs(),
+                |line| {
+                    let line_string = line.unwrap();
+                    info!("{}", line_string.as_str());
+
+                    lh.deployment_in_progress(ProgressInfo::new(
+                        ProgressScope::Application {
+                            id: build.image.application_id.clone(),
+                        },
+                        ProgressLevel::Info,
+                        Some(line_string.as_str()),
+                        self.context.execution_id(),
+                    ));
+                },
+                |line| {
+                    let line_string = line.unwrap();
+                    error!("{}", line_string.as_str());
+
+                    lh.error(ProgressInfo::new(
+                        ProgressScope::Application {
+                            id: build.image.application_id.clone(),
+                        },
+                        ProgressLevel::Error,
+                        Some(line_string.as_str()),
+                        self.context.execution_id(),
+                    ));
+                },
+            );
+
+            if exit_status.is_ok() {
+                // quit now if the builder successfully build the app
+                break;
+            }
+        }
+
+        match exit_status {
+            Ok(_) => Ok(BuildResult { build }),
+            Err(err) => {
+                warn!("{:?}", err);
+
+                Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "None builders supports Your application can't be built without providing a Dockerfile",
+                    ),
+                    format!(
+                        "Qovery can't build your container image {} with one of the following builders: {}. \
+                    Please do provide a valid Dockerfile to build your application or contact the support.",
+                        self.name_with_id(),
+                        BUILDPACKS_BUILDERS.join(", ")
+                    ),
+                ))
+            }
+        }
     }
 }
 
@@ -67,7 +266,17 @@ impl BuildPlatform for LocalDocker {
 
     fn is_valid(&self) -> Result<(), EngineError> {
         if !crate::cmd::utilities::does_binary_exist("docker") {
-            return Err(self.engine_error(EngineErrorCause::Internal, String::from("docker binary not found")));
+            return Err(self.engine_error(
+                EngineErrorCause::Internal,
+                String::from("docker binary not found"),
+            ));
+        }
+
+        if !crate::cmd::utilities::does_binary_exist("pack") {
+            return Err(self.engine_error(
+                EngineErrorCause::Internal,
+                String::from("pack binary not found"),
+            ));
         }
 
         Ok(())
@@ -79,7 +288,10 @@ impl BuildPlatform for LocalDocker {
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         if !force_build && self.image_does_exist(&build.image)? {
-            info!("image {:?} does already exist - no need to build it", build.image);
+            info!(
+                "image {:?} does already exist - no need to build it",
+                build.image
+            );
 
             return Ok(BuildResult { build });
         }
@@ -146,27 +358,18 @@ impl BuildPlatform for LocalDocker {
 
         let into_dir_docker_style = format!("{}/.", into_dir.as_str());
 
-        let dockerfile_relative_path = match build.git_repository.dockerfile_path.trim() {
-            "" | "." | "/" | "/." | "./" | "Dockerfile" => "Dockerfile",
-            dockerfile_root_path => dockerfile_root_path,
+        let dockerfile_relative_path = match &build.git_repository.dockerfile_path {
+            Some(dockerfile_relative_path) => match dockerfile_relative_path.trim() {
+                "" | "." | "/" | "/." | "./" | "Dockerfile" => Some("Dockerfile"),
+                dockerfile_root_path => Some(dockerfile_root_path),
+            },
+            None => None,
         };
-
-        let dockerfile_complete_path = format!("{}/{}", into_dir.as_str(), dockerfile_relative_path);
-
-        match Path::new(dockerfile_complete_path.as_str()).exists() {
-            false => {
-                let message = format!("Unable to find Dockerfile path {}", dockerfile_complete_path.as_str());
-
-                error!("{}", &message);
-
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
-            }
-            _ => {}
-        }
 
         let mut disable_build_cache = false;
 
-        let mut env_var_args: Vec<String> = Vec::with_capacity(build.options.environment_variables.len());
+        let mut env_var_args: Vec<String> =
+            Vec::with_capacity(build.options.environment_variables.len());
 
         for ev in &build.options.environment_variables {
             if ev.key == "QOVERY_DISABLE_BUILD_CACHE" && ev.value.to_lowercase() == "true" {
@@ -177,41 +380,6 @@ impl BuildPlatform for LocalDocker {
                 env_var_args.push(format!("{}={}", ev.key, ev.value));
             }
         }
-
-        let mut docker_args = if disable_build_cache {
-            vec!["build", "--no-cache"]
-        } else {
-            vec!["build"]
-        };
-
-        let name_with_tag = build.image.name_with_tag();
-
-        docker_args.extend(vec![
-            "-f",
-            dockerfile_complete_path.as_str(),
-            "-t",
-            name_with_tag.as_str(),
-        ]);
-
-        let mut docker_args = if env_var_args.is_empty() {
-            docker_args
-        } else {
-            let mut build_args = vec![];
-            env_var_args.iter().for_each(|x| {
-                build_args.push("--build-arg");
-                build_args.push(x.as_str());
-            });
-
-            docker_args.extend(build_args);
-            docker_args
-        };
-
-        docker_args.push(into_dir_docker_style.as_str());
-
-        let envs = match self.context.docker_tcp_socket() {
-            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
-            None => vec![],
-        };
 
         // ensure there is enough disk space left before building a new image
         let docker_path = Path::new("/var/lib/docker");
@@ -225,69 +393,57 @@ impl BuildPlatform for LocalDocker {
                 }
             };
 
-            check_docker_space_usage_and_clean(docker_path_size_info, envs.clone());
+            check_docker_space_usage_and_clean(docker_path_size_info, self.get_docker_host_envs());
         }
 
-        // docker build
-        let exit_status = cmd::utilities::exec_with_envs_and_output(
-            "docker",
-            docker_args,
-            envs,
-            |line| {
-                let line_string = line.unwrap();
-                info!("{}", line_string.as_str());
+        let application_id = build.image.application_id.clone();
 
-                listeners_helper.deployment_in_progress(ProgressInfo::new(
-                    ProgressScope::Application {
-                        id: build.image.application_id.clone(),
-                    },
-                    ProgressLevel::Info,
-                    Some(line_string.as_str()),
-                    self.context.execution_id(),
-                ));
-            },
-            |line| {
-                let line_string = line.unwrap();
-                error!("{}", line_string.as_str());
-
-                listeners_helper.error(ProgressInfo::new(
-                    ProgressScope::Application {
-                        id: build.image.application_id.clone(),
-                    },
-                    ProgressLevel::Error,
-                    Some(line_string.as_str()),
-                    self.context.execution_id(),
-                ));
-            },
-        );
-
-        match exit_status {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "It looks like your Dockerfile is wrong. Did you consider building \
-                        your container locally using `qovery run` or `docker build --no-cache`?",
-                    ),
-                    format!(
-                        "error while building container image {}. Error: {:?}",
-                        self.name_with_id(),
-                        err
-                    ),
-                ));
+        let dockerfile_exists = match dockerfile_relative_path {
+            Some(path) => {
+                let dockerfile_complete_path = format!("{}/{}", into_dir.as_str(), path);
+                Path::new(dockerfile_complete_path.as_str()).exists()
             }
-        }
+            None => false,
+        };
+
+        let result = match dockerfile_exists {
+            true => {
+                // build container from the provided Dockerfile
+                let dockerfile_complete_path = format!(
+                    "{}/{}",
+                    into_dir.as_str(),
+                    dockerfile_relative_path.unwrap()
+                );
+
+                self.build_image_with_docker(
+                    build,
+                    dockerfile_complete_path.as_str(),
+                    into_dir_docker_style.as_str(),
+                    env_var_args,
+                    !disable_build_cache,
+                    &listeners_helper,
+                )
+            }
+            false => {
+                // build container with Buildpacks
+                self.build_image_with_buildpacks(
+                    build,
+                    into_dir_docker_style.as_str(),
+                    env_var_args,
+                    !disable_build_cache,
+                    &listeners_helper,
+                )
+            }
+        };
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Application {
-                id: build.image.application_id.clone(),
-            },
+            ProgressScope::Application { id: application_id },
             ProgressLevel::Info,
-            Some(format!("container build is done for {} ✔", self.name_with_id())),
+            Some(format!("container {} is built ✔", self.name_with_id())),
             self.context.execution_id(),
         ));
 
-        Ok(BuildResult { build })
+        result
     }
 
     fn build_error(&self, build: Build) -> Result<BuildResult, EngineError> {
@@ -325,7 +481,8 @@ impl Listen for LocalDocker {
 fn check_docker_space_usage_and_clean(docker_path_size_info: FsStats, envs: Vec<(&str, &str)>) {
     let docker_max_disk_percentage_usage_before_purge = 50; // arbitrary percentage that should make the job anytime
 
-    let docker_percentage_used = docker_path_size_info.available_space() * 100 / docker_path_size_info.total_space();
+    let docker_percentage_used =
+        docker_path_size_info.available_space() * 100 / docker_path_size_info.total_space();
 
     if docker_percentage_used > docker_max_disk_percentage_usage_before_purge {
         warn!(

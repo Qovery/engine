@@ -50,22 +50,22 @@ pub fn init() -> Instant {
     Instant::now()
 }
 
-pub fn teardown(startTime: Instant, testName: String){
+pub fn teardown(startTime: Instant, testName: String) {
     let end = Instant::now();
     let elapsed = startTime.to(end);
-    info!("{} seconds for test {}", elapsed.as_seconds_f64(),testName);
+    info!("{} seconds for test {}", elapsed.as_seconds_f64(), testName);
 }
 
 pub fn engine_run_test<T>(test: T) -> ()
-    where T: FnOnce() -> String
+where
+    T: FnOnce() -> String,
 {
     let start = init();
 
     let test_name = test();
 
-    teardown(start,test_name);
+    teardown(start, test_name);
 }
-
 
 pub fn generate_id() -> String {
     // Should follow DNS naming convention https://tools.ietf.org/html/rfc1035
