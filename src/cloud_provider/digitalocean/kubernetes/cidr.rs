@@ -1,8 +1,5 @@
-use std::borrow::Borrow;
-use std::collections::hash_map::RandomState;
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 
 use crate::cmd::utilities;
 
@@ -17,31 +14,6 @@ pub struct DoVpc {
     default: bool,
 }
 
-fn get_forbidden_cidr_per_region() -> HashMap<&'static str, &'static str, RandomState> {
-    // see https://www.digitalocean.com/docs/networking/vpc/
-    let mut forbidden_cidr = HashMap::with_capacity(40);
-    forbidden_cidr.insert("AMS1", "10.11.0.0/16");
-    forbidden_cidr.insert("AMS2", "10.14.0.0/16");
-    forbidden_cidr.insert("AMS3", "10.18.0.0/16");
-    forbidden_cidr.insert("BLR1", "10.47.0.0/16");
-    forbidden_cidr.insert("FRA1", "10.19.0.0/16");
-    forbidden_cidr.insert("LON1", "10.16.0.0/16");
-    forbidden_cidr.insert("NYC1", "10.10.0.0/16");
-    forbidden_cidr.insert("NYC2", "10.13.0.0/16");
-    forbidden_cidr.insert("NYC3", "10.17.0.0/16");
-    forbidden_cidr.insert("SFO1", "10.12.0.0/16");
-    forbidden_cidr.insert("SFO2", "10.46.0.0/16");
-    forbidden_cidr.insert("SFO3", "10.48.0.0/16");
-    forbidden_cidr.insert("SGP1", "10.15.0.0/16");
-    forbidden_cidr.insert("TOR1", "10.20.0.0/16");
-    // for all regions
-    forbidden_cidr.insert("ALL", "10.244.0.0/16");
-    forbidden_cidr.insert("ALL", "10.245.0.0/16");
-    // the /24 is not a typo ;)
-    forbidden_cidr.insert("ALL", "10.246.0.0/24");
-    forbidden_cidr
-}
-
 pub fn get_used_cidr_on_region(token: &str) {
     let mut output_from_cli = String::new();
     let _ = utilities::exec_with_output(
@@ -52,19 +24,11 @@ pub fn get_used_cidr_on_region(token: &str) {
             Err(e) => error!("DOCTL CLI does not respond correctly {}", e),
         },
         |r_err| match r_err {
-            Ok(s) => error!(
-                "DOCTL CLI error from cmd inserted, please check vpcs list command{}",
-                s
-            ),
+            Ok(s) => error!("DOCTL CLI error from cmd inserted, please check vpcs list command{}", s),
             Err(e) => error!("DOCTL CLI does not respond correctly {}", e),
         },
     );
 
     let buff = output_from_cli.borrow();
-    let array: Vec<DoVpc> = serde_json::from_str(&buff).expect("JSON is not well-formatted");
-
-    for elem in array.iter() {
-        let reg = &elem.region;
-        let ip = &elem.ip_range;
-    }
+    let _array: Vec<DoVpc> = serde_json::from_str(&buff).expect("JSON is not well-formatted");
 }

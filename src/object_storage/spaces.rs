@@ -58,12 +58,7 @@ impl Spaces {
             endpoint: format!("https://{}.digitaloceanspaces.com", self.region),
         };
 
-        let credentials = StaticProvider::new(
-            self.access_key_id.clone(),
-            self.secret_access_key.clone(),
-            None,
-            None,
-        );
+        let credentials = StaticProvider::new(self.access_key_id.clone(), self.secret_access_key.clone(), None, None);
 
         let client = Client::new_with(credentials, HttpClient::new().unwrap());
         let s3_client = S3Client::new_with_client(client, region.clone());
@@ -91,13 +86,9 @@ impl Spaces {
                 match file {
                     Ok(mut created_file) => match io::copy(&mut body, &mut created_file).await {
                         Ok(_) => Ok(File::open(download_into_file_path.as_ref()).unwrap()),
-                        Err(e) => {
-                            Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", e)))
-                        }
+                        Err(e) => Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", e))),
                     },
-                    Err(e) => {
-                        Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", e)))
-                    }
+                    Err(e) => Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", e))),
                 }
             }
             Err(e) => Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", e))),
@@ -127,20 +118,15 @@ impl ObjectStorage for Spaces {
         Ok(())
     }
 
-    fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+    fn create_bucket(&self, _bucket_name: &str) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+    fn delete_bucket(&self, _bucket_name: &str) -> Result<(), EngineError> {
         unimplemented!()
     }
 
-    fn get(
-        &self,
-        bucket_name: &str,
-        object_key: &str,
-        use_cache: bool,
-    ) -> Result<(StringPath, File), EngineError> {
+    fn get(&self, bucket_name: &str, object_key: &str, use_cache: bool) -> Result<(StringPath, File), EngineError> {
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),
@@ -161,26 +147,18 @@ impl ObjectStorage for Spaces {
         }
 
         // retrieve config file from object storage
-        let result = retry::retry(
-            Fibonacci::from_millis(3000).take(5),
-            || match runtime::async_run(self.get_object(
-                bucket_name,
-                object_key,
-                file_path.as_str(),
-            )) {
+        let result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
+            match runtime::async_run(self.get_object(bucket_name, object_key, file_path.as_str())) {
                 Ok(file) => OperationResult::Ok(file),
                 Err(err) => {
                     debug!("{:?}", err);
 
-                    warn!(
-                        "Can't download object '{}/{}'. Let's retry...",
-                        bucket_name, object_key
-                    );
+                    warn!("Can't download object '{}/{}'. Let's retry...", bucket_name, object_key);
 
                     OperationResult::Retry(err)
                 }
-            },
-        );
+            }
+        });
 
         let file = match result {
             Ok(_) => File::open(file_path.as_str()),
@@ -198,7 +176,7 @@ impl ObjectStorage for Spaces {
         }
     }
 
-    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), EngineError> {
+    fn put(&self, _bucket_name: &str, _object_key: &str, _file_path: &str) -> Result<(), EngineError> {
         Err(self.engine_error(Internal, "spaces.put(..) is not implemented".to_string()))
     }
 }

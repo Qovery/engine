@@ -13,7 +13,6 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tracing::info;
 use tracing_subscriber;
-use tracing_subscriber::util::SubscriberInitExt;
 
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cmd;
@@ -33,7 +32,7 @@ pub fn init() -> Instant {
     // check if it's currently running on GitHub action or Gitlab CI, using a common env var
     let ci_var = "CI";
 
-    match env::var_os(ci_var) {
+    let _ = match env::var_os(ci_var) {
         Some(_) => tracing_subscriber::fmt()
             .json()
             .with_max_level(tracing::Level::INFO)
@@ -50,10 +49,10 @@ pub fn init() -> Instant {
     Instant::now()
 }
 
-pub fn teardown(startTime: Instant, testName: String) {
+pub fn teardown(start_time: Instant, test_name: String) {
     let end = Instant::now();
-    let elapsed = startTime.to(end);
-    info!("{} seconds for test {}", elapsed.as_seconds_f64(), testName);
+    let elapsed = end - start_time;
+    info!("{} seconds for test {}", elapsed.as_seconds_f64(), test_name);
 }
 
 pub fn engine_run_test<T>(test: T) -> ()
@@ -111,8 +110,7 @@ fn curl_path(path: &str) -> bool {
 
 pub fn context() -> Context {
     let execution_id = execution_id();
-    let home_dir = std::env::var("WORKSPACE_ROOT_DIR")
-        .unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
+    let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
     let metadata = Metadata {
         test: Option::from(true),
@@ -120,13 +118,7 @@ pub fn context() -> Context {
         resource_expiration_in_seconds: Some(2700),
     };
 
-    Context::new(
-        execution_id,
-        home_dir,
-        lib_root_dir,
-        None,
-        Option::from(metadata),
-    )
+    Context::new(execution_id, home_dir, lib_root_dir, None, Option::from(metadata))
 }
 
 fn kubernetes_config_path(
@@ -138,10 +130,7 @@ fn kubernetes_config_path(
     let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", kubernetes_cluster_id);
     let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
 
-    let kubernetes_config_file_path = format!(
-        "{}/kubernetes_config_{}",
-        workspace_directory, kubernetes_cluster_id
-    );
+    let kubernetes_config_file_path = format!("{}/kubernetes_config_{}", workspace_directory, kubernetes_cluster_id);
 
     let _ = get_kubernetes_config_file(
         access_key_id,
@@ -228,10 +217,7 @@ fn get_object_via_aws_cli(
     Ok(s)
 }
 
-pub fn is_pod_restarted_aws_env(
-    environment_check: Environment,
-    pod_to_check: &str,
-) -> (bool, String) {
+pub fn is_pod_restarted_aws_env(environment_check: Environment, pod_to_check: &str) -> (bool, String) {
     let namespace_name = format!(
         "{}-{}",
         &environment_check.project_id.clone(),

@@ -5,9 +5,9 @@ use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, deploy_stateless_service_error,
-    deploy_user_stateless_service, send_progress_on_long_task, Action, Application as CApplication,
-    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
+    send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
+    StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -21,7 +21,7 @@ pub struct Application {
     name: String,
     private_port: Option<u16>,
     total_cpus: String,
-    cpu_burst: String,
+    _cpu_burst: String,
     total_ram_in_mib: u32,
     total_instances: u16,
     start_timeout_in_seconds: u32,
@@ -39,7 +39,7 @@ impl Application {
         name: &str,
         private_port: Option<u16>,
         total_cpus: String,
-        cpu_burst: String,
+        _cpu_burst: String,
         total_ram_in_mib: u32,
         total_instances: u16,
         start_timeout_in_seconds: u32,
@@ -55,7 +55,7 @@ impl Application {
             name: name.to_string(),
             private_port,
             total_cpus,
-            cpu_burst,
+            _cpu_burst,
             total_ram_in_mib,
             total_instances,
             start_timeout_in_seconds,
@@ -157,7 +157,10 @@ impl Service for Application {
             Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
             None => {
                 let image_name_with_tag = self.image().name_with_tag();
-                warn!("there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
+                warn!(
+                    "there is no registry url, use image name with tag with the default container registry: {}",
+                    image_name_with_tag.as_str()
+                );
                 context.insert("image_name_with_tag", image_name_with_tag.as_str());
             }
         }
@@ -244,10 +247,7 @@ impl Create for Application {
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "AWS.application.on_create_error() called for {}",
-            self.name()
-        );
+        warn!("AWS.application.on_create_error() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
@@ -273,10 +273,7 @@ impl Pause for Application {
     }
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "AWS.application.on_pause_error() called for {}",
-            self.name()
-        );
+        warn!("AWS.application.on_pause_error() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
@@ -302,10 +299,7 @@ impl Delete for Application {
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "AWS.application.on_delete_error() called for {}",
-            self.name()
-        );
+        warn!("AWS.application.on_delete_error() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
