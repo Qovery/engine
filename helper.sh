@@ -313,6 +313,7 @@ function all_tests(){ ## Run all tests on qovery-engine
 
   STARTTIME=$(date +%s)
 
+  ls -lR target
   cargo build --color=always --all --all-targets
   sccache -s
   cd $ENGINE_DIR
@@ -345,7 +346,7 @@ function lint() {
   export_env
   prepare_engine
   
-  ls -lR /home/gitlab_cache
+  ls -lR target
   set -e
 
   echo "###################################################"
