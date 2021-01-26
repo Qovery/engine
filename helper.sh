@@ -347,6 +347,7 @@ function lint() {
   
 
   cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
+  RUSTFLAGS="--deny warnings" cargo build
   # FIXME fix warning in the engine and enable clippy
   # cargo clippy
 }
