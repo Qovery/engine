@@ -35,15 +35,6 @@ function fatal(){
 }
 
 
-function fetch_last_valid_artifacts {
-  jobId=$(curl -s -L --header "PRIVATE-TOKEN: ${PRIVATE_TOKEN}" "https://gitlab.com/api/v4/projects/qovery%2Fqovery-engine/jobs?scope[]=success" | jq '.[] | select(.name == "lint-code") | .id' | head -n1)
-  echo "Found jobID for lint-code ${jobId}"
-
-  curl -L --header "PRIVATE-TOKEN: ${PRIVATE_TOKEN}" "https://gitlab.com/api/v4/projects/qovery%2Fqovery-engine/jobs/${jobId}/artifacts" -o artifacts.zip
-
-  unzip artifacts.zip
-}
-
 function check_num_args() {
   desired_number=$1
   if [ $ARGS_NUM -ne ${desired_number} ]; then
@@ -425,9 +416,6 @@ fi
 echo "Detected commit ID: $commit_id"
 
 case $1 in
-fetch_last_artifact)
-  fetch_last_valid_artifacts
-  ;;
 build_image)
   build_image
   ;;
