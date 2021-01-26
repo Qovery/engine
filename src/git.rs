@@ -5,11 +5,7 @@ use git2::{Error, Oid, Repository};
 
 /// TODO support SSH repository_url - we assume that the repository URL starts with HTTPS
 /// TODO support git submodules
-pub fn clone<P>(
-    repository_url: &str,
-    into_dir: P,
-    credentials: &Option<Credentials>,
-) -> Result<Repository, Error>
+pub fn clone<P>(repository_url: &str, into_dir: P, credentials: &Option<Credentials>) -> Result<Repository, Error>
 where
     P: AsRef<Path>,
 {
@@ -44,11 +40,7 @@ pub fn checkout(repo: &Repository, commit_id: &str, repo_url: &str) -> Result<()
     let _ = match repo.find_commit(oid) {
         Err(e) => {
             let mut x = git2::Error::from_str(
-                format!(
-                    "Commit ID {} on repository {} was not found",
-                    &commit_id, &repo_url
-                )
-                .as_ref(),
+                format!("Commit ID {} on repository {} was not found", &commit_id, &repo_url).as_ref(),
             );
             x.set_code(e.code());
             x.set_class(e.class());
@@ -80,11 +72,7 @@ pub fn checkout_submodules(repo: &Repository) -> Result<(), Error> {
     match repo.submodules() {
         Ok(submodules) => {
             for mut submodule in submodules {
-                info!(
-                    "getting submodule {:?} from {:?}",
-                    submodule.name(),
-                    submodule.url()
-                );
+                info!("getting submodule {:?} from {:?}", submodule.name(), submodule.url());
 
                 match submodule.update(true, None) {
                     Err(e) => return Err(e),

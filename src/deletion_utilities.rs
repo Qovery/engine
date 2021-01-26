@@ -2,8 +2,7 @@
 pub fn get_firsts_namespaces_to_delete(namespaces: Vec<&str>) -> Vec<&str> {
     // from all namesapce remove managed and never delete namespaces
     let minus_managed = minus_namespaces(namespaces, get_qovery_managed_namespaces());
-    let minus_qovery_managed_and_never_delete =
-        minus_namespaces(minus_managed, get_never_delete_namespaces());
+    let minus_qovery_managed_and_never_delete = minus_namespaces(minus_managed, get_never_delete_namespaces());
     minus_qovery_managed_and_never_delete
 }
 

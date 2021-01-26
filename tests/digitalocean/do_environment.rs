@@ -10,10 +10,7 @@ use test_utilities::digitalocean::digital_ocean_token;
 use test_utilities::utilities::{context, engine_run_test, init};
 use tracing::{span, Level};
 
-pub fn deploy_environment(
-    context: &Context,
-    environment_action: &EnvironmentAction,
-) -> TransactionResult {
+pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
     let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
@@ -35,10 +32,7 @@ pub fn deploy_environment(
     tx.commit()
 }
 
-pub fn delete_environment(
-    context: &Context,
-    environment_action: &EnvironmentAction,
-) -> TransactionResult {
+pub fn delete_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
     let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
@@ -57,17 +51,13 @@ pub fn delete_environment(
 //#[test]
 fn deploy_a_working_environment_with_no_router_on_do() {
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "deploy_a_working_environment_with_no_router_on_do"
-        );
+        let span = span!(Level::INFO, "deploy_a_working_environment_with_no_router_on_do");
         let _enter = span.enter();
 
         let context = context();
         let context_for_delete = context.clone_not_same_execution_id();
         let mut environment = test_utilities::aws::environment_only_http_server(&context);
-        let mut environment_for_delete =
-            test_utilities::aws::environment_only_http_server(&context);
+        let mut environment_for_delete = test_utilities::aws::environment_only_http_server(&context);
         environment.routers = vec![];
         environment_for_delete.routers = vec![];
         environment_for_delete.action = Action::Delete;
@@ -118,10 +108,7 @@ fn deploy_a_working_environment_with_no_router_on_do() {
 //#[test]
 fn do_deploy_a_working_environment_with_custom_domain() {
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "deploy_a_working_environment_with_custom_domain"
-        );
+        let span = span!(Level::INFO, "deploy_a_working_environment_with_custom_domain");
         let _enter = span.enter();
 
         let context = context();
@@ -169,10 +156,7 @@ fn do_deploy_a_working_environment_with_custom_domain() {
 //#[test]
 fn deploy_a_working_environment_router_and_app_on_do() {
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "deploy_a_working_environment_router_and_app_on_do"
-        );
+        let span = span!(Level::INFO, "deploy_a_working_environment_router_and_app_on_do");
         let _enter = span.enter();
 
         let context = context();

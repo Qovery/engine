@@ -48,8 +48,7 @@ where
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let helm_history_rows =
-        helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
     Ok(match helm_history_rows.first() {
@@ -220,10 +219,7 @@ where
         },
     ) {
         Ok(_) => info!("Helm uninstall fail with : {}", helmlist_string.clone()),
-        Err(_) => info!(
-            "Helm history found for release name: {}",
-            helmlist_string.clone()
-        ),
+        Err(_) => info!("Helm history found for release name: {}", helmlist_string.clone()),
     };
     Ok(output_vec.join(""))
 }
@@ -304,8 +300,7 @@ where
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let helm_history_rows =
-        helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
     Ok(match helm_history_rows.first() {
@@ -314,10 +309,7 @@ where
     })
 }
 
-pub fn helm_list<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-) -> Result<Vec<String>, SimpleError>
+pub fn helm_list<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<Vec<String>, SimpleError>
 where
     P: AsRef<Path>,
 {

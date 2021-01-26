@@ -14,7 +14,6 @@ pub struct Cluster {
     pub kubernetes_cluster: KubernetesCluster,
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesCluster {

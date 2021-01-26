@@ -7,8 +7,8 @@ use serde::de::DeserializeOwned;
 
 use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
 use crate::cmd::structs::{
-    Item, KubernetesEvent, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod,
-    KubernetesPodStatusPhase, KubernetesService, LabelsContent,
+    Item, KubernetesEvent, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
+    KubernetesService, LabelsContent,
 };
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
@@ -107,10 +107,7 @@ where
         Err(err) => {
             error!("{:?}", err);
             error!("{}", output_string.as_str());
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(output_string),
-            ));
+            return Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)));
         }
     }
 }
@@ -127,16 +124,7 @@ where
 {
     match do_kubectl_exec_describe_service(kubernetes_config, namespace, selector, envs) {
         Ok(result) => {
-            if result.items.is_empty()
-                || result
-                    .items
-                    .first()
-                    .unwrap()
-                    .status
-                    .load_balancer
-                    .ingress
-                    .is_empty()
-            {
+            if result.items.is_empty() || result.items.first().unwrap().status.load_balancer.ingress.is_empty() {
                 return Ok(None);
             }
 
@@ -169,16 +157,7 @@ where
 {
     match do_kubectl_exec_describe_service(kubernetes_config, namespace, selector, envs) {
         Ok(result) => {
-            if result.items.is_empty()
-                || result
-                    .items
-                    .first()
-                    .unwrap()
-                    .status
-                    .load_balancer
-                    .ingress
-                    .is_empty()
-            {
+            if result.items.is_empty() || result.items.first().unwrap().status.load_balancer.ingress.is_empty() {
                 return Ok(None);
             }
 
@@ -215,16 +194,7 @@ where
         envs,
     )?;
 
-    if result.items.is_empty()
-        || result
-            .items
-            .first()
-            .unwrap()
-            .status
-            .load_balancer
-            .ingress
-            .is_empty()
-    {
+    if result.items.is_empty() || result.items.first().unwrap().status.load_balancer.ingress.is_empty() {
         return Ok(None);
     }
 
@@ -299,15 +269,7 @@ where
 {
     let result = kubectl_exec_get_pod(kubernetes_config, namespace, selector, envs)?;
 
-    if result.items.is_empty()
-        || result
-            .items
-            .first()
-            .unwrap()
-            .status
-            .container_statuses
-            .is_empty()
-    {
+    if result.items.is_empty() || result.items.first().unwrap().status.container_statuses.is_empty() {
         return Ok(None);
     }
 
@@ -387,11 +349,7 @@ where
     Ok(Some(false))
 }
 
-pub fn kubectl_exec_is_namespace_present<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    envs: Vec<(&str, &str)>,
-) -> bool
+pub fn kubectl_exec_is_namespace_present<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> bool
 where
     P: AsRef<Path>,
 {
@@ -425,11 +383,7 @@ where
     }
 }
 
-pub fn kubectl_exec_create_namespace_without_labels(
-    namespace: &str,
-    kube_config: &str,
-    envs: Vec<(&str, &str)>,
-) {
+pub fn kubectl_exec_create_namespace_without_labels(namespace: &str, kube_config: &str, envs: Vec<(&str, &str)>) {
     let _ = kubectl_exec_create_namespace(kube_config, namespace, None, envs);
 }
 
@@ -443,11 +397,7 @@ where
     P: AsRef<Path>,
 {
     // don't create the namespace if already exists and not not return error in this case
-    if !kubectl_exec_is_namespace_present(
-        kubernetes_config.as_ref(),
-        namespace.clone(),
-        envs.clone(),
-    ) {
+    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace.clone(), envs.clone()) {
         // create namespace
         let mut _envs = Vec::with_capacity(envs.len() + 1);
         _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -494,11 +444,7 @@ where
         ));
     };
 
-    if !kubectl_exec_is_namespace_present(
-        kubernetes_config.as_ref(),
-        namespace.clone(),
-        envs.clone(),
-    ) {
+    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace.clone(), envs.clone()) {
         return Err(SimpleError::new(
             SimpleErrorKind::Other,
             Some(format! {"Can't set labels on namespace {} because it doesn't exists", namespace}),
@@ -512,10 +458,7 @@ where
     for label in labels.iter() {
         labels_string.push(format! {"{}={}", label.name, label.value});
     }
-    let labels_str = labels_string
-        .iter()
-        .map(|x| x.as_ref())
-        .collect::<Vec<&str>>();
+    let labels_str = labels_string.iter().map(|x| x.as_ref()).collect::<Vec<&str>>();
     command_args.extend(labels_str);
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
@@ -584,11 +527,8 @@ pub fn kubectl_exec_get_all_namespaces<P>(
 where
     P: AsRef<Path>,
 {
-    let result = kubectl_exec::<P, KubernetesList<Item>>(
-        vec!["get", "namespaces", "-o", "json"],
-        kubernetes_config,
-        envs,
-    );
+    let result =
+        kubectl_exec::<P, KubernetesList<Item>>(vec!["get", "namespaces", "-o", "json"], kubernetes_config, envs);
 
     let mut to_return: Vec<String> = Vec::new();
 
@@ -743,11 +683,7 @@ pub fn kubectl_exec_get_node<P>(
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, KubernetesList<KubernetesNode>>(
-        vec!["get", "node", "-o", "json"],
-        kubernetes_config,
-        envs,
-    )
+    kubectl_exec::<P, KubernetesList<KubernetesNode>>(vec!["get", "node", "-o", "json"], kubernetes_config, envs)
 }
 
 pub fn kubectl_exec_get_pod<P>(
@@ -782,11 +718,7 @@ where
     )
 }
 
-fn kubectl_exec<P, T>(
-    args: Vec<&str>,
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-) -> Result<T, SimpleError>
+fn kubectl_exec<P, T>(args: Vec<&str>, kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<T, SimpleError>
 where
     P: AsRef<Path>,
     T: DeserializeOwned,
@@ -816,10 +748,7 @@ where
         Err(err) => {
             error!("{:?}", err);
             error!("{}", output_string.as_str());
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(output_string),
-            ));
+            return Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)));
         }
     };
 

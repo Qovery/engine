@@ -3,9 +3,9 @@ use tera::Context as TeraContext;
 use crate::build_platform::Image;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, deploy_stateless_service_error,
-    deploy_user_stateless_service, send_progress_on_long_task, Action, Application as AApplication,
-    Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
+    send_progress_on_long_task, Action, Application as AApplication, Create, Delete, Helm, Pause, Service, ServiceType,
+    StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -64,10 +64,7 @@ impl crate::cloud_provider::service::Application for ExternalService {
 
 impl Helm for ExternalService {
     fn helm_release_name(&self) -> String {
-        crate::string::cut(
-            format!("external-service-{}-{}", self.name(), self.id()),
-            50,
-        )
+        crate::string::cut(format!("external-service-{}-{}", self.name(), self.id()), 50)
     }
 
     fn helm_chart_dir(&self) -> String {
@@ -145,7 +142,10 @@ impl Service for ExternalService {
             Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
             None => {
                 let image_name_with_tag = self.image().name_with_tag();
-                warn!("there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
+                warn!(
+                    "there is no registry url, use image name with tag with the default container registry: {}",
+                    image_name_with_tag.as_str()
+                );
                 context.insert("image_name_with_tag", image_name_with_tag.as_str());
             }
         }
@@ -175,10 +175,7 @@ impl Service for ExternalService {
 
 impl Create for ExternalService {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!(
-            "AWS.external_service.on_create() called for {}",
-            self.name()
-        );
+        info!("AWS.external_service.on_create() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
@@ -192,10 +189,7 @@ impl Create for ExternalService {
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "AWS.external_service.on_create_error() called for {}",
-            self.name()
-        );
+        warn!("AWS.external_service.on_create_error() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
@@ -221,10 +215,7 @@ impl Pause for ExternalService {
     }
 
     fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "AWS.external_service.on_pause_error() called for {}",
-            self.name()
-        );
+        warn!("AWS.external_service.on_pause_error() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
@@ -236,10 +227,7 @@ impl Pause for ExternalService {
 
 impl Delete for ExternalService {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!(
-            "AWS.external_service.on_delete() called for {}",
-            self.name()
-        );
+        info!("AWS.external_service.on_delete() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
@@ -253,10 +241,7 @@ impl Delete for ExternalService {
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "AWS.external_service.on_delete_error() called for {}",
-            self.name()
-        );
+        warn!("AWS.external_service.on_delete_error() called for {}", self.name());
 
         send_progress_on_long_task(
             self,

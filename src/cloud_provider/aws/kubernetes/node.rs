@@ -73,38 +73,17 @@ mod tests {
         assert_eq!(Node::new_with_cpu_and_mem(0, 1).instance_type(), "t2.micro");
         assert_eq!(Node::new_with_cpu_and_mem(1, 1).instance_type(), "t2.micro");
         assert_eq!(Node::new_with_cpu_and_mem(1, 2).instance_type(), "t2.small");
-        assert_eq!(
-            Node::new_with_cpu_and_mem(2, 4).instance_type(),
-            "t2.medium"
-        );
+        assert_eq!(Node::new_with_cpu_and_mem(2, 4).instance_type(), "t2.medium");
         assert_eq!(Node::new_with_cpu_and_mem(2, 5).instance_type(), "t2.large");
         assert_eq!(Node::new_with_cpu_and_mem(1, 6).instance_type(), "t2.large");
         assert_eq!(Node::new_with_cpu_and_mem(1, 7).instance_type(), "t2.large");
         assert_eq!(Node::new_with_cpu_and_mem(2, 8).instance_type(), "t2.large");
         assert_eq!(Node::new_with_cpu_and_mem(3, 8).instance_type(), "t2.large");
-        assert_eq!(
-            Node::new_with_cpu_and_mem(3, 10).instance_type(),
-            "t2.xlarge"
-        );
-        assert_eq!(
-            Node::new_with_cpu_and_mem(3, 12).instance_type(),
-            "t2.xlarge"
-        );
-        assert_eq!(
-            Node::new_with_cpu_and_mem(4, 16).instance_type(),
-            "t2.xlarge"
-        );
-        assert_eq!(
-            Node::new_with_cpu_and_mem(4, 17).instance_type(),
-            "t2.2xlarge"
-        );
-        assert_eq!(
-            Node::new_with_cpu_and_mem(8, 32).instance_type(),
-            "t2.2xlarge"
-        );
-        assert_eq!(
-            Node::new_with_cpu_and_mem(16, 64).instance_type(),
-            "t2.2xlarge"
-        );
+        assert_eq!(Node::new_with_cpu_and_mem(3, 10).instance_type(), "t2.xlarge");
+        assert_eq!(Node::new_with_cpu_and_mem(3, 12).instance_type(), "t2.xlarge");
+        assert_eq!(Node::new_with_cpu_and_mem(4, 16).instance_type(), "t2.xlarge");
+        assert_eq!(Node::new_with_cpu_and_mem(4, 17).instance_type(), "t2.2xlarge");
+        assert_eq!(Node::new_with_cpu_and_mem(8, 32).instance_type(), "t2.2xlarge");
+        assert_eq!(Node::new_with_cpu_and_mem(16, 64).instance_type(), "t2.2xlarge");
     }
 }
