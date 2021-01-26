@@ -31,9 +31,6 @@ lint-code:
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   tags:
     - engine-dedicated
-  artifacts:
-    paths: 
-      - target/
 
 wip-fast-tests:
   stage: tests
@@ -56,7 +53,6 @@ wip-fast-tests:
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
-      - target/
     expire_in: 1 week
 
 wip-full-tests:
@@ -80,7 +76,6 @@ wip-full-tests:
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
-      - target/
     expire_in: 1 week
 
 # Dev branch
@@ -101,7 +96,6 @@ dev-full-test-from-github:
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
-      - target/
     expire_in: 1 week
 
 dev-fast-test-from-github:
@@ -120,7 +114,6 @@ dev-fast-test-from-github:
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
-      - target/
     expire_in: 1 week
 
 dev-full-tests:
@@ -142,7 +135,6 @@ dev-full-tests:
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
-      - target/
     expire_in: 1 week
 
 dev-fast-tests-sequential:
@@ -161,7 +153,6 @@ dev-fast-tests-sequential:
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
-      - target/
     expire_in: 1 week
 
 dev-full-tests-sequential:
@@ -180,7 +171,6 @@ dev-full-tests-sequential:
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
-      - target/
     expire_in: 1 week
 
 dev-build:
