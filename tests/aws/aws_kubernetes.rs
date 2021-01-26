@@ -71,9 +71,8 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
     let mut read_buf = String::new();
     file.read_to_string(&mut read_buf).unwrap();
 
-    let options_result = serde_json::from_str::<
-        qovery_engine::cloud_provider::aws::kubernetes::Options,
-    >(read_buf.as_str());
+    let options_result =
+        serde_json::from_str::<qovery_engine::cloud_provider::aws::kubernetes::Options>(read_buf.as_str());
 
     let region = "eu-west-3";
     let kubernetes = EKS::new(
@@ -129,9 +128,8 @@ fn create_eks_cluster_in_us_east_2() {
     let mut read_buf = String::new();
     file.read_to_string(&mut read_buf).unwrap();
 
-    let options_result = serde_json::from_str::<
-        qovery_engine::cloud_provider::aws::kubernetes::Options,
-    >(read_buf.as_str());
+    let options_result =
+        serde_json::from_str::<qovery_engine::cloud_provider::aws::kubernetes::Options>(read_buf.as_str());
 
     let region = "us-east-2";
     let kubernetes = EKS::new(
@@ -177,9 +175,8 @@ fn delete_eks_cluster_in_us_east_2() {
     let mut read_buf = String::new();
     file.read_to_string(&mut read_buf).unwrap();
 
-    let options_result = serde_json::from_str::<
-        qovery_engine::cloud_provider::aws::kubernetes::Options,
-    >(read_buf.as_str());
+    let options_result =
+        serde_json::from_str::<qovery_engine::cloud_provider::aws::kubernetes::Options>(read_buf.as_str());
 
     let region = "us-east-2";
     let kubernetes = EKS::new(
@@ -225,9 +222,8 @@ fn delete_eks_cluster_in_eu_west_3() {
     let mut read_buf = String::new();
     file.read_to_string(&mut read_buf).unwrap();
 
-    let options_result = serde_json::from_str::<
-        qovery_engine::cloud_provider::aws::kubernetes::Options,
-    >(read_buf.as_str());
+    let options_result =
+        serde_json::from_str::<qovery_engine::cloud_provider::aws::kubernetes::Options>(read_buf.as_str());
 
     let region = "eu-west-3";
     let kubernetes = EKS::new(

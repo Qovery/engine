@@ -8,19 +8,13 @@ use flate2::Compression;
 use walkdir::WalkDir;
 
 pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), Error> {
-    let files = WalkDir::new(from)
-        .follow_links(true)
-        .into_iter()
-        .filter_map(|e| e.ok());
+    let files = WalkDir::new(from).follow_links(true).into_iter().filter_map(|e| e.ok());
 
     let files = match exclude_j2_files {
         true => files
             .filter(|e| {
                 // return only non *.j2.* files
-                e.file_name()
-                    .to_str()
-                    .map(|s| !s.contains(".j2."))
-                    .unwrap_or(false)
+                e.file_name().to_str().map(|s| !s.contains(".j2.")).unwrap_or(false)
             })
             .collect::<Vec<_>>(),
         false => files.collect::<Vec<_>>(),
@@ -31,11 +25,7 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
 
     for file in files {
         let path_str = file.path().to_str().unwrap();
-        let dest = format!(
-            "{}{}",
-            to.to_str().unwrap(),
-            path_str.replace(from_str, "").as_str()
-        );
+        let dest = format!("{}{}", to.to_str().unwrap(), path_str.replace(from_str, "").as_str());
 
         if file.metadata().unwrap().is_dir() {
             let _ = fs::create_dir_all(&dest)?;
@@ -73,16 +63,10 @@ where
     dir
 }
 
-fn archive_workspace_directory(
-    working_root_dir: &str,
-    execution_id: &str,
-) -> Result<String, std::io::Error> {
+fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
     let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id);
 
-    let tar_gz_file_path = format!(
-        "{}/.qovery-workspace/{}.tar.gz",
-        working_root_dir, execution_id
-    );
+    let tar_gz_file_path = format!("{}/.qovery-workspace/{}.tar.gz", working_root_dir, execution_id);
 
     let tar_gz_file = File::create(tar_gz_file_path.as_str())?;
 
@@ -98,10 +82,7 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) {
     let _ = std::fs::remove_dir_all(workspace_dir);
 }
 
-pub fn create_workspace_archive(
-    working_root_dir: &str,
-    execution_id: &str,
-) -> Result<String, std::io::Error> {
+pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
     info!("archive workspace directory in progress");
 
     match archive_workspace_directory(working_root_dir, execution_id) {

@@ -11,11 +11,7 @@ use walkdir::WalkDir;
 
 use crate::error::{SimpleError, SimpleErrorKind};
 
-pub fn generate_and_copy_all_files_into_dir<S, P>(
-    from_dir: S,
-    to_dir: P,
-    context: &Context,
-) -> Result<(), SimpleError>
+pub fn generate_and_copy_all_files_into_dir<S, P>(from_dir: S, to_dir: P, context: &Context) -> Result<(), SimpleError>
 where
     S: AsRef<Path>,
     P: AsRef<Path>,
@@ -28,10 +24,7 @@ where
             let error_msg = match e.kind {
                 tera::ErrorKind::TemplateNotFound(x) => format!("template not found: {}", x),
                 tera::ErrorKind::Msg(x) => format!("tera error: {}", x),
-                tera::ErrorKind::CircularExtend {
-                    tpl,
-                    inheritance_chain,
-                } => format!(
+                tera::ErrorKind::CircularExtend { tpl, inheritance_chain } => format!(
                     "circular extend - template: {}, inheritance chain: {:?}",
                     tpl, inheritance_chain
                 ),
@@ -77,10 +70,7 @@ where
     }
 }
 
-pub fn generate_j2_template_files<P>(
-    root_dir: P,
-    context: &Context,
-) -> Result<Vec<RenderedTemplate>, TeraError>
+pub fn generate_j2_template_files<P>(root_dir: P, context: &Context) -> Result<Vec<RenderedTemplate>, TeraError>
 where
     P: AsRef<Path>,
 {
@@ -95,12 +85,7 @@ where
         .follow_links(true)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_name()
-                .to_str()
-                .map(|s| s.contains(".j2."))
-                .unwrap_or(false)
-        })
+        .filter(|e| e.file_name().to_str().map(|s| s.contains(".j2.")).unwrap_or(false))
         .collect::<Vec<_>>();
 
     let mut results: Vec<RenderedTemplate> = vec![];
@@ -122,10 +107,7 @@ where
     Ok(results)
 }
 
-pub fn write_rendered_templates(
-    rendered_templates: &[RenderedTemplate],
-    into: &Path,
-) -> Result<(), SimpleError> {
+pub fn write_rendered_templates(rendered_templates: &[RenderedTemplate], into: &Path) -> Result<(), SimpleError> {
     for rt in rendered_templates {
         let dest = format!("{}/{}", into.to_str().unwrap(), rt.path_and_file_name());
 

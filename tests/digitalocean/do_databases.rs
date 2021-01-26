@@ -1,4 +1,4 @@
-use test_utilities::utilities::{context, init, engine_run_test};
+use test_utilities::utilities::{context, engine_run_test, init};
 use tracing::{span, Level};
 
 use qovery_engine::models::{Action, Clone2, EnvironmentAction};
@@ -9,7 +9,6 @@ use crate::digitalocean::deploy_environment_on_do;
 //TODO: Do you wanna play a game ?
 fn deploy_one_postgresql() {
     engine_run_test(|| {
-
         let span = span!(Level::INFO, "deploy_one_postgresql");
         let _enter = span.enter();
 

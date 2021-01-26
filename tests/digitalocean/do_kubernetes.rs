@@ -43,9 +43,8 @@ fn create_doks_cluster_in_fra_10() {
         let mut read_buf = String::new();
         file.read_to_string(&mut read_buf).unwrap();
 
-        let options_result = serde_json::from_str::<
-            qovery_engine::cloud_provider::digitalocean::kubernetes::Options,
-        >(read_buf.as_str());
+        let options_result =
+            serde_json::from_str::<qovery_engine::cloud_provider::digitalocean::kubernetes::Options>(read_buf.as_str());
 
         let kubernetes = DOKS::new(
             context.clone(),
@@ -65,13 +64,9 @@ fn create_doks_cluster_in_fra_10() {
         tx.commit();
 
         // TESTING: Kube cluster UUID is OK ?
-        let res_uuid =
-            get_uuid_of_cluster_from_name(digital_ocean_token().as_str(), cluster_name.clone());
+        let res_uuid = get_uuid_of_cluster_from_name(digital_ocean_token().as_str(), cluster_name.clone());
         match res_uuid {
-            Ok(uuid) => assert_eq!(
-                get_kube_cluster_name_from_uuid(uuid.as_str()),
-                cluster_name.clone()
-            ),
+            Ok(uuid) => assert_eq!(get_kube_cluster_name_from_uuid(uuid.as_str()), cluster_name.clone()),
             Err(e) => {
                 error!("{:?}", e.message);
                 assert!(false);

@@ -29,10 +29,7 @@ pub fn generate_contexts_and_environments(
     (context_vec, env_vec)
 }
 
-pub fn deploy_environment(
-    context: &Context,
-    environment_action: &EnvironmentAction,
-) -> TransactionResult {
+pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
@@ -72,10 +69,7 @@ pub fn deploy_environment(
 //     tx.commit()
 // }
 
-pub fn delete_environment(
-    context: &Context,
-    environment_action: &EnvironmentAction,
-) -> TransactionResult {
+pub fn delete_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
@@ -93,10 +87,7 @@ pub fn delete_environment(
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "deploy_a_working_environment_with_no_router_on_aws_eks"
-        );
+        let span = span!(Level::INFO, "deploy_a_working_environment_with_no_router_on_aws_eks");
         let _enter = span.enter();
 
         let context = context();
@@ -166,10 +157,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
 #[test]
 fn build_with_buildpacks_and_deploy_a_working_environment() {
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "build_with_buildpacks_and_deploy_a_working_environment"
-        );
+        let span = span!(Level::INFO, "build_with_buildpacks_and_deploy_a_working_environment");
         let _enter = span.enter();
 
         let context = context();
@@ -242,10 +230,7 @@ fn deploy_a_working_environment_with_domain() {
 
 fn deploy_a_working_environment_with_custom_domain() {
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "deploy_a_working_environment_with_custom_domain"
-        );
+        let span = span!(Level::INFO, "deploy_a_working_environment_with_custom_domain");
         let _enter = span.enter();
 
         let context = context();
@@ -294,10 +279,7 @@ fn deploy_a_working_environment_with_custom_domain() {
 #[ignore]
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "deploy_a_working_environment_with_storage_on_aws_eks"
-        );
+        let span = span!(Level::INFO, "deploy_a_working_environment_with_storage_on_aws_eks");
         let _enter = span.enter();
 
         let context = context();

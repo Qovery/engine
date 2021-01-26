@@ -6,10 +6,7 @@ mod do_databases;
 mod do_environment;
 pub mod do_kubernetes;
 
-pub fn deploy_environment_on_do(
-    context: &Context,
-    environment_action: &EnvironmentAction,
-) -> TransactionResult {
+pub fn deploy_environment_on_do(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
     let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();

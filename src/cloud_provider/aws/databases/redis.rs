@@ -4,14 +4,11 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service,
-    get_tfstate_name, get_tfstate_suffix, send_progress_on_long_task, Action, Backup, Create,
-    Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType,
-    StatefulService, Terraform, Upgrade,
+    check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
+    get_tfstate_suffix, send_progress_on_long_task, Action, Backup, Create, Database, DatabaseOptions, DatabaseType,
+    Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
 };
-use crate::cloud_provider::utilities::{
-    get_self_hosted_redis_version, get_supported_version_to_use,
-};
+use crate::cloud_provider::utilities::{get_self_hosted_redis_version, get_supported_version_to_use};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
@@ -136,9 +133,7 @@ impl Service for Redis {
         kubectl::kubectl_exec_create_namespace_without_labels(
             &environment.namespace(),
             kube_config_file_path.as_str(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         );
 
         let version = self.matching_correct_version(is_managed_services)?;
@@ -154,18 +149,12 @@ impl Service for Redis {
             ));
         };
 
-        context.insert(
-            "database_elasticache_parameter_group_name",
-            parameter_group_name,
-        );
+        context.insert("database_elasticache_parameter_group_name", parameter_group_name);
 
         context.insert("namespace", environment.namespace());
         context.insert("version", &version);
 
-        for (k, v) in kubernetes
-            .cloud_provider()
-            .tera_context_environment_variables()
-        {
+        for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
             context.insert(k, v);
         }
 
@@ -227,10 +216,7 @@ impl Helm for Redis {
     }
 
     fn helm_chart_external_name_service_dir(&self) -> String {
-        format!(
-            "{}/common/charts/external-name-svc",
-            self.context.lib_root_dir()
-        )
+        format!("{}/common/charts/external-name-svc", self.context.lib_root_dir())
     }
 }
 
@@ -387,10 +373,7 @@ impl Listen for Redis {
     }
 }
 
-fn get_redis_version(
-    requested_version: &str,
-    is_managed_service: bool,
-) -> Result<String, StringError> {
+fn get_redis_version(requested_version: &str, is_managed_service: bool) -> Result<String, StringError> {
     if is_managed_service {
         get_managed_redis_version(requested_version)
     } else {
