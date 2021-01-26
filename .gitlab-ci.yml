@@ -24,8 +24,6 @@ lint-code:
   retry: 0
   script:
     - ./helper.sh lint
-  only:
-  - merge_requests
   when: always
   except:
     variables:
