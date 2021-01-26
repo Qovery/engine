@@ -30,10 +30,8 @@ openssl-sys = "0.9"
 openssl = { version = "0.10", features = ["vendored"] }
 
 # Webserver (For Prometheus, Healthcheck, ...)
-# TODO: Upgrade Tokio to LTS 1.0.x when warp support it
-# https://github.com/seanmonstar/warp/issues/725
-tokio = { version = "0.2", features = ["net", "rt-threaded"] }
-warp = "0.2.0"
+tokio = { version = "1.1.0", features = ["net", "rt-multi-thread"] }
+warp = "0.3.0"
 lazy_static = "1.4.0"
 prometheus = { version = "0.11.0", features = ["process"] }
 

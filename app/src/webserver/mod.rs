@@ -10,11 +10,9 @@ use warp::Filter;
 static MAX_THREADS: usize = 2;
 lazy_static! {
     static ref TOKIO_RUNTIME: Mutex<Runtime> = Mutex::new({
-        Builder::new()
-            .threaded_scheduler()
+        Builder::new_multi_thread()
             .thread_name("tokio-warp-http")
-            .core_threads(MAX_THREADS)
-            .max_threads(MAX_THREADS)
+            .max_blocking_threads(MAX_THREADS)
             .enable_io()
             .build()
             .unwrap()
