@@ -39,7 +39,6 @@ wip-fast-tests:
   stage: tests
   retry: 0
   script:
-    - ls -lR .
     - ./helper.sh fast_tests
   only:
   - merge_requests
@@ -126,6 +125,7 @@ dev-full-tests:
   stage: tests
   retry: 0
   script:
+    - ls -lR .
     - ./helper.sh all_tests
   only:
     refs:
