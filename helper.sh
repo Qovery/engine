@@ -37,7 +37,9 @@ function fatal(){
 
 function fetch_last_valid_artifacts {
   jobId=$(curl -s -L --header "PRIVATE-TOKEN: ${PRIVATE_TOKEN}" "https://gitlab.com/api/v4/projects/qovery%2Fqovery-engine/jobs?scope[]=success" | jq '.[] | select(.name == "lint-code") | .id' | head -n1)
-  curl -L --header "PRIVATE-TOKEN: ${PRIVATE_TOKEN}" "https://gitlab.com/api/v4/projects/qovery%2Fqovery-engine/jobs/$ID/artifacts" -o artifacts.zip
+  echo "Found jobID for lint-code ${jobId}"
+
+  curl -L --header "PRIVATE-TOKEN: ${PRIVATE_TOKEN}" "https://gitlab.com/api/v4/projects/qovery%2Fqovery-engine/jobs/${jobId}/artifacts" -o artifacts.zip
 
   unzip artifacts.zip
 }
