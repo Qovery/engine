@@ -345,6 +345,7 @@ function lint() {
   export_env
   prepare_engine
   
+  set -e
 
   cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
   RUSTFLAGS="--deny warnings" cargo build
