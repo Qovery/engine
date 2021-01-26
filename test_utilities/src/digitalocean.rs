@@ -28,13 +28,11 @@ pub fn digital_ocean_token() -> String {
 }
 
 pub fn digital_ocean_spaces_access_id() -> String {
-    std::env::var("DIGITAL_OCEAN_SPACES_ACCESS_ID")
-        .expect("env var DIGITAL_OCEAN_SPACES_ACCESS_ID is mandatory")
+    std::env::var("DIGITAL_OCEAN_SPACES_ACCESS_ID").expect("env var DIGITAL_OCEAN_SPACES_ACCESS_ID is mandatory")
 }
 
 pub fn digital_ocean_spaces_secret_key() -> String {
-    std::env::var("DIGITAL_OCEAN_SPACES_SECRET_ID")
-        .expect("env var DIGITAL_OCEAN_SPACES_SECRET_ID is mandatory")
+    std::env::var("DIGITAL_OCEAN_SPACES_SECRET_ID").expect("env var DIGITAL_OCEAN_SPACES_SECRET_ID is mandatory")
 }
 
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
@@ -120,10 +118,7 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
 
 pub fn get_kube_cluster_name_from_uuid(uuid: &str) -> String {
     let headers = qovery_engine::utilities::get_header_with_bearer(digital_ocean_token().as_str());
-    let path = format!(
-        "https://api.digitalocean.com/v2/kubernetes/clusters/{}",
-        uuid
-    );
+    let path = format!("https://api.digitalocean.com/v2/kubernetes/clusters/{}", uuid);
     let res = reqwest::blocking::Client::new()
         .get(path.as_str())
         .headers(headers)
@@ -140,6 +135,6 @@ pub fn get_kube_cluster_name_from_uuid(uuid: &str) -> String {
             }
             _ => return String::from(""),
         },
-        Err(e) => return String::from(""),
+        Err(_) => return String::from(""),
     }
 }

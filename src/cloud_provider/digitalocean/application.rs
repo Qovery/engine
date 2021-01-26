@@ -7,9 +7,8 @@ use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, deploy_stateless_service_error,
-    deploy_user_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
-    Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
+    send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -24,7 +23,7 @@ pub struct Application {
     name: String,
     private_port: Option<u16>,
     total_cpus: String,
-    cpu_burst: String,
+    _cpu_burst: String,
     total_ram_in_mib: u32,
     total_instances: u16,
     start_timeout_in_seconds: u32,
@@ -42,7 +41,7 @@ impl Application {
         name: &str,
         private_port: Option<u16>,
         total_cpus: String,
-        cpu_burst: String,
+        _cpu_burst: String,
         total_ram_in_mib: u32,
         total_instances: u16,
         start_timeout_in_seconds: u32,
@@ -58,7 +57,7 @@ impl Application {
             name: name.to_string(),
             private_port,
             total_cpus,
-            cpu_burst,
+            _cpu_burst,
             total_ram_in_mib,
             total_instances,
             start_timeout_in_seconds,
@@ -86,10 +85,7 @@ impl Helm for Application {
     }
 
     fn helm_chart_dir(&self) -> String {
-        format!(
-            "{}/digitalocean/charts/q-application",
-            self.context.lib_root_dir()
-        )
+        format!("{}/digitalocean/charts/q-application", self.context.lib_root_dir())
     }
 
     fn helm_chart_values_dir(&self) -> String {
@@ -163,7 +159,10 @@ impl Service for Application {
             Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
             None => {
                 let image_name_with_tag = self.image.name_with_tag();
-                warn!("there is no registry url, use image name with tag with the default container registry: {}", image_name_with_tag.as_str());
+                warn!(
+                    "there is no registry url, use image name with tag with the default container registry: {}",
+                    image_name_with_tag.as_str()
+                );
                 context.insert("image_name_with_tag", image_name_with_tag.as_str());
             }
         }
@@ -241,25 +240,19 @@ impl Create for Application {
         };
 
         // FIXME: remove downcast
-        let digitalocean = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<DO>()
-            .unwrap();
+        let digitalocean = kubernetes.cloud_provider().as_any().downcast_ref::<DO>().unwrap();
 
         // retrieve the cluster uuid, useful to link DO registry to k8s cluster
-        let cluster_uuid_res =
-            get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
+        let cluster_uuid_res = get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
 
         match cluster_uuid_res {
             // ensure DO registry is linked to k8s cluster
-            Ok(uuid) => match subscribe_kube_cluster_to_container_registry(
-                digitalocean.token.as_str(),
-                uuid.as_str(),
-            ) {
-                Ok(_) => info!("Container registry is well linked with the Cluster"),
-                Err(e) => error!("Unable to link cluster to registry {:?}", e.message),
-            },
+            Ok(uuid) => {
+                match subscribe_kube_cluster_to_container_registry(digitalocean.token.as_str(), uuid.as_str()) {
+                    Ok(_) => info!("Container registry is well linked with the Cluster"),
+                    Err(e) => error!("Unable to link cluster to registry {:?}", e.message),
+                }
+            }
             Err(e) => error!("Unable to get cluster uuid {:?}", e.message),
         };
 
@@ -275,10 +268,7 @@ impl Create for Application {
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "DO.application.on_create_error() called for {}",
-            self.name()
-        );
+        warn!("DO.application.on_create_error() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
@@ -330,10 +320,7 @@ impl Delete for Application {
     }
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "DO.application.on_delete_error() called for {}",
-            self.name()
-        );
+        warn!("DO.application.on_delete_error() called for {}", self.name());
 
         send_progress_on_long_task(
             self,

@@ -9,7 +9,6 @@ use core::result::Result::{Err, Ok};
 use retry::delay::Fixed;
 use retry::OperationResult;
 use trust_dns_resolver::config::*;
-use trust_dns_resolver::lookup::{Lookup, LookupRecordIter};
 use trust_dns_resolver::proto::rr::{RData, RecordType};
 use trust_dns_resolver::Resolver;
 
@@ -147,7 +146,7 @@ pub fn generate_supported_version(
     suffix_version: Option<String>,
 ) -> HashMap<String, String> {
     let mut supported_versions = HashMap::new();
-    let mut latest_major_version = String::new();
+    let latest_major_version;
 
     // blank suffix if not requested
     let suffix = match suffix_version {

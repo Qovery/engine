@@ -1,5 +1,5 @@
-use retry::delay::{Fibonacci, Fixed};
-use retry::{Error, OperationResult};
+use retry::delay::Fixed;
+use retry::OperationResult;
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::digitalocean::common::do_get_load_balancer_ip;
@@ -9,7 +9,7 @@ use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
     Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::{check_cname_for, check_domain_for};
+use crate::cloud_provider::utilities::check_cname_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{
@@ -236,7 +236,7 @@ impl Service for Router {
                             }
                         });
                         match do_load_balancer_ip {
-                            Err(e) => {
+                            Err(_) => {
                                 // "Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements. SimpleError { kind: Other, message: Some("Error While trying to deserialize json received from Digital Ocean Load Balancer API: missing field `id` at line 1 column 1926") }"
                                 return Err(self.engine_error(
                                     EngineErrorCause::Internal,
@@ -397,7 +397,7 @@ impl Create for Router {
             }
 
             // waiting for the load balancer, it should be deploy to get fqdn
-            let external_ingress_hostname_custom_result = retry::retry(Fixed::from_millis(3000).take(60), || {
+            let _ = retry::retry(Fixed::from_millis(3000).take(60), || {
                 let external_ingress_ip_custom = crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
