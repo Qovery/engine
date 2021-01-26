@@ -141,7 +141,6 @@ pub trait Router: StatelessService + Listen {
     fn check_domains(&self) -> Result<(), EngineError> {
         check_domain_for(
             ListenersHelper::new(self.listeners()),
-            self.name_with_id(),
             self.domains(),
             self.id().into(),
             self.context().execution_id(),
@@ -154,7 +153,6 @@ pub trait Database: StatefulService {
     fn check_domains(&self, listeners: Listeners, domains: Vec<&str>) -> Result<(), EngineError> {
         check_domain_for(
             ListenersHelper::new(&listeners),
-            self.name_with_id(),
             domains,
             self.id().into(),
             self.context().execution_id(),

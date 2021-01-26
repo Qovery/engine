@@ -2,19 +2,16 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::models::{
-    CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate,
-};
+use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create,
-    Delete, Helm, Pause, Router as RRouter, Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
+    Router as RRouter, Service, ServiceType, StatelessService,
 };
+use crate::cloud_provider::utilities::check_cname_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
-};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
+use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
 
 pub struct Router {
     context: Context,
@@ -148,26 +145,20 @@ impl Service for Router {
         match kubernetes_config_file_path {
             Ok(kubernetes_config_file_path_string) => {
                 // Default domain
-                let external_ingress_hostname_default =
-                    crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
-                        kubernetes_config_file_path_string.as_str(),
-                        "nginx-ingress",
-                        "app=nginx-ingress,component=controller",
-                        kubernetes
-                            .cloud_provider()
-                            .credentials_environment_variables(),
-                    );
+                let external_ingress_hostname_default = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
+                    kubernetes_config_file_path_string.as_str(),
+                    "nginx-ingress",
+                    "app=nginx-ingress,component=controller",
+                    kubernetes.cloud_provider().credentials_environment_variables(),
+                );
 
                 match external_ingress_hostname_default {
-                    Ok(external_ingress_hostname_default) => {
-                        match external_ingress_hostname_default {
-                            Some(hostname) => context
-                                .insert("external_ingress_hostname_default", hostname.as_str()),
-                            None => {
-                                warn!("unable to get external_ingress_hostname_default - what's wrong? This must never happened");
-                            }
+                    Ok(external_ingress_hostname_default) => match external_ingress_hostname_default {
+                        Some(hostname) => context.insert("external_ingress_hostname_default", hostname.as_str()),
+                        None => {
+                            warn!("unable to get external_ingress_hostname_default - what's wrong? This must never happened");
                         }
-                    }
+                    },
                     _ => {
                         // FIXME really?
                         warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
@@ -181,25 +172,18 @@ impl Service for Router {
                             kubernetes_config_file_path_string.as_str(),
                             environment.namespace(),
                             "app=nginx-ingress,component=controller",
-                            kubernetes
-                                .cloud_provider()
-                                .credentials_environment_variables(),
+                            kubernetes.cloud_provider().credentials_environment_variables(),
                         );
 
                     match external_ingress_hostname_custom {
-                        Ok(external_ingress_hostname_custom) => {
-                            match external_ingress_hostname_custom {
-                                Some(hostname) => {
-                                    context.insert(
-                                        "external_ingress_hostname_custom",
-                                        hostname.as_str(),
-                                    );
-                                }
-                                None => {
-                                    warn!("unable to get external_ingress_hostname_custom - what's wrong? This must never happened");
-                                }
+                        Ok(external_ingress_hostname_custom) => match external_ingress_hostname_custom {
+                            Some(hostname) => {
+                                context.insert("external_ingress_hostname_custom", hostname.as_str());
                             }
-                        }
+                            None => {
+                                warn!("unable to get external_ingress_hostname_custom - what's wrong? This must never happened");
+                            }
+                        },
                         _ => {
                             // FIXME really?
                             warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
@@ -208,28 +192,19 @@ impl Service for Router {
                     context.insert("app_id", kubernetes.id());
                 }
             }
-            Err(_) => error!(
-                "can't fetch kubernetes config file - what's wrong? This must never happened"
-            ), // FIXME should I return an Err?
+            Err(_) => error!("can't fetch kubernetes config file - what's wrong? This must never happened"), // FIXME should I return an Err?
         }
 
-        let router_default_domain_hash =
-            crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
+        let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
-        let tls_domain = format!("*.{}",kubernetes.dns_provider().domain());
+        let tls_domain = format!("*.{}", kubernetes.dns_provider().domain());
         context.insert("router_tls_domain", tls_domain.as_str());
         context.insert("router_default_domain", self.default_domain.as_str());
-        context.insert(
-            "router_default_domain_hash",
-            router_default_domain_hash.as_str(),
-        );
+        context.insert("router_default_domain_hash", router_default_domain_hash.as_str());
         context.insert("custom_domains", &custom_domain_data_templates);
         context.insert("routes", &route_data_templates);
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
-        context.insert(
-            "metadata_annotations_cert_manager_cluster_issuer",
-            "letsencrypt-qovery",
-        );
+        context.insert("metadata_annotations_cert_manager_cluster_issuer", "letsencrypt-qovery");
 
         let lets_encrypt_url = match self.context.metadata() {
             Some(meta) => match meta.test {
@@ -270,17 +245,11 @@ impl Helm for Router {
     }
 
     fn helm_chart_dir(&self) -> String {
-        format!(
-            "{}/common/charts/nginx-ingress",
-            self.context().lib_root_dir()
-        )
+        format!("{}/common/charts/nginx-ingress", self.context().lib_root_dir())
     }
 
     fn helm_chart_values_dir(&self) -> String {
-        format!(
-            "{}/aws/chart_values/nginx-ingress",
-            self.context.lib_root_dir()
-        )
+        format!("{}/aws/chart_values/nginx-ingress", self.context.lib_root_dir())
     }
 
     fn helm_chart_external_name_service_dir(&self) -> String {
@@ -353,50 +322,37 @@ impl Create for Router {
                     format!("custom-{}", helm_release_name).as_str(),
                     into_dir.as_str(),
                     format!("{}/nginx-ingress.yaml", into_dir.as_str()).as_str(),
-                    kubernetes
-                        .cloud_provider()
-                        .credentials_environment_variables(),
+                    kubernetes.cloud_provider().credentials_environment_variables(),
                 ),
             )?;
 
             // check deployment status
             if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    "Router has failed to be deployed".into(),
-                ));
+                return Err(self.engine_error(EngineErrorCause::Internal, "Router has failed to be deployed".into()));
             }
 
             // waiting for the nlb, it should be deploy to get fqdn
-            let external_ingress_hostname_custom_result =
-                retry::retry(Fibonacci::from_millis(3000).take(10), || {
-                    let external_ingress_hostname_custom =
-                        crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
-                            kubernetes_config_file_path.as_str(),
-                            environment.namespace(),
-                            format!(
-                                "{},component=controller,release=custom-{}",
-                                self.selector(),
-                                helm_release_name
-                            )
-                            .as_str(),
-                            kubernetes
-                                .cloud_provider()
-                                .credentials_environment_variables(),
-                        );
+            let external_ingress_hostname_custom_result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
+                let external_ingress_hostname_custom = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
+                    kubernetes_config_file_path.as_str(),
+                    environment.namespace(),
+                    format!(
+                        "{},component=controller,release=custom-{}",
+                        self.selector(),
+                        helm_release_name
+                    )
+                    .as_str(),
+                    kubernetes.cloud_provider().credentials_environment_variables(),
+                );
 
-                    match external_ingress_hostname_custom {
-                        Ok(external_ingress_hostname_custom) => {
-                            OperationResult::Ok(external_ingress_hostname_custom)
-                        }
-                        Err(err) => {
-                            error!(
-                                "Waiting NLB endpoint to be available to be able to configure TLS"
-                            );
-                            OperationResult::Retry(err)
-                        }
+                match external_ingress_hostname_custom {
+                    Ok(external_ingress_hostname_custom) => OperationResult::Ok(external_ingress_hostname_custom),
+                    Err(err) => {
+                        error!("Waiting NLB endpoint to be available to be able to configure TLS");
+                        OperationResult::Retry(err)
                     }
-                });
+                }
+            });
 
             match external_ingress_hostname_custom_result {
                 Ok(elb) => {
@@ -411,11 +367,7 @@ impl Create for Router {
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                from_dir.as_str(),
-                workspace_dir.as_str(),
-                &context,
-            ),
+            crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), &context),
         )?;
 
         // do exec helm upgrade and return the last deployment status
@@ -428,24 +380,42 @@ impl Create for Router {
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
                 Timeout::Default,
-                kubernetes
-                    .cloud_provider()
-                    .credentials_environment_variables(),
+                kubernetes.cloud_provider().credentials_environment_variables(),
             ),
         )?;
 
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(self.engine_error(
-                EngineErrorCause::Internal,
-                "Router has failed to be deployed".into(),
-            ));
+            return Err(self.engine_error(EngineErrorCause::Internal, "Router has failed to be deployed".into()));
         }
 
         Ok(())
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        self.check_domains()
+        self.check_domains()?;
+
+        // Wait/Check that custom domain is a CNAME targeting qovery
+        for domain_to_check in self.custom_domains.iter() {
+            match check_cname_for(
+                ListenersHelper::new(self.listeners()),
+                &domain_to_check.domain,
+                self.id(),
+            ) {
+                Ok(cname) if cname.trim_end_matches('.') == domain_to_check.target_domain.trim_end_matches('.') => {
+                    continue
+                }
+                Ok(err) | Err(err) => {
+                    return Err(EngineError::new(
+                        EngineErrorCause::User("Invalid CNAME"),
+                        EngineErrorScope::Router(self.id.clone(), self.name.clone()),
+                        self.context.execution_id(),
+                        Some(err.as_str()),
+                    ))
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
