@@ -14,8 +14,8 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::{
-    Action, Application, Context, Database, DatabaseKind, Environment, EnvironmentVariable,
-    GitCredentials, Kind, Route, Router, Storage, StorageType,
+    Action, Application, Context, Database, DatabaseKind, Environment, EnvironmentVariable, GitCredentials, Kind,
+    Route, Router, Storage, StorageType,
 };
 
 use crate::cloudflare::dns_provider_cloudflare;
@@ -39,13 +39,11 @@ pub fn aws_default_region() -> String {
 }
 
 pub fn terraform_aws_access_key_id() -> String {
-    std::env::var("TERRAFORM_AWS_ACCESS_KEY_ID")
-        .expect("env var TERRAFORM_AWS_ACCESS_KEY_ID is mandatory")
+    std::env::var("TERRAFORM_AWS_ACCESS_KEY_ID").expect("env var TERRAFORM_AWS_ACCESS_KEY_ID is mandatory")
 }
 
 pub fn terraform_aws_secret_access_key() -> String {
-    std::env::var("TERRAFORM_AWS_SECRET_ACCESS_KEY")
-        .expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory")
+    std::env::var("TERRAFORM_AWS_SECRET_ACCESS_KEY").expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory")
 }
 
 pub fn execution_id() -> String {
@@ -156,8 +154,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
     let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
 
     // mongoDB management part
-    let database_host_mongo =
-        "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+    let database_host_mongo = "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();

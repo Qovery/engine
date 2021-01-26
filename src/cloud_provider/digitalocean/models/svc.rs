@@ -113,8 +113,7 @@ pub struct FAnnotations {
     pub f_service_beta_kubernetes_io_do_loadbalancer_enable_proxy_protocol:
         Option<FServiceBetaKubernetesIoDoLoadbalancerEnableProxyProtocol>,
     #[serde(rename = "f:kubernetes.digitalocean.com/load-balancer-id")]
-    pub f_kubernetes_digitalocean_com_load_balancer_id:
-        Option<FKubernetesDigitaloceanComLoadBalancerId>,
+    pub f_kubernetes_digitalocean_com_load_balancer_id: Option<FKubernetesDigitaloceanComLoadBalancerId>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]

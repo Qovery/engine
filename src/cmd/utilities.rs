@@ -29,9 +29,7 @@ where
 
     let mut cmd = Command::new(&_binary);
 
-    cmd.args(&args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(&args).stdout(Stdio::piped()).stderr(Stdio::piped());
 
     if current_dir.is_some() {
         cmd.current_dir(current_dir.unwrap());
@@ -68,11 +66,7 @@ where
     ))
 }
 
-pub fn exec_with_envs<P>(
-    binary: P,
-    args: Vec<&str>,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+pub fn exec_with_envs<P>(binary: P, args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -224,18 +218,11 @@ where
     format!("{} {}", binary.as_ref().to_str().unwrap(), args.join(" "))
 }
 
-pub fn command_with_envs_to_string<P>(
-    binary: P,
-    args: &Vec<&str>,
-    envs: &Vec<(&str, &str)>,
-) -> String
+pub fn command_with_envs_to_string<P>(binary: P, args: &Vec<&str>, envs: &Vec<(&str, &str)>) -> String
 where
     P: AsRef<Path>,
 {
-    let _envs = envs
-        .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
-        .collect::<Vec<_>>();
+    let _envs = envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>();
 
     format!(
         "{} {} {}",

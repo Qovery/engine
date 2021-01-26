@@ -17,13 +17,7 @@ pub struct S3 {
 }
 
 impl S3 {
-    pub fn new(
-        context: Context,
-        id: String,
-        name: String,
-        access_key_id: String,
-        secret_access_key: String,
-    ) -> Self {
+    pub fn new(context: Context, id: String, name: String, access_key_id: String, secret_access_key: String) -> Self {
         S3 {
             context,
             id,
@@ -93,12 +87,7 @@ impl ObjectStorage for S3 {
         )
     }
 
-    fn get(
-        &self,
-        bucket_name: &str,
-        object_key: &str,
-        use_cache: bool,
-    ) -> Result<(StringPath, File), EngineError> {
+    fn get(&self, bucket_name: &str, object_key: &str, use_cache: bool) -> Result<(StringPath, File), EngineError> {
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),

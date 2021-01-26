@@ -97,8 +97,7 @@ impl Environment {
         EnvironmentResources {
             pods: required_pods,
             cpu: total_cpu_for_stateless_services + total_cpu_for_stateful_services,
-            ram_in_mib: total_ram_in_mib_for_stateless_services
-                + total_ram_in_mib_for_stateless_services,
+            ram_in_mib: total_ram_in_mib_for_stateless_services + total_ram_in_mib_for_stateless_services,
         }
     }
 }

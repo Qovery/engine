@@ -46,10 +46,7 @@ fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleEr
     Ok(())
 }
 
-pub fn terraform_exec_with_init_validate_plan_apply(
-    root_dir: &str,
-    dry_run: bool,
-) -> Result<(), SimpleError> {
+pub fn terraform_exec_with_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<(), SimpleError> {
     match terraform_exec_with_init_validate_plan(root_dir) {
         Ok(_) => match dry_run {
             true => {

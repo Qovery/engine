@@ -1,10 +1,9 @@
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service,
-    get_tfstate_name, get_tfstate_suffix, send_progress_on_long_task, Action, Backup, Create,
-    Database, DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType,
-    StatefulService, Terraform, Upgrade,
+    check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
+    get_tfstate_suffix, send_progress_on_long_task, Action, Backup, Create, Database, DatabaseOptions, DatabaseType,
+    Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
 };
 use crate::cloud_provider::utilities::get_self_hosted_postgres_version;
 use crate::cloud_provider::DeploymentTarget;
@@ -126,9 +125,7 @@ impl Service for PostgreSQL {
         kubectl::kubectl_exec_create_namespace_without_labels(
             &environment.namespace(),
             kube_config_file_path.as_str(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
         );
 
         context.insert("namespace", environment.namespace());
@@ -136,10 +133,7 @@ impl Service for PostgreSQL {
         let version = self.matching_correct_version()?;
         context.insert("version", &version);
 
-        for (k, v) in kubernetes
-            .cloud_provider()
-            .tera_context_environment_variables()
-        {
+        for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
             context.insert(k, v);
         }
 
@@ -162,10 +156,7 @@ impl Service for PostgreSQL {
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
         context.insert("tfstate_name", &get_tfstate_name(self));
 
-        context.insert(
-            "delete_automated_backups",
-            &self.context().is_test_cluster(),
-        );
+        context.insert("delete_automated_backups", &self.context().is_test_cluster());
 
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
@@ -202,33 +193,21 @@ impl Helm for PostgreSQL {
     }
 
     fn helm_chart_values_dir(&self) -> String {
-        format!(
-            "{}/digitalocean/chart_values/postgresql",
-            self.context.lib_root_dir()
-        )
+        format!("{}/digitalocean/chart_values/postgresql", self.context.lib_root_dir())
     }
 
     fn helm_chart_external_name_service_dir(&self) -> String {
-        format!(
-            "{}/common/charts/external-name-svc",
-            self.context.lib_root_dir()
-        )
+        format!("{}/common/charts/external-name-svc", self.context.lib_root_dir())
     }
 }
 
 impl Terraform for PostgreSQL {
     fn terraform_common_resource_dir_path(&self) -> String {
-        format!(
-            "{}/digitalocean/services/common",
-            self.context.lib_root_dir()
-        )
+        format!("{}/digitalocean/services/common", self.context.lib_root_dir())
     }
 
     fn terraform_resource_dir_path(&self) -> String {
-        format!(
-            "{}/digitalocean/services/postgresql",
-            self.context.lib_root_dir()
-        )
+        format!("{}/digitalocean/services/postgresql", self.context.lib_root_dir())
     }
 }
 
@@ -289,10 +268,7 @@ impl Delete for PostgreSQL {
     }
 
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!(
-            "AWS.PostgreSQL.on_create_error() called for {}",
-            self.name()
-        );
+        warn!("AWS.PostgreSQL.on_create_error() called for {}", self.name());
 
         Ok(())
     }

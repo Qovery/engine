@@ -13,12 +13,7 @@ pub struct EngineError {
 }
 
 impl EngineError {
-    pub fn new<T, S>(
-        cause: EngineErrorCause,
-        scope: EngineErrorScope,
-        execution_id: T,
-        message: Option<S>,
-    ) -> Self
+    pub fn new<T, S>(cause: EngineErrorCause, scope: EngineErrorScope, execution_id: T, message: Option<S>) -> Self
     where
         T: Into<String>,
         S: Into<String>,
