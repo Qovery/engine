@@ -345,6 +345,8 @@ function lint() {
   export_env
   prepare_engine
   
+  env
+  lr -lr /home/gitlab_cache
   set -e
 
   echo "###################################################"
