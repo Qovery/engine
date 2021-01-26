@@ -49,7 +49,9 @@ impl Request {
         let mut cloud_provider = self
             .cloud_provider
             .to_engine_cloud_provider(context.clone(), self.organization_id.as_str())
-            .ok_or_else(|| RequestError::CloudProvider(format!("Invalid cloud provider info: {:?}", self.cloud_provider)))?;
+            .ok_or_else(|| {
+                RequestError::CloudProvider(format!("Invalid cloud provider info: {:?}", self.cloud_provider))
+            })?;
 
         cloud_provider.add_listener(progress_listener.clone());
 
@@ -65,7 +67,8 @@ impl Request {
 
         container_registry.add_listener(progress_listener.clone());
 
-        let dns_provider = self.dns_provider
+        let dns_provider = self
+            .dns_provider
             .to_engine_dns_provider(context.clone())
             .ok_or_else(|| RequestError::DnsProvider(format!("Invalid DNS provider: {:?}", self.dns_provider)))?;
 
@@ -306,10 +309,13 @@ pub struct DnsProvider {
 }
 
 impl DnsProvider {
-    pub fn to_engine_dns_provider(&self, context: Context) -> Option<Box<dyn qovery_engine::dns_provider::DnsProvider>> {
+    pub fn to_engine_dns_provider(
+        &self,
+        context: Context,
+    ) -> Option<Box<dyn qovery_engine::dns_provider::DnsProvider>> {
         match self.kind {
             qovery_engine::dns_provider::Kind::Cloudflare => {
-                let token  = self.options.get("cloudflare_api_token")?;
+                let token = self.options.get("cloudflare_api_token")?;
                 let email = self.options.get("cloudflare_email")?;
 
                 Some(Box::new(Cloudflare::new(

@@ -404,7 +404,10 @@ pub enum State {
 
 impl State {
     pub fn is_in_progress(&self) -> bool {
-        matches!(self, State::DeploymentInProgress | State::PauseInProgress | State::DeleteInProgress)
+        matches!(
+            self,
+            State::DeploymentInProgress | State::PauseInProgress | State::DeleteInProgress
+        )
     }
 }
 
