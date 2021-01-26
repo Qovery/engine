@@ -255,7 +255,7 @@ fn cloudflare_dns_resolver() -> Resolver {
         .expect("Invalid cloudflare DNS resolver configuration")
 }
 
-fn get_domain_under_cname(resolver: &Resolver, cname: &str) -> Option<String> {
+fn get_cname_record_value(resolver: &Resolver, cname: &str) -> Option<String> {
     resolver
         .lookup(cname, RecordType::CNAME)
         .iter()
@@ -310,7 +310,7 @@ pub fn check_cname_for(
     // Trying for 5 min to resolve CNAME
     let fixed_iterable = Fixed::from_millis(Duration::seconds(5).num_milliseconds() as u64).take(12 * 5);
     let check_result = retry::retry(fixed_iterable, || {
-        match get_domain_under_cname(&resolver, cname_to_check) {
+        match get_cname_record_value(&resolver, cname_to_check) {
             Some(domain) => OperationResult::Ok(domain),
             None => {
                 let msg = format!("Cannot find domain under CNAME {}", cname_to_check);
@@ -412,4 +412,17 @@ pub fn check_domain_for(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::utilities::{cloudflare_dns_resolver, get_cname_record_value};
+
+    #[test]
+    pub fn test_cname_resolution() {
+        let resolver = cloudflare_dns_resolver();
+        let cname = get_cname_record_value(&resolver, "ci-test-no-delete.qovery.io");
+
+        assert_eq!(cname, Some(String::from("qovery.io.")));
+    }
 }
