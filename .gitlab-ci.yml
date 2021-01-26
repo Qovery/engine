@@ -19,7 +19,7 @@ stages:
 
 # Feat/fix branches
 
-linting:
+lint-code:
   stage: linting
   retry: 0
   script:
