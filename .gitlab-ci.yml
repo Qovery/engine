@@ -7,6 +7,13 @@ variables:
   WORKSPACE_ROOT_DIR: /builds/qovery/qovery-engine
   DOCKER_BUILDKIT: 1
 
+cache: &global_cache
+  # One cache per branch
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - target
+  policy: pull-push
+
 services:
   - docker:dind
 
