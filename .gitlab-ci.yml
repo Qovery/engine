@@ -24,6 +24,7 @@ lint-code:
   retry: 0
   script:
     - ./helper.sh lint
+    - cargo build
   when: always
   except:
     variables:

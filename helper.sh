@@ -358,7 +358,7 @@ function lint() {
   echo "###################################################"
   echo "             CARGO BUILD NO WARNING                "
   echo "###################################################"
-  RUSTFLAGS="--deny warnings" cargo build || (echo "Solve your warnings to succeed"; exit 1)
+  RUSTFLAGS="--deny warnings" cargo check || (echo "Solve your warnings to succeed"; exit 1)
 
   # FIXME fix warning in the engine and enable clippy
   # cargo clippy
