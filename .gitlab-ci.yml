@@ -23,7 +23,7 @@ lint-code:
   stage: linting
   retry: 0
   script:
-    - ls -lR target; exit 0
+    #    - ls -lR target; exit 0
     - ./helper.sh lint
   when: always
   except:
