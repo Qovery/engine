@@ -24,7 +24,7 @@ lint-code:
   retry: 0
   script:
     - ./helper.sh lint
-    - cargo build
+    - cargo build # To build cache for target/ artifacts
   when: always
   except:
     variables:
@@ -35,6 +35,7 @@ lint-code:
   artifacts:
     paths:
       - target/
+      - /builds/qovery/.cargo
 
 wip-fast-tests:
   stage: tests
@@ -126,7 +127,6 @@ dev-full-tests:
   stage: tests
   retry: 0
   script:
-    - ls -lR .
     - ./helper.sh all_tests
   only:
     refs:
