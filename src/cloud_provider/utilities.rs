@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
+use crate::error::{EngineError, StringError};
 use crate::models::{ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use chrono::Duration;
 use core::option::Option::{None, Some};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
-use itertools::Itertools;
 use retry::delay::Fixed;
 use retry::OperationResult;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::config::*;
+use trust_dns_resolver::lookup::{Lookup, LookupRecordIter};
+use trust_dns_resolver::proto::rr::{RData, RecordType};
 use trust_dns_resolver::Resolver;
 
 pub fn get_self_hosted_postgres_version(requested_version: &str) -> Result<String, StringError> {
@@ -242,33 +244,103 @@ fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
     Ok(VersionsNumber { major, minor, patch })
 }
 
+fn cloudflare_dns_resolver() -> Resolver {
+    let mut resolver_options = ResolverOpts::default();
+
+    //  We want to avoid cache and using hostfile of the host, as some provider force caching
+    //  which lead to stale response
+    resolver_options.cache_size = 0;
+    resolver_options.use_hosts_file = false;
+
+    Resolver::new(ResolverConfig::cloudflare(), resolver_options)
+        .expect("Invalid cloudflare DNS resolver configuration")
+}
+
+fn get_domain_under_cname(resolver: &Resolver, cname: &str) -> Option<String> {
+    resolver
+        .lookup(cname, RecordType::CNAME)
+        .iter()
+        .flat_map(|lookup| lookup.record_iter())
+        .filter_map(|record| {
+            if let RData::CNAME(cname) = record.rdata() {
+                Some(cname.to_utf8())
+            } else {
+                None
+            }
+        })
+        .next() // Can only have one domain behind a CNAME
+}
+
+pub fn check_cname_for(
+    listener_helper: ListenersHelper,
+    cname_to_check: &str,
+    execution_id: &str,
+) -> Result<String, String> {
+    let resolver = cloudflare_dns_resolver();
+
+    let send_deployment_progress = |msg: &str| {
+        listener_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Environment {
+                id: execution_id.to_string(),
+            },
+            ProgressLevel::Info,
+            Some(msg.to_string()),
+            execution_id,
+        ));
+    };
+
+    let send_error_progress = |msg: &str| {
+        listener_helper.error(ProgressInfo::new(
+            ProgressScope::Environment {
+                id: execution_id.to_string(),
+            },
+            ProgressLevel::Error,
+            Some(msg.to_string()),
+            execution_id,
+        ));
+    };
+
+    send_deployment_progress(
+        format!(
+            "Checking CNAME resolution of '{}'. Please wait, it can take some time...",
+            cname_to_check
+        )
+        .as_str(),
+    );
+
+    // Trying for 5 min to resolve CNAME
+    let fixed_iterable = Fixed::from_millis(Duration::seconds(5).num_milliseconds() as u64).take(12 * 5);
+    let check_result = retry::retry(fixed_iterable, || {
+        match get_domain_under_cname(&resolver, cname_to_check) {
+            Some(domain) => OperationResult::Ok(domain),
+            None => {
+                let msg = format!("Cannot find domain under CNAME {}", cname_to_check);
+                send_deployment_progress(msg.as_str());
+                OperationResult::Retry(msg)
+            }
+        }
+    });
+
+    match check_result {
+        Ok(domain) => {
+            send_deployment_progress(format!("Resolution of CNAME {} found to {}", cname_to_check, domain).as_str());
+            Ok(domain)
+        }
+        Err(_) => {
+            let msg = format!("Resolution of CNAME {} failed !!!", cname_to_check);
+            send_error_progress(msg.as_str());
+            Err(msg)
+        }
+    }
+}
+
 pub fn check_domain_for(
     listener_helper: ListenersHelper,
-    name_with_id: String,
     domains_to_check: Vec<&str>,
     execution_id: &str,
     context_id: &str,
 ) -> Result<(), EngineError> {
-    let mut resolver_options = ResolverOpts::default();
-    resolver_options.cache_size = 0;
-    resolver_options.use_hosts_file = false;
-
-    let resolver = match Resolver::new(ResolverConfig::google(), resolver_options) {
-        Ok(resolver) => resolver,
-        Err(err) => {
-            error!("{:?}", err);
-            let domains = domains_to_check.iter().join(",");
-            return Err(EngineError::new(
-                EngineErrorCause::Internal,
-                EngineErrorScope::Engine,
-                execution_id,
-                Some(format!(
-                    "Let's check domain resolution for '{}'. Please wait, it can take some time...",
-                    domains
-                )),
-            ));
-        }
-    };
+    let resolver = cloudflare_dns_resolver();
 
     for domain in domains_to_check {
         listener_helper.deployment_in_progress(ProgressInfo::new(

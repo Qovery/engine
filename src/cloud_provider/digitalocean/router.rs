@@ -4,18 +4,16 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::digitalocean::common::do_get_load_balancer_ip;
 use crate::cloud_provider::digitalocean::DO;
-use crate::cloud_provider::models::{
-    CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate,
-};
+use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create,
-    Delete, Helm, Pause, Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
+    Service, ServiceType, StatelessService,
 };
+use crate::cloud_provider::utilities::{check_cname_for, check_domain_for};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope,
-    SimpleError, SimpleErrorKind,
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
 };
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
 
@@ -102,11 +100,7 @@ impl Service for Router {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let digitalocean = kubernetes
-            .cloud_provider()
-            .as_any()
-            .downcast_ref::<DO>()
-            .unwrap();
+        let digitalocean = kubernetes.cloud_provider().as_any().downcast_ref::<DO>().unwrap();
 
         let mut context = default_tera_context(self, kubernetes, environment);
 
@@ -164,29 +158,23 @@ impl Service for Router {
         match kubernetes_config_file_path {
             Ok(kubernetes_config_file_path_string) => {
                 // Default domain
-                let external_ingress_hostname_default =
-                    crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
-                        kubernetes_config_file_path_string.as_str(),
-                        "nginx-ingress",
-                        "app=nginx-ingress,component=controller",
-                        kubernetes
-                            .cloud_provider()
-                            .credentials_environment_variables(),
-                    );
+                let external_ingress_hostname_default = crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
+                    kubernetes_config_file_path_string.as_str(),
+                    "nginx-ingress",
+                    "app=nginx-ingress,component=controller",
+                    kubernetes.cloud_provider().credentials_environment_variables(),
+                );
 
                 match external_ingress_hostname_default {
-                    Ok(external_ingress_hostname_default) => {
-                        match external_ingress_hostname_default {
-                            Some(hostname) => context
-                                .insert("external_ingress_hostname_default", hostname.as_str()),
-                            None => {
-                                return Err(self.engine_error(
-                                        EngineErrorCause::Internal,
-                                        "Error while trying to get Load Balancer IP from Kubernetes cluster".into(),
-                                    ));
-                            }
+                    Ok(external_ingress_hostname_default) => match external_ingress_hostname_default {
+                        Some(hostname) => context.insert("external_ingress_hostname_default", hostname.as_str()),
+                        None => {
+                            return Err(self.engine_error(
+                                EngineErrorCause::Internal,
+                                "Error while trying to get Load Balancer IP from Kubernetes cluster".into(),
+                            ));
                         }
-                    }
+                    },
                     _ => {
                         error!("can't fetch external ingress ip");
                     }
@@ -194,73 +182,59 @@ impl Service for Router {
 
                 // Custom domain
                 if !self.custom_domains.is_empty() {
-                    let deployed_ingress =
-                        match crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
-                            kubernetes_config_file_path_string.as_str(),
-                            environment.namespace(),
-                            "app=nginx-ingress,component=controller",
-                            kubernetes
-                                .cloud_provider()
-                                .credentials_environment_variables(),
-                        ) {
-                            Ok(x) => x.is_some(),
-                            _ => false,
-                        };
+                    let deployed_ingress = match crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
+                        kubernetes_config_file_path_string.as_str(),
+                        environment.namespace(),
+                        "app=nginx-ingress,component=controller",
+                        kubernetes.cloud_provider().credentials_environment_variables(),
+                    ) {
+                        Ok(x) => x.is_some(),
+                        _ => false,
+                    };
 
                     if deployed_ingress {
-                        let do_load_balancer_ip = retry::retry(
-                            Fixed::from_millis(5000).take(40),
-                            || {
-                                // we first need to retrieve the id from the nginx ingress service
-                                let lb_id =
-                                    crate::cmd::kubectl::do_kubectl_exec_get_loadbalancer_id(
-                                        kubernetes_config_file_path_string.as_str(),
-                                        environment.namespace(),
-                                        "app=nginx-ingress,component=controller",
-                                        kubernetes
-                                            .cloud_provider()
-                                            .credentials_environment_variables(),
-                                    );
+                        let do_load_balancer_ip = retry::retry(Fixed::from_millis(5000).take(40), || {
+                            // we first need to retrieve the id from the nginx ingress service
+                            let lb_id = crate::cmd::kubectl::do_kubectl_exec_get_loadbalancer_id(
+                                kubernetes_config_file_path_string.as_str(),
+                                environment.namespace(),
+                                "app=nginx-ingress,component=controller",
+                                kubernetes.cloud_provider().credentials_environment_variables(),
+                            );
 
-                                // then we can get the DO Load Balancer IP address which will be used in the custom ingress for the app
-                                match lb_id {
-                                    Ok(id) => match id {
-                                        Some(id) => {
-                                            match do_get_load_balancer_ip(
-                                                &digitalocean.token,
-                                                id.as_str(),
-                                            ) {
-                                                Ok(ip) => {
-                                                    info!("Got the IP {}", &ip);
-                                                    OperationResult::Ok(ip)
-                                                }
-                                                Err(e) => {
-                                                    error!("Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements");
-                                                    OperationResult::Retry(SimpleError::new(
-                                                        SimpleErrorKind::Other,
-                                                        Some(format!("Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements. {:?}", e)),
-                                                    ))
-                                                }
-                                            }
+                            // then we can get the DO Load Balancer IP address which will be used in the custom ingress for the app
+                            match lb_id {
+                                Ok(id) => match id {
+                                    Some(id) => match do_get_load_balancer_ip(&digitalocean.token, id.as_str()) {
+                                        Ok(ip) => {
+                                            info!("Got the IP {}", &ip);
+                                            OperationResult::Ok(ip)
                                         }
-                                        None => {
-                                            error!("No Load Balancer id from Digital Ocean API was found, mandatory for custom ingress");
+                                        Err(e) => {
+                                            error!("Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements");
                                             OperationResult::Retry(SimpleError::new(
                                                 SimpleErrorKind::Other,
-                                                Some("No Load Balancer id from Digital Ocean API was found, mandatory for custom ingress"),
+                                                Some(format!("Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements. {:?}", e)),
                                             ))
                                         }
                                     },
-                                    Err(_) => {
-                                        info!("Can't get Load Balancer id from Digital Ocean API, load balancer may be not ready yet or not yet deployed");
+                                    None => {
+                                        error!("No Load Balancer id from Digital Ocean API was found, mandatory for custom ingress");
                                         OperationResult::Retry(SimpleError::new(
                                             SimpleErrorKind::Other,
-                                            Some("Can't get Load Balancer id from Digital Ocean API, load balancer may be not ready yet or not yet deployed"),
+                                            Some("No Load Balancer id from Digital Ocean API was found, mandatory for custom ingress"),
                                         ))
                                     }
+                                },
+                                Err(_) => {
+                                    info!("Can't get Load Balancer id from Digital Ocean API, load balancer may be not ready yet or not yet deployed");
+                                    OperationResult::Retry(SimpleError::new(
+                                        SimpleErrorKind::Other,
+                                        Some("Can't get Load Balancer id from Digital Ocean API, load balancer may be not ready yet or not yet deployed"),
+                                    ))
                                 }
-                            },
-                        );
+                            }
+                        });
                         match do_load_balancer_ip {
                             Err(e) => {
                                 // "Error while trying to get Load Balancer IP from Digital Ocean API, mandatory for requirements. SimpleError { kind: Other, message: Some("Error While trying to deserialize json received from Digital Ocean Load Balancer API: missing field `id` at line 1 column 1926") }"
@@ -277,28 +251,19 @@ impl Service for Router {
                     context.insert("app_id", kubernetes.id());
                 }
             }
-            Err(_) => error!(
-                "can't fetch kubernetes config file - what's wrong? This must never happened"
-            ),
+            Err(_) => error!("can't fetch kubernetes config file - what's wrong? This must never happened"),
         }
 
-        let router_default_domain_hash =
-            crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
+        let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
-        let tls_domain = format!("*.{}",kubernetes.dns_provider().domain());
+        let tls_domain = format!("*.{}", kubernetes.dns_provider().domain());
         context.insert("router_tls_domain", tls_domain.as_str());
         context.insert("router_default_domain", self.default_domain.as_str());
-        context.insert(
-            "router_default_domain_hash",
-            router_default_domain_hash.as_str(),
-        );
+        context.insert("router_default_domain_hash", router_default_domain_hash.as_str());
         context.insert("custom_domains", &custom_domain_data_templates);
         context.insert("routes", &route_data_templates);
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
-        context.insert(
-            "metadata_annotations_cert_manager_cluster_issuer",
-            "letsencrypt-qovery",
-        );
+        context.insert("metadata_annotations_cert_manager_cluster_issuer", "letsencrypt-qovery");
 
         let lets_encrypt_url = match self.context.metadata() {
             Some(meta) => match meta.test {
@@ -341,10 +306,7 @@ impl Helm for Router {
     }
 
     fn helm_chart_dir(&self) -> String {
-        format!(
-            "{}/common/charts/nginx-ingress",
-            self.context().lib_root_dir()
-        )
+        format!("{}/common/charts/nginx-ingress", self.context().lib_root_dir())
     }
 
     fn helm_chart_values_dir(&self) -> String {
@@ -425,69 +387,49 @@ impl Create for Router {
                     format!("custom-{}", helm_release_name).as_str(),
                     into_dir.as_str(),
                     format!("{}/nginx-ingress.yaml", into_dir.as_str()).as_str(),
-                    kubernetes
-                        .cloud_provider()
-                        .credentials_environment_variables(),
+                    kubernetes.cloud_provider().credentials_environment_variables(),
                 ),
             )?;
 
             // check deployment status
             if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    "Router has failed to be deployed".into(),
-                ));
+                return Err(self.engine_error(EngineErrorCause::Internal, "Router has failed to be deployed".into()));
             }
 
             // waiting for the load balancer, it should be deploy to get fqdn
-            let external_ingress_hostname_custom_result = retry::retry(
-                Fixed::from_millis(3000).take(60),
-                || {
-                    let external_ingress_ip_custom =
-                        crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
-                            kubernetes_config_file_path.as_str(),
-                            environment.namespace(),
-                            format!(
-                                "{},component=controller,release=custom-{}",
-                                self.selector(),
-                                helm_release_name
-                            )
-                            .as_str(),
-                            kubernetes
-                                .cloud_provider()
-                                .credentials_environment_variables(),
-                        );
+            let external_ingress_hostname_custom_result = retry::retry(Fixed::from_millis(3000).take(60), || {
+                let external_ingress_ip_custom = crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
+                    kubernetes_config_file_path.as_str(),
+                    environment.namespace(),
+                    format!(
+                        "{},component=controller,release=custom-{}",
+                        self.selector(),
+                        helm_release_name
+                    )
+                    .as_str(),
+                    kubernetes.cloud_provider().credentials_environment_variables(),
+                );
 
-                    match external_ingress_ip_custom {
-                        Ok(external_ingress_ip_custom) => {
-                            OperationResult::Ok(external_ingress_ip_custom)
-                        }
-                        Err(err) => {
-                            error!(
-                                "Waiting Digital Ocean LoadBalancer endpoint to be available to be able to configure TLS"
-                            );
-                            OperationResult::Retry(err)
-                        }
+                match external_ingress_ip_custom {
+                    Ok(external_ingress_ip_custom) => OperationResult::Ok(external_ingress_ip_custom),
+                    Err(err) => {
+                        error!(
+                            "Waiting Digital Ocean LoadBalancer endpoint to be available to be able to configure TLS"
+                        );
+                        OperationResult::Retry(err)
                     }
-                },
-            );
+                }
+            });
         }
 
         // re-run context to get get lb ip address to use it then in the ingress
         context = self.tera_context(target)?;
 
-        let from_dir = format!(
-            "{}/digitalocean/charts/q-ingress-tls",
-            self.context.lib_root_dir()
-        );
+        let from_dir = format!("{}/digitalocean/charts/q-ingress-tls", self.context.lib_root_dir());
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                from_dir.as_str(),
-                workspace_dir.as_str(),
-                &context,
-            ),
+            crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), &context),
         )?;
 
         // do exec helm upgrade and return the last deployment status
@@ -500,24 +442,44 @@ impl Create for Router {
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
                 Timeout::Default,
-                kubernetes
-                    .cloud_provider()
-                    .credentials_environment_variables(),
+                kubernetes.cloud_provider().credentials_environment_variables(),
             ),
         )?;
 
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(self.engine_error(
-                EngineErrorCause::Internal,
-                "Router has failed to be deployed".into(),
-            ));
+            return Err(self.engine_error(EngineErrorCause::Internal, "Router has failed to be deployed".into()));
         }
 
         Ok(())
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        return Ok(());
+        use crate::cloud_provider::service::Router;
+
+        self.check_domains()?;
+
+        // Wait/Check that custom domain is a CNAME targeting qovery
+        for domain_to_check in self.custom_domains.iter() {
+            match check_cname_for(
+                ListenersHelper::new(self.listeners()),
+                &domain_to_check.domain,
+                self.id(),
+            ) {
+                Ok(cname) if cname.trim_end_matches('.') == domain_to_check.target_domain.trim_end_matches('.') => {
+                    continue
+                }
+                Ok(err) | Err(err) => {
+                    return Err(EngineError::new(
+                        EngineErrorCause::User("Invalid CNAME"),
+                        EngineErrorScope::Router(self.id.clone(), self.name.clone()),
+                        self.context.execution_id(),
+                        Some(err.as_str()),
+                    ))
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
