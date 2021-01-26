@@ -23,8 +23,6 @@ lint-code:
   stage: linting
   retry: 0
   script:
-    - curl -v -L -o artifacts.zip "https://gitlab.com/qovery/qovery-engine/-/jobs/987877089/artifacts/download"
-    - unzip artifacts.zip
     - ./helper.sh lint
   when: always
   except:
@@ -49,6 +47,8 @@ wip-fast-tests:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+  dependencies:
+    - linting
   tags:
     - engine-dedicated
   artifacts:
