@@ -56,7 +56,7 @@ resource "helm_release" "cluster_autoscaler" {
 
   set {
     name = "autoDiscovery.clusterName"
-    value = var.kubernetes_cluster_name
+    value = aws_eks_cluster.eks_cluster.name
   }
 
   set {

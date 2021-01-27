@@ -5,6 +5,7 @@ resource "helm_release" "cert_manager" {
   create_namespace = true
   atomic = true
   max_history = 50
+  timeout = 480
 
   values = [file("chart_values/cert-manager.yaml")]
 
