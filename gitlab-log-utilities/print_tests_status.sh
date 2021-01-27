@@ -1,6 +1,7 @@
 #!/bin/bash
 
-OUTPUT_DIR_TESTS_FILES="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
+FORMATED_FAILED_TESTS_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
+OUTPUT_DIR_TESTS_FILES="$FORMATED_FAILED_TESTS_DIR/output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
 TESTS_NON_HANDLED_ISSUES="$OUTPUT_DIR_TESTS_FILES/tests_issues"
 
@@ -16,7 +17,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
   while IFS= read -r line ; do
     if [ $(echo $line | grep -c 'failed') -ne 0 ] ; then
       test_name=$(echo $line | jq .name)
-      test_file=$(echo $test_name | sed -r 's/.+::(.+)"$/\1/')
+      test_file="$(echo $test_name | sed -r 's/.+::(.+)"$/\1/').log"
       if [ -f $test_file ] ; then
         echo -e "\n\n\e[36m###"
         echo "### LOGS FOR FAILED TEST: $test_name"
@@ -29,6 +30,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
           fi
           echo -e "$line"
         done < <(jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file)
+        jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file > $FORMATED_FAILED_TESTS_DIR/${test_file}
 
       else
         if [ "$test_file" != "null" ] ; then
