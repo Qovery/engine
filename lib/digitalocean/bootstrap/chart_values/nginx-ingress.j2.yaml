@@ -118,7 +118,8 @@ controller:
   ## E.g. to specify the default SSL certificate you can use
   ## extraArgs:
   ##   default-ssl-certificate: "<namespace>/<secret_name>"
-  extraArgs: {}
+  extraArgs: 
+    default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
 
   ## Additional environment variables to set
   extraEnvs: []
