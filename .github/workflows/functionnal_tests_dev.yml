@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: Run a multi-line script
-        timeout-minutes: 60
+        timeout-minutes: 120
         run: |
           branch=$(echo ${{github.ref}} | sed -r 's/^refs\/heads\/(.+)/\1/')
           echo "Branch name: $branch"
