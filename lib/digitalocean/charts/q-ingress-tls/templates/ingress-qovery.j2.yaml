@@ -23,7 +23,8 @@ spec:
   tls:
     - hosts:
         - "{{ router_tls_domain }}"
-      secretName: le-{{ router_default_domain_hash }}-qovery-cert
+  # We dont use secret name as we want to rely on default tls certificate from ingress controller
+  # which has our wildcard certificate https://cert-manager.io/next-docs/faq/kubed/
   rules:
     - host: "{{ router_default_domain }}"
       http:
