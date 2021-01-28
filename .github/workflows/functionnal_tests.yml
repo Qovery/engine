@@ -46,15 +46,4 @@ jobs:
           echo "Branch name: $branch"
           export GITHUB_BRANCH=$branch
           export GITHUB_COMMIT_ID=$GITHUB_SHA
-          gh_json=$(curl -s -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/Qovery/engine/pulls?state=open")
-          gh_pr=$(echo $gh_json | jq --compact-output '.[] | {labels, ref: .head.ref}' | grep "$branch")
-          echo "Pull request info: $(echo $gh_pr)"
-          num_labels=$(echo $gh_pr | jq '.labels | length')
-          tests_type="fast_tests"
-          if [ $num_labels -gt 0 ] ; then
-            if [ $(echo $gh_pr | grep -c 'full-tests') -eq 1 ] ; then
-              tests_type="full_tests"
-            fi
-          fi
-          echo $tests_type
-          ./helper.sh $tests_type
+          ./helper.sh autodetect
