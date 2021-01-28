@@ -32,6 +32,18 @@ function release() {
   echo "Pipeline ID: $pipeline_id"
 }
 
+function gh_tags_selector_for_gitlab() {
+  gh_json=$(curl -s -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/Qovery/engine/pulls?state=open")
+  gh_pr=$(echo $gh_json | jq --compact-output '.[] | {labels, ref: .head.ref}' | grep "$GITHUB_BRANCH")
+  num_labels=$(echo $gh_pr | jq '.labels | length')
+
+  all_labels="default"
+  if [ $num_labels -gt 0 ] ; then
+    all_labels=$(echo $gh_pr | jq -r '.labels[].url' | sed -r 's/^.+labels\/(.+)$/\1/g')
+  fi
+  echo $all_labels
+}
+
 function run_tests() {
   TESTS_TYPE=$1
   test -z $GITLAB_PROJECT_ID && variable_not_found "GITLAB_PROJECT_ID"
@@ -40,6 +52,7 @@ function run_tests() {
   test -z $GITHUB_BRANCH && variable_not_found "GITHUB_BRANCH"
   GITLAB_REF="dev"
   FORCE_CHECKOUT_CUSTOM_BRANCH='false'
+  TESTS_TO_RUN="-F \"variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID\""
 
   if [ $(curl -s --header "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/repository/branches/$GITHUB_BRANCH" | grep -c '404 Branch Not Found') -eq 0 ] ; then
     echo "Same branch name detected on gitlab, requesting to use it instead of dev branch"
@@ -124,8 +137,12 @@ full_tests)
 release)
   release
   ;;
+autodetect)
+  gh_tags_selector_for_gitlab
+  ;;
 *)
   echo "Usage:"
+  echo "$0 autodetect: autodetect tests to run based on tags"
   echo "$0 fast_tests: run fast tests"
   echo "$0 full_tests: run full tests (with cloud providers check)"
   ;;

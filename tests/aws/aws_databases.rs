@@ -20,6 +20,7 @@ use self::test_utilities::utilities::{engine_run_test, generate_id};
 **/
 
 // to check overload between several databases and apps
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
 fn deploy_an_environment_with_3_databases_and_3_apps() {
     init();
@@ -57,6 +58,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 }
 
 // this test ensure containers databases are never restarted, even in failover environment case
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
 fn postgresql_failover_dev_environment_with_all_options() {
     init();
@@ -122,8 +124,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
 }
 
 // Ensure a full environment can run correctly
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
-#[ignore]
 fn postgresql_deploy_a_working_development_environment_with_all_options() {
     init();
 
@@ -167,6 +169,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 }
 
 // Ensure redeploy works as expected
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
     engine_run_test(|| {
@@ -367,8 +370,8 @@ fn test_postgresql_configuration(context: Context, mut environment: Environment,
 }
 
 // Postgres environment environment
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
-#[ignore]
 fn postgresql_v10_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -380,8 +383,8 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
-#[ignore]
 fn postgresql_v11_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -393,6 +396,7 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
 fn postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
@@ -406,8 +410,8 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
 }
 
 // Postgres production environment
+#[cfg(feature = "test-managed-services-aws")]
 #[test]
-#[ignore]
 fn postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -420,8 +424,8 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
     );
 }
 
+#[cfg(feature = "test-managed-services-aws")]
 #[test]
-#[ignore]
 fn postgresql_v11_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -434,8 +438,8 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
     );
 }
 
+#[cfg(feature = "test-managed-services-aws")]
 #[test]
-#[ignore]
 fn postgresql_v12_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -565,8 +569,8 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 }
 
 // development environment
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
-#[ignore]
 fn mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -578,8 +582,8 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
-#[ignore]
 fn mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -591,8 +595,8 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
-#[ignore]
 fn mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -604,6 +608,7 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
 fn mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
@@ -617,8 +622,8 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
 }
 
 // MongoDB production environment (DocumentDB)
+#[cfg(feature = "test-managed-services-aws")]
 #[test]
-#[ignore]
 fn mongodb_v3_6_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -631,8 +636,8 @@ fn mongodb_v3_6_deploy_a_working_prod_environment() {
     );
 }
 
+#[cfg(feature = "test-managed-services-aws")]
 #[test]
-#[ignore]
 fn mongodb_v4_0_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -753,8 +758,8 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
 }
 
 // MySQL self-hosted environment
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
-#[ignore]
 fn mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -766,6 +771,7 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
 fn mysql_v8_deploy_a_working_dev_environment() {
     let context = context();
@@ -774,8 +780,8 @@ fn mysql_v8_deploy_a_working_dev_environment() {
 }
 
 // MySQL production environment (RDS)
+#[cfg(feature = "test-managed-services-aws")]
 #[test]
-#[ignore]
 fn mysql_v5_7_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -788,8 +794,8 @@ fn mysql_v5_7_deploy_a_working_prod_environment() {
     );
 }
 
+#[cfg(feature = "test-managed-services-aws")]
 #[test]
-#[ignore]
 fn mysql_v8_0_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -910,14 +916,15 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
 }
 
 // Redis self-hosted environment
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
-#[ignore]
 fn redis_v5_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_redis_configuration(context, environment, "5", "redis_v5_deploy_a_working_dev_environment");
 }
 
+#[cfg(feature = "test-self-hosted-aws")]
 #[test]
 fn redis_v6_deploy_a_working_dev_environment() {
     let context = context();
@@ -927,8 +934,8 @@ fn redis_v6_deploy_a_working_dev_environment() {
 }
 
 // Redis production environment (Elasticache)
+#[cfg(feature = "test-managed-services-aws")]
 #[test]
-#[ignore]
 fn redis_v5_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -936,8 +943,8 @@ fn redis_v5_deploy_a_working_prod_environment() {
     test_redis_configuration(context, environment, "5", "redis_v5_deploy_a_working_prod_environment");
 }
 
+#[cfg(feature = "test-managed-services-aws")]
 #[test]
-#[ignore]
 fn redis_v6_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
