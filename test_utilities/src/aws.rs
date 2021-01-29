@@ -8,6 +8,7 @@ use chrono::Utc;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::utilities::generate_prefixed_name;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
@@ -508,6 +509,8 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
     let database_name = "my-psql".to_string();
 
     let suffix = generate_id();
+    let application_name1 = generate_prefixed_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
+    let application_name2 = generate_prefixed_name("postgresql", &format!("{}-{}", "postgresql-app2", &suffix));
 
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -519,7 +522,6 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
         action: Action::Create,
         databases: vec![Database {
             kind: DatabaseKind::Postgresql,
-
             action: Action::Create,
             id: generate_id(),
             name: database_name.clone(),
@@ -538,7 +540,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
         applications: vec![
             Application {
                 id: generate_id(),
-                name: format!("{}-{}", "simple-app".to_string(), &suffix),
+                name: application_name1.to_string(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
@@ -588,7 +590,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
             },
             Application {
                 id: generate_id(),
-                name: format!("{}-{}", "simple-app-2".to_string(), &suffix),
+                name: application_name2.to_string(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
@@ -647,7 +649,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/".to_string(),
-                    application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
+                    application_name: application_name1.to_string(),
                 }],
             },
             Router {
@@ -659,7 +661,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/coco".to_string(),
-                    application_name: format!("{}-{}", "simple-app-2".to_string(), &suffix),
+                    application_name: application_name2.to_string(),
                 }],
             },
         ],

@@ -9,7 +9,7 @@ use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
     Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::check_cname_for;
+use crate::cloud_provider::utilities::{check_cname_for, generate_prefixed_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{
@@ -40,7 +40,7 @@ impl Router {
         Router {
             context,
             id: id.to_string(),
-            name: name.to_string(),
+            name: generate_prefixed_name("router", name),
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,

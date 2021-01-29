@@ -40,7 +40,7 @@ impl ExternalService {
             context,
             id: id.to_string(),
             action,
-            name: name.to_string(),
+            name: format!("external-service-{}", name),
             total_cpus,
             total_ram_in_mib,
             image,

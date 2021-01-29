@@ -8,7 +8,9 @@ use crate::cloud_provider::service::{
     get_tfstate_suffix, send_progress_on_long_task, Action, Backup, Create, Database, DatabaseOptions, DatabaseType,
     Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
 };
-use crate::cloud_provider::utilities::{get_self_hosted_redis_version, get_supported_version_to_use};
+use crate::cloud_provider::utilities::{
+    generate_prefixed_name, get_self_hosted_redis_version, get_supported_version_to_use,
+};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
@@ -49,7 +51,7 @@ impl Redis {
             context,
             action,
             id: id.to_string(),
-            name: name.to_string(),
+            name: generate_prefixed_name("redis", name),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
