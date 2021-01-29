@@ -7,7 +7,7 @@ use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
     Router as RRouter, Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::check_cname_for;
+use crate::cloud_provider::utilities::{check_cname_for, generate_prefixed_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
@@ -36,10 +36,16 @@ impl Router {
         Router {
             context,
             id: id.to_string(),
-            name: name.to_string(),
+            name: generate_prefixed_name("router", name),
             default_domain: default_domain.to_string(),
             custom_domains,
-            routes,
+            routes: routes
+                .into_iter()
+                .map(|mut route| {
+                    route.application_name = generate_prefixed_name("app", &route.application_name);
+                    route
+                })
+                .collect(),
             listeners,
         }
     }

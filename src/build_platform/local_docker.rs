@@ -369,14 +369,29 @@ impl BuildPlatform for LocalDocker {
         let docker_path = Path::new(docker_path_string);
 
         if docker_path.exists() {
-            let mut clean_required = false;
             let mounted_disks = proc_mounts::MountList::new();
 
             // ensure docker_path is a mounted volume, otherwise ignore because it's not what Qovery does in production
             // ex: this cause regular cleanup on CI, leading to random tests errors
             match mounted_disks {
                 Ok(m) => match m.get_mount_by_dest(Path::new(docker_path)) {
-                    Some(_) => clean_required = true,
+                    Some(_) => {
+                        let ci_env_var = "CI";
+                        match env::var_os(ci_env_var) {
+                            Some(_) => {}
+                            None => {
+                                // only used in production on Linux OS
+                                let docker_path_size_info = match fs2::statvfs(docker_path) {
+                                    Ok(fs_stats) => fs_stats,
+                                    Err(err) => {
+                                        return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
+                                    }
+                                };
+
+                                check_docker_space_usage_and_clean(docker_path_size_info, self.get_docker_host_envs());
+                            }
+                        }
+                    }
                     None => info!(
                         "ignoring docker cleanup because {} is not a mounted volume",
                         docker_path_string
@@ -384,24 +399,6 @@ impl BuildPlatform for LocalDocker {
                 },
                 Err(_) => error!("wasn't able to get info from {} volume", docker_path_string),
             };
-
-            let ci_env_var = "CI";
-            match env::var_os(ci_env_var) {
-                Some(_) => clean_required = false,
-                None => clean_required = true,
-            }
-
-            // only used in production on Linux OS
-            if clean_required {
-                let docker_path_size_info = match fs2::statvfs(docker_path) {
-                    Ok(fs_stats) => fs_stats,
-                    Err(err) => {
-                        return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
-                    }
-                };
-
-                check_docker_space_usage_and_clean(docker_path_size_info, self.get_docker_host_envs());
-            }
         }
 
         let application_id = build.image.application_id.clone();

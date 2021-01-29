@@ -9,7 +9,7 @@ use crate::cloud_provider::service::{
     Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
 };
 use crate::cloud_provider::utilities::{
-    generate_supported_version, get_self_hosted_mongodb_version, get_supported_version_to_use,
+    generate_prefixed_name, generate_supported_version, get_self_hosted_mongodb_version, get_supported_version_to_use,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -51,7 +51,7 @@ impl MongoDB {
             context,
             action,
             id: id.to_string(),
-            name: name.to_string(),
+            name: generate_prefixed_name("mongodb", name),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
