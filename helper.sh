@@ -34,6 +34,7 @@ function fatal(){
   kill -9 $PROC
 }
 
+
 function check_num_args() {
   desired_number=$1
   if [ $ARGS_NUM -ne ${desired_number} ]; then
@@ -307,9 +308,10 @@ function export_env() { ## Export environment variables from .env file
   done <".env"
 }
 
-function all_tests(){ ## Run all tests on qovery-engine
-  GITHUB_ENGINE_BRANCH_NAME=$1
-  nb_treads=$2
+function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH branch name, threads
+  filter_tests=$1
+  GITHUB_ENGINE_BRANCH_NAME=$2
+  nb_treads=$3
   export RUST_LOG=info
   export_env
   prepare_engine
@@ -322,9 +324,8 @@ function all_tests(){ ## Run all tests on qovery-engine
   cd $ENGINE_DIR
   mkdir -p $GITLAB_LOG_OUTPUT_DIR
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
-  env
 
-  cargo test --color always -- --ignored --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
+  cargo test --color always --features "$filter_tests" --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
 
   ENDTIME=$(date +%s)
@@ -439,17 +440,32 @@ release_to_prod)
 get_release_ga)
   get_release_ga
   ;;
-fast_tests)
-  fast_tests $commit_id 20
+aws_self_hosted)
+  run_tests test-aws-self-hosted $commit_id 20
   ;;
-fast_tests_seq)
-  fast_tests $commit_id 1
+do_self_hosted)
+  run_tests test-do-self-hosted $commit_id 20
   ;;
-all_tests)
-  all_tests $commit_id 20
+all_self_hosted)
+  run_tests test-all-self-hosted $commit_id 20
   ;;
-all_tests_seq)
-  all_tests $commit_id 1
+aws_managed_services)
+  run_tests test-aws-managed-services $commit_id 20
+  ;;
+do_managed_services)
+  run_tests test-do-managed-services $commit_id 20
+  ;;
+all_managed_services)
+  run_tests test-all-managed-services $commit_id 20
+  ;;
+aws_infra)
+  run_tests test-aws-infra $commit_id 20
+  ;;
+do_infra)
+  run_tests test-do-infra $commit_id 20
+  ;;
+test_all)
+  run_tests test-all $commit_id 20
   ;;
 single_test)
   check_num_args 2

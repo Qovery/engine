@@ -6,21 +6,24 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   WORKSPACE_ROOT_DIR: /builds/qovery/qovery-engine
   DOCKER_BUILDKIT: 1
+  CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
 
 services:
   - docker:dind
 
 stages:
-  - linting
+  - linter
   - tests
   - build
   - release
   - deploy
 
-# Feat/fix branches
+#
+# Merge request only
+#
 
-lint-code:
-  stage: linting
+lint-code-mr:
+  stage: linter
   retry: 0
   script:
     - ./helper.sh lint
@@ -28,27 +31,25 @@ lint-code:
   when: always
   tags:
     - qovery-2cpu-8gb
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+  only:
+    - merge_requests
 
-wip-fast-tests:
+all-self-hosted-mr:
   stage: tests
   retry: 0
   script:
-    - ./helper.sh fast_tests
+    - ./helper.sh all_self_hosted
   only:
   - merge_requests
   when: always
+  tags:
+    - qovery-2cpu-8gb
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
     - lint-code
-  tags:
-    - qovery-2cpu-8gb
   artifacts:
     when: always
     reports:
@@ -58,20 +59,22 @@ wip-fast-tests:
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 1 week
 
-wip-full-tests:
+all-managed-services-mr:
   stage: tests
   retry: 0
   script:
-    - ./helper.sh all_tests
-  when: manual
+    - ./helper.sh all_managed_services
   only:
     - merge_requests
+  when: manual
+  tags:
+    - qovery-2cpu-8gb
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
-  tags:
-    - qovery-2cpu-12gb
+  dependencies:
+    - lint-code
   artifacts:
     when: always
     reports:
@@ -81,56 +84,89 @@ wip-full-tests:
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 1 week
 
+test-all-mr:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh test_all
+  only:
+    - merge_requests
+  dependencies:
+    - lint-code
+  when: manual
+  tags:
+    - qovery-2cpu-12gb
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /builds/qovery/qovery-engine/.qovery-workspace
+    expire_in: 1 week
+
+#
 # Dev branch
+#
 
-dev-full-test-from-github:
-  stage: tests
+lint-code:
+  stage: linter
   retry: 0
   script:
-    - ./helper.sh all_tests $LIB_COMMIT_ID
-  rules:
-    - if: '$TESTS_TYPE == "full"'
-  tags:
-    - qovery-2cpu-12gb
-  artifacts:
-    when: always
-    reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
-    paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
-      - /builds/qovery/qovery-engine/.qovery-workspace
-    expire_in: 1 week
-
-dev-fast-test-from-github:
-  stage: tests
-  retry: 0
-  script:
-    - ./helper.sh fast_tests $LIB_COMMIT_ID
-  rules:
-    - if: '$TESTS_TYPE == "fast"'
+    - ./helper.sh lint
+    - ./helper.sh build_image
+  when: always
   tags:
     - qovery-2cpu-8gb
-  artifacts:
-    when: always
-    reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
-    paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
-      - /builds/qovery/qovery-engine/.qovery-workspace
-    expire_in: 1 week
+  only:
+    refs:
+      - dev
 
-dev-full-tests:
+aws-self-hosted:
   stage: tests
   retry: 0
   script:
-    - ./helper.sh all_tests
+    - ./helper.sh aws_self_hosted
+  dependencies:
+    - lint-code
+  tags:
+    - qovery-2cpu-4gb
+  when: always
   only:
     refs:
       - dev
     variables:
-      - $TESTS_TYPE == null
+      - $TEST_AWS_MANAGED_SERVICES == "true"
+      - $TEST_AWS_MANAGED_SERVICES == null
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /builds/qovery/qovery-engine/.qovery-workspace
+    expire_in: 2 week
+
+aws-managed-services:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh aws_managed_services
+  dependencies:
+    - lint-code
   tags:
-    - qovery-2cpu-12gb
+    - qovery-2cpu-4gb
+  when: always
+  only:
+    refs:
+      - dev
+    variables:
+      - $TEST_AWS_MANAGED_SERVICES == "true"
+      - $TEST_AWS_MANAGED_SERVICES == null
   artifacts:
     when: always
     reports:
@@ -138,17 +174,24 @@ dev-full-tests:
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
-    expire_in: 1 week
+    expire_in: 2 week
 
-dev-fast-tests-sequential:
+aws-infra:
   stage: tests
   retry: 0
   script:
-    - ./helper.sh fast_tests_seq
-  when: manual
+    - ./helper.sh aws_infra
+  dependencies:
+    - lint-code
+  when: always
+  tags:
+    - qovery-2cpu-4gb
   only:
     refs:
       - dev
+    variables:
+      - $TEST_AWS_MANAGED_SERVICES == "true"
+      - $TEST_AWS_MANAGED_SERVICES == null
   artifacts:
     when: always
     reports:
@@ -156,34 +199,7 @@ dev-fast-tests-sequential:
     paths:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
-    expire_in: 1 week
-
-dev-full-tests-sequential:
-  stage: tests
-  retry: 0
-  script:
-    - ./helper.sh all_tests_seq
-  when: manual
-  only:
-    refs:
-      - dev
-  artifacts:
-    when: always
-    reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
-    paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
-      - /builds/qovery/qovery-engine/.qovery-workspace
-    expire_in: 1 week
-
-dev-build:
-  stage: build
-  retry: 1
-  script:
-    - ./helper.sh build_image
-  only:
-    refs:
-      - dev
+    expire_in: 2 week
 
 dev-release:
   stage: release
@@ -195,7 +211,9 @@ dev-release:
     refs:
       - dev
 
+#
 # Main branch
+#
 
 main-release:
   stage: release
@@ -203,7 +221,7 @@ main-release:
   script:
     - ./helper.sh new_release
   tags:
-    - qovery-2cpu-8gb
+    - qovery-2cpu-4gb
   only:
     refs:
       - main
@@ -213,6 +231,8 @@ main-set-ga:
   retry: 2
   script:
     - ./helper.sh set_release_ga
+  tags:
+    - qovery-2cpu-4gb
   when: manual
   only:
     refs:
@@ -224,6 +244,8 @@ main-deploy_engine:
   script:
     - ./helper.sh release_to_prod
   when: manual
+  tags:
+    - qovery-2cpu-4gb
   only:
     refs:
       - main
