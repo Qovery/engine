@@ -395,6 +395,7 @@ impl Create for Router {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
+        // check non custom domains
         self.check_domains()?;
 
         // Wait/Check that custom domain is a CNAME targeting qovery
