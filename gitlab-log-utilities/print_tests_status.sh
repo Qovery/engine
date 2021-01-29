@@ -30,7 +30,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
           fi
           echo -e "$line"
         done < <(jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file)
-        jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file > $FORMATED_FAILED_TESTS_DIR/${test_file}
+        jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file > $OUTPUT_DIR_TESTS_FILES/cleaned_${test_file}
 
       else
         if [ "$test_file" != "null" ] ; then
