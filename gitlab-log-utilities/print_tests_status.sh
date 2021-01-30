@@ -17,7 +17,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
   while IFS= read -r line ; do
     if [ $(echo $line | grep -c 'failed') -ne 0 ] ; then
       test_name=$(echo $line | jq .name)
-      test_file="$(echo $test_name | sed -r 's/.+::(.+)"$/\1/').log"
+      test_file="$(echo $test_name | sed -r 's/.+::(.+)"$/\1/')"
       if [ -f $test_file ] ; then
         echo -e "\n\n\e[36m###"
         echo "### LOGS FOR FAILED TEST: $test_name"
@@ -30,7 +30,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
           fi
           echo -e "$line"
         done < <(jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file)
-        jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file > $OUTPUT_DIR_TESTS_FILES/cleaned_${test_file}
+        jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file > cleaned_${test_file}
 
       else
         if [ "$test_file" != "null" ] ; then
