@@ -655,7 +655,6 @@ impl Database {
 
                     Some(db)
                 }
-                _ => None,
             },
         }
     }
