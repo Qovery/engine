@@ -1,5 +1,50 @@
 #!/bin/bash
 
+function generate_html_file() {
+  file=$1
+  html_file=${file}.html
+  html_file_wip=${html_file}.wip
+  jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $file > $html_file
+
+  cat << EOF > $html_file_wip
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>$file</title>
+  <style>
+    body {
+        background-color: #262b33;
+        color: white;
+    }
+  </style>
+</head>
+<body>
+<h1>$file</h1>
+EOF
+
+  cat $html_file >> $html_file_wip
+  # replace line return by html ones
+  sed -ri 's/\\\n/<br \/>/g' $html_file_wip
+  # remove " at the begin of lines
+  sed -ri 's/^"//g' $html_file_wip
+  # colorize info, warn, and error
+  sed -ri 's/\\| INFO \\|/| <font style="color:green">INFO<\/font> |/g' $html_file_wip
+  sed -ri 's/\\| WARN \\|/| <font style="color:orange">WARN<\/font> |/g' $html_file_wip
+  sed -ri 's/fail/<font style="color:red">fail<\/font>/g' $html_file_wip
+  sed -ri 's/^(.+)\\| ERROR \\|(.+)$/<font style="color:red">\1 | ERROR | \2<\/font>/g' $html_file_wip
+  # line return at the end of lines
+  sed -ri 's/"$/<br \/>/g' $html_file_wip
+
+
+  cat << EOF >> $html_file_wip
+</body>
+</html>
+EOF
+
+  mv $html_file_wip $html_file
+}
+
 FORMATED_FAILED_TESTS_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
 OUTPUT_DIR_TESTS_FILES="$FORMATED_FAILED_TESTS_DIR/output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
@@ -30,7 +75,9 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
           fi
           echo -e "$line"
         done < <(jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file)
-        jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file > cleaned_${test_file}
+
+        # generate html version to make it more readable
+        generate_html_file $test_file
 
       else
         if [ "$test_file" != "null" ] ; then
