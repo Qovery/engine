@@ -32,8 +32,6 @@ lint-code:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
-  tags:
-    - engine-dedicated
   artifacts:
     paths:
       - target/
@@ -54,7 +52,7 @@ wip-fast-tests:
   dependencies:
     - lint-code
   tags:
-    - engine-dedicated
+    - qovery-2cpu-8gb
   artifacts:
     when: always
     reports:
@@ -77,7 +75,7 @@ wip-full-tests:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   tags:
-    - engine-dedicated
+    - qovery-2cpu-12gb
   artifacts:
     when: always
     reports:
@@ -97,7 +95,7 @@ dev-full-test-from-github:
   rules:
     - if: '$TESTS_TYPE == "full"'
   tags:
-    - engine-dedicated
+    - qovery-2cpu-12gb
   artifacts:
     when: always
     reports:
@@ -115,7 +113,7 @@ dev-fast-test-from-github:
   rules:
     - if: '$TESTS_TYPE == "fast"'
   tags:
-    - engine-dedicated
+    - qovery-2cpu-8gb
   artifacts:
     when: always
     reports:
@@ -136,7 +134,7 @@ dev-full-tests:
     variables:
       - $TESTS_TYPE == null
   tags:
-    - engine-dedicated
+    - qovery-2cpu-12gb
   artifacts:
     when: always
     reports:
