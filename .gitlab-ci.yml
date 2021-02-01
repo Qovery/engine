@@ -26,6 +26,8 @@ lint-code:
     - ./helper.sh lint
     - cargo build # To build cache for target/ artifacts
   when: always
+  tags:
+    - qovery-2cpu-8gb
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -206,6 +208,8 @@ main-release:
   retry: 1
   script:
     - ./helper.sh new_release
+  tags:
+    - qovery-2cpu-8gb
   only:
     refs:
       - main
