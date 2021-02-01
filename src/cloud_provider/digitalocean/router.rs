@@ -469,12 +469,10 @@ impl Create for Router {
                     continue
                 }
                 Ok(err) | Err(err) => {
-                    return Err(EngineError::new(
-                        EngineErrorCause::User("Invalid CNAME"),
-                        EngineErrorScope::Router(self.id.clone(), self.name.clone()),
-                        self.context.execution_id(),
-                        Some(err.as_str()),
-                    ))
+                    warn!(
+                        "Invalid CNAME for {}. Might not be an issue if user is using a CDN: {}",
+                        domain_to_check.domain, err
+                    );
                 }
             }
         }
