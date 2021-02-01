@@ -288,12 +288,12 @@ pub fn check_cname_for(
         ));
     };
 
-    let send_error_progress = |msg: &str| {
+    let send_warn_progress = |msg: &str| {
         listener_helper.error(ProgressInfo::new(
             ProgressScope::Environment {
                 id: execution_id.to_string(),
             },
-            ProgressLevel::Error,
+            ProgressLevel::Warn,
             Some(msg.to_string()),
             execution_id,
         ));
@@ -326,7 +326,7 @@ pub fn check_cname_for(
         }
         Err(_) => {
             let msg = format!("Resolution of CNAME {} failed !!!", cname_to_check);
-            send_error_progress(msg.as_str());
+            send_warn_progress(msg.as_str());
         }
     }
 
