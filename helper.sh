@@ -154,6 +154,12 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
     cd -
 }
 
+function build() { ## Build engine app with engine lib
+  prepare_engine
+  tag=$(generate_image_tag)
+  cargo build
+}
+
 function build_image() { ## Build Engine image locally. Args: <tag_version>
   prepare_engine
   tag=$(generate_image_tag)
@@ -416,6 +422,9 @@ fi
 echo "Detected commit ID: $commit_id"
 
 case $1 in
+build)
+  build
+  ;;
 build_image)
   build_image
   ;;

@@ -12,7 +12,7 @@ services:
   - docker:dind
 
 stages:
-  - linter
+  - build
   - tests
   - build
   - release
@@ -22,12 +22,22 @@ stages:
 # Merge request only
 #
 
-lint-code-mr:
-  stage: linter
+linter-mr:
+  stage: build
   retry: 0
   script:
     - ./helper.sh lint
-    - ./helper.sh build_image
+  when: always
+  tags:
+    - qovery-2cpu-4gb
+  only:
+    - merge_requests
+
+build-mr:
+  stage: build
+  retry: 0
+  script:
+    - ./helper.sh build
   when: always
   tags:
     - qovery-2cpu-8gb
@@ -49,7 +59,8 @@ all-self-hosted-mr:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
-    - lint-code
+    - linter-mr
+    - build-mr
   artifacts:
     when: always
     reports:
@@ -74,7 +85,8 @@ all-managed-services-mr:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
-    - lint-code
+    - linter-mr
+    - build-mr
   artifacts:
     when: always
     reports:
@@ -92,7 +104,8 @@ test-all-mr:
   only:
     - merge_requests
   dependencies:
-    - lint-code
+    - linter-mr
+    - build-mr
   when: manual
   tags:
     - qovery-2cpu-12gb
@@ -113,12 +126,23 @@ test-all-mr:
 # Dev branch
 #
 
-lint-code:
-  stage: linter
+linter:
+  stage: build
   retry: 0
   script:
     - ./helper.sh lint
-    - ./helper.sh build_image
+  when: always
+  tags:
+    - qovery-2cpu-4gb
+  only:
+    refs:
+      - dev
+
+build:
+  stage: build
+  retry: 0
+  script:
+    - ./helper.sh build
   when: always
   tags:
     - qovery-2cpu-8gb
@@ -132,7 +156,8 @@ aws-self-hosted:
   script:
     - ./helper.sh aws_self_hosted
   dependencies:
-    - lint-code
+    - linter
+    - build
   tags:
     - qovery-2cpu-4gb
   when: always
@@ -157,7 +182,8 @@ aws-managed-services:
   script:
     - ./helper.sh aws_managed_services
   dependencies:
-    - lint-code
+    - linter
+    - build
   tags:
     - qovery-2cpu-4gb
   when: always
@@ -182,7 +208,8 @@ aws-infra:
   script:
     - ./helper.sh aws_infra
   dependencies:
-    - lint-code
+    - linter
+    - build
   when: always
   tags:
     - qovery-2cpu-4gb
