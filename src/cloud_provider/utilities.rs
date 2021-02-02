@@ -288,12 +288,12 @@ pub fn check_cname_for(
         ));
     };
 
-    let send_error_progress = |msg: &str| {
+    let send_warn_progress = |msg: &str| {
         listener_helper.error(ProgressInfo::new(
             ProgressScope::Environment {
                 id: execution_id.to_string(),
             },
-            ProgressLevel::Error,
+            ProgressLevel::Warn,
             Some(msg.to_string()),
             execution_id,
         ));
@@ -323,14 +323,15 @@ pub fn check_cname_for(
     match check_result {
         Ok(domain) => {
             send_deployment_progress(format!("Resolution of CNAME {} found to {}", cname_to_check, domain).as_str());
-            Ok(domain)
         }
         Err(_) => {
             let msg = format!("Resolution of CNAME {} failed !!!", cname_to_check);
-            send_error_progress(msg.as_str());
-            Err(msg)
+            send_warn_progress(msg.as_str());
         }
     }
+
+    // do not exit / rollback if domain is not ready, simply warn the user about it
+    Ok(cname_to_check.to_string())
 }
 
 pub fn check_domain_for(
