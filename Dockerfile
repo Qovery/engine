@@ -4,12 +4,12 @@ ARG BIN_DEST_FOLDER="/binaries"
 FROM rust:1.48-slim-buster as build
 
 ARG BIN_DEST_FOLDER
-ARG SCCACHE_REDIS_URI
+ARG SCCACHE_REDIS
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
 ENV RUSTC_WRAPPER=/usr/bin/sccache
-ENV SCCACHE_REDIS=$SCCACHE_REDIS_URI
+ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
 RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev
 WORKDIR /usr/src/app
@@ -26,7 +26,7 @@ RUN ./docker/load.sh download
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
 
-RUN cargo build --release
+RUN sccache --version && sccache -s && cargo build --release && sccache -s
 
 # Final image
 FROM debian:buster-slim as run
