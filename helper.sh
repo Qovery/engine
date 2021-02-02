@@ -157,7 +157,9 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
 function build() { ## Build engine app with engine lib
   prepare_engine
   tag=$(generate_image_tag)
-  cargo build
+  use_sccache
+  cargo build --color=always --all --all-targets
+  sccache -s
 }
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
