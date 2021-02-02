@@ -159,7 +159,7 @@ aws-self-hosted:
     - linter
     - build
   tags:
-    - qovery-2cpu-4gb
+    - qovery-2cpu-8gb
   when: always
   only:
     refs:
@@ -185,7 +185,7 @@ aws-managed-services:
     - linter
     - build
   tags:
-    - qovery-2cpu-4gb
+    - qovery-2cpu-8gb
   when: always
   only:
     refs:
@@ -212,7 +212,7 @@ aws-infra:
     - build
   when: always
   tags:
-    - qovery-2cpu-4gb
+    - qovery-2cpu-8gb
   only:
     refs:
       - dev

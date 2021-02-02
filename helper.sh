@@ -293,6 +293,7 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
   export_env
   prepare_engine
   prepare_tests
+
   cargo build --color=always --all --all-targets
   sccache -s
   cd $ENGINE_DIR
@@ -369,41 +370,6 @@ function lint() {
 
   # FIXME fix warning in the engine and enable clippy
   # cargo clippy
-}
-
-function fast_tests(){ ## Run fast tests only on qovery-engine
-  GITHUB_ENGINE_BRANCH_NAME=$1
-  nb_treads=$2
-  export RUST_LOG=info
-  export_env
-  prepare_engine
-  prepare_tests
-
-  STARTTIME=$(date +%s)
-
-  cargo build --color=always --all --all-targets
-  sccache -s
-  cd $ENGINE_DIR
-  mkdir -p $GITLAB_LOG_OUTPUT_DIR
-  touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
-  env
-
-  cargo test --color always -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1  | tee $GITLAB_LOG_OUTPUT_DIR/output.log
-  TESTS_STATUS="${PIPESTATUS[0]}"
-
-  ENDTIME=$(date +%s)
-  echo -e "\e[95mIt took $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
-  # Log management part
-  cd $GITLAB_LOG_UTILITIES_DIR
-  STARTTIME=$(date +%s)
-  # sorts logs into multiple files
-  ./sorter.sh $GITLAB_LOG_OUTPUT_DIR/output.log
-  # print failed tests
-  ./print_tests_status.sh
-  ENDTIME=$(date +%s)
-  echo -e "\e[95mIt took $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
-
-  return $TESTS_STATUS
 }
 
 if [ $ARGS_NUM -eq 0 ] ; then
