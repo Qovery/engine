@@ -24,7 +24,7 @@ lint-code:
   retry: 0
   script:
     - ./helper.sh lint
-    - cargo build # To build cache for target/ artifacts
+    - ./helper.sh build_image
   when: always
   tags:
     - qovery-2cpu-8gb
@@ -32,10 +32,6 @@ lint-code:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
-  artifacts:
-    paths:
-      - target/
-      - /builds/qovery/.cargo
 
 wip-fast-tests:
   stage: tests
