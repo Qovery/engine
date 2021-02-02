@@ -84,7 +84,7 @@ pub fn delete_environment(context: &Context, environment_action: &EnvironmentAct
     tx.commit()
 }
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
     engine_run_test(|| {
@@ -118,7 +118,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
     })
 }
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     engine_run_test(|| {
@@ -156,7 +156,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     })
 }
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn build_with_buildpacks_and_deploy_a_working_environment() {
     engine_run_test(|| {
@@ -200,7 +200,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
     })
 }
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_a_working_environment_with_domain() {
     engine_run_test(|| {
@@ -279,7 +279,7 @@ fn deploy_a_working_environment_with_custom_domain() {
     })
 }
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
     engine_run_test(|| {
@@ -332,7 +332,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 }
 
 // to check if app redeploy or not, it shouldn't
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn redeploy_same_app_with_ebs() {
     engine_run_test(|| {
@@ -475,7 +475,7 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
     };
 }*/
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_a_not_working_environment_and_after_working_environment() {
     engine_run_test(|| {
@@ -532,7 +532,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
     })
 }
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_ok_fail_fail_ok_environment() {
     init();
@@ -608,7 +608,7 @@ fn deploy_ok_fail_fail_ok_environment() {
     };
 }
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     engine_run_test(|| {
@@ -642,7 +642,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     })
 }
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     init();
@@ -734,7 +734,7 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 //     };
 // }
 
-#[cfg(feature = "test-self-hosted-aws")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
     init();
