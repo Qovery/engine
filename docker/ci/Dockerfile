@@ -1,9 +1,9 @@
 FROM rust:1.48.0-buster
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG SCCACHE_REDIS_URI
+ARG SCCACHE_REDIS
 ENV RUSTC_WRAPPER=/usr/bin/sccache
-ENV SCCACHE_REDIS=$SCCACHE_REDIS_URI
+ENV SCCACHE_REDIS=$SCCACHE_REDIS
 ENV BIN_DIR=$BIN_DEST_FOLDER
 
 RUN apt-get update && apt-get install -y docker.io awscli curl libssh-dev pkg-config unzip make netcat-openbsd jq

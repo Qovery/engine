@@ -34,13 +34,19 @@ function fatal(){
   kill -9 $PROC
 }
 
-
 function check_num_args() {
   desired_number=$1
   if [ $ARGS_NUM -ne ${desired_number} ]; then
     echo "Illegal number of parameters, required $desired_number"
     exit 1
   fi
+}
+
+function print_title() {
+  title=$1
+  echo "###################################################"
+  echo "          $title"
+  echo "###################################################"
 }
 
 function check_untracked_files() {
@@ -101,7 +107,7 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
       elif [ ! -z $CI_COMMIT_REF_NAME ] ; then
         ENGINE_BRANCH=$CI_COMMIT_REF_NAME
       else
-        echo "Can't get commit ID"
+        print_title "Can't get commit ID"
         exit 1
       fi
       # For the app, checkout on the same branch name gitlab <-> github if the same name exists
@@ -112,7 +118,7 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
     else
       ENGINE_BRANCH=$(git branch --show-current)
     fi
-    echo "Using Qovery app commit:"
+    print_title "USING QOVERY APP COMMIT"
     git log -1
 
     if [ -e $ENGINE_DIR ] ; then
@@ -130,7 +136,7 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
         cd $ENGINE_DIR
         git checkout $ENGINE_BRANCH
         git pull
-        echo "Using Qovery lib commit:"
+        print_title "USING QOVERY LIB COMMIT"
         git log -1
         cd -
       fi
@@ -286,9 +292,6 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
 
 function use_sccache() {
   export RUSTC_WRAPPER=/usr/bin/sccache
-  if [ ! -z $SCCACHE_REDIS_URI ] ; then
-    export SCCACHE_REDIS=$SCCACHE_REDIS_URI
-  fi
   sccache --version
   sccache -s
 }
@@ -339,24 +342,20 @@ function all_tests(){ ## Run all tests on qovery-engine
   return $TESTS_STATUS
 }
 
+# shellcheck disable=SC2120
 function lint() {
   GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info
   export_env
   prepare_engine
-  
+
   set -e
 
-  echo "###################################################"
-  echo "                   CARGO FMT                       "
-  echo "###################################################"
+  print_title "CARGO FMT"
   cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
 
-
-  echo "###################################################"
-  echo "             CARGO BUILD NO WARNING                "
-  echo "###################################################"
+  print_title "CARGO BUILD NO WARNING"
   RUSTFLAGS="--deny warnings" cargo check || (echo "Solve your warnings to succeed"; exit 1)
 
   # FIXME fix warning in the engine and enable clippy
