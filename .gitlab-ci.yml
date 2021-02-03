@@ -10,6 +10,7 @@ variables:
 
 cache:
   key: ${CI_COMMIT_REF_SLUG}
+  secretName: s3access
   paths:
     - $CARGO_HOME
     - $WORKSPACE_ROOT_DIR/target
