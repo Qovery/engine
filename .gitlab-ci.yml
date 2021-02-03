@@ -13,6 +13,7 @@ cache:
   paths:
     - $CARGO_HOME
     - $WORKSPACE_ROOT_DIR/target
+  policy: pull
 
 services:
   - docker:dind
@@ -44,6 +45,9 @@ build-mr:
   retry: 0
   script:
     - ./helper.sh build
+  cache:
+    <<: *global_cache
+    policy: pull-push
   when: always
   tags:
     - 2cpu-4gmem-0g
@@ -149,6 +153,9 @@ build:
   retry: 0
   script:
     - ./helper.sh build
+  cache:
+    <<: *global_cache
+    policy: pull-push
   when: always
   tags:
     - 2cpu-4gmem-0g
@@ -255,6 +262,9 @@ main-release:
   retry: 1
   script:
     - ./helper.sh new_release
+  cache:
+    <<: *global_cache
+    policy: pull-push
   tags:
     - 2cpu-4gmem-0g
   only:
