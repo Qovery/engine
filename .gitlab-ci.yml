@@ -40,7 +40,7 @@ build-mr:
     - ./helper.sh build
   when: always
   tags:
-    - qovery-2cpu-8gb
+    - 2cpu-4gmem-50gdisk
   only:
     - merge_requests
 
@@ -53,7 +53,7 @@ all-self-hosted-mr:
   - merge_requests
   when: always
   tags:
-    - qovery-2cpu-8gb
+    - 2cpu-4gmem-50gdisk
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -79,7 +79,7 @@ all-managed-services-mr:
     - merge_requests
   when: manual
   tags:
-    - qovery-2cpu-8gb
+    - 2cpu-4gmem-50gdisk
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -145,7 +145,7 @@ build:
     - ./helper.sh build
   when: always
   tags:
-    - qovery-2cpu-8gb
+    - 2cpu-4gmem-50gdisk
   only:
     refs:
       - dev
@@ -159,7 +159,7 @@ aws-self-hosted:
     - linter
     - build
   tags:
-    - qovery-2cpu-8gb
+    - 2cpu-4gmem-50gdisk
   when: always
   only:
     refs:
@@ -185,7 +185,7 @@ aws-managed-services:
     - linter
     - build
   tags:
-    - qovery-2cpu-8gb
+    - 2cpu-4gmem-50gdisk
   when: always
   only:
     refs:
@@ -212,7 +212,7 @@ aws-infra:
     - build
   when: always
   tags:
-    - qovery-2cpu-8gb
+    - 2cpu-4gmem-50gdisk
   only:
     refs:
       - dev

@@ -418,31 +418,31 @@ get_release_ga)
   get_release_ga
   ;;
 aws_self_hosted)
-  run_tests test-aws-self-hosted $commit_id 10
+  run_tests test-aws-self-hosted $commit_id 20
   ;;
 do_self_hosted)
-  run_tests test-do-self-hosted $commit_id 10
+  run_tests test-do-self-hosted $commit_id 20
   ;;
 all_self_hosted)
-  run_tests test-all-self-hosted $commit_id 10
+  run_tests test-all-self-hosted $commit_id 20
   ;;
 aws_managed_services)
-  run_tests test-aws-managed-services $commit_id 10
+  run_tests test-aws-managed-services $commit_id 20
   ;;
 do_managed_services)
-  run_tests test-do-managed-services $commit_id 10
+  run_tests test-do-managed-services $commit_id 20
   ;;
 all_managed_services)
-  run_tests test-all-managed-services $commit_id 10
+  run_tests test-all-managed-services $commit_id 20
   ;;
 aws_infra)
-  run_tests test-aws-infra $commit_id 10
+  run_tests test-aws-infra $commit_id 20
   ;;
 do_infra)
-  run_tests test-do-infra $commit_id 10
+  run_tests test-do-infra $commit_id 20
   ;;
 test_all)
-  run_tests test-all $commit_id 10
+  run_tests test-all $commit_id 20
   ;;
 single_test)
   check_num_args 2
