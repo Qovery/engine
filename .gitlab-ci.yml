@@ -8,6 +8,12 @@ variables:
   DOCKER_BUILDKIT: 1
   CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
 
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - $CARGO_HOME
+    - $WORKSPACE_ROOT_DIR/target
+
 services:
   - docker:dind
 
@@ -29,7 +35,7 @@ linter-mr:
     - ./helper.sh lint
   when: always
   tags:
-    - qovery-2cpu-4gb
+    - 2cpu-4gmem-50gdisk
   only:
     - merge_requests
 
@@ -133,7 +139,7 @@ linter:
     - ./helper.sh lint
   when: always
   tags:
-    - qovery-2cpu-4gb
+    - 2cpu-4gmem-50gdisk
   only:
     refs:
       - dev
@@ -248,7 +254,7 @@ main-release:
   script:
     - ./helper.sh new_release
   tags:
-    - qovery-2cpu-4gb
+    - 2cpu-4gmem-50gdisk
   only:
     refs:
       - main
@@ -259,7 +265,7 @@ main-set-ga:
   script:
     - ./helper.sh set_release_ga
   tags:
-    - qovery-2cpu-4gb
+    - 2cpu-4gmem-50gdisk
   when: manual
   only:
     refs:
@@ -272,7 +278,7 @@ main-deploy_engine:
     - ./helper.sh release_to_prod
   when: manual
   tags:
-    - qovery-2cpu-4gb
+    - 2cpu-4gmem-50gdisk
   only:
     refs:
       - main
