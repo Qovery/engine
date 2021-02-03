@@ -35,7 +35,7 @@ linter-mr:
     - ./helper.sh lint
   when: always
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   only:
     - merge_requests
 
@@ -46,7 +46,7 @@ build-mr:
     - ./helper.sh build
   when: always
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   only:
     - merge_requests
 
@@ -59,7 +59,7 @@ all-self-hosted-mr:
   - merge_requests
   when: always
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -85,7 +85,7 @@ all-managed-services-mr:
     - merge_requests
   when: manual
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -139,7 +139,7 @@ linter:
     - ./helper.sh lint
   when: always
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   only:
     refs:
       - dev
@@ -151,7 +151,7 @@ build:
     - ./helper.sh build
   when: always
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   only:
     refs:
       - dev
@@ -165,7 +165,7 @@ aws-self-hosted:
     - linter
     - build
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   when: always
   only:
     refs:
@@ -191,7 +191,7 @@ aws-managed-services:
     - linter
     - build
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   when: always
   only:
     refs:
@@ -218,7 +218,7 @@ aws-infra:
     - build
   when: always
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   only:
     refs:
       - dev
@@ -239,6 +239,8 @@ dev-release:
   retry: 1
   script:
     - ./helper.sh new_release
+  tags:
+    - 2cpu-4gmem-0g
   when: manual
   only:
     refs:
@@ -254,7 +256,7 @@ main-release:
   script:
     - ./helper.sh new_release
   tags:
-    - 2cpu-4gmem-50gdisk
+    - 2cpu-4gmem-0g
   only:
     refs:
       - main
@@ -264,8 +266,6 @@ main-set-ga:
   retry: 2
   script:
     - ./helper.sh set_release_ga
-  tags:
-    - 2cpu-4gmem-50gdisk
   when: manual
   only:
     refs:
@@ -277,8 +277,6 @@ main-deploy_engine:
   script:
     - ./helper.sh release_to_prod
   when: manual
-  tags:
-    - 2cpu-4gmem-50gdisk
   only:
     refs:
       - main
