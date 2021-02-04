@@ -1,5 +1,10 @@
 #!/bin/bash
 
+FORMATED_FAILED_TESTS_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
+OUTPUT_DIR_TESTS_FILES="$FORMATED_FAILED_TESTS_DIR/output"
+JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
+TESTS_NON_HANDLED_ISSUES="$OUTPUT_DIR_TESTS_FILES/tests_issues"
+
 function generate_html_file() {
   file=$1
   html_file=${file}.html
@@ -44,11 +49,6 @@ EOF
 
   mv $html_file_wip $html_file
 }
-
-FORMATED_FAILED_TESTS_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
-OUTPUT_DIR_TESTS_FILES="$FORMATED_FAILED_TESTS_DIR/output"
-JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
-TESTS_NON_HANDLED_ISSUES="$OUTPUT_DIR_TESTS_FILES/tests_issues"
 
 cd $OUTPUT_DIR_TESTS_FILES
 
