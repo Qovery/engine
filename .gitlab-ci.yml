@@ -8,8 +8,8 @@ variables:
   DOCKER_BUILDKIT: 1
   CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
 
-cache:
-  key: ${CI_COMMIT_REF_SLUG}
+cache: &global_cache
+  key: one-key-to-rule-them-all
   paths:
     - $CARGO_HOME
     - $WORKSPACE_ROOT_DIR/target
@@ -39,20 +39,19 @@ linter-mr:
     - 2cpu-4gmem-0g
   only:
     - merge_requests
+  interruptible: true
 
 build-mr:
   stage: build
   retry: 0
   script:
     - ./helper.sh build
-  cache:
-    <<: *global_cache
-    policy: pull-push
   when: always
   tags:
     - 2cpu-4gmem-0g
   only:
     - merge_requests
+  interruptible: true
 
 all-self-hosted-mr:
   stage: tests
@@ -79,6 +78,7 @@ all-self-hosted-mr:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 1 week
+  interruptible: true
 
 all-managed-services-mr:
   stage: tests
@@ -105,6 +105,7 @@ all-managed-services-mr:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 1 week
+  interruptible: true
 
 test-all-mr:
   stage: tests
@@ -131,6 +132,7 @@ test-all-mr:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 1 week
+  interruptible: true
 
 #
 # Dev branch
@@ -147,6 +149,7 @@ linter:
   only:
     refs:
       - dev
+  interruptible: true
 
 build:
   stage: build
@@ -188,6 +191,7 @@ aws-self-hosted:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 2 week
+  interruptible: true
 
 aws-managed-services:
   stage: tests
@@ -214,6 +218,7 @@ aws-managed-services:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 2 week
+  interruptible: true
 
 aws-infra:
   stage: tests
@@ -240,6 +245,7 @@ aws-infra:
       - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 2 week
+  interruptible: true
 
 dev-release:
   stage: release

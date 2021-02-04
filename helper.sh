@@ -17,8 +17,8 @@ PROC="$$"
 QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=cloned-engine
-GITLAB_LOG_UTILITIES_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
-GITLAB_LOG_OUTPUT_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
+export GITLAB_LOG_UTILITIES_DIR="logs_output"
+export GITLAB_LOG_OUTPUT_DIR="logs_output"
 export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
 export RUNNING_ON_CI=0
 export ENGINE_BRANCH=""
@@ -321,6 +321,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   filter_tests=$1
   GITHUB_ENGINE_BRANCH_NAME=$2
   nb_treads=$3
+  print_title "RUNNING TESTS - $filter_tests"
   export RUST_LOG=info
   export_env
   prepare_engine
@@ -328,13 +329,15 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 
   STARTTIME=$(date +%s)
 
-  cargo build --color=always --all --all-targets
   sccache -s
   cd $ENGINE_DIR
+
   mkdir -p $GITLAB_LOG_OUTPUT_DIR
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
 
-  cargo test --color always --features "$filter_tests" --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
+  set -x
+  pwd
+  cargo test --color always --features $filter_tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
 
   ENDTIME=$(date +%s)
@@ -380,6 +383,8 @@ fi
 if [ ! -z $GITHUB_COMMIT_ID ] ; then
   commit_id=$GITHUB_COMMIT_ID
   RUNNING_ON_CI=1
+  export GITLAB_LOG_UTILITIES_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
+  export GITLAB_LOG_OUTPUT_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
 # Check if running manually
 elif [ ! -z $GITLAB_USER_ID ] ; then
   commit_id=$CI_COMMIT_SHA
