@@ -337,7 +337,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 
   set -x
   pwd
-  cargo test --color always --features $filter_tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
+  cargo test --release --color always --features $filter_tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
 
   ENDTIME=$(date +%s)
