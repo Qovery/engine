@@ -3,6 +3,7 @@
 .idea
 .qovery-workspace
 .terraform/
+logs_output/
 NOTES.txt
 .env
 results.xml

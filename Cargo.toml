@@ -60,7 +60,7 @@ digitalocean = "0.1.1"
 test-utilities = { path = "test_utilities" }
 
 [features]
-default = ["test-all"]
+default = []
 test-all = ["test-all-self-hosted", "test-all-infra", "test-all-managed-services"]
 
 # functionnal tests by type
