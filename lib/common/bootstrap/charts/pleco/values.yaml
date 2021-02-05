@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: qoveryrd/pleco
   pullPolicy: IfNotPresent
-  plecoImageTag: "0.4.1"
+  plecoImageTag: "0.5.0"
 
 environmentVariables:
   LOG_LEVEL: "info"
@@ -26,6 +26,8 @@ enabledFeatures:
   eks: false
   elb: false
   ebs: false
+  vpc: false
+  s3: false
 
 imagePullSecrets: []
 nameOverride: ""
