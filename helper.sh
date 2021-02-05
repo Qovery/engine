@@ -165,7 +165,7 @@ function build() { ## Build engine app with engine lib
 }
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
-  prepare_engine
+  build
   tag=$(generate_image_tag)
 
   cp docker/load.sh docker/engine/load.sh
