@@ -112,7 +112,7 @@ impl Service for Router {
                 CustomDomainDataTemplate {
                     domain: cd.domain.clone(),
                     domain_hash,
-                    target_domain: cd.target_domain.clone(),
+                    target_domain: cd.target_domain.clone(), // todo: updater ce champ plus tard
                 }
             })
             .collect::<Vec<_>>();
@@ -148,7 +148,9 @@ impl Service for Router {
                 let external_ingress_hostname_default = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
                     kubernetes_config_file_path_string.as_str(),
                     "nginx-ingress",
-                    "app=nginx-ingress,component=controller",
+                    "app=nginx-ingress,component=controller", //todo: mettre l'app id
+                    // custom-router-pmt2pfv7xiy4i2kw-nginx-ingress-controller   LoadBalancer   10.245.76.176   www.fillbit.io    80:31157/TCP,443:31232/TCP   73m   app.kubernetes.io/managed-by=Helm,app=nginx-ingress,app_id=pmt2pfv7xiy4i2kw,chart=nginx-ingress-1.35.0,component=controller,heritage=Helm,release=custom-router-pmt2pfv7xiy4i2kw
+                    // custom-router-v6b5agdvpdj5522i-nginx-ingress-controller   LoadBalancer   10.245.17.42    core.fillbit.io   80:30879/TCP,443:31731/TCP   70m   app.kubernetes.io/managed-by=Helm,app=nginx-ingress,app_id=v6b5agdvpdj5522i,chart=nginx-ingress-1.35.0,component=controller,heritage=Helm,release=custom-router-v6b5agdvpdj5522i
                     kubernetes.cloud_provider().credentials_environment_variables(),
                 );
 
