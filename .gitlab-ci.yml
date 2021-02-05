@@ -181,8 +181,9 @@ aws-self-hosted:
     refs:
       - dev
     variables:
-      - $TEST_AWS_MANAGED_SERVICES == "true"
-      - $TEST_AWS_MANAGED_SERVICES == null
+      - $TESTS_TO_RUN =~ /test-aws-self-hosted/
+      - $TESTS_TO_RUN =~ /test-aws-all/
+      - $TESTS_TO_RUN =~ /test-all/
   artifacts:
     when: always
     reports:
@@ -208,8 +209,9 @@ aws-managed-services:
     refs:
       - dev
     variables:
-      - $TEST_AWS_MANAGED_SERVICES == "true"
-      - $TEST_AWS_MANAGED_SERVICES == null
+      - $TESTS_TO_RUN =~ /test-aws-managed-services/
+      - $TESTS_TO_RUN =~ /test-aws-all/
+      - $TESTS_TO_RUN =~ /test-all/
   artifacts:
     when: always
     reports:
@@ -235,8 +237,9 @@ aws-infra:
     refs:
       - dev
     variables:
-      - $TEST_AWS_MANAGED_SERVICES == "true"
-      - $TEST_AWS_MANAGED_SERVICES == null
+      - $TESTS_TO_RUN =~ /test-aws-infra/
+      - $TESTS_TO_RUN =~ /test-aws-all/
+      - $TESTS_TO_RUN =~ /test-all/
   artifacts:
     when: always
     reports:
