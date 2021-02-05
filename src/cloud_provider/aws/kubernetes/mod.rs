@@ -484,7 +484,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 self.engine_error_scope(),
                 self.context().execution_id(),
                 Some(format!(
-                    "rror while deploying cluster {} with id {}. {}",
+                    "Error while deploying cluster {} with id {}. {}",
                     self.name(),
                     self.id(),
                     msg
