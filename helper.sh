@@ -17,6 +17,8 @@ PROC="$$"
 QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=cloned-engine
+
+export DOCKER_BUILDKIT=1
 export GITLAB_LOG_UTILITIES_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
 export GITLAB_LOG_OUTPUT_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
 export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
@@ -168,6 +170,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
 
   cp docker/load.sh docker/engine/load.sh
   cp docker/bin_versions bin_versions
+  cp target/release/app app
   # copy providers files to download required binaries
   rm -Rf docker/engine/providers/*
   set -e
@@ -190,7 +193,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   fi
   set -e
 
-  docker build --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
+  docker build -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
@@ -205,7 +208,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
   cp docker/bin_versions docker/ci/bin_versions
 
   cd docker/ci
-   DOCKER_BUILDKIT=1 docker build --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t qoveryrd/ci:${tag} .
+  docker build --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t qoveryrd/ci:${tag} .
   cd ..
 
   rm -f docker/ci/load.sh
@@ -335,6 +338,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   mkdir -p $GITLAB_LOG_OUTPUT_DIR
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
 
+  # Note: keep release, we don't waste time because of multiple cache and it drastically help to speed up prod build
   cargo test --release --color always --features $filter_tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
 
