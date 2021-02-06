@@ -158,10 +158,13 @@ impl Service for Router {
         match kubernetes_config_file_path {
             Ok(kubernetes_config_file_path_string) => {
                 // Default domain
+                let external_ingress_ip_selector =
+                    format!("app=nginx-ingress,component=controller,app_id={}", self.id());
+
                 let external_ingress_hostname_default = crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                     kubernetes_config_file_path_string.as_str(),
                     "nginx-ingress",
-                    "app=nginx-ingress,component=controller",
+                    external_ingress_ip_selector.as_str(),
                     kubernetes.cloud_provider().credentials_environment_variables(),
                 );
 
