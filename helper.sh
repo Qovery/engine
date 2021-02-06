@@ -160,7 +160,7 @@ function build() { ## Build engine app with engine lib
   prepare_engine
   tag=$(generate_image_tag)
   use_sccache
-  cargo build --color=always --all --all-targets
+  cargo build --release --color=always --all --all-targets
   sccache -s
 }
 
@@ -170,6 +170,9 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
 
   cp docker/load.sh docker/engine/load.sh
   cp docker/bin_versions bin_versions
+  if [ ! -f target/release/app ] ; then
+    build
+  fi
   cp target/release/app engine-app
   # copy providers files to download required binaries
   rm -Rf docker/engine/providers/*
