@@ -400,18 +400,16 @@ impl Create for Router {
                 self.progress_scope(),
                 self.listeners(),
                 &domain_to_check.domain,
-                self.id(),
+                self.context.execution_id(),
             ) {
                 Ok(cname) if cname.trim_end_matches('.') == domain_to_check.target_domain.trim_end_matches('.') => {
                     continue
                 }
                 Ok(err) | Err(err) => {
-                    return Err(EngineError::new(
-                        EngineErrorCause::User("Invalid CNAME"),
-                        EngineErrorScope::Router(self.id.clone(), self.name.clone()),
-                        self.context.execution_id(),
-                        Some(err.as_str()),
-                    ))
+                    warn!(
+                        "Invalid CNAME for {}. Might not be an issue if user is using a CDN: {}",
+                        domain_to_check.domain, err
+                    );
                 }
             }
         }

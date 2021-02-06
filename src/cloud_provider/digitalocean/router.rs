@@ -464,7 +464,7 @@ impl Create for Router {
                 self.progress_scope(),
                 self.listeners(),
                 &domain_to_check.domain,
-                self.id(),
+                self.context.execution_id(),
             ) {
                 Ok(cname) if cname.trim_end_matches('.') == domain_to_check.target_domain.trim_end_matches('.') => {
                     continue;
