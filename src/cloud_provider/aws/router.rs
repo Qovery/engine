@@ -11,7 +11,7 @@ use crate::cloud_provider::utilities::check_cname_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
     context: Context,

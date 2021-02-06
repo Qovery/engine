@@ -15,7 +15,7 @@ use crate::cmd::helm::Timeout;
 use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
 };
-use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
     context: Context,
