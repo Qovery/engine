@@ -250,7 +250,7 @@ aws-infra:
     expire_in: 2 week
   interruptible: true
 
-dev-release:
+dev-release-image:
   stage: release
   retry: 1
   script:
@@ -266,7 +266,7 @@ dev-release:
 # Main branch
 #
 
-main-release:
+main-release-image:
   stage: release
   retry: 1
   script:
@@ -287,7 +287,7 @@ main-set-ga:
     refs:
       - main
 
-main-deploy_engine:
+main-deploy-engine-infra:
   stage: deploy
   retry: 0
   script:
