@@ -39,14 +39,11 @@ function gh_tags_selector_for_gitlab() {
   num_labels=$(echo $gh_pr | jq '.labels | length')
 
   all_labels=""
-  if [ $num_labels -gt 0 ] ; then
+  if [ "$num_labels" != "0" ] ; then
     for i in $(echo $gh_pr | jq -r '.labels[].name' | grep 'test-') ; do
       all_labels="$all_labels,$i"
     done
     all_labels=$(echo $all_labels | sed 's/^,//')
-  else
-    # default tests if no test label are specified
-    all_labels="test-aws-all"
   fi
 
   echo $all_labels
@@ -147,9 +144,17 @@ autodetect)
   tags=$(gh_tags_selector_for_gitlab)
   run_tests $tags
   ;;
+check_gh_tags)
+  if [ gh_tags_selector_for_gitlab == "$all_labels" ] ; then
+    exit 0
+  fi
+  echo "You need to enable all the tests to validate this PR"
+  exit 1
+  ;;
 *)
   echo "Usage:"
   echo "$0 autodetect: autodetect tests to run based on tags"
   echo "$0 full_tests: run full tests (with cloud providers check)"
+  echo "$0 check_gh_tags: get defined tags (only working if branch is a PR)"
   ;;
 esac
