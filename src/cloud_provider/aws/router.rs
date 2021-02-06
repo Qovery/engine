@@ -397,7 +397,8 @@ impl Create for Router {
         // Wait/Check that custom domain is a CNAME targeting qovery
         for domain_to_check in self.custom_domains.iter() {
             match check_cname_for(
-                ListenersHelper::new(self.listeners()),
+                self.progress_scope(),
+                self.listeners(),
                 &domain_to_check.domain,
                 self.id(),
             ) {
