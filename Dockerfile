@@ -40,7 +40,7 @@ RUN apt-get update && \
 
 WORKDIR $HOME_DIR
 ADD cloned-engine/lib lib
-COPY app .
+COPY engine-app app
 COPY --from=build /usr/src/app/docker/engine/load.sh .
 COPY --from=build /usr/src/app/docker/engine/run.sh .
 COPY --from=build /usr/src/app/bin_versions .

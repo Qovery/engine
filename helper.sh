@@ -170,7 +170,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
 
   cp docker/load.sh docker/engine/load.sh
   cp docker/bin_versions bin_versions
-  cp target/release/app app
+  cp target/release/app engine-app
   # copy providers files to download required binaries
   rm -Rf docker/engine/providers/*
   set -e
