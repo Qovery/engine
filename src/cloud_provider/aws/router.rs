@@ -11,7 +11,7 @@ use crate::cloud_provider::utilities::check_cname_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
     context: Context,
@@ -399,20 +399,19 @@ impl Create for Router {
         // Wait/Check that custom domain is a CNAME targeting qovery
         for domain_to_check in self.custom_domains.iter() {
             match check_cname_for(
-                ListenersHelper::new(self.listeners()),
+                self.progress_scope(),
+                self.listeners(),
                 &domain_to_check.domain,
-                self.id(),
+                self.context.execution_id(),
             ) {
                 Ok(cname) if cname.trim_end_matches('.') == domain_to_check.target_domain.trim_end_matches('.') => {
                     continue
                 }
                 Ok(err) | Err(err) => {
-                    return Err(EngineError::new(
-                        EngineErrorCause::User("Invalid CNAME"),
-                        EngineErrorScope::Router(self.id.clone(), self.name.clone()),
-                        self.context.execution_id(),
-                        Some(err.as_str()),
-                    ))
+                    warn!(
+                        "Invalid CNAME for {}. Might not be an issue if user is using a CDN: {}",
+                        domain_to_check.domain, err
+                    );
                 }
             }
         }
