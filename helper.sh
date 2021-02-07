@@ -18,7 +18,7 @@ QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=cloned-engine
 
-export DOCKER_BUILDKIT=1
+export DOCKER_BUILDKIT=0
 export GITLAB_LOG_UTILITIES_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
 export GITLAB_LOG_OUTPUT_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
 export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib

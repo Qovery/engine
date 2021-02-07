@@ -5,7 +5,6 @@ variables:
   DOCKER_HOST: tcp://localhost:2375
   DOCKER_TLS_CERTDIR: ""
   WORKSPACE_ROOT_DIR: /builds/qovery/qovery-engine
-  DOCKER_BUILDKIT: 0
   CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
 
 cache: &global_cache
