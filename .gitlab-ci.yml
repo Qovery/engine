@@ -184,6 +184,9 @@ aws-self-hosted:
       - $TESTS_TO_RUN =~ /test-aws-self-hosted/
       - $TESTS_TO_RUN =~ /test-aws-all/
       - $TESTS_TO_RUN =~ /test-all/
+  except:
+    variables:
+      - $TESTS_TO_RUN
   artifacts:
     when: always
     reports:
