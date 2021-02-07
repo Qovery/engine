@@ -1,4 +1,4 @@
-name: functionnal-tests
+name: tests
 
 on:
   push:
@@ -29,13 +29,13 @@ jobs:
           echo "########## START BUILD ##########"
           cargo build --release --all-features
           sccache --show-stats
-  functionnal-tests:
+  selected-functionnal-tests:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
     needs: build
     steps:
       - uses: actions/checkout@v1
-      - name: Run a multi-line script
+      - name: Run selected functional tests
         timeout-minutes: 120
         env:
           GITLAB_PROJECT_ID: ${{ secrets.GITLAB_PROJECT_ID }}
@@ -47,3 +47,20 @@ jobs:
           export GITHUB_BRANCH=$branch
           export GITHUB_COMMIT_ID=$GITHUB_SHA
           ./helper.sh autodetect
+  all-tests-enabled:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v1
+      - name: Only validate PR if all tests have been requested
+        timeout-minutes: 120
+        env:
+          GITLAB_PROJECT_ID: ${{ secrets.GITLAB_PROJECT_ID }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_PERSONAL_TOKEN: ${{ secrets.GITLAB_PERSONAL_TOKEN }}
+        run: |
+          branch=$(echo ${{github.ref}} | sed -r 's/^refs\/heads\/(.+)/\1/')
+          echo "Branch name: $branch"
+          export GITHUB_BRANCH=$branch
+          export GITHUB_COMMIT_ID=$GITHUB_SHA
+          ./helper.sh check_gh_tags

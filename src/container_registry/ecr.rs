@@ -16,6 +16,9 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::runtime::async_run;
+use retry::delay::Fibonacci;
+use retry::Error::Operation;
+use retry::OperationResult;
 
 pub struct ECR {
     context: Context,
@@ -111,27 +114,57 @@ impl ECR {
         // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
         // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
 
-        match cmd::utilities::exec_with_envs(
-            "docker",
-            vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
-            self.docker_envs(),
-        ) {
-            Err(_) => {
+        let docker_tag = retry::retry(
+            Fibonacci::from_millis(3000).take(5),
+            || match cmd::utilities::exec_with_envs(
+                "docker",
+                vec!["tag", image.name_with_tag().as_str(), dest.as_str()],
+                self.docker_envs(),
+            ) {
+                Ok(_) => OperationResult::Ok(()),
+                Err(e) => {
+                    info!("failed to tag image {} with tag {}, retrying...", image.name, image.tag);
+                    OperationResult::Retry(e)
+                }
+            },
+        );
+
+        match docker_tag {
+            Err(Operation { error, .. }) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
-                    format!("failed to tag image ({}) {:?}", image.name_with_tag(), image,),
-                ));
+                    format!(
+                        "failed to tag image ({}) {:?}: {:?}",
+                        image.name_with_tag(),
+                        image,
+                        error.message
+                    ),
+                ))
             }
             _ => {}
-        };
+        }
 
         // docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
-        match cmd::utilities::exec_with_envs("docker", vec!["push", dest.as_str()], self.docker_envs()) {
+        let docker_push = retry::retry(
+            Fibonacci::from_millis(3000).take(5),
+            || match cmd::utilities::exec_with_envs("docker", vec!["push", dest.as_str()], self.docker_envs()) {
+                Ok(_) => OperationResult::Ok(()),
+                Err(e) => {
+                    info!(
+                        "failed to push image {} with tag {}, retrying...",
+                        image.name, image.tag
+                    );
+                    OperationResult::Retry(e)
+                }
+            },
+        );
+
+        match docker_push {
             Err(_) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
                     format!("failed to push image {:?} into ECR {}", image, self.name_with_id(),),
-                ));
+                ))
             }
             _ => {}
         };

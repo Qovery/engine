@@ -364,18 +364,34 @@ impl BuildPlatform for LocalDocker {
         }
 
         // ensure there is enough disk space left before building a new image
-        let docker_path = Path::new("/var/lib/docker");
+        let docker_path_string = "/var/lib/docker";
+        let docker_path = Path::new(docker_path_string);
 
         if docker_path.exists() {
-            // only used in production on Linux OS
-            let docker_path_size_info = match fs2::statvfs(docker_path) {
-                Ok(fs_stats) => fs_stats,
-                Err(err) => {
-                    return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
-                }
-            };
+            let mounted_disks = proc_mounts::MountList::new();
 
-            check_docker_space_usage_and_clean(docker_path_size_info, self.get_docker_host_envs());
+            // ensure docker_path is a mounted volume, otherwise ignore because it's not what Qovery does in production
+            // ex: this cause regular cleanup on CI, leading to random tests errors
+            match mounted_disks {
+                Ok(m) => match m.get_mount_by_dest(Path::new(docker_path)) {
+                    Some(_) => {
+                        // only used in production on Linux OS
+                        let docker_path_size_info = match fs2::statvfs(docker_path) {
+                            Ok(fs_stats) => fs_stats,
+                            Err(err) => {
+                                return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
+                            }
+                        };
+
+                        check_docker_space_usage_and_clean(docker_path_size_info, self.get_docker_host_envs());
+                    }
+                    None => info!(
+                        "ignoring docker cleanup because {} is not a mounted volume",
+                        docker_path_string
+                    ),
+                },
+                Err(_) => error!("wasn't able to get info from {} volume", docker_path_string),
+            };
         }
 
         let application_id = build.image.application_id.clone();
@@ -457,8 +473,7 @@ impl Listen for LocalDocker {
 }
 
 fn check_docker_space_usage_and_clean(docker_path_size_info: FsStats, envs: Vec<(&str, &str)>) {
-    let docker_max_disk_percentage_usage_before_purge = 50; // arbitrary percentage that should make the job anytime
-
+    let docker_max_disk_percentage_usage_before_purge = 60; // arbitrary percentage that should make the job anytime
     let docker_percentage_used = docker_path_size_info.available_space() * 100 / docker_path_size_info.total_space();
 
     if docker_percentage_used > docker_max_disk_percentage_usage_before_purge {
