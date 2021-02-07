@@ -38,7 +38,6 @@ function gh_tags_selector_for_gitlab() {
   gh_pr=$(echo $gh_json | jq --compact-output '.[] | {labels, ref: .head.ref}' | grep "$GITHUB_BRANCH")
   num_labels=$(echo $gh_pr | jq '.labels | length')
 
-  all_labels=""
   if [ "$num_labels" != "0" ] ; then
     for i in $(echo $gh_pr | jq -r '.labels[].name' | grep 'test-') ; do
       all_labels="$all_labels,$i"
@@ -145,7 +144,8 @@ autodetect)
   run_tests $tags
   ;;
 check_gh_tags)
-  if [ gh_tags_selector_for_gitlab == "$all_labels" ] ; then
+  if [ "$(gh_tags_selector_for_gitlab)" == "$all_labels" ] ; then
+    echo "All tests have been enabled"
     exit 0
   fi
   echo "You need to enable all the tests to validate this PR"
