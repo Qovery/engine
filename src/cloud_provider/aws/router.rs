@@ -145,13 +145,10 @@ impl Service for Router {
         match kubernetes_config_file_path {
             Ok(kubernetes_config_file_path_string) => {
                 // Default domain
-                let external_ingress_ip_selector =
-                    format!("app=nginx-ingress,component=controller,app_id={}", self.id());
-
                 let external_ingress_hostname_default = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
                     kubernetes_config_file_path_string.as_str(),
                     "nginx-ingress",
-                    external_ingress_ip_selector.as_str(),
+                    "app=nginx-ingress,component=controller",
                     kubernetes.cloud_provider().credentials_environment_variables(),
                 );
 
@@ -170,11 +167,14 @@ impl Service for Router {
 
                 // Check if there is a custom domain first
                 if !self.custom_domains.is_empty() {
+                    let external_ingress_ip_selector =
+                        format!("app=nginx-ingress,component=controller,app_id={}", self.id());
+
                     let external_ingress_hostname_custom =
                         crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
                             kubernetes_config_file_path_string.as_str(),
                             environment.namespace(),
-                            "app=nginx-ingress,component=controller",
+                            external_ingress_ip_selector.as_str(),
                             kubernetes.cloud_provider().credentials_environment_variables(),
                         );
 
