@@ -82,7 +82,7 @@ spec:
                 secretKeyRef:
                   name: {{ $kubefullname }}
                   key: {{ $key }}
-          {{ end }}
+            {{ end }}
           resources:
       {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
