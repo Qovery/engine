@@ -158,13 +158,10 @@ impl Service for Router {
         match kubernetes_config_file_path {
             Ok(kubernetes_config_file_path_string) => {
                 // Default domain
-                let external_ingress_ip_selector =
-                    format!("app=nginx-ingress,component=controller,app_id={}", self.id());
-
                 let external_ingress_hostname_default = crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                     kubernetes_config_file_path_string.as_str(),
                     "nginx-ingress",
-                    external_ingress_ip_selector.as_str(),
+                    "app=nginx-ingress,component=controller",
                     kubernetes.cloud_provider().credentials_environment_variables(),
                 );
 
@@ -185,10 +182,13 @@ impl Service for Router {
 
                 // Custom domain
                 if !self.custom_domains.is_empty() {
+                    let external_ingress_ip_selector =
+                        format!("app=nginx-ingress,component=controller,app_id={}", self.id());
+
                     let deployed_ingress = match crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                         kubernetes_config_file_path_string.as_str(),
                         environment.namespace(),
-                        "app=nginx-ingress,component=controller",
+                        external_ingress_ip_selector.as_str(),
                         kubernetes.cloud_provider().credentials_environment_variables(),
                     ) {
                         Ok(x) => x.is_some(),
@@ -201,7 +201,7 @@ impl Service for Router {
                             let lb_id = crate::cmd::kubectl::do_kubectl_exec_get_loadbalancer_id(
                                 kubernetes_config_file_path_string.as_str(),
                                 environment.namespace(),
-                                "app=nginx-ingress,component=controller",
+                                external_ingress_ip_selector.as_str(),
                                 kubernetes.cloud_provider().credentials_environment_variables(),
                             );
 
