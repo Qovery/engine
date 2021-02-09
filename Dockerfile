@@ -8,14 +8,7 @@ ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
 
-RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev
-WORKDIR /usr/src/app
-ADD . .
-
-# sscache
-RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/releases/latest" | sed -r 's/^.+tag\/(.+)">.+/\1/') && \
-    curl -sLo /usr/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache && \
-    chmod 755 /usr/bin/sccache
+RUN apt-get update && apt-get -y install libfindbin-libs-perl curl unzip pkg-config libssl-dev
 
 # run release build
 RUN mkdir -p $TF_PLUGIN_CACHE_DIR
