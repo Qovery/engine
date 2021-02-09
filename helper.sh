@@ -160,6 +160,7 @@ function build() { ## Build engine app with engine lib
   prepare_engine
   tag=$(generate_image_tag)
   use_sccache
+  set -e
   cargo build --release --all-features --color=always
   sccache -s
 }

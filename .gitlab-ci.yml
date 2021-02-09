@@ -160,7 +160,7 @@ build:
     policy: pull-push
   when: always
   tags:
-    - 2cpu-4gmem-0g
+    - 2cpu-8gmem-0g
   only:
     refs:
       - dev
@@ -271,7 +271,7 @@ main-release-image:
   script:
     - ./helper.sh new_release
   tags:
-    - 2cpu-4gmem-0g
+    - 2cpu-8gmem-0g
   only:
     refs:
       - main
