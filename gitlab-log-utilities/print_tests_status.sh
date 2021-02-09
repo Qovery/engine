@@ -82,6 +82,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
 
         # generate html version to make it more readable
         generate_html_file $test_file
+        mv $OUTPUT_DIR_TESTS_FILES/*.html $FORMATED_FAILED_TESTS_DIR
 
       else
         if [ "$test_file" != "null" ] ; then
