@@ -9,6 +9,7 @@ ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
 
 RUN apt-get update && apt-get -y install libfindbin-libs-perl curl unzip pkg-config libssl-dev
+ADD docker .
 
 # run release build
 RUN mkdir -p $TF_PLUGIN_CACHE_DIR
@@ -37,7 +38,7 @@ RUN apt-get update && \
 
 WORKDIR $HOME_DIR
 ADD cloned-engine/lib $HOME_DIR/lib
-ADD target/release/app $HOME_DIR
+ADD engine-app ./app
 COPY --from=build /usr/src/app/docker/engine/load.sh $HOME_DIR
 COPY --from=build /usr/src/app/docker/engine/run.sh $HOME_DIR
 COPY --from=build /usr/src/app/bin_versions $HOME_DIR
