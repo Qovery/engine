@@ -1,15 +1,12 @@
 ARG BIN_DEST_FOLDER="/binaries"
 
 # docker build stage
-FROM rust:1.48-slim-buster as build
+FROM debian:buster-slim as build
 
 ARG BIN_DEST_FOLDER
-ARG SCCACHE_REDIS
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
-ENV RUSTC_WRAPPER=/usr/bin/sccache
-ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
 RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev
 WORKDIR /usr/src/app
@@ -25,8 +22,6 @@ RUN mkdir -p $TF_PLUGIN_CACHE_DIR
 RUN ./docker/load.sh download
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
-
-RUN sccache --version && sccache -s && cargo build --release && sccache -s
 
 # Final image
 FROM debian:buster-slim as run
@@ -48,11 +43,11 @@ RUN apt-get update && \
     chown -Rf 1000:1000 $HOME_DIR/.terraform.d
 
 WORKDIR $HOME_DIR
-ADD cloned-engine/lib lib
-COPY --from=build /usr/src/app/target/release/app .
-COPY --from=build /usr/src/app/docker/engine/load.sh .
-COPY --from=build /usr/src/app/docker/engine/run.sh .
-COPY --from=build /usr/src/app/bin_versions .
+ADD cloned-engine/lib $HOME_DIR/lib
+ADD target/release/app $HOME_DIR
+COPY --from=build /usr/src/app/docker/engine/load.sh $HOME_DIR
+COPY --from=build /usr/src/app/docker/engine/run.sh $HOME_DIR
+COPY --from=build /usr/src/app/bin_versions $HOME_DIR
 COPY --from=build /root/.terraform.d $HOME_DIR/.terraform.d
 COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
