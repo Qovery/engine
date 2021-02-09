@@ -9,11 +9,11 @@ ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
 
 RUN apt-get update && apt-get -y install libfindbin-libs-perl curl unzip pkg-config libssl-dev
-ADD docker .
+ADD docker docker
 
 # run release build
 RUN mkdir -p $TF_PLUGIN_CACHE_DIR
-RUN ./docker/load.sh download
+RUN cp docker/bin_versions . && ./docker/load.sh download
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
 
@@ -39,9 +39,9 @@ RUN apt-get update && \
 WORKDIR $HOME_DIR
 ADD cloned-engine/lib $HOME_DIR/lib
 ADD engine-app ./app
-COPY --from=build /usr/src/app/docker/engine/load.sh $HOME_DIR
-COPY --from=build /usr/src/app/docker/engine/run.sh $HOME_DIR
-COPY --from=build /usr/src/app/bin_versions $HOME_DIR
+COPY --from=build /docker/engine/load.sh $HOME_DIR
+COPY --from=build /docker/engine/run.sh $HOME_DIR
+COPY --from=build /bin_versions $HOME_DIR
 COPY --from=build /root/.terraform.d $HOME_DIR/.terraform.d
 COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
