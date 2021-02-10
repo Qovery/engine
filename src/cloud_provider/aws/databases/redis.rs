@@ -8,9 +8,7 @@ use crate::cloud_provider::service::{
     get_tfstate_suffix, send_progress_on_long_task, Action, Backup, Create, Database, DatabaseOptions, DatabaseType,
     Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
 };
-use crate::cloud_provider::utilities::{
-    generate_prefixed_name, get_self_hosted_redis_version, get_supported_version_to_use,
-};
+use crate::cloud_provider::utilities::{get_self_hosted_redis_version, get_supported_version_to_use};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
@@ -51,7 +49,7 @@ impl Redis {
             context,
             action,
             id: id.to_string(),
-            name: generate_prefixed_name("redis", name),
+            name: Self::sanitize_name("redis", name),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -65,6 +63,13 @@ impl Redis {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_redis_version(self.version(), is_managed_services), self)
+    }
+
+    fn sanitize_name(prefix: &str, name: &str) -> String {
+        // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
+        let max_size = 47 - name.chars().count(); // 50 (max RDS) - 3 (k8s statefulset chars)
+        let new_name = name[..max_size].replace("_", "").replace("-", "");
+        format!("{}{}", prefix, new_name)
     }
 }
 
