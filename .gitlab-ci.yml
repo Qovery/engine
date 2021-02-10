@@ -8,7 +8,7 @@ variables:
   CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
 
 cache: &global_cache
-  key: one-key-to-rule-them-all
+  key: ${CI_COMMIT_REF_SLUG}
   paths:
     - $CARGO_HOME
     - $WORKSPACE_ROOT_DIR/target

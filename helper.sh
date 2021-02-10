@@ -156,24 +156,27 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
     cd -
 }
 
+# shellcheck disable=SC2120
 function build() { ## Build engine app with engine lib
+  build_options=""
+  if [ ! -z "$1" ] ; then
+    build_options="$1"
+  fi
+  echo "Building with cargo options: $build_options"
   prepare_engine
   tag=$(generate_image_tag)
   use_sccache
   set -e
-  cargo build --release --all-features --color=always
+  cargo build $build_options --all-features --color=always
   sccache -s
 }
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
-  build
+  build "--release"
   tag=$(generate_image_tag)
 
   cp docker/load.sh docker/engine/load.sh
   cp docker/bin_versions bin_versions
-  if [ ! -f target/release/app ] ; then
-    build
-  fi
   cp target/release/app engine-app
   # copy providers files to download required binaries
   rm -Rf docker/engine/providers/*
