@@ -9,7 +9,7 @@ use crate::cloud_provider::service::{
     Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
 };
 use crate::cloud_provider::utilities::{
-    generate_prefixed_name, generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use,
+    generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -51,7 +51,7 @@ impl MySQL {
             context,
             action,
             id: id.to_string(),
-            name: generate_prefixed_name("mysql", name),
+            name: Self::sanitize_name("mysql", name),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -65,6 +65,13 @@ impl MySQL {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_mysql_version(self.version(), is_managed_services), self)
+    }
+
+    fn sanitize_name(prefix: &str, name: &str) -> String {
+        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
+        let max_size = 60 - name.chars().count(); // 63 (max RDS) - 3 (k8s statefulset chars)
+        let new_name = name[..max_size].replace("_", "").replace("-", "");
+        format!("{}{}", prefix, new_name)
     }
 }
 
@@ -397,7 +404,9 @@ fn get_managed_mysql_version(requested_version: &str) -> Result<String, StringEr
 
 #[cfg(test)]
 mod tests_mysql {
-    use crate::cloud_provider::aws::databases::mysql::get_mysql_version;
+    use crate::cloud_provider::aws::databases::mysql::{get_mysql_version, MySQL};
+    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::models::Context;
 
     #[test]
     fn check_mysql_version() {
@@ -417,5 +426,34 @@ mod tests_mysql {
             get_mysql_version("1.0", false).unwrap_err().as_str(),
             "MySQL 1.0 version is not supported"
         );
+    }
+
+    #[test]
+    fn mysql_name_sanitizer() {
+        let mysql_input_name = "test-name_sanitizer";
+        let mysql_expected_name = "testnamesanitizer";
+
+        let mysql = MySQL::new(
+            Context::new("a".to_string(), "b".to_string(), "c".to_string(), None, None),
+            "mysqlid",
+            Action::Create,
+            mysql_input_name,
+            "8",
+            "mysqltest.qovery.io",
+            "mysqlid",
+            "1".to_string(),
+            512,
+            "db.t2.micro",
+            DatabaseOptions {
+                login: "".to_string(),
+                password: "".to_string(),
+                host: "".to_string(),
+                port: 3306,
+                disk_size_in_gib: 10,
+                database_disk_type: "gp2".to_string(),
+            },
+            vec![],
+        );
+        assert_eq!(mysql.name, mysql_expected_name);
     }
 }

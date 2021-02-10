@@ -10,7 +10,7 @@ use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
     send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::generate_prefixed_name;
+use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::container_registry::docr::subscribe_kube_cluster_to_container_registry;
@@ -55,7 +55,7 @@ impl Application {
             context,
             id: id.to_string(),
             action,
-            name: generate_prefixed_name("app", name),
+            name: sanitize_name("app", name),
             private_port,
             total_cpus,
             _cpu_burst,

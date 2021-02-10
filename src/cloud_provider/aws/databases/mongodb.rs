@@ -9,7 +9,7 @@ use crate::cloud_provider::service::{
     Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
 };
 use crate::cloud_provider::utilities::{
-    generate_prefixed_name, generate_supported_version, get_self_hosted_mongodb_version, get_supported_version_to_use,
+    generate_supported_version, get_self_hosted_mongodb_version, get_supported_version_to_use,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -51,7 +51,7 @@ impl MongoDB {
             context,
             action,
             id: id.to_string(),
-            name: generate_prefixed_name("mongodb", name),
+            name: Self::sanitize_name("mongodb", name),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -65,6 +65,13 @@ impl MongoDB {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_mongodb_version(self.version(), is_managed_services), self)
+    }
+
+    fn sanitize_name(prefix: &str, name: &str) -> String {
+        // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
+        let max_size = 60 - name.chars().count(); // 60 = 63 (max RDS) - 3 (k8s statefulset chars)
+        let new_name = name[..max_size].replace("_", "").replace("-", "");
+        format!("{}-{}", prefix, new_name)
     }
 }
 

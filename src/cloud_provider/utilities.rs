@@ -416,7 +416,7 @@ pub fn check_domain_for(
     Ok(())
 }
 
-pub fn generate_prefixed_name(prefix: &str, name: &str) -> String {
+pub fn sanitize_name(prefix: &str, name: &str) -> String {
     format!("{}-{}", prefix, name)
 }
 
