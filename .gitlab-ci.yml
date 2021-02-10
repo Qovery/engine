@@ -271,7 +271,7 @@ main-release-image:
   script:
     - ./helper.sh new_release
   tags:
-    - 2cpu-12gmem-0g
+    - 3cpu-12gmem-0g
   only:
     refs:
       - main
