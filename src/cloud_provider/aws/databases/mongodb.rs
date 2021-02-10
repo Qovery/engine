@@ -69,9 +69,12 @@ impl MongoDB {
 
     fn sanitize_name(prefix: &str, name: &str) -> String {
         // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
-        let max_size = 60 - name.chars().count(); // 60 = 63 (max RDS) - 3 (k8s statefulset chars)
-        let new_name = name[..max_size].replace("_", "").replace("-", "");
-        format!("{}-{}", prefix, new_name)
+        let max_size = 60; // 63 (max DocumentDB) - 3 (k8s statefulset chars)
+        let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
+        if new_name.clone().chars().count() > max_size {
+            new_name = new_name[..max_size].to_string();
+        }
+        new_name
     }
 }
 
@@ -393,7 +396,9 @@ fn get_managed_mongodb_version(requested_version: &str) -> Result<String, String
 
 #[cfg(test)]
 mod tests_mongodb {
-    use crate::cloud_provider::aws::databases::mongodb::get_mongodb_version;
+    use crate::cloud_provider::aws::databases::mongodb::{get_mongodb_version, MongoDB};
+    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::models::Context;
 
     #[test]
     fn check_mongodb_version() {
@@ -411,5 +416,34 @@ mod tests_mongodb {
             get_mongodb_version("3.4", false).unwrap_err().as_str(),
             "MongoDB 3.4 version is not supported"
         );
+    }
+
+    #[test]
+    fn mongo_name_sanitizer() {
+        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
+        let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhichwillb";
+
+        let database = MongoDB::new(
+            Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
+            "pgid",
+            Action::Create,
+            db_input_name,
+            "8",
+            "mongotest.qovery.io",
+            "pgid",
+            "1".to_string(),
+            512,
+            "db.t2.micro",
+            DatabaseOptions {
+                login: "".to_string(),
+                password: "".to_string(),
+                host: "".to_string(),
+                port: 5432,
+                disk_size_in_gib: 10,
+                database_disk_type: "gp2".to_string(),
+            },
+            vec![],
+        );
+        assert_eq!(database.name, db_expected_name);
     }
 }
