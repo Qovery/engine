@@ -8,7 +8,7 @@ use chrono::Utc;
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::utilities::generate_prefixed_name;
+use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
@@ -509,8 +509,8 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
     let database_name = "my-psql".to_string();
 
     let suffix = generate_id();
-    let application_name1 = generate_prefixed_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
-    let application_name2 = generate_prefixed_name("postgresql", &format!("{}-{}", "postgresql-app2", &suffix));
+    let application_name1 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
+    let application_name2 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app2", &suffix));
 
     Environment {
         execution_id: context.execution_id().to_string(),
