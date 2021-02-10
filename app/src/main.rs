@@ -5,7 +5,6 @@ extern crate prometheus;
 #[macro_use]
 extern crate serde;
 
-use std::borrow::Borrow;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
@@ -19,7 +18,6 @@ use chrono::Utc;
 use crossbeam_channel::{unbounded, Sender};
 use dirs::home_dir;
 use dotenv::dotenv;
-use nats::{Connection, Message, Subscription};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use uuid::Uuid;
@@ -30,316 +28,21 @@ use qovery_engine_task_manager::models::Request;
 use qovery_engine_task_manager::task_manager::{PreRun, Task, TaskManager};
 use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 use qovery_engine_task_manager::utils::LogErrorOnDrop;
-use utils::{subject, Mode};
+use utils::Mode;
 
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::ErrorKind::BinVersion;
 use crate::custom_error::{EngineInitError, ErrorKind};
 use crate::models::TaskSelector::{Environment, Infrastructure};
-use crate::models::{
-    CheckTaskOrderRequest, CheckTaskOrderResponse, CheckTaskRunningResponse, GetTaskManagerInfoRequest,
-    GetTaskManagerInfoResponse, Ping, Response, StatusResponse, TaskSelector,
-};
+use crate::models::{Ping, Response, StatusResponse, TaskSelector};
+use crate::nats::{subjects, Connection, Message, Subscription};
 
 mod constants;
 mod custom_error;
 mod models;
+mod nats;
 mod utils;
 mod webserver;
-
-const CORE_TASK_STATUS_SUBJECT: &str = "core.task.status";
-const CORE_PING_SUBJECT: &str = "core.ping";
-const ENGINE_TASK_RUNNING_CHECK_SUBJECT: &str = "engine.task_running_check";
-const ENGINE_TASK_ORDER_EXECUTION_CHECK_SUBJECT: &str = "engine.task_order_execution_check";
-const ENGINE_INCOMING_TASK_SUBJECT: &str = "engine.incoming_task";
-const ENGINE_TASK_MANAGER_INFO_SUBJECT: &str = "engine.task_manager_info";
-
-fn subject_name(mode: &Mode, task_selector: &TaskSelector) -> String {
-    subject(
-        mode,
-        match task_selector {
-            TaskSelector::Infrastructure(s) => s,
-            TaskSelector::Environment(s) => s,
-        },
-    )
-}
-
-/// check that the same task is not running on another instance of Q-engine.
-/// we use the task.group_id() to determine if it is the case
-fn is_the_same_task_running(task: &dyn Task, nc: &Connection, mode: &Mode) -> PreRun {
-    let subject_name = subject(mode, ENGINE_TASK_RUNNING_CHECK_SUBJECT);
-    let sub = nc.request_multi(subject_name.as_str(), task.group_id());
-
-    if sub.is_err() {
-        error!(
-            "can't check that the task '{}' with group id '{}' is running or not,\
-        then act like it was already running to prevent critical outage",
-            task.id(),
-            task.group_id()
-        );
-
-        return PreRun::NoAndQueueTail;
-    };
-
-    for msg in sub.unwrap().next() {
-        let is_task_running = serde_json::from_slice(&msg.data)
-            .map(|task: CheckTaskRunningResponse| task.is_running)
-            .unwrap();
-
-        let _ = msg
-            .respond(Response::new(None).as_json_string())
-            .map_err(|err| error!("Cannot send response from is_the_same_task_running: {}", err));
-
-        if is_task_running {
-            warn!(
-                "task with group id {} and id {} is already running",
-                task.group_id(),
-                task.id()
-            );
-            return PreRun::NoAndQueueTail;
-        }
-    }
-
-    info!(
-        "task with group id {} and id {} is not running",
-        task.group_id(),
-        task.id()
-    );
-    PreRun::Yes
-}
-
-/// Listen and respond to NATS events to check if a specific task is currently running
-///
-/// TODO: Adapt CheckTaskRunningResponse in order to propagate failure instead of returning True
-fn listen_for_task_running_check_events(
-    task_manager: Arc<RwLock<TaskManager>>,
-    nc: &Connection,
-    mode: &Mode,
-) -> Result<(), Error> {
-    let subject_name = subject(&mode, ENGINE_TASK_RUNNING_CHECK_SUBJECT);
-    let sub = nc.subscribe(subject_name.as_str())?;
-    info!("subscribe to {}", subject_name.as_str());
-
-    sub.with_handler(move |msg| {
-        let group_id = String::from(String::from_utf8_lossy(&msg.data));
-
-        let is_running = task_manager
-            .read()
-            .unwrap()
-            .get_task_status_by_group_id(&group_id)
-            .map_or(false, |status| status.status.is_in_progress());
-
-        info!(
-            "task with group id {} is {} here",
-            group_id,
-            if is_running { "running" } else { "not running" }
-        );
-        let _ = msg
-            .respond(CheckTaskRunningResponse::new(is_running).as_json_string())
-            .map_err(|err| {
-                error!(
-                    "Cannot send response from listen_for_task_running_check_events: {}",
-                    err
-                )
-            });
-
-        Ok(())
-    });
-
-    Ok(())
-}
-
-/// check if the current task is the next one to run
-/// ask to other Engine if they have a task that must be launched sooner
-/// this is a way to lazily order tasks
-fn is_the_next_task_to_run(task: &dyn Task, nc: &Connection, mode: &Mode) -> PreRun {
-    let subject_name = subject(mode, ENGINE_TASK_ORDER_EXECUTION_CHECK_SUBJECT);
-    let request = CheckTaskOrderRequest::new(task.group_id().to_string(), *task.created_at());
-
-    let sub = nc.request_multi(subject_name.as_str(), request.as_json_string());
-    if sub.is_err() {
-        error!(
-            "can't check that the task '{}' with group id '{}' is the next task or not,\
-             then act like it was not the next task to prevent critical outage\n{}",
-            task.id(),
-            task.group_id(),
-            sub.unwrap_err()
-        );
-
-        return PreRun::NoAndQueueTail;
-    };
-
-    for msg in sub.unwrap().next() {
-        let is_first_place = serde_json::from_slice(&msg.data)
-            .map(|task: CheckTaskOrderResponse| task.is_first_place)
-            .unwrap();
-
-        let _ = msg
-            .respond(Response::new(None).as_json_string())
-            .map_err(|err| error!("cannot send response in is_the_next_task_to_run: {}", err));
-
-        if !is_first_place {
-            warn!(
-                "task with group id {} and id {} is not at the first place",
-                task.group_id(),
-                task.id()
-            );
-            return PreRun::NoAndQueueTail;
-        }
-    }
-
-    info!(
-        "task with group id {} and id {} is at the first place",
-        task.group_id(),
-        task.id()
-    );
-    PreRun::Yes
-}
-
-fn listen_for_task_order_execution_check(
-    task_manager: Arc<RwLock<TaskManager>>,
-    nc: &Connection,
-    mode: &Mode,
-) -> Result<(), Error> {
-    let subject_name = subject(&mode, ENGINE_TASK_ORDER_EXECUTION_CHECK_SUBJECT);
-    let sub = nc.subscribe(subject_name.as_str())?;
-    info!("subscribe to {}", subject_name.as_str());
-
-    sub.with_handler(move |msg| {
-        let req: CheckTaskOrderRequest = match serde_json::from_slice(&msg.data) {
-            Ok(req) => req,
-            Err(err) => {
-                error!("{:?}", err);
-                return Ok(());
-            }
-        };
-
-        // compare the date of the current task to other tasks with the same group id.
-        // if the current task has lower date than other tasks with same group id, it means that it is good to be run 👍
-        // if the current task has higher date than other tasks with same group id, it means that it is not good to be run 👎
-        let is_first_place = task_manager
-            .read()
-            .unwrap()
-            .get_task_status_by_group_id(&req.group_id)
-            .map_or(true, |status| req.created_at < status.context.task_created_at);
-
-        info!(
-            "task with group id {} is {} to be executed here",
-            req.group_id,
-            if is_first_place {
-                "in first position"
-            } else {
-                "not in first position"
-            }
-        );
-
-        let _ = msg
-            .respond(CheckTaskOrderResponse::new(is_first_place).as_json_string())
-            .map_err(|err| {
-                error!(
-                    "Cannot send response to nats in listen_for_task_order_execution_check: {}",
-                    err
-                )
-            });
-
-        Ok(())
-    });
-
-    Ok(())
-}
-
-fn task_manager_info_subject_name(mode: &Mode) -> String {
-    subject(mode, ENGINE_TASK_MANAGER_INFO_SUBJECT)
-}
-
-/// This function listen for task coming from other engines to load balance them.
-fn listen_for_incoming_load_balancing_tasks(
-    engine_id: &str,
-    task_manager: Arc<RwLock<TaskManager>>,
-    workspace_root_dir: String,
-    lib_root_dir: String,
-    docker_tcp_socket: Option<String>,
-    task_selector: &TaskSelector,
-    nc: &Connection,
-    mode: &Mode,
-    tx: Sender<Box<dyn Task>>,
-) -> Result<(Subscription, Subscription), Error> {
-    // unique subject for each engine instance
-    let engine_name = format!("{}.{}", ENGINE_INCOMING_TASK_SUBJECT, engine_id);
-    let incoming_task_subject_name = subject(mode, &engine_name);
-
-    let incoming_task_sub = nc.subscribe(incoming_task_subject_name.as_str())?;
-    info!("subscribe to {}", incoming_task_subject_name.as_str());
-
-    let tm_info_subject_name = task_manager_info_subject_name(mode);
-    let tm_info_task_sub = nc.subscribe(tm_info_subject_name.as_str())?;
-    info!("subscribe to {}", tm_info_subject_name.as_str());
-
-    // incoming tasks receiver
-    let _ = {
-        let thread_name = format!("incoming-lb-task-{}-{}", task_selector.name(), generate_id());
-        let incoming_task_sub = incoming_task_sub.clone();
-        let nc = nc.clone();
-        let task_selector = *task_selector;
-        let workspace_root_dir = workspace_root_dir;
-        let lib_root_dir = lib_root_dir;
-        let docker_tcp_socket = docker_tcp_socket;
-        let mode = mode.clone();
-
-        thread::Builder::new()
-            .name(thread_name.clone())
-            .spawn(move || {
-                let _drop_logger = LogErrorOnDrop::new(&thread_name);
-
-                for msg in incoming_task_sub.messages() {
-                    receive_and_queue_task(
-                        msg,
-                        workspace_root_dir.as_ref(),
-                        lib_root_dir.as_str(),
-                        &docker_tcp_socket,
-                        &task_selector,
-                        &nc,
-                        &mode,
-                        &tx,
-                    );
-                }
-            })
-            .unwrap()
-    };
-
-    // respond to get info request on the task manager remaining tasks to run
-    let _ = {
-        let thread_name = format!("tm-get-info-{}-{}", task_selector.name(), generate_id());
-        let engine_id = engine_id.to_string();
-        let subject_name = tm_info_subject_name;
-        let tm_info_task_sub = tm_info_task_sub.clone();
-
-        thread::Builder::new()
-            .name(thread_name.clone())
-            .spawn(move || {
-                let _drop_logger = LogErrorOnDrop::new(&thread_name);
-
-                loop {
-                    for msg in tm_info_task_sub.next() {
-                        let remaining_tasks_to_run = task_manager.read().unwrap().remaining_tasks_to_run();
-                        let res = GetTaskManagerInfoResponse::new(
-                            engine_id.as_str(),
-                            subject_name.as_str(),
-                            remaining_tasks_to_run,
-                        );
-
-                        info!("response to current task manager info request: {:?}", res);
-                        let _ = msg
-                            .respond(res.as_json_string())
-                            .map_err(|err| error!("Cannot respond to nats in {}: {}", thread_name, err));
-                    }
-                }
-            })
-            .unwrap()
-    };
-
-    Ok((incoming_task_sub, tm_info_task_sub))
-}
 
 fn listen_for_events(
     workspace_root_dir: String,
@@ -350,9 +53,9 @@ fn listen_for_events(
     mode: &Mode,
     tx: Sender<Box<dyn Task>>,
 ) -> Result<Subscription, Error> {
-    let subject_name = subject_name(mode, task_selector);
-    let sub = nc.queue_subscribe(subject_name.as_str(), subject_name.as_str())?;
-    info!("subscribe to {}", subject_name.as_str());
+    let subject_name = subjects::get_subject_name(mode, task_selector);
+    let sub = nc.queue_subscribe(&subject_name)?;
+    info!("subscribe to {:?}", subject_name);
 
     let ts_str = match task_selector {
         Infrastructure(_) => "infrastructure",
@@ -361,9 +64,7 @@ fn listen_for_events(
 
     let _ = {
         let thread_name = format!("nats-event-receiver-{}", ts_str);
-        let nc = nc.clone();
         let sub = sub.clone();
-        let mode = mode.clone();
         let task_selector = *task_selector;
 
         thread::Builder::new()
@@ -381,8 +82,6 @@ fn listen_for_events(
                             lib_root_dir.as_str(),
                             &docker_tcp_socket,
                             &task_selector,
-                            &nc,
-                            &mode,
                             &tx,
                         );
                     }
@@ -400,21 +99,11 @@ fn receive_and_queue_task(
     lib_root_dir: &str,
     docker_tcp_socket: &Option<String>,
     task_selector: &TaskSelector,
-    nc: &Connection,
-    mode: &Mode,
     tx: &Sender<Box<dyn Task>>,
 ) {
-    let nc = nc.clone();
-    let mode = mode.clone();
-
     // call before to run the current task to check that the same task is not running on another engine app
     // check is_the_same_task_running and is_the_next_task_to_run functions to know more about the details
-    let pre_run_callback = Box::new(move |task: &dyn Task| {
-        PreRun::add(
-            is_the_same_task_running(task, &nc, &mode),
-            is_the_next_task_to_run(task, &nc, &mode),
-        )
-    });
+    let pre_run_callback = Box::new(move |_task: &dyn Task| PreRun::Yes);
 
     match serde_json::from_slice::<Request>(&msg.data) {
         Ok(req) => {
@@ -467,13 +156,13 @@ Ping KO!! What's wrong? Let's shutdown the service
 "#;
             loop {
                 let ping_res = retry::retry(Fibonacci::from_millis(3000).take(10), || {
-                    let res = nc.request_timeout(CORE_PING_SUBJECT, json.as_bytes(), Duration::from_secs(5));
+                    let res = nc.request_timeout(&subjects::CORE_PING, json.as_bytes(), Duration::from_secs(5));
                     match res {
                         Ok(_) => OperationResult::Ok(0),
                         _ => {
                             warn!(
                                 "ping failed (subject: {}), let's retry to ping the core server in a few seconds",
-                                CORE_PING_SUBJECT
+                                subjects::CORE_PING.name
                             );
                             OperationResult::Retry(0)
                         }
@@ -643,14 +332,7 @@ pub fn main() -> io::Result<()> {
         Ok(deploy_from_file) => {
             using_json_path_parameter(deploy_from_file, workspace_root_dir, lib_root_dir, docker_host)
         }
-        _ => using_nats_server(
-            engine_id,
-            nats_server,
-            workspace_root_dir,
-            lib_root_dir,
-            docker_host,
-            mode,
-        ),
+        _ => using_nats_server(nats_server, workspace_root_dir, lib_root_dir, docker_host, mode),
     }
 }
 
@@ -699,61 +381,8 @@ pub fn using_json_path_parameter(
     }
 }
 
-/// Request engines (within the same zone) to give their Task Manager infos.
-fn list_engines_task_manager_infos(
-    mode: &Mode,
-    nc: &Connection,
-    request: GetTaskManagerInfoRequest,
-) -> Vec<GetTaskManagerInfoResponse> {
-    let tm_info_subject_name = subject(mode, ENGINE_TASK_MANAGER_INFO_SUBJECT);
-
-    let sub = match nc.request_multi(tm_info_subject_name.as_str(), request.as_json_string()) {
-        Ok(sub) => sub,
-        Err(err) => {
-            error!("can't get task manager infos from other engines: {}", err);
-            // FIXME should we retry?
-            return vec![];
-        }
-    };
-
-    let mut results: Vec<GetTaskManagerInfoResponse> = Vec::with_capacity(5);
-    for msg in sub.next() {
-        match serde_json::from_slice::<GetTaskManagerInfoResponse>(&msg.data) {
-            Ok(tm_info) => results.push(tm_info),
-            Err(err) => error!("{}", err),
-        };
-    }
-
-    results
-}
-
-/// This function help to find the engine where to dispatch the next task.
-/// The choice is based on the less loaded by counting the number of tasks that remained to be run.
-/// If there is no result (E.g network issue) - then return None
-fn find_the_engine_where_to_dispatch_the_next_task(
-    mut task_manager_infos: Vec<GetTaskManagerInfoResponse>,
-) -> Option<GetTaskManagerInfoResponse> {
-    task_manager_infos.sort_by_key(|x| x.remaining_tasks_to_run);
-    match task_manager_infos.into_iter().next() {
-        Some(v) => Some(v),
-        None => None,
-    }
-}
-
-/// This function dispatch a task to an engine through NATS
-fn dispatch_task_to_engine(task: &dyn Task, subject_name: &str, nc: &Connection) {
-    // FIXME should I wait for ack? Use request instead of publish ?
-    let _ = nc
-        .publish(
-            subject_name,
-            serde_json::to_string(task.bytes_payload().as_slice()).unwrap(),
-        )
-        .map_err(|err| error!("Cannot dispatch task to engine with nats: {}", err));
-}
-
 // the engine can be autonomous using the nats server to receive actions
 fn using_nats_server(
-    engine_id: String,
     nats_server: String,
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -783,12 +412,7 @@ fn using_nats_server(
     // .unwrap();
 
     info!("connect to the NATS server...");
-
-    let nc = nats::Options::new()
-        .with_name(name.as_str())
-        //.tls_connector(tls_connector) // FIXME
-        .connect(nats_server.as_str())?;
-
+    let nc = Connection::new(name.as_str(), nats_server.as_str())?;
     info!("connection to the NATS server established");
 
     let (task_tx, task_rx) = unbounded::<Box<dyn Task>>();
@@ -831,8 +455,8 @@ fn using_nats_server(
                         let json = serde_json::to_string(&sr).unwrap();
                         debug!("send through NATS StatusResponse: {}", json.as_str());
                         let _ = nc
-                            .publish(CORE_TASK_STATUS_SUBJECT, json.as_bytes())
-                            .map_err(|err| error!("Cannot publish on {}: {}", CORE_TASK_STATUS_SUBJECT, err));
+                            .publish(&subjects::CORE_TASK_STATUS, json.as_bytes())
+                            .map_err(|err| error!("Cannot publish on {}: {}", subjects::CORE_TASK_STATUS.name, err));
                     }
                     Ok(Err(err)) => error!("{:?}", err),
                     Err(err) => error!("{:?}", err),
@@ -848,9 +472,6 @@ fn using_nats_server(
 
     let _ = {
         let thread_name = "tm-task-adder";
-        let nc = nc.clone();
-        let mode = mode.clone();
-        let engine_id = engine_id.clone();
         let task_manager = task_manager.clone();
         let func = move || {
             let _drop_logger = LogErrorOnDrop::new(thread_name);
@@ -868,23 +489,7 @@ fn using_nats_server(
                 // load balance workload before dispatching the task to the current task manager.
                 // request info from other engines
                 // to know how many remaining tasks to run they have?
-                let engines =
-                    list_engines_task_manager_infos(&mode, &nc, GetTaskManagerInfoRequest::new(engine_id.as_str()));
-                match find_the_engine_where_to_dispatch_the_next_task(engines) {
-                    // This is a default/fallback choice. Add the task into the local engine. Maybe not the best choice, but better than nothing.
-                    None => task_manager.write().unwrap().add_task(task),
-
-                    // FIXME how to prevent ping/pong between engines?
-                    // dispatch the task into the best engine
-                    // the local engine is less loaded than the others
-                    Some(tm_info) if tm_info.engine_id == engine_id.as_str() => {
-                        task_manager.write().unwrap().add_task(task)
-                    }
-                    Some(_tm_info) => {
-                        let tm_info_subject_name = task_manager_info_subject_name(&mode);
-                        dispatch_task_to_engine(task.borrow(), tm_info_subject_name.as_str(), &nc);
-                    }
-                }
+                task_manager.write().unwrap().add_task(task);
             }
         };
 
@@ -894,36 +499,8 @@ fn using_nats_server(
             .unwrap()
     };
 
-    let _ = listen_for_task_running_check_events(task_manager.clone(), &nc, &mode)?;
-    let _ = listen_for_task_order_execution_check(task_manager.clone(), &nc, &mode)?;
-
     let infrastructure_task_selector = TaskSelector::Infrastructure("infrastructure");
     let environment_task_selector = TaskSelector::Environment("environment");
-
-    let (lb_infrastructure_incoming_task_sub, lb_infrastructure_tm_info_sub) =
-        listen_for_incoming_load_balancing_tasks(
-            engine_id.as_str(),
-            task_manager.clone(),
-            workspace_root_dir.clone(),
-            lib_root_dir.clone(),
-            docker_host.clone(),
-            &infrastructure_task_selector,
-            &nc,
-            &mode,
-            task_tx.clone(),
-        )?;
-
-    let (lb_environment_incoming_task_sub, lb_environment_tm_info_sub) = listen_for_incoming_load_balancing_tasks(
-        engine_id.as_str(),
-        task_manager.clone(),
-        workspace_root_dir.clone(),
-        lib_root_dir.clone(),
-        docker_host.clone(),
-        &environment_task_selector,
-        &nc,
-        &mode,
-        task_tx.clone(),
-    )?;
 
     let infrastructure_sub = listen_for_events(
         workspace_root_dir.clone(),
@@ -956,14 +533,7 @@ fn using_nats_server(
             warn!("Termination signal received - graceful termination in progress...");
             // unsubscribe listeners
             // do not unsubscribe "task_running_check_sub - it must be alive during the whole tasks completion"
-            let subsriptions = vec![
-                infrastructure_sub,
-                environment_sub,
-                lb_infrastructure_incoming_task_sub,
-                lb_infrastructure_tm_info_sub,
-                lb_environment_incoming_task_sub,
-                lb_environment_tm_info_sub,
-            ];
+            let subsriptions = vec![infrastructure_sub, environment_sub];
 
             for sub in subsriptions.into_iter() {
                 let _ = sub
