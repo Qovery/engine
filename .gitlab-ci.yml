@@ -160,7 +160,7 @@ build:
     policy: pull-push
   when: always
   tags:
-    - 2cpu-12gmem-0g
+    - 2cpu-4gmem-0g
   only:
     refs:
       - dev
