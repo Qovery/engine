@@ -67,8 +67,11 @@ impl Redis {
 
     fn sanitize_name(prefix: &str, name: &str) -> String {
         // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
-        let max_size = 47 - name.chars().count(); // 50 (max RDS) - 3 (k8s statefulset chars)
-        let new_name = name[..max_size].replace("_", "").replace("-", "");
+        let max_size = 47; // 50 (max Elasticache ) - 3 (k8s statefulset chars)
+        let mut new_name = name.replace("_", "").replace("-", "");
+        if new_name.clone().chars().count() > max_size {
+            new_name = new_name[..max_size].to_string();
+        }
         format!("{}{}", prefix, new_name)
     }
 }
@@ -400,7 +403,9 @@ fn get_managed_redis_version(requested_version: &str) -> Result<String, StringEr
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::databases::redis::get_redis_version;
+    use crate::cloud_provider::aws::databases::redis::{get_redis_version, Redis};
+    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::models::Context;
 
     #[test]
     fn check_redis_version() {
@@ -419,5 +424,34 @@ mod tests {
             get_redis_version("1.0", false).unwrap_err().as_str(),
             "Redis 1.0 version is not supported"
         );
+    }
+
+    #[test]
+    fn redis_name_sanitizer() {
+        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
+        let db_expected_name = "redistestnamesanitizerwithtoomanycharsnotallowedwhic";
+
+        let database = Redis::new(
+            Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
+            "pgid",
+            Action::Create,
+            db_input_name,
+            "8",
+            "redistest.qovery.io",
+            "redisid",
+            "1".to_string(),
+            512,
+            "db.t2.micro",
+            DatabaseOptions {
+                login: "".to_string(),
+                password: "".to_string(),
+                host: "".to_string(),
+                port: 5432,
+                disk_size_in_gib: 10,
+                database_disk_type: "gp2".to_string(),
+            },
+            vec![],
+        );
+        assert_eq!(database.name, db_expected_name);
     }
 }

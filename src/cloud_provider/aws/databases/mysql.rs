@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::databases::utilities::rds_name_sanitizer;
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
@@ -69,9 +70,8 @@ impl MySQL {
 
     fn sanitize_name(prefix: &str, name: &str) -> String {
         // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let max_size = 60 - name.chars().count(); // 63 (max RDS) - 3 (k8s statefulset chars)
-        let new_name = name[..max_size].replace("_", "").replace("-", "");
-        format!("{}{}", prefix, new_name)
+        let max_size = 63 - 3; // max RDS - k8s statefulset chars
+        rds_name_sanitizer(max_size, prefix, name)
     }
 }
 
@@ -430,14 +430,14 @@ mod tests_mysql {
 
     #[test]
     fn mysql_name_sanitizer() {
-        let mysql_input_name = "test-name_sanitizer";
-        let mysql_expected_name = "testnamesanitizer";
+        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
+        let db_expected_name = "mysqltestnamesanitizerwithtoomanycharsnotallowedwhichwillbes";
 
-        let mysql = MySQL::new(
-            Context::new("a".to_string(), "b".to_string(), "c".to_string(), None, None),
+        let database = MySQL::new(
+            Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
             "mysqlid",
             Action::Create,
-            mysql_input_name,
+            db_input_name,
             "8",
             "mysqltest.qovery.io",
             "mysqlid",
@@ -454,6 +454,6 @@ mod tests_mysql {
             },
             vec![],
         );
-        assert_eq!(mysql.name, mysql_expected_name);
+        assert_eq!(database.name, db_expected_name);
     }
 }

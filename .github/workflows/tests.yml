@@ -27,7 +27,7 @@ jobs:
           sccache --version
           sccache --show-stats
           echo "########## START BUILD ##########"
-          cargo build --release --all-features
+          cargo build --all-features
           sccache --show-stats
   selected-functionnal-tests:
     runs-on: ubuntu-latest
