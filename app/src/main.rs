@@ -8,7 +8,7 @@ extern crate serde;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, thread};
@@ -416,11 +416,12 @@ fn using_nats_server(
     info!("connection to the NATS server established");
 
     let (task_tx, task_rx) = unbounded::<Box<dyn Task>>();
-    let task_manager = Arc::new(RwLock::new(TaskManager::new()));
+    let mut tm = TaskManager::new();
+    let status_rx = tm.run().unwrap();
+    let task_manager = Arc::new(tm);
 
     let _ = {
         let thread_name = "tm-status-core-updater";
-        let status_rx = task_manager.write().unwrap().run().unwrap();
         let nc = nc.clone();
         let func = move || {
             let _drop_logger = LogErrorOnDrop::new(thread_name);
@@ -468,7 +469,7 @@ fn using_nats_server(
                 // load balance workload before dispatching the task to the current task manager.
                 // request info from other engines
                 // to know how many remaining tasks to run they have?
-                task_manager.write().unwrap().add_task(task);
+                task_manager.add_task(task);
             }
         };
 
@@ -520,7 +521,7 @@ fn using_nats_server(
                     .map_err(|err| error!("Cannot drain/unsubscribe {:?}: {}", nc, err));
 
                 info!("Unsubscribed from all subjects");
-                task_manager.read().unwrap().stop();
+                task_manager.stop();
                 info!("Requested TaskManager to stop receiving new tasks");
             })
             .unwrap();
@@ -535,7 +536,7 @@ fn using_nats_server(
     .expect("Error setting Ctrl-C (SIGTERM) handler");
 
     info!("server started and listening for incoming requests");
-    task_manager.read().unwrap().wait_shutdown();
+    task_manager.wait_shutdown();
 
     warn!("end of execution");
     Ok(())
