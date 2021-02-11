@@ -22,7 +22,7 @@ charts:
   - name: aws-vpc-cni
     repo_name: aws
     dest: aws-bootstrap
-    version: 1.1.0
+    version: 1.1.2
   - name: aws-calico
     repo_name: aws
     dest: aws-bootstrap

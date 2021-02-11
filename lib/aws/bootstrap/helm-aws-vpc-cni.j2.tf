@@ -33,11 +33,6 @@ resource "helm_release" "aws_vpc_cni" {
   }
 
   set {
-    name = "image.tag"
-    value = "v1.6.3"
-  }
-
-  set {
     name = "image.region"
     value = var.region
   }

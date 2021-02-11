@@ -29,38 +29,6 @@ spec:
         k8s-app: aws-node
     spec:
       priorityClassName: "{{ .Values.priorityClassName }}"
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: "beta.kubernetes.io/os"
-                    operator: In
-                    values:
-                      - linux
-                  - key: "beta.kubernetes.io/arch"
-                    operator: In
-                    values:
-                      - amd64
-                      - arm64
-                  - key: "eks.amazonaws.com/compute-type"
-                    operator: NotIn
-                    values:
-                      - fargate
-              - matchExpressions:
-                  - key: "kubernetes.io/os"
-                    operator: In
-                    values:
-                      - linux
-                  - key: "kubernetes.io/arch"
-                    operator: In
-                    values:
-                      - amd64
-                      - arm64
-                  - key: "eks.amazonaws.com/compute-type"
-                    operator: NotIn
-                    values:
-                      - fargate
       serviceAccountName: {{ template "aws-vpc-cni.serviceAccountName" . }}
       hostNetwork: true
       initContainers:
@@ -115,6 +83,13 @@ spec:
             name: cni-bin-dir
           - mountPath: /host/etc/cni/net.d
             name: cni-net-dir
+{{- if .Values.cniConfig.enabled }}
+            # the dockerfile copies the baked in config to this location, lets overwrite it with ours
+            # the entrypoint.sh script will then copy our config to /host/etc/cni/net.d on boot
+          - name: cni-config
+            mountPath: /app/10-aws.conflist
+            subPath: 10-aws.conflist
+{{- end }}
           - mountPath: /host/var/log/aws-routed-eni
             name: log-dir
           - mountPath: /var/run/dockershim.sock
@@ -130,6 +105,11 @@ spec:
       - name: cni-net-dir
         hostPath:
           path: /etc/cni/net.d
+{{- if .Values.cniConfig.enabled }}
+      - name: cni-config
+        configMap:
+          name: {{ include "aws-vpc-cni.fullname" . }}
+{{- end }}
       - name: dockershim
         hostPath:
           path: /var/run/dockershim.sock
