@@ -471,11 +471,11 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
     let app_name = format!("mongodb-app-{}", generate_id());
     let database_host = "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 27017;
-    let database_db_name = "my-mongodb".to_string();
+    let database_db_name = "mongodb".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
     let database_uri = format!(
-        "mongodb://{}:{}@{}:{}/{}",
+        "mongodb://{}:{}@{}:{}/mongodb{}",
         database_username, database_password, database_host, database_port, database_db_name
     );
     // while waiting the info to be given directly in the database info, we're using this
