@@ -746,7 +746,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 || match cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
-                    cmd::terraform::terraform_exec_with_init_plan_destroy(temp_dir.as_str()),
+                    cmd::terraform::terraform_exec_destroy(temp_dir.as_str(), false),
                 ) {
                     Ok(_) => OperationResult::Ok(()),
                     Err(e) => OperationResult::Retry(e),
