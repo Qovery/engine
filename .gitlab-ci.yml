@@ -74,7 +74,7 @@ all-self-hosted-mr:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /builds/qovery/qovery-engine/gitlab-log-utilities
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 1 week
   interruptible: true
@@ -101,7 +101,7 @@ all-managed-services-mr:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /builds/qovery/qovery-engine/gitlab-log-utilities
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 1 week
   interruptible: true
@@ -128,7 +128,7 @@ test-all-mr:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /builds/qovery/qovery-engine/gitlab-log-utilities
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 1 week
   interruptible: true
@@ -188,7 +188,7 @@ aws-infra:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /builds/qovery/qovery-engine/gitlab-log-utilities
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 2 week
   interruptible: true
@@ -216,7 +216,7 @@ aws-managed-services:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /builds/qovery/qovery-engine/gitlab-log-utilities
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 2 week
   interruptible: true
@@ -244,7 +244,7 @@ aws-self-hosted:
     reports:
       junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities/output/*
+      - /builds/qovery/qovery-engine/gitlab-log-utilities
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 2 week
   interruptible: true
