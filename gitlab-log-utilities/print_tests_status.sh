@@ -15,7 +15,7 @@ function generate_html_file() {
 
   jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $file >> $html_file_wip
   # replace line return by html ones
-  sed -ri 's/\\\n/<br \/>/g' $html_file_wip
+  sed -ri 's/\\n/<br \/>/g' $html_file_wip
   # remove " at the begin and end of lines
   sed -ri 's/^"//g' $html_file_wip
   sed -ri 's/"$//g' $html_file_wip
