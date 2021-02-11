@@ -192,7 +192,7 @@ impl Helm for MySQL {
     }
 
     fn helm_chart_values_dir(&self) -> String {
-        format!("{}/aws/chart_values/mysql", self.context.lib_root_dir())
+        format!("{}/digitalocean/chart_values/mysql", self.context.lib_root_dir())
     }
 
     fn helm_chart_external_name_service_dir(&self) -> String {
@@ -202,17 +202,17 @@ impl Helm for MySQL {
 
 impl Terraform for MySQL {
     fn terraform_common_resource_dir_path(&self) -> String {
-        format!("{}/aws/services/common", self.context.lib_root_dir())
+        format!("{}/digitalocean/services/common", self.context.lib_root_dir())
     }
 
     fn terraform_resource_dir_path(&self) -> String {
-        format!("{}/aws/services/mysql", self.context.lib_root_dir())
+        format!("{}/digitalocean/services/mysql", self.context.lib_root_dir())
     }
 }
 
 impl Create for MySQL {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.MySQL.on_create() called for {}", self.name());
+        info!("DIGITALOCEAN.MySQL.on_create() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
@@ -227,7 +227,7 @@ impl Create for MySQL {
     }
 
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.MySQL.on_create_error() called for {}", self.name());
+        warn!("DIGITALOCEAN.MySQL.on_create_error() called for {}", self.name());
 
         Ok(())
     }
@@ -235,7 +235,7 @@ impl Create for MySQL {
 
 impl Pause for MySQL {
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.MySQL.on_pause() called for {}", self.name());
+        info!("DIGITALOCEAN.MySQL.on_pause() called for {}", self.name());
 
         // TODO how to pause production? - the goal is to reduce cost, but it is possible to pause a production env?
         // TODO how to pause development? - the goal is also to reduce cost, we can set the number of instances to 0, which will avoid to delete data :)
@@ -248,7 +248,7 @@ impl Pause for MySQL {
     }
 
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.MySQL.on_pause_error() called for {}", self.name());
+        warn!("DIGITALOCEAN.MySQL.on_pause_error() called for {}", self.name());
 
         // TODO what to do if there is a pause error?
 
@@ -258,7 +258,7 @@ impl Pause for MySQL {
 
 impl Delete for MySQL {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.MySQL.on_delete() called for {}", self.name());
+        info!("DIGITALOCEAN.MySQL.on_delete() called for {}", self.name());
 
         send_progress_on_long_task(
             self,
@@ -272,7 +272,7 @@ impl Delete for MySQL {
     }
 
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.MySQL.on_create_error() called for {}", self.name());
+        warn!("DIGITALOCEAN.MySQL.on_create_error() called for {}", self.name());
         Ok(())
     }
 }
