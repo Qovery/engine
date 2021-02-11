@@ -15,6 +15,9 @@ use log::Level::Debug;
 use prometheus::{self, IntGauge};
 use qovery_engine::models::{ProgressLevel, ProgressScope};
 use serde::export::Formatter;
+use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -28,41 +31,42 @@ lazy_static! {
 pub struct TaskManager {
     task_executor_tx: Sender<InternalTask>,
     task_executor_rx: Receiver<InternalTask>,
-    should_stop_tx: Sender<bool>,
-    should_stop_rx: Receiver<bool>,
-    is_stopped_tx: Sender<bool>,
-    is_stopped_rx: Receiver<bool>,
+    should_stop: Arc<AtomicBool>,
+    is_stopped: Arc<AtomicBool>,
     status_by_task_id_r: Mutex<ReadHandle<Id, Status>>,
     status_by_task_id_w: Arc<Mutex<WriteHandle<Id, Status>>>,
     task_status_tx: Sender<Message>,
     task_status_rx: Receiver<Message>,
     running_tasks: IntGauge,
     running: bool,
+    // We use a Mutex to provide interior mutability
+    // because we wrap TaskManager into a RwLock.
+    // Consuming threads_handle should be a final states
+    threads_handle: Mutex<Vec<(String, JoinHandle<()>)>>,
 }
 
 impl TaskManager {
     pub fn new() -> Self {
         let (task_executor_tx, task_executor_rx) = unbounded::<InternalTask>();
-        let (should_stop_tx, should_stop_rx) = unbounded::<bool>();
-        let (is_stopped_tx, is_stopped_rx) = unbounded::<bool>();
         let (status_by_task_id_r, status_by_task_id_w) = evmap::new::<Id, Status>();
         let status_by_task_id_r = Mutex::new(status_by_task_id_r);
         let status_by_task_id_w = Arc::new(Mutex::new(status_by_task_id_w));
         let (task_status_tx, task_status_rx) = unbounded::<Message>();
+        let should_stop = Arc::new(AtomicBool::new(false));
+        let is_stopped = Arc::new(AtomicBool::new(false));
 
         TaskManager {
             task_executor_tx,
             task_executor_rx,
-            should_stop_tx,
-            should_stop_rx,
-            is_stopped_tx,
-            is_stopped_rx,
+            should_stop,
+            is_stopped,
             status_by_task_id_r,
             status_by_task_id_w,
             task_status_tx,
             task_status_rx,
             running_tasks: METRICS_NB_RUNNING_TASKS.clone(),
             running: false,
+            threads_handle: Mutex::new(Vec::with_capacity(2)),
         }
     }
 
@@ -79,8 +83,13 @@ impl TaskManager {
         self.task_executor_rx.len() + self.running_tasks.get().min(0) as usize
     }
 
-    pub fn is_terminated(&self) -> Receiver<bool> {
-        self.is_stopped_rx.clone()
+    pub fn wait_shutdown(&self) {
+        while let Some((thread_name, handle)) = self.threads_handle.lock().unwrap().pop() {
+            info!("Waiting for {} to shutdown", thread_name);
+            let _ = handle
+                .join()
+                .map_err(|err| error!("Cannot join thread {}: {:?}", thread_name, err));
+        }
     }
 
     pub fn get_task_status(&self, id: &str) -> Option<Status> {
@@ -99,10 +108,7 @@ impl TaskManager {
 
     /// gracefully end the remaining tasks but stop accepting new ones
     pub fn stop(&self) {
-        self.should_stop_tx
-            .send(true)
-            .map_err(|err| error!("Cannot send stop signal to task manager {}", err))
-            .unwrap();
+        self.should_stop.store(true, Ordering::Release)
     }
 
     /// run task manager - only a single instance will run
@@ -120,39 +126,74 @@ impl TaskManager {
         // So we subscribe to the notification channel and update our internal hashmap
         // Once done, we forward the task's status update to the subscriber of the taskManager (the one calling .run())
         {
-            let is_stopped_rx = self.is_stopped_rx.clone();
+            let is_stopped = self.is_stopped.clone();
             let task_status_rx = self.task_status_rx.clone();
             let status_by_task_id_w = self.status_by_task_id_w.clone();
             let thread_name = "tm-task-status-updater";
-
-            thread::Builder::new()
-                .name(thread_name.to_string())
-                .spawn(move || {
-                    let _drop_logger = LogErrorOnDrop::new(thread_name);
-                    while is_stopped_rx.is_empty()
-                        && handle_task_status_update(&task_status_rx, &task_status_forwarder_tx, &status_by_task_id_w)
-                            .is_ok()
-                    {
-                        // Spinning ;o
+            let func = move || {
+                let _drop_logger = LogErrorOnDrop::new(thread_name);
+                while !is_stopped.load(Ordering::Acquire) || !task_status_rx.is_empty() {
+                    if is_stopped.load(Relaxed) {
+                        info!(
+                            "{} should stop, but still have {} pending tasks to process",
+                            thread_name,
+                            task_status_rx.len()
+                        );
                     }
-                })
+
+                    let task_status = match task_status_rx.try_recv() {
+                        Ok(task_status) => task_status,
+
+                        // No task to process, sleep and retry later
+                        Err(TryRecvError::Empty) => {
+                            thread::sleep(Duration::from_secs(1));
+                            continue;
+                        }
+
+                        // Channel is disconnected (dropped in the other end)
+                        // We will not received any message anymore, exiting
+                        Err(err) => {
+                            error!("Cannot retrieve task status {}", err);
+                            return;
+                        }
+                    };
+
+                    if handle_task_status_update(task_status, &task_status_forwarder_tx, &status_by_task_id_w).is_err()
+                    {
+                        return;
+                    }
+                }
+            };
+
+            let th = thread::Builder::new()
+                .name(thread_name.to_string())
+                .spawn(func)
                 .unwrap();
+            self.threads_handle.lock().unwrap().push((thread_name.to_string(), th));
         };
 
+        let is_stopped = self.is_stopped.clone();
+        let should_stop = self.should_stop.clone();
         let task_status_tx = self.task_status_tx.clone();
         let task_executor_tx = self.task_executor_tx.clone();
         let task_executor_rx = self.task_executor_rx.clone();
-        let should_stop_rx = self.should_stop_rx.clone();
-        let is_stopped_tx = self.is_stopped_tx.clone();
         let nb_running_tasks = self.running_tasks.clone();
+        let thread_name = "tm-task-processor";
 
-        let _ = thread::Builder::new()
-            .name("tm-task-processor".to_string())
+        let th = thread::Builder::new()
+            .name(thread_name.to_string())
             .spawn(move || {
-                let _drop_logger = LogErrorOnDrop::new("tm-task-processor");
+                let _drop_logger = LogErrorOnDrop::new(thread_name);
                 let mut log_debug_waiting = log_no_spam_builder(Debug, "no task to run, waiting...", 60);
 
-                while should_stop_rx.is_empty() || !task_executor_rx.is_empty() {
+                while !should_stop.load(Acquire) || !task_executor_rx.is_empty() {
+                    if should_stop.load(Relaxed) {
+                        info!(
+                            "TaskManager should stop, but still have {} pending tasks to process",
+                            task_executor_rx.len()
+                        );
+                    }
+
                     let internal_task = match task_executor_rx.try_recv() {
                         // Dequeue our task !
                         Ok(internal_task) => internal_task,
@@ -168,9 +209,7 @@ impl TaskManager {
                         // We will not received any message anymore, exiting
                         Err(err) => {
                             error!("Cannot retrieve task to execute {}", err);
-                            let _ = is_stopped_tx
-                                .send(true)
-                                .map_err(|err| error!("Cannot send is_stopped signal: {}", err));
+                            is_stopped.store(true, Release);
                             return;
                         }
                     };
@@ -212,26 +251,20 @@ impl TaskManager {
                     }
                     nb_running_tasks.dec();
                 }
-
-                let _ = is_stopped_tx
-                    .send(true)
-                    .map_err(|err| error!("Cannot send is_stopped signal: {}", err));
+                is_stopped.store(true, Release);
             })
             .unwrap();
 
+        self.threads_handle.lock().unwrap().push((thread_name.to_string(), th));
         Ok(task_status_forwarder_rx)
     }
 }
 
 fn handle_task_status_update(
-    task_status_rx: &Receiver<Message>,
+    msg: Message,
     task_status_forwarder_tx: &Sender<Message>,
     status_by_task_id_w: &Arc<Mutex<WriteHandle<Id, Status>>>,
 ) -> Result<(), ()> {
-    let msg = task_status_rx
-        .recv()
-        .map_err(|err| error!("Cannot retrieve task status update: {}", err))?;
-
     match &msg {
         Ok(it) => match it.status.status {
             State::Error | State::Deployed | State::Deleted | State::DeploymentError | State::DeleteError => {
@@ -444,6 +477,7 @@ mod tests {
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
     use qovery_engine::models::{ProgressLevel, ProgressScope};
+    use std::sync::atomic::Ordering::Acquire;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
     use std::time::Duration;
@@ -546,7 +580,7 @@ mod tests {
         task.barrier_end.wait();
 
         tm.stop();
-        assert_eq!(tm.should_stop_rx.is_empty(), false);
+        assert_eq!(tm.should_stop.load(Acquire), true);
         // Wait for task to be completed
         let mut nb_iter = 0;
         while tm.remaining_tasks_to_run() > 0 {
@@ -592,9 +626,8 @@ mod tests {
         assert_eq!(task_status_rx.recv().unwrap().unwrap().status.status, State::Deleted);
         assert_eq!(tm.get_task_status(&id).map(|s| s.status), None);
 
-        let is_stopped = tm.is_terminated();
         tm.stop();
-        assert_eq!(is_stopped.recv(), Ok(true));
+        assert_eq!(tm.wait_shutdown(), ());
     }
 
     #[test]
@@ -613,8 +646,7 @@ mod tests {
         tm.stop();
         tm.run().expect("Impossible to run task Manager");
 
-        let is_stopped = tm.is_terminated();
-        assert_eq!(is_stopped.recv(), Ok(true));
+        assert_eq!(tm.wait_shutdown(), ());
         assert_eq!(tm.remaining_tasks_to_run(), 0);
     }
 }

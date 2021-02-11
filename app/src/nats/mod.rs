@@ -29,4 +29,8 @@ impl Connection {
     pub fn request_timeout(&self, subject: &Subject, payload: &[u8], timeout: Duration) -> io::Result<Message> {
         self.cnx.request_timeout(subject.name.as_str(), payload, timeout)
     }
+
+    pub fn drain(&self) -> io::Result<()> {
+        self.cnx.drain()
+    }
 }

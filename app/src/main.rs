@@ -161,8 +161,8 @@ Ping KO!! What's wrong? Let's shutdown the service
                         Ok(_) => OperationResult::Ok(0),
                         _ => {
                             warn!(
-                                "ping failed (subject: {}), let's retry to ping the core server in a few seconds",
-                                subjects::CORE_PING.name
+                                "ping failed ({:?}), let's retry to ping the core server in a few seconds",
+                                *subjects::CORE_PING
                             );
                             OperationResult::Retry(0)
                         }
@@ -416,29 +416,7 @@ fn using_nats_server(
     info!("connection to the NATS server established");
 
     let (task_tx, task_rx) = unbounded::<Box<dyn Task>>();
-    let (quit_tx, quit_rx) = unbounded::<bool>();
     let task_manager = Arc::new(RwLock::new(TaskManager::new()));
-
-    // Wait for the TaskManager to terminate in order to notify application to exit
-    let _ = {
-        let thread_name = "tm-ta-quit-handler";
-        let task_manager_is_terminated_rx = task_manager.read().unwrap().is_terminated();
-        let func = move || {
-            let _drop_logger = LogErrorOnDrop::new(thread_name);
-            // waiting for sig term to quit gracefully by waiting that there is no remaining tasks to execute.
-            let _ = task_manager_is_terminated_rx
-                .recv()
-                .map_err(|err| error!("cannot recv sigterm {}", err));
-            let _ = quit_tx
-                .send(true)
-                .map_err(|err| error!("cannot send terminated {}", err));
-        };
-
-        thread::Builder::new()
-            .name(thread_name.to_string())
-            .spawn(func)
-            .unwrap()
-    };
 
     let _ = {
         let thread_name = "tm-status-core-updater";
@@ -459,7 +437,8 @@ fn using_nats_server(
                             .map_err(|err| error!("Cannot publish on {}: {}", subjects::CORE_TASK_STATUS.name, err));
                     }
                     Ok(Err(err)) => error!("{:?}", err),
-                    Err(err) => error!("{:?}", err),
+                    // Other end of the channel is disconnected
+                    Err(_) => return,
                 };
             }
         };
@@ -502,7 +481,7 @@ fn using_nats_server(
     let infrastructure_task_selector = TaskSelector::Infrastructure("infrastructure");
     let environment_task_selector = TaskSelector::Environment("environment");
 
-    let infrastructure_sub = listen_for_events(
+    listen_for_events(
         workspace_root_dir.clone(),
         lib_root_dir.clone(),
         docker_host.clone(),
@@ -512,7 +491,7 @@ fn using_nats_server(
         task_tx.clone(),
     )?;
 
-    let environment_sub = listen_for_events(
+    listen_for_events(
         workspace_root_dir,
         lib_root_dir,
         docker_host,
@@ -523,29 +502,29 @@ fn using_nats_server(
     )?;
 
     let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
-    let _ = thread::Builder::new()
-        .name("sigterm-dispatcher".to_string())
-        .spawn(move || {
-            let _drop_logger = LogErrorOnDrop::new("sigterm-dispatcher");
-            let _ = sig_term_rx
-                .recv()
-                .map_err(|err| error!("sigterm received with error {}", err));
-            warn!("Termination signal received - graceful termination in progress...");
-            // unsubscribe listeners
-            // do not unsubscribe "task_running_check_sub - it must be alive during the whole tasks completion"
-            let subsriptions = vec![infrastructure_sub, environment_sub];
+    {
+        let nc = nc.clone();
+        let thread_name = "sigterm-dispatcher".to_string();
+        let task_manager = task_manager.clone();
+        let _ = thread::Builder::new()
+            .name(thread_name.clone())
+            .spawn(move || {
+                let _drop_logger = LogErrorOnDrop::new(thread_name.as_str());
+                let _ = sig_term_rx
+                    .recv()
+                    .map_err(|err| error!("sigterm received with error {}", err));
+                warn!("Termination signal received - graceful termination in progress...");
 
-            for sub in subsriptions.into_iter() {
-                let _ = sub
+                let _ = nc
                     .drain()
-                    .map_err(|err| error!("Cannot drain/unsubscribe {:?}: {}", sub, err));
-            }
+                    .map_err(|err| error!("Cannot drain/unsubscribe {:?}: {}", nc, err));
 
-            info!("Unsubscribed from all subjects");
-            task_manager.read().unwrap().stop();
-            info!("Request to TaskManager to stop receiving new tasks");
-        })
-        .unwrap();
+                info!("Unsubscribed from all subjects");
+                task_manager.read().unwrap().stop();
+                info!("Requested TaskManager to stop receiving new tasks");
+            })
+            .unwrap();
+    }
 
     watchdog(name, nc, sig_term_tx.clone());
     ctrlc::set_handler(move || {
@@ -556,7 +535,7 @@ fn using_nats_server(
     .expect("Error setting Ctrl-C (SIGTERM) handler");
 
     info!("server started and listening for incoming requests");
-    let _ = quit_rx.recv();
+    task_manager.read().unwrap().wait_shutdown();
 
     warn!("end of execution");
     Ok(())
