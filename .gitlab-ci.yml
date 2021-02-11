@@ -165,22 +165,22 @@ build:
     refs:
       - dev
 
-aws-self-hosted:
+aws-infra:
   stage: tests
   retry: 0
   script:
-    - ./helper.sh aws_self_hosted
+    - ./helper.sh aws_infra
   dependencies:
     - linter
     - build
+  when: always
   tags:
     - 2cpu-4gmem-0g
-  when: always
   only:
     refs:
       - dev
     variables:
-      - $TESTS_TO_RUN =~ /test-aws-self-hosted/
+      - $TESTS_TO_RUN =~ /test-aws-infra/
       - $TESTS_TO_RUN =~ /test-aws-all/
       - $TESTS_TO_RUN =~ /test-all/
   artifacts:
@@ -221,22 +221,22 @@ aws-managed-services:
     expire_in: 2 week
   interruptible: true
 
-aws-infra:
+aws-self-hosted:
   stage: tests
   retry: 0
   script:
-    - ./helper.sh aws_infra
+    - ./helper.sh aws_self_hosted
   dependencies:
     - linter
     - build
-  when: always
   tags:
-    - 2cpu-4gmem-0g
+    - 2cpu-8gmem-0g
+  when: always
   only:
     refs:
       - dev
     variables:
-      - $TESTS_TO_RUN =~ /test-aws-infra/
+      - $TESTS_TO_RUN =~ /test-aws-self-hosted/
       - $TESTS_TO_RUN =~ /test-aws-all/
       - $TESTS_TO_RUN =~ /test-all/
   artifacts:
