@@ -268,7 +268,7 @@ impl Delete for PostgreSQL {
     }
 
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.PostgreSQL.on_create_error() called for {}", self.name());
+        warn!("DIGITALOCEAN.PostgreSQL.on_create_error() called for {}", self.name());
 
         Ok(())
     }
