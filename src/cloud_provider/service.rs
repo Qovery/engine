@@ -707,7 +707,7 @@ where
                 ),
             )?;
 
-            match crate::cmd::terraform::terraform_exec_with_init_plan_apply_destroy(workspace_dir.as_str()) {
+            match crate::cmd::terraform::terraform_exec_destroy(workspace_dir.as_str(), true) {
                 Ok(_) => {
                     info!("let's delete secrets containing tfstates");
                     let _ = delete_terraform_tfstate_secret(*kubernetes, &get_tfstate_name(service));
