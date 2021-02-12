@@ -35,7 +35,7 @@ fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleEr
     };
 
     // plan
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(3), || {
         match terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"]) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
