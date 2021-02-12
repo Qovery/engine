@@ -460,36 +460,19 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
         ));
 
-        let terraform_result =
-            retry::retry(
-                Fibonacci::from_millis(60000).take(3),
-                || match cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
-                        temp_dir.as_str(),
-                        self.context.is_dry_run_deploy(),
-                    ),
-                ) {
-                    Ok(_) => OperationResult::Ok(()),
-                    Err(e) => OperationResult::Retry(e),
-                },
-            );
-
-        match terraform_result {
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+                temp_dir.as_str(),
+                self.context.is_dry_run_deploy(),
+            ),
+        ) {
             Ok(_) => Ok(()),
-            Err(Operation { error, .. }) => Err(error),
-            Err(retry::Error::Internal(msg)) => Err(EngineError::new(
-                EngineErrorCause::Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                Some(format!(
-                    "Error while deploying cluster {} with id {}. {}",
-                    self.name(),
-                    self.id(),
-                    msg
-                )),
-            )),
+            Err(e) => {
+                format!("Error while deploying cluster {} with id {}.", self.name(), self.id());
+                Err(e)
+            }
         }
     }
 
