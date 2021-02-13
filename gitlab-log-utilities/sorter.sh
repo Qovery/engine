@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-OUTPUT_DIR_TESTS_FILES="/home/pmavro/Downloads/tmp/gitlab-log-utilities/output"
+OUTPUT_DIR_TESTS_FILES="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
 OUTPUT_FILE=$1
 
