@@ -7,7 +7,7 @@ use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::error::{SimpleError, SimpleErrorKind};
 use retry::Error::Operation;
 
-fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleError> {
+fn terraform_exec_with_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     // terraform init
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         match terraform_exec(root_dir, vec!["init"]) {
@@ -31,35 +31,33 @@ fn terraform_exec_with_init_validate_plan(root_dir: &str) -> Result<(), SimpleEr
             error!("error while trying to Terraform validate the rendered templates");
             return Err(e);
         }
-        _ => {}
-    };
-
-    // plan
-    let result = retry::retry(Fixed::from_millis(3000).take(3), || {
-        match terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"]) {
-            Ok(out) => OperationResult::Ok(out),
-            Err(err) => {
-                error!("While trying to Terraform plan the rendered templates");
-                OperationResult::Retry(err)
-            }
-        }
-    });
-
-    match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
     }
 }
 
 pub fn terraform_exec_with_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<(), SimpleError> {
-    match terraform_exec_with_init_validate_plan(root_dir) {
+    match terraform_exec_with_init_validate(root_dir) {
         Err(e) => return Err(e),
         Ok(_) => {}
     }
 
     if dry_run {
-        return Ok(());
+        // plan
+        let result = retry::retry(Fixed::from_millis(3000).take(3), || {
+            match terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"]) {
+                Ok(out) => OperationResult::Ok(out),
+                Err(err) => {
+                    error!("While trying to Terraform plan the rendered templates");
+                    OperationResult::Retry(err)
+                }
+            }
+        });
+
+        return match result {
+            Ok(_) => Ok(()),
+            Err(Operation { error, .. }) => Err(error),
+            Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        };
     }
 
     match terraform_apply(root_dir) {
@@ -69,8 +67,8 @@ pub fn terraform_exec_with_init_validate_plan_apply(root_dir: &str, dry_run: boo
 }
 
 pub fn terraform_exec_destroy(root_dir: &str, run_apply_before_destroy: bool) -> Result<(), SimpleError> {
-    // terraform init and plan
-    match terraform_exec_with_init_validate_plan(root_dir) {
+    // terraform init
+    match terraform_exec_with_init_validate(root_dir) {
         Err(e) => return Err(e),
         Ok(_) => {}
     }
@@ -103,6 +101,15 @@ pub fn terraform_exec_destroy(root_dir: &str, run_apply_before_destroy: bool) ->
 
 fn terraform_apply(root_dir: &str) -> Result<(), SimpleError> {
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+        // plan
+        match terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"]) {
+            Ok(_) => {}
+            Err(err) => {
+                error!("While trying to Terraform plan the rendered templates");
+                return OperationResult::Retry(err);
+            }
+        };
+        // apply
         match terraform_exec(root_dir, vec!["apply", "-auto-approve", "tf_plan"]) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
