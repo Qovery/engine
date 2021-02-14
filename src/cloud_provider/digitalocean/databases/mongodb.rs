@@ -5,7 +5,7 @@ use crate::cloud_provider::service::{
     get_tfstate_suffix, send_progress_on_long_task, Action, Backup, Create, Database, DatabaseOptions, DatabaseType,
     Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
 };
-use crate::cloud_provider::utilities::get_self_hosted_mongodb_version;
+use crate::cloud_provider::utilities::{get_self_hosted_mongodb_version, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
@@ -46,7 +46,7 @@ impl MongoDB {
             context,
             action,
             id: id.to_string(),
-            name: name.to_string(),
+            name: sanitize_name("mongodb", name),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),

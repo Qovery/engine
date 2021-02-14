@@ -416,6 +416,10 @@ pub fn check_domain_for(
     Ok(())
 }
 
+pub fn sanitize_name(prefix: &str, name: &str) -> String {
+    format!("{}-{}", prefix, name)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::utilities::{cloudflare_dns_resolver, get_cname_record_value};

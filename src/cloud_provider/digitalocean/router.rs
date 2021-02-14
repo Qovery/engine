@@ -9,7 +9,7 @@ use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
     Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::check_cname_for;
+use crate::cloud_provider::utilities::{check_cname_for, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{
@@ -40,7 +40,7 @@ impl Router {
         Router {
             context,
             id: id.to_string(),
-            name: name.to_string(),
+            name: sanitize_name("router", name),
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,
@@ -459,6 +459,7 @@ impl Create for Router {
     fn on_create_check(&self) -> Result<(), EngineError> {
         use crate::cloud_provider::service::Router;
 
+        // check non custom domains
         self.check_domains()?;
 
         // Wait/Check that custom domain is a CNAME targeting qovery

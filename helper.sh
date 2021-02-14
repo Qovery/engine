@@ -39,6 +39,7 @@ function gh_tags_selector_for_gitlab() {
   num_labels=$(echo $gh_pr | jq '.labels | length')
 
   if [ "$num_labels" != "0" ] ; then
+    all_labels=""
     for i in $(echo $gh_pr | jq -r '.labels[].name' | grep 'test-') ; do
       all_labels="$all_labels,$i"
     done
