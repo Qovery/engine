@@ -202,7 +202,7 @@ aws-managed-services:
     - linter
     - build
   tags:
-    - 2cpu-4gmem-0g
+    - 2cpu-8gmem-0g
   when: always
   only:
     refs:
