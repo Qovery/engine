@@ -19,11 +19,22 @@ function generate_html_file() {
   # remove " at the begin and end of lines
   sed -ri 's/^"//g' $html_file_wip
   sed -ri 's/"$//g' $html_file_wip
+  sed -ri 's/\\"/"/g' $html_file_wip
+  # convert ANSI codes color to html
+  sed -ri 's/ /\&nbsp\;/g' $html_file_wip
+  sed -ri 's/\\u001b\[31m(.*?)\\u001b\[0m/<font style="color:red">\1<\/font>/g' $html_file_wip
+  sed -ri 's/\\u001b\[32m(.*?)\\u001b\[0m/<font style="color:green">\1<\/font>/g' $html_file_wip
+  sed -ri 's/\\u001b\[1m(.*?)\\u001b\[0m/<b>\1<\/b>/g' $html_file_wip
+  # removing non properly handled colors
+  sed -ri 's/\\u001b\[31m//g' $html_file_wip
+  sed -ri 's/\\u001b\[32m//g' $html_file_wip
+  sed -ri 's/\\u001b\[1m//g' $html_file_wip
+  sed -ri 's/\\u001b\[0m/\&nbsp\;\&nbsp\;\&nbsp\;/g' $html_file_wip
   # colorize info, warn, and error
-  sed -ri 's/\| INFO \|/| <font style="color:green">INFO<\/font> |/g' $html_file_wip
-  sed -ri 's/\| WARN \|/| <font style="color:orange">WARN<\/font> |/g' $html_file_wip
+  sed -ri 's/\|\&nbsp\;INFO\&nbsp\;\|/| <font style="color:green">INFO<\/font> |/g' $html_file_wip
+  sed -ri 's/\|\&nbsp\;WARN\&nbsp\;\|/| <font style="color:orange">WARN<\/font> |/g' $html_file_wip
   sed -ri 's/fail/<font style="color:red">fail<\/font>/g' $html_file_wip
-  sed -ri 's/^(.+)\| ERROR \|(.+)$/<font style="color:red">\1 | ERROR | \2<\/font>/g' $html_file_wip
+  sed -ri 's/^(.+)\|\&nbsp\;ERROR\&nbsp\;\|(.+)$/<font style="color:red">\1|ERRO| \2<\/font>/g' $html_file_wip
   # line return at the end of lines
   sed -ri 's/$/<br \/>/g' $html_file_wip
 
