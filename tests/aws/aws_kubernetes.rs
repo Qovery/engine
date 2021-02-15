@@ -117,8 +117,8 @@ fn create_and_destroy_eks_cluster(region: &str, test_name: &str) {
     It is useful to keep 2 clusters deployment tests to run in // to validate there is no name collision (overlaping)
 */
 
+#[cfg(feature = "test-aws-infra")]
 #[test]
-#[ignore]
 fn create_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
     create_and_destroy_eks_cluster(
@@ -127,8 +127,8 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
     );
 }
 
+#[cfg(feature = "test-aws-infra")]
 #[test]
-#[ignore]
 fn create_and_destroy_eks_cluster_in_us_east_2() {
     let region = "us-east-2";
     create_and_destroy_eks_cluster(

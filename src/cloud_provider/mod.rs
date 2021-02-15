@@ -14,7 +14,7 @@ pub mod gcp;
 pub mod kubernetes;
 pub mod models;
 pub mod service;
-pub(crate) mod utilities;
+pub mod utilities;
 
 pub trait CloudProvider: Listen {
     fn context(&self) -> &Context;

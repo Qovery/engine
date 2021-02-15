@@ -63,12 +63,18 @@ spec:
             {{ if eq .Values.enabledFeatures.eks true}}
             - --enable-eks
             {{ end }}
+            {{ if eq .Values.enabledFeatures.vpc true}}
+            - --enable-vpc
+            {{ end }}
+            {{ if eq .Values.enabledFeatures.s3 true}}
+            - --enable-s3
+            {{ end }}
             {{ if or (eq .Values.enabledFeatures.elb true) (eq .Values.enabledFeatures.eks true)}}
             - --enable-elb
             {{ end }}
             {{ if or (eq .Values.enabledFeatures.ebs true) (eq .Values.enabledFeatures.eks true)}}
             - --enable-ebs
-          {{ end }}
+            {{ end }}
           env:
             {{ range $key, $value := .Values.environmentVariables -}}
             - name: "{{ $key }}"

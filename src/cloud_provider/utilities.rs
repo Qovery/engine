@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::error::{EngineError, StringError};
-use crate::models::{ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use chrono::Duration;
 use core::option::Option::{None, Some};
 use core::result::Result;
@@ -271,29 +271,27 @@ fn get_cname_record_value(resolver: &Resolver, cname: &str) -> Option<String> {
 }
 
 pub fn check_cname_for(
-    listener_helper: ListenersHelper,
+    scope: ProgressScope,
+    listeners: &Listeners,
     cname_to_check: &str,
     execution_id: &str,
 ) -> Result<String, String> {
     let resolver = cloudflare_dns_resolver();
+    let listener_helper = ListenersHelper::new(listeners);
 
     let send_deployment_progress = |msg: &str| {
         listener_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Environment {
-                id: execution_id.to_string(),
-            },
+            scope.clone(),
             ProgressLevel::Info,
             Some(msg.to_string()),
             execution_id,
         ));
     };
 
-    let send_error_progress = |msg: &str| {
-        listener_helper.error(ProgressInfo::new(
-            ProgressScope::Environment {
-                id: execution_id.to_string(),
-            },
-            ProgressLevel::Error,
+    let send_deployment_progress_warn = |msg: &str| {
+        listener_helper.deployment_in_progress(ProgressInfo::new(
+            scope.clone(),
+            ProgressLevel::Warn,
             Some(msg.to_string()),
             execution_id,
         ));
@@ -308,12 +306,15 @@ pub fn check_cname_for(
     );
 
     // Trying for 5 min to resolve CNAME
-    let fixed_iterable = Fixed::from_millis(Duration::seconds(5).num_milliseconds() as u64).take(12 * 5);
+    let fixed_iterable = Fixed::from_millis(Duration::seconds(5).num_milliseconds() as u64).take(6 * 5);
     let check_result = retry::retry(fixed_iterable, || {
         match get_cname_record_value(&resolver, cname_to_check) {
             Some(domain) => OperationResult::Ok(domain),
             None => {
-                let msg = format!("Cannot find domain under CNAME {}", cname_to_check);
+                let msg = format!(
+                    "Cannot find domain under CNAME {}. Retrying in 5 seconds...",
+                    cname_to_check
+                );
                 send_deployment_progress(msg.as_str());
                 OperationResult::Retry(msg)
             }
@@ -323,14 +324,18 @@ pub fn check_cname_for(
     match check_result {
         Ok(domain) => {
             send_deployment_progress(format!("Resolution of CNAME {} found to {}", cname_to_check, domain).as_str());
-            Ok(domain)
         }
         Err(_) => {
-            let msg = format!("Resolution of CNAME {} failed !!!", cname_to_check);
-            send_error_progress(msg.as_str());
-            Err(msg)
+            let msg = format!(
+                "Resolution of CNAME {} failed. Please check that you have correctly configured your CNAME. If you are using a CDN you can forget this message",
+                cname_to_check
+            );
+            send_deployment_progress_warn(msg.as_str());
         }
     }
+
+    // do not exit / rollback if domain is not ready, simply warn the user about it
+    Ok(cname_to_check.to_string())
 }
 
 pub fn check_domain_for(
@@ -412,6 +417,10 @@ pub fn check_domain_for(
     }
 
     Ok(())
+}
+
+pub fn sanitize_name(prefix: &str, name: &str) -> String {
+    format!("{}-{}", prefix, name)
 }
 
 #[cfg(test)]

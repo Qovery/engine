@@ -1,4 +1,4 @@
-name: functionnal-tests
+name: tests
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - name: build engine
+      - name: build
         run: |
           export PATH=$GITHUB_WORKSPACE/bin:$PATH
           export RUSTC_WRAPPER=$GITHUB_WORKSPACE/bin/sccache
@@ -27,15 +27,17 @@ jobs:
           sccache --version
           sccache --show-stats
           echo "########## START BUILD ##########"
-          cargo build --release --all-features
+          cargo build --all-features
           sccache --show-stats
-  functionnal-tests:
+          echo "########## START UNIT TESTS ##########"
+          cargo test
+  selected-functionnal-tests:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
     needs: build
     steps:
       - uses: actions/checkout@v1
-      - name: Run a multi-line script
+      - name: Run selected functional tests
         timeout-minutes: 120
         env:
           GITLAB_PROJECT_ID: ${{ secrets.GITLAB_PROJECT_ID }}
@@ -46,15 +48,21 @@ jobs:
           echo "Branch name: $branch"
           export GITHUB_BRANCH=$branch
           export GITHUB_COMMIT_ID=$GITHUB_SHA
-          gh_json=$(curl -s -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/Qovery/engine/pulls?state=open")
-          gh_pr=$(echo $gh_json | jq --compact-output '.[] | {labels, ref: .head.ref}' | grep "$branch")
-          echo "Pull request info: $(echo $gh_pr)"
-          num_labels=$(echo $gh_pr | jq '.labels | length')
-          tests_type="fast_tests"
-          if [ $num_labels -gt 0 ] ; then
-            if [ $(echo $gh_pr | grep -c 'full-tests') -eq 1 ] ; then
-              tests_type="full_tests"
-            fi
-          fi
-          echo $tests_type
-          ./helper.sh $tests_type
+          ./helper.sh autodetect
+  all-tests-enabled:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v1
+      - name: Only validate PR if all tests have been requested
+        timeout-minutes: 120
+        env:
+          GITLAB_PROJECT_ID: ${{ secrets.GITLAB_PROJECT_ID }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_PERSONAL_TOKEN: ${{ secrets.GITLAB_PERSONAL_TOKEN }}
+        run: |
+          branch=$(echo ${{github.ref}} | sed -r 's/^refs\/heads\/(.+)/\1/')
+          echo "Branch name: $branch"
+          export GITHUB_BRANCH=$branch
+          export GITHUB_COMMIT_ID=$GITHUB_SHA
+          ./helper.sh check_gh_tags

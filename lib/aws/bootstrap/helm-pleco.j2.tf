@@ -1,3 +1,23 @@
+locals {
+  pleco_config = <<PLECO
+enabledFeatures:
+  disableDryRun: true
+  checkInterval: 120
+  kubernetes: "in"
+  awsRegions:
+    - eu-west-3
+    - us-east-2
+  rds: true
+  documentdb: true
+  elasticache: true
+  eks: true
+  elb: true
+  ebs: true
+  vpc: false
+  s3: true
+PLECO
+}
+
 resource "helm_release" "pleco" {
   count = var.test_cluster == "false" ? 0 : 1
 
@@ -7,40 +27,12 @@ resource "helm_release" "pleco" {
   atomic = true
   max_history = 50
 
+  values = [local.pleco_config]
+
   // make a fake arg to avoid TF to validate update on failure because of the atomic option
   set {
     name = "fake"
     value = timestamp()
-  }
-
-  set {
-    name = "enabledFeatures.awsRegions"
-    value = "{eu-west-3,us-east-2}"
-  }
-
-  set {
-    name = "enabledFeatures.rds"
-    value = "true"
-  }
-
-  set {
-    name = "enabledFeatures.documentdb"
-    value = "true"
-  }
-
-  set {
-    name = "enabledFeatures.elasticache"
-    value = "true"
-  }
-
-  set {
-    name = "enabledFeatures.eks"
-    value = "true"
-  }
-
-  set {
-    name = "enabledFeatures.disableDryRun"
-    value = "true"
   }
 
   set {

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::databases::utilities::rds_name_sanitizer;
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
@@ -51,7 +52,7 @@ impl PostgreSQL {
             context,
             action,
             id: id.to_string(),
-            name: name.to_string(),
+            name: Self::sanitize_name("postgresql", name),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -65,6 +66,12 @@ impl PostgreSQL {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_postgres_version(self.version(), is_managed_services), self)
+    }
+
+    fn sanitize_name(prefix: &str, name: &str) -> String {
+        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
+        let max_size = 63 - 3; // max RDS - k8s statefulset chars
+        rds_name_sanitizer(max_size, prefix, name)
     }
 }
 
@@ -400,7 +407,9 @@ fn get_managed_postgres_version(requested_version: &str) -> Result<String, Strin
 
 #[cfg(test)]
 mod tests_postgres {
-    use crate::cloud_provider::aws::databases::postgresql::get_postgres_version;
+    use crate::cloud_provider::aws::databases::postgresql::{get_postgres_version, PostgreSQL};
+    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::models::Context;
 
     #[test]
     fn check_postgres_version() {
@@ -423,5 +432,34 @@ mod tests_postgres {
             get_postgres_version("1.0", false).unwrap_err().as_str(),
             "Postgresql 1.0 version is not supported"
         );
+    }
+
+    #[test]
+    fn postgres_name_sanitizer() {
+        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
+        let db_expected_name = "postgresqltestnamesanitizerwithtoomanycharsnotallowedwhichwi";
+
+        let database = PostgreSQL::new(
+            Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
+            "pgid",
+            Action::Create,
+            db_input_name,
+            "8",
+            "pgtest.qovery.io",
+            "pgid",
+            "1".to_string(),
+            512,
+            "db.t2.micro",
+            DatabaseOptions {
+                login: "".to_string(),
+                password: "".to_string(),
+                host: "".to_string(),
+                port: 5432,
+                disk_size_in_gib: 10,
+                database_disk_type: "gp2".to_string(),
+            },
+            vec![],
+        );
+        assert_eq!(database.name, db_expected_name);
     }
 }

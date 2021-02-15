@@ -20,6 +20,7 @@ use self::test_utilities::utilities::{engine_run_test, generate_id};
 **/
 
 // to check overload between several databases and apps
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn deploy_an_environment_with_3_databases_and_3_apps() {
     init();
@@ -57,14 +58,12 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 }
 
 // this test ensure containers databases are never restarted, even in failover environment case
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn postgresql_failover_dev_environment_with_all_options() {
     init();
 
-    let span = span!(
-        Level::INFO,
-        "postgresql_deploy_a_working_development_environment_with_all_options"
-    );
+    let span = span!(Level::INFO, "postgresql_failover_dev_environment_with_all_options");
     let _enter = span.enter();
 
     let context = context();
@@ -98,7 +97,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
     // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-    let database_name = format!("{}-0", &environment_check.databases[0].name);
+    let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
     match is_pod_restarted_aws_env(environment_check.clone(), database_name.as_str()) {
         (true, _) => assert!(true),
         (false, _) => assert!(false),
@@ -122,8 +121,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
 }
 
 // Ensure a full environment can run correctly
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
-#[ignore]
 fn postgresql_deploy_a_working_development_environment_with_all_options() {
     init();
 
@@ -167,6 +166,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 }
 
 // Ensure redeploy works as expected
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
     engine_run_test(|| {
@@ -179,9 +179,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
+        let app_name = format!("postgresql-app-{}", generate_id());
         let database_host = "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
         let database_port = 5432;
-        let database_db_name = "my-postgres".to_string();
+        let database_db_name = "mypostgres".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
         environment.databases = vec![Database {
@@ -205,7 +206,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             .applications
             .into_iter()
             .map(|mut app| {
-                app.branch = "postgres-app".to_string();
+                app.branch = app_name.clone();
                 app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
                 app.private_port = Some(1234);
                 app.environment_variables = vec![
@@ -219,7 +220,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                     },
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: database_db_name.clone(),
+                        value: format!("postgresql{}", database_db_name),
                     },
                     EnvironmentVariable {
                         key: "PG_USERNAME".to_string(),
@@ -233,7 +234,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = "postgres-app".to_string();
+        environment.routers[0].routes[0].application_name = app_name.clone();
+
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
         let ea_redeploy = EnvironmentAction::Environment(environment_to_redeploy);
@@ -254,7 +256,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-        let database_name = format!("{}-0", &environment_check.databases[0].name);
+        let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_aws_env(environment_check, database_name.as_str()) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
@@ -281,7 +283,8 @@ fn test_postgresql_configuration(context: Context, mut environment: Environment,
         let _enter = span.enter();
         let context_for_delete = context.clone_not_same_execution_id();
 
-        let database_host = "postgres-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; //
+        let app_name = format!("postgresql-app-{}", generate_id());
+        let database_host = "postgres-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN";
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
@@ -313,7 +316,7 @@ fn test_postgresql_configuration(context: Context, mut environment: Environment,
             .applications
             .into_iter()
             .map(|mut app| {
-                app.branch = "postgres-app".to_string();
+                app.branch = app_name.clone();
                 app.commit_id = "ad65b24a0470e7e8aa0983e036fb9a05928fd973".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
@@ -342,7 +345,7 @@ fn test_postgresql_configuration(context: Context, mut environment: Environment,
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = "postgres-app".to_string();
+        environment.routers[0].routes[0].application_name = app_name.clone();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -367,8 +370,8 @@ fn test_postgresql_configuration(context: Context, mut environment: Environment,
 }
 
 // Postgres environment environment
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
-#[ignore]
 fn postgresql_v10_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -380,8 +383,8 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
-#[ignore]
 fn postgresql_v11_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -393,6 +396,7 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
@@ -406,8 +410,8 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
 }
 
 // Postgres production environment
+#[cfg(feature = "test-aws-managed-services")]
 #[test]
-#[ignore]
 fn postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -420,8 +424,8 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-managed-services")]
 #[test]
-#[ignore]
 fn postgresql_v11_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -434,8 +438,8 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-managed-services")]
 #[test]
-#[ignore]
 fn postgresql_v12_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -461,13 +465,14 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
     let _enter = span.enter();
     let context_for_delete = context.clone_not_same_execution_id();
 
+    let app_name = format!("mongodb-app-{}", generate_id());
     let database_host = "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 27017;
-    let database_db_name = "my-mongodb".to_string();
+    let database_db_name = "mongodb".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
     let database_uri = format!(
-        "mongodb://{}:{}@{}:{}/{}",
+        "mongodb://{}:{}@{}:{}/mongodb{}",
         database_username, database_password, database_host, database_port, database_db_name
     );
     // while waiting the info to be given directly in the database info, we're using this
@@ -497,7 +502,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
         .applications
         .into_iter()
         .map(|mut app| {
-            app.branch = "mongodb-app".to_string();
+            app.branch = app_name.clone();
             app.commit_id = "3fdc7e784c1d98b80446be7ff25e35370306d9a8".to_string();
             app.private_port = Some(1234);
             app.dockerfile_path = Some(format!("Dockerfile-{}", version));
@@ -542,7 +547,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
             app
         })
         .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = "mongodb-app".to_string();
+    environment.routers[0].routes[0].application_name = app_name.clone();
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
@@ -565,8 +570,8 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 }
 
 // development environment
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
-#[ignore]
 fn mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -578,8 +583,8 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
-#[ignore]
 fn mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -591,8 +596,8 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
-#[ignore]
 fn mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -604,6 +609,7 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
@@ -617,8 +623,8 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
 }
 
 // MongoDB production environment (DocumentDB)
+#[cfg(feature = "test-aws-managed-services")]
 #[test]
-#[ignore]
 fn mongodb_v3_6_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -631,8 +637,8 @@ fn mongodb_v3_6_deploy_a_working_prod_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-managed-services")]
 #[test]
-#[ignore]
 fn mongodb_v4_0_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -658,6 +664,7 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
 
         let deletion_context = context.clone_not_same_execution_id();
 
+        let app_name = format!("mysql-app-{}", generate_id());
         let database_host = "mysql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
@@ -690,7 +697,7 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
             .applications
             .into_iter()
             .map(|mut app| {
-                app.branch = "mysql-app".to_string();
+                app.branch = app_name.clone();
                 app.commit_id = "fc8a87b39cdee84bb789893fb823e3e62a1999c0".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
@@ -727,7 +734,7 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = "mysql-app".to_string();
+        environment.routers[0].routes[0].application_name = app_name.clone();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -753,8 +760,8 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
 }
 
 // MySQL self-hosted environment
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
-#[ignore]
 fn mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
@@ -766,6 +773,7 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn mysql_v8_deploy_a_working_dev_environment() {
     let context = context();
@@ -774,8 +782,8 @@ fn mysql_v8_deploy_a_working_dev_environment() {
 }
 
 // MySQL production environment (RDS)
+#[cfg(feature = "test-aws-managed-services")]
 #[test]
-#[ignore]
 fn mysql_v5_7_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -788,8 +796,8 @@ fn mysql_v5_7_deploy_a_working_prod_environment() {
     );
 }
 
+#[cfg(feature = "test-aws-managed-services")]
 #[test]
-#[ignore]
 fn mysql_v8_0_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -815,6 +823,7 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
 
         let context_for_delete = context.clone_not_same_execution_id();
 
+        let app_name = format!("redis-app-{}", generate_id());
         let database_host = "redis-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
@@ -847,7 +856,7 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
             .applications
             .into_iter()
             .map(|mut app| {
-                app.name = "redis-app".to_string();
+                app.name = app_name.clone();
                 app.branch = "redis-app".to_string();
                 app.commit_id = "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string();
                 app.private_port = Some(1234);
@@ -885,7 +894,7 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = "redis-app".to_string();
+        environment.routers[0].routes[0].application_name = app_name.clone();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -910,14 +919,15 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
 }
 
 // Redis self-hosted environment
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
-#[ignore]
 fn redis_v5_deploy_a_working_dev_environment() {
     let context = context();
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_redis_configuration(context, environment, "5", "redis_v5_deploy_a_working_dev_environment");
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 fn redis_v6_deploy_a_working_dev_environment() {
     let context = context();
@@ -927,8 +937,8 @@ fn redis_v6_deploy_a_working_dev_environment() {
 }
 
 // Redis production environment (Elasticache)
+#[cfg(feature = "test-aws-managed-services")]
 #[test]
-#[ignore]
 fn redis_v5_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
@@ -936,8 +946,8 @@ fn redis_v5_deploy_a_working_prod_environment() {
     test_redis_configuration(context, environment, "5", "redis_v5_deploy_a_working_prod_environment");
 }
 
+#[cfg(feature = "test-aws-managed-services")]
 #[test]
-#[ignore]
 fn redis_v6_deploy_a_working_prod_environment() {
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);

@@ -22,7 +22,7 @@ charts:
   - name: aws-vpc-cni
     repo_name: aws
     dest: aws-bootstrap
-    version: 1.1.0
+    version: 1.1.2
   - name: aws-calico
     repo_name: aws
     dest: aws-bootstrap
@@ -58,7 +58,7 @@ charts:
     version: 12.0.1
     dest: services
   - name: pleco
-    version: 0.4.1
+    version: 0.5.1
     repo_name: pleco
   - name: do-k8s-token-rotate
     version: 0.1.3

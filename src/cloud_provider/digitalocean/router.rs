@@ -9,13 +9,13 @@ use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
     Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::check_cname_for;
+use crate::cloud_provider::utilities::{check_cname_for, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
 };
-use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
     context: Context,
@@ -40,7 +40,7 @@ impl Router {
         Router {
             context,
             id: id.to_string(),
-            name: name.to_string(),
+            name: sanitize_name("router", name),
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,
@@ -182,10 +182,13 @@ impl Service for Router {
 
                 // Custom domain
                 if !self.custom_domains.is_empty() {
+                    let external_ingress_ip_selector =
+                        format!("app=nginx-ingress,component=controller,app_id={}", self.id());
+
                     let deployed_ingress = match crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
                         kubernetes_config_file_path_string.as_str(),
                         environment.namespace(),
-                        "app=nginx-ingress,component=controller",
+                        external_ingress_ip_selector.as_str(),
                         kubernetes.cloud_provider().credentials_environment_variables(),
                     ) {
                         Ok(x) => x.is_some(),
@@ -198,7 +201,7 @@ impl Service for Router {
                             let lb_id = crate::cmd::kubectl::do_kubectl_exec_get_loadbalancer_id(
                                 kubernetes_config_file_path_string.as_str(),
                                 environment.namespace(),
-                                "app=nginx-ingress,component=controller",
+                                external_ingress_ip_selector.as_str(),
                                 kubernetes.cloud_provider().credentials_environment_variables(),
                             );
 
@@ -456,25 +459,25 @@ impl Create for Router {
     fn on_create_check(&self) -> Result<(), EngineError> {
         use crate::cloud_provider::service::Router;
 
+        // check non custom domains
         self.check_domains()?;
 
         // Wait/Check that custom domain is a CNAME targeting qovery
         for domain_to_check in self.custom_domains.iter() {
             match check_cname_for(
-                ListenersHelper::new(self.listeners()),
+                self.progress_scope(),
+                self.listeners(),
                 &domain_to_check.domain,
-                self.id(),
+                self.context.execution_id(),
             ) {
                 Ok(cname) if cname.trim_end_matches('.') == domain_to_check.target_domain.trim_end_matches('.') => {
-                    continue
+                    continue;
                 }
                 Ok(err) | Err(err) => {
-                    return Err(EngineError::new(
-                        EngineErrorCause::User("Invalid CNAME"),
-                        EngineErrorScope::Router(self.id.clone(), self.name.clone()),
-                        self.context.execution_id(),
-                        Some(err.as_str()),
-                    ))
+                    warn!(
+                        "Invalid CNAME for {}. Might not be an issue if user is using a CDN: {}",
+                        domain_to_check.domain, err
+                    );
                 }
             }
         }
