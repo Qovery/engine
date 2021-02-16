@@ -8,7 +8,6 @@ use gethostname;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
-use qovery_engine::build_platform::GitRepository;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::transaction::TransactionResult;
 

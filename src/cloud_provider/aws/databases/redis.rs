@@ -49,7 +49,7 @@ impl Redis {
             context,
             action,
             id: id.to_string(),
-            name: Self::sanitize_name("redis", name),
+            name: name.to_string(),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -63,16 +63,6 @@ impl Redis {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_redis_version(self.version(), is_managed_services), self)
-    }
-
-    fn sanitize_name(prefix: &str, name: &str) -> String {
-        // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
-        let max_size = 47; // 50 (max Elasticache ) - 3 (k8s statefulset chars)
-        let mut new_name = name.replace("_", "").replace("-", "");
-        if new_name.clone().chars().count() > max_size {
-            new_name = new_name[..max_size].to_string();
-        }
-        format!("{}{}", prefix, new_name)
     }
 }
 
@@ -93,6 +83,19 @@ impl Service for Redis {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
+        let prefix = "redis";
+        let max_size = 47 - prefix.len(); // 50 (max Elasticache ) - 3 (k8s statefulset chars)
+        let mut new_name = self.name().replace("_", "").replace("-", "");
+
+        if new_name.clone().chars().count() > max_size {
+            new_name = new_name[..max_size].to_string();
+        }
+
+        format!("{}{}", prefix, new_name)
     }
 
     fn version(&self) -> &str {

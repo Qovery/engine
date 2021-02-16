@@ -33,11 +33,11 @@ image:
 
 ## String to partially override redis.fullname template (will maintain the release name)
 ##
-nameOverride: {{ name }}
+nameOverride: {{ sanitized_name }}
 
 ## String to fully override redis.fullname template
 ##
-fullnameOverride: {{ name }}
+fullnameOverride: {{ sanitized_name }}
 
 ## Cluster settings
 cluster:
@@ -291,7 +291,7 @@ master:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: {{ name }}
+    databaseName: {{ sanitized_name }}
   podAnnotations: {}
 
   ## Redis Master resource requests and limits

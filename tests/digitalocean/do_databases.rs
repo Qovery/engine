@@ -1,4 +1,4 @@
-use test_utilities::utilities::{context, engine_run_test, init};
+use test_utilities::utilities::{context, engine_run_test};
 use tracing::{span, Level};
 
 use qovery_engine::models::{Action, Clone2, EnvironmentAction};

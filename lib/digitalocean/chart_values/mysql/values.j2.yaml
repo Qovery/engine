@@ -32,12 +32,12 @@ image:
 ## String to partially override mysql.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: {{ name }}
+nameOverride: {{ sanitized_name }}
 
 ## String to fully override mysql.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: {{ name }}
+fullnameOverride: {{ sanitized_name }}
 
 ## Cluster domain
 ##
@@ -47,7 +47,7 @@ labels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: {{ name }}
+  databaseName: {{ sanitized_name }}
 
 ## Init containers parameters:
 ## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
@@ -111,7 +111,7 @@ db:
   ## Database to create
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#creating-a-database-on-first-run
   ##
-  name: {{ name }}
+  name: {{ sanitized_name }}
   ## Option to force users to specify a password. That is required for 'helm upgrade' to work properly.
   ## If it is not force, a random password will be generated.
   ##
@@ -318,7 +318,7 @@ master:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       databaseId: {{ id }}
-      databaseName: {{ name }}
+      databaseName: {{ sanitized_name }}
 
     ## Persistent Volume Access Mode
     ##

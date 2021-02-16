@@ -51,7 +51,7 @@ impl MongoDB {
             context,
             action,
             id: id.to_string(),
-            name: Self::sanitize_name("mongodb", name),
+            name: name.to_string(),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -65,16 +65,6 @@ impl MongoDB {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_mongodb_version(self.version(), is_managed_services), self)
-    }
-
-    fn sanitize_name(prefix: &str, name: &str) -> String {
-        // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
-        let max_size = 60; // 63 (max DocumentDB) - 3 (k8s statefulset chars)
-        let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
-        if new_name.clone().chars().count() > max_size {
-            new_name = new_name[..max_size].to_string();
-        }
-        new_name
     }
 }
 
@@ -95,6 +85,18 @@ impl Service for MongoDB {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
+        let prefix = "mongodb";
+        let max_size = 60 - prefix.len(); // 63 (max DocumentDB) - 3 (k8s statefulset chars)
+        let mut new_name = format!("{}{}", prefix, self.name().replace("_", "").replace("-", ""));
+        if new_name.chars().count() > max_size {
+            new_name = new_name[..max_size].to_string();
+        }
+
+        new_name
     }
 
     fn version(&self) -> &str {
@@ -187,7 +189,7 @@ impl Service for MongoDB {
     }
 
     fn selector(&self) -> String {
-        format!("app={}", self.name())
+        format!("app={}", self.sanitized_name())
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {

@@ -1,7 +1,6 @@
 extern crate test_utilities;
 
-use test_utilities::utilities::context;
-use test_utilities::utilities::{init, is_pod_restarted_aws_env};
+use test_utilities::utilities::init;
 use tracing::{span, Level};
 
 use qovery_engine::models::{

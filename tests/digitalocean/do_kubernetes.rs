@@ -8,13 +8,12 @@ use tracing::{error, span, Level};
 
 use qovery_engine::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::cloud_provider::digitalocean::models::cluster::Clusters;
 use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_delete_namespace};
 use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::digitalocean::{digital_ocean_token, get_kube_cluster_name_from_uuid};
-use self::test_utilities::utilities::{engine_run_test, generate_id, init};
+use self::test_utilities::utilities::{engine_run_test, generate_id};
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 
 //#[test]

@@ -115,6 +115,10 @@ impl Service for Application {
         self.name.as_str()
     }
 
+    fn sanitized_name(&self) -> String {
+        unimplemented!()
+    }
+
     fn version(&self) -> &str {
         self.image.commit_id.as_str()
     }

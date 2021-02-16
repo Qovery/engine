@@ -52,7 +52,7 @@ impl MySQL {
             context,
             action,
             id: id.to_string(),
-            name: Self::sanitize_name("mysql", name),
+            name: name.to_string(),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -66,12 +66,6 @@ impl MySQL {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_mysql_version(self.version(), is_managed_services), self)
-    }
-
-    fn sanitize_name(prefix: &str, name: &str) -> String {
-        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let max_size = 63 - 3; // max RDS - k8s statefulset chars
-        rds_name_sanitizer(max_size, prefix, name)
     }
 }
 
@@ -92,6 +86,13 @@ impl Service for MySQL {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
+        let prefix = "mysql";
+        let max_size = 63 - 3; // max RDS - k8s statefulset chars
+        rds_name_sanitizer(max_size, prefix, self.name())
     }
 
     fn version(&self) -> &str {
@@ -166,7 +167,7 @@ impl Service for MySQL {
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
         context.insert("database_instance_type", &self.database_instance_type);
         context.insert("database_disk_type", &self.options.database_disk_type);
-        context.insert("database_name", &self.name);
+        context.insert("database_name", &self.sanitized_name());
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());

@@ -46,7 +46,7 @@ impl MongoDB {
             context,
             action,
             id: id.to_string(),
-            name: sanitize_name("mongodb", name),
+            name: name.to_string(),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -80,6 +80,10 @@ impl Service for MongoDB {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        sanitize_name("mongodb", self.name())
     }
 
     fn version(&self) -> &str {

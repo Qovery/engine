@@ -24,6 +24,7 @@ pub trait Service {
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
+    fn sanitized_name(&self) -> String;
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
@@ -305,6 +306,7 @@ pub fn default_tera_context(
     context.insert("environment_id", environment.id.as_str());
     context.insert("region", kubernetes.region());
     context.insert("name", service.name());
+    context.insert("sanitized_name", &service.sanitized_name());
     context.insert("namespace", environment.namespace());
     context.insert("cluster_name", kubernetes.name());
     context.insert("total_cpus", &service.total_cpus());

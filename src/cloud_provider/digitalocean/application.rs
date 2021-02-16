@@ -55,7 +55,7 @@ impl Application {
             context,
             id: id.to_string(),
             action,
-            name: sanitize_name("app", name),
+            name: name.to_string(),
             private_port,
             total_cpus,
             _cpu_burst,
@@ -115,6 +115,10 @@ impl Service for Application {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        sanitize_name("app", self.name())
     }
 
     fn version(&self) -> &str {

@@ -52,7 +52,7 @@ impl PostgreSQL {
             context,
             action,
             id: id.to_string(),
-            name: Self::sanitize_name("postgresql", name),
+            name: name.to_string(),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -66,12 +66,6 @@ impl PostgreSQL {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_postgres_version(self.version(), is_managed_services), self)
-    }
-
-    fn sanitize_name(prefix: &str, name: &str) -> String {
-        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let max_size = 63 - 3; // max RDS - k8s statefulset chars
-        rds_name_sanitizer(max_size, prefix, name)
     }
 }
 
@@ -92,6 +86,13 @@ impl Service for PostgreSQL {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
+        let prefix = "posgresql";
+        let max_size = 63 - 3; // max RDS - k8s statefulset chars
+        rds_name_sanitizer(max_size, prefix, self.name())
     }
 
     fn version(&self) -> &str {
@@ -160,7 +161,7 @@ impl Service for PostgreSQL {
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
 
-        context.insert("database_name", self.name.as_str());
+        context.insert("database_name", &self.sanitized_name());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());

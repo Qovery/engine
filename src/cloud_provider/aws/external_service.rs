@@ -40,7 +40,7 @@ impl ExternalService {
             context,
             id: id.to_string(),
             action,
-            name: format!("external-service-{}", name),
+            name: name.to_string(),
             total_cpus,
             total_ram_in_mib,
             image,
@@ -97,6 +97,10 @@ impl Service for ExternalService {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        format!("ext-service-{}", self.name())
     }
 
     fn version(&self) -> &str {
