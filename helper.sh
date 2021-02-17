@@ -346,7 +346,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
 
   # Note: keep release, we don't waste time because of multiple cache and it drastically help to speed up prod build
-  cargo test --release --color always --features $filter_tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
+  cargo test --color always --features $filter_tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
 
   ENDTIME=$(date +%s)
