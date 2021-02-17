@@ -157,11 +157,11 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
     // mongoDB management part
     let database_host_mongo = "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port_mongo = 27017;
-    let database_db_name_mongo = "mymongodb".to_string();
+    let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
     let database_password_mongo = generate_id();
     let database_uri_mongo = format!(
-        "mongodb://{}:{}@{}:{}/mongodb{}",
+        "mongodb://{}:{}@{}:{}/{}",
         database_username_mongo,
         database_password_mongo,
         database_host_mongo,
@@ -176,13 +176,13 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_id();
-    let database_name = "mypsql".to_string();
+    let database_name = "my-psql".to_string();
 
     // pSQL 2 management part
     let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
     let fqdn_2 = fqdn_id_2.clone() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN";
     let database_username_2 = "superuser2".to_string();
-    let database_name_2 = "mypsql2".to_string();
+    let database_name_2 = "my-psql-2".to_string();
 
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -216,7 +216,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 environment_variables: vec![
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_name),
+                        value: database_name.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_HOST".to_string(),
@@ -266,7 +266,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 environment_variables: vec![
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_name_2),
+                        value: database_name_2.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_HOST".to_string(),
@@ -506,7 +506,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_id();
-    let database_name = "mypsql".to_string();
+    let database_name = "my-psql".to_string();
 
     let suffix = generate_id();
     let application_name1 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
@@ -561,7 +561,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 environment_variables: vec![
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_name.clone()),
+                        value: database_name.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_HOST".to_string(),
@@ -611,7 +611,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 environment_variables: vec![
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_name.clone()),
+                        value: database_name.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_HOST".to_string(),

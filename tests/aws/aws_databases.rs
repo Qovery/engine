@@ -62,7 +62,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 fn postgresql_failover_dev_environment_with_all_options() {
     init();
 
-    let span = span!(Level::INFO, "postgresql_failover_dev_environment_with_all_options");
+    let span = span!(
+        Level::INFO,
+        "postgresql_deploy_a_working_development_environment_with_all_options"
+    );
     let _enter = span.enter();
 
     let context = context();
