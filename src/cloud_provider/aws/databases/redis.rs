@@ -432,7 +432,7 @@ mod tests {
     #[test]
     fn redis_name_sanitizer() {
         let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "redistestnamesanitizerwithtoomanycharsnotallowedwhic";
+        let db_expected_name = "redistestnamesanitizerwithtoomanycharsnotallowe";
 
         let database = Redis::new(
             Context::new("".to_string(), "".to_string(), "".to_string(), None, None),

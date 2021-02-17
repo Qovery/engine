@@ -423,7 +423,7 @@ mod tests_mongodb {
     #[test]
     fn mongo_name_sanitizer() {
         let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhichwillb";
+        let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhi";
 
         let database = MongoDB::new(
             Context::new("".to_string(), "".to_string(), "".to_string(), None, None),

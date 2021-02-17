@@ -432,7 +432,7 @@ mod tests_mysql {
     #[test]
     fn mysql_name_sanitizer() {
         let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "mysqltestnamesanitizerwithtoomanycharsnotallowedwhichwillbes";
+        let db_expected_name = "mysqltestnamesanitizerwithtoomanycharsnotallowedwhichwi";
 
         let database = MySQL::new(
             Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
