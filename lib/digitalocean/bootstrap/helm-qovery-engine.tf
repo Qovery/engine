@@ -10,6 +10,7 @@ resource "helm_release" "qovery_engine_resources" {
   create_namespace = true
   max_history = 50
   force_update = true
+  timeout = 600
 
   // make a fake arg to avoid TF to validate update on failure because of the atomic option
   set {
