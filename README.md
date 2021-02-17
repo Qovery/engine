@@ -107,6 +107,14 @@ curl --request POST \
 
 ```
 
+# Debug
+
+If you have a json context, and you want to deploy for investigation, you need to set 2 environment variables:
+```bash
+DEPLOY_FROM_FILE=<path_tojson_file>
+DEPLOY_FROM_FILE_KIND=<env|infra> # choose between infra (infrastructure deployment) and env (environment deployment)
+```
+
 ## Contribute
 
 To active the debugger add the `RUST_LOG=qovery_engine=debug` env var

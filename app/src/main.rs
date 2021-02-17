@@ -36,6 +36,7 @@ use crate::custom_error::{EngineInitError, ErrorKind};
 use crate::models::TaskSelector::{Environment, Infrastructure};
 use crate::models::{Ping, Response, StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message, Subscription};
+use std::env::VarError;
 
 mod constants;
 mod custom_error;
@@ -329,9 +330,32 @@ pub fn main() -> io::Result<()> {
     };
 
     match env::var("DEPLOY_FROM_FILE") {
-        Ok(deploy_from_file) => {
-            using_json_path_parameter(deploy_from_file, workspace_root_dir, lib_root_dir, docker_host)
-        }
+        Ok(deploy_from_file) => match env::var("DEPLOY_FROM_FILE_KIND") {
+            Ok(value) => match value.as_str() {
+                "infra" => using_json_path_parameter(
+                    deploy_from_file,
+                    workspace_root_dir,
+                    lib_root_dir,
+                    TaskSelector::Infrastructure(""),
+                    docker_host,
+                ),
+                "env" => using_json_path_parameter(
+                    deploy_from_file,
+                    workspace_root_dir,
+                    lib_root_dir,
+                    TaskSelector::Environment(""),
+                    docker_host,
+                ),
+                _ => {
+                    println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra' or 'env'");
+                    process::exit(1);
+                }
+            },
+            _ => {
+                println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra' or 'env'");
+                process::exit(1);
+            }
+        },
         _ => using_nats_server(nats_server, workspace_root_dir, lib_root_dir, docker_host, mode),
     }
 }
@@ -341,6 +365,7 @@ pub fn using_json_path_parameter(
     deploy_from_file: String,
     workspace_root_dir: String,
     lib_root_dir: String,
+    deployment_type: TaskSelector,
     docker_host: Option<String>,
 ) -> Result<(), Error> {
     // check if file json config file exist
@@ -367,11 +392,18 @@ pub fn using_json_path_parameter(
         req.metadata.clone(),
     );
 
-    let task = Box::new(InfrastructureTask::new(
-        context,
-        req,
-        Box::new(|_: &dyn Task| PreRun::Yes),
-    ));
+    let task: Box<dyn Task> = match deployment_type {
+        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(
+            context.clone(),
+            req.clone(),
+            Box::new(|_: &dyn Task| PreRun::Yes),
+        )),
+        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(
+            context,
+            req,
+            Box::new(|_: &dyn Task| PreRun::Yes),
+        )),
+    };
 
     task_manager.add_task(task);
     let _ = task_manager.run();
