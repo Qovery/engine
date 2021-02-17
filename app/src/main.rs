@@ -36,7 +36,6 @@ use crate::custom_error::{EngineInitError, ErrorKind};
 use crate::models::TaskSelector::{Environment, Infrastructure};
 use crate::models::{Ping, Response, StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message, Subscription};
-use std::env::VarError;
 
 mod constants;
 mod custom_error;
