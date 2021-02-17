@@ -96,7 +96,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
     // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-    let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
+    let database_name = format!("{}-0", &environment_check.databases[0].name);
     match is_pod_restarted_aws_env(environment_check.clone(), database_name.as_str()) {
         (true, _) => assert!(true),
         (false, _) => assert!(false),
@@ -181,7 +181,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let app_name = format!("postgresql-app-{}", generate_id());
         let database_host = "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
         let database_port = 5432;
-        let database_db_name = "mypostgres".to_string();
+        let database_db_name = "my-postgres".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
         environment.databases = vec![Database {
@@ -219,7 +219,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                     },
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_db_name),
+                        value: database_db_name.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_USERNAME".to_string(),
@@ -255,7 +255,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-        let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
+        let database_name = format!("{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_aws_env(environment_check, database_name.as_str()) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
@@ -467,11 +467,11 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
     let app_name = format!("mongodb-app-{}", generate_id());
     let database_host = "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 27017;
-    let database_db_name = "mongodb".to_string();
+    let database_db_name = "my-mongodb".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
     let database_uri = format!(
-        "mongodb://{}:{}@{}:{}/mongodb{}",
+        "mongodb://{}:{}@{}:{}/{}",
         database_username, database_password, database_host, database_port, database_db_name
     );
     // while waiting the info to be given directly in the database info, we're using this
