@@ -406,7 +406,7 @@ fn get_managed_mysql_version(requested_version: &str) -> Result<String, StringEr
 #[cfg(test)]
 mod tests_mysql {
     use crate::cloud_provider::aws::databases::mysql::{get_mysql_version, MySQL};
-    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
     use crate::models::Context;
 
     #[test]
@@ -455,6 +455,6 @@ mod tests_mysql {
             },
             vec![],
         );
-        assert_eq!(database.name, db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

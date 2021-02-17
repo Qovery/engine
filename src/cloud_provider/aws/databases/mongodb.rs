@@ -399,7 +399,7 @@ fn get_managed_mongodb_version(requested_version: &str) -> Result<String, String
 #[cfg(test)]
 mod tests_mongodb {
     use crate::cloud_provider::aws::databases::mongodb::{get_mongodb_version, MongoDB};
-    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
     use crate::models::Context;
 
     #[test]
@@ -446,6 +446,6 @@ mod tests_mongodb {
             },
             vec![],
         );
-        assert_eq!(database.name, db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

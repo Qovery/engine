@@ -409,7 +409,7 @@ fn get_managed_postgres_version(requested_version: &str) -> Result<String, Strin
 #[cfg(test)]
 mod tests_postgres {
     use crate::cloud_provider::aws::databases::postgresql::{get_postgres_version, PostgreSQL};
-    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
     use crate::models::Context;
 
     #[test]
@@ -461,6 +461,6 @@ mod tests_postgres {
             },
             vec![],
         );
-        assert_eq!(database.name, db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }
