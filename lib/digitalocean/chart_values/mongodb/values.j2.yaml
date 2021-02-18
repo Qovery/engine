@@ -95,7 +95,7 @@ mongodbRootPassword: {{ database_password }}
 ##
 mongodbUsername: {{ database_login }}
 mongodbPassword: {{ database_password }}
-mongodbDatabase: {{ sanitized_name }}
+mongodbDatabase: {{ database_db_name }}
 
 ## Whether enable/disable IPv6 on MongoDB
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#enabling/disabling-ipv6
