@@ -397,7 +397,7 @@ where
     P: AsRef<Path>,
 {
     // don't create the namespace if already exists and not not return error in this case
-    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace.clone(), envs.clone()) {
+    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
         // create namespace
         let mut _envs = Vec::with_capacity(envs.len() + 1);
         _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -444,7 +444,7 @@ where
         ));
     };
 
-    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace.clone(), envs.clone()) {
+    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
         return Err(SimpleError::new(
             SimpleErrorKind::Other,
             Some(format! {"Can't set labels on namespace {} because it doesn't exists", namespace}),
