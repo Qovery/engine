@@ -9,7 +9,6 @@ use crate::cloud_provider::service::{
     send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
     StatelessService,
 };
-use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{EngineError, EngineErrorScope};
@@ -53,7 +52,7 @@ impl Application {
             context,
             id: id.to_string(),
             action,
-            name: sanitize_name("app", name),
+            name: name.to_string(),
             private_port,
             total_cpus,
             _cpu_burst,
