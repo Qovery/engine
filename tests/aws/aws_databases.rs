@@ -1,6 +1,5 @@
 extern crate test_utilities;
 
-use dotenv::dotenv;
 use test_utilities::utilities::init;
 use tracing::{span, Level};
 
@@ -12,6 +11,7 @@ use qovery_engine::transaction::TransactionResult;
 use crate::aws::aws_environment::{delete_environment, deploy_environment};
 
 use self::test_utilities::utilities::{context, engine_run_test, generate_id, is_pod_restarted_aws_env};
+use qovery_engine::cloud_provider::utilities::sanitize_name;
 
 /**
 **
@@ -185,7 +185,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let app_name = format!("postgresql-app-{}", generate_id());
         let database_host = "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
         let database_port = 5432;
-        let database_db_name = "my-postgres".to_string();
+        let database_db_name = "postgresql".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
         environment.databases = vec![Database {
@@ -196,7 +196,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             version: "11.8.0".to_string(),
             fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
@@ -237,7 +237,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
@@ -259,7 +259,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-        let database_name = format!("postgresql-{}-0", &environment_check.databases[0].name);
+        let database_name = format!(
+            "{}-0",
+            sanitize_name("postgresql", &environment_check.databases[0].name)
+        );
         match is_pod_restarted_aws_env(environment_check, database_name.as_str()) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
@@ -444,7 +447,6 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[test]
 fn postgresql_v12_deploy_a_working_prod_environment() {
-    dotenv().ok();
     let context = context();
     let mut environment = test_utilities::aws::working_minimal_environment(&context);
     environment.kind = Kind::Production;
