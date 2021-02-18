@@ -171,7 +171,7 @@ impl Service for MongoDB {
     }
 
     fn selector(&self) -> String {
-        format!("app={}", self.name())
+        format!("app={}", self.sanitized_name())
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
