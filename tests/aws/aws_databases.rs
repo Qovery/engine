@@ -100,7 +100,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
     // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-    let database_name = format!("postgresql-{}-0", &environment_check.databases[0].name);
+    let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
     match is_pod_restarted_aws_env(environment_check.clone(), database_name.as_str()) {
         (true, _) => assert!(true),
         (false, _) => assert!(false),
@@ -259,10 +259,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-        let database_name = format!(
-            "{}-0",
-            sanitize_name("postgresql", &environment_check.databases[0].name)
-        );
+        let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_aws_env(environment_check, database_name.as_str()) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),

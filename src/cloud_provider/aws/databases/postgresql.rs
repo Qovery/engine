@@ -439,7 +439,7 @@ mod tests_postgres {
     #[test]
     fn postgres_name_sanitizer() {
         let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "posgresqltestnamesanitizerwithtoomanycharsnotallowe";
+        let db_expected_name = "postgresqltestnamesanitizerwithtoomanycharsnotallo";
 
         let database = PostgreSQL::new(
             Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
