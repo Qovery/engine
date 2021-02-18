@@ -90,7 +90,7 @@ impl Service for PostgreSQL {
 
     fn sanitized_name(&self) -> String {
         // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let prefix = "posgresql";
+        let prefix = "postgresql";
         let max_size = 63 - 3; // max RDS - k8s statefulset chars
         rds_name_sanitizer(max_size, prefix, self.name())
     }
