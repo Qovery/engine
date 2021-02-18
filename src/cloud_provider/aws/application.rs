@@ -9,6 +9,7 @@ use crate::cloud_provider::service::{
     send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
     StatelessService,
 };
+use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{EngineError, EngineErrorScope};
@@ -115,7 +116,7 @@ impl Service for Application {
     }
 
     fn sanitized_name(&self) -> String {
-        unimplemented!()
+        sanitize_name("app", self.name())
     }
 
     fn version(&self) -> &str {
