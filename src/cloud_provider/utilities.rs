@@ -373,7 +373,7 @@ pub fn check_domain_for(
                     },
                     ProgressLevel::Info,
                     Some(x),
-                    execution_id.clone().to_string(),
+                    execution_id.to_string(),
                 ));
 
                 OperationResult::Retry(err)
