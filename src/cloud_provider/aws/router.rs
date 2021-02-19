@@ -215,12 +215,9 @@ impl Service for Router {
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
         context.insert("metadata_annotations_cert_manager_cluster_issuer", "letsencrypt-qovery");
 
-        let lets_encrypt_url = match self.context.metadata() {
-            Some(meta) => match meta.test {
-                Some(true) => "https://acme-staging-v02.api.letsencrypt.org/directory",
-                _ => "https://acme-v02.api.letsencrypt.org/directory",
-            },
-            _ => "https://acme-v02.api.letsencrypt.org/directory",
+        let lets_encrypt_url = match self.context.is_test_cluster() {
+            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
+            false => "https://acme-v02.api.letsencrypt.org/directory",
         };
         context.insert("spec_acme_server", lets_encrypt_url);
 

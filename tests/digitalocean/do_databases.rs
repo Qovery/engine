@@ -15,7 +15,7 @@ fn deploy_one_postgresql() {
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
 
-        let mut environment = test_utilities::aws::working_minimal_environment(&context);
+        let environment = test_utilities::aws::working_minimal_environment(&context);
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
