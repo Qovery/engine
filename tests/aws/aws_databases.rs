@@ -290,7 +290,7 @@ fn test_postgresql_configuration(context: Context, mut environment: Environment,
         let database_username = "superuser".to_string();
         let database_password = generate_id();
 
-        let is_rds = match environment.kind {
+        let _is_rds = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
         };
@@ -671,7 +671,7 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
         let database_username = "superuser".to_string();
         let database_password = generate_id();
 
-        let is_rds = match environment.kind {
+        let _is_rds = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
         };
@@ -931,7 +931,6 @@ fn redis_v5_deploy_a_working_dev_environment() {
 #[test]
 fn redis_v6_deploy_a_working_dev_environment() {
     let context = context();
-    const TEST_NAME: &str = "redis_v6_0_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_redis_configuration(context, environment, "6", "redis_v6_deploy_a_working_dev_environment");
 }
