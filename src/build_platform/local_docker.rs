@@ -1,7 +1,3 @@
-use std::path::Path;
-
-use fs2::FsStats;
-
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
@@ -11,6 +7,8 @@ use crate::models::{
 };
 use crate::{cmd, git};
 use std::env;
+use std::path::Path;
+use sysinfo::{Disk, DiskExt, SystemExt};
 
 /// https://buildpacks.io/
 const BUILDPACKS_BUILDERS: [&str; 1] = [
@@ -364,41 +362,29 @@ impl BuildPlatform for LocalDocker {
             }
         }
 
-        // ensure there is enough disk space left before building a new image
-        let docker_path_string = "/var/lib/docker";
-        let docker_path = Path::new(docker_path_string);
+        // ensure docker_path is a mounted volume, otherwise ignore because it's not what Qovery does in production
+        // ex: this cause regular cleanup on CI, leading to random tests errors
+        match env::var_os("CI") {
+            Some(_) => info!("CI environment variable found, no docker prune will be made"),
+            None => {
+                // ensure there is enough disk space left before building a new image
+                let docker_path_string = "/var/lib/docker";
+                let docker_path = Path::new(docker_path_string);
 
-        if docker_path.exists() {
-            let mounted_disks = proc_mounts::MountList::new();
+                // get system info
+                let mut system = sysinfo::System::new_all();
+                system.refresh_all();
 
-            // ensure docker_path is a mounted volume, otherwise ignore because it's not what Qovery does in production
-            // ex: this cause regular cleanup on CI, leading to random tests errors
-            match mounted_disks {
-                Ok(m) => match m.get_mount_by_dest(Path::new(docker_path)) {
-                    Some(_) => {
-                        let ci_env_var = "CI";
-                        match env::var_os(ci_env_var) {
-                            Some(_) => {}
-                            None => {
-                                // only used in production on Linux OS
-                                let docker_path_size_info = match fs2::statvfs(docker_path) {
-                                    Ok(fs_stats) => fs_stats,
-                                    Err(err) => {
-                                        return Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)));
-                                    }
-                                };
-
-                                check_docker_space_usage_and_clean(docker_path_size_info, self.get_docker_host_envs());
-                            }
+                for disk in system.get_disks() {
+                    if disk.get_mount_point() == docker_path {
+                        match check_docker_space_usage_and_clean(disk, self.get_docker_host_envs()) {
+                            Ok(msg) => info!("{:?}", msg),
+                            Err(e) => error!("{:?}", e.message),
                         }
-                    }
-                    None => info!(
-                        "ignoring docker cleanup because {} is not a mounted volume",
-                        docker_path_string
-                    ),
-                },
-                Err(_) => error!("wasn't able to get info from {} volume", docker_path_string),
-            };
+                        break;
+                    };
+                }
+            }
         }
 
         let application_id = build.image.application_id.clone();
@@ -479,21 +465,33 @@ impl Listen for LocalDocker {
     }
 }
 
-fn check_docker_space_usage_and_clean(docker_path_size_info: FsStats, envs: Vec<(&str, &str)>) {
+fn check_docker_space_usage_and_clean(
+    docker_path_size_info: &Disk,
+    envs: Vec<(&str, &str)>,
+) -> Result<String, SimpleError> {
     let docker_max_disk_percentage_usage_before_purge = 60; // arbitrary percentage that should make the job anytime
-    let docker_percentage_used = docker_path_size_info.available_space() * 100 / docker_path_size_info.total_space();
+    let docker_percentage_used =
+        docker_path_size_info.get_available_space() * 100 / docker_path_size_info.get_total_space();
 
     if docker_percentage_used > docker_max_disk_percentage_usage_before_purge {
         warn!(
-            "Docker disk usage is higher than {}%, requesting cleaning",
-            docker_max_disk_percentage_usage_before_purge
+            "Docker disk usage ({}%) is higher than {}%, requesting cleaning",
+            docker_percentage_used, docker_max_disk_percentage_usage_before_purge
         );
 
-        match docker_prune_images(envs) {
-            Err(e) => error!("error while purging docker images: {:?}", e.message),
-            _ => info!("docker images have been purged"),
+        return match docker_prune_images(envs) {
+            Err(e) => {
+                error!("error while purging docker images: {:?}", e.message);
+                Err(e)
+            }
+            _ => Ok("docker images have been purged".to_string()),
         };
     };
+
+    Ok(format!(
+        "no need to purge old docker images, only {}% disk used",
+        docker_percentage_used
+    ))
 }
 
 fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
