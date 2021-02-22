@@ -25,6 +25,7 @@ function generate_html_file() {
   sed -ri 's/\\u001b\[31m(.*?)\\u001b\[0m/<font style="color:red">\1<\/font>/g' $html_file_wip
   sed -ri 's/\\u001b\[32m(.*?)\\u001b\[0m/<font style="color:green">\1<\/font>/g' $html_file_wip
   sed -ri 's/\\u001b\[1m(.*?)\\u001b\[0m/<b>\1<\/b>/g' $html_file_wip
+  sed -ri 's/\\u001b\[90m(.*?)\\u001b\[90m/<b>\1<\/b>/g' $html_file_wip
   # removing non properly handled colors
   sed -ri 's/\\u001b\[31m//g' $html_file_wip
   sed -ri 's/\\u001b\[32m//g' $html_file_wip
