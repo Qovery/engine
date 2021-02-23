@@ -9,11 +9,17 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
+use crate::cmd::kubectl::{kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects};
 use crate::dns_provider::DnsProvider;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
+use crate::error::SimpleErrorKind::Other;
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath};
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
+use retry::delay::Fibonacci;
+use retry::Error::Operation;
+use retry::OperationResult;
+use std::path::Path;
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;
@@ -516,6 +522,66 @@ pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
         );
 
         return Err(kubernetes.engine_error(cause, message));
+    }
+
+    Ok(())
+}
+
+pub fn uninstall_cert_manager<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    // https://cert-manager.io/docs/installation/uninstall/kubernetes/
+    info!("Delete cert-manager related objects to prepare deletion");
+
+    let cert_manager_objects = vec![
+        "Issuers",
+        "ClusterIssuers",
+        "Certificates",
+        "CertificateRequests",
+        "Orders",
+        "Challenges",
+    ];
+
+    for object in cert_manager_objects {
+        // check resource exist first
+        match kubectl_exec_count_all_objects(&kubernetes_config, object, envs.clone()) {
+            Ok(x) if x == 0 => continue,
+            Err(e) => {
+                warn!(
+                    "encountering issues while trying to get objects kind {}: {:?}",
+                    object, e.message
+                );
+                continue;
+            }
+            _ => {}
+        }
+
+        // delete if resource exists
+        let result =
+            retry::retry(
+                Fibonacci::from_millis(5000).take(3),
+                || match kubectl_delete_objects_in_all_namespaces(&kubernetes_config, object, envs.clone()) {
+                    Ok(_) => OperationResult::Ok(()),
+                    Err(e) => {
+                        warn!("Failed to delete all {} objects, retrying...", object);
+                        OperationResult::Retry(e)
+                    }
+                },
+            );
+
+        match result {
+            Ok(_) => {}
+            Err(Operation { error, .. }) => return Err(error),
+            Err(retry::Error::Internal(msg)) => {
+                let error_message = format!(
+                    "Wasn't able to delete all objects type {}, it's a blocker to then delete cert-manager namespace. {}",
+                    object,
+                    format!("{:?}", msg)
+                );
+                return Err(SimpleError::new(Other, Some(error_message)));
+            }
+        };
     }
 
     Ok(())
