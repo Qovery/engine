@@ -144,7 +144,7 @@ linter:
     - ./helper.sh lint
   when: always
   tags:
-    - 2cpu-4gmem-0g
+    - 7cpu-4gmem-0g
   only:
     refs:
       - dev
@@ -160,7 +160,7 @@ build:
     policy: pull-push
   when: always
   tags:
-    - 2cpu-4gmem-0g
+    - 7cpu-4gmem-0g
   only:
     refs:
       - dev
@@ -271,7 +271,7 @@ main-release-image:
   script:
     - ./helper.sh new_release
   tags:
-    - 3cpu-12gmem-0g
+    - 7cpu-12gmem-0g
   only:
     refs:
       - main
