@@ -7,7 +7,7 @@ use qovery_engine::container_registry::docr::get_current_registry_name;
 use qovery_engine::models::{Action, Clone2, Context, CustomDomain, EnvironmentAction};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::digitalocean::digital_ocean_token;
-use test_utilities::utilities::{context, engine_run_test, init};
+use test_utilities::utilities::{context, engine_run_test};
 use tracing::{span, Level};
 
 pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {

@@ -420,7 +420,7 @@ pub fn check_domain_for(
 }
 
 pub fn sanitize_name(prefix: &str, name: &str) -> String {
-    format!("{}-{}", prefix, name)
+    format!("{}-{}", prefix, name).replace("_", "-")
 }
 
 #[cfg(test)]

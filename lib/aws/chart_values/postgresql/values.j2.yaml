@@ -35,11 +35,11 @@ image:
 
 ## String to partially override postgresql.fullname template (will maintain the release name)
 ##
-nameOverride: {{ name }}
+nameOverride: {{ sanitized_name }}
 
 ## String to fully override postgresql.fullname template
 ##
-fullnameOverride: {{ name }}
+fullnameOverride: {{ sanitized_name }}
 
 ##
 ## Init containers parameters:
@@ -92,7 +92,7 @@ securityContext:
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
 serviceAccount:
   enabled: false
-  ## Name of an already existing service account. Setting this value disables the automatic service account creation.
+  ## sanitized_name of an already existing service account. Setting this value disables the automatic service account creation.
   # name:
 
 ## Pod Security Policy
@@ -141,7 +141,7 @@ postgresqlPassword: {{ database_password }}
 ## Create a database
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-on-first-run
 ##
-postgresqlDatabase: {{ name }}
+postgresqlDatabase: {{ database_db_name }}
 
 ## PostgreSQL data dir
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md
@@ -326,7 +326,7 @@ persistence:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: {{ name }}
+    databaseName: {{ sanitized_name }}
 
 ## updateStrategy for PostgreSQL StatefulSet and its slaves StatefulSets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies

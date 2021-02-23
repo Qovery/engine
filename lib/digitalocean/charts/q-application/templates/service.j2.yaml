@@ -2,12 +2,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ name }}
+  name: {{ sanitized_name }}
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
     appId: {{ id }}
-    app: {{ name }}
+    app: {{ sanitized_name }}
     envId: {{ environment_id }}
 spec:
   type: ClusterIP
@@ -18,6 +18,6 @@ spec:
   selector:
     ownerId: {{ owner_id }}
     appId: {{ id }}
-    app: {{ name }}
+    app: {{ sanitized_name }}
     envId: {{ environment_id }}
 {% endif %}
