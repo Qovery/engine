@@ -7,8 +7,8 @@ use serde::de::DeserializeOwned;
 
 use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
 use crate::cmd::structs::{
-    Item, KubernetesEvent, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
-    KubernetesService, LabelsContent,
+    Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod,
+    KubernetesPodStatusPhase, KubernetesService, LabelsContent,
 };
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
@@ -684,6 +684,24 @@ where
     P: AsRef<Path>,
 {
     kubectl_exec::<P, KubernetesList<KubernetesNode>>(vec!["get", "node", "-o", "json"], kubernetes_config, envs)
+}
+
+pub fn kubectl_exec_count_all_objects<P>(
+    kubernetes_config: P,
+    object_kind: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<usize, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    match kubectl_exec::<P, KubernetesList<KubernetesKind>>(
+        vec!["get", object_kind, "-A", "-o", "json"],
+        kubernetes_config,
+        envs,
+    ) {
+        Ok(o) => Ok(o.items.len()),
+        Err(e) => Err(e),
+    }
 }
 
 pub fn kubectl_exec_get_pod<P>(
