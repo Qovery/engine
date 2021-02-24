@@ -15,7 +15,7 @@ use std::os::unix::fs::PermissionsExt;
 use tracing::info;
 use tracing_subscriber;
 
-use crate::aws::{aws_access_key_id, aws_default_region, aws_secret_key, KUBE_CLUSTER_ID};
+use crate::aws::{aws_access_key_id, aws_secret_key, KUBE_CLUSTER_ID};
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cmd;
 use qovery_engine::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
@@ -23,7 +23,6 @@ use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Metadata};
 extern crate time;
 use time::Instant;
-
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")

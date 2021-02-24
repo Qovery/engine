@@ -1,13 +1,7 @@
-use self::rusoto_iam::{
-    CreateServiceLinkedRoleError, CreateServiceLinkedRoleRequest, CreateServiceLinkedRoleResponse,
-    GetRoleError, GetRoleRequest, GetRoleResponse, Iam, IamClient,
-};
-use crate::error::{EngineError, SimpleError, SimpleErrorKind};
-use crate::models::Context;
-use futures::TryFutureExt;
-use rusoto_core::{Client, HttpClient, Region, RusotoError};
+use self::rusoto_iam::{CreateServiceLinkedRoleRequest, GetRoleRequest, Iam, IamClient};
+use crate::error::{SimpleError, SimpleErrorKind};
+use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
-use tokio::macros::support::Future;
 use tokio::runtime::Runtime;
 
 extern crate rusoto_iam;
@@ -23,7 +17,9 @@ pub fn get_default_roles_to_create() -> Vec<Role> {
     defaults_role_to_create.push(Role {
         role_name: "AWSServiceRoleForAmazonElasticsearchService".to_string(),
         service_name: "es.amazonaws.com".to_string(),
-        description: "role permissions policy allows Amazon ES to complete create, delete, describe,  modify on ec2 and elb".to_string(),
+        description:
+            "role permissions policy allows Amazon ES to complete create, delete, describe,  modify on ec2 and elb"
+                .to_string(),
     });
     defaults_role_to_create
 }
@@ -38,8 +34,7 @@ impl Role {
     }
 
     pub async fn is_exist(&self, access_key: &str, secret_key: &str) -> Result<bool, SimpleError> {
-        let credentials =
-            StaticProvider::new(access_key.to_string(), secret_key.to_string(), None, None);
+        let credentials = StaticProvider::new(access_key.to_string(), secret_key.to_string(), None, None);
         let client = Client::new_with(credentials, HttpClient::new().unwrap());
         let iam_client = IamClient::new_with_client(client, Region::UsEast1);
         let role = iam_client
@@ -61,11 +56,7 @@ impl Role {
         };
     }
 
-    pub fn create_service_linked_role(
-        &self,
-        access_key: &str,
-        secret_key: &str,
-    ) -> Result<bool, SimpleError> {
+    pub fn create_service_linked_role(&self, access_key: &str, secret_key: &str) -> Result<bool, SimpleError> {
         let future_is_exist = self.is_exist(access_key, secret_key);
         let exist = Runtime::new()
             .expect("Failed to create Tokio runtime to check if role exist")
@@ -77,16 +68,14 @@ impl Role {
             }
             _ => {
                 info!("Role {} doesn't exist, let's create it !", &self.role_name);
-                let credentials =
-                    StaticProvider::new(access_key.to_string(), secret_key.to_string(), None, None);
+                let credentials = StaticProvider::new(access_key.to_string(), secret_key.to_string(), None, None);
                 let client = Client::new_with(credentials, HttpClient::new().unwrap());
                 let iam_client = IamClient::new_with_client(client, Region::UsEast1);
-                let future_create =
-                    iam_client.create_service_linked_role(CreateServiceLinkedRoleRequest {
-                        aws_service_name: self.service_name.clone(),
-                        custom_suffix: None,
-                        description: Some(self.description.clone()),
-                    });
+                let future_create = iam_client.create_service_linked_role(CreateServiceLinkedRoleRequest {
+                    aws_service_name: self.service_name.clone(),
+                    custom_suffix: None,
+                    description: Some(self.description.clone()),
+                });
                 let created = Runtime::new()
                     .expect("Failed to create Tokio runtime to check if role exist")
                     .block_on(future_create);
