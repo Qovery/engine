@@ -36,16 +36,10 @@ impl Router {
         Router {
             context,
             id: id.to_string(),
-            name: sanitize_name("router", name),
+            name: name.to_string(),
             default_domain: default_domain.to_string(),
             custom_domains,
-            routes: routes
-                .into_iter()
-                .map(|mut route| {
-                    route.application_name = sanitize_name("app", &route.application_name);
-                    route
-                })
-                .collect(),
+            routes,
             listeners,
         }
     }
@@ -66,6 +60,10 @@ impl Service for Router {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        sanitize_name("router", self.name())
     }
 
     fn version(&self) -> &str {

@@ -1,13 +1,13 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ name }}
+  name: {{ sanitized_name }}
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
-    app: {{ name }}
+    app: {{ sanitized_name }}
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 3600
@@ -16,13 +16,13 @@ spec:
     spec:
       restartPolicy: Never
       containers:
-        - name: {{ name }}
+        - name: {{ sanitized_name }}
           image: "{{ image_name_with_tag }}"
           env:
     {%- for ev in environment_variables %}
            - name: "{{ ev.key }}"
              valueFrom:
                secretKeyRef:
-                 name: {{ name }}
+                 name: {{ sanitized_name }}
                  key: {{ ev.key }}
     {%- endfor %}

@@ -51,7 +51,7 @@ impl MongoDB {
             context,
             action,
             id: id.to_string(),
-            name: Self::sanitize_name("mongodb", name),
+            name: name.to_string(),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -65,16 +65,6 @@ impl MongoDB {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_mongodb_version(self.version(), is_managed_services), self)
-    }
-
-    fn sanitize_name(prefix: &str, name: &str) -> String {
-        // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
-        let max_size = 60; // 63 (max DocumentDB) - 3 (k8s statefulset chars)
-        let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
-        if new_name.clone().chars().count() > max_size {
-            new_name = new_name[..max_size].to_string();
-        }
-        new_name
     }
 }
 
@@ -95,6 +85,18 @@ impl Service for MongoDB {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
+        let prefix = "mongodb";
+        let max_size = 60 - prefix.len(); // 63 (max DocumentDB) - 3 (k8s statefulset chars)
+        let mut new_name = format!("{}{}", prefix, self.name().replace("_", "").replace("-", ""));
+        if new_name.chars().count() > max_size {
+            new_name = new_name[..max_size].to_string();
+        }
+
+        new_name
     }
 
     fn version(&self) -> &str {
@@ -163,6 +165,7 @@ impl Service for MongoDB {
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
 
+        context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
@@ -187,7 +190,7 @@ impl Service for MongoDB {
     }
 
     fn selector(&self) -> String {
-        format!("app={}", self.name())
+        format!("app={}", self.sanitized_name())
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -397,7 +400,7 @@ fn get_managed_mongodb_version(requested_version: &str) -> Result<String, String
 #[cfg(test)]
 mod tests_mongodb {
     use crate::cloud_provider::aws::databases::mongodb::{get_mongodb_version, MongoDB};
-    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
     use crate::models::Context;
 
     #[test]
@@ -421,7 +424,7 @@ mod tests_mongodb {
     #[test]
     fn mongo_name_sanitizer() {
         let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhichwillb";
+        let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhi";
 
         let database = MongoDB::new(
             Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
@@ -444,6 +447,6 @@ mod tests_mongodb {
             },
             vec![],
         );
-        assert_eq!(database.name, db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

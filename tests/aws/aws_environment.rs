@@ -1,13 +1,13 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{engine_run_test, generate_id};
+use self::test_utilities::utilities::{engine_run_test, generate_id, is_pod_restarted_aws_env};
 use qovery_engine::models::{
     Action, Clone2, Context, CustomDomain, Environment, EnvironmentAction, Storage, StorageType,
 };
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::context;
-use test_utilities::utilities::{init, is_pod_restarted_aws_env};
+use test_utilities::utilities::init;
 use tracing::{span, Level};
 
 // insert how many actions you will use in tests
@@ -561,7 +561,7 @@ fn deploy_ok_fail_fail_ok_environment() {
 
     // not working 2
     let context_for_not_working_2 = context.clone_not_same_execution_id();
-    let mut not_working_env_2 = not_working_env_1.clone();
+    let not_working_env_2 = not_working_env_1.clone();
 
     // work for delete
     let context_for_delete = context.clone_not_same_execution_id();

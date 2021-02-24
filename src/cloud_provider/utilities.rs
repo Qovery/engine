@@ -373,7 +373,7 @@ pub fn check_domain_for(
                     },
                     ProgressLevel::Info,
                     Some(x),
-                    execution_id.clone().to_string(),
+                    execution_id.to_string(),
                 ));
 
                 OperationResult::Retry(err)
@@ -420,7 +420,7 @@ pub fn check_domain_for(
 }
 
 pub fn sanitize_name(prefix: &str, name: &str) -> String {
-    format!("{}-{}", prefix, name)
+    format!("{}-{}", prefix, name).replace("_", "-")
 }
 
 #[cfg(test)]

@@ -7,8 +7,8 @@ use serde::de::DeserializeOwned;
 
 use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
 use crate::cmd::structs::{
-    Item, KubernetesEvent, KubernetesJob, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
-    KubernetesService, LabelsContent,
+    Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod,
+    KubernetesPodStatusPhase, KubernetesService, LabelsContent,
 };
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
@@ -397,7 +397,7 @@ where
     P: AsRef<Path>,
 {
     // don't create the namespace if already exists and not not return error in this case
-    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace.clone(), envs.clone()) {
+    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
         // create namespace
         let mut _envs = Vec::with_capacity(envs.len() + 1);
         _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -444,7 +444,7 @@ where
         ));
     };
 
-    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace.clone(), envs.clone()) {
+    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
         return Err(SimpleError::new(
             SimpleErrorKind::Other,
             Some(format! {"Can't set labels on namespace {} because it doesn't exists", namespace}),
@@ -684,6 +684,24 @@ where
     P: AsRef<Path>,
 {
     kubectl_exec::<P, KubernetesList<KubernetesNode>>(vec!["get", "node", "-o", "json"], kubernetes_config, envs)
+}
+
+pub fn kubectl_exec_count_all_objects<P>(
+    kubernetes_config: P,
+    object_kind: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<usize, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    match kubectl_exec::<P, KubernetesList<KubernetesKind>>(
+        vec!["get", object_kind, "-A", "-o", "json"],
+        kubernetes_config,
+        envs,
+    ) {
+        Ok(o) => Ok(o.items.len()),
+        Err(e) => Err(e),
+    }
 }
 
 pub fn kubectl_exec_get_pod<P>(

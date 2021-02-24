@@ -1,7 +1,6 @@
 extern crate test_utilities;
 
-use test_utilities::utilities::context;
-use test_utilities::utilities::{init, is_pod_restarted_aws_env};
+use test_utilities::utilities::init;
 use tracing::{span, Level};
 
 use qovery_engine::models::{
@@ -11,7 +10,8 @@ use qovery_engine::transaction::TransactionResult;
 
 use crate::aws::aws_environment::{delete_environment, deploy_environment};
 
-use self::test_utilities::utilities::{engine_run_test, generate_id};
+use self::test_utilities::utilities::{context, engine_run_test, generate_id, is_pod_restarted_aws_env};
+use qovery_engine::cloud_provider::utilities::sanitize_name;
 
 /**
 **
@@ -63,7 +63,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 fn postgresql_failover_dev_environment_with_all_options() {
     init();
 
-    let span = span!(Level::INFO, "postgresql_failover_dev_environment_with_all_options");
+    let span = span!(
+        Level::INFO,
+        "postgresql_deploy_a_working_development_environment_with_all_options"
+    );
     let _enter = span.enter();
 
     let context = context();
@@ -182,7 +185,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let app_name = format!("postgresql-app-{}", generate_id());
         let database_host = "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
         let database_port = 5432;
-        let database_db_name = "mypostgres".to_string();
+        let database_db_name = "postgresql".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
         environment.databases = vec![Database {
@@ -193,7 +196,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             version: "11.8.0".to_string(),
             fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
@@ -220,7 +223,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                     },
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_db_name),
+                        value: database_db_name.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_USERNAME".to_string(),
@@ -234,7 +237,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
@@ -290,7 +293,7 @@ fn test_postgresql_configuration(context: Context, mut environment: Environment,
         let database_username = "superuser".to_string();
         let database_password = generate_id();
 
-        let is_rds = match environment.kind {
+        let _is_rds = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
         };
@@ -468,11 +471,11 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
     let app_name = format!("mongodb-app-{}", generate_id());
     let database_host = "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
     let database_port = 27017;
-    let database_db_name = "mongodb".to_string();
+    let database_db_name = "my-mongodb".to_string();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
     let database_uri = format!(
-        "mongodb://{}:{}@{}:{}/mongodb{}",
+        "mongodb://{}:{}@{}:{}/{}",
         database_username, database_password, database_host, database_port, database_db_name
     );
     // while waiting the info to be given directly in the database info, we're using this
@@ -666,12 +669,13 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
 
         let app_name = format!("mysql-app-{}", generate_id());
         let database_host = "mysql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
 
-        let is_rds = match environment.kind {
+        let _is_rds = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
         };
@@ -931,7 +935,6 @@ fn redis_v5_deploy_a_working_dev_environment() {
 #[test]
 fn redis_v6_deploy_a_working_dev_environment() {
     let context = context();
-    const TEST_NAME: &str = "redis_v6_0_dev";
     let environment = test_utilities::aws::working_minimal_environment(&context);
     test_redis_configuration(context, environment, "6", "redis_v6_deploy_a_working_dev_environment");
 }
