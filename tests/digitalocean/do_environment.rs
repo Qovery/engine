@@ -160,8 +160,8 @@ fn deploy_a_working_environment_router_and_app_on_do() {
         let _enter = span.enter();
 
         let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
-        let mut environment = test_utilities::aws::environment_only_http_server_router(&context);
+        //let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::aws::environment_only_http_server_router(&context);
         let ea = EnvironmentAction::Environment(environment);
 
         match deploy_environment_on_do(&context, &ea) {
