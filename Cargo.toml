@@ -52,6 +52,7 @@ rusoto_ecr = "0.45.0"
 rusoto_eks = "0.45.0"
 rusoto_s3 = "0.45.0"
 rusoto_dynamodb = "0.45.0"
+rusoto_iam = "0.45.0"
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"

@@ -1876,6 +1876,7 @@ dependencies = [
  "rusoto_dynamodb",
  "rusoto_ecr",
  "rusoto_eks",
+ "rusoto_iam",
  "rusoto_s3",
  "rusoto_sts",
  "rust-crypto",
@@ -2352,6 +2353,20 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+]
+
+[[package]]
+name = "rusoto_iam"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73f792f9b9977eb4af7dae0de5ec6ced243a75a8ba25b903d8251cc8ac42b1a5"
+dependencies = [
+ "async-trait",
+ "bytes 0.5.6",
+ "futures 0.3.7",
+ "rusoto_core",
+ "serde_urlencoded 0.6.1",
+ "xml-rs",
 ]
 
 [[package]]
