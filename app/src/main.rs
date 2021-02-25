@@ -267,10 +267,19 @@ pub fn main() -> io::Result<()> {
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let region = env::var("REGION");
     let nats_server = env::var("QOVERY_NATS_URL").expect("QOVERY_NATS_URL is mandatory");
+    let nats_login = std::env::var("QOVERY_NATS_USER");
+    let nats_password = std::env::var("QOVERY_NATS_PASSWORD");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
     let docker_host = env::var("DOCKER_HOST").ok();
     let workspace_root_dir = env::var("WORKSPACE_ROOT_DIR")
         .unwrap_or(format!("{}/.qovery-workspace", home_dir().unwrap().to_str().unwrap()));
+
+    let nats_credentials = match (nats_login, nats_password) {
+        (Ok(nats_login), Ok(nats_password)) if !nats_login.is_empty() && !nats_password.is_empty() => {
+            Some((nats_login, nats_password))
+        }
+        (_, _) => None,
+    };
 
     info!("engine id: {}", engine_id.as_str());
     info!(
@@ -355,7 +364,14 @@ pub fn main() -> io::Result<()> {
                 process::exit(1);
             }
         },
-        _ => using_nats_server(nats_server, workspace_root_dir, lib_root_dir, docker_host, mode),
+        _ => using_nats_server(
+            nats_server,
+            nats_credentials,
+            workspace_root_dir,
+            lib_root_dir,
+            docker_host,
+            mode,
+        ),
     }
 }
 
@@ -415,6 +431,7 @@ pub fn using_json_path_parameter(
 // the engine can be autonomous using the nats server to receive actions
 fn using_nats_server(
     nats_server: String,
+    nats_credentials: Option<(String, String)>,
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_host: Option<String>,
@@ -430,20 +447,8 @@ fn using_nats_server(
     };
 
     info!("NATS client name: {}", name.as_str());
-
-    //let mut f = File::open("certs/ca.pem").unwrap();
-    //let mut f_content = String::new();
-    //f.read_to_string(&mut f_content);
-
-    // let _tls_connector = TlsConnector::builder()
-    // .add_root_certificate(nats::tls::Certificate::from_pem(f_content.as_bytes()).unwrap())
-    // .danger_accept_invalid_certs(true)
-    // .danger_accept_invalid_hostnames(true)
-    // .build()
-    // .unwrap();
-
     info!("connect to the NATS server...");
-    let nc = Connection::new(name.as_str(), nats_server.as_str())?;
+    let nc = Connection::new(name.as_str(), nats_server.as_str(), nats_credentials)?;
     info!("connection to the NATS server established");
 
     let (task_tx, task_rx) = unbounded::<Box<dyn Task>>();

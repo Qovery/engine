@@ -13,12 +13,20 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new(name: &str, nats_server: &str) -> io::Result<Connection> {
-        let cnx = nats::Options::new().with_name(name).connect(nats_server)?;
+    pub fn new(name: &str, nats_server: &str, credentials: Option<(String, String)>) -> io::Result<Connection> {
+        let cnx = match credentials {
+            None => nats::Options::new().with_name(name).connect(nats_server)?,
+            Some((login, password)) => nats::Options::with_user_pass(login.as_str(), password.as_str())
+                .with_name(name)
+                .tls_required(true)
+                .connect(nats_server)?,
+        };
+
         Ok(Connection { cnx })
     }
 
     pub fn queue_subscribe(&self, subject: &Subject) -> io::Result<Subscription> {
+        info!("Subscribing to queue {:?}", subject);
         self.cnx.queue_subscribe(subject.name.as_str(), QUEUE_GROUP)
     }
 
