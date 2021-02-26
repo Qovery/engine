@@ -409,14 +409,20 @@ impl<'a> Transaction<'a> {
                     // create kubernetes
                     match self.commit_infrastructure(*kubernetes, Action::Create, kubernetes.on_create()) {
                         TransactionResult::Ok => {}
-                        err => return err,
+                        err => {
+                            error!("Error while creating infrastructure: {:?}", err);
+                            return err;
+                        }
                     };
                 }
                 Step::DeleteKubernetes(kubernetes) => {
                     // delete kubernetes
                     match self.commit_infrastructure(*kubernetes, Action::Delete, kubernetes.on_delete()) {
                         TransactionResult::Ok => {}
-                        err => return err,
+                        err => {
+                            error!("Error while deleting infrastructure: {:?}", err);
+                            return err;
+                        }
                     };
                 }
                 Step::BuildEnvironment(environment_action, option) => {
@@ -425,8 +431,6 @@ impl<'a> Transaction<'a> {
                         EnvironmentAction::Environment(te) => te,
                         EnvironmentAction::EnvironmentWithFailover(te, _) => te,
                     };
-
-                    // TODO check that the image is not existing into the Container Registry before building it.
 
                     let apps_result = match self._build_applications(target_environment, option) {
                         Ok(applications) => match self._push_applications(applications, option) {
@@ -488,7 +492,10 @@ impl<'a> Transaction<'a> {
                         |qe_env| kubernetes.deploy_environment(qe_env),
                     ) {
                         TransactionResult::Ok => {}
-                        err => return err,
+                        err => {
+                            error!("Error while deploying environment: {:?}", err);
+                            return err;
+                        }
                     };
                 }
                 Step::PauseEnvironment(kubernetes, environment_action) => {
@@ -500,7 +507,10 @@ impl<'a> Transaction<'a> {
                         |qe_env| kubernetes.pause_environment(qe_env),
                     ) {
                         TransactionResult::Ok => {}
-                        err => return err,
+                        err => {
+                            error!("Error while pausing environment: {:?}", err);
+                            return err;
+                        }
                     };
                 }
                 Step::DeleteEnvironment(kubernetes, environment_action) => {
@@ -512,7 +522,10 @@ impl<'a> Transaction<'a> {
                         |qe_env| kubernetes.delete_environment(qe_env),
                     ) {
                         TransactionResult::Ok => {}
-                        err => return err,
+                        err => {
+                            error!("Error while deleting environment: {:?}", err);
+                            return err;
+                        }
                     };
                 }
             };
@@ -738,6 +751,7 @@ pub enum RollbackError {
     Nothing,
 }
 
+#[derive(Debug)]
 pub enum TransactionResult {
     Ok,
     Rollback(EngineError),
