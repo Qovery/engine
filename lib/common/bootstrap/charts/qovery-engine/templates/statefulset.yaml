@@ -6,8 +6,11 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "qovery-engine.labels" . | nindent 4 }}
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val }}
+    {{- end }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.autoscaler.min_replicas }}
   serviceName: qovery-engine
   selector:
     matchLabels:
@@ -45,6 +48,9 @@ spec:
         - name: qovery-engine
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
           env:
             {{ range $key, $value := .Values.environmentVariables -}}
             - name: "{{ $key }}"

@@ -1,14 +1,12 @@
-{{ if gt .Values.replicaCount 1.0 }}
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
   name: qovery-engine
-  namespace: qovery
+  namespace: {{ .Values.namespace }}
   labels:
-    app: qovery-engine
+    {{- include "qovery-engine.labels" . | nindent 4 }}
 spec:
   minAvailable: "50%"
   selector:
     matchLabels:
-      app: qovery-engine
-{{ end }}
+      app.kubernetes.io/instance: qovery-engine

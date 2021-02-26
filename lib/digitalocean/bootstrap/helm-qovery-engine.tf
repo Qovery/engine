@@ -112,6 +112,7 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   depends_on = [
-    digitalocean_kubernetes_cluster.kubernetes_cluster
+    digitalocean_kubernetes_cluster.kubernetes_cluster,
+    helm_release.prometheus-adapter,
   ]
 }
