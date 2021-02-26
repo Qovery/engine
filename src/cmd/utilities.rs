@@ -6,7 +6,7 @@ use std::process::{Child, Command, Stdio};
 
 use crate::error::{SimpleError, SimpleErrorKind};
 
-fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Command
+fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>, use_output: bool) -> Command
 where
     P: AsRef<Path>,
 {
@@ -29,14 +29,18 @@ where
 
     let mut cmd = Command::new(&_binary);
 
-    cmd.args(&args).stdout(Stdio::piped()).stderr(Stdio::piped());
-
-    if current_dir.is_some() {
-        cmd.current_dir(current_dir.unwrap());
+    if use_output {
+        cmd.args(&args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    } else {
+        cmd.args(&args).stdout(Stdio::null()).stderr(Stdio::null());
     }
 
-    if envs.is_some() {
-        envs.unwrap().into_iter().for_each(|(k, v)| {
+    if let Some(current_dir) = current_dir {
+        cmd.current_dir(current_dir);
+    }
+
+    if let Some(envs) = envs {
+        envs.into_iter().for_each(|(k, v)| {
             cmd.env(k, v);
         });
     }
@@ -51,7 +55,7 @@ where
     let command_string = command_to_string(binary.as_ref(), &args);
     info!("command: {}", command_string.as_str());
 
-    let exit_status = match command(binary, args, None).spawn().unwrap().wait() {
+    let exit_status = match command(binary, args, None, false).spawn().unwrap().wait() {
         Ok(x) => x,
         Err(err) => return Err(SimpleError::from(err)),
     };
@@ -73,7 +77,7 @@ where
     let command_string = command_with_envs_to_string(binary.as_ref(), &args, &envs);
     info!("command: {}", command_string.as_str());
 
-    let exit_status = match command(binary, args, Some(envs)).spawn().unwrap().wait() {
+    let exit_status = match command(binary, args, Some(envs), false).spawn().unwrap().wait() {
         Ok(x) => x,
         Err(err) => return Err(SimpleError::from(err)),
     };
@@ -121,7 +125,7 @@ where
     info!("command: {}", command_string.as_str());
 
     let mut child = _with_output(
-        command(binary, args, None).spawn().unwrap(),
+        command(binary, args, None, true).spawn().unwrap(),
         stdout_output,
         stderr_output,
     );
@@ -157,7 +161,7 @@ where
     info!("command: {}", command_string.as_str());
 
     let mut child = _with_output(
-        command(binary, args, Some(envs)).spawn().unwrap(),
+        command(binary, args, Some(envs), true).spawn().unwrap(),
         stdout_output,
         stderr_output,
     );
@@ -200,15 +204,13 @@ pub fn does_binary_exist<S>(binary: S) -> bool
 where
     S: AsRef<OsStr>,
 {
-    match Command::new(binary)
+    Command::new(binary)
         .stdout(Stdio::null())
         .stdin(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-    {
-        Ok(_) => true,
-        _ => false,
-    }
+        .map(|mut child| child.wait())
+        .is_ok()
 }
 
 pub fn command_to_string<P>(binary: P, args: &Vec<&str>) -> String
