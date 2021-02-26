@@ -577,28 +577,3 @@ fn using_nats_server(
     warn!("end of execution");
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::find_the_engine_where_to_dispatch_the_next_task;
-    use crate::models::GetTaskManagerInfoResponse;
-
-    #[test]
-    fn find_the_engine_where_to_dispatch_the_next_task_tests() {
-        let x = GetTaskManagerInfoResponse::new("abc", "a.b.c", 4);
-        let y = GetTaskManagerInfoResponse::new("def", "d.e.f", 1);
-        let z = GetTaskManagerInfoResponse::new("ghi", "g.h.i", 2);
-
-        assert_eq!(
-            find_the_engine_where_to_dispatch_the_next_task(vec![x, y, z])
-                .unwrap()
-                .remaining_tasks_to_run,
-            1
-        );
-
-        match find_the_engine_where_to_dispatch_the_next_task(vec![]) {
-            Some(_) => assert!(false),
-            None => assert!(true),
-        };
-    }
-}

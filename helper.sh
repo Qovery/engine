@@ -162,11 +162,20 @@ function build() { ## Build engine app with engine lib
   if [ ! -z "$1" ] ; then
     build_options="$1"
   fi
+
   echo "Building with cargo options: $build_options"
   prepare_engine
   tag=$(generate_image_tag)
   use_sccache
   set -e
+
+  echo "=> Run task-manager tests"
+  cargo test $build_options --manifest-path qovery-engine-task-manager/Cargo.toml
+
+  echo "=> Run app tests"
+  cargo test $build_options --manifest-path app/Cargo.toml
+
+  echo "=> Run build"
   cargo build $build_options --all-features --color=always
   sccache -s
 }
