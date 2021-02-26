@@ -89,7 +89,7 @@ if [ $(grep -c '"event": "failed"' $JUNIT_REPORT) -gt 0 ] ; then
             echo -e "\e[31m$line\e[0m"
             continue
           fi
-          echo -e "$line"
+          #echo -e "$line"
         done < <(jq -Mc ' "\(.timestamp) | \(.level) | \(.target) | \(.fields.message)"' $test_file)
 
         # generate html version to make it more readable
