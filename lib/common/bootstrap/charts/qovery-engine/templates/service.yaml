@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: qovery-engine
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "qovery-engine.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: {{ .Values.metrics.portName }}
+      port: {{ .Values.metrics.port }}
+      targetPort: {{ .Values.metrics.port }}
+      protocol: TCP
+  selector:
+    app.kubernetes.io/instance: qovery-engine

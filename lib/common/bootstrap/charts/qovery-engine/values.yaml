@@ -2,23 +2,31 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 2
-
 image:
   repository: qoveryrd/engine
   pullPolicy: IfNotPresent
   tag: ""
 
 namespace: "qovery"
+metrics:
+  enabled: true
+  portName: "metrics"
+  port: 8080
 
 imagePullSecrets: []
+
+autoscaler:
+  enabled: true
+  min_replicas: 2
+  max_replicas: 10
 
 labels:
   app: qovery-engine
 
 environmentVariables:
-  RUST_LOG: DEBUG,rusoto_core::request=info,hyper=info
-  #ENGINE_RES_URL: ""
+  RUST_LOG: DEBUG,rusoto_core::request=info,trust_dns_resolver=info,trust_dns_proto=info,reqwest::connect=info,hyper=info
+  #LIB_ROOT_DIR: ""
+  #DOCKER_HOST: ""
   #QOVERY_NATS_URL: ""
   #ORGANIZATION: ""
   #CLOUD_PROVIDER: ""
