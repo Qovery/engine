@@ -597,7 +597,7 @@ mod tests {
     #[test]
     fn test_taskmanager_cleanup() {
         let mut tm = TaskManager::new();
-        tm.running_tasks = prometheus::IntGauge::new("abc", "degf").unwrap();
+        tm.running_tasks = prometheus::IntGauge::new("abcd", "degf").unwrap();
         let task = WaitingTask::new();
         let id = task.id().to_string();
         let task_status_rx = tm.run().expect("Impossible to run task Manager");
@@ -633,7 +633,7 @@ mod tests {
     #[test]
     fn test_taskmanager_graceful_shutdown() {
         let mut tm = TaskManager::new();
-        tm.running_tasks = prometheus::IntGauge::new("abc", "degf").unwrap();
+        tm.running_tasks = prometheus::IntGauge::new("abcde", "degf").unwrap();
 
         let task = DummyTask {
             date: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
