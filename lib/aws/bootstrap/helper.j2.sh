@@ -127,10 +127,6 @@ case $1 in
     check_args 2
     create_elasticsearch_role_for_aws_service "$2" "$3"
   ;;
-  create_ecr_repository)
-    check_args 1
-    create_ecr_repository "$2"
-  ;;
   is_cni_handled_by_aws)
     check_args 1
     is_cni_handled_by_aws "$2"

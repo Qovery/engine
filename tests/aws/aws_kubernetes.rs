@@ -4,16 +4,14 @@ use std::env;
 use std::fs::File;
 use std::io::Read;
 
+use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use self::test_utilities::utilities::{context, engine_run_test, generate_id, init};
 use gethostname;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
-use qovery_engine::build_platform::GitRepository;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::transaction::TransactionResult;
-
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, init};
 
 pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
 pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";

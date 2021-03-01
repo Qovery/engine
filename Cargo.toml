@@ -36,8 +36,7 @@ tracing-subscriber = "0.2"
 # shiplift = "0.6.0"
 
 # Filesystem
-fs2 = "0.4.3"
-proc-mounts = "0.2.4"
+sysinfo = "0.16.4"
 
 # Jinja2
 tera = "1.3.1"
@@ -53,6 +52,7 @@ rusoto_ecr = "0.45.0"
 rusoto_eks = "0.45.0"
 rusoto_s3 = "0.45.0"
 rusoto_dynamodb = "0.45.0"
+rusoto_iam = "0.45.0"
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"

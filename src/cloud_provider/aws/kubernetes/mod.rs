@@ -6,13 +6,14 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::kubernetes::node::Node;
+use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
+use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
-use crate::cmd::kubectl::{kubectl_delete_objects_in_all_namespaces, kubectl_exec_get_all_namespaces};
+use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
@@ -30,6 +31,7 @@ use retry::Error::Operation;
 use retry::OperationResult;
 
 pub mod node;
+pub mod roles;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Options {
@@ -409,6 +411,21 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
         ));
 
+        // create AWS IAM roles
+        let already_created_roles = get_default_roles_to_create();
+        for role in already_created_roles {
+            match role.create_service_linked_role(
+                self.cloud_provider.access_key_id.as_str(),
+                self.cloud_provider.secret_access_key.as_str(),
+            ) {
+                Ok(_) => info!("Role {} already exist, or just created", role.role_name),
+                Err(e) => error!(
+                    "While getting, or creating the role {} : causing by {:?}",
+                    role.role_name, e
+                ),
+            }
+        }
+
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
@@ -631,39 +648,21 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
         ));
 
-        // https://cert-manager.io/docs/installation/uninstall/kubernetes/
         // required to avoid namespace stuck on deletion
-        info!("Delete cert-manager related objects to prepare deletion");
-        let cert_manager_objects = vec![
-            "Issuers",
-            "ClusterIssuers",
-            "Certificates",
-            "CertificateRequests",
-            "Orders",
-            "Challenges",
-        ];
-        for object in cert_manager_objects {
-            match kubectl_delete_objects_in_all_namespaces(
-                &kubernetes_config_file_path,
-                object,
-                self.cloud_provider().credentials_environment_variables(),
-            ) {
-                Ok(_) => {}
-                Err(e) => {
-                    let error_message = format!(
-                        "Wasn't able to delete all objects type {}, it's a blocker to then delete cert-manager namespace. {}",
-                        object,
-                        format!("{:?}", e.message)
-                    );
-                    return Err(EngineError::new(
-                        Internal,
-                        self.engine_error_scope(),
-                        self.context().execution_id(),
-                        Some(error_message),
-                    ));
-                }
-            };
-        }
+        match uninstall_cert_manager(
+            &kubernetes_config_file_path,
+            self.cloud_provider().credentials_environment_variables(),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(EngineError::new(
+                    Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    e.message,
+                ))
+            }
+        };
 
         info!("Deleting Qovery managed Namespaces");
         let qovery_namespaces = get_qovery_managed_namespaces();

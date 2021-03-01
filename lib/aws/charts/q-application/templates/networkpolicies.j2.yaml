@@ -2,19 +2,19 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ name }}-default
+  name: {{ sanitized_name }}-default
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
     appId: {{ id }}
-    app: {{ name }}
+    app: {{ sanitized_name }}
     envId: {{ environment_id }}
 spec:
   # Deny all ingress by default to this application
   podSelector:
     matchLabels:
       appId: {{ id }}
-      app: {{ name }}
+      app: {{ sanitized_name }}
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   policyTypes:
@@ -23,19 +23,19 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ name }}-app-access
+  name: {{ sanitized_name }}-app-access
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
     appId: {{ id }}
-    app: {{ name }}
+    app: {{ sanitized_name }}
     envId: {{ environment_id }}
 spec:
   # Then allow some ingress to this application
   podSelector:
     matchLabels:
       appId: {{ id }}
-      app: {{ name }}
+      app: {{ sanitized_name }}
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   ingress:
@@ -73,18 +73,18 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ name }}-deny-aws-metadata-server
+  name: {{ sanitized_name }}-deny-aws-metadata-server
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
     appId: {{ id }}
-    app: {{ name }}
+    app: {{ sanitized_name }}
     envId: {{ environment_id }}
 spec:
   podSelector:
     matchLabels:
       appId: {{ id }}
-      app: {{ name }}
+      app: {{ sanitized_name }}
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   egress:

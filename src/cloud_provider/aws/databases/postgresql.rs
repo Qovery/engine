@@ -52,7 +52,7 @@ impl PostgreSQL {
             context,
             action,
             id: id.to_string(),
-            name: Self::sanitize_name("postgresql", name),
+            name: name.to_string(),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -66,12 +66,6 @@ impl PostgreSQL {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_postgres_version(self.version(), is_managed_services), self)
-    }
-
-    fn sanitize_name(prefix: &str, name: &str) -> String {
-        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let max_size = 63 - 3; // max RDS - k8s statefulset chars
-        rds_name_sanitizer(max_size, prefix, name)
     }
 }
 
@@ -92,6 +86,13 @@ impl Service for PostgreSQL {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
+        let prefix = "postgresql";
+        let max_size = 63 - 3; // max RDS - k8s statefulset chars
+        rds_name_sanitizer(max_size, prefix, self.name())
     }
 
     fn version(&self) -> &str {
@@ -160,7 +161,8 @@ impl Service for PostgreSQL {
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
 
-        context.insert("database_name", self.name.as_str());
+        context.insert("database_name", self.sanitized_name().as_str());
+        context.insert("database_db_name", self.name());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
@@ -187,7 +189,7 @@ impl Service for PostgreSQL {
     }
 
     fn selector(&self) -> String {
-        format!("app={}", self.name())
+        format!("app={}", self.sanitized_name())
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -408,7 +410,7 @@ fn get_managed_postgres_version(requested_version: &str) -> Result<String, Strin
 #[cfg(test)]
 mod tests_postgres {
     use crate::cloud_provider::aws::databases::postgresql::{get_postgres_version, PostgreSQL};
-    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
     use crate::models::Context;
 
     #[test]
@@ -437,7 +439,7 @@ mod tests_postgres {
     #[test]
     fn postgres_name_sanitizer() {
         let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "postgresqltestnamesanitizerwithtoomanycharsnotallowedwhichwi";
+        let db_expected_name = "postgresqltestnamesanitizerwithtoomanycharsnotallo";
 
         let database = PostgreSQL::new(
             Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
@@ -460,6 +462,6 @@ mod tests_postgres {
             },
             vec![],
         );
-        assert_eq!(database.name, db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

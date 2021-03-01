@@ -3,29 +3,29 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ name }}
+  name: {{ sanitized_name }}
   namespace: {{ namespace }}
   labels:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
-    app: {{ name }}
+    app: {{ sanitized_name }}
 spec:
   replicas: {{ total_instances }}
-  serviceName: {{ name }}
+  serviceName: {{ sanitized_name }}
   selector:
     matchLabels:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       appId: {{ id }}
-      app: {{ name }}
+      app: {{ sanitized_name }}
   template:
     metadata:
       labels:
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
-        app: {{ name }}
+        app: {{ sanitized_name }}
     spec:
       affinity:
         podAntiAffinity:
@@ -35,7 +35,7 @@ spec:
                   - key: "app"
                     operator: In
                     values:
-                    - {{ name }}
+                    - {{ sanitized_name }}
               topologyKey: "kubernetes.io/hostname"
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
@@ -45,14 +45,14 @@ spec:
         - name: {{ registry_secret }}
       {%- endif %}
       containers:
-        - name: {{ name }}
+        - name: {{ sanitized_name }}
           image: "{{ image_name_with_tag }}"
           env:
             {%- for ev in environment_variables %}
             - name: "{{ ev.key }}"
               valueFrom:
                 secretKeyRef:
-                  name: {{ name }}
+                  name: {{ sanitized_name }}
                   key: {{ ev.key }}
             {%- endfor %}
             {%- if private_port %}
@@ -91,7 +91,7 @@ spec:
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
-        app: {{ name }}
+        app: {{ sanitized_name }}
         diskId: {{ s.id }}
         diskType: {{ s.storage_type }}
     spec:

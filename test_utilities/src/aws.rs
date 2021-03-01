@@ -31,7 +31,7 @@ pub fn aws_access_key_id() -> String {
     std::env::var("AWS_ACCESS_KEY_ID").expect("env var AWS_ACCESS_KEY_ID is mandatory")
 }
 
-pub fn aws_secret_access_key() -> String {
+pub fn aws_secret_key() -> String {
     std::env::var("AWS_SECRET_ACCESS_KEY").expect("env var AWS_SECRET_ACCESS_KEY is mandatory")
 }
 
@@ -61,7 +61,7 @@ pub fn container_registry_ecr(context: &Context) -> ECR {
         "default-ecr-registry-Qovery Test",
         "ea59qe62xaw3wjai",
         aws_access_key_id().as_str(),
-        aws_secret_access_key().as_str(),
+        aws_secret_key().as_str(),
         aws_default_region().as_str(),
     )
 }
@@ -98,7 +98,7 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
         ORGANIZATION_ID,
         "QoveryTest",
         aws_access_key_id().as_str(),
-        aws_secret_access_key().as_str(),
+        aws_secret_key().as_str(),
         TerraformStateCredentials {
             access_key_id: terraform_aws_access_key_id().to_string(),
             secret_access_key: terraform_aws_secret_access_key().to_string(),
@@ -155,13 +155,13 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
     let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
 
     // mongoDB management part
-    let database_host_mongo = "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+    let database_host_mongo = "mongodb-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
     let database_port_mongo = 27017;
-    let database_db_name_mongo = "mymongodb".to_string();
+    let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
     let database_password_mongo = generate_id();
     let database_uri_mongo = format!(
-        "mongodb://{}:{}@{}:{}/mongodb{}",
+        "mongodb://{}:{}@{}:{}/{}",
         database_username_mongo,
         database_password_mongo,
         database_host_mongo,
@@ -172,17 +172,17 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
 
     // pSQL 1 management part
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = fqdn_id.clone() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN";
+    let fqdn = fqdn_id.clone() + ".oom.sh";
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_id();
-    let database_name = "mypsql".to_string();
+    let database_name = "postgresql".to_string();
 
     // pSQL 2 management part
     let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
-    let fqdn_2 = fqdn_id_2.clone() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN";
+    let fqdn_2 = fqdn_id_2.clone() + ".oom.sh";
     let database_username_2 = "superuser2".to_string();
-    let database_name_2 = "mypsql2".to_string();
+    let database_name_2 = "postgresql2".to_string();
 
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -202,7 +202,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
+                    access_token: "xxx".to_string(),
                     expired_at: Utc::now(),
                 }),
                 storage: vec![Storage {
@@ -216,7 +216,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 environment_variables: vec![
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_name),
+                        value: database_name.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_HOST".to_string(),
@@ -252,7 +252,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
+                    access_token: "xxx".to_string(),
                     expired_at: Utc::now(),
                 }),
                 storage: vec![Storage {
@@ -266,7 +266,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 environment_variables: vec![
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_name_2),
+                        value: database_name_2.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_HOST".to_string(),
@@ -302,7 +302,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
+                    access_token: "xxx".to_string(),
                     expired_at: Utc::now(),
                 }),
                 storage: vec![Storage {
@@ -357,7 +357,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+                default_domain: generate_id() + ".oom.sh",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -369,7 +369,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+                default_domain: generate_id() + ".oom.sh",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -381,7 +381,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "third-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+                default_domain: generate_id() + ".oom.sh",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -468,7 +468,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             action: Action::Create,
             git_credentials: Some(GitCredentials {
                 login: "x-access-token".to_string(),
-                access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
+                access_token: "xxx".to_string(),
                 expired_at: Utc::now(),
             }),
             storage: vec![],
@@ -485,7 +485,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+            default_domain: generate_id() + ".oom.sh",
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -501,12 +501,12 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
 
 pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = fqdn_id.clone() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN";
+    let fqdn = fqdn_id.clone() + ".oom.sh";
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_id();
-    let database_name = "mypsql".to_string();
+    let database_name = "postgresql".to_string();
 
     let suffix = generate_id();
     let application_name1 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
@@ -547,7 +547,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
+                    access_token: "xxx".to_string(),
                     expired_at: Utc::now(),
                 }),
                 storage: vec![Storage {
@@ -561,7 +561,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 environment_variables: vec![
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_name.clone()),
+                        value: database_name.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_HOST".to_string(),
@@ -597,7 +597,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
                     login: "x-access-token".to_string(),
-                    access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
+                    access_token: "xxx".to_string(),
                     expired_at: Utc::now(),
                 }),
                 storage: vec![Storage {
@@ -611,7 +611,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 environment_variables: vec![
                     EnvironmentVariable {
                         key: "PG_DBNAME".to_string(),
-                        value: format!("postgresql{}", database_name.clone()),
+                        value: database_name.clone(),
                     },
                     EnvironmentVariable {
                         key: "PG_HOST".to_string(),
@@ -644,7 +644,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+                default_domain: generate_id() + ".oom.sh",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -656,7 +656,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+                default_domain: generate_id() + ".oom.sh",
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -710,7 +710,7 @@ pub fn echo_app_environment(context: &Context) -> Environment {
             action: Action::Create,
             git_credentials: Some(GitCredentials {
                 login: "x-access-token".to_string(),
-                access_token: "CHANGE-ME/GITHUB_ACCESS_TOKEN".to_string(),
+                access_token: "xxx".to_string(),
                 expired_at: Utc::now(),
             }),
             storage: vec![],
@@ -730,7 +730,7 @@ pub fn echo_app_environment(context: &Context) -> Environment {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+            default_domain: generate_id() + ".oom.sh",
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -821,7 +821,7 @@ pub fn environment_only_http_server_router(context: &Context) -> Environment {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN",
+            default_domain: generate_id() + ".oom.sh",
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {

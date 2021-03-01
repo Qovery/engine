@@ -7,7 +7,7 @@ use qovery_engine::container_registry::docr::get_current_registry_name;
 use qovery_engine::models::{Action, Clone2, Context, CustomDomain, EnvironmentAction};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::digitalocean::digital_ocean_token;
-use test_utilities::utilities::{context, engine_run_test, init};
+use test_utilities::utilities::{context, engine_run_test};
 use tracing::{span, Level};
 
 pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
@@ -160,8 +160,8 @@ fn deploy_a_working_environment_router_and_app_on_do() {
         let _enter = span.enter();
 
         let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
-        let mut environment = test_utilities::aws::environment_only_http_server_router(&context);
+        //let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::aws::environment_only_http_server_router(&context);
         let ea = EnvironmentAction::Environment(environment);
 
         match deploy_environment_on_do(&context, &ea) {

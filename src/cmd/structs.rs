@@ -187,6 +187,12 @@ pub struct KubernetesInvolvedObject {
     pub name: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesKind {
+    pub kind: String,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Helm {

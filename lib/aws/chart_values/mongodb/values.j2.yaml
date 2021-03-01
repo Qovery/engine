@@ -40,12 +40,12 @@ image:
 ## String to partially override mongodb.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: {{ name }}
+nameOverride: {{ sanitized_name }}
 
 ## String to fully override mongodb.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: {{ name }}
+fullnameOverride: {{ sanitized_name }}
 
 serviceAccount:
   # Specifies whether a ServiceAccount should be created
@@ -95,7 +95,7 @@ mongodbRootPassword: {{ database_password }}
 ##
 mongodbUsername: {{ database_login }}
 mongodbPassword: {{ database_password }}
-mongodbDatabase: {{ name }}
+mongodbDatabase: {{ database_db_name }}
 
 ## Whether enable/disable IPv6 on MongoDB
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#enabling/disabling-ipv6
@@ -207,7 +207,7 @@ labels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: {{ name }}
+  databaseName: {{ sanitized_name }}
 
 # Annotations to be added to MongoDB pods
 podAnnotations: {}
@@ -342,7 +342,7 @@ persistence:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: {{ name }}
+    databaseName: {{ sanitized_name }}
 
 ## Configure the ingress resource that allows you to access the
 ## MongoDB installation. Set up the URL

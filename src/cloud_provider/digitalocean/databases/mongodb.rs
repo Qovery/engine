@@ -46,7 +46,7 @@ impl MongoDB {
             context,
             action,
             id: id.to_string(),
-            name: sanitize_name("mongodb", name),
+            name: name.to_string(),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -80,6 +80,10 @@ impl Service for MongoDB {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        sanitize_name("mongodb", self.name())
     }
 
     fn version(&self) -> &str {
@@ -143,6 +147,7 @@ impl Service for MongoDB {
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
 
+        context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
@@ -167,7 +172,7 @@ impl Service for MongoDB {
     }
 
     fn selector(&self) -> String {
-        format!("app={}", self.name())
+        format!("app={}", self.sanitized_name())
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {

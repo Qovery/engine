@@ -49,7 +49,7 @@ impl Redis {
             context,
             action,
             id: id.to_string(),
-            name: Self::sanitize_name("redis", name),
+            name: name.to_string(),
             version: version.to_string(),
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
@@ -63,16 +63,6 @@ impl Redis {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_redis_version(self.version(), is_managed_services), self)
-    }
-
-    fn sanitize_name(prefix: &str, name: &str) -> String {
-        // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
-        let max_size = 47; // 50 (max Elasticache ) - 3 (k8s statefulset chars)
-        let mut new_name = name.replace("_", "").replace("-", "");
-        if new_name.clone().chars().count() > max_size {
-            new_name = new_name[..max_size].to_string();
-        }
-        format!("{}{}", prefix, new_name)
     }
 }
 
@@ -93,6 +83,19 @@ impl Service for Redis {
 
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn sanitized_name(&self) -> String {
+        // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
+        let prefix = "redis";
+        let max_size = 47 - prefix.len(); // 50 (max Elasticache ) - 3 (k8s statefulset chars)
+        let mut new_name = self.name().replace("_", "").replace("-", "");
+
+        if new_name.clone().chars().count() > max_size {
+            new_name = new_name[..max_size].to_string();
+        }
+
+        format!("{}{}", prefix, new_name)
     }
 
     fn version(&self) -> &str {
@@ -198,7 +201,7 @@ impl Service for Redis {
     }
 
     fn selector(&self) -> String {
-        format!("app={}", self.name())
+        format!("app={}", self.sanitized_name())
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -404,7 +407,7 @@ fn get_managed_redis_version(requested_version: &str) -> Result<String, StringEr
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::aws::databases::redis::{get_redis_version, Redis};
-    use crate::cloud_provider::service::{Action, DatabaseOptions};
+    use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
     use crate::models::Context;
 
     #[test]
@@ -429,7 +432,7 @@ mod tests {
     #[test]
     fn redis_name_sanitizer() {
         let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "redistestnamesanitizerwithtoomanycharsnotallowedwhic";
+        let db_expected_name = "redistestnamesanitizerwithtoomanycharsnotallowe";
 
         let database = Redis::new(
             Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
@@ -452,6 +455,6 @@ mod tests {
             },
             vec![],
         );
-        assert_eq!(database.name, db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

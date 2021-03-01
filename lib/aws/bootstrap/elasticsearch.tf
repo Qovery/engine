@@ -1,8 +1,3 @@
-# Because it needs to be uniq across all clusters and Terraform doesn't brings solution to this, I'm using this hack
-data "external" "create_elasticsearch_role" {
-  program = ["./helper.sh", "create_elasticsearch_role_for_aws_service", "AWSServiceRoleForAmazonElasticsearchService", "es.amazonaws.com"]
-}
-
 locals {
   tags_elasticsearch = merge(
     local.tags_eks,
