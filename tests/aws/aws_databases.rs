@@ -1,6 +1,6 @@
 extern crate test_utilities;
 
-use test_utilities::utilities::init;
+use test_utilities::utilities::{init, VaultFuncTestsSecrets};
 use tracing::{span, Level};
 
 use qovery_engine::models::{
@@ -475,6 +475,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
 
     let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
+    let secrets = VaultFuncTestsSecrets::new();
     let context_for_delete = context.clone_not_same_execution_id();
 
     let app_name = format!("mongodb-app-{}", generate_id());

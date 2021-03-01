@@ -673,6 +673,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
+name = "form_urlencoded"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fc25a87fa4fd2094bffb06925852034d90a17f0d1e05197d4956d3555752191"
+dependencies = [
+ "matches",
+ "percent-encoding 2.1.0",
+]
+
+[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -893,7 +903,7 @@ dependencies = [
  "log",
  "openssl-probe",
  "openssl-sys",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -963,6 +973,23 @@ name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+
+[[package]]
+name = "hashicorp_vault"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be1f396a370640749cd445ea9657afdb90a10e820b9c57e6d886d290386f9bff"
+dependencies = [
+ "base64 0.12.3",
+ "chrono",
+ "log",
+ "quick-error",
+ "reqwest 0.10.8",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "url 2.2.1",
+]
 
 [[package]]
 name = "heck"
@@ -1851,7 +1878,7 @@ dependencies = [
  "idna 0.2.0",
  "lazy_static",
  "regex",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -2238,7 +2265,7 @@ dependencies = [
  "serde_urlencoded 0.6.1",
  "tokio 0.2.22",
  "tokio-tls",
- "url 2.1.1",
+ "url 2.2.1",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -2596,7 +2623,7 @@ dependencies = [
  "dtoa",
  "itoa",
  "serde",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -2877,6 +2904,7 @@ dependencies = [
  "curl",
  "digitalocean",
  "dirs 3.0.1",
+ "hashicorp_vault",
  "qovery-engine",
  "rand 0.7.3",
  "reqwest 0.10.8",
@@ -3274,7 +3302,7 @@ dependencies = [
  "smallvec 1.5.0",
  "thiserror",
  "tokio 0.2.22",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -3432,10 +3460,11 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.1.1"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "829d4a8476c35c9bf0bbce5a3b23f4106f79728039b726d292bb93bc106787cb"
+checksum = "9ccd964113622c8e9322cfac19eb1004a07e636c545f325da085d5cdde6f1f8b"
 dependencies = [
+ "form_urlencoded",
  "idna 0.2.0",
  "matches",
  "percent-encoding 2.1.0",
