@@ -3,7 +3,7 @@ use curl::easy::Easy;
 use dirs::home_dir;
 use std::fs::read_to_string;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 
 use rand::distributions::Alphanumeric;
@@ -16,13 +16,144 @@ use tracing::info;
 use tracing_subscriber;
 
 use crate::aws::{aws_access_key_id, aws_secret_key, KUBE_CLUSTER_ID};
+use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cmd;
 use qovery_engine::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Metadata};
+use serde::{Deserialize, Serialize};
 extern crate time;
 use time::Instant;
+
+#[derive(Debug, Deserialize, Serialize)]
+#[allow(non_snake_case)]
+pub struct VaultFuncTestsSecrets {
+    pub AWS_ACCESS_KEY_ID: String,
+    AWS_DEFAULT_REGION: String,
+    AWS_SECRET_ACCESS_KEY: String,
+    BIN_VERSION_FILE: String,
+    CLOUDFLARE_DOMAIN: String,
+    CLOUDFLARE_ID: String,
+    CLOUDFLARE_TOKEN: String,
+    CUSTOM_TEST_DOMAIN: String,
+    DEFAULT_TEST_DOMAIN: String,
+    DIGITAL_OCEAN_SPACES_ACCESS_ID: String,
+    DIGITAL_OCEAN_SPACES_SECRET_ID: String,
+    DIGITAL_OCEAN_TOKEN: String,
+    DISCORD_API_URL: String,
+    EKS_ACCESS_CIDR_BLOCKS: String,
+    GITHUB_ACCESS_TOKEN: String,
+    HTTP_LISTEN_ON: String,
+    LETS_ENCRYPT_EMAIL_REPORT: String,
+    LIB_ROOT_DIR: String,
+    QOVERY_AGENT_CONTROLLER_TOKEN: String,
+    QOVERY_API_URL: String,
+    QOVERY_ENGINE_CONTROLLER_TOKEN: String,
+    QOVERY_NATS_URL: String,
+    QOVERY_SSH_USER: String,
+    RUST_LOG: String,
+    TERRAFORM_AWS_ACCESS_KEY_ID: String,
+    TERRAFORM_AWS_SECRET_ACCESS_KEY: String,
+}
+
+struct VaultConfig {
+    address: String,
+    token: String,
+}
+
+impl VaultFuncTestsSecrets {
+    pub fn new() -> Self {
+        match Self::check_requirements() {
+            Ok(vault_config) => Self::get_secrets_from_vault(vault_config),
+            Err(e) => {
+                println!("{}", e);
+                Self::get_screts_from_env_var()
+            }
+        }
+    }
+
+    fn get_secret(&self) {
+        self.AWS_ACCESS_KEY_ID
+    }
+
+    fn check_requirements() -> Result<VaultConfig, Error> {
+        let vault_addr = match env::var_os("VAULT_ADDR") {
+            Some(x) => x.into_string().unwrap(),
+            None => {
+                return Err(Error::new(
+                    ErrorKind::NotFound,
+                    format!("VAULT_ADDR environment variable is missing"),
+                ))
+            }
+        };
+
+        let vault_token = match env::var_os("VAULT_TOKEN") {
+            Some(x) => x.into_string().unwrap(),
+            None => {
+                return Err(Error::new(
+                    ErrorKind::NotFound,
+                    format!("VAULT_TOKEN environment variable is missing"),
+                ))
+            }
+        };
+
+        Ok(VaultConfig {
+            address: vault_addr,
+            token: vault_token,
+        })
+    }
+
+    fn check_env_var_exists(name: &str) -> String {
+        match env::var_os(&name) {
+            Some(x) => x.into_string().unwrap(),
+            None => "".to_string(),
+        }
+    }
+
+    fn get_secrets_from_vault(vault_config: VaultConfig) -> VaultFuncTestsSecrets {
+        let client = hashicorp_vault::Client::new(vault_config.address, vault_config.token).unwrap();
+        let res: Result<VaultFuncTestsSecrets, _> = client.get_custom_secret("functional-tests");
+        match res {
+            Ok(r) => r,
+            Err(_) => {
+                println!("can't contact Vault, fallback on environment variables");
+                Self::get_screts_from_env_var()
+            }
+        }
+    }
+
+    fn get_screts_from_env_var() -> VaultFuncTestsSecrets {
+        VaultFuncTestsSecrets {
+            AWS_ACCESS_KEY_ID: Self::check_env_var_exists("AWS_ACCESS_KEY_ID"),
+            AWS_DEFAULT_REGION: Self::check_env_var_exists("AWS_DEFAULT_REGION"),
+            AWS_SECRET_ACCESS_KEY: Self::check_env_var_exists("AWS_SECRET_ACCESS_KEY"),
+            BIN_VERSION_FILE: Self::check_env_var_exists("BIN_VERSION_FILE"),
+            CLOUDFLARE_DOMAIN: Self::check_env_var_exists("CLOUDFLARE_DOMAIN"),
+            CLOUDFLARE_ID: Self::check_env_var_exists("CLOUDFLARE_ID"),
+            CLOUDFLARE_TOKEN: Self::check_env_var_exists("CLOUDFLARE_TOKEN"),
+            CUSTOM_TEST_DOMAIN: Self::check_env_var_exists("CUSTOM_TEST_DOMAIN"),
+            DEFAULT_TEST_DOMAIN: Self::check_env_var_exists("DEFAULT_TEST_DOMAIN"),
+            DIGITAL_OCEAN_SPACES_ACCESS_ID: Self::check_env_var_exists("DIGITAL_OCEAN_SPACES_ACCESS_ID"),
+            DIGITAL_OCEAN_SPACES_SECRET_ID: Self::check_env_var_exists("DIGITAL_OCEAN_SPACES_SECRET_ID"),
+            DIGITAL_OCEAN_TOKEN: Self::check_env_var_exists("DIGITAL_OCEAN_TOKEN"),
+            DISCORD_API_URL: Self::check_env_var_exists("DISCORD_API_URL"),
+            EKS_ACCESS_CIDR_BLOCKS: Self::check_env_var_exists("EKS_ACCESS_CIDR_BLOCKS"),
+            GITHUB_ACCESS_TOKEN: Self::check_env_var_exists("GITHUB_ACCESS_TOKEN"),
+            HTTP_LISTEN_ON: Self::check_env_var_exists("HTTP_LISTEN_ON"),
+            LETS_ENCRYPT_EMAIL_REPORT: Self::check_env_var_exists("LETS_ENCRYPT_EMAIL_REPORT"),
+            LIB_ROOT_DIR: Self::check_env_var_exists("LIB_ROOT_DIR"),
+            QOVERY_AGENT_CONTROLLER_TOKEN: Self::check_env_var_exists("QOVERY_AGENT_CONTROLLER_TOKEN"),
+            QOVERY_API_URL: Self::check_env_var_exists("QOVERY_API_URL"),
+            QOVERY_ENGINE_CONTROLLER_TOKEN: Self::check_env_var_exists("QOVERY_ENGINE_CONTROLLER_TOKEN"),
+            QOVERY_NATS_URL: Self::check_env_var_exists("QOVERY_NATS_URL"),
+            QOVERY_SSH_USER: Self::check_env_var_exists("QOVERY_SSH_USER"),
+            RUST_LOG: Self::check_env_var_exists("RUST_LOG"),
+            TERRAFORM_AWS_ACCESS_KEY_ID: Self::check_env_var_exists("TERRAFORM_AWS_ACCESS_KEY_ID"),
+            TERRAFORM_AWS_SECRET_ACCESS_KEY: Self::check_env_var_exists("TERRAFORM_AWS_SECRET_ACCESS_KEY"),
+        }
+    }
+}
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
