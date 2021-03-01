@@ -21,6 +21,7 @@ pub struct Request {
     pub organization_id: String,
     pub created_at: DateTime<Utc>,
     pub action: Action,
+    pub test_cluster: bool,
     pub build_platform: BuildPlatform,
     pub cloud_provider: CloudProvider,
     pub dns_provider: DnsProvider,

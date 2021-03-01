@@ -111,6 +111,7 @@ fn receive_and_queue_task(
                 req.id.to_string(),
                 workspace_root_dir.to_string(),
                 lib_root_dir.to_string(),
+                req.test_cluster,
                 docker_tcp_socket.clone(),
                 req.metadata.clone(),
             );
@@ -269,6 +270,7 @@ pub fn main() -> io::Result<()> {
     let nats_server = env::var("QOVERY_NATS_URL").expect("QOVERY_NATS_URL is mandatory");
     let nats_login = std::env::var("QOVERY_NATS_USER");
     let nats_password = std::env::var("QOVERY_NATS_PASSWORD");
+    let test_cluster_env_var = std::env::var("TEST_CLUSTER");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
     let docker_host = env::var("DOCKER_HOST").ok();
     let workspace_root_dir = env::var("WORKSPACE_ROOT_DIR")
@@ -315,6 +317,17 @@ pub fn main() -> io::Result<()> {
         }
     }
 
+    // check test_cluster environment variable content
+    let test_cluster = match test_cluster_env_var {
+        Ok(s) if s == "true" => true,
+        Ok(s) if s == "false" => false,
+        Ok(_) => {
+            error!("Error, unexpected TEST_CLUSTER environment variable content, only true or false are accepted");
+            process::exit(1);
+        }
+        Err(_) => true,
+    };
+
     webserver::launch(http_listen_on.as_str());
 
     match docker_host {
@@ -344,6 +357,7 @@ pub fn main() -> io::Result<()> {
                     deploy_from_file,
                     workspace_root_dir,
                     lib_root_dir,
+                    test_cluster,
                     TaskSelector::Infrastructure(""),
                     docker_host,
                 ),
@@ -351,6 +365,7 @@ pub fn main() -> io::Result<()> {
                     deploy_from_file,
                     workspace_root_dir,
                     lib_root_dir,
+                    test_cluster,
                     TaskSelector::Environment(""),
                     docker_host,
                 ),
@@ -380,6 +395,7 @@ pub fn using_json_path_parameter(
     deploy_from_file: String,
     workspace_root_dir: String,
     lib_root_dir: String,
+    test_cluster: bool,
     deployment_type: TaskSelector,
     docker_host: Option<String>,
 ) -> Result<(), Error> {
@@ -403,6 +419,7 @@ pub fn using_json_path_parameter(
         req.id.to_string(),
         workspace_root_dir,
         lib_root_dir,
+        test_cluster,
         docker_host,
         req.metadata.clone(),
     );

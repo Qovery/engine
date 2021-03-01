@@ -1227,7 +1227,7 @@ dependencies = [
  "log",
  "openssl-probe",
  "openssl-sys",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -2509,7 +2509,7 @@ dependencies = [
  "idna 0.2.0",
  "lazy_static",
  "regex",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -2951,7 +2951,7 @@ dependencies = [
  "serde_urlencoded 0.6.1",
  "tokio 0.2.22",
  "tokio-tls",
- "url 2.1.1",
+ "url 2.2.1",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -3388,7 +3388,7 @@ dependencies = [
  "dtoa",
  "itoa",
  "serde",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -4186,7 +4186,7 @@ dependencies = [
  "smallvec 1.4.2",
  "thiserror",
  "tokio 0.2.22",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -4239,7 +4239,7 @@ dependencies = [
  "log",
  "rand 0.8.3",
  "sha-1 0.9.2",
- "url 2.1.1",
+ "url 2.2.1",
  "utf-8",
 ]
 
@@ -4378,10 +4378,11 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.1.1"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "829d4a8476c35c9bf0bbce5a3b23f4106f79728039b726d292bb93bc106787cb"
+checksum = "9ccd964113622c8e9322cfac19eb1004a07e636c545f325da085d5cdde6f1f8b"
 dependencies = [
+ "form_urlencoded",
  "idna 0.2.0",
  "matches",
  "percent-encoding 2.1.0",
