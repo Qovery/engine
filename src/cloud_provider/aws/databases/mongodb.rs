@@ -413,8 +413,8 @@ mod tests_mongodb {
             "DocumentDB 4.4 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_mongodb_version("4", false).unwrap(), "4.4.2");
-        assert_eq!(get_mongodb_version("4.2", false).unwrap(), "4.2.11");
+        assert_eq!(get_mongodb_version("4", false).unwrap(), "4.4.4");
+        assert_eq!(get_mongodb_version("4.2", false).unwrap(), "4.2.12");
         assert_eq!(
             get_mongodb_version("3.4", false).unwrap_err().as_str(),
             "MongoDB 3.4 version is not supported"

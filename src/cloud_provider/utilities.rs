@@ -18,15 +18,15 @@ pub fn get_self_hosted_postgres_version(requested_version: &str) -> Result<Strin
     // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
 
     // v10
-    let v10 = generate_supported_version(10, 1, 14, Some(0), Some(0), None);
+    let v10 = generate_supported_version(10, 1, 16, Some(0), Some(0), None);
     supported_postgres_versions.extend(v10);
 
     // v11
-    let v11 = generate_supported_version(11, 1, 9, Some(0), Some(0), None);
+    let v11 = generate_supported_version(11, 1, 11, Some(0), Some(0), None);
     supported_postgres_versions.extend(v11);
 
     // v12
-    let v12 = generate_supported_version(12, 2, 4, Some(0), Some(0), None);
+    let v12 = generate_supported_version(12, 2, 6, Some(0), Some(0), None);
     supported_postgres_versions.extend(v12);
 
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
@@ -37,11 +37,11 @@ pub fn get_self_hosted_mysql_version(requested_version: &str) -> Result<String, 
     // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
 
     // v5.7
-    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
+    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(33), None);
     supported_mysql_versions.extend(v57);
 
     // v8
-    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
+    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(23), None);
     supported_mysql_versions.extend(v8);
 
     get_supported_version_to_use("MySQL", supported_mysql_versions, requested_version)
@@ -53,19 +53,19 @@ pub fn get_self_hosted_mongodb_version(requested_version: &str) -> Result<String
     // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
 
     // v3.6
-    let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(21), None);
+    let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(22), None);
     supported_mongodb_versions.extend(mongo_version);
 
     // v4.0
-    let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(21), None);
+    let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(23), None);
     supported_mongodb_versions.extend(mongo_version);
 
     // v4.2
-    let mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(11), None);
+    let mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(12), None);
     supported_mongodb_versions.extend(mongo_version);
 
     // v4.4
-    let mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(2), None);
+    let mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(4), None);
     supported_mongodb_versions.extend(mongo_version);
 
     get_supported_version_to_use("MongoDB", supported_mongodb_versions, requested_version)
