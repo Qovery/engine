@@ -20,32 +20,12 @@ use qovery_engine::models::{
 };
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, generate_id};
+use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-1";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
 pub const KUBE_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
-
-pub fn aws_access_key_id() -> String {
-    std::env::var("AWS_ACCESS_KEY_ID").expect("env var AWS_ACCESS_KEY_ID is mandatory")
-}
-
-pub fn aws_secret_key() -> String {
-    std::env::var("AWS_SECRET_ACCESS_KEY").expect("env var AWS_SECRET_ACCESS_KEY is mandatory")
-}
-
-pub fn aws_default_region() -> String {
-    std::env::var("AWS_DEFAULT_REGION").expect("env var AWS_DEFAULT_REGION is mandatory")
-}
-
-pub fn terraform_aws_access_key_id() -> String {
-    std::env::var("TERRAFORM_AWS_ACCESS_KEY_ID").expect("env var TERRAFORM_AWS_ACCESS_KEY_ID is mandatory")
-}
-
-pub fn terraform_aws_secret_access_key() -> String {
-    std::env::var("TERRAFORM_AWS_SECRET_ACCESS_KEY").expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory")
-}
 
 pub fn execution_id() -> String {
     Utc::now()
@@ -56,13 +36,14 @@ pub fn execution_id() -> String {
 }
 
 pub fn container_registry_ecr(context: &Context) -> ECR {
+    let secrets = FuncTestsSecrets::new();
     ECR::new(
         context.clone(),
         "default-ecr-registry-Qovery Test",
         "ea59qe62xaw3wjai",
-        aws_access_key_id().as_str(),
-        aws_secret_key().as_str(),
-        aws_default_region().as_str(),
+        secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
+        secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
+        secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
     )
 }
 
@@ -92,16 +73,17 @@ pub fn aws_kubernetes_nodes() -> Vec<Node> {
 }
 
 pub fn cloud_provider_aws(context: &Context) -> AWS {
+    let secrets = FuncTestsSecrets::new();
     AWS::new(
         context.clone(),
         "u8nb94c7fwxzr2jt",
         ORGANIZATION_ID,
         "QoveryTest",
-        aws_access_key_id().as_str(),
-        aws_secret_key().as_str(),
+        secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
+        secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
         TerraformStateCredentials {
-            access_key_id: terraform_aws_access_key_id().to_string(),
-            secret_access_key: terraform_aws_secret_access_key().to_string(),
+            access_key_id: secrets.TERRAFORM_AWS_ACCESS_KEY_ID.unwrap(),
+            secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
             region: "eu-west-3".to_string(),
         },
     )
@@ -113,6 +95,7 @@ pub fn aws_kubernetes_eks<'a>(
     dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
 ) -> EKS<'a> {
+    let secrets = FuncTestsSecrets::new();
     let file = File::open("tests/assets/eks-options.json").expect("file not found");
     let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
@@ -120,7 +103,7 @@ pub fn aws_kubernetes_eks<'a>(
         KUBE_CLUSTER_ID,
         KUBE_CLUSTER_ID,
         AWS_KUBERNETES_VERSION,
-        aws_default_region().as_str(),
+        secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
         cloud_provider,
         dns_provider,
         options_values,
@@ -149,13 +132,14 @@ pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
     )
 }
 
-pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environment {
+pub fn environment_3_apps_3_routers_3_databases(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
     let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
     let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
+    let test_domain = secrets.DEFAULT_TEST_DOMAIN.unwrap();
 
     // mongoDB management part
-    let database_host_mongo = "mongodb-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
+    let database_host_mongo = format!("mongodb-{}.{}", generate_id(), &test_domain);
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
@@ -172,7 +156,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
 
     // pSQL 1 management part
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = fqdn_id.clone() + ".oom.sh";
+    let fqdn = fqdn_id.clone() + &test_domain;
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_id();
@@ -180,7 +164,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
 
     // pSQL 2 management part
     let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
-    let fqdn_2 = fqdn_id_2.clone() + ".oom.sh";
+    let fqdn_2 = fqdn_id_2.clone() + &test_domain;
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgresql2".to_string();
 
@@ -357,7 +341,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + &test_domain,
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -369,7 +353,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + &test_domain,
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -381,7 +365,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "third-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + &test_domain,
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -448,7 +432,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
     }
 }
 
-pub fn working_minimal_environment(context: &Context) -> Environment {
+pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -485,7 +469,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".oom.sh",
+            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_ref(),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -499,9 +483,10 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
     }
 }
 
-pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
+pub fn environnement_2_app_2_routers_1_psql(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = fqdn_id.clone() + ".oom.sh";
+    let test_domain = secrets.DEFAULT_TEST_DOMAIN.unwrap();
+    let fqdn = format!("{}.{}", fqdn_id.clone(), &test_domain);
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
@@ -644,7 +629,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: format!("{}.{}", generate_id(), &test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -656,7 +641,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: format!("{}.{}", generate_id(), &test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -671,8 +656,8 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
     }
 }
 
-pub fn non_working_environment(context: &Context) -> Environment {
-    let mut environment = working_minimal_environment(context);
+pub fn non_working_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
+    let mut environment = working_minimal_environment(context, secrets);
 
     environment.applications = environment
         .applications
@@ -690,7 +675,7 @@ pub fn non_working_environment(context: &Context) -> Environment {
 
 // echo app environment is an environment that contains http-echo container (forked from hashicorp)
 // ECHO_TEXT var will be the content of the application root path
-pub fn echo_app_environment(context: &Context) -> Environment {
+pub fn echo_app_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -730,7 +715,7 @@ pub fn echo_app_environment(context: &Context) -> Environment {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".oom.sh",
+            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_str(),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -784,7 +769,7 @@ pub fn environment_only_http_server(context: &Context) -> Environment {
     }
 }
 
-pub fn environment_only_http_server_router(context: &Context) -> Environment {
+pub fn environment_only_http_server_router(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -821,7 +806,7 @@ pub fn environment_only_http_server_router(context: &Context) -> Environment {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".oom.sh",
+            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_str(),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
