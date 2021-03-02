@@ -533,7 +533,7 @@ mod tests {
 
         fn run(&self, _: &Sender<Message>) {
             self.barrier_begin.wait();
-            self.have_been_run.compare_and_swap(false, true, Ordering::AcqRel);
+            self.have_been_run.compare_and_swap(false, true, Ordering::Release);
             self.barrier_end.wait();
         }
     }
