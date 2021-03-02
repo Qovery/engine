@@ -13,6 +13,7 @@ use crate::cmd::structs::{
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
+use chrono::Duration;
 
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
@@ -24,7 +25,14 @@ where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),
 {
-    match exec_with_envs_and_output("kubectl", args, envs, stdout_output, stderr_output) {
+    match exec_with_envs_and_output(
+        "kubectl",
+        args,
+        envs,
+        stdout_output,
+        stderr_output,
+        Duration::max_value(),
+    ) {
         Err(err) => return Err(err),
         _ => {}
     };

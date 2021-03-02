@@ -6,9 +6,12 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::{cmd, git};
+use chrono::Duration;
 use std::env;
 use std::path::Path;
 use sysinfo::{Disk, DiskExt, SystemExt};
+
+const BUILD_DURATION_TIMEOUT_MIN: i64 = 30;
 
 /// https://buildpacks.io/
 const BUILDPACKS_BUILDERS: [&str; 1] = [
@@ -121,6 +124,7 @@ impl LocalDocker {
                     self.context.execution_id(),
                 ));
             },
+            Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
         );
 
         match exit_status {
@@ -209,6 +213,7 @@ impl LocalDocker {
                         self.context.execution_id(),
                     ));
                 },
+                Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
             );
 
             if exit_status.is_ok() {
@@ -509,5 +514,6 @@ fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
             let line_string = line.unwrap();
             debug!("{}", line_string.as_str());
         },
+        Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
     )
 }
