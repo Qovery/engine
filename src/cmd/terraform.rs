@@ -5,6 +5,7 @@ use retry::OperationResult;
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::error::{SimpleError, SimpleErrorKind};
+use chrono::Duration;
 use retry::Error::Operation;
 
 fn terraform_exec_with_init_validate(root_dir: &str) -> Result<(), SimpleError> {
@@ -142,5 +143,6 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), SimpleError
             let output = line.unwrap();
             error!("{}", output);
         },
+        Duration::max_value(),
     )
 }
