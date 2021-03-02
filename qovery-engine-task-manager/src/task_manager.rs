@@ -589,6 +589,9 @@ mod tests {
             assert_ne!(nb_iter, 5);
         }
         assert_eq!(task.have_been_run.load(Ordering::Acquire), true);
+        eprintln!("Test {}", tm.remaining_tasks_to_run());
+        eprintln!("Test {}", tm.task_executor_rx.len());
+        eprintln!("Test {}", tm.running_tasks.get());
         assert_eq!(tm.running_tasks.get(), 0);
 
         // Test that we clean the Internal Hashmap
