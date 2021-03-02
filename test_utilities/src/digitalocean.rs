@@ -12,9 +12,8 @@ use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 
-use crate::aws::{terraform_aws_access_key_id, terraform_aws_secret_access_key};
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::build_platform_local_docker;
+use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const ORGANIZATION_ID: &str = "a8nb94c7fwxzr2ja";
 pub const DO_KUBERNETES_VERSION: &str = "1.18.10-do.3";
@@ -23,24 +22,13 @@ pub const DOCR_ID: &str = "gu9ep7t68htdu78l";
 pub const DOKS_CLUSTER_ID: &str = "gqgyb7zy4ykwumak";
 pub const DOKS_CLUSTER_NAME: &str = "QoveryDigitalOceanTest";
 
-pub fn digital_ocean_token() -> String {
-    std::env::var("DIGITAL_OCEAN_TOKEN").expect("env var DIGITAL_OCEAN_TOKEN is mandatory")
-}
-
-pub fn digital_ocean_spaces_access_id() -> String {
-    std::env::var("DIGITAL_OCEAN_SPACES_ACCESS_ID").expect("env var DIGITAL_OCEAN_SPACES_ACCESS_ID is mandatory")
-}
-
-pub fn digital_ocean_spaces_secret_key() -> String {
-    std::env::var("DIGITAL_OCEAN_SPACES_SECRET_ID").expect("env var DIGITAL_OCEAN_SPACES_SECRET_ID is mandatory")
-}
-
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
+    let secrets = FuncTestsSecrets::new();
     DOCR::new(
         context.clone(),
         DOCR_ID,
         "default-docr-registry-qovery-do-test",
-        digital_ocean_token().as_str(),
+        secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
     )
 }
 
@@ -100,24 +88,26 @@ pub fn do_kubernetes_nodes() -> Vec<Node> {
 }
 
 pub fn cloud_provider_digitalocean(context: &Context) -> DO {
+    let secrets = FuncTestsSecrets::new();
     DO::new(
         context.clone(),
         "test",
         ORGANIZATION_ID,
-        digital_ocean_token().as_str(),
-        digital_ocean_spaces_access_id().as_str(),
-        digital_ocean_spaces_secret_key().as_str(),
+        secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
+        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().as_str(),
+        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().as_str(),
         DOKS_CLUSTER_NAME,
         TerraformStateCredentials {
-            access_key_id: terraform_aws_access_key_id().to_string(),
-            secret_access_key: terraform_aws_secret_access_key().to_string(),
+            access_key_id: secrets.TERRAFORM_AWS_ACCESS_KEY_ID.unwrap(),
+            secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
             region: "eu-west-3".to_string(),
         },
     )
 }
 
 pub fn get_kube_cluster_name_from_uuid(uuid: &str) -> String {
-    let headers = qovery_engine::utilities::get_header_with_bearer(digital_ocean_token().as_str());
+    let secrets = FuncTestsSecrets::new();
+    let headers = qovery_engine::utilities::get_header_with_bearer(secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str());
     let path = format!("https://api.digitalocean.com/v2/kubernetes/clusters/{}", uuid);
     let res = reqwest::blocking::Client::new()
         .get(path.as_str())

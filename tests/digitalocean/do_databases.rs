@@ -1,4 +1,4 @@
-use test_utilities::utilities::{context, engine_run_test};
+use test_utilities::utilities::{context, engine_run_test, FuncTestsSecrets};
 use tracing::{span, Level};
 
 use qovery_engine::models::{Action, Clone2, EnvironmentAction};
@@ -14,8 +14,9 @@ fn deploy_one_postgresql() {
 
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
 
-        let environment = test_utilities::aws::working_minimal_environment(&context);
+        let environment = test_utilities::aws::working_minimal_environment(&context, secrets);
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
