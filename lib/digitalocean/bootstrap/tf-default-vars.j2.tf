@@ -24,6 +24,18 @@ variable "qovery_nats_url" {
   type = string
 }
 
+variable "qovery_nats_user" {
+  description = "user of qovery nats server"
+  default = "{{ qovery_nats_user }}"
+  type = string
+}
+
+variable "qovery_nats_password" {
+  description = "password of qovery nats server"
+  default = "{{ qovery_nats_password }}"
+  type = string
+}
+
 variable "test_cluster" {
   description = "Is this a test cluster?"
   default = "{{ test_cluster }}"

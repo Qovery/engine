@@ -35,6 +35,8 @@ pub struct Options {
     pub grafana_admin_password: String,
     pub discord_api_key: String,
     pub qovery_nats_url: String,
+    pub qovery_nats_user: String,
+    pub qovery_nats_password: String,
     pub qovery_ssh_key: String,
     // Others
     pub tls_email_report: String,
@@ -122,6 +124,8 @@ impl<'a> DOKS<'a> {
         context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
         context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
+        context.insert("qovery_nats_user", self.options.qovery_nats_user.as_str());
+        context.insert("qovery_nats_password", self.options.qovery_nats_password.as_str());
         context.insert("qovery_ssh_key", self.options.qovery_ssh_key.as_str());
         context.insert("discord_api_key", self.options.discord_api_key.as_str());
 

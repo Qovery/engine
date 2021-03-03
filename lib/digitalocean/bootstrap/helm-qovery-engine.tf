@@ -34,6 +34,16 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   set {
+    name = "environmentVariables.QOVERY_NATS_USER"
+    value = var.qovery_nats_user
+  }
+
+  set {
+    name = "environmentVariables.QOVERY_NATS_PASSWORD"
+    value = var.qovery_nats_password
+  }
+
+  set {
     name = "environmentVariables.ORGANIZATION"
     value = var.organization_id
   }
