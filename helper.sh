@@ -209,7 +209,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   fi
   set -e
 
-  docker build -t qoveryrd/engine:${tag} .
+  docker build --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
@@ -281,7 +281,9 @@ function release_to_prod() { ## Release GA to prod
   helm upgrade --kubeconfig $AWS_PROD_KUBECONFIG --install --history-max 50 --wait --namespace qovery qovery-engine \
    $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine --set \
 image.tag="$tag",\
-environmentVariables.QOVERY_NATS_URL="panic.qovery.com:4242",\
+environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
+environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_USER",\
+environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
