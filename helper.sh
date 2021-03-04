@@ -181,7 +181,6 @@ function build() { ## Build engine app with engine lib
 }
 
 function build_image() { ## Build Engine image locally. Args: <tag_version>
-  build "--release"
   tag=$(generate_image_tag)
 
   cp docker/load.sh docker/engine/load.sh
@@ -209,6 +208,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   fi
   set -e
 
+  export DOCKER_BUILDKIT=1
   docker build --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh

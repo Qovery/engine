@@ -6,6 +6,7 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   WORKSPACE_ROOT_DIR: /builds/qovery/qovery-engine
   CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
+  GIT_DEPTH: 10
 
 cache: &global_cache
   key: ${CI_COMMIT_REF_SLUG}
