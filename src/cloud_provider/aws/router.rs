@@ -132,7 +132,7 @@ impl Service for Router {
                     Some(application) => match application.private_port() {
                         Some(private_port) => Some(RouteDataTemplate {
                             path: r.path.clone(),
-                            application_name: application.name().to_string(),
+                            application_name: application.sanitized_name().to_string(),
                             application_port: private_port,
                         }),
                         _ => None,
