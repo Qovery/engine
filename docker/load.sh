@@ -24,33 +24,40 @@ function download() { ## Download prerequisites binaries for the engine
   mkdir $BIN_DEST_FOLDER
 
   # buildpacks (binary is named `pack`)
+  echo "Downloading buildpacks"
   curl -sLo pack.tgz https://github.com/buildpacks/pack/releases/download/v${PACK_VERSION}/pack-v${PACK_VERSION}-linux.tgz
   tar -zxf pack.tgz
   mv pack $BIN_DEST_FOLDER/pack${PACK_VERSION}
 
   # terraform
+  echo "Downloading terraform"
   curl -so terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_${SYSTEM}_${ARCH}.zip
   unzip terraform.zip
   mv terraform $BIN_DEST_FOLDER/terraform${TERRAFORM_VERSION}
 
   # helm
+  echo "Downloading helm"
   curl -so helm.tgz https://get.helm.sh/helm-v${HELM_VERSION}-${SYSTEM}-${ARCH}.tar.gz
   tar -zxf helm.tgz
   mv linux-amd64/helm $BIN_DEST_FOLDER/helm${HELM_VERSION}
 
   # kubectl
+  echo "Downloading kubectl"
   curl -so kubectl https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl
   mv kubectl $BIN_DEST_FOLDER/kubectl${KUBECTL_VERSION}
 
   # Aws iam authenticator
+  echo "Downloading AWS IAM Authenticator"
   curl -sLo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v${AWS_IAM_AUTHENTICATOR_VERSION}/aws-iam-authenticator_${AWS_IAM_AUTHENTICATOR_VERSION}_${SYSTEM}_${ARCH}
   mv aws-iam-authenticator $BIN_DEST_FOLDER/aws-iam-authenticator${AWS_IAM_AUTHENTICATOR_VERSION}
 
   # Dumb init
+  echo "Downloading Dumb init"
   curl -sLo dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_${ARCH}
   mv dumb-init $BIN_DEST_FOLDER/
 
   # DigitalOcean Doctl
+  echo "Downloading doctl"
   curl -Lso doctl.tgz https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz
   tar -zxf doctl.tgz
   mv doctl $BIN_DEST_FOLDER/doctl${DOCTL_VERSION}
