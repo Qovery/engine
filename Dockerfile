@@ -11,11 +11,13 @@ ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
 ENV RUSTC_WRAPPER=/usr/bin/sccache
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
+WORKDIR /root
 RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev
 ADD . .
 
 # run release build
 RUN mkdir -p $TF_PLUGIN_CACHE_DIR
+RUN ./docker/load.sh download $BIN_DEST_FOLDER
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
 
@@ -48,10 +50,10 @@ RUN apt-get update && \
 
 WORKDIR $HOME_DIR
 ADD cloned-engine/lib $HOME_DIR/lib
-COPY --from=build /usr/src/app/target/release/app .
-COPY --from=build /docker/engine/load.sh $HOME_DIR
-COPY --from=build /docker/engine/run.sh $HOME_DIR
-COPY --from=build /bin_versions $HOME_DIR
+COPY --from=build /root/target/release/app .
+COPY --from=build /root/docker/engine/load.sh $HOME_DIR
+COPY --from=build /root/docker/engine/run.sh $HOME_DIR
+COPY --from=build /root/bin_versions $HOME_DIR
 COPY --from=build /root/.terraform.d $HOME_DIR/.terraform.d
 COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
@@ -70,3 +72,4 @@ ENV PATH="$HOME_DIR/binaries:${PATH}"
 ENV BIN_VERSION_FILE="$HOME_DIR/bin_versions"
 
 CMD ["./run.sh"]
+
