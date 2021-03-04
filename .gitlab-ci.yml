@@ -230,7 +230,7 @@ aws-self-hosted:
     - linter
     - build
   tags:
-    - 2cpu-8gmem-0g
+    - 2cpu-12gmem-0g
   when: always
   only:
     refs:
