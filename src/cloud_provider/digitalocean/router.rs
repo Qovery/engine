@@ -37,15 +37,6 @@ impl Router {
         routes: Vec<Route>,
         listeners: Listeners,
     ) -> Self {
-        //TODO Quick fix, see to avoid doing sanitize app in the router
-        let routes = routes
-            .into_iter()
-            .map(|mut r| {
-                r.application_name = sanitize_name("app", r.application_name.as_str());
-                r
-            })
-            .collect();
-
         Router {
             context,
             id: id.to_string(),
@@ -154,7 +145,7 @@ impl Service for Router {
                     Some(application) => match application.private_port() {
                         Some(private_port) => Some(RouteDataTemplate {
                             path: r.path.clone(),
-                            application_name: application.name().to_string(),
+                            application_name: application.sanitized_name().to_string(),
                             application_port: private_port,
                         }),
                         _ => None,
