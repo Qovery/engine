@@ -80,7 +80,7 @@ impl TaskManager {
     }
 
     pub fn remaining_tasks_to_run(&self) -> usize {
-        self.task_executor_rx.len() + self.running_tasks.get().min(0) as usize
+        self.task_executor_rx.len() + self.running_tasks.get().max(0) as usize
     }
 
     pub fn wait_shutdown(&self) {
@@ -239,7 +239,7 @@ impl TaskManager {
                             add_task(
                                 &task_executor_tx,
                                 &task_status_tx,
-                                task_executor_rx.len() + nb_running_tasks.get().min(0) as usize,
+                                task_executor_rx.len() + nb_running_tasks.get().max(0) as usize,
                                 internal_task.task,
                             );
                         }
@@ -589,9 +589,6 @@ mod tests {
             assert_ne!(nb_iter, 5);
         }
         assert_eq!(task.have_been_run.load(Ordering::Acquire), true);
-        eprintln!("Test {}", tm.remaining_tasks_to_run());
-        eprintln!("Test {}", tm.task_executor_rx.len());
-        eprintln!("Test {}", tm.running_tasks.get());
         assert_eq!(tm.running_tasks.get(), 0);
 
         // Test that we clean the Internal Hashmap
