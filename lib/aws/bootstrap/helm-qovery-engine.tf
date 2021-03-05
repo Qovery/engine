@@ -11,6 +11,7 @@ resource "helm_release" "qovery_engine_resources" {
   max_history = 50
   force_update = true
   timeout = 600
+  recreate_pods = true
 
   // make a fake arg to avoid TF to validate update on failure because of the atomic option
   set {
