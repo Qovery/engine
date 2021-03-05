@@ -185,7 +185,6 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
 
   cp docker/load.sh docker/engine/load.sh
   cp docker/bin_versions bin_versions
-  cp target/release/app engine-app
   # copy providers files to download required binaries
   rm -Rf docker/engine/providers/*
   set -e
@@ -208,7 +207,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   fi
   set -e
 
-  export DOCKER_BUILDKIT=1
+  export DOCKER_BUILDKIT=0
   docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
