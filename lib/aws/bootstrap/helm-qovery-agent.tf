@@ -19,6 +19,7 @@ resource "helm_release" "qovery_agent_resources" {
   create_namespace = true
   max_history = 50
   force_update = true
+  recreate_pods = true
 
   // make a fake arg to avoid TF to validate update on failure because of the atomic option
   set {
@@ -44,6 +45,16 @@ resource "helm_release" "qovery_agent_resources" {
   set {
     name = "environmentVariables.NATS_HOST_URL"
     value = var.qovery_nats_url
+  }
+
+  set {
+    name = "environmentVariables.NATS_USERNAME"
+    value = var.qovery_nats_user
+  }
+
+  set {
+    name = "environmentVariables.NATS_PASSWORD"
+    value = var.qovery_nats_password
   }
 
   set {
