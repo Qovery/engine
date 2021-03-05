@@ -395,6 +395,12 @@ function lint() {
   # cargo clippy
 }
 
+# need to debug?
+if [ ! -z $DEBUG_REQUIRED ] ; then
+  echo "DEBUG MODE ENABLED FOR 1H"
+  sleep 3600
+fi
+
 if [ $ARGS_NUM -eq 0 ] ; then
   print_help
 fi
