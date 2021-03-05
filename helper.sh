@@ -209,7 +209,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   set -e
 
   export DOCKER_BUILDKIT=1
-  docker build --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
+  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
@@ -224,7 +224,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
   cp docker/bin_versions docker/ci/bin_versions
 
   cd docker/ci
-  docker build --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t qoveryrd/ci:${tag} .
+  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t qoveryrd/ci:${tag} .
   cd ..
 
   rm -f docker/ci/load.sh
