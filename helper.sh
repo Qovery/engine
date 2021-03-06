@@ -207,7 +207,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   fi
   set -e
 
-  export DOCKER_BUILDKIT=0
+  export DOCKER_BUILDKIT=1
   docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
