@@ -51,7 +51,7 @@ RUN apt-get update && \
 WORKDIR $HOME_DIR
 ADD cloned-engine/lib $HOME_DIR/lib
 COPY --from=build /root/target/release/app .
-COPY --from=build /root/docker/engine/load.sh $HOME_DIR
+COPY --from=build /root/docker/load.sh $HOME_DIR
 COPY --from=build /root/docker/engine/run.sh $HOME_DIR
 COPY --from=build /root/bin_versions $HOME_DIR
 COPY --from=build /root/.terraform.d $HOME_DIR/.terraform.d
