@@ -8,8 +8,8 @@ ARG SCCACHE_REDIS
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
-ENV RUSTC_WRAPPER=/usr/bin/sccache
-ENV SCCACHE_REDIS=$SCCACHE_REDIS
+#ENV RUSTC_WRAPPER=/usr/bin/sccache
+#ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
 WORKDIR /root
 RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev
@@ -27,7 +27,8 @@ RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/relea
     chmod 755 /usr/bin/sccache
 
 # build engine
-RUN sccache --version && sccache -s && cargo build --release && sccache -s
+#RUN sccache --version && sccache -s && cargo build --release && sccache -s
+RUN cargo build --release
 
 # Final image
 FROM debian:buster-slim as run
