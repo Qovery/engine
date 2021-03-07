@@ -420,8 +420,8 @@ mod tests_mysql {
             "RDS MySQL 8.0.18 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_mysql_version("5", false).unwrap(), "5.7.31");
-        assert_eq!(get_mysql_version("5.7", false).unwrap(), "5.7.31");
+        assert_eq!(get_mysql_version("5", false).unwrap(), "5.7.33");
+        assert_eq!(get_mysql_version("5.7", false).unwrap(), "5.7.33");
         assert_eq!(get_mysql_version("5.7.31", false).unwrap(), "5.7.31");
         assert_eq!(
             get_mysql_version("1.0", false).unwrap_err().as_str(),
@@ -435,7 +435,7 @@ mod tests_mysql {
         let db_expected_name = "mysqltestnamesanitizerwithtoomanycharsnotallowedwhichwi";
 
         let database = MySQL::new(
-            Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
+            Context::new("".to_string(), "".to_string(), "".to_string(), false, None, None),
             "mysqlid",
             Action::Create,
             db_input_name,

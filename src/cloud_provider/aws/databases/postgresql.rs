@@ -390,18 +390,18 @@ fn get_managed_postgres_version(requested_version: &str) -> Result<String, Strin
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
 
     // v10
-    let mut v10 = generate_supported_version(10, 1, 14, None, None, None);
+    let mut v10 = generate_supported_version(10, 1, 15, None, None, None);
     v10.remove("10.2"); // non supported version by AWS
     v10.remove("10.8"); // non supported version by AWS
     supported_postgres_versions.extend(v10);
 
     // v11
-    let mut v11 = generate_supported_version(11, 1, 9, None, None, None);
+    let mut v11 = generate_supported_version(11, 1, 10, None, None, None);
     v11.remove("11.3"); // non supported version by AWS
     supported_postgres_versions.extend(v11);
 
     // v12
-    let v12 = generate_supported_version(12, 2, 4, None, None, None);
+    let v12 = generate_supported_version(12, 2, 5, None, None, None);
     supported_postgres_versions.extend(v12);
 
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
@@ -416,7 +416,7 @@ mod tests_postgres {
     #[test]
     fn check_postgres_version() {
         // managed version
-        assert_eq!(get_postgres_version("12", true).unwrap(), "12.4");
+        assert_eq!(get_postgres_version("12", true).unwrap(), "12.5");
         assert_eq!(get_postgres_version("12.3", true).unwrap(), "12.3");
         assert_eq!(
             get_postgres_version("12.3.0", true).unwrap_err().as_str(),
@@ -427,7 +427,7 @@ mod tests_postgres {
             "Postgresql 11.3 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_postgres_version("12", false).unwrap(), "12.4.0");
+        assert_eq!(get_postgres_version("12", false).unwrap(), "12.6.0");
         assert_eq!(get_postgres_version("12.3", false).unwrap(), "12.3.0");
         assert_eq!(get_postgres_version("12.3.0", false).unwrap(), "12.3.0");
         assert_eq!(
@@ -442,7 +442,7 @@ mod tests_postgres {
         let db_expected_name = "postgresqltestnamesanitizerwithtoomanycharsnotallo";
 
         let database = PostgreSQL::new(
-            Context::new("".to_string(), "".to_string(), "".to_string(), None, None),
+            Context::new("".to_string(), "".to_string(), "".to_string(), false, None, None),
             "pgid",
             Action::Create,
             db_input_name,

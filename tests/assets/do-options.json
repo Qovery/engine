@@ -9,5 +9,7 @@
   "grafana_admin_password": "ajdoiawjdiojAWDJawdj",
   "discord_api_key": "CHANGE-ME/DISCORD_API_URL",
   "qovery_nats_url": "CHANGE-ME/QOVERY_NATS_URL",
+  "qovery_nats_user": "CHANGE-ME/QOVERY_NATS_USERNNAME",
+  "qovery_nats_password": "CHANGE-ME/QOVERY_NATS_PASSWORD",
   "qovery_ssh_key": "CHANGE-ME/QOVERY_SSH_USER"
 }

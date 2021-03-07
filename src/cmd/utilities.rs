@@ -4,7 +4,10 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
+use crate::error::SimpleErrorKind::Other;
 use crate::error::{SimpleError, SimpleErrorKind};
+use chrono::Duration;
+use std::time::Instant;
 
 fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>, use_output: bool) -> Command
 where
@@ -28,7 +31,6 @@ where
     };
 
     let mut cmd = Command::new(&_binary);
-
     if use_output {
         cmd.args(&args).stdout(Stdio::piped()).stderr(Stdio::piped());
     } else {
@@ -151,6 +153,7 @@ pub fn exec_with_envs_and_output<P, F, X>(
     envs: Vec<(&str, &str)>,
     stdout_output: F,
     stderr_output: X,
+    timeout: Duration,
 ) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
@@ -166,11 +169,38 @@ where
         stderr_output,
     );
 
-    let exit_status = match child.wait() {
-        Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
-    };
+    // Wait for the process to exit before reaching the timeout
+    // If not, we just kill it
+    let start = Instant::now();
+    let exit_status;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                exit_status = status;
+                break;
+            }
+            Ok(None) => {
+                if (start.elapsed().as_secs() as i64) < timeout.num_seconds() {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                }
 
+                // Timeout !
+                let _ = child
+                    .kill() //Fire
+                    .map(|_| child.wait())
+                    .map_err(|err| error!("Cannot kill process {:?} {}", child, err));
+
+                return Err(SimpleError::new(
+                    Other,
+                    Some(format!("Image build timeout after {} seconds", timeout.num_seconds())),
+                ));
+            }
+            Err(err) => return Err(SimpleError::from(err)),
+        };
+    }
+
+    // Process exited
     if exit_status.success() {
         return Ok(());
     }

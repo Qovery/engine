@@ -932,6 +932,7 @@ pub struct Context {
     execution_id: String,
     workspace_root_dir: String,
     lib_root_dir: String,
+    test_cluster: bool,
     docker_host: Option<String>,
     metadata: Option<Metadata>,
 }
@@ -961,6 +962,7 @@ impl Context {
         execution_id: String,
         workspace_root_dir: String,
         lib_root_dir: String,
+        test_cluster: bool,
         docker_host: Option<String>,
         metadata: Option<Metadata>,
     ) -> Self {
@@ -968,6 +970,7 @@ impl Context {
             execution_id,
             workspace_root_dir,
             lib_root_dir,
+            test_cluster,
             docker_host,
             metadata,
         }
@@ -1004,13 +1007,7 @@ impl Context {
     }
 
     pub fn is_test_cluster(&self) -> bool {
-        match &self.metadata {
-            Some(meta) => match meta.test {
-                Some(true) => true,
-                _ => false,
-            },
-            _ => false,
-        }
+        self.test_cluster
     }
 
     pub fn resource_expiration_in_seconds(&self) -> Option<u32> {
@@ -1028,15 +1025,13 @@ impl Context {
 /// E.g you can indicate that this request is a test, then you can adapt the behaviour as you want.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Metadata {
-    pub test: Option<bool>,
     pub dry_run_deploy: Option<bool>,
     pub resource_expiration_in_seconds: Option<u32>,
 }
 
 impl Metadata {
-    pub fn new(test: Option<bool>, dry_run_deploy: Option<bool>, resource_expiration_in_seconds: Option<u32>) -> Self {
+    pub fn new(dry_run_deploy: Option<bool>, resource_expiration_in_seconds: Option<u32>) -> Self {
         Metadata {
-            test,
             dry_run_deploy,
             resource_expiration_in_seconds,
         }
