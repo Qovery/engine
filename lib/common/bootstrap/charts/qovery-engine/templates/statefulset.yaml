@@ -6,9 +6,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "qovery-engine.labels" . | nindent 4 }}
-    {{- range $key, $val := .Values.labels }}
-    {{ $key }}: {{ $val }}
-    {{- end }}
 spec:
   replicas: {{ .Values.autoscaler.min_replicas }}
   serviceName: qovery-engine
