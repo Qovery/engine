@@ -125,6 +125,7 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
     git log -1
 
     if [ -e $ENGINE_DIR ] ; then
+      print_title "USING QOVERY LIB COMMIT"
       echo "Found $ENGINE_DIR directory, going to use it"
     elif [ ! -d $ENGINE_DIR ] ; then
       if [ $RUNNING_ON_CI -eq 0 ] ; then
@@ -248,11 +249,10 @@ function push_ci_image() { ## Push CI local image with current commit ID as tag
   docker push qoveryrd/ci:${tag}
 }
 
-function new_release() { ## Release a new engine version with commit ID as tagprepare_engine
+function new_release() { ## Release a new engine version with commit ID as tag prepare_engine
   prepare_engine
   tag=$(generate_image_tag)
 
-  use_sccache
   check_untracked_files
   build_image
   push_image
