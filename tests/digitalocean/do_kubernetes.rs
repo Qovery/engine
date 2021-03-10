@@ -20,7 +20,7 @@ use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 //#[ignore]
 fn create_doks_cluster_in_fra_10() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "create_doks_cluster_in_fra_10");
+        let span = span!(Level::INFO, "test", name = "create_doks_cluster_in_fra_10");
         let _enter = span.enter();
 
         let cluster_id = "my-first-doks-10";

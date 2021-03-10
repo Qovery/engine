@@ -24,7 +24,11 @@ use self::test_utilities::utilities::{context, engine_run_test, generate_id, is_
 fn deploy_an_environment_with_3_databases_and_3_apps() {
     init();
 
-    let span = span!(Level::INFO, "deploy_an_environment_with_3_databases_and_3_apps");
+    let span = span!(
+        Level::INFO,
+        "test",
+        name = "deploy_an_environment_with_3_databases_and_3_apps"
+    );
     let _enter = span.enter();
 
     let context = context();
@@ -64,7 +68,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
 
     let span = span!(
         Level::INFO,
-        "postgresql_deploy_a_working_development_environment_with_all_options"
+        "test",
+        name = "postgresql_deploy_a_working_development_environment_with_all_options"
     );
     let _enter = span.enter();
 
@@ -130,7 +135,8 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
     let span = span!(
         Level::INFO,
-        "postgresql_deploy_a_working_development_environment_with_all_options"
+        "test",
+        name = "postgresql_deploy_a_working_development_environment_with_all_options"
     );
     let _enter = span.enter();
 
@@ -172,7 +178,11 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 #[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "postgresql_deploy_a_working_environment_and_redeploy");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "postgresql_deploy_a_working_environment_and_redeploy"
+        );
         let _enter = span.enter();
 
         let context = context();
