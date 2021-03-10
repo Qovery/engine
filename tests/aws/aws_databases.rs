@@ -24,7 +24,11 @@ use self::test_utilities::utilities::{context, engine_run_test, generate_id, is_
 fn deploy_an_environment_with_3_databases_and_3_apps() {
     init();
 
-    let span = span!(Level::INFO, "deploy_an_environment_with_3_databases_and_3_apps");
+    let span = span!(
+        Level::INFO,
+        "test",
+        name = "deploy_an_environment_with_3_databases_and_3_apps"
+    );
     let _enter = span.enter();
 
     let context = context();
@@ -64,7 +68,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
 
     let span = span!(
         Level::INFO,
-        "postgresql_deploy_a_working_development_environment_with_all_options"
+        "test",
+        name = "postgresql_deploy_a_working_development_environment_with_all_options"
     );
     let _enter = span.enter();
 
@@ -130,7 +135,8 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
     let span = span!(
         Level::INFO,
-        "postgresql_deploy_a_working_development_environment_with_all_options"
+        "test",
+        name = "postgresql_deploy_a_working_development_environment_with_all_options"
     );
     let _enter = span.enter();
 
@@ -172,7 +178,11 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 #[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "postgresql_deploy_a_working_environment_and_redeploy");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "postgresql_deploy_a_working_environment_and_redeploy"
+        );
         let _enter = span.enter();
 
         let context = context();
@@ -182,7 +192,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let mut environment = test_utilities::aws::working_minimal_environment(&context);
 
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = "postgresql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+        let database_host = "postgresql-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
         let database_port = 5432;
         let database_db_name = "postgresql".to_string();
         let database_username = "superuser".to_string();
@@ -286,7 +296,7 @@ fn test_postgresql_configuration(context: Context, mut environment: Environment,
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = "postgres-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN";
+        let database_host = "postgres-".to_string() + generate_id().as_str() + ".oom.sh";
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
@@ -468,7 +478,7 @@ fn test_mongodb_configuration(context: Context, mut environment: Environment, ve
     let context_for_delete = context.clone_not_same_execution_id();
 
     let app_name = format!("mongodb-app-{}", generate_id());
-    let database_host = "mongodb-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+    let database_host = "mongodb-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
     let database_port = 27017;
     let database_db_name = "my-mongodb".to_string();
     let database_username = "superuser".to_string();
@@ -667,7 +677,7 @@ fn test_mysql_configuration(context: Context, mut environment: Environment, vers
         let deletion_context = context.clone_not_same_execution_id();
 
         let app_name = format!("mysql-app-{}", generate_id());
-        let database_host = "mysql-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+        let database_host = "mysql-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
 
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
@@ -827,7 +837,7 @@ fn test_redis_configuration(context: Context, mut environment: Environment, vers
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("redis-app-{}", generate_id());
-        let database_host = "redis-".to_string() + generate_id().as_str() + ".CHANGE-ME/DEFAULT_TEST_DOMAIN"; // External access check
+        let database_host = "redis-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();

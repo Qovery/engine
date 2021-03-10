@@ -9,7 +9,7 @@ use crate::digitalocean::deploy_environment_on_do;
 //TODO: Do you wanna play a game ?
 fn deploy_one_postgresql() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_one_postgresql");
+        let span = span!(Level::INFO, "test", name = "deploy_one_postgresql");
         let _enter = span.enter();
 
         let context = context();

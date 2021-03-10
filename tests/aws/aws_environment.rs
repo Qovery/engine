@@ -88,7 +88,11 @@ pub fn delete_environment(context: &Context, environment_action: &EnvironmentAct
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_with_no_router_on_aws_eks");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_with_no_router_on_aws_eks"
+        );
         let _enter = span.enter();
 
         let context = context();
@@ -124,7 +128,8 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     engine_run_test(|| {
         let span = span!(
             Level::INFO,
-            "deploy_a_not_working_environment_with_no_router_on_aws_eks"
+            "test",
+            name = "deploy_a_not_working_environment_with_no_router_on_aws_eks"
         );
         let _enter = span.enter();
 
@@ -160,7 +165,11 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
 #[test]
 fn build_with_buildpacks_and_deploy_a_working_environment() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "build_with_buildpacks_and_deploy_a_working_environment");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "build_with_buildpacks_and_deploy_a_working_environment"
+        );
         let _enter = span.enter();
 
         let context = context();
@@ -204,7 +213,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
 #[test]
 fn deploy_a_working_environment_with_domain() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_with_domain");
+        let span = span!(Level::INFO, "test", name = "deploy_a_working_environment_with_domain");
         let _enter = span.enter();
 
         let context = context();
@@ -234,7 +243,11 @@ fn deploy_a_working_environment_with_domain() {
 
 fn deploy_a_working_environment_with_custom_domain() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_with_custom_domain");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_with_custom_domain"
+        );
         let _enter = span.enter();
 
         let context = context();
@@ -283,7 +296,11 @@ fn deploy_a_working_environment_with_custom_domain() {
 #[test]
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_with_storage_on_aws_eks");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_with_storage_on_aws_eks"
+        );
         let _enter = span.enter();
 
         let context = context();
@@ -336,7 +353,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 #[test]
 fn redeploy_same_app_with_ebs() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "redeploy_same_app_with_ebs");
+        let span = span!(Level::INFO, "test", name = "redeploy_same_app_with_ebs");
         let _enter = span.enter();
 
         let context = context();
@@ -481,7 +498,8 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
     engine_run_test(|| {
         let span = span!(
             Level::INFO,
-            "deploy_a_not_working_environment_and_after_working_environment"
+            "test",
+            name = "deploy_a_not_working_environment_and_after_working_environment"
         );
         let _enter = span.enter();
 
@@ -537,7 +555,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
 fn deploy_ok_fail_fail_ok_environment() {
     init();
 
-    let span = span!(Level::INFO, "deploy_ok_fail_fail_ok_environment");
+    let span = span!(Level::INFO, "test", name = "deploy_ok_fail_fail_ok_environment");
     let _enter = span.enter();
 
     // working env
@@ -614,7 +632,8 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     engine_run_test(|| {
         let span = span!(
             Level::INFO,
-            "deploy_a_non_working_environment_with_no_failover_on_aws_eks"
+            "test",
+            name = "deploy_a_non_working_environment_with_no_failover_on_aws_eks"
         );
         let _enter = span.enter();
 
@@ -649,7 +668,8 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 
     let span = span!(
         Level::INFO,
-        "deploy_a_non_working_environment_with_a_working_failover_on_aws_eks"
+        "test",
+        name = "deploy_a_non_working_environment_with_a_working_failover_on_aws_eks"
     );
     let _enter = span.enter();
 
@@ -741,7 +761,8 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
 
     let span = span!(
         Level::INFO,
-        "deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks"
+        "test",
+        name = "deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks"
     );
     let _enter = span.enter();
 
