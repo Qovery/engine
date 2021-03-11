@@ -1,12 +1,10 @@
 extern crate serde;
 extern crate serde_derive;
 
-use std::fs::File;
-
 use chrono::Utc;
 
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
-use qovery_engine::cloud_provider::aws::kubernetes::EKS;
+use qovery_engine::cloud_provider::aws::kubernetes::{Options, EKS};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
@@ -89,6 +87,147 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
     )
 }
 
+pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
+    Options {
+        eks_zone_a_subnet_blocks: vec![
+            "10.0.0.0/23".to_string(),
+            "10.0.2.0/23".to_string(),
+            "10.0.4.0/23".to_string(),
+            "10.0.6.0/23".to_string(),
+            "10.0.8.0/23".to_string(),
+            "10.0.10.0/23".to_string(),
+            "10.0.12.0/23".to_string(),
+            "10.0.14.0/23".to_string(),
+            "10.0.16.0/23".to_string(),
+            "10.0.18.0/23".to_string(),
+            "10.0.20.0/23".to_string(),
+            "10.0.22.0/23".to_string(),
+            "10.0.24.0/23".to_string(),
+            "10.0.26.0/23".to_string(),
+            "10.0.28.0/23".to_string(),
+            "10.0.30.0/23".to_string(),
+            "10.0.32.0/23".to_string(),
+            "10.0.34.0/23".to_string(),
+            "10.0.36.0/23".to_string(),
+            "10.0.38.0/23".to_string(),
+            "10.0.40.0/23".to_string(),
+        ],
+        eks_zone_b_subnet_blocks: vec![
+            "10.0.42.0/23".to_string(),
+            "10.0.44.0/23".to_string(),
+            "10.0.46.0/23".to_string(),
+            "10.0.48.0/23".to_string(),
+            "10.0.50.0/23".to_string(),
+            "10.0.52.0/23".to_string(),
+            "10.0.54.0/23".to_string(),
+            "10.0.56.0/23".to_string(),
+            "10.0.58.0/23".to_string(),
+            "10.0.60.0/23".to_string(),
+            "10.0.62.0/23".to_string(),
+            "10.0.64.0/23".to_string(),
+            "10.0.66.0/23".to_string(),
+            "10.0.68.0/23".to_string(),
+            "10.0.70.0/23".to_string(),
+            "10.0.72.0/23".to_string(),
+            "10.0.74.0/23".to_string(),
+            "10.0.78.0/23".to_string(),
+            "10.0.80.0/23".to_string(),
+            "10.0.82.0/23".to_string(),
+            "10.0.84.0/23".to_string(),
+        ],
+        eks_zone_c_subnet_blocks: vec![
+            "10.0.86.0/23".to_string(),
+            "10.0.88.0/23".to_string(),
+            "10.0.90.0/23".to_string(),
+            "10.0.92.0/23".to_string(),
+            "10.0.94.0/23".to_string(),
+            "10.0.96.0/23".to_string(),
+            "10.0.98.0/23".to_string(),
+            "10.0.100.0/23".to_string(),
+            "10.0.102.0/23".to_string(),
+            "10.0.104.0/23".to_string(),
+            "10.0.106.0/23".to_string(),
+            "10.0.108.0/23".to_string(),
+            "10.0.110.0/23".to_string(),
+            "10.0.112.0/23".to_string(),
+            "10.0.114.0/23".to_string(),
+            "10.0.116.0/23".to_string(),
+            "10.0.118.0/23".to_string(),
+            "10.0.120.0/23".to_string(),
+            "10.0.122.0/23".to_string(),
+            "10.0.124.0/23".to_string(),
+            "10.0.126.0/23".to_string(),
+        ],
+        rds_zone_a_subnet_blocks: vec![
+            "10.0.214.0/23".to_string(),
+            "10.0.216.0/23".to_string(),
+            "10.0.218.0/23".to_string(),
+            "10.0.220.0/23".to_string(),
+            "10.0.222.0/23".to_string(),
+            "10.0.224.0/23".to_string(),
+        ],
+        rds_zone_b_subnet_blocks: vec![
+            "10.0.226.0/23".to_string(),
+            "10.0.228.0/23".to_string(),
+            "10.0.230.0/23".to_string(),
+            "10.0.232.0/23".to_string(),
+            "10.0.234.0/23".to_string(),
+            "10.0.236.0/23".to_string(),
+        ],
+        rds_zone_c_subnet_blocks: vec![
+            "10.0.238.0/23".to_string(),
+            "10.0.240.0/23".to_string(),
+            "10.0.242.0/23".to_string(),
+            "10.0.244.0/23".to_string(),
+            "10.0.246.0/23".to_string(),
+            "10.0.248.0/23".to_string(),
+        ],
+        documentdb_zone_a_subnet_blocks: vec![
+            "10.0.196.0/23".to_string(),
+            "10.0.198.0/23".to_string(),
+            "10.0.200.0/23".to_string(),
+        ],
+        documentdb_zone_b_subnet_blocks: vec![
+            "10.0.202.0/23".to_string(),
+            "10.0.204.0/23".to_string(),
+            "10.0.206.0/23".to_string(),
+        ],
+        documentdb_zone_c_subnet_blocks: vec![
+            "10.0.208.0/23".to_string(),
+            "10.0.210.0/23".to_string(),
+            "10.0.212.0/23".to_string(),
+        ],
+        elasticache_zone_a_subnet_blocks: vec!["10.0.172.0/23".to_string(), "10.0.174.0/23".to_string()],
+        elasticache_zone_b_subnet_blocks: vec!["10.0.176.0/23".to_string(), "10.0.178.0/23".to_string()],
+        elasticache_zone_c_subnet_blocks: vec!["10.0.180.0/23".to_string(), "10.0.182.0/23".to_string()],
+        elasticsearch_zone_a_subnet_blocks: vec!["10.0.184.0/23".to_string(), "10.0.186.0/23".to_string()],
+        elasticsearch_zone_b_subnet_blocks: vec!["10.0.188.0/23".to_string(), "10.0.190.0/23".to_string()],
+        elasticsearch_zone_c_subnet_blocks: vec!["10.0.192.0/23".to_string(), "10.0.194.0/23".to_string()],
+        vpc_cidr_block: "10.0.0.0/16".to_string(),
+        eks_cidr_subnet: "23".to_string(),
+        eks_access_cidr_blocks: secrets
+            .EKS_ACCESS_CIDR_BLOCKS
+            .unwrap()
+            .split(",")
+            .into_iter()
+            .map(|c| c.to_string())
+            .collect(),
+        rds_cidr_subnet: "23".to_string(),
+        documentdb_cidr_subnet: "23".to_string(),
+        elasticache_cidr_subnet: "23".to_string(),
+        elasticsearch_cidr_subnet: "23".to_string(),
+        qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
+        engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
+        agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
+        grafana_admin_user: "admin".to_string(),
+        grafana_admin_password: "qovery".to_string(),
+        discord_api_key: secrets.DISCORD_API_URL.unwrap(),
+        qovery_nats_url: secrets.QOVERY_NATS_URL.unwrap(),
+        qovery_ssh_key: secrets.QOVERY_SSH_USER.unwrap(),
+        tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
+    }
+}
+
 pub fn aws_kubernetes_eks<'a>(
     context: &Context,
     cloud_provider: &'a AWS,
@@ -96,17 +235,15 @@ pub fn aws_kubernetes_eks<'a>(
     nodes: Vec<Node>,
 ) -> EKS<'a> {
     let secrets = FuncTestsSecrets::new();
-    let file = File::open("tests/assets/eks-options.json").expect("file not found");
-    let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
     EKS::<'a>::new(
         context.clone(),
         KUBE_CLUSTER_ID,
         KUBE_CLUSTER_ID,
         AWS_KUBERNETES_VERSION,
-        secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
+        secrets.clone().AWS_DEFAULT_REGION.unwrap().as_str(),
         cloud_provider,
         dns_provider,
-        options_values,
+        eks_options(secrets),
         nodes,
     )
 }
