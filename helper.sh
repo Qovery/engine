@@ -288,6 +288,9 @@ environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.RUST_LOG="DEBUG,rusoto_core::request=info,hyper=info",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
+environmentVariables.VAULT_TOKEN="s.TOhnuuSbHzrPEJ46X1E4xBUM",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 resources.limits.cpu="1",\
 resources.limits.memory="2Gi",\
 resources.requests.cpu="500m",\
