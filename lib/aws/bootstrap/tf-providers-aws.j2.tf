@@ -16,6 +16,10 @@ terraform {
       source = "hashicorp/helm"
       version = "~> 1.3.2"
     }
+    vault = {
+      source = "hashicorp/vault"
+      version = "~> 2.18.0"
+    }
     local = {
       source = "hashicorp/local"
       version = "~> 1.4"
@@ -79,3 +83,5 @@ provider "helm" {
     }
   }
 }
+
+provider "vault" {}

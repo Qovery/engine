@@ -51,7 +51,11 @@ pub fn delete_environment(context: &Context, environment_action: &EnvironmentAct
 //#[test]
 fn deploy_a_working_environment_with_no_router_on_do() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_with_no_router_on_do");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_with_no_router_on_do"
+        );
         let _enter = span.enter();
 
         let context = context();
@@ -108,7 +112,11 @@ fn deploy_a_working_environment_with_no_router_on_do() {
 //#[test]
 fn do_deploy_a_working_environment_with_custom_domain() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_with_custom_domain");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_with_custom_domain"
+        );
         let _enter = span.enter();
 
         let context = context();
@@ -156,7 +164,11 @@ fn do_deploy_a_working_environment_with_custom_domain() {
 //#[test]
 fn deploy_a_working_environment_router_and_app_on_do() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_router_and_app_on_do");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_router_and_app_on_do"
+        );
         let _enter = span.enter();
 
         let context = context();
