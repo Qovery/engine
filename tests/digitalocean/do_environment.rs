@@ -1,6 +1,7 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use self::test_utilities::utilities::FuncTestsSecrets;
 use crate::digitalocean::deploy_environment_on_do;
 use qovery_engine::build_platform::Image;
 use qovery_engine::container_registry::docr::get_current_registry_name;
@@ -8,7 +9,6 @@ use qovery_engine::models::{Action, Clone2, Context, CustomDomain, EnvironmentAc
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::{context, engine_run_test};
 use tracing::{span, Level};
-use self::test_utilities::utilities::FuncTestsSecrets;
 
 pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
     let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
