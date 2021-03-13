@@ -115,7 +115,7 @@ resource "aws_db_instance" "postgresql_instance" {
   # Backups
   backup_retention_period = var.backup_retention_period
   backup_window = var.backup_window
-  skip_final_snapshot = true
+  skip_final_snapshot = var.delete_automated_backups
   delete_automated_backups = var.delete_automated_backups
 
 }
