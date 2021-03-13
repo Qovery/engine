@@ -51,6 +51,8 @@ pub struct FuncTestsSecrets {
     pub QOVERY_API_URL: Option<String>,
     pub QOVERY_ENGINE_CONTROLLER_TOKEN: Option<String>,
     pub QOVERY_NATS_URL: Option<String>,
+    pub QOVERY_NATS_USERNAME: Option<String>,
+    pub QOVERY_NATS_PASSWORD: Option<String>,
     pub QOVERY_SSH_USER: Option<String>,
     pub RUST_LOG: Option<String>,
     pub TERRAFORM_AWS_ACCESS_KEY_ID: Option<String>,
@@ -120,6 +122,8 @@ impl FuncTestsSecrets {
             QOVERY_API_URL: None,
             QOVERY_ENGINE_CONTROLLER_TOKEN: None,
             QOVERY_NATS_URL: None,
+            QOVERY_NATS_USERNAME: None,
+            QOVERY_NATS_PASSWORD: None,
             QOVERY_SSH_USER: None,
             RUST_LOG: None,
             TERRAFORM_AWS_ACCESS_KEY_ID: None,
@@ -192,6 +196,8 @@ impl FuncTestsSecrets {
                 secrets.QOVERY_ENGINE_CONTROLLER_TOKEN,
             ),
             QOVERY_NATS_URL: Self::select_secret("QOVERY_NATS_URL", secrets.QOVERY_NATS_URL),
+            QOVERY_NATS_USERNAME: Self::select_secret("QOVERY_NATS_USERNAME", secrets.QOVERY_NATS_USERNAME),
+            QOVERY_NATS_PASSWORD: Self::select_secret("QOVERY_NATS_PASSWORD", secrets.QOVERY_NATS_PASSWORD),
             QOVERY_SSH_USER: Self::select_secret("QOVERY_SSH_USER", secrets.QOVERY_SSH_USER),
             RUST_LOG: Self::select_secret("RUST_LOG", secrets.RUST_LOG),
             TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
@@ -297,7 +303,7 @@ pub fn context() -> Context {
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
     let metadata = Metadata {
         dry_run_deploy: Option::from(false),
-        resource_expiration_in_seconds: Some(2700),
+        resource_expiration_in_seconds: Some(3600),
     };
 
     Context::new(execution_id, home_dir, lib_root_dir, true, None, Option::from(metadata))

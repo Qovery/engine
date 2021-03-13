@@ -224,6 +224,8 @@ pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
         discord_api_key: secrets.DISCORD_API_URL.unwrap(),
         qovery_nats_url: secrets.QOVERY_NATS_URL.unwrap(),
         qovery_ssh_key: secrets.QOVERY_SSH_USER.unwrap(),
+        qovery_nats_user: secrets.QOVERY_NATS_USERNAME.unwrap(),
+        qovery_nats_password: secrets.QOVERY_NATS_PASSWORD.unwrap(),
         tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
     }
 }
