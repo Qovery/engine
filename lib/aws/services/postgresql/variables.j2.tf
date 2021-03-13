@@ -166,6 +166,12 @@ variable "delete_automated_backups" {
   type = bool
 }
 
+variable "skip_final_snapshot" {
+  description = "Skip final snapshot"
+  default = {{ skip_final_snapshot }}
+  type = bool
+}
+
 # Snapshots
 # TODO later
 #variable "snapshot_identifier" {
