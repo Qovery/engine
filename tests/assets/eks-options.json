@@ -146,7 +146,6 @@
   "vault_address": "CHANGE-ME/VAULT_ADDRESS",
   "vault_token": "CHANGE-ME/VAULT_TOKEN",
   "discord_api_key": "CHANGE-ME/DISCORD_API_URL",
-  "discord_api_key": "CHANGE-ME/DISCORD_API_URL",
   "qovery_nats_url": "CHANGE-ME/QOVERY_NATS_URL",
   "qovery_nats_user": "CHANGE-ME/QOVERY_NATS_USERNNAME",
   "qovery_nats_password": "CHANGE-ME/QOVERY_NATS_PASSWORD",
