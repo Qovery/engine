@@ -9,11 +9,12 @@ use crate::cloud_provider::service::{
     send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
     StatelessService,
 };
-use crate::cloud_provider::utilities::sanitize_name;
+use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_and_burstable};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
 
 pub struct Application {
     context: Context,
@@ -22,7 +23,7 @@ pub struct Application {
     name: String,
     private_port: Option<u16>,
     total_cpus: String,
-    _cpu_burst: String,
+    cpu_burst: String,
     total_ram_in_mib: u32,
     total_instances: u16,
     start_timeout_in_seconds: u32,
@@ -40,7 +41,7 @@ impl Application {
         name: &str,
         private_port: Option<u16>,
         total_cpus: String,
-        _cpu_burst: String,
+        cpu_burst: String,
         total_ram_in_mib: u32,
         total_instances: u16,
         start_timeout_in_seconds: u32,
@@ -56,7 +57,7 @@ impl Application {
             name: name.to_string(),
             private_port,
             total_cpus,
-            _cpu_burst,
+            cpu_burst,
             total_ram_in_mib,
             total_instances,
             start_timeout_in_seconds,
@@ -139,6 +140,10 @@ impl Service for Application {
         self.total_cpus.to_string()
     }
 
+    fn cpu_burst(&self) -> String {
+        self.cpu_burst.to_string()
+    }
+
     fn total_ram_in_mib(&self) -> u32 {
         self.total_ram_in_mib
     }
@@ -190,6 +195,25 @@ impl Service for Application {
                 context.insert("is_registry_secret", &false);
             }
         };
+
+        let cpu_limits = match validate_k8s_required_cpu_and_burstable(
+            &ListenersHelper::new(&self.listeners),
+            &self.context.execution_id(),
+            &self.id,
+            self.total_cpus(),
+            self.cpu_burst(),
+        ) {
+            Ok(l) => l,
+            Err(e) => {
+                return Err(EngineError::new(
+                    Internal,
+                    EngineErrorScope::Application(self.id().to_string(), self.name().to_string()),
+                    self.context.execution_id(),
+                    Some(e.to_string()),
+                ));
+            }
+        };
+        context.insert("cpu_burst", &cpu_limits.cpu_limit);
 
         let storage = self
             .storage
