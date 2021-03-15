@@ -131,8 +131,7 @@ impl LocalDocker {
             Ok(_) => Ok(BuildResult { build }),
             Err(err) => Err(self.engine_error(
                 EngineErrorCause::User(
-                    "It looks like your Dockerfile is wrong. Did you consider building \
-                        your container locally using `qovery run` or `docker build --no-cache`?",
+                    "It looks like there is something wrong in your Dockerfile. Try run locally using `qovery run` or build with `docker build --no-cache`",
                 ),
                 format!(
                     "error while building container image {}. Error: {:?}",
@@ -278,7 +277,10 @@ impl BuildPlatform for LocalDocker {
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         if !force_build && self.image_does_exist(&build.image)? {
-            info!("image {:?} does already exist - no need to build it", build.image);
+            info!(
+                "image {:?} found on repository, container build is not required",
+                build.image
+            );
 
             return Ok(BuildResult { build });
         }

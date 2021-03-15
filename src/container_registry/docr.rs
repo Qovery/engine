@@ -324,7 +324,7 @@ impl ContainerRegistry for DOCR {
         if !force_push && self.does_image_exists(image) {
             // check if image does exist - if yes, do not upload it again
             let info_message = format!(
-                "image {:?} does already exist into DOCR {} repository - no need to upload it",
+                "image {:?} found on DOCR {} repository, container build is not required",
                 image,
                 registry_name.as_str()
             );
@@ -350,7 +350,7 @@ impl ContainerRegistry for DOCR {
         }
 
         let info_message = format!(
-            "image {:?} does not exist into DOCR {} repository - let's upload it",
+            "image {:?} does not exist on DOCR {} repository, starting image upload",
             image, registry_name
         );
 

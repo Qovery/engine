@@ -138,7 +138,7 @@ impl ContainerRegistry for DockerHub {
         if !force_push && self.does_image_exists(image) {
             // check if image does exist - if yes, do not upload it again
             let info_message = format!(
-                "image {:?} does already exist into DockerHub {} repository - no need to upload it",
+                "image {:?} found on DockerHub {} repository, container build is not required",
                 image,
                 self.name()
             );
@@ -161,7 +161,7 @@ impl ContainerRegistry for DockerHub {
         }
 
         let info_message = format!(
-            "image {:?} does not exist into DockerHub {} repository - let's upload it",
+            "image {:?} does not exist on DockerHub {} repository, starting image upload",
             image,
             self.name()
         );
