@@ -332,10 +332,8 @@ where
         service,
         service.engine_error(
             EngineErrorCause::User(
-                "Your application didn't start for some reason. \
-                Are you sure your application is correctly running? You can give a try by running \
-                locally `qovery run`. You can also check the application log from the web \
-                interface or the CLI with `qovery log`",
+                "Your application has failed to start. \
+                Ensure you can run it without issues with `qovery run` and check its logs from the web interface or the CLI with `qovery log`",
             ),
             format!(
                 "{} {} has failed to start ⤬",
