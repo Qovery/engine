@@ -47,6 +47,7 @@ pub trait Service {
     fn private_port(&self) -> Option<u16>;
     fn start_timeout(&self) -> Timeout<u32>;
     fn total_cpus(&self) -> String;
+    fn cpu_burst(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;

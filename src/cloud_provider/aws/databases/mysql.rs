@@ -115,6 +115,10 @@ impl Service for MySQL {
         self.total_cpus.to_string()
     }
 
+    fn cpu_burst(&self) -> String {
+        unimplemented!()
+    }
+
     fn total_ram_in_mib(&self) -> u32 {
         self.total_ram_in_mib
     }
