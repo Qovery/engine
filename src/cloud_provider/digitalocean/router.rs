@@ -90,6 +90,10 @@ impl Service for Router {
         "1".to_string()
     }
 
+    fn cpu_burst(&self) -> String {
+        unimplemented!()
+    }
+
     fn total_ram_in_mib(&self) -> u32 {
         1
     }

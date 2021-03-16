@@ -73,7 +73,7 @@ spec:
             {%- endif %}
           resources:
             limits:
-              cpu: 1
+              cpu: {{ cpu_burst }}
               memory: {{ total_ram_in_mib }}Mi
             requests:
               cpu: {{ total_cpus }}
