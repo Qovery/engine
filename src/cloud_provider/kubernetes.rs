@@ -155,11 +155,17 @@ pub struct Resources {
 pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
-    let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Production => {
-            DeploymentTarget::ManagedServices(kubernetes, environment)
-        }
-        crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
+    let stateful_deployment_target = match kubernetes.kind() {
+        Kind::Eks => match environment.kind {
+            crate::cloud_provider::environment::Kind::Production => {
+                DeploymentTarget::ManagedServices(kubernetes, environment)
+            }
+            crate::cloud_provider::environment::Kind::Development => {
+                DeploymentTarget::SelfHosted(kubernetes, environment)
+            }
+        },
+        // FIXME: We don't have any managed service on DO for now
+        Kind::Doks => DeploymentTarget::SelfHosted(kubernetes, environment),
     };
 
     // do not deploy if there is not enough resources
