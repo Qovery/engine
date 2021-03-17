@@ -1325,6 +1325,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
 
 [[package]]
+name = "hashicorp_vault"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be1f396a370640749cd445ea9657afdb90a10e820b9c57e6d886d290386f9bff"
+dependencies = [
+ "base64 0.12.3",
+ "chrono",
+ "log",
+ "quick-error",
+ "reqwest 0.10.8",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "url 2.2.1",
+]
+
+[[package]]
 name = "headers"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3734,6 +3751,7 @@ dependencies = [
  "curl",
  "digitalocean",
  "dirs 3.0.1",
+ "hashicorp_vault",
  "qovery-engine",
  "rand 0.7.3",
  "reqwest 0.10.8",

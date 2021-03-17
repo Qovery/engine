@@ -56,6 +56,12 @@ function download() { ## Download prerequisites binaries for the engine
   curl -sLo dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_${ARCH}
   mv dumb-init $BIN_DEST_FOLDER/
 
+  # Vault
+  echo "Downloading Vault"
+  curl -sLo vault.zip https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_${SYSTEM}_${ARCH}.zip
+  unzip vault.zip
+  mv vault $BIN_DEST_FOLDER/terraform${VAULT_VERSION}
+
   # DigitalOcean Doctl
   echo "Downloading doctl"
   curl -Lso doctl.tgz https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz

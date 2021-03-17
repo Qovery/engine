@@ -224,6 +224,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
   cp docker/bin_versions docker/ci/bin_versions
 
   cd docker/ci
+  export DOCKER_BUILDKIT=1
   docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t qoveryrd/ci:${tag} .
   cd ..
 
@@ -302,12 +303,14 @@ resources.requests.memory="2Gi"
 function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
   set -e
 
-  cat .env | while read item ; do
-    key=$(echo $item | $awk -F'=' '{ print $1}')
-    value=$(echo $item | $sed -r "s,^\w+='(.+)'$,\1,g" | $sed 's,/,\\\/,g')
-    echo "Updating $key value"
-    find ${ENGINE_DIR}/test* -type f -exec $sed -ri "s/CHANGE-ME\\/$key/$value/g" {} +
-  done
+#  cat .env | while read item ; do
+#    key=$(echo $item | $awk -F'=' '{ print $1}')
+#    value=$(echo $item | $sed -r "s,^\w+='(.+)'$,\1,g" | $sed 's,/,\\\/,g')
+#    echo "Updating $key value"
+#    find ${ENGINE_DIR}/test* -type f -exec $sed -ri "s/CHANGE-ME\\/$key/$value/g" {} +
+#  done
+  print_title "Generating Vault Token"
+  export VAULT_TOKEN=$(vault write -format=json auth/approle/login role_id=$VAULT_ROLE_ID secret_id=$VAULT_SECRET_ID | jq -r ".auth.client_token")
 }
 
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
