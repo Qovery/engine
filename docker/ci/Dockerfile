@@ -35,5 +35,5 @@ ADD dockerd-entrypoint.sh /usr/bin/dockerd-entrypoint.sh
 VOLUME /var/lib/docker
 EXPOSE 2375 2376
 
-ENTRYPOINT ["/usr/bin/dockerd-entrypoint.sh"]
+#ENTRYPOINT ["/usr/bin/dockerd-entrypoint.sh"]
 CMD ["sh"]

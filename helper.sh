@@ -226,7 +226,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
   cd docker/ci
   export DOCKER_BUILDKIT=1
   docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t qoveryrd/ci:${tag} .
-  cd ..
+  cd -
 
   rm -f docker/ci/load.sh
   rm -f docker/ci/bin_versions
