@@ -60,7 +60,7 @@ function download() { ## Download prerequisites binaries for the engine
   echo "Downloading Vault"
   curl -sLo vault.zip https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_${SYSTEM}_${ARCH}.zip
   unzip vault.zip
-  mv vault $BIN_DEST_FOLDER/terraform${VAULT_VERSION}
+  mv vault $BIN_DEST_FOLDER/vault${VAULT_VERSION}
 
   # DigitalOcean Doctl
   echo "Downloading doctl"
@@ -95,6 +95,7 @@ function install() { ## Make symlinks to install binaries in default PATH
   ln -s $BIN_DIR/kubectl${KUBECTL_VERSION} /usr/bin/kubectl
   ln -s $BIN_DIR/aws-iam-authenticator${AWS_IAM_AUTHENTICATOR_VERSION} /usr/bin/aws-iam-authenticator
   ln -s $BIN_DIR/doctl${DOCTL_VERSION} /usr/bin/doctl
+  ln -s $BIN_DIR/vault${DOCTL_VERSION} /usr/bin/vault
 
   # Generate all symlinks at once
   ln -s $BIN_DIR/* /usr/bin/
