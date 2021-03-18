@@ -208,8 +208,10 @@ pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
         eks_access_cidr_blocks: secrets
             .EKS_ACCESS_CIDR_BLOCKS
             .unwrap()
+            .replace("\"", "")
+            .replace("[", "")
+            .replace("]", "")
             .split(",")
-            .into_iter()
             .map(|c| c.to_string())
             .collect(),
         rds_cidr_subnet: "23".to_string(),
