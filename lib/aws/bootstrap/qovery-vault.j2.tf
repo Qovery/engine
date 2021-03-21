@@ -1,10 +1,10 @@
 locals {
   kubeconfig_base64 = base64encode(local.kubeconfig)
 }
-
+// do not run for tests clusters to avoid uncleaned info.
+// do not try to use count into resource, it will fails trying to connect to vault
+{% if not test_cluster %}
 resource "vault_generic_secret" "cluster-access" {
-  // do not run for tests clusters to avoid uncleaned info
-  count = var.test_cluster == "true" ? 0 : 1
   path = "official-clusters-access/${var.organization_id}-${var.kubernetes_cluster_id}"
 
   data_json = <<EOT
@@ -26,3 +26,4 @@ EOT
     aws_eks_cluster.eks_cluster,
   ]
 }
+{% endif %}
