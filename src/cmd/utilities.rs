@@ -8,7 +8,6 @@ use crate::cmd::utilities::CommandOutputType::{STDERR, STDOUT};
 use crate::error::SimpleErrorKind::Other;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
-use itertools::Itertools;
 use std::time::Instant;
 use timeout_readwrite::TimeoutReader;
 
@@ -182,7 +181,7 @@ where
     let process_start_time = Instant::now();
 
     // Read stdout/stderr until timeout is reached
-    let reader_timeout = std::time::Duration::from_secs(1);
+    let reader_timeout = std::time::Duration::from_secs(10.min(timeout.num_seconds() as u64));
     let stdout_reader = BufReader::new(TimeoutReader::new(child_process.stdout.take().unwrap(), reader_timeout))
         .lines()
         .map(STDOUT);
@@ -191,7 +190,7 @@ where
         .lines()
         .map(STDERR);
 
-    for line in stdout_reader.interleave(stderr_reader) {
+    for line in stdout_reader.chain(stderr_reader) {
         match line {
             STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {
                 if (process_start_time.elapsed().as_secs() as i64) >= timeout.num_seconds() {
