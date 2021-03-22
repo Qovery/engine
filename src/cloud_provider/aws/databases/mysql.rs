@@ -180,6 +180,7 @@ impl Service for MySQL {
         context.insert("tfstate_name", &get_tfstate_name(self));
 
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
+        context.insert("skip_final_snapshot", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
                 "resource_expiration_in_seconds",

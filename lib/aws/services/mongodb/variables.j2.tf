@@ -114,6 +114,12 @@ variable "preferred_backup_window" {
   type = string
 }
 
+variable "skip_final_snapshot" {
+  description = "Skip final snapshot"
+  default = {{ skip_final_snapshot }}
+  type = bool
+}
+
 {%- if snapshot is defined %}
 # Snapshots
 variable "snapshot_identifier" {
