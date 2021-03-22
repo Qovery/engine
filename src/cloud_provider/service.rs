@@ -996,18 +996,18 @@ where
     let events = cast_simple_error_to_engine_error(
         kubernetes.engine_error_scope(),
         kubernetes.context().execution_id(),
-        crate::cmd::kubectl::kubectl_exec_get_event(
+        crate::cmd::kubectl::kubectl_exec_get_event_for_pod(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             kubernetes.cloud_provider().credentials_environment_variables(),
+            &service.sanitized_name(),
         ),
     )?;
 
-    let pod_name_start = format!("{}-", service.name());
     for event in events.items {
-        if event.type_.to_lowercase() != "normal" && event.involved_object.name.starts_with(&pod_name_start) {
+        if event.type_.to_lowercase() != "normal" {
             if let Some(message) = event.message {
-                result.push(format!("{}: {}", event.type_, message));
+                result.push(format!("{} {}: {}", event.type_, event.reason, message));
             }
         }
     }
