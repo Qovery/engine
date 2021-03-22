@@ -673,6 +673,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
+name = "form_urlencoded"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fc25a87fa4fd2094bffb06925852034d90a17f0d1e05197d4956d3555752191"
+dependencies = [
+ "matches",
+ "percent-encoding 2.1.0",
+]
+
+[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -893,7 +903,7 @@ dependencies = [
  "log",
  "openssl-probe",
  "openssl-sys",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -963,6 +973,23 @@ name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+
+[[package]]
+name = "hashicorp_vault"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be1f396a370640749cd445ea9657afdb90a10e820b9c57e6d886d290386f9bff"
+dependencies = [
+ "base64 0.12.3",
+ "chrono",
+ "log",
+ "quick-error",
+ "reqwest 0.10.8",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "url 2.2.1",
+]
 
 [[package]]
 name = "heck"
@@ -1563,6 +1590,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50e4785f2c3b7589a0d0c1dd60285e1188adac4006e8abd6dd578e1567027363"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if 0.1.10",
+ "libc",
+ "void",
+]
+
+[[package]]
 name = "ntapi"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1851,7 +1891,7 @@ dependencies = [
  "idna 0.2.0",
  "lazy_static",
  "regex",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -1887,6 +1927,7 @@ dependencies = [
  "tar",
  "tera",
  "test-utilities",
+ "timeout-readwrite",
  "tokio 0.2.22",
  "tracing",
  "tracing-subscriber",
@@ -2238,7 +2279,7 @@ dependencies = [
  "serde_urlencoded 0.6.1",
  "tokio 0.2.22",
  "tokio-tls",
- "url 2.1.1",
+ "url 2.2.1",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -2596,7 +2637,7 @@ dependencies = [
  "dtoa",
  "itoa",
  "serde",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -2877,6 +2918,7 @@ dependencies = [
  "curl",
  "digitalocean",
  "dirs 3.0.1",
+ "hashicorp_vault",
  "qovery-engine",
  "rand 0.7.3",
  "reqwest 0.10.8",
@@ -2965,6 +3007,15 @@ dependencies = [
  "quote 1.0.7",
  "standback",
  "syn 1.0.48",
+]
+
+[[package]]
+name = "timeout-readwrite"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15f9e83663e1c312cbc7980611fa82ed60d622a947de3546350b549e5d69f9bc"
+dependencies = [
+ "nix",
 ]
 
 [[package]]
@@ -3274,7 +3325,7 @@ dependencies = [
  "smallvec 1.5.0",
  "thiserror",
  "tokio 0.2.22",
- "url 2.1.1",
+ "url 2.2.1",
 ]
 
 [[package]]
@@ -3432,10 +3483,11 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.1.1"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "829d4a8476c35c9bf0bbce5a3b23f4106f79728039b726d292bb93bc106787cb"
+checksum = "9ccd964113622c8e9322cfac19eb1004a07e636c545f325da085d5cdde6f1f8b"
 dependencies = [
+ "form_urlencoded",
  "idna 0.2.0",
  "matches",
  "percent-encoding 2.1.0",
@@ -3471,6 +3523,12 @@ name = "version_check"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
+
+[[package]]
+name = "void"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "walkdir"

@@ -63,3 +63,9 @@ pub struct RouteDataTemplate {
     pub application_name: String,
     pub application_port: u16,
 }
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct CpuLimits {
+    pub cpu_request: String,
+    pub cpu_limit: String,
+}

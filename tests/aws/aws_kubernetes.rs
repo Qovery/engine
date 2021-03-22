@@ -5,11 +5,12 @@ use std::fs::File;
 use std::io::Read;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, init};
+use self::test_utilities::utilities::{context, engine_run_test, generate_id, init, FuncTestsSecrets};
 use gethostname;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
+use self::test_utilities::aws::eks_options;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::transaction::TransactionResult;
 
@@ -48,7 +49,7 @@ fn generate_cluster_id(region: &str) -> String {
     }
 }
 
-fn create_and_destroy_eks_cluster(region: &str, test_name: &str) {
+fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_name: &str) {
     engine_run_test(|| {
         init();
 
@@ -65,13 +66,6 @@ fn create_and_destroy_eks_cluster(region: &str, test_name: &str) {
 
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let mut file = File::open("tests/assets/eks-options.json").unwrap();
-        let mut read_buf = String::new();
-        file.read_to_string(&mut read_buf).unwrap();
-
-        let options_result =
-            serde_json::from_str::<qovery_engine::cloud_provider::aws::kubernetes::Options>(read_buf.as_str());
-
         let kubernetes = EKS::new(
             context.clone(),
             generate_cluster_id(region).as_str(),
@@ -80,7 +74,7 @@ fn create_and_destroy_eks_cluster(region: &str, test_name: &str) {
             region,
             &aws,
             &cloudflare,
-            options_result.expect("Oh my god an error in test... Options options options"),
+            eks_options(secrets),
             nodes,
         );
 
@@ -116,8 +110,10 @@ fn create_and_destroy_eks_cluster(region: &str, test_name: &str) {
 #[test]
 fn create_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
+    let secrets = FuncTestsSecrets::new();
     create_and_destroy_eks_cluster(
         region.clone(),
+        secrets,
         &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
     );
 }
@@ -126,8 +122,10 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
 #[test]
 fn create_and_destroy_eks_cluster_in_us_east_2() {
     let region = "us-east-2";
+    let secrets = FuncTestsSecrets::new();
     create_and_destroy_eks_cluster(
         region.clone(),
+        secrets,
         &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
     );
 }

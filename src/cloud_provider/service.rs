@@ -47,6 +47,7 @@ pub trait Service {
     fn private_port(&self) -> Option<u16>;
     fn start_timeout(&self) -> Timeout<u32>;
     fn total_cpus(&self) -> String;
+    fn cpu_burst(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;
@@ -61,10 +62,7 @@ pub trait Service {
             _ => return false,
         };
 
-        match TcpStream::connect(format!("{}:{}", ip, private_port)) {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+        TcpStream::connect(format!("{}:{}", ip, private_port)).is_ok()
     }
     fn engine_error_scope(&self) -> EngineErrorScope;
     fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
@@ -143,7 +141,7 @@ pub trait Router: StatelessService + Listen {
         check_domain_for(
             ListenersHelper::new(self.listeners()),
             self.domains(),
-            self.id().into(),
+            self.id(),
             self.context().execution_id(),
         )?;
         Ok(())
@@ -155,7 +153,7 @@ pub trait Database: StatefulService {
         check_domain_for(
             ListenersHelper::new(&listeners),
             domains,
-            self.id().into(),
+            self.id(),
             self.context().execution_id(),
         )?;
         Ok(())
@@ -872,7 +870,7 @@ where
             }
 
             let debug_logs = service.debug_logs(deployment_target);
-            let debug_logs_string = if debug_logs.len() > 0 {
+            let debug_logs_string = if !debug_logs.is_empty() {
                 debug_logs.join("\n")
             } else {
                 String::from("<no debug logs>")
@@ -963,7 +961,17 @@ where
     )?;
 
     for pod in pods.items {
-        for container_status in pod.status.container_statuses {
+        for container_condition in pod.status.conditions {
+            if container_condition.status.to_ascii_lowercase() == "false" {
+                result.push(format!(
+                    "Condition not met to start the container: {} -> {}: {}",
+                    container_condition.typee,
+                    container_condition.reason.unwrap_or_default(),
+                    container_condition.message.unwrap_or_default()
+                ))
+            }
+        }
+        for container_status in pod.status.container_statuses.unwrap_or_default() {
             if let Some(last_state) = container_status.last_state {
                 if let Some(terminated) = last_state.terminated {
                     if let Some(message) = terminated.message {

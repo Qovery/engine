@@ -277,7 +277,7 @@ where
 {
     let result = kubectl_exec_get_pod(kubernetes_config, namespace, selector, envs)?;
 
-    if result.items.is_empty() || result.items.first().unwrap().status.container_statuses.is_empty() {
+    if result.items.is_empty() || result.items.first().unwrap().status.container_statuses.is_none() {
         return Ok(None);
     }
 

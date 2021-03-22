@@ -115,6 +115,10 @@ impl Service for PostgreSQL {
         self.total_cpus.to_string()
     }
 
+    fn cpu_burst(&self) -> String {
+        unimplemented!()
+    }
+
     fn total_ram_in_mib(&self) -> u32 {
         self.total_ram_in_mib
     }
@@ -176,6 +180,7 @@ impl Service for PostgreSQL {
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
         context.insert("tfstate_name", &get_tfstate_name(self));
 
+        context.insert("skip_final_snapshot", &self.context().is_test_cluster());
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
 
         if self.context.resource_expiration_in_seconds().is_some() {
