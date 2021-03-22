@@ -90,7 +90,7 @@ variable "auto_minor_version_upgrade" {
 
 variable "apply_changes_now" {
   description = "Apply changes now or during the during the maintenance window"
-  default = true
+  default = false
   type = bool
 }
 
