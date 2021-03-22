@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::databases::utilities::rds_name_sanitizer;
+use crate::cloud_provider::aws::databases::utilities::{rds_name_sanitizer, get_parameter_group_from_version};
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
@@ -15,8 +15,8 @@ use crate::cloud_provider::utilities::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorScope, StringError};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::error::{EngineError, EngineErrorScope, StringError, EngineErrorCause};
+use crate::models::{Context, Listen, Listener, Listeners, DatabaseKind};
 
 pub struct MySQL {
     context: Context,
@@ -154,6 +154,19 @@ impl Service for MySQL {
 
         let version = &self.matching_correct_version(is_managed_services)?;
         context.insert("version", &version);
+
+        if is_managed_services {
+            let parameter_group_family = match get_parameter_group_from_version(&version, DatabaseKind::Mysql) {
+                Ok(v) => v,
+                Err(e) => return Err(EngineError{
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: (&self.context.execution_id()).to_string(),
+                    message: Some(e),
+                }),
+            };
+            context.insert("parameter_group_family", &parameter_group_family);
+        };
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
             context.insert(k, v);

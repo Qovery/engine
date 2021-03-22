@@ -122,7 +122,7 @@ variable "upgrade_minor" {
 
 variable "apply_changes_now" {
   description = "Apply changes now or during the during the maintenance window"
-  default = true
+  default = false
   type = bool
 }
 

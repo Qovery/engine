@@ -660,7 +660,7 @@ impl Database {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DatabaseKind {
     Postgresql,

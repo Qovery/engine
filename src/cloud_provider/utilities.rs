@@ -224,7 +224,7 @@ pub struct VersionsNumber {
     pub(crate) patch: Option<String>,
 }
 
-fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
+pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
     let mut version_split = version.split(".");
 
     let major = match version_split.next() {
