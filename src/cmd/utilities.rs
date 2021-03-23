@@ -8,6 +8,7 @@ use crate::cmd::utilities::CommandOutputType::{STDERR, STDOUT};
 use crate::error::SimpleErrorKind::Other;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
+use itertools::Itertools;
 use std::time::Instant;
 use timeout_readwrite::TimeoutReader;
 
@@ -186,19 +187,22 @@ where
         .lines()
         .map(STDOUT);
 
-    let stderr_reader = BufReader::new(TimeoutReader::new(child_process.stderr.take().unwrap(), reader_timeout))
-        .lines()
-        .map(STDERR);
+    let stderr_reader = BufReader::new(TimeoutReader::new(
+        child_process.stderr.take().unwrap(),
+        std::time::Duration::from_secs(0), // don't block on stderr
+    ))
+    .lines()
+    .map(STDERR);
 
-    for line in stdout_reader.chain(stderr_reader) {
+    for line in stdout_reader.interleave(stderr_reader) {
         match line {
-            STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {
-                if (process_start_time.elapsed().as_secs() as i64) >= timeout.num_seconds() {
-                    break;
-                }
-            }
+            STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {}
             STDOUT(line) => stdout_output(line),
             STDERR(line) => stderr_output(line),
+        }
+
+        if (process_start_time.elapsed().as_secs() as i64) >= timeout.num_seconds() {
+            break;
         }
     }
 
@@ -311,6 +315,9 @@ mod tests {
         let ret = exec_with_envs_and_output("sleep", vec!["120"], vec![], |_| {}, |_| {}, Duration::seconds(2));
         assert_eq!(ret.is_err(), true);
         assert_eq!(ret.err().unwrap().message.unwrap().contains("timeout"), true);
+
+        let ret = exec_with_envs_and_output("yes", vec![""], vec![], |_| {}, |_| {}, Duration::seconds(2));
+        assert_eq!(ret.is_err(), true);
 
         let ret2 = exec_with_envs_and_output("sleep", vec!["1"], vec![], |_| {}, |_| {}, Duration::seconds(5));
 
