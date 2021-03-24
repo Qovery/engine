@@ -10,6 +10,9 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::{cmd, utilities};
+use retry::delay::Fixed;
+use retry::Error::Operation;
+use retry::OperationResult;
 
 const CR_API_PATH: &str = "https://api.digitalocean.com/v2/registry";
 const CR_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/registry";
@@ -107,14 +110,35 @@ impl DOCR {
     }
 
     fn push_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PushResult, EngineError> {
-        match cmd::utilities::exec("docker", vec!["tag", image.name_with_tag().as_str(), dest.as_str()]) {
-            Err(_) => {
+        let result = retry::retry(Fixed::from_millis(5000).take(12), || {
+            match cmd::utilities::exec("docker", vec!["tag", image.name_with_tag().as_str(), dest.as_str()]) {
+                Ok(_) => OperationResult::Ok(()),
+                Err(e) => {
+                    error!("error while trying to tag image, retrying...");
+                    OperationResult::Retry(e)
+                }
+            }
+        });
+
+        match result {
+            Ok(_) => {}
+            Err(Operation { error, .. }) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "failed to tag image ({}) {:?}. {:?}",
+                        image.name_with_tag(),
+                        image,
+                        error.message
+                    ),
+                ))
+            }
+            Err(retry::Error::Internal(_)) => {
                 return Err(self.engine_error(
                     EngineErrorCause::Internal,
                     format!("failed to tag image ({}) {:?}", image.name_with_tag(), image,),
-                ));
+                ))
             }
-            _ => {}
         };
 
         match cmd::utilities::exec_with_output(
@@ -144,7 +168,27 @@ impl DOCR {
         image.registry_secret = Some(registry_name);
         image.registry_url = Some(dest);
 
-        Ok(PushResult { image })
+        let result = retry::retry(Fixed::from_millis(5000).take(12), || {
+            match self.does_image_exists(&image) {
+                true => OperationResult::Ok(&image),
+                false => {
+                    warn!("image is not yet available on Digital Ocean Registry, retrying in a few seconds...");
+                    OperationResult::Retry(())
+                }
+            }
+        });
+
+        let image_not_reachable = Err(self.engine_error(
+            EngineErrorCause::Internal,
+            format!(
+                "image has been pushed on Digital Ocean Registry but is not yet available, please try to redeploy in a few minutes.",
+            ),
+        ));
+        match result {
+            Ok(_) => Ok(PushResult { image }),
+            Err(Operation { .. }) => image_not_reachable,
+            Err(retry::Error::Internal(_)) => image_not_reachable,
+        }
     }
 
     pub fn delete_repository(&self) -> Result<(), EngineError> {
