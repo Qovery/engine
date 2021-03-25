@@ -1,6 +1,6 @@
-use crate::models::DatabaseKind;
-use crate::error::StringError;
 use crate::cloud_provider::utilities::get_version_number;
+use crate::error::StringError;
+use crate::models::DatabaseKind;
 
 pub fn rds_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
     let max_size = max_size - prefix.len();
@@ -15,19 +15,25 @@ pub fn get_parameter_group_from_version(version: &str, database_kind: DatabaseKi
     let version_number = match get_version_number(version) {
         Ok(v) => {
             if v.minor.is_none() {
-                return Err(format!("Can't determine the minor version, to select parameter group for {:?} version {}", database_kind, version));
+                return Err(format!(
+                    "Can't determine the minor version, to select parameter group for {:?} version {}",
+                    database_kind, version
+                ));
             };
             v
-        },
+        }
         Err(e) => return Err(e),
     };
 
     match database_kind {
-        DatabaseKind::Mysql => Ok(format!("mysql{}.{}", version_number.major, version_number.minor.unwrap())),
+        DatabaseKind::Mysql => Ok(format!(
+            "mysql{}.{}",
+            version_number.major,
+            version_number.minor.unwrap()
+        )),
         _ => Ok("".to_string()),
     }
 }
-
 
 #[cfg(test)]
 mod tests_aws_databases_parameters {
@@ -43,6 +49,9 @@ mod tests_aws_databases_parameters {
         assert_eq!(mysql_parameter_group.unwrap(), "mysql8.0");
 
         let mysql_parameter_group = get_parameter_group_from_version("8", DatabaseKind::Mysql);
-        assert_eq!(mysql_parameter_group.unwrap_err(), "Can't determine the minor version, to select parameter group for Mysql version 8");
+        assert_eq!(
+            mysql_parameter_group.unwrap_err(),
+            "Can't determine the minor version, to select parameter group for Mysql version 8"
+        );
     }
 }
