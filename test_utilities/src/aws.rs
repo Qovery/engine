@@ -297,7 +297,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context, secrets: Func
 
     // pSQL 1 management part
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = fqdn_id.clone() + &test_domain;
+    let fqdn = format!("{}.{}", fqdn_id, &test_domain);
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_id();
@@ -305,7 +305,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context, secrets: Func
 
     // pSQL 2 management part
     let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
-    let fqdn_2 = fqdn_id_2.clone() + &test_domain;
+    let fqdn_2 = format!("{}.{}", fqdn_id_2, &test_domain);
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgresql2".to_string();
 
