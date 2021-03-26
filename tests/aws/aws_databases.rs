@@ -70,7 +70,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
     let span = span!(
         Level::INFO,
         "test",
-        name = "postgresql_deploy_a_working_development_environment_with_all_options"
+        name = "postgresql_failover_dev_environment_with_all_options"
     );
     let _enter = span.enter();
 

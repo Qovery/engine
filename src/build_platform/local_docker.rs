@@ -74,6 +74,13 @@ impl LocalDocker {
             vec!["build"]
         };
 
+        let args = self.context.docker_build_options();
+        for v in args.iter() {
+            for s in v.iter() {
+                docker_args.push(String::as_str(s));
+            }
+        }
+
         let name_with_tag = build.image.name_with_tag();
 
         docker_args.extend(vec!["-f", dockerfile_complete_path, "-t", name_with_tag.as_str()]);

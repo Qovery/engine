@@ -26,6 +26,20 @@ use serde::{Deserialize, Serialize};
 extern crate time;
 use time::Instant;
 
+pub fn context() -> Context {
+    let execution_id = execution_id();
+    let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
+    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+
+    let metadata = Metadata {
+        dry_run_deploy: Option::from(false),
+        resource_expiration_in_seconds: Some(3600),
+        docker_build_options: Some("--network host".to_string()),
+    };
+
+    Context::new(execution_id, home_dir, lib_root_dir, true, None, Option::from(metadata))
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[allow(non_snake_case)]
 pub struct FuncTestsSecrets {
@@ -295,18 +309,6 @@ fn curl_path(path: &str) -> bool {
             return false;
         }
     }
-}
-
-pub fn context() -> Context {
-    let execution_id = execution_id();
-    let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
-    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let metadata = Metadata {
-        dry_run_deploy: Option::from(false),
-        resource_expiration_in_seconds: Some(3600),
-    };
-
-    Context::new(execution_id, home_dir, lib_root_dir, true, None, Option::from(metadata))
 }
 
 fn kubernetes_config_path(
