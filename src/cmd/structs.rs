@@ -187,6 +187,7 @@ pub struct KubernetesEvent {
     #[serde(rename = "type")]
     pub type_: String,
     pub message: Option<String>,
+    pub last_timestamp: String,
     pub reason: String,
     pub involved_object: KubernetesInvolvedObject,
 }

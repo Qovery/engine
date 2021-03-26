@@ -728,27 +728,17 @@ where
     )
 }
 
-pub fn kubectl_exec_get_event_for_pod<P>(
+pub fn kubectl_exec_get_event<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: Vec<(&str, &str)>,
-    pod_name: &str,
 ) -> Result<KubernetesList<KubernetesEvent>, SimpleError>
 where
     P: AsRef<Path>,
 {
     // Note: can't use app selector with kubectl get event..
     kubectl_exec::<P, KubernetesList<KubernetesEvent>>(
-        vec![
-            "get",
-            "event",
-            "-o",
-            "json",
-            "-n",
-            namespace,
-            "--field-selector",
-            format!("involvedObject.fieldPath=spec.containers{{{}}}", pod_name).as_str(),
-        ],
+        vec!["get", "event", "-o", "json", "-n", namespace],
         kubernetes_config,
         envs,
     )
