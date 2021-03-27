@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    "helm.sh/hook": "test"
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation,hook-failed"
+    "helm.sh/hook-weight": "10"
+  name: {{ include "vpa.fullname" . }}-test
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vpa.fullname" . }}-test
+  labels:
+    {{- include "vpa.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": "test"
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation,hook-failed"
+    "helm.sh/hook-weight": "20"
+rules:
+  - apiGroups:
+      - "metrics.k8s.io"
+    resources:
+      - "nodes"
+    verbs:
+      - list
+  - apiGroups:
+      - "apiextensions.k8s.io"
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "autoscaling.k8s.io"
+    resources:
+      - verticalpodautoscalers
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+  - apiGroups:
+      - "autoscaling.k8s.io"
+    resources:
+      - verticalpodautoscalercheckpoints
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "vpa.fullname" . }}-test
+  labels:
+    {{- include "vpa.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": "test"
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation,hook-failed"
+    "helm.sh/hook-weight": "30"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "vpa.fullname" . }}-test
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vpa.fullname" . }}-test
+    namespace: {{ .Release.Namespace }}

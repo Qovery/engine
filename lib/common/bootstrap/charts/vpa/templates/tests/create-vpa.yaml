@@ -1,0 +1,41 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "vpa.fullname" . }}-test-create-vpa
+  labels:
+    {{- include "vpa.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    "helm.sh/hook-weight": "100"
+spec:
+  serviceAccountName: {{ include "vpa.fullname" . }}-test
+  containers:
+    - name: test
+      image: quay.io/reactiveops/ci-images:v11-alpine
+      command: ['bash']
+      args:
+        - -c
+        - |
+          #!/bin/bash
+
+          set -e
+          set -x
+          cat <<EOF | kubectl -n {{ .Release.Namespace }} apply -f -
+          apiVersion: autoscaling.k8s.io/v1
+          kind: VerticalPodAutoscaler
+          metadata:
+            name: test-vpa
+          spec:
+            targetRef:
+              apiVersion: "apps/v1"
+              kind:       Deployment
+              name:       my-app
+            updatePolicy:
+              updateMode: "Off"
+          EOF
+
+          kubectl -n {{ .Release.Namespace }} describe vpa test-vpa
+          kubectl -n {{ .Release.Namespace }} delete vpa test-vpa
+  restartPolicy: Never

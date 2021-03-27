@@ -1,0 +1,24 @@
+{{- if not .Values.testMode }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "vpa.fullname" . }}-metrics-api-available
+  labels:
+    {{- include "vpa.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    "helm.sh/hook-weight": "70"
+spec:
+  serviceAccountName: {{ include "vpa.fullname" . }}-test
+  containers:
+    - name: test
+      image: quay.io/reactiveops/ci-images:v11-alpine
+      command: ['kubectl']
+      args:
+        - get
+        - --raw
+        - "/apis/metrics.k8s.io/v1beta1/nodes"
+  restartPolicy: Never
+{{- end }}

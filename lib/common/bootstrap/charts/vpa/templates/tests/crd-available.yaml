@@ -1,0 +1,44 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "vpa.fullname" . }}-checkpoint-crd-available
+  labels:
+    {{- include "vpa.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation"
+    "helm.sh/hook-weight": "50"
+spec:
+  serviceAccountName:  {{ include "vpa.fullname" . }}-test
+  containers:
+    - name: test
+      image: quay.io/reactiveops/ci-images:v11-alpine
+      command: ['kubectl']
+      args:
+        - get
+        - crd
+        - verticalpodautoscalercheckpoints.autoscaling.k8s.io
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "vpa.fullname" . }}-crd-available
+  labels:
+    {{- include "vpa.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation"
+    "helm.sh/hook-weight": "50"
+spec:
+  serviceAccountName: {{ include "vpa.fullname" . }}-test
+  containers:
+    - name: test
+      image: quay.io/reactiveops/ci-images:v11-alpine
+      command: ['kubectl']
+      args:
+        - get
+        - crd
+        - verticalpodautoscalers.autoscaling.k8s.io
+  restartPolicy: Never

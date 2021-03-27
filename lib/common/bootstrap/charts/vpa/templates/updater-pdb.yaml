@@ -1,0 +1,13 @@
+---
+{{- if .Values.updater.maxUnavailable }}
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: "{{ template "vpa.fullname" . }}-updater-pdb"
+spec:
+  maxUnavailable: {{ .Values.updater.maxUnavailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: updater
+      app.kubernetes.io/name: {{ template "vpa.fullname" . }}
+{{- end }}
