@@ -99,7 +99,7 @@ updater:
 
 admissionController:
   # admissionController.enabled -- If true, will install the admission-controller component of vpa
-  enabled: false
+  enabled: true
   # admissionController.generateCertificate -- If true and admissionController is enabled, a pre-install hook will run to create the certificate for the webhook
   generateCertificate: true
   certGen:

@@ -12,6 +12,16 @@ resource "helm_release" "metrics_server" {
   }
 
   set {
+    name = "extraArgs.kubelet-preferred-address-types"
+    value = "InternalIP"
+  }
+
+  set {
+    name = "apiService.create"
+    value = "true"
+  }
+
+  set {
     name = "resources.limits.cpu"
     value = "250m"
   }
