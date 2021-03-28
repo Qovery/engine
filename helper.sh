@@ -290,7 +290,8 @@ environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.RUST_LOG="DEBUG,rusoto_core::request=info,hyper=info",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
-environmentVariables.VAULT_TOKEN="s.TOhnuuSbHzrPEJ46X1E4xBUM",\
+environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
+environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 resources.limits.cpu="1",\
 resources.limits.memory="2Gi",\
