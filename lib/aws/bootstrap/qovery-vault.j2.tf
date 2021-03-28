@@ -3,7 +3,7 @@ locals {
 }
 // do not run for tests clusters to avoid uncleaned info.
 // do not try to use count into resource, it will fails trying to connect to vault
-{% if not test_cluster %}
+{% if vault_auth_method != "none" and not test_cluster %}
 resource "vault_generic_secret" "cluster-access" {
   path = "official-clusters-access/${var.organization_id}-${var.kubernetes_cluster_id}"
 
