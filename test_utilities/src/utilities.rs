@@ -12,7 +12,7 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::os::unix::fs::PermissionsExt;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber;
 
 use crate::aws::KUBE_CLUSTER_ID;
@@ -32,8 +32,22 @@ pub fn context() -> Context {
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
 
     let metadata = Metadata {
-        dry_run_deploy: Option::from(false),
-        resource_expiration_in_seconds: Some(3600),
+        dry_run_deploy: Option::from({
+            match env::var_os("dry_run_deploy") {
+                Some(_) => true,
+                None => false,
+            }
+        }),
+        resource_expiration_in_seconds: {
+            // set a custom ttl as environment variable for manual tests
+            match env::var_os("ttl") {
+                Some(ttl) => {
+                    let ttl_converted: u32 = ttl.into_string().unwrap().parse().unwrap();
+                    Some(ttl_converted)
+                }
+                None => Some(3600),
+            }
+        },
         docker_build_options: Some("--network host".to_string()),
     };
 
@@ -147,7 +161,10 @@ impl FuncTestsSecrets {
 
         let vault_config = match Self::get_vault_config() {
             Ok(vault_config) => vault_config,
-            Err(_) => return empty_secrets,
+            Err(_) => {
+                warn!("Empty config is returned as no VAULT connection can be established. If not not expected, check your environment variables");
+                return empty_secrets;
+            }
         };
 
         let client = hashicorp_vault::Client::new(vault_config.address, vault_config.token).unwrap();
