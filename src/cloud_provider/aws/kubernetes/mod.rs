@@ -29,6 +29,7 @@ use crate::string::terraform_list_format;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
+use std::env;
 
 pub mod node;
 pub mod roles;
@@ -143,21 +144,15 @@ impl<'a> EKS<'a> {
         let rds_zone_c_subnet_blocks = format_ips(&self.options.rds_zone_c_subnet_blocks);
 
         let documentdb_zone_a_subnet_blocks = format_ips(&self.options.documentdb_zone_a_subnet_blocks);
-
         let documentdb_zone_b_subnet_blocks = format_ips(&self.options.documentdb_zone_b_subnet_blocks);
-
         let documentdb_zone_c_subnet_blocks = format_ips(&self.options.documentdb_zone_c_subnet_blocks);
 
         let elasticache_zone_a_subnet_blocks = format_ips(&self.options.elasticache_zone_a_subnet_blocks);
-
         let elasticache_zone_b_subnet_blocks = format_ips(&self.options.elasticache_zone_b_subnet_blocks);
-
         let elasticache_zone_c_subnet_blocks = format_ips(&self.options.elasticache_zone_c_subnet_blocks);
 
         let elasticsearch_zone_a_subnet_blocks = format_ips(&self.options.elasticsearch_zone_a_subnet_blocks);
-
         let elasticsearch_zone_b_subnet_blocks = format_ips(&self.options.elasticsearch_zone_b_subnet_blocks);
-
         let elasticsearch_zone_c_subnet_blocks = format_ips(&self.options.elasticsearch_zone_c_subnet_blocks);
 
         let region_cluster_id = format!("{}-{}", self.region(), self.id());
@@ -253,6 +248,31 @@ impl<'a> EKS<'a> {
         };
         context.insert("acme_server_url", lets_encrypt_url);
 
+        // Vault
+        context.insert("vault_auth_method", "none");
+
+        match env::var_os("VAULT_ADDR") {
+            Some(_) => {
+                // select the correct used method
+                match env::var_os("VAULT_ROLE_ID") {
+                    Some(role_id) => {
+                        context.insert("vault_auth_method", "app_role");
+                        context.insert("vault_role_id", role_id.to_str().unwrap());
+
+                        match env::var_os("VAULT_SECRET_ID") {
+                            Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
+                            None => error!("VAULT_SECRET_ID environment variable wasn't found"),
+                        }
+                    }
+                    None => match env::var_os("VAULT_TOKEN") {
+                        Some(_) => context.insert("vault_auth_method", "token"),
+                        None => {}
+                    },
+                }
+            }
+            None => {}
+        };
+
         // AWS
         context.insert("aws_access_key", &self.cloud_provider.access_key_id);
         context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
@@ -308,32 +328,25 @@ impl<'a> EKS<'a> {
         // AWS - DocumentDB
         context.insert("documentdb_cidr_subnet", &documentdb_cidr_subnet);
         context.insert("documentdb_zone_a_subnet_blocks", &documentdb_zone_a_subnet_blocks);
-
         context.insert("documentdb_zone_b_subnet_blocks", &documentdb_zone_b_subnet_blocks);
-
         context.insert("documentdb_zone_c_subnet_blocks", &documentdb_zone_c_subnet_blocks);
 
         // AWS - Elasticache
         context.insert("elasticache_cidr_subnet", &elasticache_cidr_subnet);
         context.insert("elasticache_zone_a_subnet_blocks", &elasticache_zone_a_subnet_blocks);
-
         context.insert("elasticache_zone_b_subnet_blocks", &elasticache_zone_b_subnet_blocks);
-
         context.insert("elasticache_zone_c_subnet_blocks", &elasticache_zone_c_subnet_blocks);
 
         // AWS - Elasticsearch
         context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet.clone());
-
         context.insert(
             "elasticsearch_zone_a_subnet_blocks",
             &elasticsearch_zone_a_subnet_blocks,
         );
-
         context.insert(
             "elasticsearch_zone_b_subnet_blocks",
             &elasticsearch_zone_b_subnet_blocks,
         );
-
         context.insert(
             "elasticsearch_zone_c_subnet_blocks",
             &elasticsearch_zone_c_subnet_blocks,
@@ -341,7 +354,6 @@ impl<'a> EKS<'a> {
 
         // grafana credentials
         context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
-
         context.insert("grafana_admin_password", self.options.grafana_admin_password.as_str());
 
         // qovery
