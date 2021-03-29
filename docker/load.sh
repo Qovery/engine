@@ -80,6 +80,7 @@ function download_terraform_plugins() {
   cd docker/engine/providers
   for i in * ; do
     cd $i
+    sed -ri 's/\{%.+//g' *.tf
     terraform init
     cd -
   done
