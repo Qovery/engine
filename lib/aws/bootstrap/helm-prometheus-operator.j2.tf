@@ -15,7 +15,6 @@ resource "helm_release" "prometheus_operator" {
   // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
   // to upgrade because of crd and the number of elements it has to deploy
   timeout = 480
-  create_namespace = true
   atomic = true
   max_history = 50
 
@@ -127,5 +126,6 @@ resource "helm_release" "prometheus_operator" {
   depends_on = [
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,
+    kubernetes_namespace.prometheus_namespace,
   ]
 }
