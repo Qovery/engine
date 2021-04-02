@@ -298,7 +298,6 @@ impl<'a> EKS<'a> {
             self.cloud_provider().terraform_state_credentials().region.as_str(),
         );
 
-        // TODO URGENT change the behavior of self.bucket_name()
         context.insert("aws_region", &self.region.name());
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
         context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
@@ -434,7 +433,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 self.cloud_provider.access_key_id.as_str(),
                 self.cloud_provider.secret_access_key.as_str(),
             ) {
-                Ok(_) => info!("Role {} already exist, or just created", role.role_name),
+                Ok(_) => info!("Role {} is already present, no need to create", role.role_name),
                 Err(e) => error!(
                     "While getting, or creating the role {} : causing by {:?}",
                     role.role_name, e
@@ -528,6 +527,96 @@ impl<'a> Kubernetes for EKS<'a> {
     fn on_downgrade_error(&self) -> Result<(), EngineError> {
         warn!("EKS.on_downgrade_error() called for {}", self.name());
         Ok(())
+    }
+
+    fn on_pause(&self) -> Result<(), EngineError> {
+        info!("EKS.on_pause() called for {}", self.name());
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Info,
+            Some(format!(
+                "Preparing EKS {} cluster pause with id {}",
+                self.name(),
+                self.id()
+            )),
+            self.context.execution_id(),
+        ));
+
+        let temp_dir = workspace_directory(
+            self.context.workspace_root_dir(),
+            self.context.execution_id(),
+            format!("bootstrap/{}", self.name()),
+        );
+
+        // generate terraform files and copy them into temp dir
+        let mut context = self.tera_context();
+
+        // pause: remove all worker nodes to reduce the bill but keep master to keep all the config
+        let worker_nodes: Vec<WorkerNodeDataTemplate> = Vec::new();
+        context.insert("eks_worker_nodes", &worker_nodes);
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Info,
+            Some(format!(
+                "Pausing EKS {} cluster deployment with id {}",
+                self.name(),
+                self.id()
+            )),
+            self.context.execution_id(),
+        ));
+
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+                temp_dir.as_str(),
+                self.context.is_dry_run_deploy(),
+            ),
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                format!("Error while pausing cluster {} with id {}.", self.name(), self.id());
+                Err(e)
+            }
+        }
+    }
+
+    fn on_pause_error(&self) -> Result<(), EngineError> {
+        warn!("EKS.on_pause_error() called for {}", self.name());
+        Err(self.engine_error(
+            EngineErrorCause::Internal,
+            format!("{} Kubernetes cluster failed to pause", self.name()),
+        ))
     }
 
     fn on_delete(&self) -> Result<(), EngineError> {
