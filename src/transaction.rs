@@ -37,6 +37,16 @@ impl<'a> Transaction<'a> {
         }
     }
 
+    pub fn pause_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), EngineError> {
+        match kubernetes.is_valid() {
+            Ok(_) => {
+                self.steps.push(Step::PauseKubernetes(kubernetes));
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
+    }
+
     pub fn delete_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), EngineError> {
         match kubernetes.is_valid() {
             Ok(_) => {
@@ -290,6 +300,13 @@ impl<'a> Transaction<'a> {
                         _ => {}
                     };
                 }
+                Step::PauseKubernetes(kubernetes) => {
+                    // revert pause
+                    match kubernetes.on_pause_error() {
+                        Err(err) => return Err(RollbackError::CommitError(err)),
+                        _ => {}
+                    };
+                }
                 Step::BuildEnvironment(_environment_action, _option) => {
                     // revert build applications
                 }
@@ -421,6 +438,16 @@ impl<'a> Transaction<'a> {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while deleting infrastructure: {:?}", err);
+                            return err;
+                        }
+                    };
+                }
+                Step::PauseKubernetes(kubernetes) => {
+                    // pause kubernetes
+                    match self.commit_infrastructure(*kubernetes, Action::Pause, kubernetes.on_pause()) {
+                        TransactionResult::Ok => {}
+                        err => {
+                            error!("Error while pausing infrastructure: {:?}", err);
                             return err;
                         }
                     };
@@ -725,6 +752,7 @@ enum Step<'a> {
     // init and create all the necessary resources (Network, Kubernetes)
     CreateKubernetes(&'a dyn Kubernetes),
     DeleteKubernetes(&'a dyn Kubernetes),
+    PauseKubernetes(&'a dyn Kubernetes),
     BuildEnvironment(&'a EnvironmentAction, DeploymentOption),
     DeployEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
     PauseEnvironment(&'a dyn Kubernetes, &'a EnvironmentAction),
@@ -736,6 +764,7 @@ impl<'a> Clone for Step<'a> {
         match self {
             Step::CreateKubernetes(k) => Step::CreateKubernetes(*k),
             Step::DeleteKubernetes(k) => Step::DeleteKubernetes(*k),
+            Step::PauseKubernetes(k) => Step::PauseKubernetes(*k),
             Step::BuildEnvironment(e, option) => Step::BuildEnvironment(*e, option.clone()),
             Step::DeployEnvironment(k, e) => Step::DeployEnvironment(*k, *e),
             Step::PauseEnvironment(k, e) => Step::PauseEnvironment(*k, *e),

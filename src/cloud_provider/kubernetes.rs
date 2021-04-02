@@ -106,6 +106,8 @@ pub trait Kubernetes: Listen {
     fn on_upgrade_error(&self) -> Result<(), EngineError>;
     fn on_downgrade(&self) -> Result<(), EngineError>;
     fn on_downgrade_error(&self) -> Result<(), EngineError>;
+    fn on_pause(&self) -> Result<(), EngineError>;
+    fn on_pause_error(&self) -> Result<(), EngineError>;
     fn on_delete(&self) -> Result<(), EngineError>;
     fn on_delete_error(&self) -> Result<(), EngineError>;
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError>;

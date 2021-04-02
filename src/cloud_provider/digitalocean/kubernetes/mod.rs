@@ -358,6 +358,14 @@ impl<'a> Kubernetes for DOKS<'a> {
         Ok(())
     }
 
+    fn on_pause(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_pause_error(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
     fn on_delete(&self) -> Result<(), EngineError> {
         Ok(())
     }
