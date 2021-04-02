@@ -1,0 +1,13 @@
+---
+{{- if .Values.recommender.maxUnavailable }}
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: "{{ template "vpa.fullname" . }}-recommender-pdb"
+spec:
+  maxUnavailable: {{ .Values.recommender.maxUnavailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: recommender
+      app.kubernetes.io/name: {{ template "vpa.fullname" . }}
+{{- end }}

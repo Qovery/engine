@@ -64,6 +64,9 @@ charts:
     version: 0.1.3
     dest: do-bootstrap
     repo_name: do-k8s-token-rotate
+  - name: vpa
+    version: 0.3.2
+    repo_name: fairwinds-stable
 
 repos:
   - name: stable
@@ -84,6 +87,8 @@ repos:
     url: https://kubernetes.github.io/autoscaler
   - name: do-k8s-token-rotate
     url: https://qovery.github.io/do-k8s-token-rotate/
+  - name: fairwinds-stable
+    url: https://charts.fairwinds.com/stable
 
 destinations:
   - name: default

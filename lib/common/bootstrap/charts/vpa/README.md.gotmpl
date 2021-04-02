@@ -1,0 +1,47 @@
+# VPA
+
+A chart to install the [Kubernetes Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler)
+
+This chart is entirely based on the manifests and various scripts in the `deploy` and `hack` directories of the VPA repository.
+
+## Tests and Debugging
+
+There are a few tests included with this chart that can help debug why your installation of VPA isn't working as expected. You can run `helm test -n <Release Namespace> <Release Name>` to run them.
+
+* `checkpoint-crd-available` - Checks for the verticalpodautoscalercheckpoints CRD
+* `crd-available` - Checks for the verticalpodautoscalers CRD
+* `metrics-api-available` - Checks to make sure that the metrics api endpoint is available. If it's not, install [metrics-server](https://github.com/kubernetes-sigs/metrics-server) in your cluster
+* `create-vpa` - A simple check to make sure that VPA objects can be created in your cluster. Does not check for functionality of that VPA.
+
+## Components
+
+There are three primary components to the Vertical Pod Autoscaler that can be enabled individually here.
+
+* recommender
+* updater
+* admissionController
+
+The admissionController is the only one that poses a stability consideration because it will create a mutatingwebhookconfiguration in your cluster. This _could_ cause the cluster to stop accepting pod creation requests if it is not configured correctly. Because of this, it is disabled by default in this chart. The recommender and updater are enabled by default.
+
+For more details, please see the values below, and the vertical pod autosclaer documentation.
+
+## Installation
+
+```bash
+helm repo add fairwinds-stable https://charts.fairwinds.com/stable
+helm install vpa fairwinds-stable/vpa --namespace vpa --create-namespace
+```
+
+## Utilize Prometheus for History
+
+In order to utilize prometheus for recommender history, you will need to pass some extra flags to the recommender. If you use prometheus operator installed in the `prometheus-operator` namespace, these values will do the trick.
+
+```
+recommender:
+  extraArgs:
+    prometheus-address: |
+      http://prometheus-operator-prometheus.prometheus-operator.svc.cluster.local:9090
+    storage: prometheus
+```
+
+{{ template "chart.valuesSection" . }}

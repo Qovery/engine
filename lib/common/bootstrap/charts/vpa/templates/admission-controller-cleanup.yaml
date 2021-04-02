@@ -1,0 +1,72 @@
+{{- if .Values.admissionController.cleanupOnDelete }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    "helm.sh/hook": "post-delete"
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation,hook-failed"
+    "helm.sh/hook-weight": "-100"
+  name: {{ include "vpa.fullname" . }}-cleanup
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "vpa.fullname" . }}-cleanup
+  labels:
+    app.kubernetes.io/name: {{ include "vpa.name" . }}
+    helm.sh/chart: {{ include "vpa.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: cleanup
+  annotations:
+    "helm.sh/hook": "post-delete"
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation,hook-failed"
+    "helm.sh/hook-weight": "-90"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vpa.fullname" . }}-cleanup
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "vpa.fullname" . }}-cleanup
+  labels:
+    app.kubernetes.io/name: {{ include "vpa.name" . }}
+    helm.sh/chart: {{ include "vpa.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: cleanup
+  annotations:
+    "helm.sh/hook": "post-delete"
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation"
+    "helm.sh/hook-weight": "-70"
+spec:
+  template:
+    metadata:
+      name: {{ include "vpa.fullname" . }}-cleanup
+      labels:
+        app.kubernetes.io/name: {{ include "vpa.name" . }}
+        helm.sh/chart: {{ include "vpa.chart" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/component: cleanup
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "vpa.fullname" . }}-cleanup
+      containers:
+      - name: cleanup
+        image: quay.io/reactiveops/ci-images:v11-alpine
+        command: ["bash"]
+        args:
+          - -c
+          - |
+            # From https://github.com/kubernetes/autoscaler/blob/vertical-pod-autoscaler-0.8.0/vertical-pod-autoscaler/pkg/admission-controller/delete-webhook.sh
+            echo "Unregistering VPA admission controller webhook"
+            kubectl delete -n {{ .Release.Namespace}} mutatingwebhookconfiguration.v1beta1.admissionregistration.k8s.io vpa-webhook-config || true
+            kubectl delete -n {{ .Release.Namespace}} secret vpa-tls-certs || true
+{{- end }}

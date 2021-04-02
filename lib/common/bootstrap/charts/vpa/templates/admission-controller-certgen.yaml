@@ -1,0 +1,126 @@
+{{- if .Values.admissionController.enabled }}
+{{- if .Values.admissionController.generateCertificate }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation,hook-failed"
+    "helm.sh/hook-weight": "-100"
+  name: {{ include "vpa.fullname" . }}-certgen
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "vpa.fullname" . }}-certgen
+  labels:
+    app.kubernetes.io/name: {{ include "vpa.name" . }}
+    helm.sh/chart: {{ include "vpa.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: certgen
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation,hook-failed"
+    "helm.sh/hook-weight": "-90"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vpa.fullname" . }}-certgen
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "vpa.fullname" . }}-certgen
+  labels:
+    app.kubernetes.io/name: {{ include "vpa.name" . }}
+    helm.sh/chart: {{ include "vpa.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: certgen
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation"
+    "helm.sh/hook-weight": "-70"
+spec:
+  template:
+    metadata:
+      name: {{ include "vpa.fullname" . }}-certgen
+      labels:
+        app.kubernetes.io/name: {{ include "vpa.name" . }}
+        helm.sh/chart: {{ include "vpa.chart" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/component: certgen
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "vpa.fullname" . }}-certgen
+      containers:
+      - name: certgen
+        image: "{{ .Values.admissionController.certGen.image.repository }}:{{ .Values.admissionController.certGen.image.tag | default .Chart.AppVersion }}"
+        command: ["bash"]
+        args:
+          - -c
+          - |
+            # From: https://github.com/kubernetes/autoscaler/blob/master/vpa/pkg/admission-controller/gencerts.sh
+            # Generates the a CA cert, a server key, and a server cert signed by the CA.
+            # reference:
+            # https://github.com/kubernetes/kubernetes/blob/master/plugin/pkg/admission/webhook/gencerts.sh
+            set -o errexit
+            set -o nounset
+            set -o pipefail
+            apk --update add openssl
+            CN_BASE="vpa_webhook"
+            TMP_DIR="/tmp/vpa-certs"
+
+            if kubectl get secret -n {{ .Release.Namespace }} vpa-tls-certs; then
+              echo "Secret vpa-tls-secrets already exists in namespace {{ .Release.Namespace }}"
+              exit 0
+            fi
+            echo "Generating certs for the VPA Admission Controller in ${TMP_DIR}."
+            mkdir -p ${TMP_DIR}
+            cat > ${TMP_DIR}/server.conf << EOF
+            [req]
+            req_extensions = v3_req
+            distinguished_name = req_distinguished_name
+            [req_distinguished_name]
+            [ v3_req ]
+            basicConstraints = CA:FALSE
+            keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+            extendedKeyUsage = clientAuth, serverAuth
+            subjectAltName = DNS:vpa-webhook.{{ .Release.Namespace }}.svc
+            EOF
+
+            # Create a certificate authority
+            openssl genrsa -out ${TMP_DIR}/caKey.pem 2048
+            set +o errexit
+            openssl req -x509 -new -nodes -key ${TMP_DIR}/caKey.pem -days 100000 -out ${TMP_DIR}/caCert.pem -subj "/CN=${CN_BASE}_ca" -addext "subjectAltName = DNS:${CN_BASE}_ca"
+            if [[ $? -ne 0 ]]; then
+              echo "ERROR: Failed to create CA certificate for self-signing. If the error is \"unknown option -addext\", update your openssl version or deploy VPA from the vpa-release-0.8 branch."
+              exit 1
+            fi
+            set -o errexit
+
+            # Create a server certiticate
+            openssl genrsa -out ${TMP_DIR}/serverKey.pem 2048
+            # Note the CN is the DNS name of the service of the webhook.
+            openssl req -new -key ${TMP_DIR}/serverKey.pem -out ${TMP_DIR}/server.csr -subj "/CN=vpa-webhook.{{ .Release.Namespace }}.svc" -config ${TMP_DIR}/server.conf -addext "subjectAltName = DNS:vpa-webhook.{{ .Release.Namespace }}.svc"
+            openssl x509 -req -in ${TMP_DIR}/server.csr -CA ${TMP_DIR}/caCert.pem -CAkey ${TMP_DIR}/caKey.pem -CAcreateserial -out ${TMP_DIR}/serverCert.pem -days 100000 -extensions SAN -extensions v3_req -extfile ${TMP_DIR}/server.conf
+
+            echo "Uploading certs to the cluster."
+            kubectl create secret --namespace={{ .Release.Namespace }} generic vpa-tls-certs --from-file=${TMP_DIR}/caKey.pem --from-file=${TMP_DIR}/caCert.pem --from-file=${TMP_DIR}/serverKey.pem --from-file=${TMP_DIR}/serverCert.pem
+
+            # Clean up after we're done.
+            echo "Deleting ${TMP_DIR}."
+            rm -rf ${TMP_DIR}
+        env:
+          {{- range $key, $value := .Values.admissionController.certGen.env }}
+          - name: {{ $key }}
+            value: {{ $value | quote }}
+          {{- end }}
+{{- end }}
+{{- end }}

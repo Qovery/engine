@@ -1,0 +1,13 @@
+{{- if .Values.admissionController.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: vpa-webhook
+spec:
+  ports:
+    - port: 443
+      targetPort: 8000
+  selector:
+    app.kubernetes.io/component: admission-controller
+    {{- include "vpa.selectorLabels" . | nindent 4 }}
+{{- end }}
