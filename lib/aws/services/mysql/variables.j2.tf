@@ -68,6 +68,12 @@ variable "mysql_version" {
   type = string
 }
 
+variable "parameter_group_family" {
+  description = "RDS parameter group family"
+  default = "{{ parameter_group_family }}"
+  type = string
+}
+
 variable "storage_type" {
   description = "One of 'standard' (magnetic), 'gp2' (general purpose SSD), or 'io1' (provisioned IOPS SSD)."
   default = "{{ database_disk_type }}"
@@ -122,7 +128,7 @@ variable "upgrade_minor" {
 
 variable "apply_changes_now" {
   description = "Apply changes now or during the during the maintenance window"
-  default = true
+  default = false
   type = bool
 }
 
@@ -149,6 +155,12 @@ variable "backup_window" {
 variable "delete_automated_backups" {
   description = "Delete automated backups"
   default = {{ delete_automated_backups }}
+  type = bool
+}
+
+variable "skip_final_snapshot" {
+  description = "Skip final snapshot"
+  default = {{ skip_final_snapshot }}
   type = bool
 }
 

@@ -660,7 +660,7 @@ impl Database {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DatabaseKind {
     Postgresql,
@@ -1019,6 +1019,16 @@ impl Context {
             _ => None,
         }
     }
+
+    pub fn docker_build_options(&self) -> Option<Vec<String>> {
+        match &self.metadata {
+            Some(meta) => match meta.docker_build_options.clone() {
+                Some(b) => Some(b.split(" ").map(|x| x.to_string()).collect()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 }
 
 /// put everything you want here that is required to change the behaviour of the request.
@@ -1027,13 +1037,19 @@ impl Context {
 pub struct Metadata {
     pub dry_run_deploy: Option<bool>,
     pub resource_expiration_in_seconds: Option<u32>,
+    pub docker_build_options: Option<String>,
 }
 
 impl Metadata {
-    pub fn new(dry_run_deploy: Option<bool>, resource_expiration_in_seconds: Option<u32>) -> Self {
+    pub fn new(
+        dry_run_deploy: Option<bool>,
+        resource_expiration_in_seconds: Option<u32>,
+        docker_build_options: Option<String>,
+    ) -> Self {
         Metadata {
             dry_run_deploy,
             resource_expiration_in_seconds,
+            docker_build_options,
         }
     }
 }

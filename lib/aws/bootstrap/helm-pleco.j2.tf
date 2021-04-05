@@ -15,6 +15,11 @@ enabledFeatures:
   ebs: true
   vpc: false
   s3: true
+  kms: true
+  cloudwatchLogs: true
+  iam: true
+  sshKeys: true
+  ecr: true
 PLECO
 }
 

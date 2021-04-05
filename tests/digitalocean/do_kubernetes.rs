@@ -12,15 +12,15 @@ use qovery_engine::cmd::kubectl::{kubectl_exec_create_namespace, kubectl_exec_de
 use qovery_engine::constants::DIGITAL_OCEAN_TOKEN;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::digitalocean::{digital_ocean_token, get_kube_cluster_name_from_uuid};
-use self::test_utilities::utilities::{engine_run_test, generate_id};
+use self::test_utilities::digitalocean::get_kube_cluster_name_from_uuid;
+use self::test_utilities::utilities::{engine_run_test, generate_id, FuncTestsSecrets};
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 
 //#[test]
 //#[ignore]
 fn create_doks_cluster_in_fra_10() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "create_doks_cluster_in_fra_10");
+        let span = span!(Level::INFO, "test", name = "create_doks_cluster_in_fra_10");
         let _enter = span.enter();
 
         let cluster_id = "my-first-doks-10";
@@ -28,6 +28,7 @@ fn create_doks_cluster_in_fra_10() {
         let region = "fra1";
 
         let context = test_utilities::utilities::context();
+        let secrets = FuncTestsSecrets::new();
 
         let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
         let session = engine.session().unwrap();
@@ -63,7 +64,8 @@ fn create_doks_cluster_in_fra_10() {
         tx.commit();
 
         // TESTING: Kube cluster UUID is OK ?
-        let res_uuid = get_uuid_of_cluster_from_name(digital_ocean_token().as_str(), cluster_name.clone());
+        let res_uuid =
+            get_uuid_of_cluster_from_name(secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(), cluster_name.clone());
         match res_uuid {
             Ok(uuid) => assert_eq!(get_kube_cluster_name_from_uuid(uuid.as_str()), cluster_name.clone()),
             Err(e) => {

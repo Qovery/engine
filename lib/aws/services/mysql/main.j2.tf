@@ -1,3 +1,17 @@
+locals {
+  tags_mysql = {
+    cluster_name = var.cluster_name
+    cluster_id = var.kubernetes_cluster_id
+    region = var.region
+    q_client_id = var.q_customer_id
+    q_environment_id = var.q_environment_id
+    q_project_id = var.q_project_id
+    database_identifier = var.mysql_identifier
+    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
+    {% if snapshot is defined and snapshot["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
+  }
+}
+
 data "aws_vpc" "selected" {
   filter {
     name = "tag:ClusterId"
@@ -57,21 +71,24 @@ resource "helm_release" "mysql_instance_external_name" {
   ]
 }
 
+resource "aws_db_parameter_group" "mysql_parameter_group" {
+  name   = "qovery-${var.mysql_identifier}"
+  family = var.parameter_group_family
+
+  tags = local.tags_mysql
+
+  # Set superuser permission to the default 'username' account
+  parameter {
+    name  = "log_bin_trust_function_creators"
+    value = "1"
+  }
+}
+
 # Non snapshoted version
 resource "aws_db_instance" "mysql_instance" {
   identifier = var.mysql_identifier
 
-  tags = {
-    cluster_name = var.cluster_name
-    cluster_id = var.kubernetes_cluster_id
-    region = var.region
-    q_client_id = var.q_customer_id
-    q_environment_id = var.q_environment_id
-    q_project_id = var.q_project_id
-    database_identifier = var.mysql_identifier
-    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
-    {% if snapshot is defined and snapshot["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
-  }
+  tags = local.tags_mysql
 
   # MySQL instance basics
   instance_class = var.instance_class
@@ -83,6 +100,7 @@ resource "aws_db_instance" "mysql_instance" {
   }
   password = var.password
   name = var.database_name
+  parameter_group_name = aws_db_parameter_group.mysql_parameter_group.name
   {%- if snapshot is defined and snapshot["snapshot_id"] %}
   # Snapshot
   snapshot_identifier = var.snapshot_identifier
@@ -113,7 +131,7 @@ resource "aws_db_instance" "mysql_instance" {
   # Backups
   backup_retention_period = var.backup_retention_period
   backup_window = var.backup_window
-  skip_final_snapshot = true
+  skip_final_snapshot = var.skip_final_snapshot
   delete_automated_backups = var.delete_automated_backups
 
 }

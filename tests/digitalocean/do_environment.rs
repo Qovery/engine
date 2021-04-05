@@ -1,12 +1,12 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use self::test_utilities::utilities::FuncTestsSecrets;
 use crate::digitalocean::deploy_environment_on_do;
 use qovery_engine::build_platform::Image;
 use qovery_engine::container_registry::docr::get_current_registry_name;
 use qovery_engine::models::{Action, Clone2, Context, CustomDomain, EnvironmentAction};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use test_utilities::digitalocean::digital_ocean_token;
 use test_utilities::utilities::{context, engine_run_test};
 use tracing::{span, Level};
 
@@ -51,12 +51,18 @@ pub fn delete_environment(context: &Context, environment_action: &EnvironmentAct
 //#[test]
 fn deploy_a_working_environment_with_no_router_on_do() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_with_no_router_on_do");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_with_no_router_on_do"
+        );
         let _enter = span.enter();
 
         let context = context();
         let context_for_delete = context.clone_not_same_execution_id();
         let mut environment = test_utilities::aws::environment_only_http_server(&context);
+        let secrets = FuncTestsSecrets::new();
+
         let mut environment_for_delete = test_utilities::aws::environment_only_http_server(&context);
         environment.routers = vec![];
         environment_for_delete.routers = vec![];
@@ -87,7 +93,7 @@ fn deploy_a_working_environment_with_no_router_on_do() {
         let registry_name = registry.name();
         assert_eq!(
             registry_name,
-            get_current_registry_name(digital_ocean_token().as_str())
+            get_current_registry_name(secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str())
                 .unwrap()
                 .as_str()
         );
@@ -108,23 +114,30 @@ fn deploy_a_working_environment_with_no_router_on_do() {
 //#[test]
 fn do_deploy_a_working_environment_with_custom_domain() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_with_custom_domain");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_with_custom_domain"
+        );
         let _enter = span.enter();
 
         let context = context();
         let context_for_delete = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
 
-        let mut environment = test_utilities::aws::working_minimal_environment(&context);
+        let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
         // Todo: fix domains
         environment.routers = environment
             .routers
             .into_iter()
             .map(|mut router| {
+                let custom_domain = secrets.clone().CUSTOM_TEST_DOMAIN.unwrap();
+                let target_domain = secrets.clone().DEFAULT_TEST_DOMAIN.unwrap();
                 router.custom_domains = vec![CustomDomain {
                     // should be the client domain
-                    domain: "test-domain.qvy.io".to_string(),
+                    domain: format!("test-domain.{}", custom_domain),
                     // should be our domain
-                    target_domain: "target-domain.oom.sh".to_string(),
+                    target_domain: format!("target-domain.{}", target_domain),
                 }];
                 router
             })
@@ -156,12 +169,17 @@ fn do_deploy_a_working_environment_with_custom_domain() {
 //#[test]
 fn deploy_a_working_environment_router_and_app_on_do() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_a_working_environment_router_and_app_on_do");
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_router_and_app_on_do"
+        );
         let _enter = span.enter();
 
         let context = context();
+        let secrets = FuncTestsSecrets::new();
         //let context_for_delete = context.clone_not_same_execution_id();
-        let environment = test_utilities::aws::environment_only_http_server_router(&context);
+        let environment = test_utilities::aws::environment_only_http_server_router(&context, secrets);
         let ea = EnvironmentAction::Environment(environment);
 
         match deploy_environment_on_do(&context, &ea) {

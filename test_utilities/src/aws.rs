@@ -1,12 +1,10 @@
 extern crate serde;
 extern crate serde_derive;
 
-use std::fs::File;
-
 use chrono::Utc;
 
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
-use qovery_engine::cloud_provider::aws::kubernetes::EKS;
+use qovery_engine::cloud_provider::aws::kubernetes::{Options, EKS};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
@@ -20,32 +18,12 @@ use qovery_engine::models::{
 };
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, generate_id};
+use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-1";
 pub const AWS_KUBERNETES_VERSION: &str = "1.16";
 pub const KUBE_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
-
-pub fn aws_access_key_id() -> String {
-    std::env::var("AWS_ACCESS_KEY_ID").expect("env var AWS_ACCESS_KEY_ID is mandatory")
-}
-
-pub fn aws_secret_key() -> String {
-    std::env::var("AWS_SECRET_ACCESS_KEY").expect("env var AWS_SECRET_ACCESS_KEY is mandatory")
-}
-
-pub fn aws_default_region() -> String {
-    std::env::var("AWS_DEFAULT_REGION").expect("env var AWS_DEFAULT_REGION is mandatory")
-}
-
-pub fn terraform_aws_access_key_id() -> String {
-    std::env::var("TERRAFORM_AWS_ACCESS_KEY_ID").expect("env var TERRAFORM_AWS_ACCESS_KEY_ID is mandatory")
-}
-
-pub fn terraform_aws_secret_access_key() -> String {
-    std::env::var("TERRAFORM_AWS_SECRET_ACCESS_KEY").expect("env var TERRAFORM_AWS_SECRET_ACCESS_KEY is mandatory")
-}
 
 pub fn execution_id() -> String {
     Utc::now()
@@ -56,13 +34,14 @@ pub fn execution_id() -> String {
 }
 
 pub fn container_registry_ecr(context: &Context) -> ECR {
+    let secrets = FuncTestsSecrets::new();
     ECR::new(
         context.clone(),
         "default-ecr-registry-Qovery Test",
         "ea59qe62xaw3wjai",
-        aws_access_key_id().as_str(),
-        aws_secret_key().as_str(),
-        aws_default_region().as_str(),
+        secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
+        secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
+        secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
     )
 }
 
@@ -92,19 +71,165 @@ pub fn aws_kubernetes_nodes() -> Vec<Node> {
 }
 
 pub fn cloud_provider_aws(context: &Context) -> AWS {
+    let secrets = FuncTestsSecrets::new();
     AWS::new(
         context.clone(),
         "u8nb94c7fwxzr2jt",
         ORGANIZATION_ID,
         "QoveryTest",
-        aws_access_key_id().as_str(),
-        aws_secret_key().as_str(),
+        secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
+        secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
         TerraformStateCredentials {
-            access_key_id: terraform_aws_access_key_id().to_string(),
-            secret_access_key: terraform_aws_secret_access_key().to_string(),
+            access_key_id: secrets.TERRAFORM_AWS_ACCESS_KEY_ID.unwrap(),
+            secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
             region: "eu-west-3".to_string(),
         },
     )
+}
+
+pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
+    Options {
+        eks_zone_a_subnet_blocks: vec![
+            "10.0.0.0/23".to_string(),
+            "10.0.2.0/23".to_string(),
+            "10.0.4.0/23".to_string(),
+            "10.0.6.0/23".to_string(),
+            "10.0.8.0/23".to_string(),
+            "10.0.10.0/23".to_string(),
+            "10.0.12.0/23".to_string(),
+            "10.0.14.0/23".to_string(),
+            "10.0.16.0/23".to_string(),
+            "10.0.18.0/23".to_string(),
+            "10.0.20.0/23".to_string(),
+            "10.0.22.0/23".to_string(),
+            "10.0.24.0/23".to_string(),
+            "10.0.26.0/23".to_string(),
+            "10.0.28.0/23".to_string(),
+            "10.0.30.0/23".to_string(),
+            "10.0.32.0/23".to_string(),
+            "10.0.34.0/23".to_string(),
+            "10.0.36.0/23".to_string(),
+            "10.0.38.0/23".to_string(),
+            "10.0.40.0/23".to_string(),
+        ],
+        eks_zone_b_subnet_blocks: vec![
+            "10.0.42.0/23".to_string(),
+            "10.0.44.0/23".to_string(),
+            "10.0.46.0/23".to_string(),
+            "10.0.48.0/23".to_string(),
+            "10.0.50.0/23".to_string(),
+            "10.0.52.0/23".to_string(),
+            "10.0.54.0/23".to_string(),
+            "10.0.56.0/23".to_string(),
+            "10.0.58.0/23".to_string(),
+            "10.0.60.0/23".to_string(),
+            "10.0.62.0/23".to_string(),
+            "10.0.64.0/23".to_string(),
+            "10.0.66.0/23".to_string(),
+            "10.0.68.0/23".to_string(),
+            "10.0.70.0/23".to_string(),
+            "10.0.72.0/23".to_string(),
+            "10.0.74.0/23".to_string(),
+            "10.0.78.0/23".to_string(),
+            "10.0.80.0/23".to_string(),
+            "10.0.82.0/23".to_string(),
+            "10.0.84.0/23".to_string(),
+        ],
+        eks_zone_c_subnet_blocks: vec![
+            "10.0.86.0/23".to_string(),
+            "10.0.88.0/23".to_string(),
+            "10.0.90.0/23".to_string(),
+            "10.0.92.0/23".to_string(),
+            "10.0.94.0/23".to_string(),
+            "10.0.96.0/23".to_string(),
+            "10.0.98.0/23".to_string(),
+            "10.0.100.0/23".to_string(),
+            "10.0.102.0/23".to_string(),
+            "10.0.104.0/23".to_string(),
+            "10.0.106.0/23".to_string(),
+            "10.0.108.0/23".to_string(),
+            "10.0.110.0/23".to_string(),
+            "10.0.112.0/23".to_string(),
+            "10.0.114.0/23".to_string(),
+            "10.0.116.0/23".to_string(),
+            "10.0.118.0/23".to_string(),
+            "10.0.120.0/23".to_string(),
+            "10.0.122.0/23".to_string(),
+            "10.0.124.0/23".to_string(),
+            "10.0.126.0/23".to_string(),
+        ],
+        rds_zone_a_subnet_blocks: vec![
+            "10.0.214.0/23".to_string(),
+            "10.0.216.0/23".to_string(),
+            "10.0.218.0/23".to_string(),
+            "10.0.220.0/23".to_string(),
+            "10.0.222.0/23".to_string(),
+            "10.0.224.0/23".to_string(),
+        ],
+        rds_zone_b_subnet_blocks: vec![
+            "10.0.226.0/23".to_string(),
+            "10.0.228.0/23".to_string(),
+            "10.0.230.0/23".to_string(),
+            "10.0.232.0/23".to_string(),
+            "10.0.234.0/23".to_string(),
+            "10.0.236.0/23".to_string(),
+        ],
+        rds_zone_c_subnet_blocks: vec![
+            "10.0.238.0/23".to_string(),
+            "10.0.240.0/23".to_string(),
+            "10.0.242.0/23".to_string(),
+            "10.0.244.0/23".to_string(),
+            "10.0.246.0/23".to_string(),
+            "10.0.248.0/23".to_string(),
+        ],
+        documentdb_zone_a_subnet_blocks: vec![
+            "10.0.196.0/23".to_string(),
+            "10.0.198.0/23".to_string(),
+            "10.0.200.0/23".to_string(),
+        ],
+        documentdb_zone_b_subnet_blocks: vec![
+            "10.0.202.0/23".to_string(),
+            "10.0.204.0/23".to_string(),
+            "10.0.206.0/23".to_string(),
+        ],
+        documentdb_zone_c_subnet_blocks: vec![
+            "10.0.208.0/23".to_string(),
+            "10.0.210.0/23".to_string(),
+            "10.0.212.0/23".to_string(),
+        ],
+        elasticache_zone_a_subnet_blocks: vec!["10.0.172.0/23".to_string(), "10.0.174.0/23".to_string()],
+        elasticache_zone_b_subnet_blocks: vec!["10.0.176.0/23".to_string(), "10.0.178.0/23".to_string()],
+        elasticache_zone_c_subnet_blocks: vec!["10.0.180.0/23".to_string(), "10.0.182.0/23".to_string()],
+        elasticsearch_zone_a_subnet_blocks: vec!["10.0.184.0/23".to_string(), "10.0.186.0/23".to_string()],
+        elasticsearch_zone_b_subnet_blocks: vec!["10.0.188.0/23".to_string(), "10.0.190.0/23".to_string()],
+        elasticsearch_zone_c_subnet_blocks: vec!["10.0.192.0/23".to_string(), "10.0.194.0/23".to_string()],
+        vpc_cidr_block: "10.0.0.0/16".to_string(),
+        eks_cidr_subnet: "23".to_string(),
+        eks_access_cidr_blocks: secrets
+            .EKS_ACCESS_CIDR_BLOCKS
+            .unwrap()
+            .replace("\"", "")
+            .replace("[", "")
+            .replace("]", "")
+            .split(",")
+            .map(|c| c.to_string())
+            .collect(),
+        rds_cidr_subnet: "23".to_string(),
+        documentdb_cidr_subnet: "23".to_string(),
+        elasticache_cidr_subnet: "23".to_string(),
+        elasticsearch_cidr_subnet: "23".to_string(),
+        qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
+        engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
+        agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
+        grafana_admin_user: "admin".to_string(),
+        grafana_admin_password: "qovery".to_string(),
+        discord_api_key: secrets.DISCORD_API_URL.unwrap(),
+        qovery_nats_url: secrets.QOVERY_NATS_URL.unwrap(),
+        qovery_ssh_key: secrets.QOVERY_SSH_USER.unwrap(),
+        qovery_nats_user: secrets.QOVERY_NATS_USERNAME.unwrap(),
+        qovery_nats_password: secrets.QOVERY_NATS_PASSWORD.unwrap(),
+        tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
+    }
 }
 
 pub fn aws_kubernetes_eks<'a>(
@@ -113,17 +238,16 @@ pub fn aws_kubernetes_eks<'a>(
     dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
 ) -> EKS<'a> {
-    let file = File::open("tests/assets/eks-options.json").expect("file not found");
-    let options_values = serde_json::from_reader(file).expect("JSON was not well-formatted");
+    let secrets = FuncTestsSecrets::new();
     EKS::<'a>::new(
         context.clone(),
         KUBE_CLUSTER_ID,
         KUBE_CLUSTER_ID,
         AWS_KUBERNETES_VERSION,
-        aws_default_region().as_str(),
+        secrets.clone().AWS_DEFAULT_REGION.unwrap().as_str(),
         cloud_provider,
         dns_provider,
-        options_values,
+        eks_options(secrets),
         nodes,
     )
 }
@@ -149,13 +273,14 @@ pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
     )
 }
 
-pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environment {
+pub fn environment_3_apps_3_routers_3_databases(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
     let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
     let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
+    let test_domain = secrets.DEFAULT_TEST_DOMAIN.unwrap();
 
     // mongoDB management part
-    let database_host_mongo = "mongodb-".to_string() + generate_id().as_str() + ".oom.sh"; // External access check
+    let database_host_mongo = format!("mongodb-{}.{}", generate_id(), &test_domain);
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
@@ -172,7 +297,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
 
     // pSQL 1 management part
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = fqdn_id.clone() + ".oom.sh";
+    let fqdn = format!("{}.{}", fqdn_id, &test_domain);
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_id();
@@ -180,7 +305,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
 
     // pSQL 2 management part
     let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
-    let fqdn_2 = fqdn_id_2.clone() + ".oom.sh";
+    let fqdn_2 = format!("{}.{}", fqdn_id_2, &test_domain);
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgresql2".to_string();
 
@@ -357,7 +482,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + &test_domain,
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -369,7 +494,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + &test_domain,
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -381,7 +506,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
                 id: generate_id(),
                 name: "third-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: generate_id() + &test_domain,
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -448,7 +573,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context) -> Environmen
     }
 }
 
-pub fn working_minimal_environment(context: &Context) -> Environment {
+pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -485,7 +610,7 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".oom.sh",
+            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_ref(),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -499,9 +624,10 @@ pub fn working_minimal_environment(context: &Context) -> Environment {
     }
 }
 
-pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
+pub fn environnement_2_app_2_routers_1_psql(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = fqdn_id.clone() + ".oom.sh";
+    let test_domain = secrets.DEFAULT_TEST_DOMAIN.unwrap();
+    let fqdn = format!("{}.{}", fqdn_id.clone(), &test_domain);
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
@@ -644,7 +770,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: format!("{}.{}", generate_id(), &test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -656,7 +782,7 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + ".oom.sh",
+                default_domain: format!("{}.{}", generate_id(), &test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -671,8 +797,8 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context) -> Environment {
     }
 }
 
-pub fn non_working_environment(context: &Context) -> Environment {
-    let mut environment = working_minimal_environment(context);
+pub fn non_working_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
+    let mut environment = working_minimal_environment(context, secrets);
 
     environment.applications = environment
         .applications
@@ -690,7 +816,7 @@ pub fn non_working_environment(context: &Context) -> Environment {
 
 // echo app environment is an environment that contains http-echo container (forked from hashicorp)
 // ECHO_TEXT var will be the content of the application root path
-pub fn echo_app_environment(context: &Context) -> Environment {
+pub fn echo_app_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -730,7 +856,7 @@ pub fn echo_app_environment(context: &Context) -> Environment {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".oom.sh",
+            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_str(),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -784,7 +910,7 @@ pub fn environment_only_http_server(context: &Context) -> Environment {
     }
 }
 
-pub fn environment_only_http_server_router(context: &Context) -> Environment {
+pub fn environment_only_http_server_router(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -821,7 +947,7 @@ pub fn environment_only_http_server_router(context: &Context) -> Environment {
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + ".oom.sh",
+            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_str(),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {

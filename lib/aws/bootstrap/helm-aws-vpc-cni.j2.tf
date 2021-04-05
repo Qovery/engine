@@ -91,5 +91,8 @@ resource "helm_release" "aws_vpc_cni" {
   depends_on = [
     aws_eks_cluster.eks_cluster,
     null_resource.delete_aws_managed_cni,
+    {% if not test_cluster %}
+    vault_generic_secret.cluster-access,
+    {% endif %}
   ]
 }

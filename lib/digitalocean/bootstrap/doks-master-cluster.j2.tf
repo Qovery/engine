@@ -4,6 +4,10 @@ resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
   version = var.doks_version
   vpc_uuid = digitalocean_vpc.qovery_vpc.id
 
+  # upgrade
+  auto_upgrade = true
+  surge_upgrade = true
+
   node_pool {
     tags = [digitalocean_tag.cluster_tag.id]
     name = "qovery-${var.kubernetes_cluster_id}"

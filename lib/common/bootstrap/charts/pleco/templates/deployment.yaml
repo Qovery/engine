@@ -75,6 +75,21 @@ spec:
             {{ if or (eq .Values.enabledFeatures.ebs true) (eq .Values.enabledFeatures.eks true)}}
             - --enable-ebs
             {{ end }}
+            {{ if or (eq .Values.enabledFeatures.kms true)}}
+            - --enable-kms
+            {{ end }}
+            {{ if or (eq .Values.enabledFeatures.cloudwatchLogs true)}}
+            - --enable-cloudwatch-logs
+            {{ end }}
+            {{ if or (eq .Values.enabledFeatures.iam true)}}
+            - --enable-iam
+            {{ end }}
+            {{ if or (eq .Values.enabledFeatures.sshKeys true)}}
+            - --enable-ssh-keys
+            {{ end }}
+            {{ if or (eq .Values.enabledFeatures.ecr true)}}
+            - --enable-ecr
+            {{ end }}
           env:
             {{ range $key, $value := .Values.environmentVariables -}}
             - name: "{{ $key }}"

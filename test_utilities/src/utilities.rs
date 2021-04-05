@@ -3,7 +3,7 @@ use curl::easy::Easy;
 use dirs::home_dir;
 use std::fs::read_to_string;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 
 use rand::distributions::Alphanumeric;
@@ -12,17 +12,237 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::os::unix::fs::PermissionsExt;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber;
 
-use crate::aws::{aws_access_key_id, aws_secret_key, KUBE_CLUSTER_ID};
+use crate::aws::KUBE_CLUSTER_ID;
+use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cmd;
 use qovery_engine::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Metadata};
+use serde::{Deserialize, Serialize};
 extern crate time;
 use time::Instant;
+
+pub fn context() -> Context {
+    let execution_id = execution_id();
+    let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
+    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+
+    let metadata = Metadata {
+        dry_run_deploy: Option::from({
+            match env::var_os("dry_run_deploy") {
+                Some(_) => true,
+                None => false,
+            }
+        }),
+        resource_expiration_in_seconds: {
+            // set a custom ttl as environment variable for manual tests
+            match env::var_os("ttl") {
+                Some(ttl) => {
+                    let ttl_converted: u32 = ttl.into_string().unwrap().parse().unwrap();
+                    Some(ttl_converted)
+                }
+                None => Some(3600),
+            }
+        },
+        docker_build_options: Some("--network host".to_string()),
+    };
+
+    Context::new(execution_id, home_dir, lib_root_dir, true, None, Option::from(metadata))
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[allow(non_snake_case)]
+pub struct FuncTestsSecrets {
+    pub AWS_ACCESS_KEY_ID: Option<String>,
+    pub AWS_DEFAULT_REGION: Option<String>,
+    pub AWS_SECRET_ACCESS_KEY: Option<String>,
+    pub BIN_VERSION_FILE: Option<String>,
+    pub CLOUDFLARE_DOMAIN: Option<String>,
+    pub CLOUDFLARE_ID: Option<String>,
+    pub CLOUDFLARE_TOKEN: Option<String>,
+    pub CUSTOM_TEST_DOMAIN: Option<String>,
+    pub DEFAULT_TEST_DOMAIN: Option<String>,
+    pub DIGITAL_OCEAN_SPACES_ACCESS_ID: Option<String>,
+    pub DIGITAL_OCEAN_SPACES_SECRET_ID: Option<String>,
+    pub DIGITAL_OCEAN_TOKEN: Option<String>,
+    pub DISCORD_API_URL: Option<String>,
+    pub EKS_ACCESS_CIDR_BLOCKS: Option<String>,
+    pub GITHUB_ACCESS_TOKEN: Option<String>,
+    pub HTTP_LISTEN_ON: Option<String>,
+    pub LETS_ENCRYPT_EMAIL_REPORT: Option<String>,
+    pub LIB_ROOT_DIR: Option<String>,
+    pub QOVERY_AGENT_CONTROLLER_TOKEN: Option<String>,
+    pub QOVERY_API_URL: Option<String>,
+    pub QOVERY_ENGINE_CONTROLLER_TOKEN: Option<String>,
+    pub QOVERY_NATS_URL: Option<String>,
+    pub QOVERY_NATS_USERNAME: Option<String>,
+    pub QOVERY_NATS_PASSWORD: Option<String>,
+    pub QOVERY_SSH_USER: Option<String>,
+    pub RUST_LOG: Option<String>,
+    pub TERRAFORM_AWS_ACCESS_KEY_ID: Option<String>,
+    pub TERRAFORM_AWS_SECRET_ACCESS_KEY: Option<String>,
+    pub TERRAFORM_AWS_REGION: Option<String>,
+}
+
+struct VaultConfig {
+    address: String,
+    token: String,
+}
+
+impl FuncTestsSecrets {
+    pub fn new() -> Self {
+        Self::get_all_secrets()
+    }
+
+    fn get_vault_config() -> Result<VaultConfig, Error> {
+        let vault_addr = match env::var_os("VAULT_ADDR") {
+            Some(x) => x.into_string().unwrap(),
+            None => {
+                return Err(Error::new(
+                    ErrorKind::NotFound,
+                    format!("VAULT_ADDR environment variable is missing"),
+                ))
+            }
+        };
+
+        let vault_token = match env::var_os("VAULT_TOKEN") {
+            Some(x) => x.into_string().unwrap(),
+            None => {
+                return Err(Error::new(
+                    ErrorKind::NotFound,
+                    format!("VAULT_TOKEN environment variable is missing"),
+                ))
+            }
+        };
+
+        Ok(VaultConfig {
+            address: vault_addr,
+            token: vault_token,
+        })
+    }
+
+    fn get_secrets_from_vault() -> FuncTestsSecrets {
+        let secret_name = "functional-tests";
+        let empty_secrets = FuncTestsSecrets {
+            AWS_ACCESS_KEY_ID: None,
+            AWS_DEFAULT_REGION: None,
+            AWS_SECRET_ACCESS_KEY: None,
+            BIN_VERSION_FILE: None,
+            CLOUDFLARE_DOMAIN: None,
+            CLOUDFLARE_ID: None,
+            CLOUDFLARE_TOKEN: None,
+            CUSTOM_TEST_DOMAIN: None,
+            DEFAULT_TEST_DOMAIN: None,
+            DIGITAL_OCEAN_SPACES_ACCESS_ID: None,
+            DIGITAL_OCEAN_SPACES_SECRET_ID: None,
+            DIGITAL_OCEAN_TOKEN: None,
+            DISCORD_API_URL: None,
+            EKS_ACCESS_CIDR_BLOCKS: None,
+            GITHUB_ACCESS_TOKEN: None,
+            HTTP_LISTEN_ON: None,
+            LETS_ENCRYPT_EMAIL_REPORT: None,
+            LIB_ROOT_DIR: None,
+            QOVERY_AGENT_CONTROLLER_TOKEN: None,
+            QOVERY_API_URL: None,
+            QOVERY_ENGINE_CONTROLLER_TOKEN: None,
+            QOVERY_NATS_URL: None,
+            QOVERY_NATS_USERNAME: None,
+            QOVERY_NATS_PASSWORD: None,
+            QOVERY_SSH_USER: None,
+            RUST_LOG: None,
+            TERRAFORM_AWS_ACCESS_KEY_ID: None,
+            TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
+            TERRAFORM_AWS_REGION: None,
+        };
+
+        let vault_config = match Self::get_vault_config() {
+            Ok(vault_config) => vault_config,
+            Err(_) => {
+                warn!("Empty config is returned as no VAULT connection can be established. If not not expected, check your environment variables");
+                return empty_secrets;
+            }
+        };
+
+        let client = hashicorp_vault::Client::new(vault_config.address, vault_config.token).unwrap();
+        let res: Result<FuncTestsSecrets, _> = client.get_custom_secret(secret_name);
+        match res {
+            Ok(x) => x,
+            Err(_) => {
+                println!("Couldn't connect to Vault, check your connectivity");
+                empty_secrets
+            }
+        }
+    }
+
+    fn select_secret(name: &str, vault_fallback: Option<String>) -> Option<String> {
+        match env::var_os(&name) {
+            Some(x) => Some(x.into_string().unwrap()),
+            None if vault_fallback.is_some() => vault_fallback,
+            None => None,
+        }
+    }
+
+    fn get_all_secrets() -> FuncTestsSecrets {
+        let secrets = Self::get_secrets_from_vault();
+
+        FuncTestsSecrets {
+            AWS_ACCESS_KEY_ID: Self::select_secret("AWS_ACCESS_KEY_ID", secrets.AWS_ACCESS_KEY_ID),
+            AWS_DEFAULT_REGION: Self::select_secret("AWS_DEFAULT_REGION", secrets.AWS_DEFAULT_REGION),
+            AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
+            BIN_VERSION_FILE: Self::select_secret("BIN_VERSION_FILE", secrets.BIN_VERSION_FILE),
+            CLOUDFLARE_DOMAIN: Self::select_secret("CLOUDFLARE_DOMAIN", secrets.CLOUDFLARE_DOMAIN),
+            CLOUDFLARE_ID: Self::select_secret("CLOUDFLARE_ID", secrets.CLOUDFLARE_ID),
+            CLOUDFLARE_TOKEN: Self::select_secret("CLOUDFLARE_TOKEN", secrets.CLOUDFLARE_TOKEN),
+            CUSTOM_TEST_DOMAIN: Self::select_secret("CUSTOM_TEST_DOMAIN", secrets.CUSTOM_TEST_DOMAIN),
+            DEFAULT_TEST_DOMAIN: Self::select_secret("DEFAULT_TEST_DOMAIN", secrets.DEFAULT_TEST_DOMAIN),
+            DIGITAL_OCEAN_SPACES_ACCESS_ID: Self::select_secret(
+                "DIGITAL_OCEAN_SPACES_ACCESS_ID",
+                secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID,
+            ),
+            DIGITAL_OCEAN_SPACES_SECRET_ID: Self::select_secret(
+                "DIGITAL_OCEAN_SPACES_SECRET_ID",
+                secrets.DIGITAL_OCEAN_SPACES_SECRET_ID,
+            ),
+            DIGITAL_OCEAN_TOKEN: Self::select_secret("DIGITAL_OCEAN_TOKEN", secrets.DIGITAL_OCEAN_TOKEN),
+            DISCORD_API_URL: Self::select_secret("DISCORD_API_URL", secrets.DISCORD_API_URL),
+            EKS_ACCESS_CIDR_BLOCKS: Self::select_secret("EKS_ACCESS_CIDR_BLOCKS", secrets.EKS_ACCESS_CIDR_BLOCKS),
+            GITHUB_ACCESS_TOKEN: Self::select_secret("GITHUB_ACCESS_TOKEN", secrets.GITHUB_ACCESS_TOKEN),
+            HTTP_LISTEN_ON: Self::select_secret("HTTP_LISTEN_ON", secrets.HTTP_LISTEN_ON),
+            LETS_ENCRYPT_EMAIL_REPORT: Self::select_secret(
+                "LETS_ENCRYPT_EMAIL_REPORT",
+                secrets.LETS_ENCRYPT_EMAIL_REPORT,
+            ),
+            LIB_ROOT_DIR: Self::select_secret("LIB_ROOT_DIR", secrets.LIB_ROOT_DIR),
+            QOVERY_AGENT_CONTROLLER_TOKEN: Self::select_secret(
+                "QOVERY_AGENT_CONTROLLER_TOKEN",
+                secrets.QOVERY_AGENT_CONTROLLER_TOKEN,
+            ),
+            QOVERY_API_URL: Self::select_secret("QOVERY_API_URL", secrets.QOVERY_API_URL),
+            QOVERY_ENGINE_CONTROLLER_TOKEN: Self::select_secret(
+                "QOVERY_ENGINE_CONTROLLER_TOKEN",
+                secrets.QOVERY_ENGINE_CONTROLLER_TOKEN,
+            ),
+            QOVERY_NATS_URL: Self::select_secret("QOVERY_NATS_URL", secrets.QOVERY_NATS_URL),
+            QOVERY_NATS_USERNAME: Self::select_secret("QOVERY_NATS_USERNAME", secrets.QOVERY_NATS_USERNAME),
+            QOVERY_NATS_PASSWORD: Self::select_secret("QOVERY_NATS_PASSWORD", secrets.QOVERY_NATS_PASSWORD),
+            QOVERY_SSH_USER: Self::select_secret("QOVERY_SSH_USER", secrets.QOVERY_SSH_USER),
+            RUST_LOG: Self::select_secret("RUST_LOG", secrets.RUST_LOG),
+            TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
+                "TERRAFORM_AWS_ACCESS_KEY_ID",
+                secrets.TERRAFORM_AWS_ACCESS_KEY_ID,
+            ),
+            TERRAFORM_AWS_SECRET_ACCESS_KEY: Self::select_secret(
+                "TERRAFORM_AWS_SECRET_ACCESS_KEY",
+                secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY,
+            ),
+            TERRAFORM_AWS_REGION: Self::select_secret("TERRAFORM_AWS_REGION", secrets.TERRAFORM_AWS_REGION),
+        }
+    }
+}
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
     LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
@@ -106,18 +326,6 @@ fn curl_path(path: &str) -> bool {
             return false;
         }
     }
-}
-
-pub fn context() -> Context {
-    let execution_id = execution_id();
-    let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
-    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let metadata = Metadata {
-        dry_run_deploy: Option::from(false),
-        resource_expiration_in_seconds: Some(2700),
-    };
-
-    Context::new(execution_id, home_dir, lib_root_dir, true, None, Option::from(metadata))
 }
 
 fn kubernetes_config_path(
@@ -216,26 +424,25 @@ fn get_object_via_aws_cli(
     Ok(s)
 }
 
-pub fn is_pod_restarted_aws_env(environment_check: Environment, pod_to_check: &str) -> (bool, String) {
+pub fn is_pod_restarted_aws_env(
+    environment_check: Environment,
+    pod_to_check: &str,
+    secrets: FuncTestsSecrets,
+) -> (bool, String) {
     let namespace_name = format!(
         "{}-{}",
         &environment_check.project_id.clone(),
         &environment_check.id.clone(),
     );
 
-    let access_key = aws_access_key_id();
-    let secret_key = aws_secret_key();
+    let access_key = secrets.AWS_ACCESS_KEY_ID.unwrap();
+    let secret_key = secrets.AWS_SECRET_ACCESS_KEY.unwrap();
     let aws_credentials_envs = vec![
         ("AWS_ACCESS_KEY_ID", access_key.as_str()),
         ("AWS_SECRET_ACCESS_KEY", secret_key.as_str()),
     ];
 
-    let kubernetes_config = kubernetes_config_path(
-        "/tmp",
-        KUBE_CLUSTER_ID,
-        aws_access_key_id().as_str(),
-        aws_secret_key().as_str(),
-    );
+    let kubernetes_config = kubernetes_config_path("/tmp", KUBE_CLUSTER_ID, access_key.as_str(), secret_key.as_str());
 
     match kubernetes_config {
         Ok(path) => {

@@ -397,7 +397,7 @@ impl ContainerRegistry for ECR {
         if !force_push && self.does_image_exists(image) {
             // check if image does exist - if yes, do not upload it again
             let info_message = format!(
-                "image {:?} does already exist into ECR {} repository - no need to upload it",
+                "image {:?} found on ECR {} repository, container build is not required",
                 image,
                 self.name()
             );
@@ -420,7 +420,7 @@ impl ContainerRegistry for ECR {
         }
 
         let info_message = format!(
-            "image {:?} does not exist into ECR {} repository - let's upload it",
+            "image {:?} does not exist on ECR {} repository, starting image upload",
             image,
             self.name()
         );

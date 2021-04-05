@@ -90,7 +90,7 @@ variable "auto_minor_version_upgrade" {
 
 variable "apply_changes_now" {
   description = "Apply changes now or during the during the maintenance window"
-  default = true
+  default = false
   type = bool
 }
 
@@ -112,6 +112,12 @@ variable "preferred_backup_window" {
   description = "Maintenance window"
   default = "00:00-01:00"
   type = string
+}
+
+variable "skip_final_snapshot" {
+  description = "Skip final snapshot"
+  default = {{ skip_final_snapshot }}
+  type = bool
 }
 
 {%- if snapshot is defined %}

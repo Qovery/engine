@@ -16,6 +16,10 @@ terraform {
       source = "hashicorp/helm"
       version = "~> 1.3.2"
     }
+    vault = {
+      source = "hashicorp/vault"
+      version = "~> 2.18.0"
+    }
     local = {
       source = "hashicorp/local"
       version = "~> 1.4"
@@ -78,4 +82,17 @@ provider "helm" {
       }
     }
   }
+}
+
+provider "vault" {
+  {% if vault_auth_method == "app_role" and not test_cluster %}
+  auth_login {
+    path = "auth/approle/login"
+
+    parameters = {
+      role_id   = "{{ vault_role_id }}"
+      secret_id = "{{ vault_secret_id }}"
+    }
+  }
+  {% endif %}
 }

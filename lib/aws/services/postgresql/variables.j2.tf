@@ -122,7 +122,7 @@ variable "upgrade_minor" {
 
 variable "apply_changes_now" {
   description = "Apply changes now or during the during the maintenance window"
-  default = true
+  default = false
   type = bool
 }
 
@@ -163,6 +163,12 @@ variable "backup_window" {
 variable "delete_automated_backups" {
   description = "Delete automated backups"
   default = {{ delete_automated_backups }}
+  type = bool
+}
+
+variable "skip_final_snapshot" {
+  description = "Skip final snapshot"
+  default = {{ skip_final_snapshot }}
   type = bool
 }
 

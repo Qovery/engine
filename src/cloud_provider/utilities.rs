@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::cloud_provider::models::CpuLimits;
 use crate::error::{EngineError, StringError};
 use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use chrono::Duration;
@@ -8,6 +9,7 @@ use core::result::Result;
 use core::result::Result::{Err, Ok};
 use retry::delay::Fixed;
 use retry::OperationResult;
+use std::num::ParseFloatError;
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::proto::rr::{RData, RecordType};
 use trust_dns_resolver::Resolver;
@@ -222,7 +224,7 @@ pub struct VersionsNumber {
     pub(crate) patch: Option<String>,
 }
 
-fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
+pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
     let mut version_split = version.split(".");
 
     let major = match version_split.next() {
@@ -423,9 +425,108 @@ pub fn sanitize_name(prefix: &str, name: &str) -> String {
     format!("{}-{}", prefix, name).replace("_", "-")
 }
 
+pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, ParseFloatError> {
+    if value.ends_with("m") {
+        let mut value_number_string = value;
+        value_number_string.pop();
+        return match value_number_string.parse::<f32>() {
+            Ok(n) => {
+                Ok(n * 0.001) // return in milli cpu the value
+            }
+            Err(e) => Err(e),
+        };
+    }
+
+    return match value.parse::<f32>() {
+        Ok(n) => Ok(n),
+        Err(e) => Err(e),
+    };
+}
+
+pub fn validate_k8s_required_cpu_and_burstable(
+    listener_helper: &ListenersHelper,
+    execution_id: &str,
+    context_id: &str,
+    total_cpu: String,
+    cpu_burst: String,
+) -> Result<CpuLimits, ParseFloatError> {
+    let total_cpu_float = convert_k8s_cpu_value_to_f32(total_cpu.clone())?;
+    let cpu_burst_float = convert_k8s_cpu_value_to_f32(cpu_burst.clone())?;
+    let mut set_cpu_burst = cpu_burst.clone();
+
+    if cpu_burst_float < total_cpu_float {
+        let message = format!(
+            "CPU burst value '{}' was lower than the desired total of CPUs {}, using burstable value. Please ensure your configuration is valid",
+            cpu_burst,
+            total_cpu.clone(),
+        );
+
+        warn!("{}", message);
+
+        listener_helper.error(ProgressInfo::new(
+            ProgressScope::Environment {
+                id: execution_id.to_string(),
+            },
+            ProgressLevel::Warn,
+            Some(message),
+            context_id,
+        ));
+        set_cpu_burst = total_cpu.clone();
+    }
+
+    return Ok(CpuLimits {
+        cpu_limit: set_cpu_burst.to_string(),
+        cpu_request: total_cpu,
+    });
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::utilities::{cloudflare_dns_resolver, get_cname_record_value};
+    use crate::cloud_provider::models::CpuLimits;
+    use crate::cloud_provider::utilities::{
+        cloudflare_dns_resolver, convert_k8s_cpu_value_to_f32, get_cname_record_value,
+        validate_k8s_required_cpu_and_burstable,
+    };
+    use crate::models::ListenersHelper;
+
+    #[test]
+    pub fn test_k8s_milli_cpu_convert() {
+        let milli_cpu = "250m".to_string();
+        let int_cpu = "2".to_string();
+
+        assert_eq!(convert_k8s_cpu_value_to_f32(milli_cpu).unwrap(), 0.25 as f32);
+        assert_eq!(convert_k8s_cpu_value_to_f32(int_cpu).unwrap(), 2 as f32);
+    }
+
+    #[test]
+    pub fn test_cpu_set() {
+        let v = vec![];
+        let listener_helper = ListenersHelper::new(&v);
+        let execution_id = "execution_id";
+        let context_id = "context_id";
+
+        let mut total_cpu = "0.25".to_string();
+        let mut cpu_burst = "1".to_string();
+        assert_eq!(
+            validate_k8s_required_cpu_and_burstable(&listener_helper, execution_id, context_id, total_cpu, cpu_burst)
+                .unwrap(),
+            CpuLimits {
+                cpu_request: "0.25".to_string(),
+                cpu_limit: "1".to_string()
+            }
+        );
+
+        total_cpu = "1".to_string();
+        cpu_burst = "0.5".to_string();
+        assert_eq!(
+            validate_k8s_required_cpu_and_burstable(&listener_helper, execution_id, context_id, total_cpu, cpu_burst)
+                .unwrap(),
+            CpuLimits {
+                cpu_request: "1".to_string(),
+                cpu_limit: "1".to_string()
+            }
+        );
+    }
 
     #[test]
     pub fn test_cname_resolution() {

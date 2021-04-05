@@ -1,4 +1,4 @@
-use test_utilities::utilities::{context, engine_run_test};
+use test_utilities::utilities::{context, engine_run_test, FuncTestsSecrets};
 use tracing::{span, Level};
 
 use qovery_engine::models::{Action, Clone2, EnvironmentAction};
@@ -9,13 +9,14 @@ use crate::digitalocean::deploy_environment_on_do;
 //TODO: Do you wanna play a game ?
 fn deploy_one_postgresql() {
     engine_run_test(|| {
-        let span = span!(Level::INFO, "deploy_one_postgresql");
+        let span = span!(Level::INFO, "test", name = "deploy_one_postgresql");
         let _enter = span.enter();
 
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
 
-        let environment = test_utilities::aws::working_minimal_environment(&context);
+        let environment = test_utilities::aws::working_minimal_environment(&context, secrets);
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
