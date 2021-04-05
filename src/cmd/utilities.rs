@@ -162,7 +162,7 @@ pub fn exec_with_envs_and_output<P, F, X>(
     mut stdout_output: F,
     mut stderr_output: X,
     timeout: Duration,
-) -> Result<(), SimpleError>
+) -> Result<Vec<String>, SimpleError>
 where
     P: AsRef<Path>,
     F: FnMut(Result<String, Error>),
@@ -193,12 +193,25 @@ where
     ))
     .lines()
     .map(STDERR);
+    let mut command_output = Vec::new();
 
     for line in stdout_reader.interleave(stderr_reader) {
         match line {
             STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {}
-            STDOUT(line) => stdout_output(line),
-            STDERR(line) => stderr_output(line),
+            STDOUT(line) => {
+                match &line {
+                    Ok(x) => command_output.push(x.to_string()),
+                    _ => {}
+                }
+                stdout_output(line)
+            }
+            STDERR(line) => {
+                match &line {
+                    Ok(x) => command_output.push(x.to_string()),
+                    _ => {}
+                }
+                stderr_output(line)
+            }
         }
 
         if (process_start_time.elapsed().as_secs() as i64) >= timeout.num_seconds() {
@@ -243,7 +256,7 @@ where
 
     // Process exited
     if exit_status.success() {
-        return Ok(());
+        return Ok(command_output);
     }
 
     Err(SimpleError::new(

@@ -542,7 +542,7 @@ where
             let _ = cast_simple_error_to_engine_error(
                 service.engine_error_scope(),
                 service.context().execution_id(),
-                crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+                crate::cmd::terraform::terraform_init_validate_plan_apply(
                     workspace_dir.as_str(),
                     service.context().is_dry_run_deploy(),
                 ),
@@ -705,7 +705,7 @@ where
                 ),
             )?;
 
-            match crate::cmd::terraform::terraform_exec_destroy(workspace_dir.as_str(), true) {
+            match crate::cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
                 Ok(_) => {
                     info!("let's delete secrets containing tfstates");
                     let _ = delete_terraform_tfstate_secret(*kubernetes, &get_tfstate_name(service));

@@ -14,11 +14,12 @@ use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
+use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
 use crate::error::EngineErrorCause::Internal;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -488,10 +489,7 @@ impl<'a> Kubernetes for EKS<'a> {
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
-                temp_dir.as_str(),
-                self.context.is_dry_run_deploy(),
-            ),
+            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -582,6 +580,42 @@ impl<'a> Kubernetes for EKS<'a> {
             ),
         )?;
 
+        // pause: only select terraform workers elements to pause to avoid applying on the whole config
+        // this to avoid failures because of helm deployments on removing workers nodes
+        let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.as_str()) {
+            Ok(x) => {
+                let mut tf_workers_resources_name = Vec::new();
+                for name in x {
+                    if name.starts_with("aws_eks_node_group.") {
+                        tf_workers_resources_name.push(name);
+                    }
+                }
+                tf_workers_resources_name
+            }
+            Err(e) => {
+                return Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
+                    execution_id: self.context.execution_id().to_string(),
+                    message: e.message,
+                })
+            }
+        };
+        if tf_workers_resources.len() == 0 {
+            return Err(EngineError {
+                cause: EngineErrorCause::Internal,
+                scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
+                execution_id: self.context.execution_id().to_string(),
+                message: Some("No worker nodes present, can't Pause the infrastructure. This can happen if there where a manual operations on the workers.".to_string()),
+            });
+        }
+
+        let mut terraform_args_string = vec!["apply".to_string(), "-auto-approve".to_string()];
+        for x in tf_workers_resources {
+            terraform_args_string.push(format!("-target={}", x));
+        }
+        let terraform_args = terraform_args_string.iter().map(|x| &**x).collect();
+
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Infrastructure {
                 execution_id: self.context.execution_id().to_string(),
@@ -598,10 +632,7 @@ impl<'a> Kubernetes for EKS<'a> {
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
-                temp_dir.as_str(),
-                self.context.is_dry_run_deploy(),
-            ),
+            terraform_exec(temp_dir.as_str(), terraform_args),
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -691,7 +722,7 @@ impl<'a> Kubernetes for EKS<'a> {
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            cmd::terraform::terraform_exec_with_init_validate_plan_apply(temp_dir.as_str(), false),
+            cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false),
         ) {
             Err(e) => error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message),
             _ => {}
@@ -826,7 +857,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 || match cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
                     self.context.execution_id(),
-                    cmd::terraform::terraform_exec_destroy(temp_dir.as_str(), false),
+                    cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false),
                 ) {
                     Ok(_) => OperationResult::Ok(()),
                     Err(e) => OperationResult::Retry(e),

@@ -8,7 +8,7 @@ use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
 use retry::Error::Operation;
 
-fn terraform_exec_with_init_validate(root_dir: &str) -> Result<(), SimpleError> {
+fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     // terraform init
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         match terraform_exec(root_dir, vec!["init"]) {
@@ -36,8 +36,8 @@ fn terraform_exec_with_init_validate(root_dir: &str) -> Result<(), SimpleError> 
     }
 }
 
-pub fn terraform_exec_with_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<(), SimpleError> {
-    match terraform_exec_with_init_validate(root_dir) {
+pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<(), SimpleError> {
+    match terraform_init_validate(root_dir) {
         Err(e) => return Err(e),
         Ok(_) => {}
     }
@@ -61,22 +61,22 @@ pub fn terraform_exec_with_init_validate_plan_apply(root_dir: &str, dry_run: boo
         };
     }
 
-    match terraform_apply(root_dir) {
+    match terraform_plan_apply(root_dir) {
         Ok(_) => Ok(()),
         Err(e) => Err(e),
     }
 }
 
-pub fn terraform_exec_destroy(root_dir: &str, run_apply_before_destroy: bool) -> Result<(), SimpleError> {
+pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy: bool) -> Result<(), SimpleError> {
     // terraform init
-    match terraform_exec_with_init_validate(root_dir) {
+    match terraform_init_validate(root_dir) {
         Err(e) => return Err(e),
         Ok(_) => {}
     }
 
     // better to apply before destroy to ensure terraform destroy will delete on all resources
     if run_apply_before_destroy {
-        match terraform_apply(root_dir) {
+        match terraform_plan_apply(root_dir) {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
@@ -100,7 +100,7 @@ pub fn terraform_exec_destroy(root_dir: &str, run_apply_before_destroy: bool) ->
     }
 }
 
-fn terraform_apply(root_dir: &str) -> Result<(), SimpleError> {
+fn terraform_plan_apply(root_dir: &str) -> Result<(), SimpleError> {
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // plan
         match terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"]) {
@@ -127,22 +127,52 @@ fn terraform_apply(root_dir: &str) -> Result<(), SimpleError> {
     }
 }
 
-pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<(), SimpleError> {
+pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>, SimpleError> {
+    // terraform init and validate
+    match terraform_init_validate(root_dir) {
+        Err(e) => return Err(e),
+        Ok(_) => {}
+    }
+
+    // get terraform state list output
+    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+        match terraform_exec(root_dir, vec!["state", "list"]) {
+            Ok(out) => OperationResult::Ok(out),
+            Err(err) => {
+                error!("error while trying to run terraform state list, retrying...");
+                OperationResult::Retry(err)
+            }
+        }
+    });
+
+    match result {
+        Ok(output) => Ok(output),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+    }
+}
+
+pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, SimpleError> {
     let home_dir = home_dir().expect("Could not find $HOME");
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
 
-    exec_with_envs_and_output(
+    let result = exec_with_envs_and_output(
         format!("{} terraform", root_dir).as_str(),
         args,
         vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
         |line: Result<String, std::io::Error>| {
             let output = line.unwrap();
-            info!("{}", output)
+            info!("{}", &output)
         },
         |line: Result<String, std::io::Error>| {
             let output = line.unwrap();
-            error!("{}", output);
+            error!("{}", &output);
         },
         Duration::max_value(),
-    )
+    );
+
+    match result {
+        Ok(_) => Ok(result.unwrap()),
+        Err(e) => Err(e),
+    }
 }
