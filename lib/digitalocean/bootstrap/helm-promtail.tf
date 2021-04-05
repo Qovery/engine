@@ -17,6 +17,13 @@ resource "helm_release" "promtail" {
     value = "loki"
   }
 
+  # It's mandatory to get this class to ensure paused infra will behave properly on restore
+  # and logs will always be forwarded (no other pod will preempt)
+  set {
+    name = "priorityClassName"
+    value = "system-node-critical"
+  }
+
   # Limits
   set {
     name = "resources.limits.cpu"

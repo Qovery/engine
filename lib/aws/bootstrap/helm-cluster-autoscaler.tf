@@ -74,6 +74,7 @@ resource "helm_release" "cluster_autoscaler" {
     value = aws_iam_access_key.iam_eks_cluster_autoscaler.secret
   }
 
+  # It's mandatory to get this class to ensure paused infra will behave properly on restore
   set {
     name = "priorityClassName"
     value = "system-cluster-critical"

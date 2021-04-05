@@ -17,6 +17,12 @@ resource "helm_release" "promtail" {
     value = "loki"
   }
 
+  # it's mandatory to get this class to ensure paused infra will behave properly on restore
+  set {
+    name = "priorityClassName"
+    value = "system-node-critical"
+  }
+
   # Limits
   set {
     name = "resources.limits.cpu"
