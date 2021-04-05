@@ -329,7 +329,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            crate::cmd::terraform::terraform_exec_with_init_validate_plan_apply(
+            crate::cmd::terraform::terraform_init_validate_plan_apply(
                 temp_dir.as_str(),
                 self.context.is_dry_run_deploy(),
             ),

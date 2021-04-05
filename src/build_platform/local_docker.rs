@@ -159,7 +159,7 @@ impl LocalDocker {
     ) -> Result<BuildResult, EngineError> {
         let name_with_tag = build.image.name_with_tag();
 
-        let mut exit_status: Result<(), SimpleError> =
+        let exit_status: Result<(), SimpleError> =
             Err(SimpleError::new(SimpleErrorKind::Other, Some("no builder names")));
 
         for builder_name in BUILDPACKS_BUILDERS.iter() {
@@ -189,7 +189,7 @@ impl LocalDocker {
             buildpacks_args.push(builder_name);
 
             // buildpacks build
-            exit_status = cmd::utilities::exec_with_envs_and_output(
+            let exit_status = cmd::utilities::exec_with_envs_and_output(
                 "pack",
                 buildpacks_args,
                 self.get_docker_host_envs(),
@@ -508,7 +508,7 @@ fn check_docker_space_usage_and_clean(
     ))
 }
 
-fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
+fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<Vec<String>, SimpleError> {
     let docker_args = vec!["image", "prune", "-a", "-f"];
 
     cmd::utilities::exec_with_envs_and_output(
