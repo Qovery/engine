@@ -12,6 +12,7 @@ pub mod digitalocean;
 pub mod environment;
 pub mod gcp;
 pub mod kubernetes;
+pub mod metrics;
 pub mod models;
 pub mod service;
 pub mod utilities;
