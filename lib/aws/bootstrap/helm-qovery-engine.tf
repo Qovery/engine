@@ -19,6 +19,12 @@ resource "helm_release" "qovery_engine_resources" {
     value = timestamp()
   }
 
+  // need kubernetes 1.18, should be well tested before activating it
+  set {
+    name = "autoscaler.enabled"
+    value = "false"
+  }
+
   set {
     name = "volumes.storageClassName"
     value = "aws-ebs-gp2-0"
