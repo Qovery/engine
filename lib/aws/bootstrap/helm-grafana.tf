@@ -1,5 +1,6 @@
 resource "aws_iam_user" "iam_grafana_cloudwatch" {
   name = "qovery-cloudwatch-${var.kubernetes_cluster_id}"
+  tags = local.tags_eks
 }
 
 resource "aws_iam_access_key" "iam_grafana_cloudwatch" {
