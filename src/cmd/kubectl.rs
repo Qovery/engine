@@ -6,6 +6,7 @@ use retry::OperationResult;
 use serde::de::DeserializeOwned;
 
 use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
+use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod,
     KubernetesPodStatusPhase, KubernetesService, LabelsContent,
@@ -772,6 +773,36 @@ where
             Err(e)
         }
     }
+}
+
+/// Get custom metrics values
+///
+/// # Arguments
+///
+/// * `kubernetes_config` - kubernetes config path
+/// * `envs` - environment variables required for kubernetes connection
+/// * `namespace` - kubernetes namespace
+/// * `pod_name` - add a pod name or None to specify all pods
+/// * `metric_name` - metric name
+pub fn kubectl_exec_api_custom_metrics<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: &str,
+    specific_pod_name: Option<&str>,
+    metric_name: &str,
+) -> Result<KubernetesApiMetrics, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let pods = match specific_pod_name {
+        Some(p) => p,
+        None => "*",
+    };
+    let api_url = format!(
+        "/apis/custom.metrics.k8s.io/v1beta1/namespaces/{}/pods/{}/{}",
+        namespace, pods, metric_name
+    );
+    kubectl_exec::<P, KubernetesApiMetrics>(vec!["get", "--raw", api_url.as_str()], kubernetes_config, envs)
 }
 
 fn kubectl_exec<P, T>(args: Vec<&str>, kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<T, SimpleError>

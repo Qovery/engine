@@ -13,13 +13,15 @@ use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
-use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
+use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces};
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
 use crate::error::EngineErrorCause::Internal;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
+use crate::error::{
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
+};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -554,7 +556,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context();
 
-        // pause: remove all worker nodes to reduce the bill but keep master to keep all the config
+        // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
         let worker_nodes: Vec<WorkerNodeDataTemplate> = Vec::new();
         context.insert("eks_worker_nodes", &worker_nodes);
 
@@ -606,8 +608,72 @@ impl<'a> Kubernetes for EKS<'a> {
                 cause: EngineErrorCause::Internal,
                 scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
                 execution_id: self.context.execution_id().to_string(),
-                message: Some("No worker nodes present, can't Pause the infrastructure. This can happen if there where a manual operations on the workers.".to_string()),
+                message: Some("No worker nodes present, can't Pause the infrastructure. This can happen if there where a manual operations on the workers or the infrastructure is already pause.".to_string()),
             });
+        }
+
+        let kubernetes_config_file_path = self.config_file_path()?;
+
+        // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
+        let metric_name = "taskmanager_nb_running_tasks";
+        let wait_engine_job_finish = retry::retry(Fibonacci::from_millis(60000).take(60), || {
+            return match kubectl_exec_api_custom_metrics(
+                &kubernetes_config_file_path,
+                self.cloud_provider().credentials_environment_variables(),
+                "qovery",
+                None,
+                metric_name,
+            ) {
+                Ok(metrics) => {
+                    let mut current_engine_jobs = 0;
+
+                    for metric in metrics.items {
+                        match metric.value.parse::<i32>() {
+                            Ok(_) => current_engine_jobs += 1,
+                            Err(e) => {
+                                error!("error while looking at the API metric value {}. {:?}", metric_name, e);
+                                return OperationResult::Retry(SimpleError {
+                                    kind: SimpleErrorKind::Other,
+                                    message: Some(e.to_string()),
+                                });
+                            }
+                        }
+                    }
+
+                    if current_engine_jobs == 0 {
+                        OperationResult::Ok(())
+                    } else {
+                        OperationResult::Retry(SimpleError {
+                            kind: SimpleErrorKind::Other,
+                            message: Some("can't pause the infrastructure now, Engine jobs are currently running, retrying later...".to_string()),
+                        })
+                    }
+                }
+                Err(e) => {
+                    error!("error while looking at the API metric value {}. {:?}", metric_name, e);
+                    OperationResult::Retry(e)
+                }
+            };
+        });
+
+        match wait_engine_job_finish {
+            Ok(_) => info!("no current running jobs on the Engine, infrastructure pause is allowed to start"),
+            Err(Operation { error, .. }) => {
+                return Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: error.message,
+                })
+            }
+            Err(retry::Error::Internal(msg)) => {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    EngineErrorScope::Engine,
+                    self.context.execution_id(),
+                    Some(msg),
+                ))
+            }
         }
 
         let mut terraform_args_string = vec!["apply".to_string(), "-auto-approve".to_string()];
