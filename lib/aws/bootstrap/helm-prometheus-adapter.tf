@@ -18,7 +18,7 @@ resource "helm_release" "prometheus-adapter" {
 
   set {
     name = "prometheus.url"
-    value = "prometheus-operated.${helm_release.prometheus_operator.namespace}.svc"
+    value = "http://prometheus-operated.${helm_release.prometheus_operator.namespace}.svc"
   }
 
   # PDB
