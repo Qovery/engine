@@ -5,12 +5,6 @@ resource "helm_release" "metrics_server" {
   atomic = true
   max_history = 50
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "resources.limits.cpu"
     value = "250m"
@@ -29,6 +23,11 @@ resource "helm_release" "metrics_server" {
   set {
     name = "resources.requests.memory"
     value = "256Mi"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [

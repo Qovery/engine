@@ -22,12 +22,6 @@ resource "helm_release" "coredns-config" {
   max_history = 50
   force_update = true
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "managed_dns"
     value = "{{ managed_dns_domains_terraform_format }}"
@@ -36,6 +30,11 @@ resource "helm_release" "coredns-config" {
   set {
     name = "managed_dns_resolvers"
     value = "{{ managed_dns_resolvers_terraform_format }}"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   provisioner "local-exec" {

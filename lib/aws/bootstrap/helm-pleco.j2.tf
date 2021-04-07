@@ -34,12 +34,6 @@ resource "helm_release" "pleco" {
 
   values = [local.pleco_config]
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "environmentVariables.AWS_ACCESS_KEY_ID"
     value = "{{ aws_access_key }}"
@@ -53,6 +47,11 @@ resource "helm_release" "pleco" {
   set {
     name = "environmentVariables.LOG_LEVEL"
     value = "debug"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [

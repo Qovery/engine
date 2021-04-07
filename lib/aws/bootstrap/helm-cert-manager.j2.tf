@@ -10,11 +10,6 @@ resource "helm_release" "cert_manager" {
   values = [file("chart_values/cert-manager.yaml")]
 
   set {
-    name = "fake"
-    value = timestamp()
-  }
-
-  set {
     name = "installCRDs"
     value = "true"
   }
@@ -103,6 +98,11 @@ resource "helm_release" "cert_manager" {
     value = "1Gi"
   }
 
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
+  }
+
   depends_on = [
     aws_eks_cluster.eks_cluster,
     helm_release.cluster_autoscaler,
@@ -137,6 +137,11 @@ resource "helm_release" "cert_manager_config" {
   set {
     name = "managedDns"
     value = "{{ managed_dns_domains_terraform_format }}"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
 {% if external_dns_provider == "cloudflare" %}

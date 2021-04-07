@@ -274,6 +274,13 @@ variable "discord_api_key" {
   type = string
 }
 
+# Force helm upgrade
+variable "forced_upgrade" {
+  description = "Force upgrade"
+  default = {% if force_upgrade %}timestamp(){% else %}"false"{% endif %}
+  type = string
+}
+
 {%- if resource_expiration_in_seconds is defined %}
 # Pleco ttl
 variable "resource_expiration_in_seconds" {

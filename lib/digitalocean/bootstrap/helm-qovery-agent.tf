@@ -21,12 +21,6 @@ resource "helm_release" "qovery_agent_resources" {
   force_update = true
   recreate_pods = true
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "image.tag"
     value = data.external.get_agent_version_to_use.result.version
@@ -101,6 +95,11 @@ resource "helm_release" "qovery_agent_resources" {
   set {
     name = "resources.requests.memory"
     value = "500Mi"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = timestamp()
   }
 
   depends_on = [

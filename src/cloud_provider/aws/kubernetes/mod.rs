@@ -219,6 +219,7 @@ impl<'a> EKS<'a> {
                 &self.context.resource_expiration_in_seconds(),
             )
         }
+        context.insert("force_upgrade", &self.context.requires_forced_upgrade());
 
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);

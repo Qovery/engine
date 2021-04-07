@@ -40,12 +40,6 @@ resource "helm_release" "iam_eks_user_mapper" {
   atomic = true
   max_history = 50
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "aws.accessKey"
     value = aws_iam_access_key.iam_eks_user_mapper.id
@@ -85,6 +79,11 @@ resource "helm_release" "iam_eks_user_mapper" {
   set {
     name = "resources.requests.memory"
     value = "32Mi"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [

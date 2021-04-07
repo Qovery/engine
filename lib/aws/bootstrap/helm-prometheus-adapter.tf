@@ -5,12 +5,6 @@ resource "helm_release" "prometheus-adapter" {
   atomic = true
   max_history = 50
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "metricsRelistInterval"
     value = "30s"
@@ -51,6 +45,11 @@ resource "helm_release" "prometheus-adapter" {
   set {
     name = "resources.requests.memory"
     value = "128Mi"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [

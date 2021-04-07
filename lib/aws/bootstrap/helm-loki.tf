@@ -76,12 +76,6 @@ resource "helm_release" "loki" {
 
   values = [file("chart_values/loki.yaml")]
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "config.storage_config.aws.s3"
     value = "s3://${urlencode(aws_iam_access_key.iam_eks_loki.id)}:${urlencode(aws_iam_access_key.iam_eks_loki.secret)}@${var.region}/${aws_s3_bucket.loki_bucket.bucket}"
@@ -125,6 +119,11 @@ resource "helm_release" "loki" {
   set {
     name = "resources.requests.memory"
     value = "1Gi"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [

@@ -7,12 +7,6 @@ resource "helm_release" "pleco" {
   atomic = true
   max_history = 50
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "enabledFeatures.disableDryRun"
     value = "true"
@@ -21,6 +15,11 @@ resource "helm_release" "pleco" {
   set {
     name = "environmentVariables.LOG_LEVEL"
     value = "debug"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [
