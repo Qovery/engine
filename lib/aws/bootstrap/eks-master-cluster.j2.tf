@@ -38,5 +38,6 @@ resource "aws_eks_cluster" "eks_cluster" {
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy,
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSServicePolicy,
     aws_cloudwatch_log_group.eks_cloudwatch_log_group,
+    aws_key_pair.qovery_ssh_key_{{ kubernetes_cluster_id }}
   ]
 }
