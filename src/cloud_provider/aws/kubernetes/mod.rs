@@ -14,6 +14,7 @@ use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces};
+use crate::cmd::structs::HelmList;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
@@ -851,6 +852,16 @@ impl<'a> Kubernetes for EKS<'a> {
             )),
             self.context.execution_id(),
         ));
+
+        // delete custom metrics api to avoid stale namespaces on deletion
+        let _ = cmd::helm::helm_uninstall_list(
+            &kubernetes_config_file_path,
+            vec![HelmList {
+                name: "metrics-server".to_string(),
+                namespace: "kube-system".to_string(),
+            }],
+            self.cloud_provider().credentials_environment_variables(),
+        );
 
         // required to avoid namespace stuck on deletion
         match uninstall_cert_manager(
