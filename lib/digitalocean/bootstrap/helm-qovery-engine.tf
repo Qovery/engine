@@ -13,12 +13,6 @@ resource "helm_release" "qovery_engine_resources" {
   timeout = 600
   recreate_pods = true
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   // need kubernetes 1.18, should be well tested before activating it
   set {
     name = "autoscaler.enabled"
@@ -115,6 +109,11 @@ resource "helm_release" "qovery_engine_resources" {
   set {
     name = "buildResources.requests.memory"
     value = "4Gi"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = timestamp()
   }
 
   depends_on = [

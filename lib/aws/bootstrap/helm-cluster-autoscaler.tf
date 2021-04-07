@@ -44,12 +44,6 @@ resource "helm_release" "cluster_autoscaler" {
   atomic = true
   max_history = 50
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "cloudProvider"
     value = "aws"
@@ -123,6 +117,11 @@ resource "helm_release" "cluster_autoscaler" {
   set {
     name = "resources.requests.memory"
     value = "300Mi"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [

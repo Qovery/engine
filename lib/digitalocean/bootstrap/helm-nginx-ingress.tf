@@ -10,12 +10,6 @@ resource "helm_release" "nginx_ingress" {
   timeout = 300
   values = [file("chart_values/nginx-ingress.yaml")]
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   # Controller resources
   set {
     name = "controller.resources.limits.cpu"
@@ -56,6 +50,11 @@ resource "helm_release" "nginx_ingress" {
   set {
     name = "defaultBackend.resources.requests.memory"
     value = "32Mi"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [

@@ -1006,6 +1006,16 @@ impl Context {
         }
     }
 
+    pub fn requires_forced_upgrade(&self) -> bool {
+        match &self.metadata {
+            Some(meta) => match meta.forced_upgrade {
+                Some(true) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
     pub fn is_test_cluster(&self) -> bool {
         self.test_cluster
     }
@@ -1038,6 +1048,7 @@ pub struct Metadata {
     pub dry_run_deploy: Option<bool>,
     pub resource_expiration_in_seconds: Option<u32>,
     pub docker_build_options: Option<String>,
+    pub forced_upgrade: Option<bool>,
 }
 
 impl Metadata {
@@ -1045,11 +1056,13 @@ impl Metadata {
         dry_run_deploy: Option<bool>,
         resource_expiration_in_seconds: Option<u32>,
         docker_build_options: Option<String>,
+        forced_upgrade: Option<bool>,
     ) -> Self {
         Metadata {
             dry_run_deploy,
             resource_expiration_in_seconds,
             docker_build_options,
+            forced_upgrade,
         }
     }
 }

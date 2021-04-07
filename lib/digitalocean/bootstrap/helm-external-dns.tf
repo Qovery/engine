@@ -7,12 +7,6 @@ resource "helm_release" "externaldns" {
 
   values = [file("chart_values/external-dns.yaml")]
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "resources.limits.cpu"
     value = "50m"
@@ -31,6 +25,11 @@ resource "helm_release" "externaldns" {
   set {
     name = "resources.requests.memory"
     value = "50Mi"
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [

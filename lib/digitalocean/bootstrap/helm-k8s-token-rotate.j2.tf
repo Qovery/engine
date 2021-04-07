@@ -6,12 +6,6 @@ resource "helm_release" "k8s_token_rotate" {
   max_history = 50
   force_update = true
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
-  set {
-    name = "fake"
-    value = timestamp()
-  }
-
   set {
     name = "environmentVariables.DO_API_TOKEN"
     value = "{{ digitalocean_token }}"
@@ -45,6 +39,11 @@ resource "helm_release" "k8s_token_rotate" {
   set {
     name = "environmentVariables.K8S_CLUSTER_ID"
     value = digitalocean_kubernetes_cluster.kubernetes_cluster.id
+  }
+
+  set {
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [

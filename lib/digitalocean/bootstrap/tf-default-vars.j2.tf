@@ -150,3 +150,10 @@ variable "discord_api_key" {
   default = "{{ discord_api_key }}"
   type = string
 }
+
+# Force helm upgrade
+variable "forced_upgrade" {
+  description = "Force upgrade"
+  default = {% if force_upgrade %}timestamp(){% else %}"false"{% endif %}
+  type = string
+}

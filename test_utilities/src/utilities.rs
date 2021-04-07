@@ -49,6 +49,12 @@ pub fn context() -> Context {
             }
         },
         docker_build_options: Some("--network host".to_string()),
+        forced_upgrade: Option::from({
+            match env::var_os("forced_upgrade") {
+                Some(_) => true,
+                None => false,
+            }
+        }),
     };
 
     Context::new(execution_id, home_dir, lib_root_dir, true, None, Option::from(metadata))

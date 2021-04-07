@@ -105,10 +105,9 @@ resource "helm_release" "grafana" {
     local.cloudflare_datasources,
   ]
 
-  // make a fake arg to avoid TF to validate update on failure because of the atomic option
   set {
-    name = "fake"
-    value = timestamp()
+    name = "forced_upgrade"
+    value = var.forced_upgrade
   }
 
   depends_on = [
