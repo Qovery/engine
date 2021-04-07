@@ -226,7 +226,7 @@ impl<'a> DOKS<'a> {
                 instance_type: instance_type.to_string(),
                 desired_size: "1".to_string(),
                 max_size: nodes.len().to_string(),
-                min_size: "1".to_string(),
+                min_size: "2".to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
 
