@@ -175,7 +175,7 @@ impl<'a> EKS<'a> {
                 instance_type: instance_type.to_string(),
                 desired_size: "1".to_string(),
                 max_size: nodes.len().to_string(),
-                min_size: "1".to_string(),
+                min_size: "2".to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
 
@@ -814,6 +814,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
                 info!("Deleting non Qovery namespaces");
                 for namespace_to_delete in namespaces_to_delete.iter() {
+                    info!("Starting namespace {} deletion process", namespace_to_delete);
                     let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                         &kubernetes_config_file_path,
                         namespace_to_delete,
@@ -870,6 +871,7 @@ impl<'a> Kubernetes for EKS<'a> {
         info!("Deleting Qovery managed Namespaces");
         let qovery_namespaces = get_qovery_managed_namespaces();
         for qovery_namespace in qovery_namespaces.iter() {
+            info!("Starting namespace {} deletion process", qovery_namespace);
             let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                 &kubernetes_config_file_path,
                 qovery_namespace,
@@ -894,6 +896,7 @@ impl<'a> Kubernetes for EKS<'a> {
         ) {
             Ok(helm_charts) => {
                 for chart in helm_charts {
+                    info!("Deleting chart {} in progress...", chart.name);
                     let _ = cmd::helm::helm_uninstall_list(
                         &kubernetes_config_file_path,
                         vec![chart],
