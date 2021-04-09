@@ -34,6 +34,7 @@ use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
 use std::env;
+use std::num::ParseIntError;
 
 pub mod node;
 pub mod roles;
@@ -174,7 +175,7 @@ impl<'a> EKS<'a> {
             .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
             .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
                 instance_type: instance_type.to_string(),
-                desired_size: "1".to_string(),
+                desired_size: "2".to_string(),
                 max_size: nodes.len().to_string(),
                 min_size: "2".to_string(),
             })
@@ -631,7 +632,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
                     for metric in metrics.items {
                         match metric.value.parse::<i32>() {
-                            Ok(_) => current_engine_jobs += 1,
+                            Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
                             Err(e) => {
                                 error!("error while looking at the API metric value {}. {:?}", metric_name, e);
                                 return OperationResult::Retry(SimpleError {
@@ -639,6 +640,7 @@ impl<'a> Kubernetes for EKS<'a> {
                                     message: Some(e.to_string()),
                                 });
                             }
+                            _ => {}
                         }
                     }
 
