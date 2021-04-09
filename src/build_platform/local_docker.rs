@@ -489,7 +489,7 @@ fn check_docker_space_usage_and_clean(
 
     if docker_percentage_used > docker_max_disk_percentage_usage_before_purge {
         warn!(
-            "Docker disk usage ({}%) is higher than {}%, requesting cleaning",
+            "Docker disk usage ({}%) is higher than {}%, requesting cleaning (purge)",
             docker_percentage_used, docker_max_disk_percentage_usage_before_purge
         );
 
@@ -503,8 +503,10 @@ fn check_docker_space_usage_and_clean(
     };
 
     Ok(format!(
-        "no need to purge old docker images, only {}% disk used",
-        docker_percentage_used
+        "no need to purge old docker images, only {}% ({}/{}) disk used",
+        docker_percentage_used,
+        docker_path_size_info.get_available_space(),
+        docker_path_size_info.get_total_space(),
     ))
 }
 
