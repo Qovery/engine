@@ -34,7 +34,6 @@ use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
 use std::env;
-use std::num::ParseIntError;
 
 pub mod node;
 pub mod roles;
