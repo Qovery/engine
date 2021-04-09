@@ -12,6 +12,7 @@ use tracing::{span, Level};
 
 use self::test_utilities::aws::eks_options;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
+use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::transaction::TransactionResult;
 
 pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
@@ -78,6 +79,7 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             nodes,
         );
 
+        // Deploy
         match tx.create_kubernetes(&kubernetes) {
             Err(err) => panic!("{:?}", err),
             _ => {}
@@ -88,7 +90,19 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match tx.delete_kubernetes(&kubernetes) {
+        // Pause
+        match tx.pause_kubernetes(&kubernetes) {
+            Err(err) => panic!("{:?}", err),
+            _ => {}
+        }
+        match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // Resume
+        match tx.create_kubernetes(&kubernetes) {
             Err(err) => panic!("{:?}", err),
             _ => {}
         }
@@ -97,6 +111,18 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // Destroy
+        match tx.delete_kubernetes(&kubernetes) {
+            Err(err) => panic!("{:?}", err),
+            _ => {}
+        }
+        match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
         return test_name.to_string();
     })
 }
