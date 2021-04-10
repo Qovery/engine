@@ -944,7 +944,8 @@ where
             selector.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         ),
-    )?;
+    )
+    .unwrap_or_else(|_| vec![format!("Unable to retrieve logs for pod: {}", selector)]);
 
     let _ = result.extend(logs);
 
@@ -958,9 +959,10 @@ where
             selector.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         ),
-    )?;
+    )
+    .map_or_else(|_| vec![], |pods| pods.items);
 
-    for pod in pods.items {
+    for pod in pods {
         for container_condition in pod.status.conditions {
             if container_condition.status.to_ascii_lowercase() == "false" {
                 result.push(format!(
@@ -999,14 +1001,18 @@ where
             environment.namespace(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         ),
-    )?;
+    )
+    .map_or_else(|_| vec![], |events| events.items);
 
-    for event in events.items {
+    for event in events {
         if event.type_.to_lowercase() != "normal" {
             if let Some(message) = event.message {
                 result.push(format!(
                     "{} {} {}: {}",
-                    event.last_timestamp, event.type_, event.reason, message
+                    event.last_timestamp.unwrap_or_default(),
+                    event.type_,
+                    event.reason,
+                    message
                 ));
             }
         }
