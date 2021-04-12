@@ -1,5 +1,3 @@
-# AWS IAM user
-
 locals {
   kubeconfig = <<KUBECONFIG
 apiVersion: v1
