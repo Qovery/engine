@@ -14,7 +14,7 @@ use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces};
-use crate::cmd::structs::HelmList;
+use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
@@ -857,7 +857,7 @@ impl<'a> Kubernetes for EKS<'a> {
         // delete custom metrics api to avoid stale namespaces on deletion
         let _ = cmd::helm::helm_uninstall_list(
             &kubernetes_config_file_path,
-            vec![HelmList {
+            vec![HelmChart {
                 name: "metrics-server".to_string(),
                 namespace: "kube-system".to_string(),
             }],
@@ -880,8 +880,44 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         };
 
-        info!("Deleting Qovery managed Namespaces");
+        info!("Deleting Qovery managed helm charts");
         let qovery_namespaces = get_qovery_managed_namespaces();
+        for qovery_namespace in qovery_namespaces.iter() {
+            info!(
+                "Starting Qovery managed charts deletion process in {} namespace",
+                qovery_namespace
+            );
+            let charts_to_delete = cmd::helm::helm_list(
+                &kubernetes_config_file_path,
+                self.cloud_provider().credentials_environment_variables(),
+                Some(qovery_namespace),
+            );
+            match charts_to_delete {
+                Ok(charts) => {
+                    for chart in charts {
+                        info!("Deleting chart {} in {} namespace", chart.name, chart.namespace);
+                        match cmd::helm::helm_exec_uninstall(
+                            &kubernetes_config_file_path,
+                            &chart.namespace,
+                            &chart.name,
+                            self.cloud_provider().credentials_environment_variables(),
+                        ) {
+                            Ok(_) => info!("chart {} deleted", chart.name),
+                            Err(e) => error!("{:?}", e),
+                        }
+                    }
+                }
+                Err(e) => {
+                    if e.message.is_some() && e.message.unwrap().contains("not found") {
+                        {}
+                    } else {
+                        error!("Can't delete the namespace {}", qovery_namespace);
+                    }
+                }
+            }
+        }
+
+        info!("Deleting Qovery managed Namespaces");
         for qovery_namespace in qovery_namespaces.iter() {
             info!("Starting namespace {} deletion process", qovery_namespace);
             let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
@@ -905,6 +941,7 @@ impl<'a> Kubernetes for EKS<'a> {
         match cmd::helm::helm_list(
             &kubernetes_config_file_path,
             self.cloud_provider().credentials_environment_variables(),
+            None,
         ) {
             Ok(helm_charts) => {
                 for chart in helm_charts {
