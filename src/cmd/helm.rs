@@ -3,7 +3,7 @@ use std::path::Path;
 
 use tracing::{error, info, span, Level};
 
-use crate::cmd::structs::{Helm, HelmHistoryRow, HelmList};
+use crate::cmd::structs::{Helm, HelmChart, HelmHistoryRow};
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
@@ -194,7 +194,7 @@ where
 
 pub fn helm_uninstall_list<P>(
     kubernetes_config: P,
-    helm_list: Vec<HelmList>,
+    helm_list: Vec<HelmChart>,
     envs: Vec<(&str, &str)>,
 ) -> Result<String, SimpleError>
 where
@@ -321,20 +321,36 @@ where
     })
 }
 
-pub fn helm_list<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<Vec<HelmList>, SimpleError>
+/// List deployed helm charts
+///
+/// # Arguments
+///
+/// * `kubernetes_config` - kubernetes config path
+/// * `envs` - environment variables required for kubernetes connection
+/// * `namespace` - list charts from a kubernetes namespace or use None to select all namespaces
+pub fn helm_list<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+) -> Result<Vec<HelmChart>, SimpleError>
 where
     P: AsRef<Path>,
 {
     let mut output_vec: Vec<String> = Vec::new();
+    let mut helm_args = vec![
+        "list",
+        "--kubeconfig",
+        kubernetes_config.as_ref().to_str().unwrap(),
+        "-o",
+        "json",
+    ];
+    match namespace {
+        Some(ns) => helm_args.append(&mut vec!["-n", ns]),
+        None => helm_args.push("-A"),
+    }
+
     let _ = helm_exec_with_output(
-        vec![
-            "list",
-            "-A",
-            "--kubeconfig",
-            kubernetes_config.as_ref().to_str().unwrap(),
-            "-o",
-            "json",
-        ],
+        helm_args,
         envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
@@ -348,12 +364,12 @@ where
 
     let output_string: String = output_vec.join("");
     let values = serde_json::from_str::<Vec<Helm>>(output_string.as_str());
-    let mut helms_charts: Vec<HelmList> = Vec::new();
+    let mut helms_charts: Vec<HelmChart> = Vec::new();
 
     match values {
         Ok(all_helms) => {
             for helm in all_helms {
-                helms_charts.push(HelmList::new(helm.name, helm.namespace))
+                helms_charts.push(HelmChart::new(helm.name, helm.namespace))
             }
         }
         Err(e) => {
