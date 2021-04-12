@@ -15,4 +15,4 @@ maintainers:
 name: aws-vpc-cni
 sources:
 - https://github.com/aws/amazon-vpc-cni-k8s
-version: 1.1.2
+version: 1.1.3
