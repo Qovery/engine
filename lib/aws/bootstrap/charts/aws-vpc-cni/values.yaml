@@ -139,3 +139,23 @@ affinity:
               operator: NotIn
               values:
                 - fargate
+
+eniConfig:
+  # Specifies whether ENIConfigs should be created
+  create: false
+  region: us-west-2
+  subnets:
+    # Key identifies the AZ
+    # Value contains the subnet ID and security group IDs within that AZ
+    # a:
+    #   id: subnet-123
+    #   securityGroups:
+    #   - sg-123
+    # b:
+    #   id: subnet-456
+    #   securityGroups:
+    #   - sg-456
+    # c:
+    #   id: subnet-789
+    #   securityGroups:
+    #   - sg-789
