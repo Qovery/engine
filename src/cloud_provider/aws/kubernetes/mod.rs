@@ -490,15 +490,34 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
         ));
 
-        match cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
-        ) {
+        match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             Ok(_) => Ok(()),
             Err(e) => {
-                format!("Error while deploying cluster {} with id {}.", self.name(), self.id());
-                Err(e)
+                // print Terraform error logs to end user
+                if e.logs.is_some() {
+                    let error_lined_joined = e.logs.unwrap().join("\n");
+                    listeners_helper.deployment_error(ProgressInfo::new(
+                        ProgressScope::Infrastructure {
+                            execution_id: self.context.execution_id().to_string(),
+                        },
+                        ProgressLevel::Error,
+                        Some(format!(
+                            "Failed to deploy EKS {} cluster with id {}. \n {}",
+                            self.name(),
+                            self.id(),
+                            error_lined_joined
+                        )),
+                        self.context.execution_id(),
+                    ));
+                }
+
+                error!("Error while deploying cluster {} with id {}.", self.name(), self.id());
+                Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
+                    self.context.execution_id(),
+                    e.message,
+                ))
             }
         }
     }
@@ -698,15 +717,34 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.execution_id(),
         ));
 
-        match cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            terraform_exec(temp_dir.as_str(), terraform_args),
-        ) {
+        match terraform_exec(temp_dir.as_str(), terraform_args) {
             Ok(_) => Ok(()),
             Err(e) => {
-                format!("Error while pausing cluster {} with id {}.", self.name(), self.id());
-                Err(e)
+                // print Terraform error logs to end user
+                if e.logs.is_some() {
+                    let error_lined_joined = e.logs.unwrap().join("\n");
+                    listeners_helper.deployment_error(ProgressInfo::new(
+                        ProgressScope::Infrastructure {
+                            execution_id: self.context.execution_id().to_string(),
+                        },
+                        ProgressLevel::Error,
+                        Some(format!(
+                            "Failed to pause EKS {} cluster with id {}. \n {}",
+                            self.name(),
+                            self.id(),
+                            error_lined_joined
+                        )),
+                        self.context.execution_id(),
+                    ));
+                }
+
+                error!("Error while pausing cluster {} with id {}.", self.name(), self.id());
+                Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
+                    self.context.execution_id(),
+                    e.message,
+                ))
             }
         }
     }
@@ -788,13 +826,9 @@ impl<'a> Kubernetes for EKS<'a> {
         ));
 
         info!("Running Terraform apply");
-        match cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false),
-        ) {
+        match cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
             Err(e) => error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message),
-            _ => {}
+            Ok(_) => {}
         };
 
         // should make the diff between all namespaces and qovery managed namespaces
@@ -936,11 +970,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let terraform_result =
             retry::retry(
                 Fibonacci::from_millis(60000).take(3),
-                || match cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false),
-                ) {
+                || match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
                     Ok(_) => OperationResult::Ok(()),
                     Err(e) => OperationResult::Retry(e),
                 },
@@ -948,7 +978,18 @@ impl<'a> Kubernetes for EKS<'a> {
 
         match terraform_result {
             Ok(_) => Ok(()),
-            Err(Operation { error, .. }) => Err(error),
+            Err(Operation { error, .. }) => Err(EngineError::new(
+                EngineErrorCause::Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                Some(format!(
+                    "Error while deleting cluster {} with id {}: {:?}.\n{:?}",
+                    self.name(),
+                    self.id(),
+                    error.message,
+                    error.logs,
+                )),
+            )),
             Err(retry::Error::Internal(msg)) => Err(EngineError::new(
                 EngineErrorCause::Internal,
                 self.engine_error_scope(),

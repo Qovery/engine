@@ -110,3 +110,26 @@ pub fn cast_simple_error_to_engine_error<X, T: Into<String>>(
         Ok(x) => Ok(x),
     }
 }
+
+#[derive(Debug)]
+pub struct TerraformError {
+    pub kind: SimpleErrorKind,
+    pub message: Option<String>,
+    pub logs: Option<Vec<String>>,
+}
+
+impl TerraformError {
+    pub fn new<T: Into<String>>(kind: SimpleErrorKind, message: Option<T>, logs: Option<Vec<String>>) -> Self {
+        TerraformError {
+            kind,
+            message: match message {
+                Some(message) => Some(message.into()),
+                _ => None,
+            },
+            logs: match logs {
+                Some(l) => Some(l),
+                _ => None,
+            },
+        }
+    }
+}
