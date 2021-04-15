@@ -19,24 +19,23 @@ pub fn docker_tag_and_push_image(
         Kind::Docr => "DigitalOcean Registry",
     };
     let docker_environment_variables = match docker_envs {
-        None => vec![("", "")],
+        None => vec![],
         Some(v) => v,
     };
 
-    match retry::retry(
-        Fibonacci::from_millis(3000).take(5),
-        || match cmd::utilities::exec_with_envs(
+    match retry::retry(Fibonacci::from_millis(3000).take(5), || {
+        match cmd::utilities::exec(
             "docker",
             vec!["tag", &image_with_tag, dest.as_str()],
-            docker_environment_variables.clone(),
+            Some(docker_environment_variables.clone()),
         ) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
                 info!("failed to tag image {}, retrying...", image_with_tag);
                 OperationResult::Retry(e)
             }
-        },
-    ) {
+        }
+    }) {
         Err(Operation { error, .. }) => {
             return Err(SimpleError::new(
                 SimpleErrorKind::Other,
@@ -46,12 +45,11 @@ pub fn docker_tag_and_push_image(
         _ => {}
     }
 
-    match retry::retry(
-        Fibonacci::from_millis(5000).take(5),
-        || match cmd::utilities::exec_with_envs(
+    match retry::retry(Fibonacci::from_millis(5000).take(5), || {
+        match cmd::utilities::exec(
             "docker",
             vec!["push", dest.as_str()],
-            docker_environment_variables.clone(),
+            Some(docker_environment_variables.clone()),
         ) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
@@ -61,8 +59,8 @@ pub fn docker_tag_and_push_image(
                 );
                 OperationResult::Retry(e)
             }
-        },
-    ) {
+        }
+    }) {
         Err(Operation { error, .. }) => Err(error),
         Err(e) => Err(SimpleError::new(
             SimpleErrorKind::Other,

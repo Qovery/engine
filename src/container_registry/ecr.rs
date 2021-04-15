@@ -323,7 +323,7 @@ impl ContainerRegistry for ECR {
             }
         };
 
-        match cmd::utilities::exec_with_envs(
+        match cmd::utilities::exec(
             "docker",
             vec![
                 "login",
@@ -333,7 +333,7 @@ impl ContainerRegistry for ECR {
                 password.as_str(),
                 endpoint_url.as_str(),
             ],
-            self.docker_envs(),
+            Some(self.docker_envs()),
         ) {
             Err(_) => {
                 return Err(self.engine_error(

@@ -58,36 +58,17 @@ where
     cmd
 }
 
-pub fn exec<P>(binary: P, args: Vec<&str>) -> Result<(), SimpleError>
+pub fn exec<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
-    let command_string = command_to_string(binary.as_ref(), &args);
-    info!("command: {}", command_string.as_str());
-
-    let exit_status = match command(binary, args, None, false).spawn().unwrap().wait() {
-        Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
+    let command_string = match &envs {
+        None => command_to_string(binary.as_ref(), &args),
+        Some(v) => command_with_envs_to_string(binary.as_ref(), &args, v),
     };
-
-    if exit_status.success() {
-        return Ok(());
-    }
-
-    Err(SimpleError::new(
-        SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
-    ))
-}
-
-pub fn exec_with_envs<P>(binary: P, args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let command_string = command_with_envs_to_string(binary.as_ref(), &args, &envs);
     info!("command: {}", command_string.as_str());
 
-    let exit_status = match command(binary, args, Some(envs), false).spawn().unwrap().wait() {
+    let exit_status = match command(binary, args, envs, false).spawn().unwrap().wait() {
         Ok(x) => x,
         Err(err) => return Err(SimpleError::from(err)),
     };

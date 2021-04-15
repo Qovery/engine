@@ -305,6 +305,7 @@ impl ContainerRegistry for DOCR {
         match cmd::utilities::exec(
             "doctl",
             vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
+            None,
         ) {
             Err(_) => {
                 return Err(self.engine_error(

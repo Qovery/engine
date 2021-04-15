@@ -116,10 +116,10 @@ impl ContainerRegistry for DockerHub {
             None => vec![],
         };
 
-        match cmd::utilities::exec_with_envs(
+        match cmd::utilities::exec(
             "docker",
             vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
-            envs.clone(),
+            Some(envs.clone()),
         ) {
             Err(_) => {
                 return Err(self.engine_error(
