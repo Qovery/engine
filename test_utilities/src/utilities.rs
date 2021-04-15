@@ -417,13 +417,13 @@ fn get_object_via_aws_cli(
     let s3_url = format!("s3://{}/{}", bucket_name, object_key);
     let local_path = format!("/tmp/{}", object_key); // FIXME: change hardcoded /tmp/
 
-    qovery_engine::cmd::utilities::exec_with_envs(
+    qovery_engine::cmd::utilities::exec(
         "aws",
         vec!["s3", "cp", &s3_url, &local_path],
-        vec![
+        Some(vec![
             (AWS_ACCESS_KEY_ID, access_key_id),
             (AWS_SECRET_ACCESS_KEY, secret_access_key),
-        ],
+        ]),
     )?;
 
     let s = read_to_string(&local_path)?;
