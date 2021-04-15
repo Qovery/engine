@@ -10,6 +10,7 @@ use crate::error::EngineErrorCause;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
+use chrono::Duration;
 
 pub struct DockerHub {
     context: Context,
@@ -56,6 +57,7 @@ impl ContainerRegistry for DockerHub {
         let _ = cmd::utilities::exec_with_output(
             "docker",
             vec!["--version"],
+            &vec![],
             |r_out| match r_out {
                 Ok(s) => output_from_cmd.push_str(&s.to_owned()),
                 Err(e) => error!("Error while getting sdtout from docker {}", e),
@@ -64,6 +66,7 @@ impl ContainerRegistry for DockerHub {
                 Ok(s) => error!("Error executing docker command {}", s),
                 Err(e) => error!("Error while getting stderr from docker {}", e),
             },
+            Duration::seconds(15),
         );
 
         info!("Using Docker: {}", output_from_cmd);

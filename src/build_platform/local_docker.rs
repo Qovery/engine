@@ -101,10 +101,10 @@ impl LocalDocker {
         docker_args.push(into_dir_docker_style);
 
         // docker build
-        let exit_status = cmd::utilities::exec_with_envs_and_output(
+        let exit_status = cmd::utilities::exec_with_output(
             "docker",
             docker_args,
-            self.get_docker_host_envs(),
+            &self.get_docker_host_envs(),
             |line| {
                 let line_string = line.unwrap();
                 info!("{}", line_string.as_str());
@@ -161,7 +161,7 @@ impl LocalDocker {
 
         let args = self.context.docker_build_options();
 
-        let mut exit_status: Result<Vec<String>, SimpleError> =
+        let exit_status: Result<Vec<String>, SimpleError> =
             Err(SimpleError::new(SimpleErrorKind::Other, Some("no builder names")));
 
         for builder_name in BUILDPACKS_BUILDERS.iter() {
@@ -197,10 +197,10 @@ impl LocalDocker {
             buildpacks_args.push(builder_name);
 
             // buildpacks build
-            exit_status = cmd::utilities::exec_with_envs_and_output(
+            let exit_status = cmd::utilities::exec_with_output(
                 "pack",
                 buildpacks_args,
-                self.get_docker_host_envs(),
+                &self.get_docker_host_envs(),
                 |line| {
                     let line_string = line.unwrap();
                     info!("{}", line_string.as_str());
@@ -243,7 +243,7 @@ impl LocalDocker {
 
                 Err(self.engine_error(
                     EngineErrorCause::User(
-                        "None builders supports Your application can't be built without providing a Dockerfile",
+                        "None builders supports. Your application can't be built without providing a Dockerfile",
                     ),
                     format!(
                         "Qovery can't build your container image {} with one of the following builders: {}. \
@@ -521,10 +521,10 @@ fn check_docker_space_usage_and_clean(
 fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<Vec<String>, SimpleError> {
     let docker_args = vec!["image", "prune", "-a", "-f"];
 
-    cmd::utilities::exec_with_envs_and_output(
+    cmd::utilities::exec_with_output(
         "docker",
         docker_args,
-        envs,
+        &envs,
         |line| {
             let line_string = line.unwrap();
             debug!("{}", line_string.as_str());

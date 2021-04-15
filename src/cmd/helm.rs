@@ -4,7 +4,7 @@ use std::path::Path;
 use tracing::{error, info, span, Level};
 
 use crate::cmd::structs::{Helm, HelmChart, HelmHistoryRow};
-use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::cmd::utilities::exec_with_output;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
 
@@ -408,7 +408,7 @@ where
     // Note: Helm CLI use spf13/cobra lib for the CLI; One function is mainly used to return an error if a command failed.
     // Helm returns an error each time a command does not succeed as they want. Which leads to handling error with status code 1
     // It means that the command successfully ran, but it didn't terminate as expected
-    match exec_with_envs_and_output("helm", args, envs, stdout_output, stderr_output, Duration::max_value()) {
+    match exec_with_output("helm", args, &envs, stdout_output, stderr_output, Duration::max_value()) {
         Err(err) => match err.kind {
             SimpleErrorKind::Command(exit_status) => match exit_status.code() {
                 Some(exit_status_code) => {

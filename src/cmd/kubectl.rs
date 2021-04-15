@@ -11,7 +11,7 @@ use crate::cmd::structs::{
     Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod,
     KubernetesPodStatusPhase, KubernetesService, LabelsContent,
 };
-use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::cmd::utilities::exec_with_output;
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
@@ -26,10 +26,10 @@ where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),
 {
-    match exec_with_envs_and_output(
+    match exec_with_output(
         "kubectl",
         args,
-        envs,
+        &envs,
         stdout_output,
         stderr_output,
         Duration::max_value(),

@@ -100,42 +100,7 @@ where
 pub fn exec_with_output<P, F, X>(
     binary: P,
     args: Vec<&str>,
-    stdout_output: F,
-    stderr_output: X,
-) -> Result<(), SimpleError>
-where
-    P: AsRef<Path>,
-    F: FnMut(Result<String, Error>),
-    X: FnMut(Result<String, Error>),
-{
-    let command_string = command_to_string(binary.as_ref(), &args, &vec![]);
-    info!("command: {}", command_string.as_str());
-
-    let mut child = _with_output(
-        command(binary, args, &vec![], true).spawn().unwrap(),
-        stdout_output,
-        stderr_output,
-    );
-
-    let exit_status = match child.wait() {
-        Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
-    };
-
-    if exit_status.success() {
-        return Ok(());
-    }
-
-    Err(SimpleError::new(
-        SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
-    ))
-}
-
-pub fn exec_with_envs_and_output<P, F, X>(
-    binary: P,
-    args: Vec<&str>,
-    envs: Vec<(&str, &str)>,
+    envs: &Vec<(&str, &str)>,
     mut stdout_output: F,
     mut stderr_output: X,
     timeout: Duration,
@@ -248,6 +213,7 @@ pub fn run_version_command_for(binary_name: &str) -> String {
     let _ = exec_with_output(
         binary_name,
         vec!["--version"],
+        &vec![],
         |r_out| match r_out {
             Ok(s) => output_from_cmd.push_str(&s),
             Err(e) => error!("Error while getting stdout from {} {}", binary_name, e),
@@ -256,6 +222,7 @@ pub fn run_version_command_for(binary_name: &str) -> String {
             Ok(_) => error!("Error executing {}", binary_name),
             Err(e) => error!("Error while getting stderr from {} {}", binary_name, e),
         },
+        Duration::seconds(10),
     );
 
     output_from_cmd
@@ -290,19 +257,19 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::utilities::exec_with_envs_and_output;
+    use crate::cmd::utilities::exec_with_output;
     use chrono::Duration;
 
     #[test]
     fn test_command_with_timeout() {
-        let ret = exec_with_envs_and_output("sleep", vec!["120"], vec![], |_| {}, |_| {}, Duration::seconds(2));
+        let ret = exec_with_output("sleep", vec!["120"], &vec![], |_| {}, |_| {}, Duration::seconds(2));
         assert_eq!(ret.is_err(), true);
         assert_eq!(ret.err().unwrap().message.unwrap().contains("timeout"), true);
 
-        let ret = exec_with_envs_and_output("yes", vec![""], vec![], |_| {}, |_| {}, Duration::seconds(2));
+        let ret = exec_with_output("yes", vec![""], &vec![], |_| {}, |_| {}, Duration::seconds(2));
         assert_eq!(ret.is_err(), true);
 
-        let ret2 = exec_with_envs_and_output("sleep", vec!["1"], vec![], |_| {}, |_| {}, Duration::seconds(5));
+        let ret2 = exec_with_output("sleep", vec!["1"], &vec![], |_| {}, |_| {}, Duration::seconds(5));
 
         assert_eq!(ret2.is_ok(), true);
     }

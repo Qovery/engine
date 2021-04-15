@@ -2,7 +2,7 @@ use dirs::home_dir;
 use retry::delay::Fixed;
 use retry::OperationResult;
 
-use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::cmd::utilities::exec_with_output;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
@@ -156,10 +156,10 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Si
     let home_dir = home_dir().expect("Could not find $HOME");
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
 
-    let result = exec_with_envs_and_output(
+    let result = exec_with_output(
         format!("{} terraform", root_dir).as_str(),
         args,
-        vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
+        &vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
         |line: Result<String, std::io::Error>| {
             let output = line.unwrap();
             info!("{}", &output)

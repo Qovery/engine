@@ -1,6 +1,7 @@
 use crate::cmd;
 use crate::container_registry::Kind;
 use crate::error::{SimpleError, SimpleErrorKind};
+use chrono::Duration;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
@@ -37,8 +38,19 @@ pub fn docker_tag_and_push_image(
         _ => {}
     }
 
-    match retry::retry(Fibonacci::from_millis(5000).take(5), || {
-        match cmd::utilities::exec("docker", vec!["push", dest.as_str()], &docker_envs) {
+    match retry::retry(
+        Fibonacci::from_millis(5000).take(5),
+        || match cmd::utilities::exec_with_output(
+            "docker",
+            vec!["push", dest.as_str()],
+            &docker_envs,
+            |_| {},
+            |error_line| match error_line {
+                Ok(x) => error! {"error during docker push: {}", x},
+                Err(e) => error!("error while getting docker push stderr: {}", e),
+            },
+            Duration::seconds(600),
+        ) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
                 warn!(
@@ -47,8 +59,8 @@ pub fn docker_tag_and_push_image(
                 );
                 OperationResult::Retry(e)
             }
-        }
-    }) {
+        },
+    ) {
         Err(Operation { error, .. }) => Err(error),
         Err(e) => Err(SimpleError::new(
             SimpleErrorKind::Other,
