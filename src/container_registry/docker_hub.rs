@@ -119,7 +119,7 @@ impl ContainerRegistry for DockerHub {
         match cmd::utilities::exec(
             "docker",
             vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
-            Some(envs.clone()),
+            &envs,
         ) {
             Err(_) => {
                 return Err(self.engine_error(
@@ -176,7 +176,7 @@ impl ContainerRegistry for DockerHub {
             self.context.execution_id(),
         ));
 
-        match docker_tag_and_push_image(self.kind(), None, image.name.clone(), image.tag.clone(), dest.clone()) {
+        match docker_tag_and_push_image(self.kind(), vec![], image.name.clone(), image.tag.clone(), dest.clone()) {
             Ok(_) => {
                 let mut image = image.clone();
                 image.registry_url = Some(dest);

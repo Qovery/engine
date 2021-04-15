@@ -420,10 +420,10 @@ fn get_object_via_aws_cli(
     qovery_engine::cmd::utilities::exec(
         "aws",
         vec!["s3", "cp", &s3_url, &local_path],
-        Some(vec![
+        &vec![
             (AWS_ACCESS_KEY_ID, access_key_id),
             (AWS_SECRET_ACCESS_KEY, secret_access_key),
-        ]),
+        ],
     )?;
 
     let s = read_to_string(&local_path)?;

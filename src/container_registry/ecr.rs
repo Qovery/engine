@@ -114,7 +114,7 @@ impl ECR {
 
         match docker_tag_and_push_image(
             self.kind(),
-            Some(self.docker_envs()),
+            self.docker_envs(),
             image.name.clone(),
             image.tag.clone(),
             dest.clone(),
@@ -333,7 +333,7 @@ impl ContainerRegistry for ECR {
                 password.as_str(),
                 endpoint_url.as_str(),
             ],
-            Some(self.docker_envs()),
+            &self.docker_envs(),
         ) {
             Err(_) => {
                 return Err(self.engine_error(

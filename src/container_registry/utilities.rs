@@ -7,7 +7,7 @@ use retry::OperationResult;
 
 pub fn docker_tag_and_push_image(
     container_registry_kind: Kind,
-    docker_envs: Option<Vec<(&str, &str)>>,
+    docker_envs: Vec<(&str, &str)>,
     image_name: String,
     image_tag: String,
     dest: String,
@@ -18,17 +18,9 @@ pub fn docker_tag_and_push_image(
         Kind::Ecr => "AWS ECR",
         Kind::Docr => "DigitalOcean Registry",
     };
-    let docker_environment_variables = match docker_envs {
-        None => vec![],
-        Some(v) => v,
-    };
 
     match retry::retry(Fibonacci::from_millis(3000).take(5), || {
-        match cmd::utilities::exec(
-            "docker",
-            vec!["tag", &image_with_tag, dest.as_str()],
-            Some(docker_environment_variables.clone()),
-        ) {
+        match cmd::utilities::exec("docker", vec!["tag", &image_with_tag, dest.as_str()], &docker_envs) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
                 info!("failed to tag image {}, retrying...", image_with_tag);
@@ -46,11 +38,7 @@ pub fn docker_tag_and_push_image(
     }
 
     match retry::retry(Fibonacci::from_millis(5000).take(5), || {
-        match cmd::utilities::exec(
-            "docker",
-            vec!["push", dest.as_str()],
-            Some(docker_environment_variables.clone()),
-        ) {
+        match cmd::utilities::exec("docker", vec!["push", dest.as_str()], &docker_envs) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
                 warn!(

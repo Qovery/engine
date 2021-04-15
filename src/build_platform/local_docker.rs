@@ -44,7 +44,7 @@ impl LocalDocker {
             match crate::cmd::utilities::exec(
                 "docker",
                 vec!["image", "inspect", image.name_with_tag().as_str()],
-                Some(self.get_docker_host_envs()),
+                &self.get_docker_host_envs(),
             ) {
                 Ok(_) => true,
                 _ => false,
