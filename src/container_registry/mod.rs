@@ -7,6 +7,7 @@ use crate::models::{Context, Listen};
 pub mod docker_hub;
 pub mod docr;
 pub mod ecr;
+pub mod utilities;
 
 pub trait ContainerRegistry: Listen {
     fn context(&self) -> &Context;
