@@ -111,17 +111,17 @@ impl DOCR {
     }
 
     fn push_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PushResult, EngineError> {
-        let _ = match docker_tag_and_push_image(self.kind(), None, image.name.clone(), image.tag.clone(), dest.clone())
-        {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    e.message
-                        .unwrap_or("unknown error occurring during docker push".to_string()),
-                ))
-            }
-        };
+        let _ =
+            match docker_tag_and_push_image(self.kind(), vec![], image.name.clone(), image.tag.clone(), dest.clone()) {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        e.message
+                            .unwrap_or("unknown error occurring during docker push".to_string()),
+                    ))
+                }
+            };
 
         let mut image = image.clone();
         image.registry_name = Some(registry_name.clone());
@@ -305,7 +305,7 @@ impl ContainerRegistry for DOCR {
         match cmd::utilities::exec(
             "doctl",
             vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
-            None,
+            &vec![],
         ) {
             Err(_) => {
                 return Err(self.engine_error(

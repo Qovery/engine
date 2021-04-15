@@ -64,7 +64,7 @@ impl ObjectStorage for S3 {
             crate::cmd::utilities::exec(
                 "aws",
                 vec!["s3api", "create-bucket", "--bucket", bucket_name],
-                Some(self.credentials_environment_variables()),
+                &self.credentials_environment_variables(),
             ),
         )
     }
@@ -82,7 +82,7 @@ impl ObjectStorage for S3 {
                     "--bucket",
                     format!("s3://{}", bucket_name).as_str(),
                 ],
-                Some(self.credentials_environment_variables()),
+                &self.credentials_environment_variables(),
             ),
         )
     }
@@ -117,7 +117,7 @@ impl ObjectStorage for S3 {
                 crate::cmd::utilities::exec(
                     "aws",
                     vec!["s3", "cp", s3_url.as_str(), file_path.as_str()],
-                    Some(self.credentials_environment_variables()),
+                    &self.credentials_environment_variables(),
                 ),
             );
 
@@ -161,7 +161,7 @@ impl ObjectStorage for S3 {
                     file_path,
                     format!("s3://{}/{}", bucket_name, object_key).as_str(),
                 ],
-                Some(self.credentials_environment_variables()),
+                &self.credentials_environment_variables(),
             ),
         )
     }
