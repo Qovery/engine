@@ -20,6 +20,11 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   set {
+    name = "metrics.enabled"
+    value = "false"
+  }
+
+  set {
     name = "volumes.storageClassName"
     value = "aws-ebs-gp2-0"
   }
