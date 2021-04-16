@@ -11,6 +11,11 @@ EOT
       AWS_DEFAULT_REGION = "{{ aws_region }}"
     }
   }
+
+  depends_on = [
+    aws_eks_cluster.eks_cluster,
+    helm_release.aws_vpc_cni,
+  ]
 }
 
 resource "helm_release" "coredns-config" {

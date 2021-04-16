@@ -114,5 +114,6 @@ resource "helm_release" "grafana" {
     aws_eks_cluster.eks_cluster,
     helm_release.cluster_autoscaler,
     helm_release.aws_vpc_cni,
+    helm_release.prometheus_operator,
   ]
 }

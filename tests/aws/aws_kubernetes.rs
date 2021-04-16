@@ -80,15 +80,15 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
         );
 
         // Deploy
-        match tx.create_kubernetes(&kubernetes) {
-            Err(err) => panic!("{:?}", err),
-            _ => {}
-        }
-        let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        // match tx.create_kubernetes(&kubernetes) {
+        //     Err(err) => panic!("{:?}", err),
+        //     _ => {}
+        // }
+        // let _ = match tx.commit() {
+        //     TransactionResult::Ok => assert!(true),
+        //     TransactionResult::Rollback(_) => assert!(false),
+        //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        // };
 
         // Pause
         match tx.pause_kubernetes(&kubernetes) {
@@ -111,17 +111,17 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-
+        //
         // Destroy
-        match tx.delete_kubernetes(&kubernetes) {
-            Err(err) => panic!("{:?}", err),
-            _ => {}
-        }
-        match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        // match tx.delete_kubernetes(&kubernetes) {
+        //     Err(err) => panic!("{:?}", err),
+        //     _ => {}
+        // }
+        // match tx.commit() {
+        //     TransactionResult::Ok => assert!(true),
+        //     TransactionResult::Rollback(_) => assert!(false),
+        //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        // };
 
         return test_name.to_string();
     })
