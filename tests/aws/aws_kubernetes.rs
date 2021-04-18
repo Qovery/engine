@@ -50,7 +50,7 @@ fn generate_cluster_id(region: &str) -> String {
     }
 }
 
-fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_name: &str) {
+fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_infra_pause: bool, test_name: &str) {
     engine_run_test(|| {
         init();
 
@@ -80,28 +80,6 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
         );
 
         // Deploy
-        // match tx.create_kubernetes(&kubernetes) {
-        //     Err(err) => panic!("{:?}", err),
-        //     _ => {}
-        // }
-        // let _ = match tx.commit() {
-        //     TransactionResult::Ok => assert!(true),
-        //     TransactionResult::Rollback(_) => assert!(false),
-        //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        // };
-
-        // Pause
-        match tx.pause_kubernetes(&kubernetes) {
-            Err(err) => panic!("{:?}", err),
-            _ => {}
-        }
-        match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        // Resume
         match tx.create_kubernetes(&kubernetes) {
             Err(err) => panic!("{:?}", err),
             _ => {}
@@ -111,17 +89,42 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        //
+
+        // no need to test pause everywhere
+        if test_infra_pause {
+            // Pause
+            match tx.pause_kubernetes(&kubernetes) {
+                Err(err) => panic!("{:?}", err),
+                _ => {}
+            }
+            match tx.commit() {
+                TransactionResult::Ok => assert!(true),
+                TransactionResult::Rollback(_) => assert!(false),
+                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            };
+
+            // Resume
+            match tx.create_kubernetes(&kubernetes) {
+                Err(err) => panic!("{:?}", err),
+                _ => {}
+            }
+            let _ = match tx.commit() {
+                TransactionResult::Ok => assert!(true),
+                TransactionResult::Rollback(_) => assert!(false),
+                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            };
+        }
+
         // Destroy
-        // match tx.delete_kubernetes(&kubernetes) {
-        //     Err(err) => panic!("{:?}", err),
-        //     _ => {}
-        // }
-        // match tx.commit() {
-        //     TransactionResult::Ok => assert!(true),
-        //     TransactionResult::Rollback(_) => assert!(false),
-        //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        // };
+        match tx.delete_kubernetes(&kubernetes) {
+            Err(err) => panic!("{:?}", err),
+            _ => {}
+        }
+        match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
 
         return test_name.to_string();
     })
@@ -140,6 +143,7 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
     create_and_destroy_eks_cluster(
         region.clone(),
         secrets,
+        true,
         &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
     );
 }
@@ -152,6 +156,7 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
     create_and_destroy_eks_cluster(
         region.clone(),
         secrets,
+        false,
         &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
     );
 }
