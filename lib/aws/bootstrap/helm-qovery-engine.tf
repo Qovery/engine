@@ -9,18 +9,12 @@ resource "helm_release" "qovery_engine_resources" {
   atomic = true
   create_namespace = true
   max_history = 50
-  force_update = true
   timeout = 600
   recreate_pods = true
 
   // need kubernetes 1.18, should be well tested before activating it
   set {
     name = "autoscaler.enabled"
-    value = "false"
-  }
-
-  set {
-    name = "metrics.enabled"
     value = "false"
   }
 
