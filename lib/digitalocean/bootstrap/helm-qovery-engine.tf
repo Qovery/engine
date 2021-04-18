@@ -9,7 +9,6 @@ resource "helm_release" "qovery_engine_resources" {
   atomic = true
   create_namespace = true
   max_history = 50
-  force_update = true
   timeout = 600
   recreate_pods = true
 

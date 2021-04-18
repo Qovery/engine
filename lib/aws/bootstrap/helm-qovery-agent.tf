@@ -99,7 +99,7 @@ resource "helm_release" "qovery_agent_resources" {
 
   set {
     name = "forced_upgrade"
-    value = timestamp()
+    value = var.forced_upgrade
   }
 
   depends_on = [
