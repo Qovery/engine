@@ -53,11 +53,6 @@ resource "helm_release" "aws_vpc_cni" {
     value = "false"
   }
 
-  set {
-    name = "originalMatchLabels"
-    value = "true"
-  }
-
   # label ENIs
   set {
     name = "env.CLUSTER_NAME"
