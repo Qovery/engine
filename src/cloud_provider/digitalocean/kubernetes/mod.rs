@@ -224,9 +224,9 @@ impl<'a> DOKS<'a> {
             .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
             .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
                 instance_type: instance_type.to_string(),
-                desired_size: "2".to_string(),
+                desired_size: "1".to_string(),
                 max_size: nodes.len().to_string(),
-                min_size: "2".to_string(),
+                min_size: "1".to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
 
