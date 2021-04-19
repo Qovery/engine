@@ -26,6 +26,8 @@ spec:
         envId: {{ environment_id }}
         appId: {{ id }}
         app: {{ sanitized_name }}
+      annotations:
+        checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
     spec:
       affinity:
         podAntiAffinity:
