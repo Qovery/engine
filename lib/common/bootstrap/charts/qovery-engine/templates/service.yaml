@@ -1,3 +1,4 @@
+{{- if .Values.metrics.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -6,7 +7,6 @@ metadata:
   labels:
     {{- include "qovery-engine.labels" . | nindent 4 }}
 spec:
-  type: ClusterIP
   ports:
     - name: {{ .Values.metrics.portName }}
       port: {{ .Values.metrics.port }}
@@ -14,3 +14,4 @@ spec:
       protocol: TCP
   selector:
     app.kubernetes.io/instance: qovery-engine
+{{- end }}

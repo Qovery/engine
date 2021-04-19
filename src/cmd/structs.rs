@@ -218,14 +218,14 @@ pub struct Helm {
     pub app_version: String,
 }
 
-pub struct HelmList {
+pub struct HelmChart {
     pub name: String,
     pub namespace: String,
 }
 
-impl HelmList {
-    pub fn new(name: String, namespace: String) -> HelmList {
-        HelmList { name, namespace }
+impl HelmChart {
+    pub fn new(name: String, namespace: String) -> HelmChart {
+        HelmChart { name, namespace }
     }
 }
 

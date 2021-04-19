@@ -31,6 +31,11 @@ The following table lists the configurable parameters for this chart and their d
 | `affinity`              | Map of node/pod affinities                              | `{}`                                |
 | `cniConfig.enabled`     | Enable overriding the default 10-aws.conflist file      | `false`                             |
 | `cniConfig.fileContents`| The contents of the custom cni config file              | `nil`                               |
+| `eniConfig.create`      | Specifies whether to create ENIConfig resource(s)       | `false`                             |
+| `eniConfig.region`      | Region to use when generating ENIConfig resource names  | `us-west-2`                         |
+| `eniConfig.subnets`     | A map of AZ identifiers to config per AZ                | `nil`                               |
+| `eniConfig.subnets.id`  | The ID of the subnet within the AZ which will be used in the ENIConfig | `nil`                |
+| `eniConfig.subnets.securityGroups`  | The IDs of the security groups which will be used in the ENIConfig | `nil`        |
 | `env`                   | List of environment variables. See [here](https://github.com/aws/amazon-vpc-cni-k8s#cni-configuration-variables) for options | (see `values.yaml`) |
 | `fullnameOverride`      | Override the fullname of the chart                      | `aws-node`                          |
 | `image.region`          | ECR repository region to use. Should match your cluster | `us-west-2`                         |

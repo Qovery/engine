@@ -131,6 +131,5 @@ resource "helm_release" "cluster_autoscaler" {
     aws_eks_cluster.eks_cluster,
     helm_release.prometheus_operator,
     helm_release.aws_vpc_cni,
-    aws_key_pair.qovery_ssh_key_{{ kubernetes_cluster_id }}
   ]
 }

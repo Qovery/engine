@@ -61,10 +61,10 @@ impl ObjectStorage for S3 {
         cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context().execution_id(),
-            crate::cmd::utilities::exec_with_envs(
+            crate::cmd::utilities::exec(
                 "aws",
                 vec!["s3api", "create-bucket", "--bucket", bucket_name],
-                self.credentials_environment_variables(),
+                &self.credentials_environment_variables(),
             ),
         )
     }
@@ -73,7 +73,7 @@ impl ObjectStorage for S3 {
         cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context().execution_id(),
-            crate::cmd::utilities::exec_with_envs(
+            crate::cmd::utilities::exec(
                 "aws",
                 vec![
                     "s3",
@@ -82,7 +82,7 @@ impl ObjectStorage for S3 {
                     "--bucket",
                     format!("s3://{}", bucket_name).as_str(),
                 ],
-                self.credentials_environment_variables(),
+                &self.credentials_environment_variables(),
             ),
         )
     }
@@ -114,10 +114,10 @@ impl ObjectStorage for S3 {
             let result = cast_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context().execution_id(),
-                crate::cmd::utilities::exec_with_envs(
+                crate::cmd::utilities::exec(
                     "aws",
                     vec!["s3", "cp", s3_url.as_str(), file_path.as_str()],
-                    self.credentials_environment_variables(),
+                    &self.credentials_environment_variables(),
                 ),
             );
 
@@ -153,7 +153,7 @@ impl ObjectStorage for S3 {
         cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context().execution_id(),
-            crate::cmd::utilities::exec_with_envs(
+            crate::cmd::utilities::exec(
                 "aws",
                 vec![
                     "s3",
@@ -161,7 +161,7 @@ impl ObjectStorage for S3 {
                     file_path,
                     format!("s3://{}/{}", bucket_name, object_key).as_str(),
                 ],
-                self.credentials_environment_variables(),
+                &self.credentials_environment_variables(),
             ),
         )
     }

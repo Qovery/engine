@@ -132,28 +132,19 @@ alertmanager:
   config:
     global:
       resolve_timeout: 5m
-    route:
-      group_by: ['job']
-      group_wait: 30s
-      group_interval: 2m
-      repeat_interval: 3h
-      receiver: 'discord_webhook'
-      routes:
-        - receiver: 'null'
-          match:
-            alertname: Watchdog
-        - receiver: 'null'
-          match:
-            alertname: KubeDeploymentReplicasMismatch
-        - receiver: 'null'
-          match:
-            alertname: CPUThrottlingHigh
-        - receiver: 'discord_webhook'
-    receivers:
-      - name: 'null'
-      - name: 'discord_webhook'
-        webhook_configs:
-          - url: 'http://alertmanager-discord.prometheus.svc:9095'
+      route:
+        group_by: ['job']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        receiver: 'null'
+        routes:
+          - match:
+              alertname: Watchdog
+            receiver: 'null'
+      receivers:
+        - name: 'null'
+
 
   ## Pass the Alertmanager configuration directives through Helm's templating
   ## engine. If the Alertmanager configuration contains Alertmanager templates,

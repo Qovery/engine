@@ -4,6 +4,7 @@ use reqwest::StatusCode;
 
 use crate::build_platform::Image;
 use crate::cmd;
+use crate::container_registry::utilities::docker_tag_and_push_image;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::EngineErrorCause;
 use crate::models::{
@@ -115,10 +116,10 @@ impl ContainerRegistry for DockerHub {
             None => vec![],
         };
 
-        match cmd::utilities::exec_with_envs(
+        match cmd::utilities::exec(
             "docker",
             vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
-            envs.clone(),
+            &envs,
         ) {
             Err(_) => {
                 return Err(self.engine_error(
@@ -175,42 +176,18 @@ impl ContainerRegistry for DockerHub {
             self.context.execution_id(),
         ));
 
-        match cmd::utilities::exec_with_envs(
-            "docker",
-            vec![
-                "tag",
-                dest.as_str(),
-                format!("{}/{}", self.login.as_str(), dest.as_str()).as_str(),
-            ],
-            envs.clone(),
-        ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!("failed to tag image ({}) {:?}", image.name_with_tag(), image,),
-                ));
+        match docker_tag_and_push_image(self.kind(), vec![], image.name.clone(), image.tag.clone(), dest.clone()) {
+            Ok(_) => {
+                let mut image = image.clone();
+                image.registry_url = Some(dest);
+                Ok(PushResult { image })
             }
-            _ => {}
-        };
-
-        match cmd::utilities::exec_with_envs("docker", vec!["push", dest.as_str()], envs) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to push image {:?} into DockerHub {}",
-                        image,
-                        self.name_with_id(),
-                    ),
-                ));
-            }
-            _ => {}
-        };
-
-        let mut image = image.clone();
-        image.registry_url = Some(dest);
-
-        Ok(PushResult { image })
+            Err(e) => Err(self.engine_error(
+                EngineErrorCause::Internal,
+                e.message
+                    .unwrap_or("unknown error occurring during docker push".to_string()),
+            )),
+        }
     }
 
     fn push_error(&self, _image: &Image) -> Result<PushResult, EngineError> {

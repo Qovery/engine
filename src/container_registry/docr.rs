@@ -4,6 +4,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
+use crate::container_registry::utilities::docker_tag_and_push_image;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::models::{
@@ -110,57 +111,17 @@ impl DOCR {
     }
 
     fn push_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PushResult, EngineError> {
-        let result = retry::retry(Fixed::from_millis(5000).take(12), || {
-            match cmd::utilities::exec("docker", vec!["tag", image.name_with_tag().as_str(), dest.as_str()]) {
-                Ok(_) => OperationResult::Ok(()),
+        let _ =
+            match docker_tag_and_push_image(self.kind(), vec![], image.name.clone(), image.tag.clone(), dest.clone()) {
+                Ok(_) => {}
                 Err(e) => {
-                    error!("error while trying to tag image, retrying...");
-                    OperationResult::Retry(e)
+                    return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        e.message
+                            .unwrap_or("unknown error occurring during docker push".to_string()),
+                    ))
                 }
-            }
-        });
-
-        match result {
-            Ok(_) => {}
-            Err(Operation { error, .. }) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to tag image ({}) {:?}. {:?}",
-                        image.name_with_tag(),
-                        image,
-                        error.message
-                    ),
-                ))
-            }
-            Err(retry::Error::Internal(_)) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!("failed to tag image ({}) {:?}", image.name_with_tag(), image,),
-                ))
-            }
-        };
-
-        match cmd::utilities::exec_with_output(
-            "docker",
-            vec!["push", dest.as_str()],
-            |r_out| match r_out {
-                Ok(line) => info!("{}", line),
-                Err(line) => error!("{}", line),
-            },
-            |r_out| match r_out {
-                Ok(line) => info!("{}", line),
-                Err(line) => error!("{}", line),
-            },
-        ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!("failed to push image {:?} into DOCR {}", image, self.name_with_id(),),
-                ));
-            }
-            _ => {}
-        };
+            };
 
         let mut image = image.clone();
         image.registry_name = Some(registry_name.clone());
@@ -344,6 +305,7 @@ impl ContainerRegistry for DOCR {
         match cmd::utilities::exec(
             "doctl",
             vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
+            &vec![],
         ) {
             Err(_) => {
                 return Err(self.engine_error(

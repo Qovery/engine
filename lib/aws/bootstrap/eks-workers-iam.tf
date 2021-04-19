@@ -33,8 +33,3 @@ resource "aws_iam_role_policy_attachment" "node_AmazonEC2ContainerRegistryReadOn
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
   role       = aws_iam_role.eks_workers.name
 }
-
-resource "aws_iam_instance_profile" "workers" {
-  name = "qovery-eks-workers-${var.kubernetes_cluster_id}"
-  role = aws_iam_role.eks_workers.name
-}

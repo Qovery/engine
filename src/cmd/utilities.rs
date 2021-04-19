@@ -17,7 +17,7 @@ enum CommandOutputType {
     STDERR(Result<String, std::io::Error>),
 }
 
-fn command<P>(binary: P, args: Vec<&str>, envs: Option<Vec<(&str, &str)>>, use_output: bool) -> Command
+fn command<P>(binary: P, args: Vec<&str>, envs: &Vec<(&str, &str)>, use_output: bool) -> Command
 where
     P: AsRef<Path>,
 {
@@ -49,45 +49,22 @@ where
         cmd.current_dir(current_dir);
     }
 
-    if let Some(envs) = envs {
-        envs.into_iter().for_each(|(k, v)| {
-            cmd.env(k, v);
-        });
-    }
+    envs.into_iter().for_each(|(k, v)| {
+        cmd.env(k, v);
+    });
 
     cmd
 }
 
-pub fn exec<P>(binary: P, args: Vec<&str>) -> Result<(), SimpleError>
+pub fn exec<P>(binary: P, args: Vec<&str>, envs: &Vec<(&str, &str)>) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
-    let command_string = command_to_string(binary.as_ref(), &args);
+    let command_string = command_to_string(binary.as_ref(), &args, &envs);
+
     info!("command: {}", command_string.as_str());
 
-    let exit_status = match command(binary, args, None, false).spawn().unwrap().wait() {
-        Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
-    };
-
-    if exit_status.success() {
-        return Ok(());
-    }
-
-    Err(SimpleError::new(
-        SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
-    ))
-}
-
-pub fn exec_with_envs<P>(binary: P, args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let command_string = command_with_envs_to_string(binary.as_ref(), &args, &envs);
-    info!("command: {}", command_string.as_str());
-
-    let exit_status = match command(binary, args, Some(envs), false).spawn().unwrap().wait() {
+    let exit_status = match command(binary, args, envs, false).spawn().unwrap().wait() {
         Ok(x) => x,
         Err(err) => return Err(SimpleError::from(err)),
     };
@@ -131,11 +108,11 @@ where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),
 {
-    let command_string = command_to_string(binary.as_ref(), &args);
+    let command_string = command_to_string(binary.as_ref(), &args, &vec![]);
     info!("command: {}", command_string.as_str());
 
     let mut child = _with_output(
-        command(binary, args, None, true).spawn().unwrap(),
+        command(binary, args, &vec![], true).spawn().unwrap(),
         stdout_output,
         stderr_output,
     );
@@ -170,7 +147,7 @@ where
 {
     assert!(timeout.num_seconds() > 0, "Timeout cannot be a 0 or negative duration");
 
-    let command_string = command_with_envs_to_string(binary.as_ref(), &args, &envs);
+    let command_string = command_to_string(binary.as_ref(), &args, &envs);
     info!(
         "command with {}m timeout: {}",
         timeout.num_minutes(),
@@ -178,7 +155,7 @@ where
     );
 
     // Start the process
-    let mut child_process = command(binary, args, Some(envs), true).spawn().unwrap();
+    let mut child_process = command(binary, args, &envs, true).spawn().unwrap();
     let process_start_time = Instant::now();
 
     // Read stdout/stderr until timeout is reached
@@ -297,14 +274,7 @@ where
         .is_ok()
 }
 
-pub fn command_to_string<P>(binary: P, args: &[&str]) -> String
-where
-    P: AsRef<Path>,
-{
-    format!("{} {}", binary.as_ref().to_str().unwrap(), args.join(" "))
-}
-
-pub fn command_with_envs_to_string<P>(binary: P, args: &[&str], envs: &[(&str, &str)]) -> String
+pub fn command_to_string<P>(binary: P, args: &[&str], envs: &[(&str, &str)]) -> String
 where
     P: AsRef<Path>,
 {

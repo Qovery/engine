@@ -1,15 +1,23 @@
+locals {
+  aws_cni_chart_release_name = "aws-vpc-cni"
+}
+
 # On the first boot, it's required to remove the existing CNI to get them managed by helm
-resource "null_resource" "delete_aws_managed_cni" {
+resource "null_resource" "enable_cni_managed_by_helm" {
   provisioner "local-exec" {
     command = <<EOT
-kubectl -n kube-system delete daemonset aws-node;
-kubectl -n kube-system delete clusterrole aws-node;
-kubectl -n kube-system delete clusterrolebinding aws-node;
-kubectl -n kube-system delete crd eniconfigs.crd.k8s.amazonaws.com;
-kubectl -n kube-system delete serviceaccount aws-node
-# sleep is to avoid: "rendered manifests contain a resource that already exists"
-sleep 10
+if [ "$(kubectl -n kube-system get daemonset -l k8s-app=aws-node,app.kubernetes.io/managed-by=Helm 2>&1 | grep -ic 'No resources found')" == "0" ] ; then
+  exit 0
+fi
+
+for kind in daemonSet clusterRole clusterRoleBinding serviceAccount; do
+  echo "setting annotations and labels on $kind/aws-node"
+  kubectl -n kube-system annotate --overwrite $kind aws-node meta.helm.sh/release-name=${local.aws_cni_chart_release_name}
+  kubectl -n kube-system annotate --overwrite $kind aws-node meta.helm.sh/release-namespace=kube-system
+  kubectl -n kube-system label --overwrite $kind aws-node app.kubernetes.io/managed-by=Helm
+done
 EOT
+
     environment = {
       KUBECONFIG = local_file.kubeconfig.filename
       AWS_ACCESS_KEY_ID = "{{ aws_access_key }}"
@@ -17,10 +25,14 @@ EOT
       AWS_DEFAULT_REGION = "{{ aws_region }}"
     }
   }
+
+  depends_on = [
+    aws_eks_cluster.eks_cluster,
+  ]
 }
 
 resource "helm_release" "aws_vpc_cni" {
-  name = "aws-vpc-cni"
+  name = local.aws_cni_chart_release_name
   chart = "charts/aws-vpc-cni"
   namespace = "kube-system"
   atomic = true
@@ -34,6 +46,11 @@ resource "helm_release" "aws_vpc_cni" {
   set {
     name = "image.pullPolicy"
     value = "IfNotPresent"
+  }
+
+  set {
+    name = "crd.create"
+    value = "false"
   }
 
   # label ENIs
@@ -89,7 +106,7 @@ resource "helm_release" "aws_vpc_cni" {
 
   depends_on = [
     aws_eks_cluster.eks_cluster,
-    null_resource.delete_aws_managed_cni,
+    null_resource.enable_cni_managed_by_helm,
     {% if not test_cluster %}
     vault_generic_secret.cluster-access,
     {% endif %}
