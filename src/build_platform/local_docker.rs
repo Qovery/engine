@@ -159,6 +159,8 @@ impl LocalDocker {
     ) -> Result<BuildResult, EngineError> {
         let name_with_tag = build.image.name_with_tag();
 
+        let args = self.context.docker_build_options();
+
         let exit_status: Result<(), SimpleError> =
             Err(SimpleError::new(SimpleErrorKind::Other, Some("no builder names")));
 
@@ -168,6 +170,12 @@ impl LocalDocker {
             } else {
                 vec!["build", name_with_tag.as_str()]
             };
+
+            for v in args.iter() {
+                for s in v.iter() {
+                    buildpacks_args.push(String::as_str(s));
+                }
+            }
 
             buildpacks_args.extend(vec!["--path", into_dir_docker_style]);
 
