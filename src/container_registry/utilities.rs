@@ -1,7 +1,7 @@
 use crate::cmd;
 use crate::container_registry::Kind;
 use crate::error::{SimpleError, SimpleErrorKind};
-use retry::delay::Fibonacci;
+use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
 
@@ -37,7 +37,7 @@ pub fn docker_tag_and_push_image(
         _ => {}
     }
 
-    match retry::retry(Fibonacci::from_millis(5000).take(5), || {
+    match retry::retry(Fixed::from_millis(10000).take(12), || {
         match cmd::utilities::exec("docker", vec!["push", dest.as_str()], &docker_envs) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
