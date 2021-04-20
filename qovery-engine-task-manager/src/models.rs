@@ -12,7 +12,7 @@ use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::{Context, Environment, EnvironmentAction, Listener, Metadata};
+use qovery_engine::models::{Context, Environment, EnvironmentAction, Features, Listener, Metadata};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -21,6 +21,7 @@ pub struct Request {
     pub organization_id: String,
     pub created_at: DateTime<Utc>,
     pub action: Action,
+    pub features: Option<Vec<Features>>,
     pub test_cluster: bool,
     pub build_platform: BuildPlatform,
     pub cloud_provider: CloudProvider,

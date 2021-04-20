@@ -113,6 +113,7 @@ fn receive_and_queue_task(
                 lib_root_dir.to_string(),
                 req.test_cluster,
                 docker_tcp_socket.clone(),
+                req.features.clone(),
                 req.metadata.clone(),
             );
 
@@ -421,6 +422,7 @@ pub fn using_json_path_parameter(
         lib_root_dir,
         test_cluster,
         docker_host,
+        req.features.clone(),
         req.metadata.clone(),
     );
 
