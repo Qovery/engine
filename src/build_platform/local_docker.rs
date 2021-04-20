@@ -15,7 +15,7 @@ const BUILD_DURATION_TIMEOUT_MIN: i64 = 30;
 
 /// https://buildpacks.io/
 const BUILDPACKS_BUILDERS: [&str; 1] = [
-    "heroku/buildpacks:18",
+    "heroku/buildpacks:20",
     // removed because it does not support dynamic port binding
     //"gcr.io/buildpacks/builder:v1",
     //"paketobuildpacks/builder:base",
@@ -161,7 +161,7 @@ impl LocalDocker {
 
         let args = self.context.docker_build_options();
 
-        let exit_status: Result<(), SimpleError> =
+        let mut exit_status: Result<Vec<String>, SimpleError> =
             Err(SimpleError::new(SimpleErrorKind::Other, Some("no builder names")));
 
         for builder_name in BUILDPACKS_BUILDERS.iter() {
@@ -197,7 +197,7 @@ impl LocalDocker {
             buildpacks_args.push(builder_name);
 
             // buildpacks build
-            let exit_status = cmd::utilities::exec_with_envs_and_output(
+            exit_status = cmd::utilities::exec_with_envs_and_output(
                 "pack",
                 buildpacks_args,
                 self.get_docker_host_envs(),
