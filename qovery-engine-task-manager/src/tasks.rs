@@ -633,7 +633,7 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
 
     ❌ ❌ ❌ MESSAGE FOR THE USER ❌ ❌ ❌
 
-        ✉️ Error message: {}
+        ✉️ Error message : {}
         💬 Need help    : If you need assistance, you can reach the support team on Discord (https://discord.qovery.com) or on the Qovery console (https://console.qovery.com) with the integrated chat.
 
         "#,
@@ -647,8 +647,6 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
 
 -------------------------------------------------------------------------------
 
-    ~~ THIS IS AN INTERNAL ERROR, THE SUPPORT TEAM HAS BEEN ALERTED ~~
-
     MESSAGE FOR QOVERY TEAM:
         * Execution ID     : {}
         * Scope            : {}
@@ -658,8 +656,8 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
 
     ❌ ❌ ❌ MESSAGE FOR THE USER ❌ ❌ ❌
 
-        ✉️ Error message: {}
-        ℹ️ Hint         : {}
+        ✉️ Error message : {}
+        ℹ️ Hint          : {}
         💬 Need help    : Look at the hint message first. If you need more assistance, you can reach the support team on Discord (https://discord.qovery.com) or on the Qovery console (https://console.qovery.com) with the integrated chat.
 
         "#,
