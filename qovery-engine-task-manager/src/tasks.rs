@@ -149,7 +149,7 @@ impl Task for InfrastructureTask {
 
         let _ = match self.request.action {
             Action::Create => tx.create_kubernetes(kubernetes.borrow()),
-            Action::Pause => tx.create_kubernetes(kubernetes.borrow()),
+            Action::Pause => tx.pause_kubernetes(kubernetes.borrow()),
             Action::Delete => tx.delete_kubernetes(kubernetes.borrow()),
         };
 
