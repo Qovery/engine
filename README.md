@@ -23,7 +23,7 @@
 - Website: https://www.qovery.com
 - Full doc: https://docs.qovery.com
 - Qovery Engine doc: *coming soon*
-- Community: [Join us](https://discord.qovery.com) on Discord
+- Community: [Join us](https://discord.qovery.com) on Discord and on our [Q&A forum](https://community.qovery.com)
 
 **Please note**: We take Qovery's security and our users' trust very seriously. If you believe you have found a security issue in Qovery, please responsibly disclose by contacting us at security@qovery.com.
 
