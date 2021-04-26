@@ -519,11 +519,32 @@ fn check_docker_space_usage_and_clean(
 }
 
 fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<Vec<String>, SimpleError> {
-    let docker_args = vec!["image", "prune", "-a", "-f"];
+    let docker_image_prune_args = vec!["image", "prune", "-a", "-f"];
+    let docker_builder_prune_args = vec!["builder", "prune", "-a", "-f"];
 
-    cmd::utilities::exec_with_envs_and_output(
+    let result_docker_image_prune = cmd::utilities::exec_with_envs_and_output(
         "docker",
-        docker_args,
+        docker_image_prune_args,
+        envs.clone(),
+        |line| {
+            let line_string = line.unwrap();
+            debug!("{}", line_string.as_str());
+        },
+        |line| {
+            let line_string = line.unwrap();
+            debug!("{}", line_string.as_str());
+        },
+        Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
+    );
+
+    match result_docker_image_prune {
+        Ok(_) => {}
+        Err(e) => return Err(e),
+    };
+
+    let result_docker_builder_prune = cmd::utilities::exec_with_envs_and_output(
+        "docker",
+        docker_builder_prune_args,
         envs,
         |line| {
             let line_string = line.unwrap();
@@ -534,5 +555,15 @@ fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<Vec<String>, SimpleErr
             debug!("{}", line_string.as_str());
         },
         Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
-    )
+    );
+
+    match result_docker_builder_prune {
+        Ok(mut x) => {
+            let mut image_prune_lines = result_docker_image_prune.unwrap();
+            image_prune_lines.append(&mut x);
+            let all_lines = image_prune_lines;
+            Ok(all_lines)
+        }
+        Err(x) => Err(x),
+    }
 }
