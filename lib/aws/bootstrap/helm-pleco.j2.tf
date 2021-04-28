@@ -13,7 +13,7 @@ enabledFeatures:
   eks: true
   elb: true
   ebs: true
-  vpc: false
+  vpc: true
   s3: true
   kms: true
   cloudwatchLogs: true
