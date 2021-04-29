@@ -94,6 +94,21 @@ function get_github_engine_commit_id() {
   git rev-parse HEAD
 }
 
+function is_in_organization() {
+  # Ensure the user is part of the organization
+  branch_author=$(curl -H "Accept: application/vnd.github.groot-preview+json" https://api.github.com/repos/Qovery/engine/branches/"$GITHUB_HEAD_REF" | jq ".commit.author.login")
+  orga_user=$(curl -H "Accept: application/vnd.github.v3+json" https://api.github.com/orgs/Qovery/members | jq .[].login | grep "$branch_author")
+
+  if [ "$branch_author" == "$orga_user" ]
+  then
+    isIn=1
+  else
+    isIn=0
+  fi
+
+  return "$isIn"
+}
+
 function generate_image_tag() {
   gitlab_commit_id=$(get_gitlab_engine_commit_id)
 
@@ -419,10 +434,15 @@ if [ $ARGS_NUM -eq 0 ] ; then
   print_help
 fi
 
+
 # Check if github called it with parameters
 if [ ! -z $GITHUB_COMMIT_ID ] ; then
   commit_id=$GITHUB_COMMIT_ID
   RUNNING_ON_CI=1
+  if [ $(is_in_organization) == 0 ] ; then
+    echo "You're not a member of Qovery github organization."
+    exit 1
+  fi
 # Check if running manually
 elif [ ! -z $GITLAB_USER_ID ] ; then
   commit_id=$CI_COMMIT_SHA
