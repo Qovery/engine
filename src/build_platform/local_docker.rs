@@ -492,10 +492,10 @@ fn check_docker_space_usage_and_clean(
     envs: Vec<(&str, &str)>,
 ) -> Result<String, SimpleError> {
     let docker_max_disk_percentage_usage_before_purge = 60; // arbitrary percentage that should make the job anytime
-    let docker_percentage_used =
-        docker_path_size_info.get_available_space() * 100 / docker_path_size_info.get_total_space();
+    let available_space = docker_path_size_info.get_available_space();
+    let docker_percentage_used = available_space * 100 / docker_path_size_info.get_total_space();
 
-    if docker_percentage_used > docker_max_disk_percentage_usage_before_purge {
+    if docker_percentage_used > docker_max_disk_percentage_usage_before_purge || available_space == 0 {
         warn!(
             "Docker disk usage ({}%) is higher than {}%, requesting cleaning (purge)",
             docker_percentage_used, docker_max_disk_percentage_usage_before_purge
