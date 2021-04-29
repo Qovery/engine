@@ -2,9 +2,9 @@
 apiVersion: rbac.authorization.k8s.io/{{ .Values.rbac.apiVersion }}
 kind: ClusterRole
 metadata:
-  name: {{ include "kubernetes.fullname" . }}
+  name: {{ include "qovery-agent.fullname" . }}
   labels:
-    {{- include "kubernetes.labels" . | nindent 4 }}
+    {{- include "qovery-agent.labels" . | nindent 4 }}
 rules:
   - apiGroups:
       - ""
