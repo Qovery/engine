@@ -14,4 +14,10 @@ rules:
     verbs:
       - get
       - list
-{{- end }}
+  - apiGroups:
+      - metrics.k8s.io
+    resources:
+      - pods
+    verbs:
+      - get
+  {{- end }}
