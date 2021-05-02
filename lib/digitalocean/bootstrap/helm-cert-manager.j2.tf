@@ -26,7 +26,7 @@ resource "helm_release" "cert_manager" {
 
   set {
     name = "prometheus.servicemonitor.enabled"
-    value = "true"
+    value = var.metrics_history_enabled
   }
 
   set {

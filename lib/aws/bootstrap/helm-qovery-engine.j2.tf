@@ -19,6 +19,11 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   set {
+    name = "metrics.enabled"
+    value = var.metrics_history_enabled
+  }
+
+  set {
     name = "volumes.storageClassName"
     value = "aws-ebs-gp2-0"
   }
@@ -119,6 +124,8 @@ resource "helm_release" "qovery_engine_resources" {
     aws_eks_cluster.eks_cluster,
     helm_release.aws_vpc_cni,
     helm_release.cluster_autoscaler,
+    {% if metrics_history_enabled %}
     helm_release.prometheus-adapter,
+    {% endif %}
   ]
 }

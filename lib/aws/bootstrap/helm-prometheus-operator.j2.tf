@@ -8,6 +8,7 @@ resource "kubernetes_namespace" "prometheus_namespace" {
   }
 }
 
+{% if metrics_history_enabled %}
 resource "helm_release" "prometheus_operator" {
   name = "prometheus-operator"
   chart = "common/charts/prometheus-operator"
@@ -129,3 +130,4 @@ resource "helm_release" "prometheus_operator" {
     kubernetes_namespace.prometheus_namespace,
   ]
 }
+{% endif %}
