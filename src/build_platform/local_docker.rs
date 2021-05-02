@@ -493,12 +493,12 @@ fn check_docker_space_usage_and_clean(
 ) -> Result<String, SimpleError> {
     let docker_max_disk_percentage_usage_before_purge = 60; // arbitrary percentage that should make the job anytime
     let available_space = docker_path_size_info.get_available_space();
-    let docker_percentage_used = available_space * 100 / docker_path_size_info.get_total_space();
+    let docker_percentage_remaining = available_space * 100 / docker_path_size_info.get_total_space();
 
-    if docker_percentage_used > docker_max_disk_percentage_usage_before_purge || available_space == 0 {
+    if docker_percentage_remaining < docker_max_disk_percentage_usage_before_purge || available_space == 0 {
         warn!(
-            "Docker disk usage ({}%) is higher than {}%, requesting cleaning (purge)",
-            docker_percentage_used, docker_max_disk_percentage_usage_before_purge
+            "Docker disk remaining ({}%) is lower than {}%, requesting cleaning (purge)",
+            docker_percentage_remaining, docker_max_disk_percentage_usage_before_purge
         );
 
         return match docker_prune_images(envs) {
@@ -512,7 +512,7 @@ fn check_docker_space_usage_and_clean(
 
     Ok(format!(
         "no need to purge old docker images, only {}% ({}/{}) disk used",
-        docker_percentage_used,
+        100 - docker_percentage_remaining,
         docker_path_size_info.get_available_space(),
         docker_path_size_info.get_total_space(),
     ))
