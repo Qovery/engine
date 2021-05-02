@@ -1,3 +1,4 @@
+{% if log_history_enabled or metrics_history_enabled %}
 resource "aws_iam_user" "iam_grafana_cloudwatch" {
   name = "qovery-cloudwatch-${var.kubernetes_cluster_id}"
   tags = local.tags_eks
@@ -114,6 +115,9 @@ resource "helm_release" "grafana" {
     aws_eks_cluster.eks_cluster,
     helm_release.cluster_autoscaler,
     helm_release.aws_vpc_cni,
+    {% if metrics_history_enabled %}
     helm_release.prometheus_operator,
+    {% endif %}
   ]
 }
+{% endif %}

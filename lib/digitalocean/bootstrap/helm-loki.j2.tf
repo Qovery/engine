@@ -1,3 +1,4 @@
+{% if log_history_enabled %}
 resource "digitalocean_spaces_bucket" "loki_space" {
   name   = "qovery-logs-${var.kubernetes_cluster_id}"
   region = var.region
@@ -71,3 +72,4 @@ resource "helm_release" "loki" {
     helm_release.q_storageclass,
   ]
 }
+{% endif %}
