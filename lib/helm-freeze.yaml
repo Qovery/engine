@@ -68,7 +68,7 @@ charts:
     version: 2.12.1
     repo_name: prometheus-community
   - name: digital-mobius
-    version: 0.1.1
+    version: 0.1.2
     repo_name: digital-mobius
     dest: do-bootstrap
 
