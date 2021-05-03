@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: qoveryrd/digital-mobius
   pullPolicy: IfNotPresent
-  digitalMobiusImageTag: "0.1.1"
+  digitalMobiusImageTag: "0.1.2"
 
 imagePullSecrets: [ ]
 nameOverride: ""
@@ -39,10 +39,10 @@ securityContext: {}
 resources:
   limits:
     cpu: 100m
-    memory: 128Mi
+    memory: 32Mib
   requests:
     cpu: 100m
-    memory: 128Mi
+    memory: 32Mib
 
 nodeSelector: {}
 
