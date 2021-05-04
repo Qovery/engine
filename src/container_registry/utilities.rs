@@ -57,6 +57,9 @@ pub fn docker_tag_and_push_image(
                 image_with_tag, registry_provider, e
             )),
         )),
-        _ => Ok(()),
+        _ => {
+            info!("image {} has successfully been pushed", image_with_tag);
+            Ok(())
+        }
     }
 }
