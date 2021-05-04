@@ -31,6 +31,22 @@ function get_connection_details() { ## print environment variables to connect to
   echo 'export KUBECONFIG={{ s3_kubeconfig_bucket }}/{{ kubernetes_cluster_id }}.yaml'
 }
 
+# Todo: do it engine side when terraform/helm split will be done
+function is_cni_old_installed_version() { ## Check if an old CNI version is already installed
+  export AWS_ACCESS_KEY_ID="{{ aws_access_key }}"
+  export AWS_SECRET_ACCESS_KEY="{{ aws_secret_key }}"
+  export AWS_DEFAULT_REGION="{{ aws_region }}"
+  export KUBECONFIG={{ s3_kubeconfig_bucket }}/{{ kubernetes_cluster_id }}.yaml
+
+  # shellcheck disable=SC2046
+  if [ $(kubectl -n kube-system get ds aws-node -o json | jq -c '.spec.selector.matchLabels' | grep -c '"k8s-app":"aws-node"') -eq 1 ] ; then
+    echo '{"is_cni_old_installed_version": "true"}'
+  else
+    echo '{"is_cni_old_installed_version": "false"}'
+  fi
+  exit 0
+}
+
 function get_engine_version_to_use() { ## get the engine version for a given cluster. Args: token, api_fqdn, cluster_id
   ENGINE_VERSION_CONTROLLER_TOKEN=$1
   API_FQDN=$2
@@ -60,6 +76,9 @@ case $1 in
   ;;
   get_connection_details)
     get_connection_details
+  ;;
+  is_cni_old_installed_version)
+    is_cni_old_installed_version
   ;;
   *)
     help

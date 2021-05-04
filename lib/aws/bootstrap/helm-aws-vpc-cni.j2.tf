@@ -2,6 +2,14 @@ locals {
   aws_cni_chart_release_name = "aws-vpc-cni"
 }
 
+data "external" "is_cni_old_installed_version" {
+  program = ["./helper.sh", "is_cni_old_installed_version"]
+  depends_on = [
+    aws_eks_cluster.eks_cluster,
+    null_resource.enable_cni_managed_by_helm,
+  ]
+}
+
 # On the first boot, it's required to remove the existing CNI to get them managed by helm
 resource "null_resource" "enable_cni_managed_by_helm" {
   provisioner "local-exec" {
@@ -49,6 +57,11 @@ resource "helm_release" "aws_vpc_cni" {
   }
 
   set {
+    name = "originalMatchLabels"
+    value = data.external.is_cni_old_installed_version.result.is_cni_old_installed_version
+  }
+
+  set {
     name = "crd.create"
     value = "false"
   }
@@ -80,23 +93,8 @@ resource "helm_release" "aws_vpc_cni" {
 
   # Limits
   set {
-    name = "resources.limits.cpu"
-    value = "200m"
-  }
-
-  set {
     name = "resources.requests.cpu"
     value = "50m"
-  }
-
-  set {
-    name = "resources.limits.memory"
-    value = "128Mi"
-  }
-
-  set {
-    name = "resources.requests.memory"
-    value = "128Mi"
   }
 
   set {
@@ -107,6 +105,7 @@ resource "helm_release" "aws_vpc_cni" {
   depends_on = [
     aws_eks_cluster.eks_cluster,
     null_resource.enable_cni_managed_by_helm,
+    data.external.is_cni_old_installed_version,
     {% if not test_cluster %}
     vault_generic_secret.cluster-access,
     {% endif %}
