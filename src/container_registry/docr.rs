@@ -129,7 +129,7 @@ impl DOCR {
         image.registry_secret = Some(registry_name);
         image.registry_url = Some(dest);
 
-        let result = retry::retry(Fixed::from_millis(5000).take(12), || {
+        let result = retry::retry(Fixed::from_millis(10000).take(12), || {
             match self.does_image_exists(&image) {
                 true => OperationResult::Ok(&image),
                 false => {
@@ -142,7 +142,7 @@ impl DOCR {
         let image_not_reachable = Err(self.engine_error(
             EngineErrorCause::Internal,
             format!(
-                "image has been pushed on Digital Ocean Registry but is not yet available, please try to redeploy in a few minutes.",
+                "image has been pushed on Digital Ocean Registry but is not yet available after 2min. Please try to redeploy in a few minutes",
             ),
         ));
         match result {
