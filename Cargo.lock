@@ -1908,6 +1908,7 @@ dependencies = [
  "gethostname",
  "git2",
  "itertools",
+ "lazy_static",
  "rand 0.7.3",
  "reqwest 0.10.8",
  "retry",

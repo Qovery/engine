@@ -148,7 +148,7 @@ impl ObjectStorage for Spaces {
 
         // retrieve config file from object storage
         let result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
-            match runtime::async_run(self.get_object(bucket_name, object_key, file_path.as_str())) {
+            match runtime::block_on(self.get_object(bucket_name, object_key, file_path.as_str())) {
                 Ok(file) => OperationResult::Ok(file),
                 Err(err) => {
                     debug!("{:?}", err);
