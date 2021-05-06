@@ -166,6 +166,18 @@ build:
     refs:
       - dev
 
+dev-release-image:
+  stage: build
+  retry: 1
+  script:
+    - ./helper.sh new_release
+  tags:
+    - 2cpu-4gmem-0g
+  when: manual
+  only:
+    refs:
+      - dev
+
 aws-infra:
   stage: tests
   retry: 0
@@ -249,18 +261,6 @@ aws-self-hosted:
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 2 week
   interruptible: true
-
-dev-release-image:
-  stage: release
-  retry: 1
-  script:
-    - ./helper.sh new_release
-  tags:
-    - 2cpu-4gmem-0g
-  when: manual
-  only:
-    refs:
-      - dev
 
 #
 # Main branch
