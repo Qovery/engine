@@ -1,6 +1,7 @@
 use crate::cmd;
 use crate::container_registry::Kind;
 use crate::error::{SimpleError, SimpleErrorKind};
+use chrono::Duration;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
@@ -37,8 +38,22 @@ pub fn docker_tag_and_push_image(
         _ => {}
     }
 
-    match retry::retry(Fibonacci::from_millis(5000).take(5), || {
-        match cmd::utilities::exec("docker", vec!["push", dest.as_str()], &docker_envs) {
+    match retry::retry(
+        Fibonacci::from_millis(5000).take(5),
+        || match cmd::utilities::exec_with_envs_and_output(
+            "docker",
+            vec!["push", dest.as_str()],
+            docker_envs.clone(),
+            |line| {
+                let line_string = line.unwrap_or_default();
+                info!("{}", line_string.as_str());
+            },
+            |line| {
+                let line_string = line.unwrap_or_default();
+                error!("{}", line_string.as_str());
+            },
+            Duration::minutes(10),
+        ) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
                 warn!(
@@ -47,8 +62,8 @@ pub fn docker_tag_and_push_image(
                 );
                 OperationResult::Retry(e)
             }
-        }
-    }) {
+        },
+    ) {
         Err(Operation { error, .. }) => Err(error),
         Err(e) => Err(SimpleError::new(
             SimpleErrorKind::Other,
@@ -57,6 +72,9 @@ pub fn docker_tag_and_push_image(
                 image_with_tag, registry_provider, e
             )),
         )),
-        _ => Ok(()),
+        _ => {
+            info!("image {} has successfully been pushed", image_with_tag);
+            Ok(())
+        }
     }
 }

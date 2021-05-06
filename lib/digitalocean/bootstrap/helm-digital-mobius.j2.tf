@@ -9,6 +9,7 @@ resource "helm_release" "digital_mobius" {
     name = "environmentVariables.LOG_LEVEL"
     value = "debug"
   }
+
   set {
     name = "environmentVariables.DELAY_NODE_CREATION"
     value = "5m"
@@ -27,6 +28,11 @@ resource "helm_release" "digital_mobius" {
   set {
     name = "forced_upgrade"
     value = var.forced_upgrade
+  }
+
+  set {
+    name = "enabledFeatures.disableDryRun"
+    value = "true"
   }
 
   depends_on = [

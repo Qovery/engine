@@ -8,7 +8,7 @@ use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCred
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::error::EngineErrorCause;
 use crate::models::{Context, Listen, Listener, Listeners};
-use crate::runtime::async_run;
+use crate::runtime::block_on;
 
 pub mod application;
 pub mod databases;
@@ -86,7 +86,7 @@ impl CloudProvider for AWS {
 
     fn is_valid(&self) -> Result<(), EngineError> {
         let client = StsClient::new_with_client(self.client(), Region::default());
-        let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
+        let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(_x) => Ok(()),

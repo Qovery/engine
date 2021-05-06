@@ -16,7 +16,7 @@ use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
-use crate::runtime::async_run;
+use crate::runtime::block_on;
 
 pub struct ECR {
     context: Context,
@@ -69,7 +69,7 @@ impl ECR {
         let mut drr = DescribeRepositoriesRequest::default();
         drr.repository_names = Some(vec![image.name.to_string()]);
 
-        let r = async_run(self.ecr_client().describe_repositories(drr));
+        let r = block_on(self.ecr_client().describe_repositories(drr));
 
         match r {
             Err(_) => None,
@@ -89,7 +89,7 @@ impl ECR {
         image_identifier.image_tag = Some(image.tag.to_string());
         dir.image_ids = Some(vec![image_identifier]);
 
-        let r = async_run(self.ecr_client().describe_images(dir));
+        let r = block_on(self.ecr_client().describe_images(dir));
 
         match r {
             Err(_) => None,
@@ -127,70 +127,76 @@ impl ECR {
             Err(e) => Err(self.engine_error(
                 EngineErrorCause::Internal,
                 e.message
-                    .unwrap_or("unknown error occurring during docker push".to_string()),
+                    .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
             )),
         }
     }
 
     fn create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
         info!("ECR create repository {}", image.name.as_str());
-        let mut crr = CreateRepositoryRequest::default();
-        crr.repository_name = image.name.clone();
+        let crr = CreateRepositoryRequest {
+            repository_name: image.name.clone(),
+            ..Default::default()
+        };
 
-        let r = async_run(self.ecr_client().create_repository(crr));
-        match r {
-            Err(err) => match err {
-                RusotoError::Service(ref err) => info!("{:?}", err),
+        if let Err(err) = block_on(self.ecr_client().create_repository(crr)) {
+            match err {
+                RusotoError::Service(ref err) => error!("{:?}", err),
                 _ => {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        format!(
-                            "can't create ECR repository {} for {}",
-                            image.name.as_str(),
-                            self.name_with_id()
-                        ),
-                    ));
+                    let msg = format!(
+                        "can't create ECR repository {} for {}",
+                        image.name.as_str(),
+                        self.name_with_id(),
+                    );
+                    error!("{}: {}", msg, err);
+                    return Err(self.engine_error(EngineErrorCause::Internal, msg));
                 }
-            },
-            _ => {}
-        }
-
-        let mut plp = PutLifecyclePolicyRequest::default();
-        plp.repository_name = image.name.clone();
-
-        let ecr_policy = r#"
-        {
-          "rules": [
-            {
-              "action": {
-                "type": "expire"
-              },
-              "selection": {
-                "countType": "sinceImagePushed",
-                "countUnit": "days",
-                "countNumber": 365,
-                "tagStatus": "any"
-              },
-              "description": "Remove unit test images",
-              "rulePriority": 1
             }
-          ]
         }
-        "#;
 
-        plp.lifecycle_policy_text = ecr_policy.to_string();
+        let plp = PutLifecyclePolicyRequest {
+            repository_name: image.name.clone(),
+            lifecycle_policy_text: r#"
+            {
+              "rules": [
+                {
+                  "action": {
+                    "type": "expire"
+                  },
+                  "selection": {
+                    "countType": "sinceImagePushed",
+                    "countUnit": "days",
+                    "countNumber": 365,
+                    "tagStatus": "any"
+                  },
+                  "description": "Remove unit test images",
+                  "rulePriority": 1
+                }
+              ]
+            }
+            "#
+            .to_string(),
+            ..Default::default()
+        };
 
-        let r = async_run(self.ecr_client().put_lifecycle_policy(plp));
-
-        match r {
-            Err(_) => Err(self.engine_error(
-                EngineErrorCause::Internal,
-                format!(
-                    "can't set lifecycle policy to ECR repository {} for {}",
+        match block_on(self.ecr_client().put_lifecycle_policy(plp)) {
+            Err(err) => {
+                error!(
+                    "can't set lifecycle policy to ECR repository {} for {}: {}",
                     image.name.as_str(),
-                    self.name_with_id()
-                ),
-            )),
+                    self.name_with_id(),
+                    err
+                );
+
+                Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "can't set lifecycle policy to ECR repository {} for {}",
+                        image.name.as_str(),
+                        self.name_with_id()
+                    ),
+                ))
+            }
             _ => Ok(self.get_repository(&image).unwrap()),
         }
     }
@@ -226,7 +232,7 @@ impl ContainerRegistry for ECR {
 
     fn is_valid(&self) -> Result<(), EngineError> {
         let client = StsClient::new_with_client(self.client(), Region::default());
-        let s = async_run(client.get_caller_identity(GetCallerIdentityRequest::default()));
+        let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(_) => Ok(()),
@@ -262,7 +268,7 @@ impl ContainerRegistry for ECR {
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
-        let r = async_run(
+        let r = block_on(
             self.ecr_client()
                 .get_authorization_token(GetAuthorizationTokenRequest::default()),
         );

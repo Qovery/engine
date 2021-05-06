@@ -1908,6 +1908,7 @@ dependencies = [
  "gethostname",
  "git2",
  "itertools",
+ "lazy_static",
  "rand 0.7.3",
  "reqwest 0.10.8",
  "retry",
@@ -2298,9 +2299,9 @@ dependencies = [
 
 [[package]]
 name = "retry"
-version = "1.1.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddadf3a46af916aa0fe6b8283e676b6bb5cbdf835d986d98a49d7345072341e5"
+checksum = "d0ee4a654b43dd7e3768be7a1c0fc20e90f0a84b72a60ffb6c11e1cae2545c2e"
 dependencies = [
  "rand 0.7.3",
 ]
