@@ -45,7 +45,7 @@ pub fn context() -> Context {
                     let ttl_converted: u32 = ttl.into_string().unwrap().parse().unwrap();
                     Some(ttl_converted)
                 }
-                None => Some(3600),
+                None => Some(7200),
             }
         },
         docker_build_options: Some("--network host".to_string()),
