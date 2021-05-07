@@ -349,7 +349,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   GITHUB_ENGINE_BRANCH_NAME=$2
   nb_treads=$3
   print_title "RUNNING TESTS - $filter_tests"
-  export RUST_LOG=info
+  export RUST_LOG=debug
   export_env
   prepare_engine
   prepare_tests
