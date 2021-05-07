@@ -8,12 +8,12 @@ variables:
   CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
   GIT_DEPTH: 10
 
-cache: &global_cache
-  key: ${CI_COMMIT_REF_SLUG}
-  paths:
-    - $CARGO_HOME
-    - $WORKSPACE_ROOT_DIR/target
-  policy: pull
+#cache: &global_cache
+#  key: ${CI_COMMIT_REF_SLUG}
+#  paths:
+#    - $CARGO_HOME
+#    - $WORKSPACE_ROOT_DIR/target
+#  policy: pull
 
 services:
   - docker:dind
@@ -156,9 +156,9 @@ build:
   retry: 0
   script:
     - ./helper.sh build
-  cache:
-    <<: *global_cache
-    policy: pull-push
+#  cache:
+#    <<: *global_cache
+#    policy: pull-push
   when: always
   tags:
     - 7cpu-4gmem-0g
