@@ -199,7 +199,7 @@ impl ECR {
                 &repository_name, repo_creation_counter
             ),
             Err(Operation { error, .. }) => return error,
-            Err(retry::Error::Internal(e)) => return Err(self.engine_error(EngineErrorCause::Internal, e.to_string())),
+            Err(retry::Error::Internal(e)) => return Err(self.engine_error(EngineErrorCause::Internal, e)),
         };
 
         // apply retention policy
@@ -381,7 +381,7 @@ impl ContainerRegistry for ECR {
             }
         };
 
-        match cmd::utilities::exec(
+        if let Err(_) = cmd::utilities::exec(
             "docker",
             vec![
                 "login",
@@ -393,16 +393,13 @@ impl ContainerRegistry for ECR {
             ],
             &self.docker_envs(),
         ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "Your ECR account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials.",
-                    ),
-                    format!("failed to login to ECR {}", self.name_with_id()),
-                ))
-            }
-            _ => {}
+            return Err(self.engine_error(
+                EngineErrorCause::User(
+                    "Your ECR account seems to be no longer valid (bad Credentials). \
+                Please contact your Organization administrator to fix or change the Credentials.",
+                ),
+                format!("failed to login to ECR {}", self.name_with_id()),
+            ));
         };
 
         let dest = format!("{}:{}", repository.repository_uri.unwrap(), image.tag.as_str());

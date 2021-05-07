@@ -52,10 +52,9 @@ where
     let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
-    Ok(match helm_history_rows.first() {
-        Some(helm_history_row) => Some(helm_history_row.clone()),
-        None => None,
-    })
+    Ok(helm_history_rows
+        .first()
+        .map(|helm_history_row| helm_history_row.clone()))
 }
 
 pub fn helm_exec_upgrade<P>(
@@ -315,10 +314,9 @@ where
     let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
-    Ok(match helm_history_rows.first() {
-        Some(helm_history_row) => Some(helm_history_row.clone()),
-        None => None,
-    })
+    Ok(helm_history_rows
+        .first()
+        .map(|helm_history_row| helm_history_row.clone()))
 }
 
 /// List deployed helm charts

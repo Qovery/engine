@@ -13,15 +13,13 @@ pub struct Role {
 }
 
 pub fn get_default_roles_to_create() -> Vec<Role> {
-    let mut defaults_role_to_create: Vec<Role> = Vec::new();
-    defaults_role_to_create.push(Role {
+    vec![Role {
         role_name: "AWSServiceRoleForAmazonElasticsearchService".to_string(),
         service_name: "es.amazonaws.com".to_string(),
         description:
             "role permissions policy allows Amazon ES to complete create, delete, describe,  modify on ec2 and elb"
                 .to_string(),
-    });
-    defaults_role_to_create
+    }]
 }
 
 impl Role {

@@ -375,15 +375,14 @@ where
     let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
     // define labels to add to namespace
-    let namespace_labels = match service.context().resource_expiration_in_seconds() {
-        Some(_) => Some(vec![
+    let namespace_labels = service.context().resource_expiration_in_seconds().map(|_| {
+        vec![
             (LabelsContent {
                 name: "ttl".to_string(),
                 value: format! {"{}", service.context().resource_expiration_in_seconds().unwrap()},
             }),
-        ]),
-        None => None,
-    };
+        ]
+    });
 
     // create a namespace with labels if do not exists
     let _ = cast_simple_error_to_engine_error(
@@ -584,15 +583,14 @@ where
             )?;
 
             // define labels to add to namespace
-            let namespace_labels = match service.context().resource_expiration_in_seconds() {
-                Some(_) => Some(vec![
+            let namespace_labels = service.context().resource_expiration_in_seconds().map(|_| {
+                vec![
                     (LabelsContent {
                         name: "ttl".into(),
                         value: format!("{}", service.context().resource_expiration_in_seconds().unwrap()),
                     }),
-                ]),
-                None => None,
-            };
+                ]
+            });
 
             // create a namespace with labels if it does not exist
             let _ = cast_simple_error_to_engine_error(
@@ -1158,10 +1156,7 @@ where
     let progress_info = ProgressInfo::new(
         service.progress_scope(),
         Info,
-        match waiting_message {
-            Some(message) => Some(message.into()),
-            _ => None,
-        },
+        waiting_message.map(|message| message.into()),
         service.context().execution_id(),
     );
 
@@ -1204,7 +1199,7 @@ where
 }
 
 pub fn get_tfstate_suffix(service: &dyn Service) -> String {
-    format!("{}", service.id())
+    service.id().to_string()
 }
 
 // Name generated from TF secret suffix

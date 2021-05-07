@@ -41,7 +41,7 @@ where
                 tera::ErrorKind::CallFunction(x) => format!("call function: {}", x),
                 tera::ErrorKind::CallFilter(x) => format!("call filter: {}", x),
                 tera::ErrorKind::CallTest(x) => format!("call test: {}", x),
-                tera::ErrorKind::__Nonexhaustive => format!("non exhaustive error"),
+                tera::ErrorKind::__Nonexhaustive => "non exhaustive error".to_string(),
             };
 
             error!("{}", context.clone().into_json());
@@ -129,9 +129,8 @@ pub fn write_rendered_templates(rendered_templates: &[RenderedTemplate], into: &
 
         // perform spcific action based on the extension
         let extension = Path::new(&dest).extension().and_then(OsStr::to_str);
-        match extension {
-            Some("sh") => set_file_permission(&f, 0o755),
-            _ => {}
+        if let Some("sh") = extension {
+            set_file_permission(&f, 0o755)
         }
     }
 

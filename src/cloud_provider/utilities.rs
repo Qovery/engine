@@ -100,8 +100,8 @@ pub fn get_supported_version_to_use(
         return match all_supported_versions.get(&format!(
             "{}.{}.{}",
             version.major,
-            version.minor.unwrap().to_string(),
-            version.patch.unwrap().to_string()
+            version.minor.unwrap(),
+            version.patch.unwrap()
         )) {
             Some(version) => Ok(version.to_string()),
             None => {
@@ -115,7 +115,7 @@ pub fn get_supported_version_to_use(
 
     // if a minor version is required
     if version.minor.is_some() {
-        return match all_supported_versions.get(&format!("{}.{}", version.major, version.minor.unwrap()).to_string()) {
+        return match all_supported_versions.get(&format!("{}.{}", version.major, version.minor.unwrap())) {
             Some(version) => Ok(version.to_string()),
             None => {
                 return Err(format!(
@@ -232,15 +232,9 @@ pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> 
         _ => return Err("please check the version you've sent, it can't be checked".to_string()),
     };
 
-    let minor = match version_split.next() {
-        Some(minor) => Some(minor.to_string()),
-        _ => None,
-    };
+    let minor = version_split.next().map(|minor| minor.to_string());
 
-    let patch = match version_split.next() {
-        Some(patch) => Some(patch.to_string()),
-        _ => None,
-    };
+    let patch = version_split.next().map(|patch| patch.to_string());
 
     Ok(VersionsNumber { major, minor, patch })
 }
@@ -437,10 +431,10 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, ParseFloatErro
         };
     }
 
-    return match value.parse::<f32>() {
+    match value.parse::<f32>() {
         Ok(n) => Ok(n),
         Err(e) => Err(e),
-    };
+    }
 }
 
 pub fn validate_k8s_required_cpu_and_burstable(
@@ -474,10 +468,10 @@ pub fn validate_k8s_required_cpu_and_burstable(
         set_cpu_burst = total_cpu.clone();
     }
 
-    return Ok(CpuLimits {
+    Ok(CpuLimits {
         cpu_limit: set_cpu_burst.to_string(),
         cpu_request: total_cpu,
-    });
+    })
 }
 
 #[cfg(test)]

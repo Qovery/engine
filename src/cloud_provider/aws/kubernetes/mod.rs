@@ -256,26 +256,24 @@ impl<'a> EKS<'a> {
         // Vault
         context.insert("vault_auth_method", "none");
 
-        match env::var_os("VAULT_ADDR") {
-            Some(_) => {
-                // select the correct used method
-                match env::var_os("VAULT_ROLE_ID") {
-                    Some(role_id) => {
-                        context.insert("vault_auth_method", "app_role");
-                        context.insert("vault_role_id", role_id.to_str().unwrap());
+        if let Some(_) = env::var_os("VAULT_ADDR") {
+            // select the correct used method
+            match env::var_os("VAULT_ROLE_ID") {
+                Some(role_id) => {
+                    context.insert("vault_auth_method", "app_role");
+                    context.insert("vault_role_id", role_id.to_str().unwrap());
 
-                        match env::var_os("VAULT_SECRET_ID") {
-                            Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
-                            None => error!("VAULT_SECRET_ID environment variable wasn't found"),
-                        }
+                    match env::var_os("VAULT_SECRET_ID") {
+                        Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
+                        None => error!("VAULT_SECRET_ID environment variable wasn't found"),
                     }
-                    None => match env::var_os("VAULT_TOKEN") {
-                        Some(_) => context.insert("vault_auth_method", "token"),
-                        None => {}
-                    },
+                }
+                None => {
+                    if let Some(_) = env::var_os("VAULT_TOKEN") {
+                        context.insert("vault_auth_method", "token")
+                    }
                 }
             }
-            None => {}
         };
 
         // AWS
@@ -788,13 +786,12 @@ impl<'a> Kubernetes for EKS<'a> {
         ));
 
         info!("Running Terraform apply");
-        match cast_simple_error_to_engine_error(
+        if let Err(e) = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false),
         ) {
-            Err(e) => error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message),
-            _ => {}
+            error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message)
         };
 
         // should make the diff between all namespaces and qovery managed namespaces
@@ -803,9 +800,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 execution_id: self.context.execution_id().to_string(),
             },
             ProgressLevel::Warn,
-            Some(format!(
-                "Deleting all non-Qovery deployed applications and dependencies",
-            )),
+            Some("Deleting all non-Qovery deployed applications and dependencies".to_string()),
             self.context.execution_id(),
         ));
 
@@ -848,9 +843,7 @@ impl<'a> Kubernetes for EKS<'a> {
                 execution_id: self.context.execution_id().to_string(),
             },
             ProgressLevel::Warn,
-            Some(format!(
-                "Deleting all Qovery deployed elements and associated dependencies",
-            )),
+            Some("Deleting all Qovery deployed elements and associated dependencies".to_string()),
             self.context.execution_id(),
         ));
 
