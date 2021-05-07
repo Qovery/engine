@@ -539,14 +539,38 @@ where
                 ),
             )?;
 
-            let _ = cast_simple_error_to_engine_error(
-                service.engine_error_scope(),
-                service.context().execution_id(),
-                crate::cmd::terraform::terraform_init_validate_plan_apply(
-                    workspace_dir.as_str(),
-                    service.context().is_dry_run_deploy(),
-                ),
-            )?;
+            return match crate::cmd::terraform::terraform_init_validate_plan_apply(
+                workspace_dir.as_str(),
+                service.context().is_dry_run_deploy(),
+            ) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    // join error messages and Terraform error on the same string
+                    let mut error_complete = "".to_string();
+
+                    if e.message.is_some() {
+                        error_complete.push_str(e.message.unwrap().as_str());
+                    }
+
+                    if e.logs.is_some() {
+                        let error_lined_joined = e.logs.unwrap().join("\n");
+                        error_complete.push_str(format!("\n{:?}", error_lined_joined).as_str());
+                    }
+
+                    error!(
+                        "Error while deploying service {} with id {}.{}",
+                        service.name(),
+                        service.id(),
+                        error_complete,
+                    );
+                    Err(EngineError::new(
+                        EngineErrorCause::Internal,
+                        EngineErrorScope::CloudProvider(service.id().to_string(), service.name().to_string()),
+                        service.context().execution_id(),
+                        Some(error_complete),
+                    ))
+                }
+            };
         }
         DeploymentTarget::SelfHosted(kubernetes, environment) => {
             // use helm

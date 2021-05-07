@@ -8,9 +8,10 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
+use crate::cmd::terraform::terraform_init_validate_plan_apply;
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
-use crate::error::{cast_simple_error_to_engine_error, EngineError};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -326,16 +327,36 @@ impl<'a> Kubernetes for DOKS<'a> {
             ),
         )?;
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::cmd::terraform::terraform_init_validate_plan_apply(
-                temp_dir.as_str(),
-                self.context.is_dry_run_deploy(),
-            ),
-        )?;
+        match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // print Terraform error logs to end user
+                if e.logs.is_some() {
+                    let error_lined_joined = e.logs.unwrap().join("\n");
+                    listeners_helper.deployment_error(ProgressInfo::new(
+                        ProgressScope::Infrastructure {
+                            execution_id: self.context.execution_id().to_string(),
+                        },
+                        ProgressLevel::Error,
+                        Some(format!(
+                            "Failed to deploy EKS {} cluster with id {}. \n {}",
+                            self.name(),
+                            self.id(),
+                            error_lined_joined
+                        )),
+                        self.context.execution_id(),
+                    ));
+                }
 
-        Ok(())
+                error!("Error while deploying cluster {} with id {}.", self.name(), self.id());
+                Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
+                    self.context.execution_id(),
+                    e.message,
+                ))
+            }
+        }
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {

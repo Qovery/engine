@@ -4,11 +4,11 @@ use retry::OperationResult;
 
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::error::{SimpleErrorKind, TerraformError};
 use chrono::Duration;
 use retry::Error::Operation;
 
-fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
+fn terraform_init_validate(root_dir: &str) -> Result<(), TerraformError> {
     // terraform init
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         match terraform_exec(root_dir, vec!["init"]) {
@@ -23,7 +23,7 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     match result {
         Ok(_) => {}
         Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => return Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(retry::Error::Internal(e)) => return Err(TerraformError::new(SimpleErrorKind::Other, Some(e), None)),
     }
 
     // validate config
@@ -36,7 +36,7 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     }
 }
 
-pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<(), SimpleError> {
+pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<(), TerraformError> {
     match terraform_init_validate(root_dir) {
         Err(e) => return Err(e),
         Ok(_) => {}
@@ -57,7 +57,7 @@ pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Resu
         return match result {
             Ok(_) => Ok(()),
             Err(Operation { error, .. }) => Err(error),
-            Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+            Err(retry::Error::Internal(e)) => Err(TerraformError::new(SimpleErrorKind::Other, Some(e), None)),
         };
     }
 
@@ -67,7 +67,7 @@ pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Resu
     }
 }
 
-pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy: bool) -> Result<(), SimpleError> {
+pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy: bool) -> Result<(), TerraformError> {
     // terraform init
     match terraform_init_validate(root_dir) {
         Err(e) => return Err(e),
@@ -96,11 +96,11 @@ pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy:
     match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(SimpleErrorKind::Other, Some(e), None)),
     }
 }
 
-fn terraform_plan_apply(root_dir: &str) -> Result<(), SimpleError> {
+fn terraform_plan_apply(root_dir: &str) -> Result<(), TerraformError> {
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // plan
         match terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"]) {
@@ -123,11 +123,11 @@ fn terraform_plan_apply(root_dir: &str) -> Result<(), SimpleError> {
     match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(SimpleErrorKind::Other, Some(e), None)),
     }
 }
 
-pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>, SimpleError> {
+pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     // terraform init and validate
     match terraform_init_validate(root_dir) {
         Err(e) => return Err(e),
@@ -148,31 +148,47 @@ pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>,
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(SimpleErrorKind::Other, Some(e), None)),
     }
 }
 
-pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, SimpleError> {
+pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, TerraformError> {
     let home_dir = home_dir().expect("Could not find $HOME");
     let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
+    let tf_error_pattern_match = "Error:";
 
+    let mut tf_output = Vec::new();
+    let mut tf_output_err = Vec::new();
     let result = exec_with_envs_and_output(
         format!("{} terraform", root_dir).as_str(),
         args,
         vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
         |line: Result<String, std::io::Error>| {
             let output = line.unwrap();
-            info!("{}", &output)
+            info!("{}", &output);
+            // todo: ensure there is no useful other lines, and remove this if necessary
+            if output.contains(tf_error_pattern_match) {
+                tf_output.push(output);
+            }
         },
         |line: Result<String, std::io::Error>| {
             let output = line.unwrap();
             error!("{}", &output);
+            if output.contains(tf_error_pattern_match) {
+                tf_output_err.push(output);
+            }
         },
         Duration::max_value(),
     );
 
+    tf_output.append(&mut tf_output_err);
+
     match result {
         Ok(_) => Ok(result.unwrap()),
-        Err(e) => Err(e),
+        Err(e) => Err(TerraformError {
+            kind: SimpleErrorKind::Other,
+            message: e.message,
+            logs: Some(tf_output),
+        }),
     }
 }
