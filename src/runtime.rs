@@ -5,10 +5,8 @@ use tokio::runtime::{Builder, Runtime};
 
 lazy_static! {
     static ref TOKIO_RUNTIME: Mutex<Runtime> = Mutex::new({
-        Builder::new()
-            .basic_scheduler()
+        Builder::new_current_thread()
             .thread_name("tokio-engine-blocking")
-            .max_threads(1)
             .enable_all()
             .build()
             .unwrap()
