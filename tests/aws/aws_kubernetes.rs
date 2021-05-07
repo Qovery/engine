@@ -1,22 +1,15 @@
 extern crate test_utilities;
 
-use std::env;
-use std::fs::File;
-use std::io::Read;
-
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{context, engine_run_test, generate_id, init, FuncTestsSecrets};
 use gethostname;
+use std::env;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
 use self::test_utilities::aws::eks_options;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
-use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::transaction::TransactionResult;
-
-pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
-pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
 
 // avoid test collisions
 fn generate_cluster_id(region: &str) -> String {
