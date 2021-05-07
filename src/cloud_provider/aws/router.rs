@@ -133,14 +133,11 @@ impl Service for Router {
                     .iter()
                     .find(|app| app.name() == r.application_name.as_str())
                 {
-                    Some(application) => match application.private_port() {
-                        Some(private_port) => Some(RouteDataTemplate {
-                            path: r.path.clone(),
-                            application_name: application.sanitized_name().to_string(),
-                            application_port: private_port,
-                        }),
-                        _ => None,
-                    },
+                    Some(application) => application.private_port().map(|private_port| RouteDataTemplate {
+                        path: r.path.clone(),
+                        application_name: application.sanitized_name(),
+                        application_port: private_port,
+                    }),
                     _ => None,
                 }
             })

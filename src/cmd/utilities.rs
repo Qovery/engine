@@ -17,7 +17,7 @@ enum CommandOutputType {
     STDERR(Result<String, std::io::Error>),
 }
 
-fn command<P>(binary: P, args: Vec<&str>, envs: &Vec<(&str, &str)>, use_output: bool) -> Command
+fn command<P>(binary: P, args: Vec<&str>, envs: &[(&str, &str)], use_output: bool) -> Command
 where
     P: AsRef<Path>,
 {
@@ -49,14 +49,14 @@ where
         cmd.current_dir(current_dir);
     }
 
-    envs.into_iter().for_each(|(k, v)| {
+    envs.iter().for_each(|(k, v)| {
         cmd.env(k, v);
     });
 
     cmd
 }
 
-pub fn exec<P>(binary: P, args: Vec<&str>, envs: &Vec<(&str, &str)>) -> Result<(), SimpleError>
+pub fn exec<P>(binary: P, args: Vec<&str>, envs: &[(&str, &str)]) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -108,11 +108,11 @@ where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),
 {
-    let command_string = command_to_string(binary.as_ref(), &args, &vec![]);
+    let command_string = command_to_string(binary.as_ref(), &args, &[]);
     info!("command: {}", command_string.as_str());
 
     let mut child = _with_output(
-        command(binary, args, &vec![], true).spawn().unwrap(),
+        command(binary, args, &[], true).spawn().unwrap(),
         stdout_output,
         stderr_output,
     );
@@ -176,16 +176,14 @@ where
         match line {
             STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {}
             STDOUT(line) => {
-                match &line {
-                    Ok(x) => command_output.push(x.to_string()),
-                    _ => {}
+                if let Ok(x) = &line {
+                    command_output.push(x.to_string())
                 }
                 stdout_output(line)
             }
             STDERR(line) => {
-                match &line {
-                    Ok(x) => command_output.push(x.to_string()),
-                    _ => {}
+                if let Ok(x) = &line {
+                    command_output.push(x.to_string())
                 }
                 stderr_output(line)
             }

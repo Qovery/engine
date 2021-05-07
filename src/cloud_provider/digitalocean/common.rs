@@ -28,9 +28,7 @@ pub fn get_ip_from_do_load_balancer_api_output(json_content: &str) -> Result<Ipv
         },
         Err(_) => Err(SimpleError::new(
             SimpleErrorKind::Other,
-            Some(format!(
-                "Error While trying to deserialize json received from Digital Ocean Load Balancer API"
-            )),
+            Some("Error While trying to deserialize json received from Digital Ocean Load Balancer API".to_string()),
         )),
     }
 }
@@ -110,9 +108,8 @@ pub fn get_uuid_of_cluster_from_name(token: &str, kube_cluster_name: &str) -> Re
 
 fn search_uuid_cluster_for(kube_name: &str, clusters: Clusters) -> Option<String> {
     for cluster in clusters.kubernetes_clusters {
-        match cluster.name.eq(kube_name) {
-            true => return Some(cluster.id),
-            _ => {}
+        if let true = cluster.name.eq(kube_name) {
+            return Some(cluster.id);
         }
     }
     None

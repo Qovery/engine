@@ -234,7 +234,7 @@ impl Service for Application {
             })
             .collect::<Vec<_>>();
 
-        let is_storage = storage.len() > 0;
+        let is_storage = !storage.is_empty();
 
         context.insert("storage", &storage);
         context.insert("is_storage", &is_storage);
