@@ -3,8 +3,8 @@ use std::str::FromStr;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesRequest, Ecr, EcrClient,
-    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository,
+    CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesError, DescribeRepositoriesRequest, Ecr,
+    EcrClient, GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -17,6 +17,10 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::runtime::block_on;
+use retry::delay::Fixed;
+use retry::Error::Operation;
+use retry::OperationResult;
+use serde_json::json;
 
 pub struct ECR {
     context: Context,
@@ -133,49 +137,97 @@ impl ECR {
     }
 
     fn create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
-        info!("ECR create repository {}", image.name.as_str());
+        let repository_name = image.name.as_str();
+        info!("creating ECR repository {}", &repository_name);
+
+        let mut repo_creation_counter = 0;
+        let container_registry_request = DescribeRepositoriesRequest {
+            repository_names: Some(vec![repository_name.to_string()]),
+            ..Default::default()
+        };
         let crr = CreateRepositoryRequest {
-            repository_name: image.name.clone(),
+            repository_name: repository_name.to_string(),
             ..Default::default()
         };
 
-        if let Err(err) = block_on(self.ecr_client().create_repository(crr)) {
-            match err {
-                RusotoError::Service(ref err) => error!("{:?}", err),
-                _ => {
-                    let msg = format!(
-                        "can't create ECR repository {} for {}",
-                        image.name.as_str(),
-                        self.name_with_id(),
-                    );
-                    error!("{}: {}", msg, err);
-                    return Err(self.engine_error(EngineErrorCause::Internal, msg));
+        // ensure repository is created
+        // need to do all this checks and retry because of several issues encountered like: 200 API response code while repo is not created
+        let repo_created = retry::retry(Fixed::from_millis(5000).take(24), || {
+            match block_on(
+                self.ecr_client()
+                    .describe_repositories(container_registry_request.clone()),
+            ) {
+                Ok(x) => {
+                    debug!("created {:?} repository", x);
+                    OperationResult::Ok(())
+                }
+                Err(e) => {
+                    match e {
+                        RusotoError::Service(s) => match s {
+                            DescribeRepositoriesError::RepositoryNotFound(_) => {
+                                if repo_creation_counter != 0 {
+                                    warn!(
+                                        "repository {} was not found, {}x retrying...",
+                                        &repository_name, &repo_creation_counter
+                                    );
+                                }
+                                repo_creation_counter += 1;
+                            }
+                            _ => warn!("{:?}", s),
+                        },
+                        _ => warn!("{:?}", e),
+                    }
+
+                    let msg = match block_on(self.ecr_client().create_repository(crr.clone())) {
+                        Ok(_) => format!("repository {} created", &repository_name),
+                        Err(err) => format!(
+                            "can't create ECR repository {} for {}. {:?}",
+                            &repository_name,
+                            self.name_with_id(),
+                            err
+                        ),
+                    };
+
+                    OperationResult::Retry(Err(self.engine_error(EngineErrorCause::Internal, msg)))
                 }
             }
-        }
+        });
+
+        match repo_created {
+            Ok(_) => info!(
+                "repository {} created after {} attempt(s)",
+                &repository_name, repo_creation_counter
+            ),
+            Err(Operation { error, .. }) => return error,
+            Err(retry::Error::Internal(e)) => return Err(self.engine_error(EngineErrorCause::Internal, e.to_string())),
+        };
+
+        // apply retention policy
+        let retention_policy_in_days = match self.context.is_test_cluster() {
+            true => 1,
+            false => 365,
+        };
+        let lifecycle_policy_text = json!({
+          "rules": [
+            {
+              "action": {
+                "type": "expire"
+              },
+              "selection": {
+                "countType": "sinceImagePushed",
+                "countUnit": "days",
+                "countNumber": retention_policy_in_days,
+                "tagStatus": "any"
+              },
+              "description": "Images retention policy",
+              "rulePriority": 1
+            }
+          ]
+        });
 
         let plp = PutLifecyclePolicyRequest {
             repository_name: image.name.clone(),
-            lifecycle_policy_text: r#"
-            {
-              "rules": [
-                {
-                  "action": {
-                    "type": "expire"
-                  },
-                  "selection": {
-                    "countType": "sinceImagePushed",
-                    "countUnit": "days",
-                    "countNumber": 365,
-                    "tagStatus": "any"
-                  },
-                  "description": "Remove unit test images",
-                  "rulePriority": 1
-                }
-              ]
-            }
-            "#
-            .to_string(),
+            lifecycle_policy_text: lifecycle_policy_text.to_string(),
             ..Default::default()
         };
 
