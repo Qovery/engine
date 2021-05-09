@@ -73,9 +73,8 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
         );
 
         // Deploy
-        match tx.create_kubernetes(&kubernetes) {
-            Err(err) => panic!("{:?}", err),
-            _ => {}
+        if let Err(err) = tx.create_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
         }
         let _ = match tx.commit() {
             TransactionResult::Ok => assert!(true),
@@ -83,12 +82,10 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // no need to test pause everywhere
         if test_infra_pause {
             // Pause
-            match tx.pause_kubernetes(&kubernetes) {
-                Err(err) => panic!("{:?}", err),
-                _ => {}
+            if let Err(err) = tx.pause_kubernetes(&kubernetes) {
+                panic!("{:?}", err)
             }
             match tx.commit() {
                 TransactionResult::Ok => assert!(true),
@@ -97,9 +94,8 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             };
 
             // Resume
-            match tx.create_kubernetes(&kubernetes) {
-                Err(err) => panic!("{:?}", err),
-                _ => {}
+            if let Err(err) = tx.create_kubernetes(&kubernetes) {
+                panic!("{:?}", err)
             }
             let _ = match tx.commit() {
                 TransactionResult::Ok => assert!(true),
@@ -109,9 +105,10 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
         }
 
         // Destroy
-        match tx.delete_kubernetes(&kubernetes) {
-            Err(err) => panic!("{:?}", err),
-            _ => {}
+        // There is a bug with the current version of Terraform (0.14.10) where the destroy fails, but it works
+        // It doesn't find any helm charts after destroying the workers and charts have already been destroyed
+        if let Err(err) = tx.delete_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
         }
         match tx.commit() {
             TransactionResult::Ok => assert!(true),
@@ -119,7 +116,7 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
