@@ -205,6 +205,20 @@ pub struct KubernetesKind {
     pub kind: String,
 }
 
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesVersion {
+    pub server_version: ServerVersion,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerVersion {
+    pub major: String,
+    pub minor: String,
+    pub git_version: String,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Helm {
