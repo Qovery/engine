@@ -432,7 +432,7 @@ mod tests_mongodb {
         let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhi";
 
         let database = MongoDB::new(
-            Context::new("".to_string(), "".to_string(), "".to_string(), false, None, None),
+            Context::new("".to_string(), "".to_string(), "".to_string(), false, None, None, None),
             "pgid",
             Action::Create,
             db_input_name,
