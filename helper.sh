@@ -25,6 +25,8 @@ export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
 export RUNNING_ON_CI=0
 export ENGINE_BRANCH=""
 
+## Main functions
+
 function print_help() {
   echo "Usage: $0 <option>"
   $grep '##' $0 | $grep 'function' | $grep -v grep | $sed -r "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | $awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
@@ -35,7 +37,6 @@ function fatal(){
   echo "$@" >&2
   kill -9 $PROC
 }
-
 
 function check_num_args() {
   desired_number=$1
@@ -51,6 +52,8 @@ function print_title() {
   echo "          $title"
   echo "###################################################"
 }
+
+## Git functions
 
 function check_untracked_files() {
   if [ $RUNNING_ON_CI -eq 0 ] ; then
@@ -157,6 +160,8 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
     cd -
 }
 
+## Build and image functions
+
 # shellcheck disable=SC2120
 function build() { ## Build engine app with engine lib
   build_options=""
@@ -250,6 +255,8 @@ function push_ci_image() { ## Push CI local image with current commit ID as tag
   docker push qoveryrd/ci:${tag}
 }
 
+## Releases
+
 function new_release() { ## Release a new engine version with commit ID as tag prepare_engine
   prepare_engine
   tag=$(generate_image_tag)
@@ -299,7 +306,7 @@ resources.requests.cpu="500m",\
 resources.requests.memory="2Gi"
 }
 
-# Tests
+## Tests
 
 function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
   set -e
