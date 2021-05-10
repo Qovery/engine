@@ -557,8 +557,8 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
     })
 }
 
-//#[cfg(feature = "test-aws-self-hosted")]
-#[test]
+// #[cfg(feature = "test-aws-self-hosted")]
+// #[test]
 fn deploy_ok_fail_fail_ok_environment() {
     init();
 
