@@ -7,9 +7,10 @@ use serde::de::DeserializeOwned;
 
 use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
+use crate::cloud_provider::utilities::{get_version_number, VersionsNumber};
 use crate::cmd::structs::{
     Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod,
-    KubernetesPodStatusPhase, KubernetesService, LabelsContent,
+    KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent,
 };
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
@@ -772,6 +773,21 @@ where
             };
             Err(e)
         }
+    }
+}
+
+pub fn get_kubernetes_master_version<P>(kubernetes_config: P) -> Result<VersionsNumber, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let v = kubectl_exec::<P, KubernetesVersion>(vec!["version", "-o", "json"], kubernetes_config, vec![])?;
+
+    match get_version_number(format!("{}.{}", v.server_version.major, v.server_version.minor).as_str()) {
+        Ok(vn) => Ok(vn),
+        Err(e) => Err(SimpleError {
+            kind: SimpleErrorKind::Other,
+            message: Some(format!("Unable to determine Kubernetes master version. {}", e)),
+        }),
     }
 }
 

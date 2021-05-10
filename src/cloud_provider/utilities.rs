@@ -229,11 +229,18 @@ pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> 
 
     let major = match version_split.next() {
         Some(major) => major.to_string(),
-        _ => return Err("please check the version you've sent, it can't be checked".to_string()),
+        _ => {
+            return Err(format!(
+                "please check the version you've sent ({}), it can't be checked",
+                version
+            ))
+        }
     };
 
-    let minor = version_split.next().map(|minor| minor.to_string());
-
+    let minor = version_split.next().map(|minor| {
+        let minor = minor.to_string();
+        minor.replace("+", "")
+    });
     let patch = version_split.next().map(|patch| patch.to_string());
 
     Ok(VersionsNumber { major, minor, patch })
