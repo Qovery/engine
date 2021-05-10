@@ -9,7 +9,9 @@ use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes, KubernetesNode};
+use crate::cloud_provider::kubernetes::{
+    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode,
+};
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
@@ -438,6 +440,25 @@ impl<'a> Kubernetes for EKS<'a> {
             )),
             self.context.execution_id(),
         ));
+
+        // upgrade cluster if requested
+        match self.config_file() {
+            Ok(f) => match is_kubernetes_upgrade_required(f.0, &self.version) {
+                Ok(update_required) => {
+                    if update_required {
+                        return self.on_upgrade();
+                    }
+                    info!("Kubernetes cluster upgrade not required");
+                }
+                Err(e) => error!(
+                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
+                    e.message
+                ),
+            },
+            Err(_) => {
+                info!("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before");
+            }
+        };
 
         // create AWS IAM roles
         let already_created_roles = get_default_roles_to_create();
