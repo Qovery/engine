@@ -1,4 +1,4 @@
-use crate::cloud_provider::service::{StatefulService, StatelessService};
+use crate::cloud_provider::service::{Action, StatefulService, StatelessService};
 use crate::error::EngineError;
 use crate::unit_conversion::cpu_string_to_float;
 
@@ -41,16 +41,14 @@ impl Environment {
 
     pub fn is_valid(&self) -> Result<(), EngineError> {
         for service in self.stateful_services.iter() {
-            match service.is_valid() {
-                Err(err) => return Err(err),
-                _ => {}
+            if let Err(err) = service.is_valid() {
+                return Err(err);
             }
         }
 
         for service in self.stateless_services.iter() {
-            match service.is_valid() {
-                Err(err) => return Err(err),
-                _ => {}
+            if let Err(err) = service.is_valid() {
+                return Err(err);
             }
         }
 
@@ -66,9 +64,14 @@ impl Environment {
         let mut required_pods = self.stateless_services.len() as u16;
 
         for service in &self.stateless_services {
-            total_cpu_for_stateless_services += cpu_string_to_float(&service.total_cpus());
-            total_ram_in_mib_for_stateless_services += &service.total_ram_in_mib();
-            required_pods += service.total_instances();
+            match *service.action() {
+                Action::Create | Action::Nothing => {
+                    total_cpu_for_stateless_services += cpu_string_to_float(&service.total_cpus());
+                    total_ram_in_mib_for_stateless_services += &service.total_ram_in_mib();
+                    required_pods += service.total_instances();
+                }
+                Action::Delete | Action::Pause => {}
+            }
         }
 
         let mut total_cpu_for_stateful_services: f32 = 0.0;
@@ -78,8 +81,13 @@ impl Environment {
             Kind::Development => {
                 // development means stateful services are running on Kubernetes
                 for service in &self.stateful_services {
-                    total_cpu_for_stateful_services += cpu_string_to_float(&service.total_cpus());
-                    total_ram_in_mib_for_stateful_services += &service.total_ram_in_mib();
+                    match *service.action() {
+                        Action::Create | Action::Nothing => {
+                            total_cpu_for_stateful_services += cpu_string_to_float(&service.total_cpus());
+                            total_ram_in_mib_for_stateful_services += &service.total_ram_in_mib();
+                        }
+                        Action::Delete | Action::Pause => {}
+                    }
                 }
             }
             Kind::Production => {} // production means databases are running on managed services - so it consumes 0 cpu
@@ -89,7 +97,12 @@ impl Environment {
             crate::cloud_provider::environment::Kind::Production => {}
             crate::cloud_provider::environment::Kind::Development => {
                 for service in &self.stateful_services {
-                    required_pods += service.total_instances();
+                    match *service.action() {
+                        Action::Create | Action::Nothing => {
+                            required_pods += service.total_instances();
+                        }
+                        Action::Delete | Action::Pause => {}
+                    }
                 }
             }
         }
