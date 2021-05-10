@@ -40,16 +40,14 @@ impl LocalDocker {
     }
 
     fn image_does_exist(&self, image: &Image) -> Result<bool, EngineError> {
-        Ok(
-            match crate::cmd::utilities::exec(
+        Ok(matches!(
+            crate::cmd::utilities::exec(
                 "docker",
                 vec!["image", "inspect", image.name_with_tag().as_str()],
                 &self.get_docker_host_envs(),
-            ) {
-                Ok(_) => true,
-                _ => false,
-            },
-        )
+            ),
+            Ok(_)
+        ))
     }
 
     fn get_docker_host_envs(&self) -> Vec<(&str, &str)> {

@@ -10,7 +10,7 @@ pub fn cpu_string_to_float<T: Into<String>>(cpu: T) -> f32 {
         return 0.0;
     }
 
-    if !cpu.ends_with("m") {
+    if !cpu.ends_with('m') {
         // the value is not in millis
         return match cpu.parse::<f32>() {
             Ok(v) if v >= 0.0 => v,
@@ -56,13 +56,13 @@ pub fn mi_to_mi<T: Into<String>>(ram: T) -> u32 {
 /// convert ki, mi or gi to mi
 pub fn any_to_mi<T: Into<String>>(ram: T) -> u32 {
     let ram = ram.into();
-    return if ram.to_lowercase().ends_with("mi") {
+    if ram.to_lowercase().ends_with("mi") {
         mi_to_mi(ram)
     } else if ram.to_lowercase().ends_with("ki") {
         ki_to_mi(ram)
     } else {
         gi_to_mi(ram)
-    };
+    }
 }
 
 #[cfg(test)]

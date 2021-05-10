@@ -91,7 +91,7 @@ impl Service for Redis {
         let max_size = 47 - prefix.len(); // 50 (max Elasticache ) - 3 (k8s statefulset chars)
         let mut new_name = self.name().replace("_", "").replace("-", "");
 
-        if new_name.clone().chars().count() > max_size {
+        if new_name.chars().count() > max_size {
             new_name = new_name[..max_size].to_string();
         }
 

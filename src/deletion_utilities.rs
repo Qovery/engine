@@ -16,20 +16,9 @@ fn minus_namespaces<'a>(all: Vec<&'a str>, to_remove_namespaces: Vec<&str>) -> V
 
 pub fn get_qovery_managed_namespaces() -> Vec<&'static str> {
     // the order is very important because of dependencies
-    let mut qovery_managed_namespaces = Vec::with_capacity(5);
-    qovery_managed_namespaces.push("logging");
-    qovery_managed_namespaces.push("nginx-ingress");
-    qovery_managed_namespaces.push("qovery");
-    qovery_managed_namespaces.push("cert-manager");
-    qovery_managed_namespaces.push("prometheus");
-    return qovery_managed_namespaces;
+    vec!["logging", "nginx-ingress", "qovery", "cert-manager", "prometheus"]
 }
 
 fn get_never_delete_namespaces() -> Vec<&'static str> {
-    let mut kubernetes_never_delete_namespaces = Vec::with_capacity(4);
-    kubernetes_never_delete_namespaces.push("default");
-    kubernetes_never_delete_namespaces.push("kube-node-lease");
-    kubernetes_never_delete_namespaces.push("kube-public");
-    kubernetes_never_delete_namespaces.push("kube-system");
-    return kubernetes_never_delete_namespaces;
+    vec!["default", "kube-node-lease", "kube-public", "kube-system"]
 }

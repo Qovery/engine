@@ -120,7 +120,7 @@ pub fn get_kube_cluster_name_from_uuid(uuid: &str) -> String {
                 let res_cluster = serde_json::from_str::<Cluster>(&content);
                 match res_cluster {
                     Ok(cluster) => return cluster.kubernetes_cluster.name.clone(),
-                    Err(e) => panic!(e),
+                    Err(e) => panic!("{}", e),
                 }
             }
             _ => return String::from(""),

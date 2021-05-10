@@ -57,7 +57,7 @@ impl ContainerRegistry for DockerHub {
             "docker",
             vec!["--version"],
             |r_out| match r_out {
-                Ok(s) => output_from_cmd.push_str(&s.to_owned()),
+                Ok(s) => output_from_cmd.push_str(&s),
                 Err(e) => error!("Error while getting sdtout from docker {}", e),
             },
             |r_err| match r_err {
@@ -99,10 +99,7 @@ impl ContainerRegistry for DockerHub {
             .send();
 
         match res {
-            Ok(out) => match out.status() {
-                StatusCode::OK => true,
-                _ => false,
-            },
+            Ok(out) => matches!(out.status(), StatusCode::OK),
             Err(e) => {
                 error!("While trying to retrieve if DockerHub repository exist {:?}", e);
                 false
@@ -116,21 +113,18 @@ impl ContainerRegistry for DockerHub {
             None => vec![],
         };
 
-        match cmd::utilities::exec(
+        if let Err(_) = cmd::utilities::exec(
             "docker",
             vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
             &envs,
         ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "Your DockerHub account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials.",
-                    ),
-                    format!("failed to login to DockerHub {}", self.name_with_id()),
-                ));
-            }
-            _ => {}
+            return Err(self.engine_error(
+                EngineErrorCause::User(
+                    "Your DockerHub account seems to be no longer valid (bad Credentials). \
+                Please contact your Organization administrator to fix or change the Credentials.",
+                ),
+                format!("failed to login to DockerHub {}", self.name_with_id()),
+            ));
         };
 
         let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
@@ -185,7 +179,7 @@ impl ContainerRegistry for DockerHub {
             Err(e) => Err(self.engine_error(
                 EngineErrorCause::Internal,
                 e.message
-                    .unwrap_or("unknown error occurring during docker push".to_string()),
+                    .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
             )),
         }
     }

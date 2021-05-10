@@ -1,22 +1,15 @@
 extern crate test_utilities;
 
-use std::env;
-use std::fs::File;
-use std::io::Read;
-
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{context, engine_run_test, generate_id, init, FuncTestsSecrets};
 use gethostname;
+use std::env;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
 use self::test_utilities::aws::eks_options;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
-use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::transaction::TransactionResult;
-
-pub const QOVERY_ENGINE_REPOSITORY_URL: &str = "CHANGE-ME";
-pub const TMP_DESTINATION_GIT: &str = "/tmp/qovery-engine-main/";
 
 // avoid test collisions
 fn generate_cluster_id(region: &str) -> String {
@@ -80,9 +73,8 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
         );
 
         // Deploy
-        match tx.create_kubernetes(&kubernetes) {
-            Err(err) => panic!("{:?}", err),
-            _ => {}
+        if let Err(err) = tx.create_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
         }
         let _ = match tx.commit() {
             TransactionResult::Ok => assert!(true),
@@ -90,12 +82,10 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // no need to test pause everywhere
         if test_infra_pause {
             // Pause
-            match tx.pause_kubernetes(&kubernetes) {
-                Err(err) => panic!("{:?}", err),
-                _ => {}
+            if let Err(err) = tx.pause_kubernetes(&kubernetes) {
+                panic!("{:?}", err)
             }
             match tx.commit() {
                 TransactionResult::Ok => assert!(true),
@@ -104,9 +94,8 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             };
 
             // Resume
-            match tx.create_kubernetes(&kubernetes) {
-                Err(err) => panic!("{:?}", err),
-                _ => {}
+            if let Err(err) = tx.create_kubernetes(&kubernetes) {
+                panic!("{:?}", err)
             }
             let _ = match tx.commit() {
                 TransactionResult::Ok => assert!(true),
@@ -116,9 +105,10 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
         }
 
         // Destroy
-        match tx.delete_kubernetes(&kubernetes) {
-            Err(err) => panic!("{:?}", err),
-            _ => {}
+        // There is a bug with the current version of Terraform (0.14.10) where the destroy fails, but it works
+        // It doesn't find any helm charts after destroying the workers and charts have already been destroyed
+        if let Err(err) = tx.delete_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
         }
         match tx.commit() {
             TransactionResult::Ok => assert!(true),
@@ -126,7 +116,7 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
