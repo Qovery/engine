@@ -26,7 +26,7 @@ resource "helm_release" "cert_manager" {
 
   set {
     name = "prometheus.servicemonitor.enabled"
-    value = "true"
+    value = var.metrics_history_enabled
   }
 
   set {
@@ -104,7 +104,9 @@ resource "helm_release" "cert_manager" {
 
   depends_on = [
     digitalocean_kubernetes_cluster.kubernetes_cluster,
+    {% if metrics_history_enabled %}
     helm_release.prometheus_operator,
+    {% endif %}
   ]
 }
 

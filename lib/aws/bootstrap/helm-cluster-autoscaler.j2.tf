@@ -90,7 +90,7 @@ resource "helm_release" "cluster_autoscaler" {
   # observability
   set {
     name = "serviceMonitor.enabled"
-    value = "true"
+    value = var.metrics_history_enabled
   }
 
   set {
@@ -129,7 +129,9 @@ resource "helm_release" "cluster_autoscaler" {
     aws_iam_access_key.iam_eks_cluster_autoscaler,
     aws_iam_user_policy_attachment.s3_cluster_autoscaler_attachment,
     aws_eks_cluster.eks_cluster,
+    {% if metrics_history_enabled %}
     helm_release.prometheus_operator,
+    {% endif %}
     helm_release.aws_vpc_cni,
   ]
 }

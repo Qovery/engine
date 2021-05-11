@@ -21,7 +21,7 @@ use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cmd;
 use qovery_engine::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
-use qovery_engine::models::{Context, Environment, Metadata};
+use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
 use time::Instant;
@@ -57,7 +57,17 @@ pub fn context() -> Context {
         }),
     };
 
-    Context::new(execution_id, home_dir, lib_root_dir, true, None, Option::from(metadata))
+    let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
+
+    Context::new(
+        execution_id,
+        home_dir,
+        lib_root_dir,
+        true,
+        None,
+        Some(enabled_features),
+        Option::from(metadata),
+    )
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

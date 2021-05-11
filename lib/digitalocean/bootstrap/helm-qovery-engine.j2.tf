@@ -10,7 +10,6 @@ resource "helm_release" "qovery_engine_resources" {
   create_namespace = true
   max_history = 50
   timeout = 600
-  recreate_pods = false
 
   // need kubernetes 1.18, should be well tested before activating it
   set {
@@ -19,13 +18,18 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   set {
-    name = "volumes.storageClassName"
-    value = "aws-ebs-gp2-0"
+    name = "metrics.enabled"
+    value = var.metrics_history_enabled
   }
 
   set {
     name = "image.tag"
     value = data.external.get_engine_version_to_use.result.version
+  }
+
+  set {
+    name = "volumes.storageClassName"
+    value = "do-volume-standard-0"
   }
 
   set {
@@ -116,9 +120,9 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   depends_on = [
-    aws_eks_cluster.eks_cluster,
-    helm_release.aws_vpc_cni,
-    helm_release.cluster_autoscaler,
+    digitalocean_kubernetes_cluster.kubernetes_cluster,
+    {% if metrics_history_enabled %}
     helm_release.prometheus-adapter,
+    {% endif %}
   ]
 }

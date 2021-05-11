@@ -1,3 +1,4 @@
+{% if log_history_enabled or metrics_history_enabled %}
 locals {
   cloudflare_datasources = <<DATASOURCES
 datasources:
@@ -39,7 +40,10 @@ resource "helm_release" "grafana" {
 
   depends_on = [
     digitalocean_kubernetes_cluster.kubernetes_cluster,
+    {% if metrics_history_enabled %}
     helm_release.prometheus_operator,
+    {% endif %}
     helm_release.q_storageclass,
   ]
 }
+{% endif %}

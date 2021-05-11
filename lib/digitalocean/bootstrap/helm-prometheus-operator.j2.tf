@@ -1,3 +1,4 @@
+{% if metrics_history_enabled %}
 resource "helm_release" "prometheus_operator" {
   name = "prometheus-operator"
   chart = "common/charts/prometheus-operator"
@@ -13,7 +14,7 @@ resource "helm_release" "prometheus_operator" {
   set {
     name = "nameOverride"
     value = "prometheus-operator"
-  }
+  helm-prometheus-adapter}
 
   set {
     name = "fullnameOverride"
@@ -115,5 +116,5 @@ resource "helm_release" "prometheus_operator" {
     value = "{}"
   }
 {% endif %}
-
 }
+{% endif %}
