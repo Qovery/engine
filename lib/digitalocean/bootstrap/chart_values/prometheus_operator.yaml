@@ -121,7 +121,7 @@ alertmanager:
   ## https://github.com/kubernetes/kubernetes/issues/45398
   ##
   podDisruptionBudget:
-    enabled: true
+    enabled: false
     minAvailable: 1
     maxUnavailable: ""
 
