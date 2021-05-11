@@ -1,10 +1,11 @@
-{% if log_history_enabled %}
+// do not delete bucket as deletion can take several weeks and we won't be able to re-use the name if needed
 resource "digitalocean_spaces_bucket" "loki_space" {
   name   = "qovery-logs-${var.kubernetes_cluster_id}"
   region = var.region
   force_destroy = true
 }
 
+{% if log_history_enabled %}
 resource "helm_release" "loki" {
   name = "loki"
   chart = "common/charts/loki"
