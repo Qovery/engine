@@ -40,7 +40,7 @@ resource "helm_release" "grafana" {
 
   depends_on = [
     digitalocean_kubernetes_cluster.kubernetes_cluster,
-    {% if metrics_history_enabled %
+    {% if metrics_history_enabled %}
     helm_release.prometheus_operator,
     {% endif %}
     helm_release.q_storageclass,

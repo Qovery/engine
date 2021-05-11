@@ -934,7 +934,7 @@ pub struct Context {
     lib_root_dir: String,
     test_cluster: bool,
     docker_host: Option<String>,
-    features: Option<Vec<Features>>,
+    features: Vec<Features>,
     metadata: Option<Metadata>,
 }
 
@@ -971,7 +971,7 @@ impl Context {
         lib_root_dir: String,
         test_cluster: bool,
         docker_host: Option<String>,
-        features: Option<Vec<Features>>,
+        features: Vec<Features>,
         metadata: Option<Metadata>,
     ) -> Self {
         Context {
@@ -1051,17 +1051,12 @@ impl Context {
 
     // Qovery features
     pub fn is_feature_enabled(&self, name: &Features) -> bool {
-        return match &self.features {
-            Some(features) => {
-                for feature in features {
-                    if feature == name {
-                        return true;
-                    }
-                }
-                false
+        for feature in &self.features {
+            if feature == name {
+                return true;
             }
-            None => false,
-        };
+        }
+        false
     }
 }
 

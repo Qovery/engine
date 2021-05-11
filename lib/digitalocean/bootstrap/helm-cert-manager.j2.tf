@@ -104,7 +104,9 @@ resource "helm_release" "cert_manager" {
 
   depends_on = [
     digitalocean_kubernetes_cluster.kubernetes_cluster,
+    {% if metrics_history_enabled %}
     helm_release.prometheus_operator,
+    {% endif %}
   ]
 }
 
