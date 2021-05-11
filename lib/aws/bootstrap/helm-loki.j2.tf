@@ -1,3 +1,4 @@
+{% if log_history_enabled %}
 resource "aws_iam_user" "iam_eks_loki" {
   name = "qovery-logs-${var.kubernetes_cluster_id}"
   tags = local.tags_eks
@@ -137,3 +138,4 @@ resource "helm_release" "loki" {
     helm_release.cluster_autoscaler,
   ]
 }
+{% endif %}

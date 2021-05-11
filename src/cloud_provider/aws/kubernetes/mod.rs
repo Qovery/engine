@@ -25,7 +25,7 @@ use crate::error::{
 };
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -203,11 +203,11 @@ impl<'a> EKS<'a> {
         // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
         context.insert("qovery_api_url", &qovery_api_url);
+
         context.insert(
             "engine_version_controller_token",
             &self.options.engine_version_controller_token,
         );
-
         context.insert(
             "agent_version_controller_token",
             &self.options.agent_version_controller_token,
@@ -221,6 +221,16 @@ impl<'a> EKS<'a> {
             )
         }
         context.insert("force_upgrade", &self.context.requires_forced_upgrade());
+
+        // Qovery features
+        context.insert(
+            "log_history_enabled",
+            &self.context.is_feature_enabled(&Features::LogsHistory),
+        );
+        context.insert(
+            "metrics_history_enabled",
+            &self.context.is_feature_enabled(&Features::MetricsHistory),
+        );
 
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);

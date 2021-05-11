@@ -1,3 +1,4 @@
+{% if metrics_history_enabled %}
 resource "helm_release" "prometheus-adapter" {
   name = "prometheus-adapter"
   chart = "common/charts/prometheus-adapter"
@@ -53,8 +54,8 @@ resource "helm_release" "prometheus-adapter" {
   }
 
   depends_on = [
-    aws_eks_cluster.eks_cluster,
-    helm_release.aws_vpc_cni,
+    digitalocean_kubernetes_cluster.kubernetes_cluster,
     helm_release.prometheus_operator,
   ]
 }
+{% endif %}

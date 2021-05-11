@@ -19,6 +19,11 @@ resource "helm_release" "qovery_engine_resources" {
   }
 
   set {
+    name = "metrics.enabled"
+    value = var.metrics_history_enabled
+  }
+
+  set {
     name = "image.tag"
     value = data.external.get_engine_version_to_use.result.version
   }
@@ -117,6 +122,8 @@ resource "helm_release" "qovery_engine_resources" {
 
   depends_on = [
     digitalocean_kubernetes_cluster.kubernetes_cluster,
+    {% if metrics_history_enabled %}
     helm_release.prometheus-adapter,
+    {% endif %}
   ]
 }

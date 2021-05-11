@@ -13,7 +13,7 @@ use crate::dns_provider::DnsProvider;
 use crate::error::{cast_simple_error_to_engine_error, EngineError};
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::object_storage::spaces::Spaces;
 use crate::object_storage::ObjectStorage;
@@ -128,6 +128,16 @@ impl<'a> DOKS<'a> {
         context.insert("qovery_nats_password", self.options.qovery_nats_password.as_str());
         context.insert("qovery_ssh_key", self.options.qovery_ssh_key.as_str());
         context.insert("discord_api_key", self.options.discord_api_key.as_str());
+
+        // Qovery features
+        context.insert(
+            "log_history_enabled",
+            &self.context.is_feature_enabled(&Features::LogsHistory),
+        );
+        context.insert(
+            "metrics_history_enabled",
+            &self.context.is_feature_enabled(&Features::MetricsHistory),
+        );
 
         // grafana credentials
         context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());

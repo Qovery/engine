@@ -455,7 +455,7 @@ mod tests_mysql {
         let db_expected_name = "mysqltestnamesanitizerwithtoomanycharsnotallowedwhichwi";
 
         let database = MySQL::new(
-            Context::new("".to_string(), "".to_string(), "".to_string(), false, None, None),
+            Context::new("".to_string(), "".to_string(), "".to_string(), false, None, None, None),
             "mysqlid",
             Action::Create,
             db_input_name,

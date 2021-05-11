@@ -274,6 +274,20 @@ variable "discord_api_key" {
   type = string
 }
 
+# Qovery features
+
+variable "log_history_enabled" {
+  description = "Enable log history"
+  default = {{ log_history_enabled }}
+  type = bool
+}
+
+variable "metrics_history_enabled" {
+  description = "Enable metrics history"
+  default = {{ metrics_history_enabled }}
+  type = bool
+}
+
 # Force helm upgrade
 variable "forced_upgrade" {
   description = "Force upgrade"

@@ -1,3 +1,4 @@
+{% if log_history_enabled %}
 resource "helm_release" "promtail" {
   name = "promtail"
   chart = "common/charts/promtail"
@@ -11,8 +12,7 @@ resource "helm_release" "promtail" {
     value = "loki"
   }
 
-  # It's mandatory to get this class to ensure paused infra will behave properly on restore
-  # and logs will always be forwarded (no other pod will preempt)
+  # it's mandatory to get this class to ensure paused infra will behave properly on restore
   set {
     name = "priorityClassName"
     value = "system-node-critical"
@@ -45,6 +45,8 @@ resource "helm_release" "promtail" {
   }
 
   depends_on = [
-    digitalocean_kubernetes_cluster.kubernetes_cluster,
+    aws_eks_cluster.eks_cluster,
+    helm_release.aws_vpc_cni,
   ]
 }
+{% endif %}
