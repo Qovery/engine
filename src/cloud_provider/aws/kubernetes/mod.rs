@@ -469,7 +469,7 @@ impl<'a> Kubernetes for EKS<'a> {
             ) {
                 Ok(_) => info!("Role {} is already present, no need to create", role.role_name),
                 Err(e) => error!(
-                    "While getting, or creating the role {} : causing by {:?}",
+                    "Error while getting, or creating the role {} : causing by {:?}",
                     role.role_name, e
                 ),
             }
@@ -542,6 +542,77 @@ impl<'a> Kubernetes for EKS<'a> {
 
     fn on_upgrade(&self) -> Result<(), EngineError> {
         info!("EKS.on_upgrade() called for {}", self.name());
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        listeners_helper.upgrade_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Info,
+            Some(format!(
+                "Start upgrading EKS {} cluster with id {}",
+                self.name(),
+                self.id()
+            )),
+            self.context.execution_id(),
+        ));
+
+        let temp_dir = workspace_directory(
+            self.context.workspace_root_dir(),
+            self.context.execution_id(),
+            format!("bootstrap/{}", self.name()),
+        );
+
+        // Upgrade master nodes
+
+        // generate terraform files and copy them into temp dir
+        let mut context = self.tera_context();
+        context.insert("eks_workers_version", &self.version());
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Info,
+            Some(format!("Upgrading Kubernetes {} master nodes", self.name())),
+            self.context.execution_id(),
+        ));
+
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                format!("Error while deploying cluster {} with id {}.", self.name(), self.id());
+                Err(e)
+            }
+        }
+
         Ok(())
     }
 

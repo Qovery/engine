@@ -9,6 +9,7 @@ use core::result::Result;
 use core::result::Result::{Err, Ok};
 use retry::delay::Fixed;
 use retry::OperationResult;
+use std::fmt;
 use std::num::ParseFloatError;
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::proto::rr::{RData, RecordType};
@@ -218,10 +219,25 @@ pub fn generate_supported_version(
 
 // unfortunately some proposed versions are not SemVer like Elasticache (6.x)
 // this is why we need ot have our own structure
+#[derive(Clone)]
 pub struct VersionsNumber {
     pub(crate) major: String,
     pub(crate) minor: Option<String>,
     pub(crate) patch: Option<String>,
+}
+
+impl fmt::Display for VersionsNumber {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut version = vec![];
+        version.push(format!("{}", &self.major));
+        if self.minor.is_some() {
+            version.push(format!("{}", &self.minor.clone().unwrap()))
+        }
+        if self.patch.is_some() {
+            version.push(format!("{}", &self.patch.clone().unwrap()))
+        }
+        write!(f, "{}", version.join("."))
+    }
 }
 
 pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
