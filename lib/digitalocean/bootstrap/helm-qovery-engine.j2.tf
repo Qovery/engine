@@ -10,7 +10,6 @@ resource "helm_release" "qovery_engine_resources" {
   create_namespace = true
   max_history = 50
   timeout = 600
-  recreate_pods = true
 
   // need kubernetes 1.18, should be well tested before activating it
   set {
