@@ -890,6 +890,12 @@ impl<'a> ListenersHelper<'a> {
             .for_each(|l| l.deployment_in_progress(info.clone()));
     }
 
+    pub fn upgrade_in_progress(&self, info: ProgressInfo) {
+        self.listeners
+            .iter()
+            .for_each(|l| l.deployment_in_progress(info.clone()));
+    }
+
     pub fn pause_in_progress(&self, info: ProgressInfo) {
         self.listeners.iter().for_each(|l| l.pause_in_progress(info.clone()));
     }

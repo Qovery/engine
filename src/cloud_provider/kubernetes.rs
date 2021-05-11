@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::CheckAction;
+use crate::cloud_provider::utilities::{get_version_number, VersionsNumber};
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
@@ -605,17 +606,17 @@ where
 ///
 /// * `kubernetes_config` - kubernetes config path
 /// * `wished_version` - kubernetes wished version
-pub fn is_kubernetes_upgrade_required<P>(kubernetes_config: P, current_version: &str) -> Result<bool, SimpleError>
+pub fn is_kubernetes_upgrade_required<P>(kubernetes_config: P, requested_version: &str) -> Result<bool, SimpleError>
 where
     P: AsRef<Path>,
 {
     {
-        let wished_version = match get_kubernetes_master_version(current_version) {
+        let wished_version = match get_version_number(requested_version) {
             Ok(v) => v,
             Err(e) => {
                 let msg = format!(
                     "Don't know which Kubernetes version you want to support, upgrade is impossible. {:?}",
-                    e.message
+                    e
                 );
                 error!("{}", &msg);
                 return Err(SimpleError {
@@ -626,49 +627,7 @@ where
         };
 
         match get_kubernetes_master_version(kubernetes_config) {
-            Ok(deployed_version) => {
-                let mut upgrade_required = false;
-
-                let deployed_minor_version = match deployed_version.minor {
-                    Some(v) => v,
-                    None => {
-                        return Err(SimpleError {
-                            kind: SimpleErrorKind::Other,
-                            message: Some("deployed kubernetes minor version was missing and is missing".to_string()),
-                        })
-                    }
-                };
-
-                let wished_minor_version = match wished_version.minor {
-                    Some(v) => v,
-                    None => {
-                        return Err(SimpleError {
-                            kind: SimpleErrorKind::Other,
-                            message: Some("wished kubernetes minor version was expected and is missing".to_string()),
-                        })
-                    }
-                };
-
-                if wished_version.major > deployed_version.major {
-                    info!("Kubernetes major version change detected");
-                    upgrade_required = true;
-                }
-
-                if &deployed_minor_version > &wished_minor_version {
-                    info!("Kubernetes minor version change detected");
-                    upgrade_required = true;
-                }
-
-                if upgrade_required {
-                    let old = format!("{}.{}", deployed_version.major, deployed_minor_version);
-                    let new = format!("{}.{}", wished_version.major, wished_minor_version);
-                    info!("Kubernetes cluster upgrade is required {} -> {}!!!", old, new);
-                    return Ok(true);
-                }
-
-                info!("Kubernetes cluster upgrade is not required");
-                Ok(false)
-            }
+            Ok(deployed_version) => compare_kubernetes_cluster_versions_for_upgrade(&deployed_version, &wished_version),
             Err(e) => {
                 let msg = format!("Can't get current deployed Kubernetes version. {:?}", e.message);
                 error!("{}", &msg);
@@ -681,16 +640,74 @@ where
     }
 }
 
+fn compare_kubernetes_cluster_versions_for_upgrade(
+    deployed_version: &VersionsNumber,
+    wished_version: &VersionsNumber,
+) -> Result<bool, SimpleError> {
+    let mut upgrade_required = false;
+
+    let deployed_minor_version = match &deployed_version.minor {
+        Some(v) => v,
+        None => {
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some("deployed kubernetes minor version was missing and is missing".to_string()),
+            })
+        }
+    };
+
+    let wished_minor_version = match &wished_version.minor {
+        Some(v) => v,
+        None => {
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some("wished kubernetes minor version was expected and is missing".to_string()),
+            })
+        }
+    };
+
+    if wished_version.major > deployed_version.major {
+        info!("Kubernetes major version change detected");
+        upgrade_required = true;
+    }
+
+    if &wished_minor_version > &deployed_minor_version {
+        info!("Kubernetes minor version change detected");
+        upgrade_required = true;
+    }
+
+    if upgrade_required {
+        let old = format!("{}.{}", deployed_version.major, deployed_minor_version);
+        let new = format!("{}.{}", wished_version.major, wished_minor_version);
+        info!("Kubernetes cluster upgrade is required {} -> {}!!!", old, new);
+        return Ok(true);
+    }
+
+    info!("Kubernetes cluster upgrade is not required");
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::utilities::get_version_number;
+    use crate::cloud_provider::kubernetes::compare_kubernetes_cluster_versions_for_upgrade;
+    use crate::cloud_provider::utilities::{get_version_number, VersionsNumber};
     use crate::cmd::structs::KubernetesVersion;
+
+    #[allow(dead_code)]
+    pub fn print_kubernetes_version(provider_version: &VersionsNumber, provider: &VersionsNumber) {
+        println!(
+            "Provider version: {} | Wished version: {} | Is upgrade required: {:?}",
+            provider_version.clone(),
+            provider.clone(),
+            compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider).unwrap()
+        )
+    }
 
     #[test]
     pub fn check_kubernetes_master_versions() {
         struct KubernetesVersionToCheck {
             json: &'static str,
-            expected_version: String,
+            wished_version: VersionsNumber,
         }
 
         let kubectl_version_aws = r#"
@@ -749,26 +766,51 @@ mod tests {
         let validate_providers = vec![
             KubernetesVersionToCheck {
                 json: kubectl_version_aws,
-                expected_version: "1.16".to_string(),
+                wished_version: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("16".to_string()),
+                    patch: None,
+                },
             },
             KubernetesVersionToCheck {
                 json: kubectl_version_do,
-                expected_version: "1.18".to_string(),
+                wished_version: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("18".to_string()),
+                    patch: None,
+                },
             },
         ];
 
-        for provider in validate_providers {
-            let provider_version: KubernetesVersion = serde_json::from_str(provider.json).unwrap();
-            let version = get_version_number(
+        for mut provider in validate_providers {
+            let provider_server_version: KubernetesVersion = serde_json::from_str(provider.json).unwrap();
+            let provider_version = get_version_number(
                 format!(
-                    "{}.{}",
-                    provider_version.server_version.major, provider_version.server_version.minor
+                    "{}",
+                    VersionsNumber {
+                        major: provider_server_version.server_version.major,
+                        minor: Some(provider_server_version.server_version.minor),
+                        patch: None
+                    }
                 )
                 .as_str(),
             )
-            .unwrap();
-            let final_version = format!("{}.{}", version.major, version.minor.unwrap());
-            assert_eq!(final_version, provider.expected_version);
+            .expect("wrong kubernetes cluster version");
+
+            // upgrade is not required
+            //print_kubernetes_version(&provider_version, &provider.wished_version);
+            assert_eq!(
+                compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider.wished_version).unwrap(),
+                false
+            );
+
+            // upgrade is required
+            let add_one_version = provider.wished_version.minor.unwrap().parse::<i32>().unwrap() + 1;
+            provider.wished_version.minor = Some(add_one_version.to_string());
+            //print_kubernetes_version(&provider_version, &provider.wished_version);
+            assert!(
+                compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider.wished_version).unwrap()
+            )
         }
     }
 }
