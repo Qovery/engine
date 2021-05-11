@@ -21,7 +21,7 @@ pub struct Request {
     pub organization_id: String,
     pub created_at: DateTime<Utc>,
     pub action: Action,
-    pub features: Option<Vec<Features>>,
+    pub features: Vec<Features>,
     pub test_cluster: bool,
     pub build_platform: BuildPlatform,
     pub cloud_provider: CloudProvider,
