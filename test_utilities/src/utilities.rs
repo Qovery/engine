@@ -65,7 +65,7 @@ pub fn context() -> Context {
         lib_root_dir,
         true,
         None,
-        Some(enabled_features),
+        enabled_features,
         Option::from(metadata),
     )
 }
