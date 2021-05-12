@@ -540,7 +540,7 @@ fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
             Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
         ) {
             Ok(_) => {}
-            Err(e) => return Err(e),
+            Err(e) => error!("error while puring {}. {}", prune, e.message),
         };
     }
 
