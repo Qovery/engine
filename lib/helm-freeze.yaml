@@ -58,7 +58,7 @@ charts:
     version: 12.0.1
     dest: services
   - name: pleco
-    version: 0.7.12
+    version: 0.7.17
     repo_name: pleco
   - name: do-k8s-token-rotate
     version: 0.1.3
@@ -68,7 +68,7 @@ charts:
     version: 2.12.1
     repo_name: prometheus-community
   - name: digital-mobius
-    version: 0.1.3
+    version: 0.1.4
     repo_name: digital-mobius
     dest: do-bootstrap
 
