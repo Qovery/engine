@@ -527,7 +527,7 @@ fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
     for prune in all_prunes_commands {
         match cmd::utilities::exec_with_envs_and_output(
             "docker",
-            prune,
+            prune.clone(),
             envs.clone(),
             |line| {
                 let line_string = line.unwrap_or_default();
@@ -540,7 +540,7 @@ fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
             Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
         ) {
             Ok(_) => {}
-            Err(e) => error!("error while puring {}. {}", prune, e.message),
+            Err(e) => error!("error while puring {}. {:?}", prune[0], e.message),
         };
     }
 
