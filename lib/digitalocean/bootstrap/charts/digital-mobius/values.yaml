@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: qoveryrd/digital-mobius
   pullPolicy: IfNotPresent
-  digitalMobiusImageTag: "0.1.3"
+  digitalMobiusImageTag: "0.1.4"
 
 imagePullSecrets: [ ]
 nameOverride: ""
