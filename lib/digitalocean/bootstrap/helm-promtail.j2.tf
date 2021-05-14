@@ -2,7 +2,7 @@
 resource "helm_release" "promtail" {
   name = "promtail"
   chart = "common/charts/promtail"
-  namespace = "logging"
+  namespace = "kube-system"
   create_namespace = true
   atomic = true
   max_history = 50
