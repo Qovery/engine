@@ -1,8 +1,12 @@
 use std::any::Any;
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::thread;
 
+use retry::delay::Fibonacci;
+use retry::Error::Operation;
+use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
@@ -11,7 +15,8 @@ use crate::cloud_provider::utilities::{get_version_number, VersionsNumber};
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
-    get_kubernetes_master_version, kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects,
+    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
+    kubectl_exec_version,
 };
 use crate::dns_provider::DnsProvider;
 use crate::error::SimpleErrorKind::Other;
@@ -21,10 +26,6 @@ use crate::error::{
 use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath};
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
-use retry::delay::Fibonacci;
-use retry::Error::Operation;
-use retry::OperationResult;
-use std::path::Path;
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;
@@ -600,44 +601,168 @@ where
     Ok(())
 }
 
+pub enum KubernetesUpgradeRequired {
+    Masters,
+    Workers,
+}
+
 /// Check if the current deployed version of Kubernetes requires an upgrade
 ///
 /// # Arguments
 ///
 /// * `kubernetes_config` - kubernetes config path
 /// * `wished_version` - kubernetes wished version
-pub fn is_kubernetes_upgrade_required<P>(kubernetes_config: P, requested_version: &str) -> Result<bool, SimpleError>
+pub fn is_kubernetes_upgrade_required<P>(
+    kubernetes_config: P,
+    requested_version: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<KubernetesUpgradeRequired>, SimpleError>
 where
     P: AsRef<Path>,
 {
-    {
-        let wished_version = match get_version_number(requested_version) {
-            Ok(v) => v,
+    let mut upgrade_required: Option<KubernetesUpgradeRequired> = None;
+    let mut total_workers = 0;
+    let mut non_up_to_date_workers = 0;
+
+    let wished_version = match get_version_number(requested_version) {
+        Ok(v) => v,
+        Err(e) => {
+            let msg = format!(
+                "Don't know which Kubernetes version you want to support, upgrade is impossible. {:?}",
+                e
+            );
+            error!("{}", &msg);
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(msg.to_string()),
+            });
+        }
+    };
+
+    // check master versions
+    match get_kubernetes_masters_version(&kubernetes_config, envs.clone()) {
+        Ok(deployed_version) => {
+            match compare_kubernetes_cluster_versions_for_upgrade(&deployed_version, &wished_version) {
+                Ok(x) if x => return Ok(Some(KubernetesUpgradeRequired::Masters)),
+                Err(e) => return Err(e),
+                _ => {}
+            }
+        }
+        Err(e) => {
+            let msg = format!("Can't get current deployed Kubernetes version. {:?}", e.message);
+            error!("{}", &msg);
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(msg),
+            });
+        }
+    }
+
+    // check workers versions
+    match get_kubernetes_workers_version(kubernetes_config, envs) {
+        Ok(deployed_version) => {
+            for node in deployed_version {
+                total_workers += 1;
+                match compare_kubernetes_cluster_versions_for_upgrade(&node, &wished_version) {
+                    Ok(x) if x => {
+                        upgrade_required = Some(KubernetesUpgradeRequired::Workers);
+                        non_up_to_date_workers += 1;
+                    }
+                    Err(e) => return Err(e),
+                    Ok(_) => {}
+                }
+            }
+        }
+        Err(e) => {
+            let msg = format!("Can't get current deployed Kubernetes version. {:?}", e.message);
+            error!("{}", &msg);
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(msg),
+            });
+        }
+    }
+
+    if upgrade_required.is_none() {
+        info!("All workers are up to date, no upgrade required");
+    } else {
+        info!(
+            "Kubernetes workers upgrade required, need to update {}/{} nodes",
+            non_up_to_date_workers, total_workers
+        );
+    }
+
+    Ok(upgrade_required)
+}
+
+/// Get kubernetes master nodes version
+///
+/// # Arguments
+///
+/// * `kubernetes_config` - kubernetes config path
+pub fn get_kubernetes_masters_version<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<VersionsNumber, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let v = kubectl_exec_version(kubernetes_config, envs)?;
+
+    match get_version_number(format!("{}.{}", v.server_version.major, v.server_version.minor).as_str()) {
+        Ok(vn) => Ok(vn),
+        Err(e) => Err(SimpleError {
+            kind: SimpleErrorKind::Other,
+            message: Some(format!("Unable to determine Kubernetes master version. {}", e)),
+        }),
+    }
+}
+
+/// Get kubernetes workers nodes version (kubelet and kube-proxy)
+///
+/// # Arguments
+///
+/// * `kubernetes_config` - kubernetes config path
+pub fn get_kubernetes_workers_version<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<Vec<VersionsNumber>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut nodes_versions: Vec<VersionsNumber> = vec![];
+    let nodes = kubectl_exec_get_node(kubernetes_config, envs)?;
+
+    for node in nodes.items {
+        // check kubelet version
+        match get_version_number(node.status.node_info.kubelet_version.as_str()) {
+            Ok(vn) => nodes_versions.push(vn),
             Err(e) => {
-                let msg = format!(
-                    "Don't know which Kubernetes version you want to support, upgrade is impossible. {:?}",
-                    e
-                );
-                error!("{}", &msg);
                 return Err(SimpleError {
                     kind: SimpleErrorKind::Other,
-                    message: Some(msg.to_string()),
-                });
+                    message: Some(format!(
+                        "Unable to determine Kubernetes 'Kubelet' worker version. {}",
+                        e
+                    )),
+                })
             }
-        };
-
-        match get_kubernetes_master_version(kubernetes_config) {
-            Ok(deployed_version) => compare_kubernetes_cluster_versions_for_upgrade(&deployed_version, &wished_version),
+        }
+        // check kube-proxy version
+        match get_version_number(node.status.node_info.kube_proxy_version.as_str()) {
+            Ok(vn) => nodes_versions.push(vn),
             Err(e) => {
-                let msg = format!("Can't get current deployed Kubernetes version. {:?}", e.message);
-                error!("{}", &msg);
-                Err(SimpleError {
+                return Err(SimpleError {
                     kind: SimpleErrorKind::Other,
-                    message: Some(msg),
+                    message: Some(format!(
+                        "Unable to determine Kubernetes 'Kube-proxy' worker version. {}",
+                        e
+                    )),
                 })
             }
         }
     }
+
+    Ok(nodes_versions)
 }
 
 fn compare_kubernetes_cluster_versions_for_upgrade(
@@ -691,7 +816,7 @@ fn compare_kubernetes_cluster_versions_for_upgrade(
 mod tests {
     use crate::cloud_provider::kubernetes::compare_kubernetes_cluster_versions_for_upgrade;
     use crate::cloud_provider::utilities::{get_version_number, VersionsNumber};
-    use crate::cmd::structs::KubernetesVersion;
+    use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
 
     #[allow(dead_code)]
     pub fn print_kubernetes_version(provider_version: &VersionsNumber, provider: &VersionsNumber) {
@@ -811,6 +936,367 @@ mod tests {
             assert!(
                 compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider.wished_version).unwrap()
             )
+        }
+    }
+
+    #[test]
+    pub fn check_kubernetes_workers_versions() {
+        struct KubernetesVersionToCheck {
+            json: &'static str,
+            wished_version: VersionsNumber,
+        }
+
+        let kubectl_version_aws = r#"
+{
+    "apiVersion": "v1",
+    "items": [
+        {
+            "apiVersion": "v1",
+            "kind": "Node",
+            "metadata": {
+                "annotations": {
+                    "node.alpha.kubernetes.io/ttl": "0",
+                    "volumes.kubernetes.io/controller-managed-attach-detach": "true"
+                },
+                "creationTimestamp": "2021-04-30T07:23:17Z",
+                "labels": {
+                    "beta.kubernetes.io/arch": "amd64",
+                    "beta.kubernetes.io/instance-type": "t2.large",
+                    "beta.kubernetes.io/os": "linux",
+                    "eks.amazonaws.com/nodegroup": "qovery-dmubm9agk7sr8a8r-1",
+                    "eks.amazonaws.com/nodegroup-image": "ami-0f8d6052f6e3a19d2",
+                    "failure-domain.beta.kubernetes.io/region": "us-east-2",
+                    "failure-domain.beta.kubernetes.io/zone": "us-east-2c",
+                    "kubernetes.io/arch": "amd64",
+                    "kubernetes.io/hostname": "ip-10-0-105-29.us-east-2.compute.internal",
+                    "kubernetes.io/os": "linux"
+                },
+                "name": "ip-10-0-105-29.us-east-2.compute.internal",
+                "resourceVersion": "76995588",
+                "selfLink": "/api/v1/nodes/ip-10-0-105-29.us-east-2.compute.internal",
+                "uid": "dbe8d9e1-481a-4de5-9fa5-1c0b2f2e94e9"
+            },
+            "spec": {
+                "providerID": "aws:///us-east-2c/i-0a99d3bb7b27d62ac"
+            },
+            "status": {
+                "addresses": [
+                    {
+                        "address": "10.0.105.29",
+                        "type": "InternalIP"
+                    },
+                    {
+                        "address": "3.139.58.222",
+                        "type": "ExternalIP"
+                    },
+                    {
+                        "address": "ip-10-0-105-29.us-east-2.compute.internal",
+                        "type": "Hostname"
+                    },
+                    {
+                        "address": "ip-10-0-105-29.us-east-2.compute.internal",
+                        "type": "InternalDNS"
+                    },
+                    {
+                        "address": "ec2-3-139-58-222.us-east-2.compute.amazonaws.com",
+                        "type": "ExternalDNS"
+                    }
+                ],
+                "allocatable": {
+                    "attachable-volumes-aws-ebs": "39",
+                    "cpu": "1930m",
+                    "ephemeral-storage": "18242267924",
+                    "hugepages-2Mi": "0",
+                    "memory": "7408576Ki",
+                    "pods": "35"
+                },
+                "capacity": {
+                    "attachable-volumes-aws-ebs": "39",
+                    "cpu": "2",
+                    "ephemeral-storage": "20959212Ki",
+                    "hugepages-2Mi": "0",
+                    "memory": "8166336Ki",
+                    "pods": "35"
+                },
+                "conditions": [
+                    {
+                        "lastHeartbeatTime": "2021-05-13T13:45:52Z",
+                        "lastTransitionTime": "2021-04-30T07:23:16Z",
+                        "message": "kubelet has sufficient memory available",
+                        "reason": "KubeletHasSufficientMemory",
+                        "status": "False",
+                        "type": "MemoryPressure"
+                    },
+                    {
+                        "lastHeartbeatTime": "2021-05-13T13:45:52Z",
+                        "lastTransitionTime": "2021-04-30T07:23:16Z",
+                        "message": "kubelet has no disk pressure",
+                        "reason": "KubeletHasNoDiskPressure",
+                        "status": "False",
+                        "type": "DiskPressure"
+                    },
+                    {
+                        "lastHeartbeatTime": "2021-05-13T13:45:52Z",
+                        "lastTransitionTime": "2021-04-30T07:23:16Z",
+                        "message": "kubelet has sufficient PID available",
+                        "reason": "KubeletHasSufficientPID",
+                        "status": "False",
+                        "type": "PIDPressure"
+                    },
+                    {
+                        "lastHeartbeatTime": "2021-05-13T13:45:52Z",
+                        "lastTransitionTime": "2021-04-30T07:23:58Z",
+                        "message": "kubelet is posting ready status",
+                        "reason": "KubeletReady",
+                        "status": "True",
+                        "type": "Ready"
+                    }
+                ],
+                "daemonEndpoints": {
+                    "kubeletEndpoint": {
+                        "Port": 10250
+                    }
+                },
+                "images": [
+                    {
+                        "names": [
+                            "grafana/loki@sha256:72fdf006e78141aa1f449acdbbaa195d4b7ad6be559a6710e4bcfe5ea2d7cc80",
+                            "grafana/loki:1.6.0"
+                        ],
+                        "sizeBytes": 72825761
+                    }
+                ],
+                "nodeInfo": {
+                    "architecture": "amd64",
+                    "bootID": "6707bff0-c846-4ae5-971f-6213a09cbb8d",
+                    "containerRuntimeVersion": "docker://19.3.6",
+                    "kernelVersion": "4.14.198-152.320.amzn2.x86_64",
+                    "kubeProxyVersion": "v1.16.13-eks-ec92d4",
+                    "kubeletVersion": "v1.16.13-eks-ec92d4",
+                    "machineID": "9e41586f1a7b461a8987a1110da45b2a",
+                    "operatingSystem": "linux",
+                    "osImage": "Amazon Linux 2",
+                    "systemUUID": "EC2E8B4C-92F9-213B-09B5-C0CD11A7EEB7"
+                }
+            }
+        } 
+    ],
+    "kind": "List",
+    "metadata": {
+        "resourceVersion": "",
+        "selfLink": ""
+    }
+}
+"#;
+        let kubectl_version_do = r#"
+{
+    "apiVersion": "v1",
+    "items": [
+        {
+            "apiVersion": "v1",
+            "kind": "Node",
+            "metadata": {
+                "annotations": {
+                    "alpha.kubernetes.io/provided-node-ip": "10.1.2.12",
+                    "csi.volume.kubernetes.io/nodeid": "{\"dobs.csi.digitalocean.com\":\"245738308\"}",
+                    "io.cilium.network.ipv4-cilium-host": "10.244.60.81",
+                    "io.cilium.network.ipv4-health-ip": "10.244.60.6",
+                    "io.cilium.network.ipv4-pod-cidr": "10.244.60.0/25",
+                    "node.alpha.kubernetes.io/ttl": "15",
+                    "volumes.kubernetes.io/controller-managed-attach-detach": "true"
+                },
+                "creationTimestamp": "2021-05-12T08:22:46Z",
+                "labels": {
+                    "beta.kubernetes.io/arch": "amd64",
+                    "beta.kubernetes.io/instance-type": "g-16vcpu-64gb",
+                    "beta.kubernetes.io/os": "linux",
+                    "doks.digitalocean.com/node-id": "2407f0b3-de84-4c26-b835-d979e1d5e873",
+                    "doks.digitalocean.com/node-pool": "pool-un5t2n2gp",
+                    "doks.digitalocean.com/node-pool-id": "5a2ea5fb-f826-4df1-b405-8b6f8d594098",
+                    "doks.digitalocean.com/version": "1.18.10-do.2",
+                    "failure-domain.beta.kubernetes.io/region": "nyc3",
+                    "kubernetes.io/arch": "amd64",
+                    "kubernetes.io/hostname": "pool-un5t2n2gp-8b870",
+                    "kubernetes.io/os": "linux",
+                    "node.kubernetes.io/instance-type": "g-16vcpu-64gb",
+                    "region": "nyc3",
+                    "topology.kubernetes.io/region": "nyc3"
+                },
+                "name": "pool-un5t2n2gp-8b870",
+                "resourceVersion": "127317441",
+                "selfLink": "/api/v1/nodes/pool-un5t2n2gp-8b870",
+                "uid": "b75f6082-c597-44fa-ab88-16cf193f639b"
+            },
+            "spec": {
+                "podCIDR": "10.244.60.0/25",
+                "podCIDRs": [
+                    "10.244.60.0/25"
+                ],
+                "providerID": "digitalocean://245738308"
+            },
+            "status": {
+                "addresses": [
+                    {
+                        "address": "pool-un5t2n2gp-8b870",
+                        "type": "Hostname"
+                    },
+                    {
+                        "address": "10.1.2.12",
+                        "type": "InternalIP"
+                    },
+                    {
+                        "address": "167.99.121.123",
+                        "type": "ExternalIP"
+                    }
+                ],
+                "allocatable": {
+                    "cpu": "16",
+                    "ephemeral-storage": "190207346374",
+                    "hugepages-1Gi": "0",
+                    "hugepages-2Mi": "0",
+                    "memory": "59942Mi",
+                    "pods": "110"
+                },
+                "capacity": {
+                    "cpu": "16",
+                    "ephemeral-storage": "206388180Ki",
+                    "hugepages-1Gi": "0",
+                    "hugepages-2Mi": "0",
+                    "memory": "65970528Ki",
+                    "pods": "110"
+                },
+                "conditions": [
+                    {
+                        "lastHeartbeatTime": "2021-05-12T08:22:55Z",
+                        "lastTransitionTime": "2021-05-12T08:22:55Z",
+                        "message": "Cilium is running on this node",
+                        "reason": "CiliumIsUp",
+                        "status": "False",
+                        "type": "NetworkUnavailable"
+                    },
+                    {
+                        "lastHeartbeatTime": "2021-05-13T14:33:56Z",
+                        "lastTransitionTime": "2021-05-12T08:22:45Z",
+                        "message": "kubelet has sufficient memory available",
+                        "reason": "KubeletHasSufficientMemory",
+                        "status": "False",
+                        "type": "MemoryPressure"
+                    },
+                    {
+                        "lastHeartbeatTime": "2021-05-13T14:33:56Z",
+                        "lastTransitionTime": "2021-05-12T08:22:45Z",
+                        "message": "kubelet has no disk pressure",
+                        "reason": "KubeletHasNoDiskPressure",
+                        "status": "False",
+                        "type": "DiskPressure"
+                    },
+                    {
+                        "lastHeartbeatTime": "2021-05-13T14:33:56Z",
+                        "lastTransitionTime": "2021-05-12T08:22:45Z",
+                        "message": "kubelet has sufficient PID available",
+                        "reason": "KubeletHasSufficientPID",
+                        "status": "False",
+                        "type": "PIDPressure"
+                    },
+                    {
+                        "lastHeartbeatTime": "2021-05-13T14:33:56Z",
+                        "lastTransitionTime": "2021-05-12T08:22:56Z",
+                        "message": "kubelet is posting ready status. AppArmor enabled",
+                        "reason": "KubeletReady",
+                        "status": "True",
+                        "type": "Ready"
+                    }
+                ],
+                "daemonEndpoints": {
+                    "kubeletEndpoint": {
+                        "Port": 10250
+                    }
+                },
+                "images": [
+                    {
+                        "names": [
+                            "digitalocean/doks-debug@sha256:d1a215845d868d1d6b2a6a93cb225a892d61e131954d71b5ef45664d77d8d2c7",
+                            "digitalocean/doks-debug:latest"
+                        ],
+                        "sizeBytes": 752144177
+                    }
+                ],
+                "nodeInfo": {
+                    "architecture": "amd64",
+                    "bootID": "917eead4-1db5-4709-9d28-01c3e469131a",
+                    "containerRuntimeVersion": "docker://18.9.9",
+                    "kernelVersion": "4.19.0-11-amd64",
+                    "kubeProxyVersion": "v1.18.10",
+                    "kubeletVersion": "v1.18.10",
+                    "machineID": "503195a66f1a4417bfa02fc696aa3436",
+                    "operatingSystem": "linux",
+                    "osImage": "Debian GNU/Linux 10 (buster)",
+                    "systemUUID": "503195a6-6f1a-4417-bfa0-2fc696aa3436"
+                },
+                "volumesAttached": [
+                    {
+                        "devicePath": "",
+                        "name": "kubernetes.io/csi/dobs.csi.digitalocean.com^ba8713ff-b34a-11eb-9a5b-0a58ac146bd9"
+                    }
+                ],
+                "volumesInUse": [
+                    "kubernetes.io/csi/dobs.csi.digitalocean.com^ba8713ff-b34a-11eb-9a5b-0a58ac146bd9"
+                ]
+            }
+        }
+    ],
+    "kind": "List",
+    "metadata": {
+        "resourceVersion": "",
+        "selfLink": ""
+    }
+}
+"#;
+
+        let validate_providers = vec![
+            KubernetesVersionToCheck {
+                json: kubectl_version_aws,
+                wished_version: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("16".to_string()),
+                    patch: None,
+                },
+            },
+            KubernetesVersionToCheck {
+                json: kubectl_version_do,
+                wished_version: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("18".to_string()),
+                    patch: None,
+                },
+            },
+        ];
+
+        for mut provider in validate_providers {
+            let provider_server_version: KubernetesList<KubernetesNode> =
+                serde_json::from_str(provider.json).expect("Can't read workers json from {} provider");
+            for node in provider_server_version.items {
+                let kubelet = get_version_number(&node.status.node_info.kubelet_version).unwrap();
+                let kube_proxy = get_version_number(&node.status.node_info.kube_proxy_version).unwrap();
+
+                // upgrade is not required
+                //print_kubernetes_version(&provider_version, &provider.wished_version);
+                assert_eq!(
+                    compare_kubernetes_cluster_versions_for_upgrade(&kubelet, &provider.wished_version).unwrap(),
+                    false
+                );
+                assert_eq!(
+                    compare_kubernetes_cluster_versions_for_upgrade(&kube_proxy, &provider.wished_version).unwrap(),
+                    false
+                );
+
+                // upgrade is required
+                let kubelet_add_one_version =
+                    provider.wished_version.minor.clone().unwrap().parse::<i32>().unwrap() + 1;
+                provider.wished_version.minor = Some(kubelet_add_one_version.to_string());
+                //print_kubernetes_version(&provider_version, &provider.wished_version);
+                assert!(compare_kubernetes_cluster_versions_for_upgrade(&kubelet, &provider.wished_version).unwrap());
+            }
         }
     }
 }
