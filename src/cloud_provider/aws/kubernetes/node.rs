@@ -2,6 +2,7 @@ use std::any::Any;
 
 use crate::cloud_provider::kubernetes::KubernetesNode;
 
+#[derive(Clone)]
 pub struct Node {
     instance_type: String,
 }

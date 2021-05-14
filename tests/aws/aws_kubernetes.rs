@@ -43,7 +43,13 @@ fn generate_cluster_id(region: &str) -> String {
     }
 }
 
-fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_infra_pause: bool, test_name: &str) {
+fn create_upgrade_and_destroy_eks_cluster(
+    region: &str,
+    secrets: FuncTestsSecrets,
+    boot_version: &str,
+    upgrade_to_version: &str,
+    test_name: &str,
+) {
     engine_run_test(|| {
         init();
 
@@ -62,6 +68,82 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
 
         let kubernetes = EKS::new(
             context.clone(),
+            generate_cluster_id(region).as_str(),
+            generate_cluster_id(region).as_str(),
+            boot_version,
+            region,
+            &aws,
+            &cloudflare,
+            eks_options(secrets.clone()),
+            nodes.clone(),
+        );
+
+        // Deploy
+        if let Err(err) = tx.create_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
+        }
+        let _ = match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // Upgrade
+        let kubernetes = EKS::new(
+            context,
+            generate_cluster_id(region).as_str(),
+            generate_cluster_id(region).as_str(),
+            upgrade_to_version,
+            region,
+            &aws,
+            &cloudflare,
+            eks_options(secrets),
+            nodes,
+        );
+        if let Err(err) = tx.create_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
+        }
+        let _ = match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // Destroy
+        // There is a bug with the current version of Terraform (0.14.10) where the destroy fails, but it works
+        // It doesn't find any helm charts after destroying the workers and charts have already been destroyed
+        if let Err(err) = tx.delete_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
+        }
+        match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        test_name.to_string()
+    })
+}
+
+fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_infra_pause: bool, test_name: &str) {
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let context = context();
+        let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+        let session = engine.session().unwrap();
+        let mut tx = session.transaction();
+
+        let aws = test_utilities::aws::cloud_provider_aws(&context);
+        let nodes = test_utilities::aws::aws_kubernetes_nodes();
+
+        let cloudflare = dns_provider_cloudflare(&context);
+
+        let kubernetes = EKS::new(
+            context,
             generate_cluster_id(region).as_str(),
             generate_cluster_id(region).as_str(),
             AWS_KUBERNETES_VERSION,
@@ -131,7 +213,7 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_eks_cluster(
-        region.clone(),
+        &region,
         secrets,
         true,
         &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
@@ -144,9 +226,23 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
     let region = "us-east-2";
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_eks_cluster(
-        region.clone(),
+        &region,
         secrets,
         false,
         &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
+    );
+}
+
+#[cfg(feature = "test-aws-infra")]
+#[test]
+fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
+    let region = "eu-west-3";
+    let secrets = FuncTestsSecrets::new();
+    create_upgrade_and_destroy_eks_cluster(
+        &region,
+        secrets,
+        "1.16",
+        "1.17",
+        &format!("create_upgrade_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
     );
 }

@@ -37,6 +37,7 @@ resource "aws_iam_user_policy_attachment" "s3_cluster_autoscaler_attachment" {
   policy_arn = aws_iam_policy.cluster_autoscaler_policy.arn
 }
 
+{% if enable_cluster_autoscaler %}
 resource "helm_release" "cluster_autoscaler" {
   name = "cluster-autoscaler"
   chart = "common/charts/cluster-autoscaler"
@@ -135,3 +136,4 @@ resource "helm_release" "cluster_autoscaler" {
     helm_release.aws_vpc_cni,
   ]
 }
+{% endif %}

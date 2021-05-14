@@ -12,7 +12,7 @@ pub struct KubernetesService {
     pub status: KubernetesServiceStatus,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Labels {
     pub name: String,
@@ -23,26 +23,26 @@ pub struct LabelsContent {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Spec {
     pub finalizers: Vec<String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     pub phase: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Metadata2 {
     pub resource_version: String,
     pub self_link: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
     pub api_version: String,
@@ -52,7 +52,7 @@ pub struct Item {
     pub status: Status,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Metadata {
     pub creation_timestamp: String,
@@ -171,6 +171,7 @@ pub struct KubernetesNode {
 pub struct KubernetesNodeStatus {
     pub allocatable: KubernetesNodeStatusResources,
     pub capacity: KubernetesNodeStatusResources,
+    pub node_info: KubernetesNodeInfo,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -179,6 +180,13 @@ pub struct KubernetesNodeStatusResources {
     pub cpu: String,
     pub memory: String,
     pub pods: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesNodeInfo {
+    pub kube_proxy_version: String,
+    pub kubelet_version: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -219,7 +227,7 @@ pub struct ServerVersion {
     pub git_version: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Helm {
     pub name: String,
