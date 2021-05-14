@@ -4,7 +4,7 @@ extern crate serde_derive;
 use chrono::Utc;
 
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
-use qovery_engine::cloud_provider::aws::kubernetes::{EKS, Options};
+use qovery_engine::cloud_provider::aws::kubernetes::{Options, EKS};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
