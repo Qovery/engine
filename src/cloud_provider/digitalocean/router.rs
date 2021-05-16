@@ -4,6 +4,7 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::digitalocean::common::do_get_load_balancer_ip;
 use crate::cloud_provider::digitalocean::DO;
+use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
@@ -160,6 +161,27 @@ impl Service for Router {
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
+
+        // autoscaler
+        context.insert("nginx_enable_horizontal_autoscaler", "false");
+        context.insert("nginx_minimum_replicas", "1");
+        context.insert("nginx_maximum_replicas", "10");
+        // resources
+        context.insert("nginx_requests_cpu", "200m");
+        context.insert("nginx_requests_memory", "128Mi");
+        context.insert("nginx_limit_cpu", "200m");
+        context.insert("nginx_limit_memory", "128Mi");
+        match environment.kind {
+            Kind::Production => {
+                context.insert("nginx_enable_horizontal_autoscaler", "true");
+                context.insert("nginx_minimum_replicas", "2");
+                context.insert("nginx_requests_cpu", "250m");
+                context.insert("nginx_requests_memory", "384Mi");
+                context.insert("nginx_limit_cpu", "1");
+                context.insert("nginx_limit_memory", "384Mi");
+            }
+            _ => {}
+        };
 
         let kubernetes_config_file_path = kubernetes.config_file_path();
 
