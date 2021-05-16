@@ -643,7 +643,12 @@ where
     match get_kubernetes_masters_version(&kubernetes_config, envs.clone()) {
         Ok(deployed_version) => {
             match compare_kubernetes_cluster_versions_for_upgrade(&deployed_version, &wished_version) {
-                Ok(x) if x => return Ok(Some(KubernetesUpgradeRequired::Masters)),
+                Ok(x) if x.upgraded_required => {
+                    if x.message.is_some() {
+                        info!("{:?}", x.message)
+                    }
+                    return Ok(Some(KubernetesUpgradeRequired::Masters));
+                }
                 Err(e) => return Err(e),
                 _ => {}
             }
@@ -664,7 +669,7 @@ where
             for node in deployed_version {
                 total_workers += 1;
                 match compare_kubernetes_cluster_versions_for_upgrade(&node, &wished_version) {
-                    Ok(x) if x => {
+                    Ok(x) if x.upgraded_required => {
                         upgrade_required = Some(KubernetesUpgradeRequired::Workers);
                         non_up_to_date_workers += 1;
                     }
@@ -765,11 +770,20 @@ where
     Ok(nodes_versions)
 }
 
+pub struct KubernetesUpgradeStatus {
+    upgraded_required: bool,
+    message: Option<String>,
+}
+
 fn compare_kubernetes_cluster_versions_for_upgrade(
     deployed_version: &VersionsNumber,
     wished_version: &VersionsNumber,
-) -> Result<bool, SimpleError> {
-    let mut upgrade_required = false;
+) -> Result<KubernetesUpgradeStatus, SimpleError> {
+    let mut messages: Vec<&str> = Vec::new();
+    let mut upgrade_required = KubernetesUpgradeStatus {
+        upgraded_required: false,
+        message: None,
+    };
 
     let deployed_minor_version = match &deployed_version.minor {
         Some(v) => v,
@@ -792,24 +806,25 @@ fn compare_kubernetes_cluster_versions_for_upgrade(
     };
 
     if wished_version.major > deployed_version.major {
-        info!("Kubernetes major version change detected");
-        upgrade_required = true;
+        upgrade_required.upgraded_required = true;
+        messages.push("Kubernetes major version change detected");
     }
 
     if &wished_minor_version > &deployed_minor_version {
-        info!("Kubernetes minor version change detected");
-        upgrade_required = true;
+        upgrade_required.upgraded_required = true;
+        messages.push("Kubernetes minor version change detected");
     }
 
-    if upgrade_required {
+    let mut final_message = "Kubernetes cluster upgrade is not required".to_string();
+    if upgrade_required.upgraded_required {
         let old = format!("{}.{}", deployed_version.major, deployed_minor_version);
         let new = format!("{}.{}", wished_version.major, wished_minor_version);
-        info!("Kubernetes cluster upgrade is required {} -> {}!!!", old, new);
-        return Ok(true);
+        final_message = format!("Kubernetes cluster upgrade is required {} -> {} !!!", old, new);
     }
+    messages.push(final_message.as_str());
+    upgrade_required.message = Some(messages.join(". "));
 
-    info!("Kubernetes cluster upgrade is not required");
-    Ok(false)
+    Ok(upgrade_required)
 }
 
 #[cfg(test)]
@@ -824,7 +839,9 @@ mod tests {
             "Provider version: {} | Wished version: {} | Is upgrade required: {:?}",
             provider_version.clone(),
             provider.clone(),
-            compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider).unwrap()
+            compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider)
+                .unwrap()
+                .message
         )
     }
 
@@ -925,7 +942,9 @@ mod tests {
             // upgrade is not required
             //print_kubernetes_version(&provider_version, &provider.wished_version);
             assert_eq!(
-                compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider.wished_version).unwrap(),
+                compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider.wished_version)
+                    .unwrap()
+                    .upgraded_required,
                 false
             );
 
@@ -934,7 +953,9 @@ mod tests {
             provider.wished_version.minor = Some(add_one_version.to_string());
             //print_kubernetes_version(&provider_version, &provider.wished_version);
             assert!(
-                compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider.wished_version).unwrap()
+                compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider.wished_version)
+                    .unwrap()
+                    .upgraded_required
             )
         }
     }
@@ -1282,11 +1303,15 @@ mod tests {
                 // upgrade is not required
                 //print_kubernetes_version(&provider_version, &provider.wished_version);
                 assert_eq!(
-                    compare_kubernetes_cluster_versions_for_upgrade(&kubelet, &provider.wished_version).unwrap(),
+                    compare_kubernetes_cluster_versions_for_upgrade(&kubelet, &provider.wished_version)
+                        .unwrap()
+                        .upgraded_required,
                     false
                 );
                 assert_eq!(
-                    compare_kubernetes_cluster_versions_for_upgrade(&kube_proxy, &provider.wished_version).unwrap(),
+                    compare_kubernetes_cluster_versions_for_upgrade(&kube_proxy, &provider.wished_version)
+                        .unwrap()
+                        .upgraded_required,
                     false
                 );
 
@@ -1295,7 +1320,11 @@ mod tests {
                     provider.wished_version.minor.clone().unwrap().parse::<i32>().unwrap() + 1;
                 provider.wished_version.minor = Some(kubelet_add_one_version.to_string());
                 //print_kubernetes_version(&provider_version, &provider.wished_version);
-                assert!(compare_kubernetes_cluster_versions_for_upgrade(&kubelet, &provider.wished_version).unwrap());
+                assert!(
+                    compare_kubernetes_cluster_versions_for_upgrade(&kubelet, &provider.wished_version)
+                        .unwrap()
+                        .upgraded_required
+                );
             }
         }
     }

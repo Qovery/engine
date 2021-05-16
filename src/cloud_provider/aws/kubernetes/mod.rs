@@ -552,7 +552,14 @@ impl<'a> Kubernetes for EKS<'a> {
                 self.context.execution_id(),
             ))
         };
-        send_to_customer(format!("Start upgrading EKS {} cluster with id {}", self.name(), self.id()).as_str());
+        send_to_customer(
+            format!(
+                "Start preparing EKS upgrade process {} cluster with id {}",
+                self.name(),
+                self.id()
+            )
+            .as_str(),
+        );
 
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
@@ -677,8 +684,9 @@ impl<'a> Kubernetes for EKS<'a> {
         //
         // Upgrade worker nodes
         //
+
         let message = format!(
-            "Start managing workers nodes for upgrade for Kubernetes cluster {}",
+            "Preparing workers nodes for upgrade for Kubernetes cluster {}",
             self.name()
         );
         info!("{}", &message);
@@ -686,7 +694,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // disable cluster autoscaler to avoid it interfering with AWS upgrade procedure
         context.insert("enable_cluster_autoscaler", &false);
-        context.insert("eks_workers_version", &self.version);
+        context.insert("eks_workers_version", &self.version());
 
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),

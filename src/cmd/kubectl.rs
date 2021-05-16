@@ -834,7 +834,7 @@ pub fn kubectl_exec_scale_replicas<P>(
     kind: ScalingKind,
     name: &str,
     replicas_count: u32,
-) -> Result<KubernetesApiMetrics, SimpleError>
+) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -844,7 +844,11 @@ where
     };
     let kind_with_name = format!("{}/{}", kind_formated, name);
 
-    kubectl_exec::<P, _>(
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    kubectl_exec_with_output(
         vec![
             "-n",
             namespace,
@@ -853,8 +857,15 @@ where
             "--replicas",
             &replicas_count.to_string(),
         ],
-        kubernetes_config,
-        envs,
+        _envs,
+        |out| match out {
+            Err(err) => error!("{:?}", err),
+            _ => {}
+        },
+        |out| match out {
+            Err(err) => error!("{:?}", err),
+            _ => {}
+        },
     )
 }
 
