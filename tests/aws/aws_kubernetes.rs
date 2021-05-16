@@ -43,6 +43,7 @@ fn generate_cluster_id(region: &str) -> String {
     }
 }
 
+#[allow(dead_code)]
 fn create_upgrade_and_destroy_eks_cluster(
     region: &str,
     secrets: FuncTestsSecrets,
@@ -233,7 +234,7 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
     );
 }
 
-#[cfg(feature = "test-aws-infra")]
+// only enable this test manually when we want to perform and validate upgrade process
 #[test]
 fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";

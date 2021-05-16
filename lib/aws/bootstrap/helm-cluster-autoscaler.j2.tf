@@ -37,13 +37,17 @@ resource "aws_iam_user_policy_attachment" "s3_cluster_autoscaler_attachment" {
   policy_arn = aws_iam_policy.cluster_autoscaler_policy.arn
 }
 
-{% if enable_cluster_autoscaler %}
 resource "helm_release" "cluster_autoscaler" {
   name = "cluster-autoscaler"
   chart = "common/charts/cluster-autoscaler"
   namespace = "kube-system"
   atomic = true
   max_history = 50
+
+  set {
+    name = "replicaCount"
+    value = "{% if enable_cluster_autoscaler %}1{% else %}0{% endif %}"
+  }
 
   set {
     name = "cloudProvider"
@@ -136,4 +140,3 @@ resource "helm_release" "cluster_autoscaler" {
     helm_release.aws_vpc_cni,
   ]
 }
-{% endif %}
