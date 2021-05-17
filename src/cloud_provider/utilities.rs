@@ -220,7 +220,7 @@ pub fn generate_supported_version(
 
 // unfortunately some proposed versions are not SemVer like Elasticache (6.x)
 // this is why we need ot have our own structure
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct VersionsNumber {
     pub(crate) major: String,
     pub(crate) minor: Option<String>,
@@ -229,20 +229,19 @@ pub struct VersionsNumber {
 
 impl fmt::Display for VersionsNumber {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut version = vec![];
-        version.push(format!("{}", &self.major));
+        let mut version = vec![self.major.to_string()];
         if self.minor.is_some() {
-            version.push(format!("{}", &self.minor.clone().unwrap()))
+            version.push(self.minor.clone().unwrap())
         }
         if self.patch.is_some() {
-            version.push(format!("{}", &self.patch.clone().unwrap()))
+            version.push(self.patch.clone().unwrap())
         }
         write!(f, "{}", version.join("."))
     }
 }
 
 pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
-    let mut version_split = version.split(".");
+    let mut version_split = version.split('.');
 
     let major = match version_split.next() {
         Some(major) => {
@@ -269,7 +268,7 @@ pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> 
 fn cloudflare_dns_resolver() -> Resolver {
     let mut resolver_options = ResolverOpts::default();
 
-    //  We want to avoid cache and using hostfile of the host, as some provider force caching
+    //  We want to avoid cache and using host file of the host, as some provider force caching
     //  which lead to stale response
     resolver_options.cache_size = 0;
     resolver_options.use_hosts_file = false;
@@ -447,7 +446,7 @@ pub fn sanitize_name(prefix: &str, name: &str) -> String {
 }
 
 pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, ParseFloatError> {
-    if value.ends_with("m") {
+    if value.ends_with('m') {
         let mut value_number_string = value;
         value_number_string.pop();
         return match value_number_string.parse::<f32>() {
@@ -479,7 +478,7 @@ pub fn validate_k8s_required_cpu_and_burstable(
         let message = format!(
             "CPU burst value '{}' was lower than the desired total of CPUs {}, using burstable value. Please ensure your configuration is valid",
             cpu_burst,
-            total_cpu.clone(),
+            total_cpu,
         );
 
         warn!("{}", message);
@@ -496,7 +495,7 @@ pub fn validate_k8s_required_cpu_and_burstable(
     }
 
     Ok(CpuLimits {
-        cpu_limit: set_cpu_burst.to_string(),
+        cpu_limit: set_cpu_burst,
         cpu_request: total_cpu,
     })
 }
