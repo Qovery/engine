@@ -601,28 +601,108 @@ where
     Ok(())
 }
 
-pub enum KubernetesUpgradeRequired {
-    Masters,
-    Workers,
-}
-
-/// Check if the current deployed version of Kubernetes requires an upgrade
-///
-/// # Arguments
-///
-/// * `kubernetes_config` - kubernetes config path
-/// * `wished_version` - kubernetes wished version
 pub fn is_kubernetes_upgrade_required<P>(
     kubernetes_config: P,
     requested_version: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<KubernetesUpgradeRequired>, SimpleError>
+) -> Result<KubernetesUpgradeStatus, SimpleError>
 where
     P: AsRef<Path>,
 {
-    let mut upgrade_required: Option<KubernetesUpgradeRequired> = None;
+    // check master versions
+    let v = kubectl_exec_version(&kubernetes_config, envs.clone())?;
+    let masters_version =
+        match get_version_number(format!("{}.{}", v.server_version.major, v.server_version.minor).as_str()) {
+            Ok(vn) => Ok(vn),
+            Err(e) => Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(format!("Unable to determine Kubernetes master version. {}", e)),
+            }),
+        };
+
+    let deployed_masters_version = match masters_version {
+        Ok(deployed_version) => deployed_version,
+        Err(e) => {
+            let msg = format!("Can't get current deployed Kubernetes version. {:?}", e.message);
+            error!("{}", &msg);
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(msg),
+            });
+        }
+    };
+
+    // check workers versions
+    let mut deployed_workers_version: Vec<VersionsNumber> = vec![];
+    let nodes = kubectl_exec_get_node(kubernetes_config, envs)?;
+
+    for node in nodes.items {
+        // check kubelet version
+        match get_version_number(node.status.node_info.kubelet_version.as_str()) {
+            Ok(vn) => deployed_workers_version.push(vn),
+            Err(e) => {
+                return Err(SimpleError {
+                    kind: SimpleErrorKind::Other,
+                    message: Some(format!(
+                        "Unable to determine Kubernetes 'Kubelet' worker version. {}",
+                        e
+                    )),
+                })
+            }
+        }
+        // check kube-proxy version
+        match get_version_number(node.status.node_info.kube_proxy_version.as_str()) {
+            Ok(vn) => deployed_workers_version.push(vn),
+            Err(e) => {
+                return Err(SimpleError {
+                    kind: SimpleErrorKind::Other,
+                    message: Some(format!(
+                        "Unable to determine Kubernetes 'Kube-proxy' worker version. {}",
+                        e
+                    )),
+                })
+            }
+        }
+    }
+
+    check_kubernetes_upgrade_status(requested_version, deployed_masters_version, deployed_workers_version)
+}
+
+#[derive(Debug, PartialEq)]
+pub enum KubernetesNodesType {
+    Masters,
+    Workers,
+}
+
+#[derive(Debug)]
+pub struct KubernetesUpgradeStatus {
+    pub required_upgrade_on: Option<KubernetesNodesType>,
+    pub requested_version: VersionsNumber,
+    pub deployed_masters_version: VersionsNumber,
+    pub deployed_workers_version: VersionsNumber,
+    pub older_masters_version_detected: bool,
+    pub older_workers_version_detected: bool,
+}
+
+/// Check if Kubernetes cluster elements are requiring an upgrade
+///
+/// It will gives useful info:
+/// * versions of masters
+/// * versions of workers (the oldest)
+/// * which type of nodes should be upgraded in priority
+/// * is the requested version is older than the current deployed
+///
+fn check_kubernetes_upgrade_status(
+    requested_version: &str,
+    deployed_masters_version: VersionsNumber,
+    deployed_workers_version: Vec<VersionsNumber>,
+) -> Result<KubernetesUpgradeStatus, SimpleError> {
     let mut total_workers = 0;
     let mut non_up_to_date_workers = 0;
+    let mut required_upgrade_on = None;
+    let mut older_masters_version_detected = false;
+    let mut older_workers_version_detected = false;
+    let mut workers_oldest_version = deployed_workers_version[0].clone();
 
     let wished_version = match get_version_number(requested_version) {
         Ok(v) => v,
@@ -640,148 +720,78 @@ where
     };
 
     // check master versions
-    match get_kubernetes_masters_version(&kubernetes_config, envs.clone()) {
-        Ok(deployed_version) => {
-            match compare_kubernetes_cluster_versions_for_upgrade(&deployed_version, &wished_version) {
-                Ok(x) if x.upgraded_required => {
-                    if x.message.is_some() {
-                        info!("{:?}", x.message)
-                    }
-                    return Ok(Some(KubernetesUpgradeRequired::Masters));
-                }
-                Err(e) => return Err(e),
-                _ => {}
+    match compare_kubernetes_cluster_versions_for_upgrade(&deployed_masters_version, &wished_version) {
+        Ok(x) => {
+            if x.message.is_some() {
+                info!("{:?}", x.message)
+            };
+            if x.older_version_detected {
+                older_masters_version_detected = x.older_version_detected;
+            }
+            if x.upgraded_required {
+                required_upgrade_on = Some(KubernetesNodesType::Masters);
             }
         }
-        Err(e) => {
-            let msg = format!("Can't get current deployed Kubernetes version. {:?}", e.message);
-            error!("{}", &msg);
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(msg),
-            });
-        }
-    }
+        Err(e) => return Err(e),
+    };
 
     // check workers versions
-    match get_kubernetes_workers_version(kubernetes_config, envs) {
-        Ok(deployed_version) => {
-            for node in deployed_version {
-                total_workers += 1;
-                match compare_kubernetes_cluster_versions_for_upgrade(&node, &wished_version) {
-                    Ok(x) if x.upgraded_required => {
-                        upgrade_required = Some(KubernetesUpgradeRequired::Workers);
-                        non_up_to_date_workers += 1;
-                    }
-                    Err(e) => return Err(e),
-                    Ok(_) => {}
-                }
+    for node in deployed_workers_version {
+        total_workers += 1;
+        match compare_kubernetes_cluster_versions_for_upgrade(&node, &wished_version) {
+            Ok(x) => {
+                if x.older_version_detected {
+                    older_workers_version_detected = x.older_version_detected;
+                    workers_oldest_version = node.clone();
+                };
+                if x.upgraded_required {
+                    workers_oldest_version = node;
+                    match required_upgrade_on {
+                        Some(KubernetesNodesType::Masters) => {}
+                        _ => required_upgrade_on = Some(KubernetesNodesType::Workers),
+                    };
+                };
+                non_up_to_date_workers += 1;
             }
-        }
-        Err(e) => {
-            let msg = format!("Can't get current deployed Kubernetes version. {:?}", e.message);
-            error!("{}", &msg);
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(msg),
-            });
+            Err(e) => return Err(e),
         }
     }
 
-    if upgrade_required.is_none() {
-        info!("All workers are up to date, no upgrade required");
-    } else {
-        info!(
-            "Kubernetes workers upgrade required, need to update {}/{} nodes",
-            non_up_to_date_workers, total_workers
-        );
+    match &required_upgrade_on {
+        None => info!("All workers are up to date, no upgrade required"),
+        Some(node_type) => match node_type {
+            KubernetesNodesType::Masters => info!("Kubernetes master upgrade required"),
+            KubernetesNodesType::Workers => info!(
+                "Kubernetes workers upgrade required, need to update {}/{} nodes",
+                non_up_to_date_workers, total_workers
+            ),
+        },
     }
 
-    Ok(upgrade_required)
+    Ok(KubernetesUpgradeStatus {
+        required_upgrade_on,
+        requested_version: wished_version,
+        deployed_masters_version,
+        deployed_workers_version: workers_oldest_version,
+        older_masters_version_detected,
+        older_workers_version_detected,
+    })
 }
 
-/// Get kubernetes master nodes version
-///
-/// # Arguments
-///
-/// * `kubernetes_config` - kubernetes config path
-pub fn get_kubernetes_masters_version<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-) -> Result<VersionsNumber, SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let v = kubectl_exec_version(kubernetes_config, envs)?;
-
-    match get_version_number(format!("{}.{}", v.server_version.major, v.server_version.minor).as_str()) {
-        Ok(vn) => Ok(vn),
-        Err(e) => Err(SimpleError {
-            kind: SimpleErrorKind::Other,
-            message: Some(format!("Unable to determine Kubernetes master version. {}", e)),
-        }),
-    }
+pub struct CompareKubernetesStatusStatus {
+    pub upgraded_required: bool,
+    pub older_version_detected: bool,
+    pub message: Option<String>,
 }
 
-/// Get kubernetes workers nodes version (kubelet and kube-proxy)
-///
-/// # Arguments
-///
-/// * `kubernetes_config` - kubernetes config path
-pub fn get_kubernetes_workers_version<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-) -> Result<Vec<VersionsNumber>, SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let mut nodes_versions: Vec<VersionsNumber> = vec![];
-    let nodes = kubectl_exec_get_node(kubernetes_config, envs)?;
-
-    for node in nodes.items {
-        // check kubelet version
-        match get_version_number(node.status.node_info.kubelet_version.as_str()) {
-            Ok(vn) => nodes_versions.push(vn),
-            Err(e) => {
-                return Err(SimpleError {
-                    kind: SimpleErrorKind::Other,
-                    message: Some(format!(
-                        "Unable to determine Kubernetes 'Kubelet' worker version. {}",
-                        e
-                    )),
-                })
-            }
-        }
-        // check kube-proxy version
-        match get_version_number(node.status.node_info.kube_proxy_version.as_str()) {
-            Ok(vn) => nodes_versions.push(vn),
-            Err(e) => {
-                return Err(SimpleError {
-                    kind: SimpleErrorKind::Other,
-                    message: Some(format!(
-                        "Unable to determine Kubernetes 'Kube-proxy' worker version. {}",
-                        e
-                    )),
-                })
-            }
-        }
-    }
-
-    Ok(nodes_versions)
-}
-
-pub struct KubernetesUpgradeStatus {
-    upgraded_required: bool,
-    message: Option<String>,
-}
-
-fn compare_kubernetes_cluster_versions_for_upgrade(
+pub fn compare_kubernetes_cluster_versions_for_upgrade(
     deployed_version: &VersionsNumber,
     wished_version: &VersionsNumber,
-) -> Result<KubernetesUpgradeStatus, SimpleError> {
+) -> Result<CompareKubernetesStatusStatus, SimpleError> {
     let mut messages: Vec<&str> = Vec::new();
-    let mut upgrade_required = KubernetesUpgradeStatus {
+    let mut upgrade_required = CompareKubernetesStatusStatus {
         upgraded_required: false,
+        older_version_detected: false,
         message: None,
     };
 
@@ -810,9 +820,21 @@ fn compare_kubernetes_cluster_versions_for_upgrade(
         messages.push("Kubernetes major version change detected");
     }
 
+    if wished_version.major < deployed_version.major {
+        upgrade_required.upgraded_required = false;
+        upgrade_required.older_version_detected = true;
+        messages.push("Older Kubernetes major version detected");
+    }
+
     if &wished_minor_version > &deployed_minor_version {
         upgrade_required.upgraded_required = true;
         messages.push("Kubernetes minor version change detected");
+    }
+
+    if &wished_minor_version < &deployed_minor_version {
+        upgrade_required.upgraded_required = false;
+        upgrade_required.older_version_detected = true;
+        messages.push("Older Kubernetes minor version detected");
     }
 
     let mut final_message = "Kubernetes cluster upgrade is not required".to_string();
@@ -829,9 +851,64 @@ fn compare_kubernetes_cluster_versions_for_upgrade(
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::kubernetes::compare_kubernetes_cluster_versions_for_upgrade;
+    use crate::cloud_provider::kubernetes::{
+        check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, KubernetesNodesType,
+    };
     use crate::cloud_provider::utilities::{get_version_number, VersionsNumber};
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
+
+    #[test]
+    pub fn check_kubernetes_upgrade_method() {
+        let version_1_16 = VersionsNumber {
+            major: "1".to_string(),
+            minor: Some("16".to_string()),
+            patch: None,
+        };
+        let version_1_17 = VersionsNumber {
+            major: "1".to_string(),
+            minor: Some("17".to_string()),
+            patch: None,
+        };
+
+        // test full cluster upgrade (masters + workers)
+        let result = check_kubernetes_upgrade_status("1.17", version_1_16.clone(), vec![version_1_16.clone()]).unwrap();
+        assert_eq!(result.required_upgrade_on.unwrap(), KubernetesNodesType::Masters); // master should be performed first
+        assert_eq!(result.deployed_masters_version, version_1_16);
+        assert_eq!(result.deployed_workers_version, version_1_16);
+        assert_eq!(result.older_masters_version_detected, false);
+        assert_eq!(result.older_workers_version_detected, false);
+        let result = check_kubernetes_upgrade_status("1.17", version_1_17.clone(), vec![version_1_16.clone()]).unwrap();
+        assert_eq!(result.required_upgrade_on.unwrap(), KubernetesNodesType::Workers); // then workers
+        assert_eq!(result.deployed_masters_version, version_1_17);
+        assert_eq!(result.deployed_workers_version, version_1_16);
+        assert_eq!(result.older_masters_version_detected, false);
+        assert_eq!(result.older_workers_version_detected, false);
+
+        // everything is up to date, no upgrade required
+        let result = check_kubernetes_upgrade_status("1.17", version_1_17.clone(), vec![version_1_17.clone()]).unwrap();
+        assert!(result.required_upgrade_on.is_none());
+        assert_eq!(result.older_masters_version_detected, false);
+        assert_eq!(result.older_workers_version_detected, false);
+
+        // downgrade should be detected
+        let result = check_kubernetes_upgrade_status("1.16", version_1_17.clone(), vec![version_1_17.clone()]).unwrap();
+        assert!(result.required_upgrade_on.is_none());
+        assert_eq!(result.older_masters_version_detected, true);
+        assert_eq!(result.older_workers_version_detected, true);
+
+        // mixed workers version
+        let result = check_kubernetes_upgrade_status(
+            "1.17",
+            version_1_17.clone(),
+            vec![version_1_17.clone(), version_1_16.clone()],
+        )
+        .unwrap();
+        assert_eq!(result.required_upgrade_on.unwrap(), KubernetesNodesType::Workers);
+        assert_eq!(result.deployed_masters_version, version_1_17);
+        assert_eq!(result.deployed_workers_version, version_1_16);
+        assert_eq!(result.older_masters_version_detected, false); // not true because we're in an upgrade process
+        assert_eq!(result.older_workers_version_detected, false); // not true because we're in an upgrade process
+    }
 
     #[allow(dead_code)]
     pub fn print_kubernetes_version(provider_version: &VersionsNumber, provider: &VersionsNumber) {
