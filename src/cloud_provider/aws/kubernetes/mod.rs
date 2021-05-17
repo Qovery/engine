@@ -14,8 +14,8 @@ use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{
-    get_kubernetes_masters_version, is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes,
-    KubernetesNode, KubernetesUpgradeRequired,
+    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesNodesType,
+    KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
@@ -386,161 +386,8 @@ impl<'a> EKS<'a> {
 
         context
     }
-}
 
-impl<'a> Kubernetes for EKS<'a> {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn kind(&self) -> Kind {
-        Kind::Eks
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        self.version.as_str()
-    }
-
-    fn region(&self) -> &str {
-        self.region.name()
-    }
-
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.s3
-    }
-
-    fn is_valid(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    fn on_create(&self) -> Result<(), EngineError> {
-        info!("EKS.on_create() called for {}", self.name());
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-        let send_to_customer = |message: &str| {
-            listeners_helper.deployment_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
-
-        send_to_customer(format!("Preparing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
-
-        // upgrade cluster instead if required
-        match self.config_file() {
-            Ok(f) => match is_kubernetes_upgrade_required(
-                f.0,
-                &self.version,
-                self.cloud_provider.credentials_environment_variables(),
-            ) {
-                Ok(update_required) => {
-                    if update_required.is_some() {
-                        return self.on_upgrade();
-                    }
-                    info!("Kubernetes cluster upgrade not required");
-                }
-                Err(e) => error!(
-                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
-                    e.message
-                ),
-            },
-            Err(_) => {
-                info!("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before");
-            }
-        };
-
-        // create AWS IAM roles
-        let already_created_roles = get_default_roles_to_create();
-        for role in already_created_roles {
-            match role.create_service_linked_role(
-                self.cloud_provider.access_key_id.as_str(),
-                self.cloud_provider.secret_access_key.as_str(),
-            ) {
-                Ok(_) => info!("Role {} is already present, no need to create", role.role_name),
-                Err(e) => error!(
-                    "Error while getting, or creating the role {} : causing by {:?}",
-                    role.role_name, e
-                ),
-            }
-        }
-
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
-        );
-
-        // generate terraform files and copy them into temp dir
-        let context = self.tera_context();
-
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                self.template_directory.as_str(),
-                temp_dir.as_str(),
-                &context,
-            ),
-        )?;
-
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::copy_non_template_files(
-                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                common_charts_temp_dir.as_str(),
-            ),
-        )?;
-
-        send_to_customer(format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
-
-        match cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                format!("Error while deploying cluster {} with id {}.", self.name(), self.id());
-                Err(e)
-            }
-        }
-    }
-
-    fn on_create_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_create_error() called for {}", self.name());
-        Err(self.engine_error(
-            EngineErrorCause::Internal,
-            format!("{} Kubernetes cluster failed on deployment", self.name()),
-        ))
-    }
-
-    fn on_upgrade(&self) -> Result<(), EngineError> {
-        info!("EKS.on_upgrade() called for {}", self.name());
-
+    fn upgrade(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let send_to_customer = |message: &str| {
             listeners_helper.upgrade_in_progress(ProgressInfo::new(
@@ -582,24 +429,8 @@ impl<'a> Kubernetes for EKS<'a> {
         // Upgrade master nodes
         //
 
-        let upgrade_required = match is_kubernetes_upgrade_required(
-            &kubeconfig,
-            &self.version,
-            self.cloud_provider().credentials_environment_variables(),
-        ) {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: e.message,
-                })
-            }
-        };
-
-        match upgrade_required {
-            Some(KubernetesUpgradeRequired::Masters) => {
+        match &kubernetes_upgrade_status.required_upgrade_on {
+            Some(KubernetesNodesType::Masters) => {
                 let message = format!(
                     "Start upgrading process for master nodes on {}/{}",
                     self.name(),
@@ -608,24 +439,17 @@ impl<'a> Kubernetes for EKS<'a> {
                 info!("{}", &message);
                 send_to_customer(&message);
 
-                let kubernetes_master_version = match get_kubernetes_masters_version(
-                    &kubeconfig,
-                    self.cloud_provider().credentials_environment_variables(),
-                ) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        return Err(EngineError {
-                            cause: EngineErrorCause::Internal,
-                            scope: EngineErrorScope::Engine,
-                            execution_id: self.context.execution_id().to_string(),
-                            message: e.message,
-                        })
-                    }
-                };
-
                 // AWS requires the upgrade to be done in 2 steps (masters, then workers)
                 // use the current kubernetes masters' version for workers, in order to avoid migration in one step
-                context.insert("eks_workers_version", &kubernetes_master_version);
+                context.insert(
+                    "kubernetes_master_version",
+                    format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+                );
+                // use the current master version for workers, they will be updated later
+                context.insert(
+                    "eks_workers_version",
+                    format!("{}", &kubernetes_upgrade_status.deployed_masters_version).as_str(),
+                );
 
                 let _ = cast_simple_error_to_engine_error(
                     self.engine_error_scope(),
@@ -672,11 +496,11 @@ impl<'a> Kubernetes for EKS<'a> {
                     }
                 }
             }
-            Some(KubernetesUpgradeRequired::Workers) => {
+            Some(KubernetesNodesType::Workers) => {
                 info!("No need to perform Kubernetes master upgrade, they are already up to date")
             }
             None => {
-                info!("No upgrade required, masters and workers are already up to date");
+                info!("No Kubernetes upgrade required, masters and workers are already up to date");
                 return Ok(());
             }
         }
@@ -692,9 +516,12 @@ impl<'a> Kubernetes for EKS<'a> {
         info!("{}", &message);
         send_to_customer(message.as_str());
 
-        // disable cluster autoscaler to avoid it interfering with AWS upgrade procedure
+        // disable cluster autoscaler to avoid interfering with AWS upgrade procedure
         context.insert("enable_cluster_autoscaler", &false);
-        context.insert("eks_workers_version", &self.version());
+        context.insert(
+            "eks_workers_version",
+            &kubernetes_upgrade_status.deployed_workers_version,
+        );
 
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -798,6 +625,187 @@ impl<'a> Kubernetes for EKS<'a> {
         };
 
         Ok(())
+    }
+}
+
+impl<'a> Kubernetes for EKS<'a> {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn kind(&self) -> Kind {
+        Kind::Eks
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        self.version.as_str()
+    }
+
+    fn region(&self) -> &str {
+        self.region.name()
+    }
+
+    fn cloud_provider(&self) -> &dyn CloudProvider {
+        self.cloud_provider
+    }
+
+    fn dns_provider(&self) -> &dyn DnsProvider {
+        self.dns_provider
+    }
+
+    fn config_file_store(&self) -> &dyn ObjectStorage {
+        &self.s3
+    }
+
+    fn is_valid(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_create(&self) -> Result<(), EngineError> {
+        info!("EKS.on_create() called for {}", self.name());
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let send_to_customer = |message: &str| {
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Infrastructure {
+                    execution_id: self.context.execution_id().to_string(),
+                },
+                ProgressLevel::Info,
+                Some(message),
+                self.context.execution_id(),
+            ))
+        };
+
+        send_to_customer(format!("Preparing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
+
+        // upgrade cluster instead if required
+        match self.config_file() {
+            Ok(f) => match is_kubernetes_upgrade_required(
+                f.0,
+                &self.version,
+                self.cloud_provider.credentials_environment_variables(),
+            ) {
+                Ok(x) => {
+                    if x.required_upgrade_on.is_some() {
+                        return self.upgrade(x);
+                    }
+                    info!("Kubernetes cluster upgrade not required");
+                }
+                Err(e) => error!(
+                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
+                    e.message
+                ),
+            },
+            Err(_) => {
+                info!("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before");
+            }
+        };
+
+        // create AWS IAM roles
+        let already_created_roles = get_default_roles_to_create();
+        for role in already_created_roles {
+            match role.create_service_linked_role(
+                self.cloud_provider.access_key_id.as_str(),
+                self.cloud_provider.secret_access_key.as_str(),
+            ) {
+                Ok(_) => info!("Role {} is already present, no need to create", role.role_name),
+                Err(e) => error!(
+                    "Error while getting, or creating the role {} : causing by {:?}",
+                    role.role_name, e
+                ),
+            }
+        }
+
+        let temp_dir = workspace_directory(
+            self.context.workspace_root_dir(),
+            self.context.execution_id(),
+            format!("bootstrap/{}", self.name()),
+        );
+
+        // generate terraform files and copy them into temp dir
+        let context = self.tera_context();
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        send_to_customer(format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
+
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                format!("Error while deploying cluster {} with id {}.", self.name(), self.id());
+                Err(e)
+            }
+        }
+    }
+
+    fn on_create_error(&self) -> Result<(), EngineError> {
+        warn!("EKS.on_create_error() called for {}", self.name());
+        Err(self.engine_error(
+            EngineErrorCause::Internal,
+            format!("{} Kubernetes cluster failed on deployment", self.name()),
+        ))
+    }
+
+    fn on_upgrade(&self) -> Result<(), EngineError> {
+        info!("EKS.on_upgrade() called for {}", self.name());
+
+        let kubeconfig = match self.config_file() {
+            Ok(f) => f.0,
+            Err(e) => return Err(e),
+        };
+
+        match is_kubernetes_upgrade_required(
+            kubeconfig,
+            &self.version,
+            self.cloud_provider.credentials_environment_variables(),
+        ) {
+            Ok(x) => return self.upgrade(x),
+            Err(e) => {
+                let msg = format!(
+                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
+                    e.message
+                );
+                error!("{}", &msg);
+                return Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: Some(msg),
+                });
+            }
+        }
     }
 
     fn on_upgrade_error(&self) -> Result<(), EngineError> {
