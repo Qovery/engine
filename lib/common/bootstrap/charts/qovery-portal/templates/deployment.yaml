@@ -1,0 +1,77 @@
+{{- $kubefullname := include "kubernetes.fullname" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kubernetes.fullname" . }}
+  labels:
+    {{- include "kubernetes.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "kubernetes.fullname" . }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app: {{ include "kubernetes.fullname" . }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kubernetes.serviceAccountName" . }}
+      securityContext:
+      {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: "oauth-proxy"
+          image: bitnami/oauth2-proxy:7
+          args: [ "--config=/etc/config/config" ]
+          ports:
+            - containerPort: {{ .Values.oauthConfig.port }}
+          volumeMounts:
+            - name: "oauth-storage"
+              mountPath: /etc/config
+        - name: nginx
+          image: nginx:1.19
+          ports:
+          - containerPort: {{ .Values.portal.port }}
+          volumeMounts:
+          - name: "nginx-storage"
+            mountPath: /etc/nginx/conf.d
+          - name: "nginx-html"
+            mountPath: /usr/share/nginx/html
+      volumes:
+        - name: "oauth-storage"
+          configMap:
+            name: {{ include "kubernetes.fullname" . }}
+            items:
+              - key: config
+                path: config
+        - name: "nginx-storage"
+          configMap:
+            name: {{ include "kubernetes.fullname" . }}
+            items:
+              - key: default.conf
+                path: default.conf
+        - name: nginx-html
+          configMap:
+            name: {{ include "kubernetes.fullname" . }}
+            items:
+              - key: index.html
+                path: index.html
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+  {{- toYaml . | nindent 8 }}
+  {{- end }}
