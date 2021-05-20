@@ -1,3 +1,5 @@
+{%- if not is_storage %}
+---
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
@@ -9,10 +11,11 @@ metadata:
     appId: {{ id }}
     app: {{ sanitized_name }}
 spec:
-  minAvailable: 2
+  minAvailable: 1
   selector:
     matchLabels:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       appId: {{ id }}
       app: {{ sanitized_name }}
+{%- endif %}
