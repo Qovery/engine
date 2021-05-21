@@ -40,6 +40,7 @@ use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
 
+pub mod helm_charts;
 pub mod node;
 pub mod roles;
 

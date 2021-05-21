@@ -63,6 +63,15 @@ pub struct Metadata {
     pub uid: String,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Daemonset {
+    pub api_version: String,
+    pub items: Vec<Item>,
+    pub kind: String,
+    pub metadata: Metadata,
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesServiceStatus {
