@@ -6,12 +6,15 @@ locals {
 
 locals {
   tags_eks = {
-    ClusterId = var.kubernetes_cluster_id,
+    ClusterId = var.kubernetes_cluster_id
     ClusterName = var.kubernetes_cluster_name,
     Region = var.region
+    creationDate = time_static.on_cluster_create.rfc3339
     {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
   }
 }
+
+resource "time_static" "on_cluster_create" {}
 
 resource "aws_cloudwatch_log_group" "eks_cloudwatch_log_group" {
   name = var.eks_cloudwatch_log_group
