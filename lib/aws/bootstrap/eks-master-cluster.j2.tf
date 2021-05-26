@@ -9,6 +9,7 @@ locals {
     ClusterId = var.kubernetes_cluster_id,
     ClusterName = var.kubernetes_cluster_name,
     Region = var.region
+    CreationDate = var.kubernetes_cluster_creation_date
     {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
   }
 }

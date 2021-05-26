@@ -97,6 +97,12 @@ variable "kubernetes_cluster_name" {
   type        = string
 }
 
+variable "kubernetes_cluster_creation_date" {
+  description = "Kubernetes cluster creation date"
+  default = "{{ kubernetes_cluster_creation_date }}"
+  type = string
+}
+
 variable "eks_access_cidr_blocks" {
   description = "Kubernetes cluster name"
   default     = {{ eks_access_cidr_blocks }}

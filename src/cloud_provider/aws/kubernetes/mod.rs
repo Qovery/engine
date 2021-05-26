@@ -34,6 +34,7 @@ use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
 use std::env;
+use chrono::Utc;
 
 pub mod node;
 pub mod roles;
@@ -320,6 +321,7 @@ impl<'a> EKS<'a> {
         // AWS - EKS
         context.insert("eks_cidr_subnet", &eks_cidr_subnet.clone());
         context.insert("kubernetes_cluster_name", &self.name());
+        context.insert("kubernetes_cluster_creation_date", &Utc::now().format("%Y-%m-%d %H:%M:%S").to_string());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
         context.insert("eks_worker_nodes", &worker_nodes);

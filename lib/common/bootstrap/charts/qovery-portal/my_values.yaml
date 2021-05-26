@@ -1,0 +1,72 @@
+replicaCount: 1
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+hostName: "enzo.oom.sh"
+externalDnsTarget: "a1a0f75110b904af48f1ed38dd991740-e879a85984f3d1a8.elb.us-east-2.amazonaws.com"
+clusterIssuer: "letsencrypt-qovery"
+ingressClass: "nginx-qovery"
+
+oauthConfig:
+  redirectUrl: "https://enzo.oom.sh/oauth2/callback"
+  oidcIssuerUrl: "https://qovery-admin.eu.auth0.com/"
+  clientId: "R39yQzfHpZLIU5LqSCRJLmBaUG4Z2jFi"
+  clientSecret: "Dq4C7MKFsWHtEscN_gVDRBwvcR1xksroXXZFrVpxpo5a-Ah3vp1SvJdVx7jbE2Lo"
+  cookieName: "yummy_cookie"
+  cookieSecret: "supersuperqovery"
+  emailDomains: "*"
+  port: "4180"
+  upstreams:
+   - "http://enzo.oom.sh/"
+
+links:
+  - name: "Grafana"
+    path: "grafana"
+    url: "grafana.prometheus.svc.cluster.local"
+    port: "80"
+  - name: "Prometheus"
+    path: "prometheus"
+    url: "prometheus-operator-prometheus.prometheus.svc.cluster.local"
+    port: "9090"
+
+portal:
+  title: "My page"
+  port: "80"
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+# fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+# readOnlyRootFilesystem: true
+# runAsNonRoot: true
+# runAsUser: 1000
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
