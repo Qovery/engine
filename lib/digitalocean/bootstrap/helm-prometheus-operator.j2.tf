@@ -14,7 +14,7 @@ resource "helm_release" "prometheus_operator" {
   set {
     name = "nameOverride"
     value = "prometheus-operator"
-  helm-prometheus-adapter}
+  }
 
   set {
     name = "fullnameOverride"
