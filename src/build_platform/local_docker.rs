@@ -412,7 +412,11 @@ impl BuildPlatform for LocalDocker {
         let dockerfile_exists = match dockerfile_relative_path {
             Some(path) => {
                 let dockerfile_complete_path = format!("{}/{}", into_dir.as_str(), path);
-                Path::new(dockerfile_complete_path.as_str()).exists()
+                let exists = Path::new(dockerfile_complete_path.as_str()).exists();
+                if !exists {
+                    warn!("Dockerfile not found under given {}", dockerfile_complete_path)
+                }
+                exists
             }
             None => false,
         };
