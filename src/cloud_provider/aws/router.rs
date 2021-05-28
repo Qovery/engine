@@ -18,6 +18,7 @@ pub struct Router {
     context: Context,
     id: String,
     name: String,
+    action: Action,
     default_domain: String,
     custom_domains: Vec<CustomDomain>,
     routes: Vec<Route>,
@@ -29,6 +30,7 @@ impl Router {
         context: Context,
         id: &str,
         name: &str,
+        action: Action,
         default_domain: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
@@ -38,6 +40,7 @@ impl Router {
             context,
             id: id.to_string(),
             name: name.to_string(),
+            action,
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,
@@ -72,7 +75,7 @@ impl Service for Router {
     }
 
     fn action(&self) -> &Action {
-        &Action::Create
+        &self.action
     }
 
     fn private_port(&self) -> Option<u16> {
