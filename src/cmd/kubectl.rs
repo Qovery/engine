@@ -697,6 +697,57 @@ where
     kubectl_exec::<P, KubernetesVersion>(vec!["version", "-o", "json"], kubernetes_config, envs)
 }
 
+pub fn kubectl_exec_get_daemonset<P>(
+    kubernetes_config: P,
+    name: &str,
+    namespace: &str,
+    selectors: Option<&str>,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesNode>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut args = vec!["-n", namespace, "get", "daemonset", name];
+    match selectors {
+        Some(x) => {
+            args.push("-l");
+            args.push(x);
+        }
+        None => {}
+    };
+    args.push("-o");
+    args.push("json");
+
+    kubectl_exec::<P, KubernetesList<KubernetesNode>>(args, kubernetes_config, envs)
+}
+
+pub fn kubectl_exec_rollout_restart_deployment<P>(
+    kubernetes_config: P,
+    name: &str,
+    namespace: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut environment_variables: Vec<(&str, &str)> = envs;
+    environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
+    let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
+
+    kubectl_exec_with_output(
+        args,
+        environment_variables.clone(),
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )
+}
+
 pub fn kubectl_exec_get_node<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
