@@ -11,6 +11,7 @@ pub mod aws;
 pub mod digitalocean;
 pub mod environment;
 pub mod gcp;
+pub mod helm;
 pub mod kubernetes;
 pub mod metrics;
 pub mod models;
