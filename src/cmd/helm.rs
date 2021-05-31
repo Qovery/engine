@@ -3,6 +3,7 @@ use std::path::Path;
 
 use tracing::{error, info, span, Level};
 
+use crate::cloud_provider::helm::{get_chart_namespace, ChartInfo};
 use crate::cmd::structs::{Helm, HelmChart, HelmHistoryRow};
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -57,6 +58,97 @@ where
         .map(|helm_history_row| helm_history_row.clone()))
 }
 
+pub fn helm_exec_upgrade_with_chart_info<P>(
+    kubernetes_config: P,
+    envs: &Vec<(&str, &str)>,
+    chart: &ChartInfo,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut args_string: Vec<String> = vec![
+        "upgrade",
+        "-o",
+        "json",
+        "--kubeconfig",
+        kubernetes_config.as_ref().to_str().unwrap(),
+        "--create-namespace",
+        "--install",
+        "--history-max",
+        "50",
+        "--namespace",
+        get_chart_namespace(chart.namespace).as_str(),
+    ]
+    .into_iter()
+    .map(|x| x.to_string())
+    .collect();
+
+    // warn: don't add debug or json output won't work
+    if chart.atomic {
+        args_string.push("--atomic".to_string())
+    }
+    if chart.force_upgrade {
+        args_string.push("--force".to_string())
+    }
+    if chart.dry_run {
+        args_string.push("--dry-run".to_string())
+    }
+    if chart.wait {
+        args_string.push("--wait".to_string())
+    }
+
+    // overrides and files overrides
+    for value in &chart.values {
+        args_string.push("--set".to_string());
+        args_string.push(format!("{}={}", value.key, value.value));
+    }
+    for value_file in &chart.values_files {
+        args_string.push("-f".to_string());
+        args_string.push(value_file.clone());
+    }
+
+    // add last elements
+    args_string.push(chart.name.to_string());
+    args_string.push(chart.path.to_string());
+
+    let args = args_string.iter().map(|x| x.as_str()).collect();
+
+    let mut json_output_string = String::new();
+    let mut error_message = String::new();
+    match helm_exec_with_output(
+        args,
+        envs.clone(),
+        |out| match out {
+            Ok(line) => json_output_string = line,
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => {
+                // helm errors are not json formatted unfortunately
+                if line.contains("has been rolled back") {
+                    error_message = format!("Deployment {} has been rolled back", chart.name);
+                    warn!("{}. {}", &error_message, &line);
+                } else if line.contains("has been uninstalled") {
+                    error_message = format!("Deployment {} has been uninstalled due to failure", chart.name);
+                    warn!("{}. {}", &error_message, &line);
+                } else {
+                    error_message = format!("Deployment {} has failed", chart.name);
+                    warn!("{}. {}", &error_message, &line);
+                }
+            }
+            Err(err) => error!("{:?}", err),
+        },
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(format!("{}. {:?}", error_message, e.message)),
+            })
+        }
+    }
+}
+
 pub fn helm_exec_upgrade<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -94,6 +186,35 @@ where
             chart_root_dir.as_ref().to_str().unwrap(),
         ],
         envs,
+        |out| match out {
+            Ok(line) => info!("{}", line.as_str()),
+            Err(err) => error!("{}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line.as_str()),
+            Err(err) => error!("{}", err),
+        },
+    )
+}
+
+pub fn helm_exec_uninstall_with_chart_info<P>(
+    kubernetes_config: P,
+    envs: &Vec<(&str, &str)>,
+    chart: &ChartInfo,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    helm_exec_with_output(
+        vec![
+            "uninstall",
+            "--kubeconfig",
+            kubernetes_config.as_ref().to_str().unwrap(),
+            "--namespace",
+            get_chart_namespace(chart.namespace).as_str(),
+            &chart.name,
+        ],
+        envs.clone(),
         |out| match out {
             Ok(line) => info!("{}", line.as_str()),
             Err(err) => error!("{}", err),
