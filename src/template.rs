@@ -42,6 +42,8 @@ where
                 tera::ErrorKind::CallFilter(x) => format!("call filter: {}", x),
                 tera::ErrorKind::CallTest(x) => format!("call test: {}", x),
                 tera::ErrorKind::__Nonexhaustive => "non exhaustive error".to_string(),
+                tera::ErrorKind::Io(x) => format!("io error {:?}", x),
+                tera::ErrorKind::Utf8Conversion { .. } => format!("utf-8 conversion issue"),
             };
 
             error!("{}", context.clone().into_json());
