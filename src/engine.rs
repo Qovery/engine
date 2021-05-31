@@ -64,7 +64,7 @@ impl<'a> Engine {
         Ok(())
     }
 
-    /// check and init the connection to all the services
+    /// check and init the connection to all services
     pub fn session(&'a self) -> Result<Session<'a>, EngineError> {
         match self.is_valid() {
             Ok(_) => Ok(Session::<'a> { engine: self }),
