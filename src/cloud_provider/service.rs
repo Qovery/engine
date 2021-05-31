@@ -333,8 +333,8 @@ where
         service.engine_error(
             EngineErrorCause::User(
                 "Your application has failed to start. \
-                Ensure you can run it without issues with `qovery run` and check its logs from the web interface or the CLI with `qovery log`",
-            ),
+                Ensure you can run it without issues with `qovery run` and check its logs from the web interface or the CLI with `qovery log`.\
+                HINT: this issue often occurs due to ports misconfiguration. Make sure you exposed the correct port (using EXPOSE statement in Dockerfile or via Qovery configuration). ",
             format!(
                 "{} {} has failed to start ⤬",
                 service.service_type().name(),
