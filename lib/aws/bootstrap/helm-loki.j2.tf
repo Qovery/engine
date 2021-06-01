@@ -1,4 +1,3 @@
-{% if log_history_enabled %}
 resource "aws_iam_user" "iam_eks_loki" {
   name = "qovery-logs-${var.kubernetes_cluster_id}"
   tags = local.tags_eks
@@ -67,75 +66,74 @@ resource "aws_s3_bucket" "loki_bucket" {
   )
 }
 
-resource "helm_release" "loki" {
-  name = "loki"
-  chart = "common/charts/loki"
-  namespace = "logging"
-  create_namespace = true
-  atomic = true
-  max_history = 50
-
-  values = [file("chart_values/loki.yaml")]
-
-  set {
-    name = "config.storage_config.aws.s3"
-    value = "s3://${urlencode(aws_iam_access_key.iam_eks_loki.id)}:${urlencode(aws_iam_access_key.iam_eks_loki.secret)}@${var.region}/${aws_s3_bucket.loki_bucket.bucket}"
-  }
-
-  set {
-    name = "config.storage_config.aws.region"
-    value = var.region
-  }
-
-  set {
-    name = "config.storage_config.aws.access_key_id"
-    value = aws_iam_access_key.iam_eks_loki.id
-  }
-
-  set {
-    name = "config.storage_config.aws.secret_access_key"
-    value = aws_iam_access_key.iam_eks_loki.secret
-  }
-  set {
-    name = "config.storage_config.aws.sse_encryption"
-    value = "true"
-  }
-
-  # Limits
-  set {
-    name = "resources.limits.cpu"
-    value = "100m"
-  }
-
-  set {
-    name = "resources.requests.cpu"
-    value = "100m"
-  }
-
-  set {
-    name = "resources.limits.memory"
-    value = "2Gi"
-  }
-
-  set {
-    name = "resources.requests.memory"
-    value = "1Gi"
-  }
-
-  set {
-    name = "forced_upgrade"
-    value = var.forced_upgrade
-  }
-
-  depends_on = [
-    aws_iam_user.iam_eks_loki,
-    aws_iam_access_key.iam_eks_loki,
-    aws_s3_bucket.loki_bucket,
-    aws_iam_policy.loki_s3_policy,
-    aws_iam_user_policy_attachment.s3_loki_attachment,
-    aws_eks_cluster.eks_cluster,
-    helm_release.aws_vpc_cni,
-    helm_release.cluster_autoscaler,
-  ]
-}
-{% endif %}
+//resource "helm_release" "loki" {
+//  name = "loki"
+//  chart = "common/charts/loki"
+//  namespace = "logging"
+//  create_namespace = true
+//  atomic = true
+//  max_history = 50
+//
+//  values = [file("chart_values/loki.yaml")]
+//
+//  set {
+//    name = "config.storage_config.aws.s3"
+//    value = "s3://${urlencode(aws_iam_access_key.iam_eks_loki.id)}:${urlencode(aws_iam_access_key.iam_eks_loki.secret)}@${var.region}/${aws_s3_bucket.loki_bucket.bucket}"
+//  }
+//
+//  set {
+//    name = "config.storage_config.aws.region"
+//    value = var.region
+//  }
+//
+//  set {
+//    name = "config.storage_config.aws.access_key_id"
+//    value = aws_iam_access_key.iam_eks_loki.id
+//  }
+//
+//  set {
+//    name = "config.storage_config.aws.secret_access_key"
+//    value = aws_iam_access_key.iam_eks_loki.secret
+//  }
+//  set {
+//    name = "config.storage_config.aws.sse_encryption"
+//    value = "true"
+//  }
+//
+//  # Limits
+//  set {
+//    name = "resources.limits.cpu"
+//    value = "100m"
+//  }
+//
+//  set {
+//    name = "resources.requests.cpu"
+//    value = "100m"
+//  }
+//
+//  set {
+//    name = "resources.limits.memory"
+//    value = "2Gi"
+//  }
+//
+//  set {
+//    name = "resources.requests.memory"
+//    value = "1Gi"
+//  }
+//
+//  set {
+//    name = "forced_upgrade"
+//    value = var.forced_upgrade
+//  }
+//
+//  depends_on = [
+//    aws_iam_user.iam_eks_loki,
+//    aws_iam_access_key.iam_eks_loki,
+//    aws_s3_bucket.loki_bucket,
+//    aws_iam_policy.loki_s3_policy,
+//    aws_iam_user_policy_attachment.s3_loki_attachment,
+//    aws_eks_cluster.eks_cluster,
+//    helm_release.aws_vpc_cni,
+//    helm_release.cluster_autoscaler,
+//  ]
+//}

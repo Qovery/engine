@@ -46,10 +46,7 @@ pub struct AwsQoveryTerraformConfig {
     pub qovery_engine_version: String,
 }
 
-pub fn aws_helm_charts<H, I>(qovery_terraform_config_file: &str) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError>
-where
-    H: ?Sized,
-{
+pub fn aws_helm_charts(qovery_terraform_config_file: &str) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError> {
     let qovery_terraform_config = match serde_json::from_str::<AwsQoveryTerraformConfig>(qovery_terraform_config_file) {
         Ok(x) => x,
         Err(e) => {
@@ -1071,15 +1068,13 @@ impl AwsVpcCniChart {
     fn enable_cni_managed_by_helm(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> bool {
         let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
 
-        match kubectl_exec_get_daemonset(
+        kubectl_exec_get_daemonset(
             kubernetes_config,
             &self.chart_info.name,
             self.namespace().as_str(),
             Some("k8s-app=aws-node,app.kubernetes.io/managed-by=Helm"),
             environment_variables,
-        ) {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+        )
+        .is_ok()
     }
 }

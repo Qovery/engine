@@ -9,10 +9,12 @@ use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::kubernetes::helm_charts::aws_helm_charts;
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesNodesType,
     KubernetesUpgradeStatus,
@@ -39,6 +41,7 @@ use crate::models::{
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
+use std::path::PathBuf;
 
 pub mod helm_charts;
 pub mod node;
@@ -758,17 +761,43 @@ impl<'a> Kubernetes for EKS<'a> {
 
         send_to_customer(format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
 
+        // terraform deployment dedicated to cloud resources
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
         ) {
-            Ok(_) => Ok(()),
+            Ok(_) => {}
             Err(e) => {
-                format!("Error while deploying cluster {} with id {}.", self.name(), self.id());
-                Err(e)
+                format!(
+                    "Error while deploying cluster {} with Terraform with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(e);
             }
-        }
+        };
+
+        // kubernetes helm deployments on the cluster
+        let kubeconfig = PathBuf::from(self.config_file().expect("expected to get a kubeconfig file").0);
+        let credentials_environment_variables: Vec<(String, String)> = self
+            .cloud_provider
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|x| (x.0.to_string(), x.1.to_string()))
+            .collect();
+
+        let helm_charts_to_deploy = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            aws_helm_charts(kubeconfig.as_path().to_str().unwrap()),
+        )?;
+
+        cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            deploy_charts_levels(&kubeconfig, &credentials_environment_variables, helm_charts_to_deploy),
+        )
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {
@@ -792,19 +821,19 @@ impl<'a> Kubernetes for EKS<'a> {
             &self.version,
             self.cloud_provider.credentials_environment_variables(),
         ) {
-            Ok(x) => return self.upgrade(x),
+            Ok(x) => self.upgrade(x),
             Err(e) => {
                 let msg = format!(
                     "Error detected, upgrade won't occurs, but standard deployment. {:?}",
                     e.message
                 );
                 error!("{}", &msg);
-                return Err(EngineError {
+                Err(EngineError {
                     cause: EngineErrorCause::Internal,
                     scope: EngineErrorScope::Engine,
                     execution_id: self.context.execution_id().to_string(),
                     message: Some(msg),
-                });
+                })
             }
         }
     }

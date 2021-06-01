@@ -1,4 +1,3 @@
-{% if log_history_enabled or metrics_history_enabled %}
 resource "aws_iam_user" "iam_grafana_cloudwatch" {
   name = "qovery-cloudwatch-${var.kubernetes_cluster_id}"
   tags = local.tags_eks
@@ -64,60 +63,59 @@ resource "aws_iam_user_policy_attachment" "grafana_cloudwatch_attachment" {
   policy_arn = aws_iam_policy.grafana_cloudwatch_policy.arn
 }
 
-locals {
-  cloudflare_datasources = <<DATASOURCES
-datasources:
-  datasources.yaml:
-    apiVersion: 1
-    datasources:
-      - name: Prometheus
-        type: prometheus
-        url: "http://prometheus-operator-prometheus:9090"
-        access: proxy
-        isDefault: true
-      - name: PromLoki
-        type: prometheus
-        url: "http://${helm_release.loki.name}.${helm_release.loki.namespace}.svc:3100/loki"
-        access: proxy
-        isDefault: false
-      - name: Loki
-        type: loki
-        url: "http://${helm_release.loki.name}.${helm_release.loki.namespace}.svc:3100"
-      - name: Cloudwatch
-        type: cloudwatch
-        jsonData:
-          authType: keys
-          defaultRegion: ${var.region}
-        secureJsonData:
-          accessKey: '${aws_iam_access_key.iam_grafana_cloudwatch.id}'
-          secretKey: '${aws_iam_access_key.iam_grafana_cloudwatch.secret}'
-DATASOURCES
-}
-
-resource "helm_release" "grafana" {
-  name = "grafana"
-  chart = "common/charts/grafana"
-  namespace = "prometheus"
-  atomic = true
-  max_history = 50
-
-  values = [
-    file("chart_values/grafana.yaml"),
-    local.cloudflare_datasources,
-  ]
-
-  set {
-    name = "forced_upgrade"
-    value = var.forced_upgrade
-  }
-
-  depends_on = [
-    aws_eks_cluster.eks_cluster,
-    helm_release.cluster_autoscaler,
-    helm_release.aws_vpc_cni,
-    {% if metrics_history_enabled %}
-    helm_release.prometheus_operator,
-    {% endif %}
-  ]
-}
-{% endif %}
+//locals {
+//  cloudflare_datasources = <<DATASOURCES
+//datasources:
+//  datasources.yaml:
+//    apiVersion: 1
+//    datasources:
+//      - name: Prometheus
+//        type: prometheus
+//        url: "http://prometheus-operator-prometheus:9090"
+//        access: proxy
+//        isDefault: true
+//      - name: PromLoki
+//        type: prometheus
+//        url: "http://${helm_release.loki.name}.${helm_release.loki.namespace}.svc:3100/loki"
+//        access: proxy
+//        isDefault: false
+//      - name: Loki
+//        type: loki
+//        url: "http://${helm_release.loki.name}.${helm_release.loki.namespace}.svc:3100"
+//      - name: Cloudwatch
+//        type: cloudwatch
+//        jsonData:
+//          authType: keys
+//          defaultRegion: ${var.region}
+//        secureJsonData:
+//          accessKey: '${aws_iam_access_key.iam_grafana_cloudwatch.id}'
+//          secretKey: '${aws_iam_access_key.iam_grafana_cloudwatch.secret}'
+//DATASOURCES
+//}
+//
+//resource "helm_release" "grafana" {
+//  name = "grafana"
+//  chart = "common/charts/grafana"
+//  namespace = "prometheus"
+//  atomic = true
+//  max_history = 50
+//
+//  values = [
+//    file("chart_values/grafana.yaml"),
+//    local.cloudflare_datasources,
+//  ]
+//
+//  set {
+//    name = "forced_upgrade"
+//    value = var.forced_upgrade
+//  }
+//
+//  depends_on = [
+//    aws_eks_cluster.eks_cluster,
+//    helm_release.cluster_autoscaler,
+//    helm_release.aws_vpc_cni,
+//    {% if metrics_history_enabled %}
+//    helm_release.prometheus_operator,
+//    {% endif %}
+//  ]
+//}
