@@ -75,7 +75,7 @@ pub fn get_chart_namespace(namespace: HelmChartNamespaces) -> String {
     .to_string()
 }
 
-pub trait HelmChart {
+pub trait HelmChart: Send {
     fn check_prerequisites(&self) -> Result<(), SimpleError> {
         let chart = self.get_chart_info();
         for file in chart.values_files.iter() {
@@ -141,25 +141,52 @@ pub trait HelmChart {
     }
 }
 
-//todo: implement it
-#[allow(unused_must_use)]
-pub fn deploy_multiple_charts<H: 'static + HelmChart + Sync + Send>(
-    kubernetes_config: &'static Path,
-    envs: &Vec<(String, String)>,
-    charts: Vec<H>,
-) {
+fn deploy_parallel_charts(
+    kubernetes_config: &Path,
+    envs: &[(String, String)],
+    charts: Vec<Box<dyn HelmChart>>,
+) -> Result<(), SimpleError> {
     let mut handles = vec![];
 
     for chart in charts.into_iter() {
-        let environment_variables = envs.clone();
-        let kubeconfig = kubernetes_config.clone();
-        let handle = spawn(move || chart.run(kubeconfig, &environment_variables));
+        let environment_variables = envs.to_owned();
+        let path = kubernetes_config.to_path_buf();
+        let handle = spawn(move || chart.run(path.as_path(), &environment_variables));
         handles.push(handle);
     }
 
     for handle in handles {
-        handle.join().unwrap();
+        match handle.join() {
+            Ok(helm_run_ret) => match helm_run_ret {
+                Ok(_) => {}
+                Err(e) => return Err(e),
+            },
+            Err(e) => {
+                error!("{:?}", e);
+                return Err(SimpleError {
+                    kind: SimpleErrorKind::Other,
+                    message: Some("thread panicked during parallel charts deployments".to_string()),
+                });
+            }
+        }
     }
+
+    Ok(())
+}
+
+pub fn deploy_charts_levels(
+    kubernetes_config: &Path,
+    envs: &[(String, String)],
+    charts: Vec<Vec<Box<dyn HelmChart>>>,
+) -> Result<(), SimpleError> {
+    for level in charts.into_iter() {
+        match deploy_parallel_charts(&kubernetes_config, &envs, level) {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(())
 }
 
 //
