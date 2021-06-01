@@ -10,7 +10,7 @@ use qovery_engine::transaction::TransactionResult;
 
 use crate::aws::aws_environment::{delete_environment, deploy_environment};
 
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, is_pod_restarted_aws_env};
+use self::test_utilities::utilities::{engine_run_test, generate_id};
 
 /**
 **

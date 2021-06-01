@@ -1,8 +1,8 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{engine_run_test, generate_id, is_pod_restarted_aws_env, FuncTestsSecrets};
-use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
+use self::test_utilities::utilities::FuncTestsSecrets;
+use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::context;
 use test_utilities::utilities::init;
