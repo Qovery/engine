@@ -38,12 +38,13 @@ ln -s path_to_qovery/engine cloned-engine
 cp docker/bin_versions .
 
 # Modify version if necessary to match your bin_versions file
-curl https://releases.hashicorp.com/terraform/0.13.5/terraform_0.13.5_linux_amd64.zip -o /tmp/terraform.zip
+curl https://releases.hashicorp.com/terraform/[TERRAFORM_REQUIRED_VERSION]/terraform_[TERRAFORM_REQUIRED_VERSION]_linux_amd64.zip -o /tmp/terraform.zip
 sudo unzip /tmp/terraform.zip -d /usr/local/bin/
 
 # Ensure /usr/local/bin is in your path
 cargo run 
 ```
+- `[TERRAFORM_REQUIRED_VERSION]` to be replaced by the version listed in [bin_versions](bin_versions) under `TERRAFORM_VERSION`.
 
 ### Generate a new image version
 To generate a new Engine image version, you have to use Gitlab and GitHub:
