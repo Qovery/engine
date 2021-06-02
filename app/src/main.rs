@@ -135,7 +135,7 @@ fn receive_and_queue_task(
             error!("receiving request but JSON decoding error occurred: {:?}", err);
             let _ = msg
                 .respond(Response::new(Some(err.to_string())).as_json_string())
-                .map_err(|err| error!("Cannot send reponse to nats receive_and_queue_task: {}", err));
+                .map_err(|err| error!("Cannot send response to nats receive_and_queue_task: {}", err));
         }
     };
 }
@@ -511,7 +511,7 @@ fn using_nats_server(
         let func = move || {
             let _drop_logger = LogErrorOnDrop::new(thread_name);
 
-            // FIXME instead of manually implementing the loadbalincing ourselves between engines
+            // FIXME instead of manually implementing the load-balancing ourselves between engines
             // we should just use NATS queue groups and stop picking task when the taskManager
             // is currently busy.
             // The issue is that there is no coordination between threads inside the app
