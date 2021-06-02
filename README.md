@@ -44,7 +44,7 @@ sudo unzip /tmp/terraform.zip -d /usr/local/bin/
 # Ensure /usr/local/bin is in your path
 cargo run 
 ```
-- `[TERRAFORM_REQUIRED_VERSION]` to be replaced by the version listed in [bin_versions](bin_versions) under `TERRAFORM_VERSION`.
+- `[TERRAFORM_REQUIRED_VERSION]` to be replaced by the version listed in [bin_versions](docker/bin_versions) under `TERRAFORM_VERSION`.
 
 ### Generate a new image version
 To generate a new Engine image version, you have to use Gitlab and GitHub:
