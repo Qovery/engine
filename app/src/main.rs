@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate log;
+extern crate tracing;
 #[macro_use]
 extern crate prometheus;
 #[macro_use]
@@ -20,6 +20,12 @@ use dirs::home_dir;
 use dotenv::dotenv;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
+use tracing::error;
+use tracing_subscriber::{
+    fmt::{format, time::ChronoUtc},
+    prelude::*,
+    EnvFilter,
+};
 use uuid::Uuid;
 
 use qovery_engine::cmd;
@@ -260,7 +266,17 @@ pub fn main() -> io::Result<()> {
 
     // Load env variable from .env file
     dotenv().ok();
-    env_logger::init();
+
+    // Init tracing subscriber
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .fmt_fields(
+            tracing_subscriber::fmt::format::debug_fn(|writer, field, value| write!(writer, "{}: {:?}", field, value))
+                .delimited(", "),
+        )
+        .with_ansi(false)
+        .with_timer(ChronoUtc::with_format("%Y-%m-%dT%H:%M:%SZ".to_string()))
+        .init();
 
     let http_listen_on = env::var("HTTP_LISTEN_ON").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
     let engine_id = env::var("ID").unwrap_or_else(|_| generate_id().to_string());

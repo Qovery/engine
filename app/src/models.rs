@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use qovery_engine_task_manager::task_manager::Status;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum TaskSelector {
     Infrastructure(&'static str),
     Environment(&'static str),

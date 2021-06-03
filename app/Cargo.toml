@@ -35,9 +35,9 @@ warp = "0.3.0"
 lazy_static = "1.4.0"
 prometheus = { version = "0.11.0", features = ["process"] }
 
-# logger
-env_logger = "0.8.2"
-log = "0.4.11"
+# tracing
+tracing = { version = "0.1.26", features = ["log"] }
+tracing-subscriber = { version = "0.2.18", features = ["env-filter"] }
 
 # To load .env file into env variables
 dotenv = "0.15.0"

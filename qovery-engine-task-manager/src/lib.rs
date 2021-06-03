@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate log;
+extern crate tracing;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]

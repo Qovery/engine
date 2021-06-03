@@ -11,13 +11,13 @@ use serde::{Deserialize, Serialize};
 use crate::utils::log_no_spam_builder;
 use crate::utils::LogErrorOnDrop;
 use core::fmt;
-use log::Level::Debug;
 use prometheus::{self, IntGauge};
 use qovery_engine::models::{ProgressLevel, ProgressScope};
 use serde::export::Formatter;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
+use tracing;
 
 pub type Id = String;
 pub type GroupId = Id;
@@ -184,7 +184,7 @@ impl TaskManager {
             .name(thread_name.to_string())
             .spawn(move || {
                 let _drop_logger = LogErrorOnDrop::new(thread_name);
-                let mut log_debug_waiting = log_no_spam_builder(Debug, "no task to run, waiting...", 60);
+                let mut log_debug_waiting = log_no_spam_builder("no task to run, waiting...", 60);
 
                 while !should_stop.load(Acquire) || !task_executor_rx.is_empty() {
                     if should_stop.load(Relaxed) {
@@ -215,6 +215,16 @@ impl TaskManager {
                     };
 
                     nb_running_tasks.inc();
+
+                    // Activate a tracing span with max level to add task log elements to tracing
+                    // events of all levels
+                    let task_span = span!(
+                        tracing::Level::INFO,
+                        "task",
+                        execution_id = internal_task.status.context.execution_id_short().as_str(),
+                    );
+                    let _enter = task_span.enter();
+
                     match internal_task.task.pre_run() {
                         PreRun::Yes => {
                             let start_time = Instant::now();
@@ -400,6 +410,14 @@ impl ActionContext {
             task_created_at,
         }
     }
+
+    pub fn execution_id_short(&self) -> String {
+        const MAX_EXECUTION_ID_CHARS: usize = 7;
+        match self.execution_id.char_indices().nth(MAX_EXECUTION_ID_CHARS) {
+            None => self.execution_id.to_string(),
+            Some((idx, _)) => self.execution_id[..idx].to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -477,6 +495,7 @@ mod tests {
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
     use qovery_engine::models::{ProgressLevel, ProgressScope};
+    use std::cmp;
     use std::sync::atomic::Ordering::Acquire;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
@@ -648,5 +667,70 @@ mod tests {
 
         assert_eq!(tm.wait_shutdown(), ());
         assert_eq!(tm.remaining_tasks_to_run(), 0);
+    }
+
+    #[test]
+    fn test_auction_context_execution_id_short() {
+        // setup:
+        struct TestCase<'a> {
+            execution_id: &'a str,
+            expected_execution_id_short: &'a str,
+            description: &'a str,
+        }
+
+        let test_cases: Vec<TestCase> = vec![
+            TestCase {
+                execution_id: "",
+                expected_execution_id_short: "",
+                description: "empty execution_id",
+            },
+            TestCase {
+                execution_id: " ",
+                expected_execution_id_short: " ",
+                description: "whitespace execution_id",
+            },
+            TestCase {
+                execution_id: "azertyuiopmlkjhgfdsqwxcvbn",
+                expected_execution_id_short: "azertyu",
+                description: "execution_id with more chars count than short version",
+            },
+            TestCase {
+                execution_id: "azertyu",
+                expected_execution_id_short: "azertyu",
+                description: "execution_id with same chars count than short version",
+            },
+            TestCase {
+                execution_id: "azerty",
+                expected_execution_id_short: "azerty",
+                description: "execution_id with less chars count than short version",
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let auction_context = ActionContext::new(
+                ProgressScope::Infrastructure {
+                    execution_id: tc.execution_id.to_string(),
+                },
+                ProgressLevel::Info,
+                tc.execution_id.to_string(),
+                Utc::now(),
+            );
+            let result = auction_context.execution_id_short();
+
+            // verify:
+            assert_eq!(
+                cmp::min(7usize, tc.execution_id.len()),
+                result.len(),
+                "case: {}, execution_id: {:?}",
+                tc.description,
+                tc.execution_id,
+            );
+            assert_eq!(
+                tc.expected_execution_id_short, result,
+                "case: {}, execution_id: {:?}",
+                tc.description, tc.execution_id,
+            );
+        }
     }
 }
