@@ -1,13 +1,16 @@
 use crate::cloud_provider::helm::{
-    get_chart_namespace, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
+    get_chart_namespace, ChartInfo, ChartSetValue, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
 };
 use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
 use crate::error::{SimpleError, SimpleErrorKind};
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
+use std::thread::sleep;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AwsQoveryTerraformConfig {
     pub cloud_provider: String,
     pub region: String,
@@ -46,16 +49,30 @@ pub struct AwsQoveryTerraformConfig {
     pub qovery_engine_version: String,
 }
 
-pub fn aws_helm_charts(qovery_terraform_config_file: &str) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError> {
-    let qovery_terraform_config = match serde_json::from_str::<AwsQoveryTerraformConfig>(qovery_terraform_config_file) {
-        Ok(x) => x,
+pub fn aws_helm_charts(
+    qovery_terraform_config_file: &str,
+    chart_prefix_path: Option<&str>,
+) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError> {
+    let chart_prefix = match chart_prefix_path {
+        None => "./",
+        Some(x) => x,
+    };
+    let content_file = File::open(&qovery_terraform_config_file)?;
+    let reader = BufReader::new(content_file);
+    let qovery_terraform_config: AwsQoveryTerraformConfig = match serde_json::from_reader(reader) {
+        Ok(config) => config,
         Err(e) => {
+            error!(
+                "error while parsing terraform config file {}: {:?}",
+                &qovery_terraform_config_file, &e
+            );
             return Err(SimpleError {
                 kind: SimpleErrorKind::Other,
                 message: Some(format!("{:?}", e)),
-            })
+            });
         }
     };
+
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let loki_namespace = HelmChartNamespaces::Logging;
     let loki_service_name = "loki".to_string();
@@ -64,15 +81,15 @@ pub fn aws_helm_charts(qovery_terraform_config_file: &str) -> Result<Vec<Vec<Box
     let q_storage_class = CommonChart {
         chart_info: ChartInfo {
             name: "q-storageclass".to_string(),
-            path: "charts/q-storageclass".to_string(),
+            path: format!("{}/charts/q-storageclass", &chart_prefix),
             ..Default::default()
         },
     };
 
     let aws_vpc_cni_chart = AwsVpcCniChart {
         chart_info: ChartInfo {
-            name: "aws-vpc-cni".to_string(),
-            path: "charts/aws-vpc-cni".to_string(),
+            name: "aws-node".to_string(),
+            path: format!("{}/charts/aws-vpc-cni", &chart_prefix),
             values: vec![
                 ChartSetValue {
                     key: "image.region".to_string(),
@@ -271,10 +288,10 @@ pub fn aws_helm_charts(qovery_terraform_config_file: &str) -> Result<Vec<Vec<Box
         },
     };
 
-    let coredns_config = CommonChart {
+    let coredns_config = CoreDNSConfigChart {
         chart_info: ChartInfo {
-            name: "coredns-config".to_string(),
-            path: "charts/coredns-config".to_string(),
+            name: "coredns".to_string(),
+            path: format!("{}/charts/coredns-config", &chart_prefix),
             values: vec![
                 ChartSetValue {
                     key: "managed_dns".to_string(),
@@ -951,39 +968,41 @@ pub fn aws_helm_charts(qovery_terraform_config_file: &str) -> Result<Vec<Vec<Box
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(cluster_autoscaler),
-        Box::new(aws_iam_eks_user_mapper),
-        Box::new(aws_calico),
+        // Box::new(cluster_autoscaler),
+        // Box::new(aws_iam_eks_user_mapper),
+        // Box::new(aws_calico),
     ];
 
     let mut level_4: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(metric_server),
-        Box::new(aws_node_term_handler),
-        Box::new(external_dns),
+        // Box::new(metric_server),
+        // Box::new(aws_node_term_handler),
+        // Box::new(external_dns),
     ];
 
-    let level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager), Box::new(pleco)];
+    let level_5: Vec<Box<dyn HelmChart>> = vec![
+    // Box::new(nginx_ingress), Box::new(cert_manager), Box::new(pleco)
+    ];
 
     let mut level_6: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(cert_manager_config),
-        Box::new(qovery_agent),
-        Box::new(qovery_engine),
+        // Box::new(cert_manager_config),
+        // Box::new(qovery_agent),
+        // Box::new(qovery_engine),
     ];
 
-    if &qovery_terraform_config.feature_flag_metrics_history == "true" {
-        level_2.push(Box::new(prometheus_operator));
-        level_4.push(Box::new(prometheus_adapter));
-    }
-    if &qovery_terraform_config.feature_flag_log_history == "true" {
-        level_3.push(Box::new(promtail));
-        level_4.push(Box::new(loki));
-    }
-
-    if &qovery_terraform_config.feature_flag_metrics_history == "true"
-        || &qovery_terraform_config.feature_flag_log_history == "true"
-    {
-        level_6.push(Box::new(grafana))
-    };
+    // if &qovery_terraform_config.feature_flag_metrics_history == "true" {
+    //     level_2.push(Box::new(prometheus_operator));
+    //     level_4.push(Box::new(prometheus_adapter));
+    // }
+    // if &qovery_terraform_config.feature_flag_log_history == "true" {
+    //     level_3.push(Box::new(promtail));
+    //     level_4.push(Box::new(loki));
+    // }
+    //
+    // if &qovery_terraform_config.feature_flag_metrics_history == "true"
+    //     || &qovery_terraform_config.feature_flag_log_history == "true"
+    // {
+    //     level_6.push(Box::new(grafana))
+    // };
 
     Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6])
 }
@@ -1024,7 +1043,7 @@ impl HelmChart for AwsVpcCniChart {
                         environment_variables.clone(),
                         |_| {},
                         |_| {},
-                    )?;
+                    );
                     kubectl_exec_with_output(
                         vec![
                             "-n",
@@ -1038,7 +1057,7 @@ impl HelmChart for AwsVpcCniChart {
                         environment_variables.clone(),
                         |_| {},
                         |_| {},
-                    )?;
+                    );
                     kubectl_exec_with_output(
                         vec![
                             "-n",
@@ -1052,10 +1071,12 @@ impl HelmChart for AwsVpcCniChart {
                         environment_variables.clone(),
                         |_| {},
                         |_| {},
-                    )?
+                    );
                 }
 
-                info!("AWS CNI successfully deployed")
+                info!("AWS CNI successfully deployed");
+                // sleep in order to be sure the daemonset is updated
+                sleep(Duration::from_secs(20))
             }
             false => info!("AWS CNI is already supported by Helm, nothing to do"),
         };
@@ -1068,13 +1089,27 @@ impl AwsVpcCniChart {
     fn enable_cni_managed_by_helm(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> bool {
         let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
 
-        kubectl_exec_get_daemonset(
+        match kubectl_exec_get_daemonset(
             kubernetes_config,
             &self.chart_info.name,
             self.namespace().as_str(),
             Some("k8s-app=aws-node,app.kubernetes.io/managed-by=Helm"),
             environment_variables,
-        )
-        .is_ok()
+        ) {
+            Ok(x) => {
+                if x.items.is_empty() {
+                    true
+                } else {
+                    false
+                }
+            }
+            Err(e) => {
+                error!(
+                    "error while getting daemonset info for chart {}, won't deploy CNI cahrt. {:?}",
+                    &self.chart_info.name, e
+                );
+                false
+            }
+        }
     }
 }
