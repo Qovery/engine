@@ -115,31 +115,46 @@ where
 
     let mut json_output_string = String::new();
     let mut error_message = String::new();
+    let mut helm_error_during_deployment = SimpleError {
+        kind: SimpleErrorKind::Other,
+        message: None,
+    };
     match helm_exec_with_output(
         args,
         envs.clone(),
         |out| match out {
             Ok(line) => json_output_string = line,
-            Err(err) => error!("{:?}", err),
+            Err(err) => error!("{}", &err),
         },
         |out| match out {
             Ok(line) => {
                 // helm errors are not json formatted unfortunately
                 if line.contains("has been rolled back") {
-                    error_message = format!("Deployment {} has been rolled back", chart.name);
+                    error_message = format!("deployment {} has been rolled back", chart.name);
+                    helm_error_during_deployment.message = Some(error_message.clone());
                     warn!("{}. {}", &error_message, &line);
                 } else if line.contains("has been uninstalled") {
-                    error_message = format!("Deployment {} has been uninstalled due to failure", chart.name);
+                    error_message = format!("deployment {} has been uninstalled due to failure", chart.name);
+                    helm_error_during_deployment.message = Some(error_message.clone());
                     warn!("{}. {}", &error_message, &line);
                 } else {
-                    error_message = format!("Deployment {} has failed", chart.name);
-                    warn!("{}. {}", &error_message, &line);
+                    error_message = format!("deployment {} has failed", chart.name);
+                    helm_error_during_deployment.message = Some(error_message.clone());
+                    error!("{}. {}", &error_message, &line);
                 }
             }
-            Err(err) => error!("{:?}", err),
+            Err(err) => {
+                error_message = format!("helm chart {} failed before deployment. {:?}", chart.name, err);
+                helm_error_during_deployment.message = Some(error_message.clone());
+                error!("{}", error_message);
+            }
         },
     ) {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            if helm_error_during_deployment.message.is_some() {
+                return Err(helm_error_during_deployment);
+            }
+        }
         Err(e) => {
             return Err(SimpleError {
                 kind: SimpleErrorKind::Other,
@@ -147,6 +162,8 @@ where
             })
         }
     }
+
+    Ok(())
 }
 
 pub fn helm_exec_upgrade<P>(

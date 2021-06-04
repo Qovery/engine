@@ -1,7 +1,7 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
 use crate::cmd::helm::{helm_exec_uninstall_with_chart_info, helm_exec_upgrade_with_chart_info};
-use crate::cmd::kubectl::kubectl_exec_rollout_restart_deployment;
+use crate::cmd::kubectl::{kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output};
 use crate::error::{SimpleError, SimpleErrorKind};
 use std::path::Path;
 use std::{fs, thread};
@@ -102,7 +102,6 @@ pub trait HelmChart: Send {
     }
 
     fn pre_exec(&self, _kubernetes_config: &Path, _envs: &[(String, String)]) -> Result<(), SimpleError> {
-        //
         Ok(())
     }
 
@@ -112,8 +111,12 @@ pub trait HelmChart: Send {
         match self.exec(&kubernetes_config, &envs) {
             Ok(_) => {}
             Err(e) => {
-                error!("Error while deploying chart: {:?}", e.message);
-                return self.on_deploy_failure(&kubernetes_config, &envs);
+                error!(
+                    "Error while deploying chart: {:?}",
+                    e.message.clone().expect("no message provided")
+                );
+                self.on_deploy_failure(&kubernetes_config, &envs);
+                return Err(e);
             }
         };
         self.post_exec(&kubernetes_config, &envs)?;
@@ -216,6 +219,57 @@ pub struct CoreDNSConfigChart {
 impl HelmChart for CoreDNSConfigChart {
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
+    }
+
+    fn pre_exec(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<(), SimpleError> {
+        let kind = "configmap";
+        let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+        environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
+
+        info!("setting annotations and labels on {}/{}", &kind, &self.chart_info.name);
+        kubectl_exec_with_output(
+            vec![
+                "-n",
+                "kube-system",
+                "annotate",
+                "--overwrite",
+                &kind,
+                &self.chart_info.name,
+                format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
+            ],
+            environment_variables.clone(),
+            |_| {},
+            |_| {},
+        )?;
+        kubectl_exec_with_output(
+            vec![
+                "-n",
+                "kube-system",
+                "annotate",
+                "--overwrite",
+                &kind,
+                &self.chart_info.name,
+                "meta.helm.sh/release-namespace=kube-system",
+            ],
+            environment_variables.clone(),
+            |_| {},
+            |_| {},
+        )?;
+        kubectl_exec_with_output(
+            vec![
+                "-n",
+                "kube-system",
+                "label",
+                "--overwrite",
+                &kind,
+                &self.chart_info.name,
+                "app.kubernetes.io/managed-by=Helm",
+            ],
+            environment_variables.clone(),
+            |_| {},
+            |_| {},
+        )?;
+        Ok(())
     }
 
     // todo: it would be better to avoid rebooting coredns on every run

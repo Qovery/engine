@@ -790,7 +790,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let helm_charts_to_deploy = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            aws_helm_charts(kubeconfig.as_path().to_str().unwrap()),
+            aws_helm_charts(format!("{}/qovery-tf-config.json", &temp_dir).as_str(), Some(&temp_dir)),
         )?;
 
         cast_simple_error_to_engine_error(

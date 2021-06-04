@@ -9,12 +9,13 @@ use serde::de::DeserializeOwned;
 use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
-    Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod,
+    Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod,
     KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent,
 };
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
+use itertools::Itertools;
 
 pub enum ScalingKind {
     Deployment,
@@ -33,14 +34,19 @@ where
 {
     match exec_with_envs_and_output(
         "kubectl",
-        args,
-        envs,
+        args.clone(),
+        envs.clone(),
         stdout_output,
         stderr_output,
         Duration::max_value(),
     ) {
-        Err(err) => return Err(err),
-        _ => {}
+        Err(err) => {
+            let args_string = args.join(" ");
+            let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
+            error!("{}", &msg);
+            return Err(err);
+        }
+        Ok(_) => {}
     };
 
     Ok(())
@@ -703,22 +709,22 @@ pub fn kubectl_exec_get_daemonset<P>(
     namespace: &str,
     selectors: Option<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesNode>, SimpleError>
+) -> Result<Daemonset, SimpleError>
 where
     P: AsRef<Path>,
 {
-    let mut args = vec!["-n", namespace, "get", "daemonset", name];
+    let mut args = vec!["-n", namespace, "get", "daemonset"];
     match selectors {
         Some(x) => {
             args.push("-l");
             args.push(x);
         }
-        None => {}
+        None => args.push(name),
     };
     args.push("-o");
     args.push("json");
 
-    kubectl_exec::<P, KubernetesList<KubernetesNode>>(args, kubernetes_config, envs)
+    kubectl_exec::<P, Daemonset>(args, kubernetes_config, envs)
 }
 
 pub fn kubectl_exec_rollout_restart_deployment<P>(
@@ -931,8 +937,8 @@ where
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
     let _ = kubectl_exec_with_output(
-        args,
-        _envs,
+        args.clone(),
+        _envs.clone(),
         |out| match out {
             Ok(line) => output_vec.push(line),
             Err(err) => error!("{:?}", err),
@@ -948,7 +954,20 @@ where
     let result = match serde_json::from_str::<T>(output_string.as_str()) {
         Ok(x) => x,
         Err(err) => {
-            error!("{:?}", err);
+            let args_string = args.join(" ");
+            let mut env_vars_in_vec = Vec::new();
+            let _ = _envs.into_iter().map(|x| {
+                env_vars_in_vec.push(x.0.to_string());
+                env_vars_in_vec.push(x.1.to_string());
+            });
+            let environment_variables = env_vars_in_vec.join(" ");
+            error!(
+                "json parsing error on {:?} on command: {} kubectl {}. {:?}",
+                std::any::type_name::<T>(),
+                environment_variables,
+                args_string,
+                err
+            );
             error!("{}", output_string.as_str());
             return Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)));
         }

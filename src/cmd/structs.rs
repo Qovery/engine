@@ -12,27 +12,9 @@ pub struct KubernetesService {
     pub status: KubernetesServiceStatus,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Labels {
-    pub name: String,
-}
-
 pub struct LabelsContent {
     pub name: String,
     pub value: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Spec {
-    pub finalizers: Vec<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Status {
-    pub phase: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -48,15 +30,12 @@ pub struct Item {
     pub api_version: String,
     pub kind: String,
     pub metadata: Metadata,
-    pub spec: Spec,
-    pub status: Status,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Metadata {
     pub creation_timestamp: String,
-    pub labels: Option<Labels>,
     pub name: String,
     pub resource_version: String,
     pub self_link: String,
@@ -69,7 +48,6 @@ pub struct Daemonset {
     pub api_version: String,
     pub items: Vec<Item>,
     pub kind: String,
-    pub metadata: Metadata,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
