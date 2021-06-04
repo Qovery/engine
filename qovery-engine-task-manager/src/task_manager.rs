@@ -412,8 +412,8 @@ impl ActionContext {
     }
 
     pub fn execution_id_short(&self) -> String {
-        const MAX_EXECUTION_ID_CHARS: usize = 7;
-        match self.execution_id.char_indices().nth(MAX_EXECUTION_ID_CHARS) {
+        let max_execution_id_chars: usize = 7;
+        match self.execution_id.char_indices().nth(max_execution_id_chars) {
             None => self.execution_id.to_string(),
             Some((idx, _)) => self.execution_id[..idx].to_string(),
         }
