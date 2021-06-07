@@ -27,8 +27,8 @@ lazy_static = "1.4.0"
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 
 # tar gz
-flate2 = "1.0.16" # tar gz
-tar = "0.4.29"
+flate2 = "1.0.20" # tar gz
+tar = "0.4.35"
 
 # logger
 tracing = "0.1"
@@ -61,6 +61,7 @@ digitalocean = "0.1.1"
 
 [dev-dependencies]
 test-utilities = { path = "test_utilities" }
+tempdir = "0.3"
 
 [features]
 default = []
