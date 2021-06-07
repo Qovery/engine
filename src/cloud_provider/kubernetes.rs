@@ -702,7 +702,6 @@ fn check_kubernetes_upgrade_status(
     let mut required_upgrade_on = None;
     let mut older_masters_version_detected = false;
     let mut older_workers_version_detected = false;
-    let mut workers_oldest_version = deployed_workers_version[0].clone();
 
     let wished_version = match get_version_number(requested_version) {
         Ok(v) => v,
@@ -736,6 +735,19 @@ fn check_kubernetes_upgrade_status(
     };
 
     // check workers versions
+    if deployed_workers_version.is_empty() {
+        warn!("no worker nodes found, can't check if upgrade is required for workers");
+        return Ok(KubernetesUpgradeStatus {
+            required_upgrade_on,
+            requested_version: wished_version,
+            deployed_masters_version: deployed_masters_version.clone(),
+            deployed_workers_version: deployed_masters_version,
+            older_masters_version_detected,
+            older_workers_version_detected,
+        });
+    }
+    let mut workers_oldest_version = deployed_workers_version[0].clone();
+
     for node in deployed_workers_version {
         total_workers += 1;
         match compare_kubernetes_cluster_versions_for_upgrade(&node, &wished_version) {

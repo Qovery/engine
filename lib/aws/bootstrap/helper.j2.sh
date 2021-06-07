@@ -47,6 +47,27 @@ function is_cni_old_installed_version() { ## Check if an old CNI version is alre
   exit 0
 }
 
+function enable_cni_managed_by_helm() { ## Check if an old CNI version is already installed
+  export AWS_ACCESS_KEY_ID="{{ aws_access_key }}"
+  export AWS_SECRET_ACCESS_KEY="{{ aws_secret_key }}"
+  export AWS_DEFAULT_REGION="{{ aws_region }}"
+  export KUBECONFIG={{ s3_kubeconfig_bucket }}/{{ kubernetes_cluster_id }}.yaml
+
+  set +e
+  # shellcheck disable=SC2046
+  if [ "$(kubectl -n kube-system get daemonset -l k8s-app=aws-node,app.kubernetes.io/managed-by=Helm 2>&1 | grep -ic 'No resources found')" == "0" ] ; then
+    exit 0
+  fi
+
+  for kind in daemonSet clusterRole clusterRoleBinding serviceAccount; do
+    echo "setting annotations and labels on $kind/aws-node"
+    kubectl -n kube-system annotate --overwrite $kind aws-node meta.helm.sh/release-name=aws-vpc-cni
+    kubectl -n kube-system annotate --overwrite $kind aws-node meta.helm.sh/release-namespace=kube-system
+    kubectl -n kube-system label --overwrite $kind aws-node app.kubernetes.io/managed-by=Helm
+  done
+  exit 0
+}
+
 function get_engine_version_to_use() { ## get the engine version for a given cluster. Args: token, api_fqdn, cluster_id
   ENGINE_VERSION_CONTROLLER_TOKEN=$1
   API_FQDN=$2
@@ -79,6 +100,9 @@ case $1 in
   ;;
   is_cni_old_installed_version)
     is_cni_old_installed_version
+  ;;
+  enable_cni_managed_by_helm)
+    enable_cni_managed_by_helm
   ;;
   *)
     help
