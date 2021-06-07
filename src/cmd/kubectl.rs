@@ -15,7 +15,6 @@ use crate::cmd::structs::{
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
-use itertools::Itertools;
 
 pub enum ScalingKind {
     Deployment,

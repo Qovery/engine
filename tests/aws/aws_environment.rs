@@ -27,7 +27,6 @@ use tracing::{span, Level};
 //     (context_vec, env_vec)
 // }
 
-
 // TODO:
 //   - Tests that applications are always restarted when recieving a CREATE action
 //     see: https://github.com/Qovery/engine/pull/269

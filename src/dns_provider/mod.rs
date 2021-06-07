@@ -9,6 +9,7 @@ pub mod cloudflare;
 
 pub trait DnsProvider {
     fn context(&self) -> &Context;
+    fn provider_name(&self) -> &str;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
@@ -18,6 +19,9 @@ pub trait DnsProvider {
     fn account(&self) -> &str;
     fn token(&self) -> &str;
     fn domain(&self) -> &str;
+    fn domain_helm_format(&self) -> String {
+        format!("{{{}}}", self.domain())
+    }
     fn resolvers(&self) -> Vec<Ipv4Addr>;
     fn is_valid(&self) -> Result<(), EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {

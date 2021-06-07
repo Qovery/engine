@@ -38,6 +38,10 @@ impl DnsProvider for Cloudflare {
         &self.context
     }
 
+    fn provider_name(&self) -> &str {
+        "cloudflare"
+    }
+
     fn kind(&self) -> Kind {
         Kind::Cloudflare
     }
