@@ -72,21 +72,22 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
     let enc = GzEncoder::new(tgz_file, Compression::fast());
     let mut tar = tar::Builder::new(enc);
 
-    let excluded_files: HashSet<&'static str> = vec![
-        ".terraform.lock.hcl",
-        ".terraform",]
-        .into_iter()
-        .collect();
+    let excluded_files: HashSet<&'static str> = vec![".terraform.lock.hcl", ".terraform"].into_iter().collect();
 
     for entry in WalkDir::new(workspace_dir.clone())
         .into_iter()
-        .filter_entry(|e| !excluded_files.contains(e.file_name().to_str().unwrap()))
+        .filter_entry(|e| !excluded_files.contains(e.file_name().to_str().expect("error getting file name string")))
     {
-        let entry = entry.unwrap();
+        let entry = entry.expect("error reading file");
         let entry_path = entry.path();
         if entry_path.is_file() {
-            tar.append_path_with_name(entry_path, entry_path.strip_prefix(workspace_dir.as_str()).unwrap())
-                .unwrap();
+            tar.append_path_with_name(
+                entry_path,
+                entry_path
+                    .strip_prefix(workspace_dir.as_str())
+                    .expect("error building relative path for file to place it in archive"),
+            )
+            .expect("error adding file to archive");
         }
     }
 
@@ -130,7 +131,7 @@ mod tests {
     fn test_archive_workspace_directory() {
         // setup:
         let execution_id: &str = "123";
-        let tmp_dir = TempDir::new("workspace_directory").unwrap();
+        let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
         let root_dir = format!(
             "{}/.qovery-workspace/{}",
             tmp_dir.path().to_str().unwrap(),
@@ -153,7 +154,7 @@ mod tests {
         ];
         directories_to_create
             .iter()
-            .for_each(|d| fs::create_dir_all(d).unwrap());
+            .for_each(|d| fs::create_dir_all(d).expect("error creating directory"));
 
         let tmp_files = vec![
             (".terraform/file-1.txt", "content"),
@@ -170,15 +171,18 @@ mod tests {
         ]
         .iter()
         .map(|(p, c)| {
-            let mut file = File::create(root_dir_path.join(p)).unwrap();
-            file.write_all(c.as_bytes()).unwrap();
+            let mut file = File::create(root_dir_path.join(p)).expect("error creating file");
+            file.write_all(c.as_bytes()).expect("error writing into file");
 
             file
         })
         .collect::<Vec<File>>();
 
         // execute:
-        let result = archive_workspace_directory(tmp_dir.path().to_str().unwrap(), execution_id);
+        let result = archive_workspace_directory(
+            tmp_dir.path().to_str().expect("error getting file path string"),
+            execution_id,
+        );
 
         // verify:
         assert_eq!(true, result.is_ok());
@@ -188,16 +192,22 @@ mod tests {
                 .into_iter()
                 .collect();
 
-        let archive = File::open(result.unwrap()).unwrap();
+        let archive = File::open(result.expect("error creating archive workspace directory"))
+            .expect("error opening archive file");
         let archive = BufReader::new(archive);
         let archive = GzDecoder::new(archive);
         let mut archive = tar::Archive::new(archive);
         let mut files_in_tar = HashSet::new();
 
-        for entry in archive.entries().unwrap() {
-            let encoded_entry = entry.unwrap();
-            let encoded_entry_path = &encoded_entry.path().unwrap();
-            files_in_tar.insert(encoded_entry_path.to_str().unwrap().to_string());
+        for entry in archive.entries().expect("error getting archive entries") {
+            let encoded_entry = entry.expect("error getting encoded entry");
+            let encoded_entry_path = &encoded_entry.path().expect("error getting encoded entry path");
+            files_in_tar.insert(
+                encoded_entry_path
+                    .to_str()
+                    .expect("error getting encoded entry path string")
+                    .to_string(),
+            );
         }
 
         assert_eq!(expected_files_in_tar.len(), files_in_tar.len());
@@ -210,6 +220,6 @@ mod tests {
 
         // clean:
         tmp_files.iter().for_each(|f| drop(f));
-        tmp_dir.close().unwrap();
+        tmp_dir.close().expect("error closing temporary directory");
     }
 }
