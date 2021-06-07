@@ -1,4 +1,4 @@
-FROM rust:1.48.0-buster
+FROM rust:1.52-buster
 
 ARG BIN_DEST_FOLDER="/binaries"
 ARG SCCACHE_REDIS
@@ -6,8 +6,11 @@ ENV RUSTC_WRAPPER=/usr/bin/sccache
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 ENV BIN_DIR=$BIN_DEST_FOLDER
 
-RUN apt-get update && apt-get install -y docker.io awscli curl libssh-dev pkg-config unzip make netcat-openbsd jq
+RUN apt-get update && apt-get install -y docker.io curl libssh-dev pkg-config unzip make netcat-openbsd jq
 
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+unzip awscliv2.zip && \
+./aws/install
 # sscache
 RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/releases/latest" | sed -r 's/^.+tag\/(.+)">.+/\1/') && \
     curl -sLo /usr/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache && \
