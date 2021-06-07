@@ -21,7 +21,7 @@ resource "aws_cloudwatch_log_group" "eks_cloudwatch_log_group" {
 }
 
 resource "aws_eks_cluster" "eks_cluster" {
-  name            = "qovery-${var.kubernetes_cluster_id}"
+  name            = var.kubernetes_cluster_name
   role_arn        = aws_iam_role.eks_cluster.arn
   version         = var.eks_k8s_versions.masters
 

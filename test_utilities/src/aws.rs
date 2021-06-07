@@ -1,10 +1,11 @@
 extern crate serde;
 extern crate serde_derive;
+use tracing::error;
 
 use chrono::Utc;
 
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
-use qovery_engine::cloud_provider::aws::kubernetes::{Options, EKS};
+use qovery_engine::cloud_provider::aws::kubernetes::{InfraOptions, EKS};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
@@ -35,6 +36,14 @@ pub fn execution_id() -> String {
 
 pub fn container_registry_ecr(context: &Context) -> ECR {
     let secrets = FuncTestsSecrets::new();
+    if secrets.AWS_ACCESS_KEY_ID.is_none()
+        || secrets.AWS_SECRET_ACCESS_KEY.is_none()
+        || secrets.AWS_DEFAULT_REGION.is_none()
+    {
+        error!("Please check your Vault connectivity (token/address) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_DEFAULT_REGION envrionment variables are set");
+        std::process::exit(1)
+    }
+
     ECR::new(
         context.clone(),
         "default-ecr-registry-Qovery Test",
@@ -87,8 +96,8 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
     )
 }
 
-pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
-    Options {
+pub fn eks_options(secrets: FuncTestsSecrets) -> InfraOptions {
+    InfraOptions {
         eks_zone_a_subnet_blocks: vec![
             "10.0.0.0/23".to_string(),
             "10.0.2.0/23".to_string(),

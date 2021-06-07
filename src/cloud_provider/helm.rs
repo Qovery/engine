@@ -31,6 +31,12 @@ pub struct ChartSetValue {
 }
 
 #[derive(Clone)]
+pub struct ChartValuesGenerated {
+    pub filename: String,
+    pub yaml_content: String,
+}
+
+#[derive(Clone)]
 pub struct ChartInfo {
     pub name: String,
     pub path: String,
@@ -43,6 +49,7 @@ pub struct ChartInfo {
     pub wait: bool,
     pub values: Vec<ChartSetValue>,
     pub values_files: Vec<String>,
+    pub yaml_files_content: Vec<ChartValuesGenerated>,
 }
 
 impl Default for ChartInfo {
@@ -54,11 +61,12 @@ impl Default for ChartInfo {
             action: Deploy,
             atomic: true,
             force_upgrade: false,
-            timeout: "300s".to_string(),
+            timeout: "180s".to_string(),
             dry_run: false,
             wait: true,
             values: Vec::new(),
             values_files: Vec::new(),
+            yaml_files_content: vec![],
         }
     }
 }
@@ -115,7 +123,7 @@ pub trait HelmChart: Send {
                     "Error while deploying chart: {:?}",
                     e.message.clone().expect("no message provided")
                 );
-                self.on_deploy_failure(&kubernetes_config, &envs);
+                self.on_deploy_failure(&kubernetes_config, &envs)?;
                 return Err(e);
             }
         };
@@ -227,48 +235,55 @@ impl HelmChart for CoreDNSConfigChart {
         environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
 
         info!("setting annotations and labels on {}/{}", &kind, &self.chart_info.name);
-        kubectl_exec_with_output(
-            vec![
-                "-n",
-                "kube-system",
-                "annotate",
-                "--overwrite",
-                &kind,
-                &self.chart_info.name,
-                format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
-            ],
-            environment_variables.clone(),
-            |_| {},
-            |_| {},
-        )?;
-        kubectl_exec_with_output(
-            vec![
-                "-n",
-                "kube-system",
-                "annotate",
-                "--overwrite",
-                &kind,
-                &self.chart_info.name,
-                "meta.helm.sh/release-namespace=kube-system",
-            ],
-            environment_variables.clone(),
-            |_| {},
-            |_| {},
-        )?;
-        kubectl_exec_with_output(
-            vec![
-                "-n",
-                "kube-system",
-                "label",
-                "--overwrite",
-                &kind,
-                &self.chart_info.name,
-                "app.kubernetes.io/managed-by=Helm",
-            ],
-            environment_variables.clone(),
-            |_| {},
-            |_| {},
-        )?;
+        let steps = || -> Result<(), SimpleError> {
+            kubectl_exec_with_output(
+                vec![
+                    "-n",
+                    "kube-system",
+                    "annotate",
+                    "--overwrite",
+                    &kind,
+                    &self.chart_info.name,
+                    format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
+                ],
+                environment_variables.clone(),
+                |_| {},
+                |_| {},
+            )?;
+            kubectl_exec_with_output(
+                vec![
+                    "-n",
+                    "kube-system",
+                    "annotate",
+                    "--overwrite",
+                    &kind,
+                    &self.chart_info.name,
+                    "meta.helm.sh/release-namespace=kube-system",
+                ],
+                environment_variables.clone(),
+                |_| {},
+                |_| {},
+            )?;
+            kubectl_exec_with_output(
+                vec![
+                    "-n",
+                    "kube-system",
+                    "label",
+                    "--overwrite",
+                    &kind,
+                    &self.chart_info.name,
+                    "app.kubernetes.io/managed-by=Helm",
+                ],
+                environment_variables.clone(),
+                |_| {},
+                |_| {},
+            )?;
+            Ok(())
+        };
+        if let Err(e) = steps() {
+            return Err(e);
+        };
+
         Ok(())
     }
 

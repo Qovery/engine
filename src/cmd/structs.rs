@@ -42,12 +42,32 @@ pub struct Metadata {
     pub uid: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Daemonset {
     pub api_version: String,
-    pub items: Vec<Item>,
+    pub items: Option<Vec<Item>>,
     pub kind: String,
+    pub spec: Option<Spec>,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Spec {
+    pub selector: Selector,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Selector {
+    pub match_labels: MatchLabels,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchLabels {
+    #[serde(rename = "k8s-app")]
+    pub k8s_app: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
