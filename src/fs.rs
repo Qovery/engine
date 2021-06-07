@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::fs::{create_dir_all, File};
 use std::io::Error;
@@ -65,16 +66,31 @@ where
 
 fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
     let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id);
+    let tgz_file_path = format!("{}/.qovery-workspace/{}.tgz", working_root_dir, execution_id);
+    let tgz_file = File::create(tgz_file_path.as_str())?;
 
-    let tar_gz_file_path = format!("{}/.qovery-workspace/{}.tar.gz", working_root_dir, execution_id);
-
-    let tar_gz_file = File::create(tar_gz_file_path.as_str())?;
-
-    let enc = GzEncoder::new(tar_gz_file, Compression::fast());
+    let enc = GzEncoder::new(tgz_file, Compression::fast());
     let mut tar = tar::Builder::new(enc);
-    tar.append_dir_all(execution_id, workspace_dir)?;
 
-    Ok(tar_gz_file_path)
+    let excluded_files: HashSet<&'static str> = vec![
+        ".terraform.lock.hcl",
+        ".terraform",]
+        .into_iter()
+        .collect();
+
+    for entry in WalkDir::new(workspace_dir.clone())
+        .into_iter()
+        .filter_entry(|e| !excluded_files.contains(e.file_name().to_str().unwrap()))
+    {
+        let entry = entry.unwrap();
+        let entry_path = entry.path();
+        if entry_path.is_file() {
+            tar.append_path_with_name(entry_path, entry_path.strip_prefix(workspace_dir.as_str()).unwrap())
+                .unwrap();
+        }
+    }
+
+    Ok(tgz_file_path)
 }
 
 pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) {
@@ -95,5 +111,105 @@ pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> R
             cleanup_workspace_directory(working_root_dir, execution_id);
             Ok(file)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate tempdir;
+
+    use super::*;
+    use flate2::read::GzDecoder;
+    use std::collections::HashSet;
+    use std::fs::File;
+    use std::io::prelude::*;
+    use std::io::BufReader;
+    use tempdir::TempDir;
+
+    #[test]
+    fn test_archive_workspace_directory() {
+        // setup:
+        let execution_id: &str = "123";
+        let tmp_dir = TempDir::new("workspace_directory").unwrap();
+        let root_dir = format!(
+            "{}/.qovery-workspace/{}",
+            tmp_dir.path().to_str().unwrap(),
+            execution_id
+        );
+        let root_dir_path = Path::new(root_dir.as_str());
+
+        let directories_to_create = vec![
+            format!("{}", root_dir),
+            format!("{}/.terraform", root_dir),
+            format!("{}/.terraform/dir-1", root_dir),
+            format!("{}/dir-1", root_dir),
+            format!("{}/dir-1/.terraform", root_dir),
+            format!("{}/dir-1/.terraform/dir-1", root_dir),
+            format!("{}/dir-2", root_dir),
+            format!("{}/dir-2/.terraform", root_dir),
+            format!("{}/dir-2/dir-1/.terraform", root_dir),
+            format!("{}/dir-2/dir-1/.terraform/dir-1", root_dir),
+            format!("{}/dir-2/.terraform/dir-1", root_dir),
+        ];
+        directories_to_create
+            .iter()
+            .for_each(|d| fs::create_dir_all(d).unwrap());
+
+        let tmp_files = vec![
+            (".terraform/file-1.txt", "content"),
+            (".terraform/dir-1/file-1.txt", "content"),
+            ("dir-1/.terraform/file-1.txt", "content"),
+            ("dir-1/.terraform/dir-1/file-1.txt", "content"),
+            ("dir-2/dir-1/.terraform/file-1.txt", "content"),
+            ("dir-2/dir-1/.terraform/dir-1/file-1.txt", "content"),
+            ("file-1.txt", "content"),
+            (".terraform.lock.hcl", "content"),
+            ("dir-1/.terraform.lock.hcl", "content"),
+            ("dir-2/dir-1/.terraform.lock.hcl", "content"),
+            ("dir-2/dir-1/file-2.txt", "content"),
+        ]
+        .iter()
+        .map(|(p, c)| {
+            let mut file = File::create(root_dir_path.join(p)).unwrap();
+            file.write_all(c.as_bytes()).unwrap();
+
+            file
+        })
+        .collect::<Vec<File>>();
+
+        // execute:
+        let result = archive_workspace_directory(tmp_dir.path().to_str().unwrap(), execution_id);
+
+        // verify:
+        assert_eq!(true, result.is_ok());
+
+        let expected_files_in_tar: HashSet<String> =
+            vec![String::from("file-1.txt"), String::from("dir-2/dir-1/file-2.txt")]
+                .into_iter()
+                .collect();
+
+        let archive = File::open(result.unwrap()).unwrap();
+        let archive = BufReader::new(archive);
+        let archive = GzDecoder::new(archive);
+        let mut archive = tar::Archive::new(archive);
+        let mut files_in_tar = HashSet::new();
+
+        for entry in archive.entries().unwrap() {
+            let encoded_entry = entry.unwrap();
+            let encoded_entry_path = &encoded_entry.path().unwrap();
+            files_in_tar.insert(encoded_entry_path.to_str().unwrap().to_string());
+        }
+
+        assert_eq!(expected_files_in_tar.len(), files_in_tar.len());
+        for e in expected_files_in_tar.iter() {
+            assert_eq!(true, files_in_tar.contains(e));
+        }
+        for e in files_in_tar.iter() {
+            assert_eq!(true, expected_files_in_tar.contains(e));
+        }
+
+        // clean:
+        tmp_files.iter().for_each(|f| drop(f));
+        tmp_dir.close().unwrap();
     }
 }
