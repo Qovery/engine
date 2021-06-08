@@ -18,6 +18,10 @@ QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=cloned-engine
 
+export AWS_DEFAULT_REGION="eu-west-3"
+export AWS_ACCESS_KEY_ID="$AWS_PROD_DEPLOY_ACCESS_KEY"
+export AWS_SECRET_ACCESS_KEY="$AWS_PROD_DEPLOY_SECRET_KEY"
+
 export DOCKER_BUILDKIT=0
 export GITLAB_LOG_UTILITIES_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
 export GITLAB_LOG_OUTPUT_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
@@ -229,7 +233,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   set -e
 
   export DOCKER_BUILDKIT=1
-  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
+  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t public.ecr.aws/r3m4q3r9/qovery-ci:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
@@ -245,7 +249,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
 
   cd docker/ci
   export DOCKER_BUILDKIT=1
-  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t qoveryrd/ci:${tag} .
+  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t public.ecr.aws/r3m4q3r9/qovery-ci:${tag} .
   cd -
 
   rm -f docker/ci/load.sh
@@ -257,8 +261,8 @@ function push_image() { ## Push Engine local image with current commit ID as tag
   tag=$(generate_image_tag)
   set -e
 
-  docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
-  docker push qoveryrd/engine:${tag}
+  aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+  docker push public.ecr.aws/r3m4q3r9/qovery-ci:${tag}
 }
 
 function push_ci_image() { ## Push CI local image with current commit ID as tag
@@ -266,8 +270,8 @@ function push_ci_image() { ## Push CI local image with current commit ID as tag
   tag=$(generate_image_tag)
   set -e
 
-  docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
-  docker push qoveryrd/ci:${tag}
+  aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+  docker push public.ecr.aws/r3m4q3r9/qovery-ci:${tag}
 }
 
 ## Releases
