@@ -971,6 +971,7 @@ impl Clone2 for Context {
         let suffix = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(10)
+            .map(|e| e.to_string())
             .collect::<String>();
         new.execution_id = format!("{}-{}", self.execution_id, suffix);
         new
