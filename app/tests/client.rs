@@ -1,5 +1,3 @@
-extern crate log;
-
 use std::fs::File;
 use std::io::{Error, Read};
 

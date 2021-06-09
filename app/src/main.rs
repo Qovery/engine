@@ -21,11 +21,7 @@ use dotenv::dotenv;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use tracing::error;
-use tracing_subscriber::{
-    fmt::{format, time::ChronoUtc},
-    prelude::*,
-    EnvFilter,
-};
+use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
 use uuid::Uuid;
 
 use qovery_engine::cmd;
