@@ -2,7 +2,6 @@ FROM rust:1.52.1-buster
 
 ARG BIN_DEST_FOLDER="/binaries"
 ARG SCCACHE_REDIS
-ENV RUSTC_WRAPPER=/usr/bin/sccache
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 ENV BIN_DIR=$BIN_DEST_FOLDER
 
@@ -23,6 +22,8 @@ RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/relea
 RUN cargo install cargo2junit
 RUN rustup component add rustfmt clippy
 ENV PATH="/root/.cargo/bin/:${PATH}"
+
+ENV RUSTC_WRAPPER=/usr/bin/sccache
 
 ADD load.sh /
 ADD bin_versions /
