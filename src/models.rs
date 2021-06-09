@@ -142,6 +142,10 @@ impl Action {
     }
 }
 
+fn default_root_path_value() -> String {
+    "/".to_string()
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     pub id: String,
@@ -152,6 +156,8 @@ pub struct Application {
     pub branch: String,
     pub commit_id: String,
     pub dockerfile_path: Option<String>,
+    #[serde(default = "default_root_path_value")]
+    pub root_path: String,
     pub private_port: Option<u16>,
     pub total_cpus: String,
     pub cpu_burst: String,
@@ -285,15 +291,13 @@ impl Application {
         Build {
             git_repository: GitRepository {
                 url: self.git_url.clone(),
-                credentials: match &self.git_credentials {
-                    Some(credentials) => Some(Credentials {
-                        login: credentials.login.clone(),
-                        password: credentials.access_token.clone(),
-                    }),
-                    _ => None,
-                },
+                credentials: self.git_credentials.as_ref().map(|credentials| Credentials {
+                    login: credentials.login.clone(),
+                    password: credentials.access_token.clone(),
+                }),
                 commit_id: self.commit_id.clone(),
                 dockerfile_path: self.dockerfile_path.clone(),
+                root_path: self.root_path.clone(),
             },
             image: self.to_image(),
             options: BuildOptions {
@@ -377,9 +381,7 @@ impl Storage {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
-            storage_type: match self.storage_type {
-                _ => crate::cloud_provider::digitalocean::application::StorageType::Standard,
-            },
+            storage_type: crate::cloud_provider::digitalocean::application::StorageType::Standard,
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
@@ -771,13 +773,10 @@ impl ExternalService {
         Build {
             git_repository: GitRepository {
                 url: self.git_url.clone(),
-                credentials: match &self.git_credentials {
-                    Some(credentials) => Some(Credentials {
-                        login: credentials.login.clone(),
-                        password: credentials.access_token.clone(),
-                    }),
-                    _ => None,
-                },
+                credentials: self.git_credentials.as_ref().map(|credentials| Credentials {
+                    login: credentials.login.clone(),
+                    password: credentials.access_token.clone(),
+                }),
                 commit_id: self.commit_id.clone(),
                 dockerfile_path: Some(match self.action {
                     Action::Create => self.on_create_dockerfile_path.clone(),
@@ -785,6 +784,7 @@ impl ExternalService {
                     Action::Delete => self.on_delete_dockerfile_path.clone(),
                     Action::Nothing => self.on_create_dockerfile_path.clone(),
                 }),
+                root_path: default_root_path_value(),
             },
             image: self.to_image(),
             options: BuildOptions {
@@ -826,10 +826,7 @@ impl ProgressInfo {
             created_at: Utc::now(),
             scope,
             level,
-            message: match message {
-                Some(msg) => Some(msg.into()),
-                _ => None,
-            },
+            message: message.map(|msg| msg.into()),
             execution_id: execution_id.into(),
         }
     }
@@ -1015,20 +1012,14 @@ impl Context {
 
     pub fn is_dry_run_deploy(&self) -> bool {
         match &self.metadata {
-            Some(meta) => match meta.dry_run_deploy {
-                Some(true) => true,
-                _ => false,
-            },
+            Some(meta) => matches!(meta.dry_run_deploy, Some(true)),
             _ => false,
         }
     }
 
     pub fn requires_forced_upgrade(&self) -> bool {
         match &self.metadata {
-            Some(meta) => match meta.forced_upgrade {
-                Some(true) => true,
-                _ => false,
-            },
+            Some(meta) => matches!(meta.forced_upgrade, Some(true)),
             _ => false,
         }
     }
@@ -1039,20 +1030,17 @@ impl Context {
 
     pub fn resource_expiration_in_seconds(&self) -> Option<u32> {
         match &self.metadata {
-            Some(meta) => match meta.resource_expiration_in_seconds {
-                Some(ttl) => Some(ttl),
-                _ => None,
-            },
+            Some(meta) => meta.resource_expiration_in_seconds.map(|ttl| ttl),
             _ => None,
         }
     }
 
     pub fn docker_build_options(&self) -> Option<Vec<String>> {
         match &self.metadata {
-            Some(meta) => match meta.docker_build_options.clone() {
-                Some(b) => Some(b.split(" ").map(|x| x.to_string()).collect()),
-                _ => None,
-            },
+            Some(meta) => meta
+                .docker_build_options
+                .clone()
+                .map(|b| b.split(' ').map(|x| x.to_string()).collect()),
             _ => None,
         }
     }
