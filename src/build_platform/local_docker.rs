@@ -299,77 +299,55 @@ impl BuildPlatform for LocalDocker {
         }
 
         // git clone
-        let into_dir = workspace_directory(
+        let repository_root_path = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("build/{}", build.image.name.as_str()),
         );
 
-        info!("cloning repository: {}", build.git_repository.url);
+        info!(
+            "cloning repository: {} to {}",
+            build.git_repository.url, repository_root_path
+        );
         let git_clone = git::clone(
             build.git_repository.url.as_str(),
-            &into_dir,
+            &repository_root_path,
             &build.git_repository.credentials,
         );
 
-        match git_clone {
-            Ok(_) => {}
-            Err(err) => {
-                let message = format!(
-                    "Error while cloning repository {}. Error: {:?}",
-                    &build.git_repository.url, err
-                );
-
-                error!("{}", message);
-
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
-            }
+        if let Err(err) = git_clone {
+            let message = format!(
+                "Error while cloning repository {}. Error: {:?}",
+                &build.git_repository.url, err
+            );
+            error!("{}", message);
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
         // git checkout to given commit
-        let repo = &git_clone.unwrap();
+        let repo = git_clone.unwrap();
         let commit_id = &build.git_repository.commit_id;
-        match git::checkout(&repo, &commit_id, build.git_repository.url.as_str()) {
-            Ok(_) => {}
-            Err(err) => {
-                let message = format!(
-                    "Error while git checkout repository {} with commit id {}. Error: {:?}",
-                    &build.git_repository.url, commit_id, err
-                );
-
-                error!("{}", message);
-
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
-            }
+        if let Err(err) = git::checkout(&repo, commit_id, build.git_repository.url.as_str()) {
+            let message = format!(
+                "Error while git checkout repository {} with commit id {}. Error: {:?}",
+                &build.git_repository.url, commit_id, err
+            );
+            error!("{}", message);
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
         // git checkout submodules
-        match checkout_submodules(repo) {
-            Ok(_) => {}
-            Err(err) => {
-                let message = format!(
-                    "Error while checkout submodules from repository {}. Error: {:?}",
-                    &build.git_repository.url, err
-                );
+        if let Err(err) = checkout_submodules(&repo) {
+            let message = format!(
+                "Error while checkout submodules from repository {}. Error: {:?}",
+                &build.git_repository.url, err
+            );
+            error!("{}", message);
 
-                error!("{}", message);
-
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
-            }
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
-        let into_dir_docker_style = format!("{}/.", into_dir.as_str());
-
-        let dockerfile_relative_path = match &build.git_repository.dockerfile_path {
-            Some(dockerfile_relative_path) => match dockerfile_relative_path.trim() {
-                "" | "." | "/" | "/." | "./" | "Dockerfile" => Some("Dockerfile"),
-                dockerfile_root_path => Some(dockerfile_root_path),
-            },
-            None => None,
-        };
-
         let mut disable_build_cache = false;
-
         let mut env_var_args: Vec<String> = Vec::with_capacity(build.options.environment_variables.len());
 
         for ev in &build.options.environment_variables {
@@ -407,48 +385,67 @@ impl BuildPlatform for LocalDocker {
             }
         }
 
-        let application_id = build.image.application_id.clone();
+        let app_id = build.image.application_id.clone();
+        let build_context_path = format!("{}/{}/.", repository_root_path.as_str(), build.git_repository.root_path);
+        // If no Dockerfile specified, we should use BuildPacks
+        let result = if build.git_repository.dockerfile_path.is_some() {
+            // build container from the provided Dockerfile
 
-        let dockerfile_exists = match dockerfile_relative_path {
-            Some(path) => {
-                let dockerfile_complete_path = format!("{}/{}", into_dir.as_str(), path);
-                let exists = Path::new(dockerfile_complete_path.as_str()).exists();
-                if !exists {
-                    warn!("Dockerfile not found under given {}", dockerfile_complete_path)
-                }
-                exists
-            }
-            None => false,
-        };
+            let dockerfile_relative_path = build.git_repository.dockerfile_path.as_ref().unwrap();
+            let dockerfile_normalized_path = match dockerfile_relative_path.trim() {
+                "" | "." | "/" | "/." | "./" | "Dockerfile" => "Dockerfile",
+                dockerfile_root_path => dockerfile_root_path,
+            };
 
-        let result = match dockerfile_exists {
-            true => {
-                // build container from the provided Dockerfile
-                let dockerfile_complete_path = format!("{}/{}", into_dir.as_str(), dockerfile_relative_path.unwrap());
+            let dockerfile_relative_path = format!("{}/{}", build.git_repository.root_path, dockerfile_normalized_path);
+            let dockerfile_absolute_path = format!("{}/{}", repository_root_path.as_str(), dockerfile_relative_path);
 
-                self.build_image_with_docker(
-                    build,
-                    dockerfile_complete_path.as_str(),
-                    into_dir_docker_style.as_str(),
-                    env_var_args,
-                    !disable_build_cache,
-                    &listeners_helper,
-                )
+            // If the dockerfile does not exist, abort
+            if !Path::new(dockerfile_absolute_path.as_str()).exists() {
+                warn!("Dockerfile not found under {}", dockerfile_absolute_path);
+                listeners_helper.error(ProgressInfo::new(
+                    ProgressScope::Application {
+                        id: build.image.application_id.clone(),
+                    },
+                    ProgressLevel::Error,
+                    Some(format!(
+                        "Dockerfile is not present at location {}",
+                        dockerfile_relative_path
+                    )),
+                    self.context.execution_id(),
+                ));
+
+                return Err(self.engine_error(
+                    EngineErrorCause::User("Dockerfile not found at location"),
+                    format!(
+                        "Your Dockerfile is not present at the specified location {}/{}",
+                        build.git_repository.root_path.as_str(),
+                        build.git_repository.dockerfile_path.unwrap_or_default().as_str()
+                    ),
+                ));
             }
-            false => {
-                // build container with Buildpacks
-                self.build_image_with_buildpacks(
-                    build,
-                    into_dir_docker_style.as_str(),
-                    env_var_args,
-                    !disable_build_cache,
-                    &listeners_helper,
-                )
-            }
+
+            self.build_image_with_docker(
+                build,
+                dockerfile_absolute_path.as_str(),
+                build_context_path.as_str(),
+                env_var_args,
+                !disable_build_cache,
+                &listeners_helper,
+            )
+        } else {
+            // build container with Buildpacks
+            self.build_image_with_buildpacks(
+                build,
+                build_context_path.as_str(),
+                env_var_args,
+                !disable_build_cache,
+                &listeners_helper,
+            )
         };
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Application { id: application_id },
+            ProgressScope::Application { id: app_id },
             ProgressLevel::Info,
             Some(format!("container {} is built ✔", self.name_with_id())),
             self.context.execution_id(),
