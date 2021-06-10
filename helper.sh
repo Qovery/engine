@@ -233,7 +233,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   set -e
 
   export DOCKER_BUILDKIT=1
-  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t public.ecr.aws/r3m4q3r9/qovery-ci:${tag} .
+  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
@@ -261,8 +261,8 @@ function push_image() { ## Push Engine local image with current commit ID as tag
   tag=$(generate_image_tag)
   set -e
 
-  aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
-  docker push public.ecr.aws/r3m4q3r9/qovery-ci:${tag}
+  docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
+  docker push qoveryrd/engine:${tag}
 }
 
 function push_ci_image() { ## Push CI local image with current commit ID as tag
