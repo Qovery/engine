@@ -1,9 +1,10 @@
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 
 use chrono::{DateTime, Utc};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 
 use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
 use crate::cloud_provider::aws::databases::mongodb::MongoDB;
@@ -276,10 +277,17 @@ impl Application {
     }
 
     pub fn to_image(&self) -> Image {
+        // Image tag == hash(root_path) + commit_id truncate to 127 char
+        // https://github.com/distribution/distribution/blob/6affafd1f030087d88f88841bf66a8abe2bf4d24/reference/regexp.go#L41
+        let mut hasher = DefaultHasher::new();
+        self.root_path.hash(&mut hasher);
+        let mut tag = format!("{}-{}", hasher.finish(), self.commit_id);
+        tag.truncate(127);
+
         Image {
             application_id: self.id.clone(),
             name: self.name.clone(),
-            tag: self.commit_id.clone(),
+            tag,
             commit_id: self.commit_id.clone(),
             registry_name: None,
             registry_secret: None,
