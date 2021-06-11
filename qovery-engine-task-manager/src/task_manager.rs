@@ -13,7 +13,7 @@ use crate::utils::LogErrorOnDrop;
 use core::fmt;
 use prometheus::{self, IntGauge};
 use qovery_engine::models::{ProgressLevel, ProgressScope};
-use serde::export::Formatter;
+use core::fmt::Formatter;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
