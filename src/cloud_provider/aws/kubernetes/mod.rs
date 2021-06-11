@@ -521,7 +521,7 @@ impl<'a> EKS<'a> {
         context.insert("enable_cluster_autoscaler", &false);
         context.insert(
             "eks_workers_version",
-            &kubernetes_upgrade_status.deployed_workers_version,
+            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
         );
 
         let _ = cast_simple_error_to_engine_error(
