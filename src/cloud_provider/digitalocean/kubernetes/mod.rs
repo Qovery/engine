@@ -223,6 +223,7 @@ impl<'a> DOKS<'a> {
 
         context.insert("nginx_enable_horizontal_autoscaler", "true");
         context.insert("nginx_minimum_replicas", "2");
+        context.insert("nginx_maximum_replicas", "2");
         context.insert("nginx_requests_cpu", "250m");
         context.insert("nginx_requests_memory", "384Mi");
         context.insert("nginx_limit_cpu", "1");
