@@ -214,22 +214,22 @@ controller:
   ##
   podAnnotations: {}
 
-  replicaCount: {{ nginx_minimum_replicas }}
+  replicaCount: 2
 
   minAvailable: 1
 
   resources:
     limits:
-      cpu: {{ nginx_limit_cpu }}
-      memory: {{ nginx_limit_memory }}
+      cpu: 1
+      memory: 384Mi
     requests:
-      cpu: {{ nginx_requests_cpu }}
-      memory: {{ nginx_requests_memory }}
+      cpu: 1
+      memory: 384Mi
 
   autoscaling:
-    enabled: {{ nginx_enable_horizontal_autoscaler }}
-    minReplicas: {{ nginx_minimum_replicas }}
-    maxReplicas: {{ nginx_maximum_replicas }}
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
     targetCPUUtilizationPercentage: 50
     targetMemoryUtilizationPercentage: 50
 
