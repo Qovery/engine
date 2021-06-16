@@ -42,6 +42,17 @@ pub struct Metadata {
     pub uid: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct Configmap {
+    pub data: ConfigmapData,
+}
+
+#[derive(Hash, Serialize, Deserialize)]
+pub struct ConfigmapData {
+    #[serde(rename = "Corefile")]
+    pub corefile: Option<String>,
+}
+
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Daemonset {
@@ -261,6 +272,7 @@ impl HelmChart {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct HelmHistoryRow {
     pub revision: u16,
+    pub updated: String,
     pub status: String,
     pub chart: String,
     pub app_version: String,

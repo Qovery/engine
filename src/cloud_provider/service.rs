@@ -449,7 +449,7 @@ where
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
-            kubernetes.cloud_provider().credentials_environment_variables(),
+            &kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
@@ -1086,7 +1086,7 @@ pub fn do_stateless_service_cleanup(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name,
-            kubernetes.cloud_provider().credentials_environment_variables(),
+            &kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 

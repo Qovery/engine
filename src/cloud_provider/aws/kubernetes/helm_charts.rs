@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::InfraOptions;
 use crate::cloud_provider::helm::{
-    get_chart_namespace, ChartInfo, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmChart,
-    HelmChartNamespaces,
+    get_chart_namespace, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart,
+    HelmChart, HelmChartNamespaces,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
@@ -55,10 +55,7 @@ pub fn aws_helm_charts(
     kubernetes_config: &Path,
     envs: &[(String, String)],
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError> {
-    let chart_prefix = match chart_prefix_path {
-        None => "./",
-        Some(x) => x,
-    };
+    let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
     let content_file = File::open(&qovery_terraform_config_file)?;
     let reader = BufReader::new(content_file);
@@ -157,7 +154,7 @@ pub fn aws_helm_charts(
                     value: qovery_terraform_config.aws_iam_eks_user_mapper_secret,
                 },
                 ChartSetValue {
-                    key: "image.region".to_string(),
+                    key: "aws.region".to_string(),
                     value: chart_config_prerequisites.region.clone(),
                 },
                 ChartSetValue {
@@ -671,7 +668,7 @@ datasources:
         get_chart_namespace(loki_namespace),
         &loki.chart_info.name,
         get_chart_namespace(loki_namespace),
-        chart_config_prerequisites.region,
+        chart_config_prerequisites.region.clone(),
         qovery_terraform_config.aws_iam_cloudwatch_key,
         qovery_terraform_config.aws_iam_cloudwatch_secret,
     );
@@ -873,6 +870,10 @@ datasources:
                 ChartSetValue {
                     key: "environmentVariables.AWS_SECRET_ACCESS_KEY".to_string(),
                     value: chart_config_prerequisites.aws_secret_access_key.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.PLECO_IDENTIFIER".to_string(),
+                    value: chart_config_prerequisites.cluster_id.clone(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.LOG_LEVEL".to_string(),
@@ -1133,7 +1134,12 @@ impl HelmChart for AwsVpcCniChart {
         &self.chart_info
     }
 
-    fn pre_exec(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<(), SimpleError> {
+    fn pre_exec(
+        &self,
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
+        _payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, SimpleError> {
         let kinds = vec!["daemonSet", "clusterRole", "clusterRoleBinding", "serviceAccount"];
         let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
@@ -1208,7 +1214,7 @@ impl HelmChart for AwsVpcCniChart {
             false => info!("AWS CNI is already supported by Helm, nothing to do"),
         };
 
-        Ok(())
+        Ok(None)
     }
 }
 
@@ -1268,13 +1274,7 @@ impl AwsVpcCniChart {
             Some("k8s-app=aws-node,app.kubernetes.io/managed-by=Helm"),
             environment_variables,
         ) {
-            Ok(x) => {
-                if x.items.is_some() && x.items.unwrap().is_empty() {
-                    true
-                } else {
-                    false
-                }
-            }
+            Ok(x) => x.items.is_some() && x.items.unwrap().is_empty(),
             Err(e) => {
                 error!(
                     "error while getting daemonset info for chart {}, won't deploy CNI chart. {:?}",

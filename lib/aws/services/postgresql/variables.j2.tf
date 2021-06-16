@@ -173,7 +173,6 @@ variable "skip_final_snapshot" {
 }
 
 # Snapshots
-# TODO later
 #variable "snapshot_identifier" {
 #  description = "Snapshot ID to restore"
 #  default = "{ service_info['snapshot']['snapshot_id'] }"
