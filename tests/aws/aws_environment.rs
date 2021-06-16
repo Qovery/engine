@@ -8,25 +8,6 @@ use test_utilities::utilities::context;
 use test_utilities::utilities::init;
 use tracing::{span, Level};
 
-// insert how many actions you will use in tests
-// args are function you want to use and how many context you want to have
-// it permit you to create several different workspaces for each steps
-// TODO implement it well
-// pub fn generate_contexts_and_environments(
-//     number: u8,
-//     func: fn(&Context) -> Environment,
-// ) -> (Vec<Context>, Vec<Environment>) {
-//     let mut context_vec: Vec<Context> = Vec::new();
-//     let mut env_vec: Vec<Environment> = Vec::new();
-//     let context = context();
-//     for _ in std::iter::repeat(number) {
-//         context_vec.push(context.clone_not_same_execution_id());
-//         let environment = func(&context);
-//         env_vec.push(environment);
-//     }
-//     (context_vec, env_vec)
-// }
-
 // TODO:
 //   - Tests that applications are always restarted when recieving a CREATE action
 //     see: https://github.com/Qovery/engine/pull/269

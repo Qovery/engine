@@ -9,8 +9,8 @@ use serde::de::DeserializeOwned;
 use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
-    Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod,
-    KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent,
+    Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
+    KubernetesPod, KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent,
 };
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
@@ -217,7 +217,6 @@ where
         return Ok(None);
     }
 
-    // FIXME unsafe unwrap here?
     Ok(Some(
         result
             .items
@@ -242,7 +241,6 @@ pub fn kubectl_exec_is_pod_ready_with_retry<P>(
 where
     P: AsRef<Path>,
 {
-    // TODO check this
     let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
         let r = crate::cmd::kubectl::kubectl_exec_is_pod_ready(
             kubernetes_config.as_ref(),
@@ -311,7 +309,6 @@ pub fn kubectl_exec_is_job_ready_with_retry<P>(
 where
     P: AsRef<Path>,
 {
-    // TODO check this
     let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
         let r = crate::cmd::kubectl::kubectl_exec_is_job_ready(
             kubernetes_config.as_ref(),
@@ -730,12 +727,12 @@ pub fn kubectl_exec_rollout_restart_deployment<P>(
     kubernetes_config: P,
     name: &str,
     namespace: &str,
-    envs: Vec<(&str, &str)>,
+    envs: &Vec<(&str, &str)>,
 ) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
-    let mut environment_variables: Vec<(&str, &str)> = envs;
+    let mut environment_variables: Vec<(&str, &str)> = envs.clone();
     environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
@@ -792,6 +789,22 @@ where
 {
     kubectl_exec::<P, KubernetesList<KubernetesPod>>(
         vec!["get", "pod", "-o", "json", "-n", namespace, "-l", selector],
+        kubernetes_config,
+        envs,
+    )
+}
+
+pub fn kubectl_exec_get_configmap<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Configmap, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, Configmap>(
+        vec!["get", "configmap", "-o", "json", "-n", namespace, &name],
         kubernetes_config,
         envs,
     )

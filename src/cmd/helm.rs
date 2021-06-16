@@ -54,7 +54,7 @@ where
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, &envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
     Ok(helm_history_rows
@@ -317,7 +317,7 @@ pub fn helm_exec_history<P>(
     kubernetes_config: P,
     namespace: &str,
     release_name: &str,
-    envs: Vec<(&str, &str)>,
+    envs: &Vec<(&str, &str)>,
 ) -> Result<Vec<HelmHistoryRow>, SimpleError>
 where
     P: AsRef<Path>,
@@ -335,7 +335,7 @@ where
             "json",
             release_name,
         ],
-        envs,
+        envs.clone(),
         |out| match out {
             Ok(line) => output_string = line,
             Err(err) => error!("{:?}", err),
@@ -489,7 +489,7 @@ where
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, &envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
     Ok(helm_history_rows
@@ -556,6 +556,80 @@ where
     }
 
     Ok(helms_charts)
+}
+
+pub fn helm_upgrade_diff_with_chart_info<P>(
+    kubernetes_config: P,
+    envs: &Vec<(String, String)>,
+    chart: &ChartInfo,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut environment_variables = envs.clone();
+    environment_variables.push(("HELM_NAMESPACE".to_string(), get_chart_namespace(chart.namespace)));
+
+    let mut args_string: Vec<String> = vec![
+        "diff",
+        "upgrade",
+        "--allow-unreleased",
+        "--kubeconfig",
+        kubernetes_config.as_ref().to_str().unwrap(),
+    ]
+    .into_iter()
+    .map(|x| x.to_string())
+    .collect();
+
+    // overrides and files overrides
+    for value in &chart.values {
+        args_string.push("--set".to_string());
+        args_string.push(format!("{}={}", value.key, value.value));
+    }
+    for value_file in &chart.values_files {
+        args_string.push("-f".to_string());
+        args_string.push(value_file.clone());
+    }
+    for value_file in &chart.yaml_files_content {
+        let file_path = format!("{}/{}", chart.path, &value_file.filename);
+        let file_create = || -> Result<(), Error> {
+            let mut file = File::create(&file_path)?;
+            file.write_all(value_file.yaml_content.as_bytes())?;
+            Ok(())
+        };
+        // no need to validate yaml as it will be done by helm
+        if let Err(e) = file_create() {
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(format!(
+                    "error while writing yaml content to file {}\n{}\n{}",
+                    &file_path, value_file.yaml_content, e
+                )),
+            });
+        };
+
+        args_string.push("-f".to_string());
+        args_string.push(file_path.clone());
+    }
+
+    // add last elements
+    args_string.push(chart.name.to_string());
+    args_string.push(chart.path.to_string());
+
+    helm_exec_with_output(
+        args_string.iter().map(|x| x.as_str()).collect(),
+        environment_variables
+            .iter()
+            .map(|x| (x.0.as_str(), x.1.as_str()))
+            .collect(),
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            Err(err) => error!("{}", &err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{}", err),
+        },
+    )
 }
 
 pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {

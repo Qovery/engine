@@ -769,6 +769,44 @@ impl<'a> Kubernetes for EKS<'a> {
 
         send_to_customer(format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
 
+        // temporary: remove helm/kube management from terraform
+        match terraform_init_validate_state_list(temp_dir.as_str()) {
+            Ok(x) => {
+                let items_type = vec!["helm_release", "kubernetes_namespace"];
+                for item in items_type {
+                    for entry in x.clone() {
+                        if entry.starts_with(item) {
+                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
+                                Ok(_) => info!("successfully removed {}", &entry),
+                                Err(e) => {
+                                    return Err(EngineError {
+                                        cause: EngineErrorCause::Internal,
+                                        scope: EngineErrorScope::Engine,
+                                        execution_id: self.context.execution_id().to_string(),
+                                        message: Some(format!(
+                                            "error while trying to remove {} out of terraform state file. {:?}",
+                                            entry, e.message
+                                        )),
+                                    })
+                                }
+                            }
+                        };
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: Some(format!(
+                        "error while getting the list of deployed elements by terraform. {:?}",
+                        e
+                    )),
+                })
+            }
+        };
+
         // terraform deployment dedicated to cloud resources
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -830,7 +868,12 @@ impl<'a> Kubernetes for EKS<'a> {
         cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            deploy_charts_levels(&kubeconfig, &credentials_environment_variables, helm_charts_to_deploy),
+            deploy_charts_levels(
+                &kubeconfig,
+                &credentials_environment_variables,
+                helm_charts_to_deploy,
+                self.context.is_dry_run_deploy(),
+            ),
         )
     }
 
