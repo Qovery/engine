@@ -214,10 +214,16 @@ controller:
   ##
   podAnnotations: {}
 
+  # TODO: It should be replaced by tera context values
+  # for now they are now properly injected
+  # see https://github.com/Qovery/engine/pull/264
   replicaCount: 2
 
   minAvailable: 1
 
+  # TODO: It should be replaced by tera context values
+  # for now they are now properly injected
+  # see https://github.com/Qovery/engine/pull/264
   resources:
     limits:
       cpu: 1
