@@ -1,10 +1,11 @@
 use std::str::FromStr;
 
-use rusoto_core::{Client, HttpClient, Region, RusotoError};
+use chrono::Duration;
+use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesError, DescribeRepositoriesRequest, Ecr,
-    EcrClient, GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository,
+    DescribeImagesRequest, DescribeRepositoriesRequest, Ecr, EcrClient, GetAuthorizationTokenRequest, ImageDetail,
+    ImageIdentifier, PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -136,70 +137,97 @@ impl ECR {
         }
     }
 
-    fn create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
+    fn create_repository(
+        &self,
+        image: &Image,
+        docker_login_access_token: String,
+        docker_login_password: String,
+        docker_login_endpoint_url: String,
+    ) -> Result<Repository, EngineError> {
         let repository_name = image.name.as_str();
         info!("creating ECR repository {}", &repository_name);
 
-        let mut repo_creation_counter = 0;
-        let container_registry_request = DescribeRepositoriesRequest {
-            repository_names: Some(vec![repository_name.to_string()]),
-            ..Default::default()
-        };
-        let crr = CreateRepositoryRequest {
-            repository_name: repository_name.to_string(),
-            ..Default::default()
-        };
+        let mut output_from_cmd = String::new();
+        match cmd::utilities::exec_with_output(
+            "docker",
+            vec![
+                "login",
+                "-u",
+                docker_login_access_token.as_str(),
+                "-p",
+                docker_login_password.as_str(),
+                docker_login_endpoint_url.as_str(),
+            ],
+            |r_out| match r_out {
+                Ok(s) => output_from_cmd.push_str(&s),
+                Err(e) => error!("Error while getting sdtout for aws {}", e),
+            },
+            |r_err| match r_err {
+                Ok(s) => error!("Error executing aws command {}", s),
+                Err(e) => error!("Error while getting stderr from aws {}", e),
+            },
+        ) {
+            Ok(x) => {
+                debug!("created {:?} repository", x);
+            }
+            Err(e) => {
+                warn!("{:?}", e);
+            }
+        }
 
         // ensure repository is created
         // need to do all this checks and retry because of several issues encountered like: 200 API response code while repo is not created
-        let repo_created = retry::retry(Fixed::from_millis(5000).take(24), || {
-            match block_on(
-                self.ecr_client()
-                    .describe_repositories(container_registry_request.clone()),
-            ) {
-                Ok(x) => {
-                    debug!("created {:?} repository", x);
-                    OperationResult::Ok(())
-                }
-                Err(e) => {
-                    match e {
-                        RusotoError::Service(s) => match s {
-                            DescribeRepositoriesError::RepositoryNotFound(_) => {
-                                if repo_creation_counter != 0 {
-                                    warn!(
-                                        "repository {} was not found, {}x retrying...",
-                                        &repository_name, &repo_creation_counter
-                                    );
-                                }
-                                repo_creation_counter += 1;
-                            }
-                            _ => warn!("{:?}", s),
-                        },
-                        _ => warn!("{:?}", e),
+        let mut repo_creation_counter = 0;
+        let mut output_from_cmd = String::new();
+        let repo_created =
+            retry::retry(
+                Fixed::from_millis(5000).take(24),
+                || match cmd::utilities::exec_with_envs_and_output(
+                    "aws",
+                    vec![
+                        "ecr",
+                        "create-repository",
+                        "--repository-name",
+                        repository_name.clone(),
+                        "--region",
+                        self.region.name(),
+                    ],
+                    vec![
+                        ("AWS_ACCESS_KEY_ID", self.access_key_id.as_str()),
+                        ("AWS_SECRET_ACCESS_KEY", self.secret_access_key.as_str()),
+                        ("AWS_DEFAULT_REGION", self.region.name()),
+                    ],
+                    |r_out| match r_out {
+                        Ok(s) => output_from_cmd.push_str(&s),
+                        Err(e) => error!("Error while getting sdtout for aws {}", e),
+                    },
+                    |r_err| match r_err {
+                        Ok(s) => error!("Error executing aws command {}", s),
+                        Err(e) => error!("Error while getting stderr from aws {}", e),
+                    },
+                    Duration::seconds(30),
+                ) {
+                    Ok(x) => {
+                        debug!("created {:?} repository", x);
+                        OperationResult::Ok(())
                     }
-
-                    let msg = match block_on(self.ecr_client().create_repository(crr.clone())) {
-                        Ok(_) => format!("repository {} created", &repository_name),
-                        Err(err) => format!(
-                            "can't create ECR repository {} for {}. {:?}",
-                            &repository_name,
-                            self.name_with_id(),
-                            err
-                        ),
-                    };
-
-                    OperationResult::Retry(Err(self.engine_error(EngineErrorCause::Internal, msg)))
-                }
-            }
-        });
+                    Err(e) => {
+                        repo_creation_counter += 1;
+                        warn!("{:?}", e);
+                        OperationResult::Err(e)
+                    }
+                },
+            );
 
         match repo_created {
             Ok(_) => info!(
                 "repository {} created after {} attempt(s)",
                 &repository_name, repo_creation_counter
             ),
-            Err(Operation { error, .. }) => return error,
             Err(retry::Error::Internal(e)) => return Err(self.engine_error(EngineErrorCause::Internal, e)),
+            Err(Operation { error, .. }) => {
+                return Err(self.engine_error(EngineErrorCause::Internal, error.message.unwrap_or_default()))
+            }
         };
 
         // apply retention policy
@@ -253,7 +281,13 @@ impl ECR {
         }
     }
 
-    fn get_or_create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
+    fn get_or_create_repository(
+        &self,
+        image: &Image,
+        docker_login_access_token: String,
+        docker_login_password: String,
+        docker_login_endpoint_url: String,
+    ) -> Result<Repository, EngineError> {
         // check if the repository already exists
         let repository = self.get_repository(&image);
         if repository.is_some() {
@@ -261,7 +295,12 @@ impl ECR {
             return Ok(repository.unwrap());
         }
 
-        self.create_repository(&image)
+        self.create_repository(
+            &image,
+            docker_login_access_token,
+            docker_login_password,
+            docker_login_endpoint_url,
+        )
     }
 }
 
@@ -364,9 +403,9 @@ impl ContainerRegistry for ECR {
         };
 
         let repository = match if force_push {
-            self.create_repository(image)
+            self.create_repository(image, access_token.clone(), password.clone(), endpoint_url.clone())
         } else {
-            self.get_or_create_repository(image)
+            self.get_or_create_repository(image, access_token.clone(), password.clone(), endpoint_url.clone())
         } {
             Ok(r) => r,
             _ => {
