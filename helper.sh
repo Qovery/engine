@@ -443,7 +443,7 @@ fi
 if [ ! -z $GITHUB_COMMIT_ID ] ; then
   commit_id=$GITHUB_COMMIT_ID
   RUNNING_ON_CI=1
-  if [ $(is_in_organization) == 0 ] ; then
+  if [ "$(is_in_organization)" == "0" ] ; then
     echo "You're not a member of Qovery github organization."
     exit 1
   fi
