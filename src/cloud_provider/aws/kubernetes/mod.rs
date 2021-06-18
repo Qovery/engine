@@ -48,7 +48,7 @@ pub mod node;
 pub mod roles;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct InfraOptions {
+pub struct Options {
     // AWS related
     pub eks_zone_a_subnet_blocks: Vec<String>,
     pub eks_zone_b_subnet_blocks: Vec<String>,
@@ -98,7 +98,7 @@ pub struct EKS<'a> {
     s3: S3,
     nodes: Vec<Node>,
     template_directory: String,
-    options: InfraOptions,
+    options: Options,
     listeners: Listeners,
 }
 
@@ -111,7 +111,7 @@ impl<'a> EKS<'a> {
         region: &str,
         cloud_provider: &'a AWS,
         dns_provider: &'a dyn DnsProvider,
-        options: InfraOptions,
+        options: Options,
         nodes: Vec<Node>,
     ) -> Self {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
