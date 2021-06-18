@@ -78,8 +78,18 @@ impl ECR {
         match r {
             Err(_) => None,
             Ok(res) => match res.repositories {
-                // assume there is only one repository returned - why? Because we set only one repository_names above
-                Some(repositories) => repositories.into_iter().next(),
+                Some(repositories) => {
+                    // assume there is only one repository returned - why? Because we set only one repository_names above
+                    let repo = repositories.into_iter().next();
+                    // Note: making sure describe result actually returns a repository and not an empty result
+                    if repo.is_some() {
+                        let repo = repo.unwrap();
+                        if repo.registry_id.is_some() {
+                            return Some(repo);
+                        }
+                    }
+                    None
+                }
                 _ => None,
             },
         }
@@ -150,16 +160,29 @@ impl ECR {
             ..Default::default()
         };
 
-        // ensure repository is created
-        // need to do all this checks and retry because of several issues encountered like: 200 API response code while repo is not created
+        // Ensure repository is created.
+        // Need to do all this checks and retry because of several issues encountered like: 200 API response code while repo is not created.
+        // CF comment bellow.
         let repo_created = retry::retry(Fixed::from_millis(5000).take(24), || {
             match block_on(
                 self.ecr_client()
                     .describe_repositories(container_registry_request.clone()),
             ) {
                 Ok(x) => {
-                    debug!("created {:?} repository", x);
-                    OperationResult::Ok(())
+                    // Note: make sure the repository actually exists on ECR side, seems AWS API might return a 200 OK on creation
+                    // with the created object but the latter is not yet created nor retrievable on ECR side.
+                    // Hence, we redo the creation until we are able to properly retrieve this newly created repository.
+                    if self.get_repository(image).is_some() {
+                        debug!("created {:?} repository", x);
+                        OperationResult::Ok(())
+                    } else {
+                        let msg = format!(
+                            "ECR returned created status for repository {:?} but it cannot be retrieved, retrying ...",
+                            x
+                        );
+                        debug!("{}", msg);
+                        OperationResult::Retry(Err(self.engine_error(EngineErrorCause::Internal, msg)))
+                    }
                 }
                 Err(e) => {
                     match e {
