@@ -12,7 +12,7 @@ ENV RUSTC_WRAPPER=/usr/bin/sccache
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
 WORKDIR /root
-RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev
+RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git
 ADD . .
 
 # run release build

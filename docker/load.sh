@@ -102,7 +102,7 @@ function install() { ## Make symlinks to install binaries in default PATH
   ln -s $BIN_DIR/* /usr/bin/
 
   # install helm diff
-  helm plugin install https://github.com/databus23/helm-diff
+  /usr/bin/helm plugin install https://github.com/databus23/helm-diff
 }
 
 case $1 in
