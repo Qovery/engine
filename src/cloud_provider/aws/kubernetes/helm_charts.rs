@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::kubernetes::InfraOptions;
+use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_chart_namespace, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart,
     HelmChart, HelmChartNamespaces,
@@ -45,7 +45,7 @@ pub struct ChartsConfigPrerequisites {
     pub cloudflare_email: String,
     pub cloudflare_api_token: String,
     // qovery options form json input
-    pub infra_options: InfraOptions,
+    pub infra_options: Options,
 }
 
 pub fn aws_helm_charts(

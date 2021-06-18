@@ -5,7 +5,7 @@ use tracing::error;
 use chrono::Utc;
 
 use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
-use qovery_engine::cloud_provider::aws::kubernetes::{InfraOptions, EKS};
+use qovery_engine::cloud_provider::aws::kubernetes::{Options, EKS};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
@@ -96,8 +96,8 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
     )
 }
 
-pub fn eks_options(secrets: FuncTestsSecrets) -> InfraOptions {
-    InfraOptions {
+pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
+    Options {
         eks_zone_a_subnet_blocks: vec![
             "10.0.0.0/23".to_string(),
             "10.0.2.0/23".to_string(),
