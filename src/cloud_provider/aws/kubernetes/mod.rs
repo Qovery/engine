@@ -794,17 +794,10 @@ impl<'a> Kubernetes for EKS<'a> {
                     }
                 }
             }
-            Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some(format!(
-                        "error while getting the list of deployed elements by terraform. {:?}",
-                        e
-                    )),
-                })
-            }
+            Err(e) => warn!(
+                "no state list exists yet, this is normal if it's a newly created cluster. {:?}",
+                e
+            ),
         };
 
         // terraform deployment dedicated to cloud resources
