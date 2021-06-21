@@ -44,6 +44,7 @@ pub struct ChartsConfigPrerequisites {
     pub acme_url: String,
     pub cloudflare_email: String,
     pub cloudflare_api_token: String,
+    pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: Options,
 }
@@ -1097,7 +1098,7 @@ datasources:
         Box::new(external_dns),
     ];
 
-    let level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager), Box::new(pleco)];
+    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager)];
 
     let mut level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
@@ -1105,6 +1106,7 @@ datasources:
         Box::new(qovery_engine),
     ];
 
+    // observability
     if chart_config_prerequisites.ff_metrics_history_enabled {
         level_2.push(Box::new(prometheus_operator));
         level_4.push(Box::new(prometheus_adapter));
@@ -1118,6 +1120,11 @@ datasources:
     if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
         level_6.push(Box::new(grafana))
     };
+
+    // pleco
+    if !chart_config_prerequisites.disable_pleco {
+        level_5.push(Box::new(pleco));
+    }
 
     Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6])
 }

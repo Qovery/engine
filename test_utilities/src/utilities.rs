@@ -55,6 +55,7 @@ pub fn context() -> Context {
                 None => false,
             }
         }),
+        disable_pleco: Some(true),
     };
 
     let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
