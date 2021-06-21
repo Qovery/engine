@@ -4,7 +4,7 @@ use crate::cmd::helm::{
     helm_exec_uninstall_with_chart_info, helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info,
 };
 use crate::cmd::kubectl::{
-    kubectl_exec_get_configmap, kubectl_exec_get_event, kubectl_exec_rollout_restart_deployment,
+    kubectl_exec_get_configmap, kubectl_exec_get_events, kubectl_exec_rollout_restart_deployment,
     kubectl_exec_with_output,
 };
 use crate::cmd::structs::HelmHistoryRow;
@@ -176,7 +176,7 @@ pub trait HelmChart: Send {
     ) -> Result<Option<ChartPayload>, SimpleError> {
         // print events for future investigation
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-        kubectl_exec_get_event(
+        kubectl_exec_get_events(
             kubernetes_config,
             get_chart_namespace(self.get_chart_info().namespace).as_str(),
             environment_variables,

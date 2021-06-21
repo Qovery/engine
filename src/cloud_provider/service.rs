@@ -994,7 +994,7 @@ where
     let events = cast_simple_error_to_engine_error(
         kubernetes.engine_error_scope(),
         kubernetes.context().execution_id(),
-        crate::cmd::kubectl::kubectl_exec_get_event(
+        crate::cmd::kubectl::kubectl_exec_get_json_events(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             kubernetes.cloud_provider().credentials_environment_variables(),
