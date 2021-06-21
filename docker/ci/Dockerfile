@@ -29,6 +29,7 @@ ADD load.sh /
 ADD bin_versions /
 
 RUN /load.sh download && ./load.sh install $BIN_DIR
+RUN echo "disable_checkpoint = true" > ~/.terraform.rc
 
 ### Docker
 

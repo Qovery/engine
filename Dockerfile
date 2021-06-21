@@ -63,6 +63,7 @@ RUN ./load.sh install $BIN_DIR && \
     rm -f ./load.sh
 
 USER qovery
+RUN echo "disable_checkpoint = true" > ~/.terraform.rc
 
 # for local use only
 VOLUME /qovery_libs
