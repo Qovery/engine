@@ -127,6 +127,7 @@ pub trait HelmChart: Send {
     }
 
     fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, SimpleError> {
+        info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
         self.pre_exec(&kubernetes_config, &envs, None)?;
         if let Err(e) = self.exec(&kubernetes_config, &envs, None) {
@@ -367,6 +368,7 @@ impl HelmChart for CoreDNSConfigChart {
     }
 
     fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, SimpleError> {
+        info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
         let payload = match self.pre_exec(&kubernetes_config, &envs, None) {
             Ok(p) => match p {
