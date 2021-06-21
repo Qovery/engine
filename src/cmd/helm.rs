@@ -154,6 +154,7 @@ where
             envs.clone(),
             |out| match out {
                 Ok(line) => {
+                    info!("{}", line);
                     if debug {
                         debug!("{}", line);
                     }

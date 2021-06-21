@@ -56,6 +56,8 @@ pub fn aws_helm_charts(
     kubernetes_config: &Path,
     envs: &[(String, String)],
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError> {
+    info!("preparing chart configuration to be deployed");
+
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
     let content_file = File::open(&qovery_terraform_config_file)?;
@@ -893,10 +895,12 @@ datasources:
     ) {
         Ok(x) => x,
         Err(e) => {
+            let msg = format!("Qovery agent version couldn't be retrieved. {}", e);
+            error!("{}", &msg);
             return Err(SimpleError {
                 kind: SimpleErrorKind::Other,
-                message: Some(format!("Qovery agent version couldn't be retrieved. {}", e)),
-            })
+                message: Some(msg),
+            });
         }
     };
     let qovery_agent = CommonChart {
@@ -974,10 +978,12 @@ datasources:
     ) {
         Ok(x) => x,
         Err(e) => {
+            let msg = format!("Qovery engine version couldn't be retrieved. {}", e);
+            error!("{}", &msg);
             return Err(SimpleError {
                 kind: SimpleErrorKind::Other,
-                message: Some(format!("Qovery engine version couldn't be retrieved. {}", e)),
-            })
+                message: Some(msg),
+            });
         }
     };
     let qovery_engine = CommonChart {
@@ -1126,6 +1132,7 @@ datasources:
         level_5.push(Box::new(pleco));
     }
 
+    info!("charts configuration preparation finished");
     Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6])
 }
 

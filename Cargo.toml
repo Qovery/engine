@@ -33,6 +33,7 @@ tar = "0.4.35"
 # logger
 tracing = "0.1.26"
 tracing-subscriber = "0.2.18"
+tracing-futures = { version = "0.2.5", features = ["std", "std-future", "futures-03"] }
 
 # Docker deps
 # shiplift = "0.6.0"
