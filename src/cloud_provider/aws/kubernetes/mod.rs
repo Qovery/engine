@@ -844,6 +844,7 @@ impl<'a> Kubernetes for EKS<'a> {
             acme_url: self.lets_encrypt_url(),
             cloudflare_email: self.dns_provider.account().to_string(),
             cloudflare_api_token: self.dns_provider.token().to_string(),
+            disable_pleco: self.context.disable_pleco(),
         };
 
         let helm_charts_to_deploy = cast_simple_error_to_engine_error(
