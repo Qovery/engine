@@ -10,15 +10,15 @@ enabledFeatures:
   rds: true
   documentdb: true
   elasticache: true
-  eks: true
+  eks: false
   elb: true
   ebs: true
   vpc: true
-  s3: true
+  s3: false
   kms: true
   cloudwatchLogs: true
   iam: true
-  sshKeys: true
+  sshKeys: false
   ecr: true
 PLECO
 }
