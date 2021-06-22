@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::{fs, thread};
 use thread::spawn;
+use tracing::{span, Level};
 
 #[derive(Clone)]
 pub enum HelmAction {
@@ -197,7 +198,11 @@ fn deploy_parallel_charts(
         let environment_variables = envs.to_owned();
         let path = kubernetes_config.to_path_buf();
 
-        let handle = spawn(move || chart.run(path.as_path(), &environment_variables));
+        let handle = spawn(move || {
+            let multi_span = span!(parent: span::Span::current(), Level::INFO, "deploy_parallel_chart");
+            let _enter = multi_span.enter();
+            chart.run(path.as_path(), &environment_variables)
+        });
         handles.push(handle);
     }
 
