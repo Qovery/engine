@@ -27,6 +27,11 @@ use tracing::{span, Level};
 //     (context_vec, env_vec)
 // }
 
+
+// TODO:
+//   - Tests that applications are always restarted when recieving a CREATE action
+//     see: https://github.com/Qovery/engine/pull/269
+
 pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
     let session = engine.session().unwrap();
