@@ -197,11 +197,11 @@ fn deploy_parallel_charts(
     for chart in charts.into_iter() {
         let environment_variables = envs.to_owned();
         let path = kubernetes_config.to_path_buf();
-
+        let current_span = tracing::Span::current();
         let handle = spawn(move || {
-            let multi_span = span!(parent: span::Span::current(), Level::INFO, "deploy_parallel_chart");
-            let _enter = multi_span.enter();
-            chart.run(path.as_path(), &environment_variables)
+            // making sure to pass the current span to the new thread not to lose any tracing info
+            span!(parent: &current_span, Level::INFO, "") // empty span name to reduce logs length
+                .in_scope(|| chart.run(path.as_path(), &environment_variables))
         });
         handles.push(handle);
     }
