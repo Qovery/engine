@@ -257,15 +257,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "356fd654e9a433e730a826d4e01ea2414ab122ca8a5374eadf6c43a6090f8dd3"
 dependencies = [
  "proc-macro-error",
-<<<<<<< HEAD
- "proc-macro2 1.0.24",
- "quote 1.0.8",
- "syn 1.0.56",
-=======
  "proc-macro2 1.0.27",
  "quote 1.0.8",
  "syn 1.0.73",
->>>>>>> 8ae8953 (fix: do not restart coredns if not necessary)
 ]
 
 [[package]]
@@ -1981,15 +1975,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
 dependencies = [
  "proc-macro-error-attr",
-<<<<<<< HEAD
- "proc-macro2 1.0.24",
- "quote 1.0.8",
- "syn 1.0.56",
-=======
  "proc-macro2 1.0.27",
  "quote 1.0.8",
  "syn 1.0.73",
->>>>>>> 8ae8953 (fix: do not restart coredns if not necessary)
  "version_check",
 ]
 
@@ -1999,11 +1987,7 @@ version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
 dependencies = [
-<<<<<<< HEAD
- "proc-macro2 1.0.24",
-=======
  "proc-macro2 1.0.27",
->>>>>>> 8ae8953 (fix: do not restart coredns if not necessary)
  "quote 1.0.8",
  "version_check",
 ]
@@ -2087,7 +2071,6 @@ dependencies = [
  "timeout-readwrite",
  "tokio 1.7.0",
  "tracing",
- "tracing-futures",
  "tracing-subscriber",
  "trust-dns-resolver",
  "walkdir",
@@ -3550,8 +3533,6 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
- "futures 0.3.15",
- "futures-task",
  "pin-project",
  "tracing",
 ]
