@@ -15,7 +15,7 @@ namespace: "qovery"
 labels:
   app: qovery-agent
 
-environmentVariables:
+environmentVariables: {}
   #CLOUD_PROVIDER: ""
   #CLOUD_REGION: ""
   #AGENT_ID: ""

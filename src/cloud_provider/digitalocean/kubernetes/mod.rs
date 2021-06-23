@@ -221,8 +221,14 @@ impl<'a> DOKS<'a> {
             self.cloud_provider().terraform_state_credentials().region.as_str(),
         );
 
+        context.insert("nginx_enable_horizontal_autoscaler", "true");
+        context.insert("nginx_minimum_replicas", "2");
+        context.insert("nginx_maximum_replicas", "2");
+        context.insert("nginx_requests_cpu", "250m");
+        context.insert("nginx_requests_memory", "384Mi");
+        context.insert("nginx_limit_cpu", "1");
+        context.insert("nginx_limit_memory", "384Mi");
         context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
-
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
 
         // kubernetes workers
@@ -234,9 +240,9 @@ impl<'a> DOKS<'a> {
             .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
             .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
                 instance_type: instance_type.to_string(),
-                desired_size: "1".to_string(),
+                desired_size: "3".to_string(),
                 max_size: nodes.len().to_string(),
-                min_size: "1".to_string(),
+                min_size: "3".to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
 

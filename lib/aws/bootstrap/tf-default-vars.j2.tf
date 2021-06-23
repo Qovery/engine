@@ -86,14 +86,14 @@ variable "eks_k8s_versions" {
 }
 
 variable "kubernetes_cluster_id" {
-  description = "Kubernetes cluster name"
+  description = "Kubernetes cluster id"
   default     = "{{ kubernetes_cluster_id }}"
   type        = string
 }
 
 variable "kubernetes_cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "qovery-{{ kubernetes_cluster_name }}"
+  default     = "qovery-{{ kubernetes_cluster_id }}"
   type        = string
 }
 
@@ -286,13 +286,6 @@ variable "metrics_history_enabled" {
   description = "Enable metrics history"
   default = {{ metrics_history_enabled }}
   type = bool
-}
-
-# Force helm upgrade
-variable "forced_upgrade" {
-  description = "Force upgrade"
-  default = {% if force_upgrade %}timestamp(){% else %}"false"{% endif %}
-  type = string
 }
 
 {%- if resource_expiration_in_seconds is defined %}

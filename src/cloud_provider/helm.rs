@@ -1,11 +1,20 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
-use crate::cmd::helm::{helm_exec_uninstall_with_chart_info, helm_exec_upgrade_with_chart_info};
-use crate::cmd::kubectl::kubectl_exec_rollout_restart_deployment;
+use crate::cmd::helm::{
+    helm_exec_uninstall_with_chart_info, helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info,
+};
+use crate::cmd::kubectl::{
+    kubectl_exec_get_configmap, kubectl_exec_get_events, kubectl_exec_rollout_restart_deployment,
+    kubectl_exec_with_output,
+};
+use crate::cmd::structs::HelmHistoryRow;
 use crate::error::{SimpleError, SimpleErrorKind};
+use crate::utilities::calculate_hash;
+use std::collections::HashMap;
 use std::path::Path;
 use std::{fs, thread};
 use thread::spawn;
+use tracing::{span, Level};
 
 #[derive(Clone)]
 pub enum HelmAction {
@@ -31,6 +40,12 @@ pub struct ChartSetValue {
 }
 
 #[derive(Clone)]
+pub struct ChartValuesGenerated {
+    pub filename: String,
+    pub yaml_content: String,
+}
+
+#[derive(Clone)]
 pub struct ChartInfo {
     pub name: String,
     pub path: String,
@@ -43,6 +58,7 @@ pub struct ChartInfo {
     pub wait: bool,
     pub values: Vec<ChartSetValue>,
     pub values_files: Vec<String>,
+    pub yaml_files_content: Vec<ChartValuesGenerated>,
 }
 
 impl Default for ChartInfo {
@@ -54,11 +70,12 @@ impl Default for ChartInfo {
             action: Deploy,
             atomic: true,
             force_upgrade: false,
-            timeout: "300s".to_string(),
+            timeout: "180s".to_string(),
             dry_run: false,
             wait: true,
             values: Vec::new(),
             values_files: Vec::new(),
+            yaml_files_content: vec![],
         }
     }
 }
@@ -75,8 +92,8 @@ pub fn get_chart_namespace(namespace: HelmChartNamespaces) -> String {
     .to_string()
 }
 
-pub trait HelmChart {
-    fn check_prerequisites(&self) -> Result<(), SimpleError> {
+pub trait HelmChart: Send {
+    fn check_prerequisites(&self) -> Result<Option<ChartPayload>, SimpleError> {
         let chart = self.get_chart_info();
         for file in chart.values_files.iter() {
             match fs::metadata(file) {
@@ -92,7 +109,7 @@ pub trait HelmChart {
                 }
             }
         }
-        Ok(())
+        Ok(None)
     }
 
     fn get_chart_info(&self) -> &ChartInfo;
@@ -101,65 +118,138 @@ pub trait HelmChart {
         get_chart_namespace(self.get_chart_info().namespace)
     }
 
-    fn pre_exec(&self, _kubernetes_config: &Path, _envs: &[(String, String)]) -> Result<(), SimpleError> {
-        //
-        Ok(())
+    fn pre_exec(
+        &self,
+        _kubernetes_config: &Path,
+        _envs: &[(String, String)],
+        _payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, SimpleError> {
+        Ok(None)
     }
 
-    fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<(), SimpleError> {
+    fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, SimpleError> {
+        info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
-        self.pre_exec(&kubernetes_config, &envs)?;
-        match self.exec(&kubernetes_config, &envs) {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Error while deploying chart: {:?}", e.message);
-                return self.on_deploy_failure(&kubernetes_config, &envs);
-            }
+        self.pre_exec(&kubernetes_config, &envs, None)?;
+        if let Err(e) = self.exec(&kubernetes_config, &envs, None) {
+            error!(
+                "Error while deploying chart: {:?}",
+                e.message.clone().expect("no message provided")
+            );
+            self.on_deploy_failure(&kubernetes_config, &envs, None)?;
+            return Err(e);
         };
-        self.post_exec(&kubernetes_config, &envs)?;
-        Ok(())
+        self.post_exec(&kubernetes_config, &envs, None)?;
+        Ok(None)
     }
 
-    fn exec(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<(), SimpleError> {
+    fn exec(
+        &self,
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
+        _payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, SimpleError> {
         let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         match self.get_chart_info().action {
             HelmAction::Deploy => {
-                helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, self.get_chart_info())
+                helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, self.get_chart_info())?
             }
             HelmAction::Destroy => {
-                helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, self.get_chart_info())
+                helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, self.get_chart_info())?
             }
-            HelmAction::Skip => Ok(()),
+            HelmAction::Skip => {}
         }
+        Ok(None)
     }
 
-    fn post_exec(&self, _kubernetes_config: &Path, _envs: &[(String, String)]) -> Result<(), SimpleError> {
-        Ok(())
+    fn post_exec(
+        &self,
+        _kubernetes_config: &Path,
+        _envs: &[(String, String)],
+        _payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, SimpleError> {
+        Ok(None)
     }
-    fn on_deploy_failure(&self, _kubernetes_config: &Path, _envs: &[(String, String)]) -> Result<(), SimpleError> {
-        Ok(())
+    fn on_deploy_failure(
+        &self,
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
+        _payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, SimpleError> {
+        // print events for future investigation
+        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+        kubectl_exec_get_events(
+            kubernetes_config,
+            get_chart_namespace(self.get_chart_info().namespace).as_str(),
+            environment_variables,
+        )?;
+        Ok(None)
     }
 }
 
-//todo: implement it
-#[allow(unused_must_use)]
-pub fn deploy_multiple_charts<H: 'static + HelmChart + Sync + Send>(
-    kubernetes_config: &'static Path,
-    envs: &Vec<(String, String)>,
-    charts: Vec<H>,
-) {
+fn deploy_parallel_charts(
+    kubernetes_config: &Path,
+    envs: &[(String, String)],
+    charts: Vec<Box<dyn HelmChart>>,
+) -> Result<(), SimpleError> {
     let mut handles = vec![];
 
     for chart in charts.into_iter() {
-        let environment_variables = envs.clone();
-        let kubeconfig = kubernetes_config.clone();
-        let handle = spawn(move || chart.run(kubeconfig, &environment_variables));
+        let environment_variables = envs.to_owned();
+        let path = kubernetes_config.to_path_buf();
+
+        let handle = spawn(move || {
+            let multi_span = span!(parent: span::Span::current(), Level::INFO, "deploy_parallel_chart");
+            let _enter = multi_span.enter();
+            chart.run(path.as_path(), &environment_variables)
+        });
         handles.push(handle);
     }
 
     for handle in handles {
-        handle.join().unwrap();
+        match handle.join() {
+            Ok(helm_run_ret) => match helm_run_ret {
+                Ok(_) => {}
+                Err(e) => return Err(e),
+            },
+            Err(e) => {
+                error!("{:?}", e);
+                return Err(SimpleError {
+                    kind: SimpleErrorKind::Other,
+                    message: Some("thread panicked during parallel charts deployments".to_string()),
+                });
+            }
+        }
     }
+
+    Ok(())
+}
+
+pub fn deploy_charts_levels(
+    kubernetes_config: &Path,
+    envs: &Vec<(String, String)>,
+    charts: Vec<Vec<Box<dyn HelmChart>>>,
+    dry_run: bool,
+) -> Result<(), SimpleError> {
+    // first show diff
+    for level in &charts {
+        for chart in level {
+            let _ = helm_upgrade_diff_with_chart_info(&kubernetes_config, envs, chart.get_chart_info());
+        }
+    }
+
+    // then apply
+    if dry_run {
+        return Ok(());
+    }
+    for level in charts.into_iter() {
+        match deploy_parallel_charts(&kubernetes_config, &envs, level) {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(())
 }
 
 //
@@ -169,6 +259,11 @@ pub fn deploy_multiple_charts<H: 'static + HelmChart + Sync + Send>(
 #[derive(Default)]
 pub struct CommonChart {
     pub chart_info: ChartInfo,
+}
+
+/// using ChartPayload to pass random kind of data between each deployment steps against a chart deployment
+pub struct ChartPayload {
+    data: HashMap<String, String>,
 }
 
 impl CommonChart {}
@@ -191,15 +286,241 @@ impl HelmChart for CoreDNSConfigChart {
         &self.chart_info
     }
 
-    // todo: it would be better to avoid rebooting coredns on every run
-    fn post_exec(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<(), SimpleError> {
-        let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+    fn pre_exec(
+        &self,
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
+        _payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, SimpleError> {
+        let kind = "configmap";
+        let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+        environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
 
+        // calculate current configmap checksum
+        let current_configmap_hash = match kubectl_exec_get_configmap(
+            &kubernetes_config,
+            &get_chart_namespace(self.chart_info.namespace),
+            &self.chart_info.name,
+            environment_variables.clone(),
+        ) {
+            Ok(cm) => {
+                if cm.data.corefile.is_none() {
+                    return Err(SimpleError {
+                        kind: SimpleErrorKind::Other,
+                        message: Some("Corefile data structure is not found in CoreDNS configmap".to_string()),
+                    });
+                };
+                calculate_hash(&cm.data.corefile.unwrap())
+            }
+            Err(e) => return Err(e),
+        };
+        let mut configmap_hash = HashMap::new();
+        configmap_hash.insert("checksum".to_string(), current_configmap_hash.to_string());
+        let payload = ChartPayload { data: configmap_hash };
+
+        // set labels and annotations to give helm ownership
+        info!("setting annotations and labels on {}/{}", &kind, &self.chart_info.name);
+        let steps = || -> Result<(), SimpleError> {
+            kubectl_exec_with_output(
+                vec![
+                    "-n",
+                    "kube-system",
+                    "annotate",
+                    "--overwrite",
+                    &kind,
+                    &self.chart_info.name,
+                    format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
+                ],
+                environment_variables.clone(),
+                |_| {},
+                |_| {},
+            )?;
+            kubectl_exec_with_output(
+                vec![
+                    "-n",
+                    "kube-system",
+                    "annotate",
+                    "--overwrite",
+                    &kind,
+                    &self.chart_info.name,
+                    "meta.helm.sh/release-namespace=kube-system",
+                ],
+                environment_variables.clone(),
+                |_| {},
+                |_| {},
+            )?;
+            kubectl_exec_with_output(
+                vec![
+                    "-n",
+                    "kube-system",
+                    "label",
+                    "--overwrite",
+                    &kind,
+                    &self.chart_info.name,
+                    "app.kubernetes.io/managed-by=Helm",
+                ],
+                environment_variables.clone(),
+                |_| {},
+                |_| {},
+            )?;
+            Ok(())
+        };
+        if let Err(e) = steps() {
+            return Err(e);
+        };
+
+        Ok(Some(payload))
+    }
+
+    fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, SimpleError> {
+        info!("prepare and deploy chart {}", &self.get_chart_info().name);
+        self.check_prerequisites()?;
+        let payload = match self.pre_exec(&kubernetes_config, &envs, None) {
+            Ok(p) => match p {
+                None => {
+                    return Err(SimpleError {
+                        kind: SimpleErrorKind::Other,
+                        message: Some(
+                            "CoreDNS configmap checksum couldn't be get, can't deploy CoreDNS chart".to_string(),
+                        ),
+                    })
+                }
+                Some(p) => p,
+            },
+            Err(e) => return Err(e),
+        };
+        if let Err(e) = self.exec(&kubernetes_config, &envs, None) {
+            error!(
+                "Error while deploying chart: {:?}",
+                e.message.clone().expect("no message provided")
+            );
+            self.on_deploy_failure(&kubernetes_config, &envs, None)?;
+            return Err(e);
+        };
+        self.post_exec(&kubernetes_config, &envs, Some(payload))?;
+        Ok(None)
+    }
+
+    fn post_exec(
+        &self,
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
+        payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, SimpleError> {
+        let mut environment_variables = Vec::new();
+        for env in envs {
+            environment_variables.push((env.0.as_str(), env.1.as_str()));
+        }
+
+        // detect configmap data change
+        let previous_configmap_checksum = match &payload {
+            None => {
+                return Err(SimpleError {
+                    kind: SimpleErrorKind::Other,
+                    message: Some("missing payload, can't check coredns update".to_string()),
+                })
+            }
+            Some(x) => match x.data.get("checksum") {
+                None => {
+                    return Err(SimpleError {
+                        kind: SimpleErrorKind::Other,
+                        message: Some("missing configmap checksum, can't check coredns diff".to_string()),
+                    })
+                }
+                Some(c) => c.clone(),
+            },
+        };
+        let current_configmap_checksum = match kubectl_exec_get_configmap(
+            &kubernetes_config,
+            &get_chart_namespace(self.chart_info.namespace),
+            &self.chart_info.name,
+            environment_variables.clone(),
+        ) {
+            Ok(cm) => {
+                if cm.data.corefile.is_none() {
+                    return Err(SimpleError {
+                        kind: SimpleErrorKind::Other,
+                        message: Some("Corefile data structure is not found in CoreDNS configmap".to_string()),
+                    });
+                };
+                calculate_hash(&cm.data.corefile.unwrap()).to_string()
+            }
+            Err(e) => return Err(e),
+        };
+        if previous_configmap_checksum == current_configmap_checksum {
+            info!("no coredns config change detected, nothing to restart");
+            return Ok(None);
+        }
+
+        // avoid rebooting coredns on every run
+        info!("coredns config change detected, proceed to config reload");
         kubectl_exec_rollout_restart_deployment(
             kubernetes_config,
             &self.chart_info.name,
             self.namespace().as_str(),
-            environment_variables,
-        )
+            &environment_variables,
+        )?;
+        Ok(None)
+    }
+}
+
+pub fn get_latest_successful_deployment(helm_history_list: &[HelmHistoryRow]) -> Result<HelmHistoryRow, SimpleError> {
+    let mut helm_history_reversed = helm_history_list.to_owned();
+    helm_history_reversed.reverse();
+
+    for revision in helm_history_reversed.clone() {
+        if revision.status == "deployed" {
+            return Ok(revision);
+        }
+    }
+
+    Err(SimpleError {
+        kind: SimpleErrorKind::Other,
+        message: Some(format!(
+            "no succeed revision found for chart {}",
+            helm_history_reversed[0].chart
+        )),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::helm::get_latest_successful_deployment;
+    use crate::cmd::structs::HelmHistoryRow;
+
+    #[test]
+    fn test_last_succeeded_deployment() {
+        let payload = r#"
+        [
+            {
+                "revision": 1,
+                "updated": "2021-06-17T08:37:37.687890192+02:00",
+                "status": "superseded",
+                "chart": "coredns-config-0.1.0",
+                "app_version": "0.1",
+                "description": "Install complete"
+            },
+            {
+                "revision": 2,
+                "updated": "2021-06-17T12:34:08.958006444+02:00",
+                "status": "deployed",
+                "chart": "coredns-config-0.1.0",
+                "app_version": "0.1",
+                "description": "Upgrade complete"
+            },
+            {
+                "revision": 3,
+                "updated": "2021-06-17T12:36:08.958006444+02:00",
+                "status": "failed",
+                "chart": "coredns-config-0.1.0",
+                "app_version": "0.1",
+                "description": "Failed complete"
+            }
+        ]
+        "#;
+
+        let results = serde_json::from_str::<Vec<HelmHistoryRow>>(payload).unwrap();
+        let final_succeed = get_latest_successful_deployment(&results).unwrap();
+        assert_eq!(results[1].updated, final_succeed.updated);
     }
 }

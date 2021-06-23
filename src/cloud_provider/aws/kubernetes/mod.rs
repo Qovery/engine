@@ -2,17 +2,19 @@ use std::env;
 use std::str::FromStr;
 
 use itertools::Itertools;
-use retry::delay::Fibonacci;
+use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
 use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::kubernetes::helm_charts::{aws_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::node::Node;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesNodesType,
     KubernetesUpgradeStatus,
@@ -39,6 +41,7 @@ use crate::models::{
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
+use std::path::PathBuf;
 
 pub mod helm_charts;
 pub mod node;
@@ -142,7 +145,26 @@ impl<'a> EKS<'a> {
         format!("qovery-kubeconfigs-{}", self.id())
     }
 
-    fn tera_context(&self) -> TeraContext {
+    fn managed_dns_resolvers_terraform_format(&self) -> String {
+        let managed_dns_resolvers: Vec<String> = self
+            .dns_provider
+            .resolvers()
+            .iter()
+            .map(|x| format!("{}", x.clone().to_string()))
+            .collect();
+
+        terraform_list_format(managed_dns_resolvers)
+    }
+
+    fn lets_encrypt_url(&self) -> String {
+        match &self.context.is_test_cluster() {
+            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
+            false => "https://acme-v02.api.letsencrypt.org/directory",
+        }
+        .to_string()
+    }
+
+    fn tera_context(&self) -> Result<TeraContext, EngineError> {
         let format_ips =
             |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
 
@@ -180,9 +202,9 @@ impl<'a> EKS<'a> {
             .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
             .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
                 instance_type: instance_type.to_string(),
-                desired_size: "1".to_string(),
+                desired_size: "3".to_string(),
                 max_size: nodes.len().to_string(),
-                min_size: "1".to_string(),
+                min_size: "3".to_string(),
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
 
@@ -193,17 +215,9 @@ impl<'a> EKS<'a> {
         let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
 
         let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
+        let managed_dns_domains_helm_format = vec![format!("{}", self.dns_provider.domain())];
         let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
-
-        let managed_dns_resolvers: Vec<String> = self
-            .dns_provider
-            .resolvers()
-            .iter()
-            .map(|x| format!("{}", x.clone().to_string()))
-            .collect();
-
-        let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
+        let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
 
         let mut context = TeraContext::new();
         // Qovery
@@ -254,7 +268,7 @@ impl<'a> EKS<'a> {
 
         match self.dns_provider.kind() {
             dns_provider::Kind::Cloudflare => {
-                context.insert("external_dns_provider", "cloudflare");
+                context.insert("external_dns_provider", self.dns_provider.provider_name());
                 context.insert("cloudflare_api_token", self.dns_provider.token());
                 context.insert("cloudflare_email", self.dns_provider.account());
             }
@@ -263,11 +277,7 @@ impl<'a> EKS<'a> {
         context.insert("dns_email_report", &self.options.tls_email_report); // Pierre suggested renaming to tls_email_report
 
         // TLS
-        let lets_encrypt_url = match &self.context.is_test_cluster() {
-            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
-            false => "https://acme-v02.api.letsencrypt.org/directory",
-        };
-        context.insert("acme_server_url", lets_encrypt_url);
+        context.insert("acme_server_url", &self.lets_encrypt_url());
 
         // Vault
         context.insert("vault_auth_method", "none");
@@ -293,6 +303,7 @@ impl<'a> EKS<'a> {
         };
 
         // Other Kubernetes
+        context.insert("kubernetes_cluster_name", &self.cluster_name());
         context.insert("enable_cluster_autoscaler", &true);
 
         // AWS
@@ -385,7 +396,7 @@ impl<'a> EKS<'a> {
         context.insert("qovery_ssh_key", self.options.qovery_ssh_key.as_str());
         context.insert("discord_api_key", self.options.discord_api_key.as_str());
 
-        context
+        Ok(context)
     }
 
     fn upgrade(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
@@ -424,7 +435,7 @@ impl<'a> EKS<'a> {
         };
 
         // generate terraform files and copy them into temp dir
-        let mut context = self.tera_context();
+        let mut context = self.tera_context()?;
 
         //
         // Upgrade master nodes
@@ -732,7 +743,7 @@ impl<'a> Kubernetes for EKS<'a> {
         );
 
         // generate terraform files and copy them into temp dir
-        let context = self.tera_context();
+        let context = self.tera_context()?;
 
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -758,17 +769,106 @@ impl<'a> Kubernetes for EKS<'a> {
 
         send_to_customer(format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
 
+        // temporary: remove helm/kube management from terraform
+        match terraform_init_validate_state_list(temp_dir.as_str()) {
+            Ok(x) => {
+                let items_type = vec!["helm_release", "kubernetes_namespace"];
+                for item in items_type {
+                    for entry in x.clone() {
+                        if entry.starts_with(item) {
+                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
+                                Ok(_) => info!("successfully removed {}", &entry),
+                                Err(e) => {
+                                    return Err(EngineError {
+                                        cause: EngineErrorCause::Internal,
+                                        scope: EngineErrorScope::Engine,
+                                        execution_id: self.context.execution_id().to_string(),
+                                        message: Some(format!(
+                                            "error while trying to remove {} out of terraform state file. {:?}",
+                                            entry, e.message
+                                        )),
+                                    })
+                                }
+                            }
+                        };
+                    }
+                }
+            }
+            Err(e) => warn!(
+                "no state list exists yet, this is normal if it's a newly created cluster. {:?}",
+                e
+            ),
+        };
+
+        // terraform deployment dedicated to cloud resources
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
             terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
         ) {
-            Ok(_) => Ok(()),
+            Ok(_) => {}
             Err(e) => {
-                format!("Error while deploying cluster {} with id {}.", self.name(), self.id());
-                Err(e)
+                format!(
+                    "Error while deploying cluster {} with Terraform with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(e);
             }
-        }
+        };
+
+        // kubernetes helm deployments on the cluster
+        let kubeconfig = PathBuf::from(self.config_file().expect("expected to get a kubeconfig file").0);
+        let credentials_environment_variables: Vec<(String, String)> = self
+            .cloud_provider
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|x| (x.0.to_string(), x.1.to_string()))
+            .collect();
+        let charts_prerequisites = ChartsConfigPrerequisites {
+            organization_id: self.cloud_provider.organization_id().to_string(),
+            infra_options: self.options.clone(),
+            cluster_id: self.id.clone(),
+            region: self.region().to_string(),
+            cluster_name: self.cluster_name().to_string(),
+            cloud_provider: "aws".to_string(),
+            test_cluster: self.context.is_test_cluster(),
+            aws_access_key_id: self.cloud_provider.access_key_id.to_string(),
+            aws_secret_access_key: self.cloud_provider.secret_access_key.to_string(),
+            ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
+            ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
+            managed_dns_helm_format: self.dns_provider.domain_helm_format(),
+            managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
+            external_dns_provider: self.dns_provider.provider_name().to_string(),
+            dns_email_report: self.options.tls_email_report.clone(),
+            acme_url: self.lets_encrypt_url(),
+            cloudflare_email: self.dns_provider.account().to_string(),
+            cloudflare_api_token: self.dns_provider.token().to_string(),
+            disable_pleco: self.context.disable_pleco(),
+        };
+
+        let helm_charts_to_deploy = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            aws_helm_charts(
+                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+                &charts_prerequisites,
+                Some(&temp_dir),
+                &kubeconfig,
+                &credentials_environment_variables,
+            ),
+        )?;
+
+        cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            deploy_charts_levels(
+                &kubeconfig,
+                &credentials_environment_variables,
+                helm_charts_to_deploy,
+                self.context.is_dry_run_deploy(),
+            ),
+        )
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {
@@ -792,19 +892,19 @@ impl<'a> Kubernetes for EKS<'a> {
             &self.version,
             self.cloud_provider.credentials_environment_variables(),
         ) {
-            Ok(x) => return self.upgrade(x),
+            Ok(x) => self.upgrade(x),
             Err(e) => {
                 let msg = format!(
                     "Error detected, upgrade won't occurs, but standard deployment. {:?}",
                     e.message
                 );
                 error!("{}", &msg);
-                return Err(EngineError {
+                Err(EngineError {
                     cause: EngineErrorCause::Internal,
                     scope: EngineErrorScope::Engine,
                     execution_id: self.context.execution_id().to_string(),
                     message: Some(msg),
-                });
+                })
             }
         }
     }
@@ -847,7 +947,7 @@ impl<'a> Kubernetes for EKS<'a> {
         );
 
         // generate terraform files and copy them into temp dir
-        let mut context = self.tera_context();
+        let mut context = self.tera_context()?;
 
         // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
         let worker_nodes: Vec<WorkerNodeDataTemplate> = Vec::new();
@@ -909,7 +1009,7 @@ impl<'a> Kubernetes for EKS<'a> {
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
         let metric_name = "taskmanager_nb_running_tasks";
-        let wait_engine_job_finish = retry::retry(Fibonacci::from_millis(60000).take(60), || {
+        let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
             return match kubectl_exec_api_custom_metrics(
                 &kubernetes_config_file_path,
                 self.cloud_provider().credentials_environment_variables(),
@@ -1029,7 +1129,7 @@ impl<'a> Kubernetes for EKS<'a> {
         );
 
         // generate terraform files and copy them into temp dir
-        let context = self.tera_context();
+        let context = self.tera_context()?;
 
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
