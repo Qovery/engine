@@ -226,7 +226,7 @@ controller:
   minAvailable: 1
 
   # TODO: It should be replaced by tera context values
-  # for now they are now properly injected
+  # for now they are not properly injected
   # see https://github.com/Qovery/engine/pull/264
   resources:
     limits:
