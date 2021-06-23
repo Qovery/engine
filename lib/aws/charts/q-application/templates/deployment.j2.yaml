@@ -11,7 +11,7 @@ metadata:
     appId: {{ id }}
     app: {{ sanitized_name }}
   annotations:
-    releaseTime: {{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}
+    releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
 spec:
   replicas: {{ total_instances }}
   strategy:
