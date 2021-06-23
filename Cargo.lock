@@ -1526,7 +1526,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
- "pin-project 1.0.1",
+ "pin-project",
  "socket2",
  "tokio 0.2.22",
  "tower-service",
@@ -1550,7 +1550,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
- "pin-project 1.0.1",
+ "pin-project",
  "socket2",
  "tokio 1.7.0",
  "tower-service",
@@ -2372,31 +2372,11 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "0.4.27"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ffbc8e94b38ea3d2d8ba92aea2983b503cd75d0888d75b86bb37970b5698e15"
-dependencies = [
- "pin-project-internal 0.4.27",
-]
-
-[[package]]
-name = "pin-project"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee41d838744f60d959d7074e3afb6b35c7456d0f61cad38a24e35e6553f73841"
 dependencies = [
- "pin-project-internal 1.0.1",
-]
-
-[[package]]
-name = "pin-project-internal"
-version = "0.4.27"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65ad2ae56b6abe3a1ee25f15ee605bacadb9a764edaba9c2bf4103800d4a1895"
-dependencies = [
- "proc-macro2 1.0.27",
- "quote 1.0.7",
- "syn 1.0.73",
+ "pin-project-internal",
 ]
 
 [[package]]
@@ -2595,6 +2575,7 @@ dependencies = [
  "timeout-readwrite",
  "tokio 1.7.0",
  "tracing",
+ "tracing-futures",
  "tracing-subscriber",
  "trust-dns-resolver",
  "walkdir",
@@ -4150,7 +4131,7 @@ checksum = "e1a5f475f1b9d077ea1017ecbc60890fda8e54942d680ca0b1d2b47cfa2d861b"
 dependencies = [
  "futures-util",
  "log",
- "pin-project 1.0.1",
+ "pin-project",
  "tokio 1.7.0",
  "tungstenite",
 ]
@@ -4226,11 +4207,13 @@ dependencies = [
 
 [[package]]
 name = "tracing-futures"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab7bb6f14721aa00656086e9335d363c5c8747bae02ebe32ea2c7dece5689b4c"
+checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
- "pin-project 0.4.27",
+ "futures 0.3.15",
+ "futures-task",
+ "pin-project",
  "tracing",
 ]
 
@@ -4613,7 +4596,7 @@ dependencies = [
  "mime_guess",
  "multipart",
  "percent-encoding 2.1.0",
- "pin-project 1.0.1",
+ "pin-project",
  "scoped-tls",
  "serde",
  "serde_json",
