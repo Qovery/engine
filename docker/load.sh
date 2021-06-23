@@ -100,7 +100,9 @@ function install() { ## Make symlinks to install binaries in default PATH
 
   # Generate all symlinks at once
   ln -s $BIN_DIR/* /usr/bin/
+}
 
+function post_install() { ## Perform post installation (plugins, etc...)
   # install helm diff
   /usr/bin/helm plugin install https://github.com/databus23/helm-diff
 }

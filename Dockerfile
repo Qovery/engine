@@ -41,7 +41,7 @@ ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV ARCHIVE_BUCKET_NAME=qovery-engine-deployment-archive
 
 RUN apt-get update && \
-    apt-get -y install curl docker.io vim awscli procps netcat-openbsd iproute2 lldb gdbserver && \
+    apt-get -y install curl docker.io vim awscli procps netcat-openbsd iproute2 lldb && \
     apt-get clean &&\
     groupadd -g 1000 qovery && \
     useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery && \
@@ -59,11 +59,12 @@ COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
 RUN ./load.sh install $BIN_DIR && \
     chown -Rf qovery. . && \
-    chmod 500 app && \
-    rm -f ./load.sh
+    chmod 500 app
 
 USER qovery
 RUN echo "disable_checkpoint = true" > ~/.terraform.rc
+RUN ./load.sh post_install && \
+    rm -f ./load.sh
 
 # for local use only
 VOLUME /qovery_libs

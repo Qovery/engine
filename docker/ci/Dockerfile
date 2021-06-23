@@ -5,7 +5,7 @@ ARG SCCACHE_REDIS
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 ENV BIN_DIR=$BIN_DEST_FOLDER
 
-RUN apt-get update && apt-get install -y curl libssh-dev pkg-config unzip make netcat-openbsd jq vim gdbserver \
+RUN apt-get update && apt-get install -y curl libssh-dev pkg-config unzip make netcat-openbsd jq vim lldb \
     apt-transport-https ca-certificates curl gnupg lsb-release &&\
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg &&\
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null &&\
@@ -28,7 +28,7 @@ ENV RUSTC_WRAPPER=/usr/bin/sccache
 ADD load.sh /
 ADD bin_versions /
 
-RUN /load.sh download && ./load.sh install $BIN_DIR
+RUN /load.sh download && ./load.sh install $BIN_DIR && ./load.sh post_install
 RUN echo "disable_checkpoint = true" > ~/.terraform.rc
 
 ### Docker
