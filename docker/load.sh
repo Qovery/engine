@@ -115,6 +115,9 @@ install)
   check_num_args 2
   install $2
   ;;
+post_install)
+  post_install
+  ;;
 download_terraform_plugins)
   download_terraform_plugins
   ;;
