@@ -37,6 +37,7 @@ pub struct ChartsConfigPrerequisites {
     pub aws_secret_access_key: String,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
+    pub managed_dns_name: String,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
     pub external_dns_provider: String,
@@ -77,6 +78,10 @@ pub fn aws_helm_charts(
     };
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
+    let prometheus_internal_url = format!(
+        "http://prometheus-operated.{}.svc",
+        get_chart_namespace(prometheus_namespace)
+    );
     let loki_namespace = HelmChartNamespaces::Logging;
     let loki_kube_dns_prefix = format!("loki.{}.svc", get_chart_namespace(loki_namespace));
 
@@ -456,6 +461,10 @@ pub fn aws_helm_charts(
                     key: "fullnameOverride".to_string(),
                     value: "prometheus-operator".to_string(),
                 },
+                ChartSetValue {
+                    key: "prometheus.prometheusSpec.externalUrl".to_string(),
+                    value: prometheus_internal_url.clone(),
+                },
                 // Limits kube-state-metrics
                 ChartSetValue {
                     key: "kube-state-metrics.resources.limits.cpu".to_string(),
@@ -547,10 +556,7 @@ pub fn aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "prometheus.url".to_string(),
-                    value: format!(
-                        "http://prometheus-operated.{}.svc",
-                        get_chart_namespace(prometheus_namespace)
-                    ),
+                    value: prometheus_internal_url.clone(),
                 },
                 ChartSetValue {
                     key: "podDisruptionBudget.enabled".to_string(),
@@ -647,7 +653,7 @@ datasources:
     datasources:
       - name: Prometheus
         type: prometheus
-        url: \"http://prometheus-operator-prometheus:9090\"
+        url: \"{}:9090\"
         access: proxy
         isDefault: true
       - name: PromLoki
@@ -667,6 +673,7 @@ datasources:
           accessKey: '{}'
           secretKey: '{}'
       ",
+        prometheus_internal_url.clone(),
         &loki.chart_info.name,
         get_chart_namespace(loki_namespace),
         &loki.chart_info.name,
@@ -886,6 +893,87 @@ datasources:
             ..Default::default()
         },
     };
+
+    // let qovery_portal_fqdn = format!(
+    //     "qovery-{}.{}",
+    //     chart_config_prerequisites.cluster_id.clone(),
+    //     chart_config_prerequisites.managed_dns_name
+    // );
+    // let qovery_portal = CommonChart {
+    //     chart_info: ChartInfo {
+    //         name: "qovery-portal".to_string(),
+    //         path: chart_path("common/charts/qovery-portal"),
+    //         namespace: HelmChartNamespaces::Qovery,
+    //         values: vec![
+    //             ChartSetValue {
+    //                 key: "hostName".to_string(),
+    //                 value: qovery_portal_fqdn.clone(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "portal.title".to_string(),
+    //                 value: qovery_portal_fqdn.clone(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "oauthConfig.redirectUrl".to_string(),
+    //                 value: format!("https://{}/oauth2/callback", &qovery_portal_fqdn),
+    //             },
+    //             ChartSetValue {
+    //                 key: "oauthConfig.upstreams".to_string(),
+    //                 value: format!("https://{}/", &qovery_portal_fqdn),
+    //             },
+    //             ChartSetValue {
+    //                 key: "oauthConfig.oidcIssuerUrl".to_string(),
+    //                 value: "https://qovery.eu.auth0.com/".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "oauthConfig.clientId".to_string(),
+    //                 value: "shouldn't be client propagated".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "oauthConfig.clientSecret".to_string(),
+    //                 value: "shouldn't be client propagated".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "oauthConfig.cookieName".to_string(),
+    //                 value: "xxx".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "oauthConfig.cookieSecret".to_string(),
+    //                 value: "xxx".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "oauthConfig.emailDomains".to_string(),
+    //                 value: "shouldn't be client propagated".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "clusterIssuer".to_string(),
+    //                 value: "????????????".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "ingressClass".to_string(),
+    //                 value: "nginx-ingress".to_string(),
+    //             },
+    //             // resources limits
+    //             ChartSetValue {
+    //                 key: "resources.limits.cpu".to_string(),
+    //                 value: "1".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "resources.requests.cpu".to_string(),
+    //                 value: "200m".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "resources.limits.memory".to_string(),
+    //                 value: "500Mi".to_string(),
+    //             },
+    //             ChartSetValue {
+    //                 key: "resources.requests.memory".to_string(),
+    //                 value: "500Mi".to_string(),
+    //             },
+    //         ],
+    //         ..Default::default()
+    //     },
+    // };
 
     let qovery_agent_version: QoveryAgent = match get_qovery_app_version(
         QoveryAppName::Agent,
