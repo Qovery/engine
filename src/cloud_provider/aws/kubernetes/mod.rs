@@ -274,7 +274,7 @@ impl<'a> EKS<'a> {
             }
         };
 
-        context.insert("dns_email_report", &self.options.tls_email_report); // Pierre suggested renaming to tls_email_report
+        context.insert("dns_email_report", &self.options.tls_email_report);
 
         // TLS
         context.insert("acme_server_url", &self.lets_encrypt_url());
