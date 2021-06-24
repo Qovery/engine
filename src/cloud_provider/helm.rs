@@ -122,32 +122,35 @@ pub trait HelmChart: Send {
         &self,
         _kubernetes_config: &Path,
         _envs: &[(String, String)],
-        _payload: Option<ChartPayload>,
+        payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, SimpleError> {
-        Ok(None)
+        Ok(payload)
     }
 
     fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, SimpleError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
-        self.check_prerequisites()?;
-        self.pre_exec(&kubernetes_config, &envs, None)?;
-        if let Err(e) = self.exec(&kubernetes_config, &envs, None) {
-            error!(
-                "Error while deploying chart: {:?}",
-                e.message.clone().expect("no message provided")
-            );
-            self.on_deploy_failure(&kubernetes_config, &envs, None)?;
-            return Err(e);
+        let payload = self.check_prerequisites()?;
+        let payload = self.pre_exec(&kubernetes_config, &envs, payload)?;
+        let payload = match self.exec(&kubernetes_config, &envs, payload.clone()) {
+            Ok(payload) => payload,
+            Err(e) => {
+                error!(
+                    "Error while deploying chart: {:?}",
+                    e.message.clone().expect("no error message provided")
+                );
+                self.on_deploy_failure(&kubernetes_config, &envs, payload)?;
+                return Err(e);
+            }
         };
-        self.post_exec(&kubernetes_config, &envs, None)?;
-        Ok(None)
+        let payload = self.post_exec(&kubernetes_config, &envs, payload)?;
+        Ok(payload)
     }
 
     fn exec(
         &self,
         kubernetes_config: &Path,
         envs: &[(String, String)],
-        _payload: Option<ChartPayload>,
+        payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, SimpleError> {
         let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         match self.get_chart_info().action {
@@ -159,22 +162,23 @@ pub trait HelmChart: Send {
             }
             HelmAction::Skip => {}
         }
-        Ok(None)
+        Ok(payload)
     }
 
     fn post_exec(
         &self,
         _kubernetes_config: &Path,
         _envs: &[(String, String)],
-        _payload: Option<ChartPayload>,
+        payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, SimpleError> {
-        Ok(None)
+        Ok(payload)
     }
+
     fn on_deploy_failure(
         &self,
         kubernetes_config: &Path,
         envs: &[(String, String)],
-        _payload: Option<ChartPayload>,
+        payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, SimpleError> {
         // print events for future investigation
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
@@ -183,7 +187,7 @@ pub trait HelmChart: Send {
             get_chart_namespace(self.get_chart_info().namespace).as_str(),
             environment_variables,
         )?;
-        Ok(None)
+        Ok(payload)
     }
 }
 
@@ -262,6 +266,7 @@ pub struct CommonChart {
 }
 
 /// using ChartPayload to pass random kind of data between each deployment steps against a chart deployment
+#[derive(Clone)]
 pub struct ChartPayload {
     data: HashMap<String, String>,
 }
@@ -463,6 +468,104 @@ impl HelmChart for CoreDNSConfigChart {
         Ok(None)
     }
 }
+
+// Qovery Portal
+
+// #[derive(Default)]
+// pub struct QoveryPortalChart {
+//     pub chart_info: ChartInfo,
+// }
+//
+// impl HelmChart for QoveryPortalChart {
+//     fn get_chart_info(&self) -> &ChartInfo {
+//         &self.chart_info
+//     }
+//
+//     fn pre_exec(
+//         &self,
+//         kubernetes_config: &Path,
+//         envs: &[(String, String)],
+//         _payload: Option<ChartPayload>,
+//     ) -> Result<Option<ChartPayload>, SimpleError> {
+//         let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+//         let cluster_default_ingress_loadbalancer_address = match kubectl_exec_get_external_ingress_hostname(
+//             &kubernetes_config,
+//             &get_chart_namespace(HelmChartNamespaces::NginxIngress), // todo: would be better to get it directly from the chart itself
+//             "app=nginx-ingress,component=controller",
+//             environment_variables,
+//         ) {
+//             Ok(x) => {
+//                 if x.is_some() {
+//                     x.unwrap()
+//                 } else {
+//                     return Err(SimpleError {
+//                         kind: SimpleErrorKind::Other,
+//                         message: Some(format!(
+//                             "No default Nginx ingress was found, can't deploy Qovery portal. {:?}",
+//                             e.message
+//                         )),
+//                     });
+//                 }
+//             }
+//             Err(e) => {
+//                 return Err(SimpleError {
+//                     kind: SimpleErrorKind::Other,
+//                     message: Some(format!(
+//                         "Error while trying to get default Nginx ingress to deploy Qovery portal. {:?}",
+//                         e.message
+//                     )),
+//                 })
+//             }
+//         };
+//         let mut configmap_hash = HashMap::new();
+//         configmap_hash.insert(
+//             "loadbalancer_address".to_string(),
+//             cluster_default_ingress_loadbalancer_address,
+//         );
+//         let payload = ChartPayload { data: configmap_hash };
+//
+//         Ok(Some(payload))
+//     }
+//
+//     fn exec(
+//         &self,
+//         kubernetes_config: &Path,
+//         envs: &[(String, String)],
+//         payload: Option<ChartPayload>,
+//     ) -> Result<Option<ChartPayload>, SimpleError> {
+//         if payload.is_none() {
+//             return Err(SimpleError {
+//                 kind: SimpleErrorKind::Other,
+//                 message: Some("payload is missing for qovery-portal chart".to_string()),
+//             });
+//         }
+//         let external_dns_target = match payload.unwrap().data.get("loadbalancer_address") {
+//             None => {
+//                 return Err(SimpleError {
+//                     kind: SimpleErrorKind::Other,
+//                     message: Some("loadbalancer_address payload is missing, can't deploy qovery portal".to_string()),
+//                 })
+//             }
+//             Some(x) => x.into_string(),
+//         };
+//
+//         let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+//         let mut chart = self.chart_info.clone();
+//         chart.values.push(ChartSetValue {
+//             key: "externalDnsTarget".to_string(),
+//             value: external_dns_target,
+//         });
+//
+//         match self.get_chart_info().action {
+//             HelmAction::Deploy => helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, &chart)?,
+//             HelmAction::Destroy => {
+//                 helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, &chart)?
+//             }
+//             HelmAction::Skip => {}
+//         }
+//         Ok(payload)
+//     }
+// }
 
 pub fn get_latest_successful_deployment(helm_history_list: &[HelmHistoryRow]) -> Result<HelmHistoryRow, SimpleError> {
     let mut helm_history_reversed = helm_history_list.to_owned();
