@@ -837,6 +837,7 @@ impl<'a> Kubernetes for EKS<'a> {
             aws_secret_access_key: self.cloud_provider.secret_access_key.to_string(),
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
             ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
+            managed_dns_name: self.dns_provider.domain().to_string(),
             managed_dns_helm_format: self.dns_provider.domain_helm_format(),
             managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
             external_dns_provider: self.dns_provider.provider_name().to_string(),
