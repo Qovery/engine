@@ -59,9 +59,14 @@ pub fn aws_helm_charts(
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError> {
     info!("preparing chart configuration to be deployed");
 
+    let content_file = match File::open(&qovery_terraform_config_file) {
+        Ok(x) => x,
+        Err(e) => return Err(SimpleError{ kind: SimpleErrorKind::Other, message: Some(
+            format!("Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?. {:?}", e)
+        )}),
+    };
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-    let content_file = File::open(&qovery_terraform_config_file)?;
     let reader = BufReader::new(content_file);
     let qovery_terraform_config: AwsQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
