@@ -1,7 +1,9 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, generate_cluster_id, init, FuncTestsSecrets};
+use self::test_utilities::utilities::{
+    context, engine_run_test, generate_cluster_id, generate_id, init, FuncTestsSecrets,
+};
 use std::env;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};

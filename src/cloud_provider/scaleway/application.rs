@@ -222,10 +222,8 @@ impl Service for Application {
                 id: s.id.clone(),
                 name: s.name.clone(),
                 storage_type: match s.storage_type {
-                    StorageType::SC1 => "sc1",
-                    StorageType::ST1 => "st1",
-                    StorageType::GP2 => "gp2",
-                    StorageType::IO1 => "io1",
+                    StorageType::BlockSsd => "b_ssd",
+                    StorageType::LocalSsd => "l_ssd",
                 }
                 .to_string(),
                 size_in_gib: s.size_in_gib,
@@ -350,8 +348,6 @@ impl Listen for Application {
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub enum StorageType {
-    SC1,
-    ST1,
-    GP2,
-    IO1,
+    BlockSsd,
+    LocalSsd,
 }
