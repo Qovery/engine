@@ -12,11 +12,11 @@ terraform {
 # CF: https://registry.terraform.io/providers/scaleway/scaleway/latest/docs#authentication
 provider "scaleway" {}
 # provider "scaleway" {
-#   access_key      = "{{ scw_access_key }}"
-#   secret_key      = "{{ scw_secret_key }}"
-#   project_id	    = "{{ scw_default_project_id }}"
-#   zone            = "{{ scw_default_zone }}"
-#   region          = "{{ scw_default_region }}"
+#   access_key      = "{{ scaleway_access_key }}"
+#   secret_key      = "{{ scaleway_secret_key }}"
+#   project_id	    = "{{ scaleway_default_project_id }}"
+#   zone            = "{{ scaleway_default_zone }}"
+#   region          = "{{ scaleway_default_region }}"
 # }
 
 provider "kubernetes" {

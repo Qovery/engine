@@ -6,10 +6,8 @@ use std::env;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
-use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::transaction::TransactionResult;
 
-#[allow(dead_code)]
 fn create_upgrade_and_destroy_kubernetes_cluster(
     region: &str,
     secrets: FuncTestsSecrets,
@@ -18,4 +16,24 @@ fn create_upgrade_and_destroy_kubernetes_cluster(
     test_name: &str,
 ) {
     // TODO(benjaminch): Implement it
+
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let context = context();
+        let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+        let session = engine.session().unwrap();
+        let mut tx = session.transaction();
+
+        // Deploy
+
+        // Upgrade
+
+        // Destroy
+
+        test_name.to_string()
+    });
 }

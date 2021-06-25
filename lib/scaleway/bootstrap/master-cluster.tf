@@ -1,7 +1,9 @@
 resource "scaleway_k8s_cluster" "kubernetes_cluster" {
-  name    = "kubernetes_cluster_1" # TODO: make it qovery named: qovery-${var.kubernetes_cluster_id}
+  name    = "qovery-${var.kubernetes_cluster_id}"
   version = "1.21.1"
   cni     = "cilium"
+
+  tags    = ["qovery", "integration-test"] # TODO(benjaminch): put more usefull data in tags
 
   autoscaler_config {
     disable_scale_down              = false
@@ -12,21 +14,21 @@ resource "scaleway_k8s_cluster" "kubernetes_cluster" {
     balance_similar_node_groups     = true
     expendable_pods_priority_cutoff = -5
   }
-
-  tags    = ["qovery", "integration-test"]
 }
 
 resource "scaleway_k8s_pool" "kubernetes_cluster_pool" {
   cluster_id    = scaleway_k8s_cluster.kubernetes_cluster.id
-  name          = "kubernetes_cluster_pool_1" # TODO: make it qovery named: qovery-${var.kubernetes_cluster_id}
+  name          = "qovery-${var.kubernetes_cluster_id}"
   node_type     = "DEV1-L"
+
+  # use Scaleway built-in cluster autoscaler
   autoscaling   = true
   autohealing   = true
-  size          = 3
-  min_size      = 3
-  max_size      = 10
+  size          = "{{ scw_ks_worker_nodes[0].instance_type }}"
+  min_nodes  = "{{ scw_ks_worker_nodes[0].min_size }}"
+  max_nodes  = "{{ scw_ks_worker_nodes[0].max_size }}"
 
-  tags          = ["qovery", "integration-test"]
+  tags          = ["qovery", "integration-test"] # TODO(benjaminch): put more usefull data in tags
 }
 
 resource "null_resource" "kubeconfig" {

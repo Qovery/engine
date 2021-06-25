@@ -55,30 +55,30 @@ variable "cidr_block" {
 
 variable "kubernetes_cluster_id" {
   description = "Kubernetes cluster name"
-  default     = "{{ doks_cluster_id }}"
+  default     = "{{ scaleway_ks_cluster_id }}"
   type        = string
 }
 
 variable "kubernetes_cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "qovery-{{ doks_master_name }}"
+  default     = "qovery-{{ scaleway_ks_master_name }}"
   type        = string
 }
 
-variable "doks_version" {
+variable "scaleway_ks_version" {
   description = "Kubernetes cluster version"
-  default = "{{ doks_version }}"
+  default = "{{ scaleway_ks_version }}"
   type    = string
 }
 
 # kubernetes WORKER second cluster
 
-variable "doks_pool_name" {
-  default = "{{ doks_master_name }}"
+variable "scaleway_ks_pool_name" {
+  default = "{{ scaleway_ks_master_name }}"
   type    = string
 }
 
-variable "doks_pool_autoscale" {
+variable "scaleway_ks_pool_autoscale" {
   description = "Enable built-in cluster autoscaler"
   default = true
   type    = bool

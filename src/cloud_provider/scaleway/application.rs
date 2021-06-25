@@ -1,3 +1,6 @@
+use std::fmt;
+use std::str::FromStr;
+
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
@@ -350,4 +353,34 @@ impl Listen for Application {
 pub enum StorageType {
     BlockSsd,
     LocalSsd,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum Region {
+    Paris,
+    Amsterdam,
+    Warsaw,
+}
+
+impl fmt::Display for Region {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Region::Paris => write!(f, "fr-par"),
+            Region::Amsterdam => write!(f, "nl-ams"),
+            Region::Warsaw => write!(f, "pl-waw"),
+        }
+    }
+}
+
+impl FromStr for Region {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Region, ()> {
+        match s {
+            "fr-par" => Ok(Region::Paris),
+            "nl-ams" => Ok(Region::Amsterdam),
+            "pl-waw" => Ok(Region::Warsaw),
+            _ => Err(()),
+        }
+    }
 }
