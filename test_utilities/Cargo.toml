@@ -10,6 +10,7 @@ edition = "2018"
 qovery-engine = { path = "../" }
 chrono = "0.4.11"
 dirs = "3.0.1"
+gethostname = "0.2.1"
 rand = "0.7.3"
 serde = "1.0"
 serde_json = "1.0.57"

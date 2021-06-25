@@ -220,6 +220,24 @@ impl Application {
                     listeners,
                 ),
             )),
+            CPKind::Scw => Some(Box::new(
+                crate::cloud_provider::scaleway::application::Application::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.private_port,
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.total_instances,
+                    self.start_timeout_in_seconds,
+                    image.clone(),
+                    self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
+                    environment_variables,
+                    listeners,
+                ),
+            )),
         }
     }
 

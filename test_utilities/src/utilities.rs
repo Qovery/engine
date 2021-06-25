@@ -1,6 +1,7 @@
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
+use gethostname;
 use std::fs::read_to_string;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
@@ -493,4 +494,36 @@ pub fn execution_id() -> String {
         .replace(":", "-")
         .replace(".", "-")
         .replace("+", "-")
+}
+
+// avoid test collisions
+pub fn generate_cluster_id(region: &str) -> String {
+    let check_if_running_on_gitlab_env_var = "CI_PROJECT_TITLE";
+    let name = gethostname::gethostname().into_string();
+
+    // if running on CI, generate an ID
+    match env::var_os(check_if_running_on_gitlab_env_var) {
+        None => {}
+        Some(_) => return generate_id(),
+    };
+
+    match name {
+        // shrink to 15 chars in order to avoid resources name issues
+        Ok(current_name) => {
+            let mut shrink_size = 15;
+            // avoid out of bounds issue
+            if current_name.chars().count() < shrink_size {
+                shrink_size = current_name.chars().count()
+            }
+            let mut final_name = format!("{}", &current_name[..shrink_size]);
+            // do not end with a non alphanumeric char
+            while !final_name.chars().last().unwrap().is_alphanumeric() {
+                shrink_size -= 1;
+                final_name = format!("{}", &current_name[..shrink_size]);
+            }
+            // note ensure you use only lowercase  (uppercase are not allowed in lot of AWS resources)
+            format!("{}-{}", final_name.to_lowercase(), region.to_lowercase())
+        }
+        _ => generate_id(),
+    }
 }

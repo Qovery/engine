@@ -3113,6 +3113,7 @@ dependencies = [
  "curl",
  "digitalocean",
  "dirs",
+ "gethostname",
  "hashicorp_vault",
  "qovery-engine",
  "rand 0.7.3",
