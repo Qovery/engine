@@ -1,16 +1,18 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, generate_cluster_id, init, FuncTestsSecrets};
+use self::test_utilities::utilities::{
+    context, engine_run_test, generate_cluster_id, generate_id, init, FuncTestsSecrets,
+};
 use std::env;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
-use qovery_engine::transaction::TransactionResult;
-use qovery_engine::container_registry::scaleway_cr::ScalewayCR;
-use qovery_engine::cloud_provider::scaleway::application::Region;
-use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::build_platform::Image;
+use qovery_engine::cloud_provider::scaleway::application::Region;
+use qovery_engine::container_registry::scaleway_cr::ScalewayCR;
+use qovery_engine::container_registry::ContainerRegistry;
+use qovery_engine::transaction::TransactionResult;
 
 #[test]
 fn check_if_image_exist() {
@@ -27,7 +29,7 @@ fn check_if_image_exist() {
         Region::Paris, // TODO(benjaminch): maybe change the default region or make it customizable
     );
 
-    let image = Image{
+    let image = Image {
         application_id: "1234".to_string(),
         name: "test".to_string(),
         tag: "tag123".to_string(),
@@ -43,5 +45,3 @@ fn check_if_image_exist() {
     // verify:
     assert_eq!(false, result);
 }
-
-
