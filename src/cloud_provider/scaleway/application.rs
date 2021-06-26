@@ -349,16 +349,21 @@ impl Listen for Application {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
 pub enum StorageType {
+    #[serde(rename = "b_ssd")]
     BlockSsd,
+    #[serde(rename = "l_ssd")]
     LocalSsd,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
 pub enum Region {
+    #[serde(rename = "fr-par")]
     Paris,
+    #[serde(rename = "nl-ams")]
     Amsterdam,
+    #[serde(rename = "pl-waw")]
     Warsaw,
 }
 

@@ -63,6 +63,7 @@ digitalocean = "0.1.1"
 [dev-dependencies]
 test-utilities = { path = "test_utilities" }
 tempdir = "0.3"
+uuid = { version = "0.8", features = ["v4"] }
 
 [features]
 default = []
