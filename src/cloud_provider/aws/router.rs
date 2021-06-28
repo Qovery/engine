@@ -451,37 +451,25 @@ impl Create for Router {
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_create_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            delete_stateless_service(target, self, true)
+        })
     }
 }
 
 impl Pause for Router {
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.router.on_pause() called for {}", self.name());
-
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        info!("AWS.router.on_pause() called for {}, doing nothing", self.name());
+        Ok(())
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_pause_error() called for {}", self.name());
-
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        Ok(())
     }
 }
 
@@ -489,11 +477,9 @@ impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.router.on_delete() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateless_service(target, self, false)
+        })
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -503,10 +489,8 @@ impl Delete for Router {
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_delete_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateless_service(target, self, true)
+        })
     }
 }

@@ -24,6 +24,7 @@ use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
+use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use time::Instant;
 
 pub fn context() -> Context {
@@ -485,6 +486,34 @@ pub fn is_pod_restarted_aws_env(
         }
         Err(_e) => return (false, "".to_string()),
     }
+}
+
+pub fn get_pods_aws(
+    environment_check: Environment,
+    pod_to_check: &str,
+    secrets: FuncTestsSecrets,
+) -> Result<KubernetesList<KubernetesPod>, SimpleError> {
+    let namespace_name = format!(
+        "{}-{}",
+        &environment_check.project_id.clone(),
+        &environment_check.id.clone(),
+    );
+
+    let access_key = secrets.AWS_ACCESS_KEY_ID.unwrap();
+    let secret_key = secrets.AWS_SECRET_ACCESS_KEY.unwrap();
+    let aws_credentials_envs = vec![
+        ("AWS_ACCESS_KEY_ID", access_key.as_str()),
+        ("AWS_SECRET_ACCESS_KEY", secret_key.as_str()),
+    ];
+
+    let kubernetes_config = kubernetes_config_path("/tmp", KUBE_CLUSTER_ID, access_key.as_str(), secret_key.as_str());
+
+    cmd::kubectl::kubectl_exec_get_pod(
+        kubernetes_config.unwrap().as_str(),
+        namespace_name.clone().as_str(),
+        pod_to_check,
+        aws_credentials_envs,
+    )
 }
 
 pub fn execution_id() -> String {

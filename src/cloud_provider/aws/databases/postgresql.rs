@@ -6,8 +6,9 @@ use crate::cloud_provider::aws::databases::utilities::rds_name_sanitizer;
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
-    get_tfstate_suffix, send_progress_on_long_task, Action, Backup, Create, Database, DatabaseOptions, DatabaseType,
-    Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform, Upgrade,
+    get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
+    DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
+    Upgrade,
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use,
@@ -240,11 +241,9 @@ impl Create for PostgreSQL {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.PostgreSQL.on_create() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_stateful_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_stateful_service(target, self)
+        })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -259,13 +258,12 @@ impl Create for PostgreSQL {
 }
 
 impl Pause for PostgreSQL {
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.PostgreSQL.on_pause() called for {}", self.name());
 
-        // TODO how to pause production? - the goal is to reduce cost, but it is possible to pause a production env?
-        // TODO how to pause development? - the goal is also to reduce cost, we can set the number of instances to 0, which will avoid to delete data :)
-
-        Ok(())
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
+            scale_down_database(target, self, 0)
+        })
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -275,8 +273,6 @@ impl Pause for PostgreSQL {
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.PostgreSQL.on_pause_error() called for {}", self.name());
 
-        // TODO what to do if there is a pause error?
-
         Ok(())
     }
 }
@@ -285,11 +281,9 @@ impl Delete for PostgreSQL {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.PostgreSQL.on_delete() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateful_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateful_service(target, self)
+        })
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
