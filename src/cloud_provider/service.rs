@@ -12,7 +12,8 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::cmd::kubectl::kubectl_exec_delete_secret;
+use crate::cmd::kubectl::ScalingKind::Statefulset;
+use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas, ScalingKind};
 use crate::cmd::structs::LabelsContent;
 use crate::error::{cast_simple_error_to_engine_error, StringError};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
@@ -468,6 +469,68 @@ where
     }
 
     Ok(())
+}
+
+pub fn scale_down_database(
+    target: &DeploymentTarget,
+    service: &impl Database,
+    replicas_count: usize,
+) -> Result<(), EngineError> {
+    let (kubernetes, environment) = match target {
+        DeploymentTarget::ManagedServices(_, _) => {
+            info!("Doing nothing for pause database as it is a managed service");
+            return Ok(());
+        }
+        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+    };
+
+    let scaledown_ret = kubectl_exec_scale_replicas(
+        kubernetes.config_file_path()?,
+        kubernetes.cloud_provider().credentials_environment_variables(),
+        environment.namespace(),
+        Statefulset,
+        service.sanitized_name().as_str(),
+        replicas_count as u32,
+    );
+
+    cast_simple_error_to_engine_error(
+        service.engine_error_scope(),
+        service.context().execution_id(),
+        scaledown_ret,
+    )
+}
+
+pub fn scale_down_stateless_service(
+    target: &DeploymentTarget,
+    service: &impl StatelessService,
+    replicas_count: usize,
+    scaling_kind: ScalingKind,
+) -> Result<(), EngineError> {
+    let (kubernetes, environment) = match target {
+        DeploymentTarget::ManagedServices(_, _) => {
+            return Err(EngineError {
+                cause: EngineErrorCause::Internal,
+                scope: EngineErrorScope::Engine,
+                execution_id: service.context().execution_id().to_string(),
+                message: Some(format!("Cannot scale down managed service: {}", service.name_with_id())),
+            })
+        }
+        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+    };
+    let scaledown_ret = kubectl_exec_scale_replicas(
+        kubernetes.config_file_path()?,
+        kubernetes.cloud_provider().credentials_environment_variables(),
+        environment.namespace(),
+        scaling_kind,
+        service.sanitized_name().as_str(),
+        replicas_count as u32,
+    );
+
+    cast_simple_error_to_engine_error(
+        service.engine_error_scope(),
+        service.context().execution_id(),
+        scaledown_ret,
+    )
 }
 
 pub fn delete_stateless_service<T>(target: &DeploymentTarget, service: &T, is_error: bool) -> Result<(), EngineError>

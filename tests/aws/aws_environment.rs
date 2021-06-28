@@ -1,7 +1,9 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{engine_run_test, generate_id, is_pod_restarted_aws_env, FuncTestsSecrets};
+use self::test_utilities::utilities::{
+    engine_run_test, generate_id, get_pods_aws, is_pod_restarted_aws_env, FuncTestsSecrets,
+};
 use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::context;
@@ -34,23 +36,20 @@ pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAct
     tx.commit()
 }
 
-// pub fn pause_environment(
-//     context: &Context,
-//     environment_action: &EnvironmentAction,
-// ) -> TransactionResult {
-//     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
-//     let session = engine.session().unwrap();
-//     let mut tx = session.transaction();
-//
-//     let cp = test_utilities::aws::cloud_provider_aws(&context);
-//     let nodes = test_utilities::aws::aws_kubernetes_nodes();
-//     let dns_provider = dns_provider_cloudflare(context);
-//     let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
-//
-//     tx.pause_environment(&k, &environment_action);
-//
-//     tx.commit()
-// }
+pub fn ctx_pause_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
+    let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = test_utilities::aws::cloud_provider_aws(&context);
+    let nodes = test_utilities::aws::aws_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(context);
+    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
+
+    let _ = tx.pause_environment(&k, &environment_action);
+
+    tx.commit()
+}
 
 pub fn delete_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
     let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
@@ -103,6 +102,56 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
         return "deploy_a_working_environment_with_no_router_on_aws_eks".to_string();
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[test]
+fn deploy_a_working_environment_and_pause_it_eks() {
+    engine_run_test(|| {
+        let test_name = "deploy_a_working_environment_and_pause_it";
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let context = context();
+        let context_for_delete = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
+        let environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+
+        let ea = EnvironmentAction::Environment(environment.clone());
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        match ctx_pause_environment(&context_for_delete, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // Check that we have actually 0 pods running for this app
+        let app_name = format!("{}-0", environment.applications[0].name);
+        let ret = get_pods_aws(environment.clone(), app_name.clone().as_str(), secrets.clone());
+        assert_eq!(ret.is_ok(), true);
+        assert_eq!(ret.unwrap().items.is_empty(), true);
+
+        // Check we can resume the env
+        let ctx_resume = context.clone_not_same_execution_id();
+        match deploy_environment(&ctx_resume, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // Cleanup
+        match delete_environment(&context_for_delete, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+        return test_name.to_string();
     })
 }
 

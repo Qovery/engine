@@ -31,7 +31,7 @@ where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),
 {
-    match exec_with_envs_and_output(
+    if let Err(err) = exec_with_envs_and_output(
         "kubectl",
         args.clone(),
         envs.clone(),
@@ -39,13 +39,10 @@ where
         stderr_output,
         Duration::max_value(),
     ) {
-        Err(err) => {
-            let args_string = args.join(" ");
-            let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
-            error!("{}", &msg);
-            return Err(err);
-        }
-        Ok(_) => {}
+        let args_string = args.join(" ");
+        let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
+        error!("{}", &msg);
+        return Err(err);
     };
 
     Ok(())
@@ -126,7 +123,7 @@ where
         Err(err) => {
             error!("{:?}", err);
             error!("{}", output_string.as_str());
-            return Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)));
+            Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)))
         }
     }
 }
@@ -308,11 +305,7 @@ where
 
     let first_item = result.items.first().unwrap();
 
-    let is_ready = match first_item.status.phase {
-        KubernetesPodStatusPhase::Running => true,
-        _ => false,
-    };
-
+    let is_ready = matches!(first_item.status.phase, KubernetesPodStatusPhase::Running);
     Ok(Some(is_ready))
 }
 
@@ -409,10 +402,7 @@ where
         },
     );
 
-    match result {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    result.is_ok()
 }
 
 pub fn kubectl_exec_create_namespace_without_labels(namespace: &str, kube_config: &str, envs: Vec<(&str, &str)>) {
@@ -469,7 +459,7 @@ pub fn kubectl_add_labels_to_namespace<P>(
 where
     P: AsRef<Path>,
 {
-    if labels.iter().count() == 0 {
+    if labels.is_empty() {
         return Err(SimpleError::new(
             SimpleErrorKind::Other,
             Some("No labels were defined, can't set them"),
@@ -542,13 +532,13 @@ where
 
     match result {
         Ok(out) => {
-            if out.items.len() == 0 {
+            if out.items.is_empty() {
                 Ok(false)
             } else {
                 Ok(true)
             }
         }
-        Err(e) => return Err(e),
+        Err(e) => Err(e),
     }
 }
 
@@ -918,10 +908,7 @@ pub fn kubectl_exec_api_custom_metrics<P>(
 where
     P: AsRef<Path>,
 {
-    let pods = match specific_pod_name {
-        Some(p) => p,
-        None => "*",
-    };
+    let pods = specific_pod_name.unwrap_or("*");
     let api_url = format!(
         "/apis/custom.metrics.k8s.io/v1beta1/namespaces/{}/pods/{}/{}",
         namespace, pods, metric_name
@@ -950,11 +937,11 @@ pub fn kubectl_exec_scale_replicas<P>(
 where
     P: AsRef<Path>,
 {
-    let kind_formated = match kind {
+    let kind_formatted = match kind {
         ScalingKind::Deployment => "deployment.v1.apps",
         ScalingKind::Statefulset => "statefulset.v1.apps",
     };
-    let kind_with_name = format!("{}/{}", kind_formated, name);
+    let kind_with_name = format!("{}/{}", kind_formatted, name);
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -970,13 +957,15 @@ where
             &replicas_count.to_string(),
         ],
         _envs,
-        |out| match out {
-            Err(err) => error!("{:?}", err),
-            _ => {}
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
         },
-        |out| match out {
-            Err(err) => error!("{:?}", err),
-            _ => {}
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
         },
     )
 }
