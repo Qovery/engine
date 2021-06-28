@@ -9,10 +9,10 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_worker" {
   # use Scaleway built-in cluster autoscaler
   autoscaling   = true # TODO(benjaminch): use scaleway_ks_pool_autoscale variable
   autohealing   = true
-  size          = 3 # TODO(benjaminch) : use : "{{ scw_ks_worker_node.instance_type }}"
+  size          = 3 # TODO(benjaminch) : use : "{{ scw_ks_worker_node.min_size }}"
   min_size      = 3 # TODO(benjaminch) : use : "{{ scw_ks_worker_node.min_size }}"
   max_size      = 10 # TODO(benjaminch) : use : "{{ scw_ks_worker_node.max_size }}"
 
-  tags          = local.tags_ks
+  tags          =  [for i, v in local.tags_ks : "${i}=${v}"] # NOTE: Scaleway doesn't support KV style tags
 }
 # {% endfor %}
