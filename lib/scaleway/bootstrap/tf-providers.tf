@@ -3,6 +3,10 @@ terraform {
     scaleway = {
       source = "scaleway/scaleway"
     }
+    local = {
+      source = "hashicorp/local"
+      version = "~> 1.4"
+    }
     time = {
       source  = "hashicorp/time"
       version = "~> 0.3"
