@@ -1,6 +1,6 @@
 resource "scaleway_k8s_cluster" "kubernetes_cluster" {
   name    = "test-cluster" # TODO(benjaminch) : use : "qovery-${var.kubernetes_cluster_id}"
-  version = "1.20" # TODO(benjaminch): Scaleway doesn't support omitting update version :(
+  version = "1.20"
   cni     = "cilium"
 
   tags    =  [for i, v in local.tags_ks : "${i}=${v}"] # NOTE: Scaleway doesn't support KV style tags
