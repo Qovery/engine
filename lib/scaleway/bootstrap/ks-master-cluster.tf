@@ -14,9 +14,7 @@ resource "scaleway_k8s_cluster" "kubernetes_cluster" {
   }
 
   auto_upgrade {
-    enable = false
-
-    # Needs to be specified even if auto upgrade not enabled
+    enable = true
     maintenance_window_day = "any"
     maintenance_window_start_hour = 3
   }

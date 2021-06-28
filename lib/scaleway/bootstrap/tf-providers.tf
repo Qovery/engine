@@ -12,7 +12,7 @@ terraform {
 }
 
 
-# TODO: use explicit values once tests are over, for the time being, values are injected via ENV
+# TODO(benjaminch): use explicit values once tests are over, for the time being, values are injected via ENV
 # CF: https://registry.terraform.io/providers/scaleway/scaleway/latest/docs#authentication
 provider "scaleway" {}
 # provider "scaleway" {
