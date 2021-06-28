@@ -1,0 +1,20 @@
+enabledFeatures:
+  disableDryRun: true
+  checkInterval: 120
+  kubernetes: "in"
+  awsRegions:
+    - eu-west-3
+    - us-east-2
+  rds: true
+  documentdb: true
+  elasticache: true
+  eks: false
+  elb: true
+  ebs: true
+  vpc: true
+  s3: false
+  kms: true
+  cloudwatchLogs: true
+  iam: true
+  sshKeys: false
+  ecr: true

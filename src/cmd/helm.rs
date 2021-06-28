@@ -1,4 +1,4 @@
-use std::io::Error;
+use std::io::{Error, Write};
 use std::path::Path;
 
 use tracing::{error, info, span, Level};
@@ -8,6 +8,10 @@ use crate::cmd::structs::{Helm, HelmChart, HelmHistoryRow};
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
+use retry::delay::Fixed;
+use retry::Error::Operation;
+use retry::OperationResult;
+use std::fs::File;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
 
@@ -50,7 +54,7 @@ where
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, &envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
     Ok(helm_history_rows
@@ -66,10 +70,10 @@ pub fn helm_exec_upgrade_with_chart_info<P>(
 where
     P: AsRef<Path>,
 {
+    let debug = false;
+
     let mut args_string: Vec<String> = vec![
         "upgrade",
-        "-o",
-        "json",
         "--kubeconfig",
         kubernetes_config.as_ref().to_str().unwrap(),
         "--create-namespace",
@@ -83,6 +87,10 @@ where
     .map(|x| x.to_string())
     .collect();
 
+    if debug {
+        args_string.push("-o".to_string());
+        args_string.push("json".to_string());
+    }
     // warn: don't add debug or json output won't work
     if chart.atomic {
         args_string.push("--atomic".to_string())
@@ -106,46 +114,96 @@ where
         args_string.push("-f".to_string());
         args_string.push(value_file.clone());
     }
+    for value_file in &chart.yaml_files_content {
+        let file_path = format!("{}/{}", chart.path, &value_file.filename);
+        let file_create = || -> Result<(), Error> {
+            let mut file = File::create(&file_path)?;
+            file.write_all(value_file.yaml_content.as_bytes())?;
+            Ok(())
+        };
+        // no need to validate yaml as it will be done by helm
+        if let Err(e) = file_create() {
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(format!(
+                    "error while writing yaml content to file {}\n{}\n{}",
+                    &file_path, value_file.yaml_content, e
+                )),
+            });
+        };
+
+        args_string.push("-f".to_string());
+        args_string.push(file_path.clone());
+    }
 
     // add last elements
     args_string.push(chart.name.to_string());
     args_string.push(chart.path.to_string());
 
-    let args = args_string.iter().map(|x| x.as_str()).collect();
-
     let mut json_output_string = String::new();
     let mut error_message = String::new();
-    match helm_exec_with_output(
-        args,
-        envs.clone(),
-        |out| match out {
-            Ok(line) => json_output_string = line,
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => {
-                // helm errors are not json formatted unfortunately
-                if line.contains("has been rolled back") {
-                    error_message = format!("Deployment {} has been rolled back", chart.name);
-                    warn!("{}. {}", &error_message, &line);
-                } else if line.contains("has been uninstalled") {
-                    error_message = format!("Deployment {} has been uninstalled due to failure", chart.name);
-                    warn!("{}. {}", &error_message, &line);
+
+    let result = retry::retry(Fixed::from_millis(15000).take(3), || {
+        let args = args_string.iter().map(|x| x.as_str()).collect();
+        let mut helm_error_during_deployment = SimpleError {
+            kind: SimpleErrorKind::Other,
+            message: None,
+        };
+        match helm_exec_with_output(
+            args,
+            envs.clone(),
+            |out| match out {
+                Ok(line) => {
+                    info!("{}", line);
+                    if debug {
+                        debug!("{}", line);
+                    }
+                    json_output_string = line
+                }
+                Err(err) => error!("{}", &err),
+            },
+            |out| match out {
+                Ok(line) => {
+                    // helm errors are not json formatted unfortunately
+                    if line.contains("has been rolled back") {
+                        error_message = format!("deployment {} has been rolled back", chart.name);
+                        helm_error_during_deployment.message = Some(error_message.clone());
+                        warn!("{}. {}", &error_message, &line);
+                    } else if line.contains("has been uninstalled") {
+                        error_message = format!("deployment {} has been uninstalled due to failure", chart.name);
+                        helm_error_during_deployment.message = Some(error_message.clone());
+                        warn!("{}. {}", &error_message, &line);
+                    // special fix for prometheus operator
+                    } else if line.contains("info: skipping unknown hook: \"crd-install\"") {
+                        debug!("chart {}: {}", chart.name, line);
+                    } else {
+                        error_message = format!("deployment {} has failed", chart.name);
+                        helm_error_during_deployment.message = Some(error_message.clone());
+                        error!("{}. {}", &error_message, &line);
+                    }
+                }
+                Err(err) => {
+                    error_message = format!("helm chart {} failed before deployment. {:?}", chart.name, err);
+                    helm_error_during_deployment.message = Some(error_message.clone());
+                    error!("{}", error_message);
+                }
+            },
+        ) {
+            Ok(_) => {
+                if helm_error_during_deployment.message.is_some() {
+                    OperationResult::Retry(helm_error_during_deployment)
                 } else {
-                    error_message = format!("Deployment {} has failed", chart.name);
-                    warn!("{}. {}", &error_message, &line);
+                    OperationResult::Ok(())
                 }
             }
-            Err(err) => error!("{:?}", err),
-        },
-    ) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(format!("{}. {:?}", error_message, e.message)),
-            })
+            Err(e) => OperationResult::Retry(e),
         }
+    });
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(Operation { error, .. }) => return Err(error),
+        Err(retry::Error::Internal(e)) => return Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
     }
 }
 
@@ -260,7 +318,7 @@ pub fn helm_exec_history<P>(
     kubernetes_config: P,
     namespace: &str,
     release_name: &str,
-    envs: Vec<(&str, &str)>,
+    envs: &Vec<(&str, &str)>,
 ) -> Result<Vec<HelmHistoryRow>, SimpleError>
 where
     P: AsRef<Path>,
@@ -278,7 +336,7 @@ where
             "json",
             release_name,
         ],
-        envs,
+        envs.clone(),
         |out| match out {
             Ok(line) => output_string = line,
             Err(err) => error!("{:?}", err),
@@ -432,7 +490,7 @@ where
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, envs)?;
+    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, &envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
     Ok(helm_history_rows
@@ -499,6 +557,80 @@ where
     }
 
     Ok(helms_charts)
+}
+
+pub fn helm_upgrade_diff_with_chart_info<P>(
+    kubernetes_config: P,
+    envs: &Vec<(String, String)>,
+    chart: &ChartInfo,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut environment_variables = envs.clone();
+    environment_variables.push(("HELM_NAMESPACE".to_string(), get_chart_namespace(chart.namespace)));
+
+    let mut args_string: Vec<String> = vec![
+        "diff",
+        "upgrade",
+        "--allow-unreleased",
+        "--kubeconfig",
+        kubernetes_config.as_ref().to_str().unwrap(),
+    ]
+    .into_iter()
+    .map(|x| x.to_string())
+    .collect();
+
+    // overrides and files overrides
+    for value in &chart.values {
+        args_string.push("--set".to_string());
+        args_string.push(format!("{}={}", value.key, value.value));
+    }
+    for value_file in &chart.values_files {
+        args_string.push("-f".to_string());
+        args_string.push(value_file.clone());
+    }
+    for value_file in &chart.yaml_files_content {
+        let file_path = format!("{}/{}", chart.path, &value_file.filename);
+        let file_create = || -> Result<(), Error> {
+            let mut file = File::create(&file_path)?;
+            file.write_all(value_file.yaml_content.as_bytes())?;
+            Ok(())
+        };
+        // no need to validate yaml as it will be done by helm
+        if let Err(e) = file_create() {
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(format!(
+                    "error while writing yaml content to file {}\n{}\n{}",
+                    &file_path, value_file.yaml_content, e
+                )),
+            });
+        };
+
+        args_string.push("-f".to_string());
+        args_string.push(file_path.clone());
+    }
+
+    // add last elements
+    args_string.push(chart.name.to_string());
+    args_string.push(chart.path.to_string());
+
+    helm_exec_with_output(
+        args_string.iter().map(|x| x.as_str()).collect(),
+        environment_variables
+            .iter()
+            .map(|x| (x.0.as_str(), x.1.as_str()))
+            .collect(),
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            Err(err) => error!("{}", &err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{}", err),
+        },
+    )
 }
 
 pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {

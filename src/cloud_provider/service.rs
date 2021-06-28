@@ -333,7 +333,8 @@ where
         service.engine_error(
             EngineErrorCause::User(
                 "Your application has failed to start. \
-                Ensure you can run it without issues with `qovery run` and check its logs from the web interface or the CLI with `qovery log`",
+                Ensure you can run it without issues with `qovery run` and check its logs from the web interface or the CLI with `qovery log`. \
+                This issue often occurs due to ports misconfiguration. Make sure you exposed the correct port (using EXPOSE statement in Dockerfile or via Qovery configuration).",
             ),
             format!(
                 "{} {} has failed to start ⤬",
@@ -449,7 +450,7 @@ where
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
-            kubernetes.cloud_provider().credentials_environment_variables(),
+            &kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 
@@ -994,7 +995,7 @@ where
     let events = cast_simple_error_to_engine_error(
         kubernetes.engine_error_scope(),
         kubernetes.context().execution_id(),
-        crate::cmd::kubectl::kubectl_exec_get_event(
+        crate::cmd::kubectl::kubectl_exec_get_json_events(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1086,7 +1087,7 @@ pub fn do_stateless_service_cleanup(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name,
-            kubernetes.cloud_provider().credentials_environment_variables(),
+            &kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
 

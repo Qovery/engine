@@ -115,6 +115,7 @@ impl Service for Router {
         let digitalocean = kubernetes.cloud_provider().as_any().downcast_ref::<DO>().unwrap();
 
         let mut context = default_tera_context(self, kubernetes, environment);
+        context.insert("doks_cluster_id", kubernetes.id());
 
         let applications = environment
             .stateless_services

@@ -92,6 +92,8 @@ spec:
             - --enable-ecr
             {{ end }}
           env:
+            - name: "AWS_EXECUTION_ENV"
+              value: "pleco_{{ .Values.image.plecoImageTag }}_{{ .Values.environmentVariables.PLECO_IDENTIFIER }}"
             {{ range $key, $value := .Values.environmentVariables -}}
             - name: "{{ $key }}"
               valueFrom:

@@ -12,27 +12,9 @@ pub struct KubernetesService {
     pub status: KubernetesServiceStatus,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Labels {
-    pub name: String,
-}
-
 pub struct LabelsContent {
     pub name: String,
     pub value: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Spec {
-    pub finalizers: Vec<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Status {
-    pub phase: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -48,28 +30,55 @@ pub struct Item {
     pub api_version: String,
     pub kind: String,
     pub metadata: Metadata,
-    pub spec: Spec,
-    pub status: Status,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Metadata {
     pub creation_timestamp: String,
-    pub labels: Option<Labels>,
     pub name: String,
     pub resource_version: String,
     pub self_link: String,
     pub uid: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+pub struct Configmap {
+    pub data: ConfigmapData,
+}
+
+#[derive(Hash, Serialize, Deserialize)]
+pub struct ConfigmapData {
+    #[serde(rename = "Corefile")]
+    pub corefile: Option<String>,
+}
+
+#[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Daemonset {
     pub api_version: String,
-    pub items: Vec<Item>,
+    pub items: Option<Vec<Item>>,
     pub kind: String,
-    pub metadata: Metadata,
+    pub spec: Option<Spec>,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Spec {
+    pub selector: Selector,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Selector {
+    pub match_labels: MatchLabels,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchLabels {
+    #[serde(rename = "k8s-app")]
+    pub k8s_app: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -263,6 +272,7 @@ impl HelmChart {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct HelmHistoryRow {
     pub revision: u16,
+    pub updated: String,
     pub status: String,
     pub chart: String,
     pub app_version: String,

@@ -35,6 +35,9 @@ pub trait Kubernetes: Listen {
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
+    fn cluster_name(&self) -> String {
+        format!("qovery-{}", self.id())
+    }
     fn version(&self) -> &str;
     fn region(&self) -> &str;
     fn cloud_provider(&self) -> &dyn CloudProvider;

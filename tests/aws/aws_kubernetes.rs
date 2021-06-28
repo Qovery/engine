@@ -111,8 +111,6 @@ fn create_upgrade_and_destroy_eks_cluster(
         };
 
         // Destroy
-        // There is a bug with the current version of Terraform (0.14.10) where the destroy fails, but it works
-        // It doesn't find any helm charts after destroying the workers and charts have already been destroyed
         if let Err(err) = tx.delete_kubernetes(&kubernetes) {
             panic!("{:?}", err)
         }
@@ -188,8 +186,6 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
         }
 
         // Destroy
-        // There is a bug with the current version of Terraform (0.14.10) where the destroy fails, but it works
-        // It doesn't find any helm charts after destroying the workers and charts have already been destroyed
         if let Err(err) = tx.delete_kubernetes(&kubernetes) {
             panic!("{:?}", err)
         }
@@ -216,7 +212,7 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
     create_and_destroy_eks_cluster(
         &region,
         secrets,
-        true,
+        false,
         &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
     );
 }
@@ -229,7 +225,7 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
     create_and_destroy_eks_cluster(
         &region,
         secrets,
-        false,
+        true,
         &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
     );
 }
