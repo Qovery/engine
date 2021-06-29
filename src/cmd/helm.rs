@@ -375,7 +375,7 @@ where
             }
         }
         Ok(x) => {
-            if let Err(e) = kubectl_exec_delete_secret(&kubernetes_config, x.as_str(), envs.clone()) {
+            if let Err(e) = kubectl_exec_delete_secret(&kubernetes_config, namespace, x.as_str(), envs.clone()) {
                 return Err(e);
             };
             Ok(())

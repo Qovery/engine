@@ -660,7 +660,7 @@ where
     T: StatefulService + Helm + Terraform,
 {
     match target {
-        DeploymentTarget::ManagedServices(kubernetes, _) => {
+        DeploymentTarget::ManagedServices(kubernetes, environment) => {
             let workspace_dir = service.workspace_directory();
             let tera_context = service.tera_context(target)?;
 
@@ -706,8 +706,12 @@ where
 
             match crate::cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
                 Ok(_) => {
-                    info!("let's delete secrets containing tfstates");
-                    let _ = delete_terraform_tfstate_secret(*kubernetes, &get_tfstate_name(service));
+                    info!("deleting secret containing tfstates");
+                    let _ = delete_terraform_tfstate_secret(
+                        *kubernetes,
+                        environment.namespace(),
+                        &get_tfstate_name(service),
+                    );
                 }
                 Err(e) => {
                     let message = format!("{:?}", e);
@@ -789,12 +793,17 @@ where
     }
 }
 
-fn delete_terraform_tfstate_secret(kubernetes: &dyn Kubernetes, secret_name: &str) -> Result<(), EngineError> {
+fn delete_terraform_tfstate_secret(
+    kubernetes: &dyn Kubernetes,
+    namespace: &str,
+    secret_name: &str,
+) -> Result<(), EngineError> {
     let config_file_path = kubernetes.config_file_path()?;
 
     //create the namespace to insert the tfstate in secrets
     let _ = kubectl_exec_delete_secret(
         config_file_path,
+        namespace,
         secret_name,
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
