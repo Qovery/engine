@@ -23,7 +23,7 @@ impl<'a> Drop for LogErrorOnDrop<'a> {
     fn drop(&mut self) {
         METRICS_NB_THREAD_TERMINATED.inc();
         if std::thread::panicking() {
-            eprintln!("TRHEAD PANIC: {}", self.msg);
+            eprintln!("THREAD PANIC: {}", self.msg);
         } else {
             eprintln!("THREAD EXIT: {}", self.msg);
         }
