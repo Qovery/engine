@@ -1026,6 +1026,13 @@ impl Context {
         }
     }
 
+    pub fn disable_pleco(&self) -> bool {
+        match &self.metadata {
+            Some(meta) => meta.disable_pleco.unwrap_or(false),
+            _ => false,
+        }
+    }
+
     pub fn requires_forced_upgrade(&self) -> bool {
         match &self.metadata {
             Some(meta) => matches!(meta.forced_upgrade, Some(true)),
@@ -1073,6 +1080,7 @@ pub struct Metadata {
     pub resource_expiration_in_seconds: Option<u32>,
     pub docker_build_options: Option<String>,
     pub forced_upgrade: Option<bool>,
+    pub disable_pleco: Option<bool>,
 }
 
 impl Metadata {
@@ -1081,12 +1089,14 @@ impl Metadata {
         resource_expiration_in_seconds: Option<u32>,
         docker_build_options: Option<String>,
         forced_upgrade: Option<bool>,
+        disable_pleco: Option<bool>,
     ) -> Self {
         Metadata {
             dry_run_deploy,
             resource_expiration_in_seconds,
             docker_build_options,
             forced_upgrade,
+            disable_pleco,
         }
     }
 }

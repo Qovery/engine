@@ -9,8 +9,8 @@ use serde::de::DeserializeOwned;
 use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
-    Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod,
-    KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent,
+    Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
+    KubernetesPod, KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent,
 };
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
@@ -33,14 +33,19 @@ where
 {
     match exec_with_envs_and_output(
         "kubectl",
-        args,
-        envs,
+        args.clone(),
+        envs.clone(),
         stdout_output,
         stderr_output,
         Duration::max_value(),
     ) {
-        Err(err) => return Err(err),
-        _ => {}
+        Err(err) => {
+            let args_string = args.join(" ");
+            let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
+            error!("{}", &msg);
+            return Err(err);
+        }
+        Ok(_) => {}
     };
 
     Ok(())
@@ -212,7 +217,6 @@ where
         return Ok(None);
     }
 
-    // FIXME unsafe unwrap here?
     Ok(Some(
         result
             .items
@@ -237,7 +241,6 @@ pub fn kubectl_exec_is_pod_ready_with_retry<P>(
 where
     P: AsRef<Path>,
 {
-    // TODO check this
     let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
         let r = crate::cmd::kubectl::kubectl_exec_is_pod_ready(
             kubernetes_config.as_ref(),
@@ -306,7 +309,6 @@ pub fn kubectl_exec_is_job_ready_with_retry<P>(
 where
     P: AsRef<Path>,
 {
-    // TODO check this
     let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
         let r = crate::cmd::kubectl::kubectl_exec_is_job_ready(
             kubernetes_config.as_ref(),
@@ -703,34 +705,34 @@ pub fn kubectl_exec_get_daemonset<P>(
     namespace: &str,
     selectors: Option<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesNode>, SimpleError>
+) -> Result<Daemonset, SimpleError>
 where
     P: AsRef<Path>,
 {
-    let mut args = vec!["-n", namespace, "get", "daemonset", name];
+    let mut args = vec!["-n", namespace, "get", "daemonset"];
     match selectors {
         Some(x) => {
             args.push("-l");
             args.push(x);
         }
-        None => {}
+        None => args.push(name),
     };
     args.push("-o");
     args.push("json");
 
-    kubectl_exec::<P, KubernetesList<KubernetesNode>>(args, kubernetes_config, envs)
+    kubectl_exec::<P, Daemonset>(args, kubernetes_config, envs)
 }
 
 pub fn kubectl_exec_rollout_restart_deployment<P>(
     kubernetes_config: P,
     name: &str,
     namespace: &str,
-    envs: Vec<(&str, &str)>,
+    envs: &Vec<(&str, &str)>,
 ) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
-    let mut environment_variables: Vec<(&str, &str)> = envs;
+    let mut environment_variables: Vec<(&str, &str)> = envs.clone();
     environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
@@ -792,7 +794,23 @@ where
     )
 }
 
-pub fn kubectl_exec_get_event<P>(
+pub fn kubectl_exec_get_configmap<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Configmap, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, Configmap>(
+        vec!["get", "configmap", "-o", "json", "-n", namespace, &name],
+        kubernetes_config,
+        envs,
+    )
+}
+
+pub fn kubectl_exec_get_json_events<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: Vec<(&str, &str)>,
@@ -805,6 +823,32 @@ where
         vec!["get", "event", "-o", "json", "-n", namespace],
         kubernetes_config,
         envs,
+    )
+}
+
+pub fn kubectl_exec_get_events<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut environment_variables = envs;
+    environment_variables.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+
+    let args = vec!["get", "event", "-n", namespace, "--sort-by='.lastTimestamp'"];
+    kubectl_exec_with_output(
+        args,
+        environment_variables,
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
     )
 }
 
@@ -931,8 +975,8 @@ where
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
     let _ = kubectl_exec_with_output(
-        args,
-        _envs,
+        args.clone(),
+        _envs.clone(),
         |out| match out {
             Ok(line) => output_vec.push(line),
             Err(err) => error!("{:?}", err),
@@ -948,7 +992,20 @@ where
     let result = match serde_json::from_str::<T>(output_string.as_str()) {
         Ok(x) => x,
         Err(err) => {
-            error!("{:?}", err);
+            let args_string = args.join(" ");
+            let mut env_vars_in_vec = Vec::new();
+            let _ = _envs.into_iter().map(|x| {
+                env_vars_in_vec.push(x.0.to_string());
+                env_vars_in_vec.push(x.1.to_string());
+            });
+            let environment_variables = env_vars_in_vec.join(" ");
+            error!(
+                "json parsing error on {:?} on command: {} kubectl {}. {:?}",
+                std::any::type_name::<T>(),
+                environment_variables,
+                args_string,
+                err
+            );
             error!("{}", output_string.as_str());
             return Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)));
         }

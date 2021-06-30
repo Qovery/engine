@@ -15,6 +15,7 @@ pub mod helm;
 pub mod kubernetes;
 pub mod metrics;
 pub mod models;
+pub mod qovery;
 pub mod service;
 pub mod utilities;
 

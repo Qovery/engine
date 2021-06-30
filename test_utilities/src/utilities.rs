@@ -55,6 +55,7 @@ pub fn context() -> Context {
                 None => false,
             }
         }),
+        disable_pleco: Some(true),
     };
 
     let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
@@ -183,7 +184,13 @@ impl FuncTestsSecrets {
             }
         };
 
-        let client = hashicorp_vault::Client::new(vault_config.address, vault_config.token).unwrap();
+        let client = match hashicorp_vault::Client::new(vault_config.address, vault_config.token) {
+            Ok(x) => x,
+            Err(e) => {
+                println!("error: wasn't able to contact Vault server. {:?}", e);
+                return empty_secrets;
+            }
+        };
         let res: Result<FuncTestsSecrets, _> = client.get_custom_secret(secret_name);
         match res {
             Ok(x) => x,
