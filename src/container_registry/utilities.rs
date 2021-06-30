@@ -2,7 +2,7 @@ use crate::cmd;
 use crate::container_registry::Kind;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
-use retry::delay::Fibonacci;
+use retry::delay::{Fibonacci, Range};
 use retry::Error::Operation;
 use retry::OperationResult;
 
@@ -38,9 +38,10 @@ pub fn docker_tag_and_push_image(
         _ => {}
     }
 
-    match retry::retry(
-        Fibonacci::from_millis(5000).take(5),
-        || match cmd::utilities::exec_with_envs_and_output(
+    // Note: use random time for retry instead of Fibonacci avoiding to have all parallel retries at the same time.
+    // This should help reducing peak QPS and stress on the container registry.
+    match retry::retry(Range::from_millis_inclusive(10, 30000).take(10), || {
+        match cmd::utilities::exec_with_envs_and_output(
             "docker",
             vec!["push", dest.as_str()],
             docker_envs.clone(),
@@ -62,8 +63,8 @@ pub fn docker_tag_and_push_image(
                 );
                 OperationResult::Retry(e)
             }
-        },
-    ) {
+        }
+    }) {
         Err(Operation { error, .. }) => Err(error),
         Err(e) => Err(SimpleError::new(
             SimpleErrorKind::Other,
