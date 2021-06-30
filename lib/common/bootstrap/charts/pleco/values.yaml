@@ -3,10 +3,11 @@ replicaCount: 1
 image:
   repository: qoveryrd/pleco
   pullPolicy: IfNotPresent
-  plecoImageTag: "0.7.21"
+  plecoImageTag: "0.8.1"
 
 environmentVariables:
   LOG_LEVEL: "info"
+  PLECO_IDENTIFIER: "tbd"
   # AWS_ACCESS_KEY_ID: ""
   # AWS_SECRET_ACCESS_KEY: ""
   # KUBECONFIG: ""
