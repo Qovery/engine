@@ -2029,6 +2029,7 @@ dependencies = [
  "rusoto_s3",
  "rusoto_sts",
  "rust-crypto",
+ "scaleway_api_rs",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2463,6 +2464,7 @@ dependencies = [
  "lazy_static",
  "log",
  "mime",
+ "mime_guess",
  "native-tls",
  "percent-encoding 2.1.0",
  "pin-project-lite 0.2.6",
@@ -2697,6 +2699,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "scaleway_api_rs"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.11.4",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "url 2.2.2",
 ]
 
 [[package]]

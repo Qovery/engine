@@ -1,3 +1,5 @@
+extern crate scaleway_api_rs;
+
 use crate::cloud_provider::scaleway::application::Region;
 
 use crate::build_platform::Image;
@@ -47,47 +49,28 @@ impl ScalewayCR {
 
     fn get_registry_namespace(&self, image: &Image) -> Option<ScalewayRegistryNamespace> {
         // https://developers.scaleway.com/en/products/registry/api/#get-09e004
-        let headers = utilities::get_header_with_bearer(self.secret_token.as_str());
-        let url = format!(
-            "https://api.scaleway.com/registry/v1/regions/{}/namespaces",
-            self.region.to_string().as_str(),
-        );
-
-        let res = reqwest::blocking::Client::new()
-            .get(url.as_str())
-            .headers(headers)
-            .query(&[
-                ("project_id", self.default_project_id.as_str()),
-                ("name", image.registry_name.as_ref().unwrap_or(&"".to_string())),
-            ])
-            .send();
-
-        let body = match res {
-            Ok(output) => match output.status() {
-                StatusCode::OK => output.text(),
-                _ => {
-                    error!(
-                        "While tyring to get registry namespace: {}, maybe this registry namespace doesn't exist !",
-                        image.registry_name.as_ref().unwrap_or(&"".to_string()),
-                    );
-                    return None;
-                }
-            },
-            Err(_) => {
-                error!(
-                    "While trying to communicate with Scaleway API to retrieve registry namespace {}",
-                    image.registry_name.as_ref().unwrap_or(&"".to_string()),
-                );
-                return None;
-            }
+        let configuration = scaleway_api_rs::apis::configuration::Configuration {
+            bearer_access_token: Some(self.secret_token.clone()),
+            ..Default()
         };
 
-        let scaleway_registry_namespaces = match serde_json::from_str::<ScalewayRegistryNamespaces>(&body.unwrap()) {
+        let scaleway_registry_namespaces = match scaleway_api_rs::apis::namespaces_api::list_namespaces(
+            &configuration,
+            self.region.to_string().as_str(),
+            None,
+            None,
+            None,
+            None,
+            Some(self.default_project_id.as_str()),
+            image.registry_name.as_str(),
+        )
+        .await
+        {
             Ok(res) => res.namespaces,
             Err(e) => {
                 error!(
-                    "While trying to deserialize Scaleway registry namespaces response, image {}",
-                    &image.name
+                    "Error while interacting with Scaleway API, error: {}, image: {}",
+                    e, &image.name
                 );
                 return None;
             }
@@ -102,61 +85,44 @@ impl ScalewayCR {
 
     fn get_image(&self, image: &Image) -> Option<ScalewayImage> {
         // https://developers.scaleway.com/en/products/registry/api/#get-a6f1bc
-        let headers = utilities::get_header_with_bearer(self.secret_token.as_str());
-        let url = format!(
-            "https://api.scaleway.com/registry/v1/regions/{}/images",
-            self.region.to_string().as_str(),
-        );
-
-        let res = reqwest::blocking::Client::new()
-            .get(url.as_str())
-            .headers(headers)
-            .query(&[
-                ("project_id", self.default_project_id.as_str()),
-                ("name", image.registry_name.as_ref().unwrap_or(&"".to_string())),
-            ])
-            .send();
-
-        let body = match res {
-            Ok(output) => match output.status() {
-                StatusCode::OK => output.text(),
-                _ => {
-                    error!(
-                        "While tyring to get image: {}, maybe this image not exist !",
-                        &image.name
-                    );
-                    return None;
-                }
-            },
-            Err(_) => {
-                error!(
-                    "While trying to communicate with Scaleway API to retrieve image {}",
-                    &image.name
-                );
-                return None;
-            }
+        let configuration = scaleway_api_rs::apis::configuration::Configuration {
+            bearer_access_token: Some(self.secret_token.clone()),
+            ..Default()
         };
 
-        let scaleway_images = match serde_json::from_str::<ScalewayImages>(&body.unwrap()) {
+        let scaleway_images = match scaleway_api_rs::apis::images_api::list_images1(
+            &configuration,
+            self.region.to_string().as_str(),
+            None,
+            None,
+            None,
+            None,
+            Some(image.name.as_str()),
+            None,
+            image.registry_name.as_str(),
+        )
+        .await
+        {
             Ok(res) => res.images,
             Err(e) => {
                 error!(
-                    "While trying to deserialize Scaleway images response, image {}",
-                    &image.name
+                    "Error while interacting with Scaleway API, error: {}, image: {}",
+                    e, &image.name
                 );
                 return None;
             }
         };
 
-        // Scaleway doesn't allow to specify any tags while getting image
-        // so we need to check if tags are the ones we are looking for
-        for scaleway_image in scaleway_images.into_iter() {
-            if scaleway_image.tags.contains(&image.tag) {
-                return Some(scaleway_image);
+        if let Some(images) = scaleway_images {
+            // Scaleway doesn't allow to specify any tags while getting image
+            // so we need to check if tags are the ones we are looking for
+            for scaleway_image in images.into_iter() {
+                if scaleway_image.tags.is_some() && scaleway_image.tags.unwrap().contains(&image.tag) {
+                    return Some(scaleway_image);
+                }
             }
         }
 
-        // No images found with given tags
         None
     }
 
@@ -181,6 +147,22 @@ impl ScalewayCR {
                 ("is_public", "false"),
             ])
             .send();
+
+        let configuration = scaleway_api_rs::apis::configuration::Configuration {
+            bearer_access_token: Some(self.secret_token.clone()),
+            ..Default()
+        };
+
+        scaleway_api_rs::apis::namespaces_api::create_namespace(
+            &configuration,
+            self.region.to_string().as_str(),
+            scaleway_api_rs::models::inline_object_53::InlineObject53{
+                name: image.registry_name.unwrap_or("".to_string()),
+                description: registry_namespace_name,
+                project_id: Some(self.default_project_id.clone()),
+                is_public: Some(false),
+            }
+        )
 
         let body = match res {
             Ok(output) => match output.status() {
@@ -360,98 +342,4 @@ impl Listen for ScalewayCR {
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
-}
-
-#[derive(Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
-pub struct ScalewayRegistryNamespaces {
-    #[serde(rename = "namespaces")]
-    namespaces: Vec<ScalewayRegistryNamespace>,
-}
-
-#[derive(Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
-pub struct ScalewayRegistryNamespace {
-    #[serde(rename = "id")]
-    id: String,
-    #[serde(rename = "name")]
-    name: String,
-    #[serde(rename = "description")]
-    description: String,
-    #[serde(rename = "organization_id")]
-    organization_id: String,
-    #[serde(rename = "project_id")]
-    project_id: String,
-    #[serde(rename = "status")]
-    status: ScalewayResourceStatus,
-    #[serde(rename = "status_message")]
-    status_message: String,
-    #[serde(rename = "endpoint")]
-    endpoint: String,
-    #[serde(rename = "is_public")]
-    is_public: bool,
-    #[serde(rename = "size")]
-    size: u32,
-    #[serde(rename = "created_at")]
-    created_at: String,
-    #[serde(rename = "updated_at")]
-    updated_at: String,
-    #[serde(rename = "image_count")]
-    image_count: u32,
-    #[serde(rename = "region")]
-    region: Region,
-}
-
-#[derive(Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
-pub struct ScalewayImages {
-    #[serde(rename = "images")]
-    images: Vec<ScalewayImage>,
-}
-
-#[derive(Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
-pub struct ScalewayImage {
-    #[serde(rename = "id")]
-    id: String,
-    #[serde(rename = "name")]
-    name: String,
-    #[serde(rename = "namespace_id")]
-    namespace_id: String,
-    #[serde(rename = "status")]
-    status: ScalewayResourceStatus,
-    #[serde(rename = "status_message")]
-    status_message: String,
-    #[serde(rename = "visibility")]
-    visibility: ScalewayImageVisibility,
-    #[serde(rename = "size")]
-    size: u32,
-    #[serde(rename = "created_at")]
-    created_at: String,
-    #[serde(rename = "updated_at")]
-    updated_at: String,
-    #[serde(rename = "tags")]
-    tags: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
-pub enum ScalewayResourceStatus {
-    #[serde(rename = "unknown")]
-    Unknown,
-    #[serde(rename = "ready")]
-    Ready,
-    #[serde(rename = "deleting")]
-    Deleting,
-    #[serde(rename = "error")]
-    Error,
-    #[serde(rename = "locked")]
-    Locked,
-}
-
-#[derive(Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
-pub enum ScalewayImageVisibility {
-    #[serde(rename = "visibility_unknown")]
-    Unknown,
-    #[serde(rename = "inherit")]
-    Inherit,
-    #[serde(rename = "public")]
-    Public,
-    #[serde(rename = "private")]
-    Private,
 }

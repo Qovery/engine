@@ -6,6 +6,7 @@ resource "scaleway_k8s_cluster" "kubernetes_cluster" {
   tags    =  [for i, v in local.tags_ks : "${i}=${v}"] # NOTE: Scaleway doesn't support KV style tags
 
   autoscaler_config {
+    # autoscaler FAQ https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md
     max_graceful_termination_sec    = 3600
     disable_scale_down              = false
     estimator                       = "binpacking"
