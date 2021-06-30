@@ -272,6 +272,22 @@ where
     }
 }
 
+pub fn kubectl_exec_get_secrets<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<Item>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, KubernetesList<Item>>(
+        vec!["get", "secrets", "-o", "json", "-n", namespace, "-l", selector],
+        kubernetes_config,
+        envs,
+    )
+}
+
 pub fn kubectl_exec_is_pod_ready<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -596,6 +612,7 @@ where
 
 pub fn kubectl_exec_delete_secret<P>(
     kubernetes_config: P,
+    namespace: &str,
     secret: &str,
     envs: Vec<(&str, &str)>,
 ) -> Result<(), SimpleError>
@@ -607,7 +624,7 @@ where
     _envs.extend(envs);
 
     let _ = kubectl_exec_with_output(
-        vec!["delete", "secret", secret],
+        vec!["-n", namespace, "delete", "secret", secret],
         _envs,
         |out| match out {
             Ok(line) => info!("{}", line),
