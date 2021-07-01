@@ -619,23 +619,21 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
     match engine_error.cause {
         EngineErrorCause::Internal => format!(
             r#"
-
 -------------------------------------------------------------------------------
 
     ~~ THIS IS AN INTERNAL ERROR, THE SUPPORT TEAM HAS BEEN ALERTED ~~
 
     MESSAGE FOR QOVERY TEAM:
-        * Execution ID     : {}
-        * Scope            : {}
-        * Rollback message : {}
+        * Execution ID: {}
+        * Scope: {}
+        * Rollback message: {}
 
 -------------------------------------------------------------------------------
 
     ❌ ❌ ❌ MESSAGE FOR THE USER ❌ ❌ ❌
 
-        ✉️ Error message : {}
-        💬 Need help    : If you need assistance, you can reach the support team on Discord (https://discord.qovery.com) or on the Qovery console (https://console.qovery.com) with the integrated chat.
-
+        ✉️ Error message: {}
+        💬 Need help: If you need assistance, you can reach the support team on Discord (https://discord.qovery.com) or on the Qovery console (https://console.qovery.com) with the integrated chat.
         "#,
             engine_error.execution_id,
             scope,
@@ -644,22 +642,20 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
         ),
         EngineErrorCause::User(hint) => format!(
             r#"
-
 -------------------------------------------------------------------------------
 
     MESSAGE FOR QOVERY TEAM:
-        * Execution ID     : {}
-        * Scope            : {}
-        * Rollback message : {}
+        * Execution ID: {}
+        * Scope: {}
+        * Rollback message: {}
 
 -------------------------------------------------------------------------------
 
     ❌ ❌ ❌ MESSAGE FOR THE USER ❌ ❌ ❌
 
-        ✉️ Error message : {}
-        ℹ️ Hint          : {}
-        💬 Need help    : Look at the hint message first. If you need more assistance, you can reach the support team on Discord (https://discord.qovery.com) or on the Qovery console (https://console.qovery.com) with the integrated chat.
-
+        ✉️ Error message: {}
+        💬 Need help: Look at the hint message first. If you need more assistance, you can reach the support team on Discord (https://discord.qovery.com) or on the Qovery console (https://console.qovery.com) with the integrated chat.
+        ℹ️ Hint: {}
         "#,
             engine_error.execution_id,
             scope,
