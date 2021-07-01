@@ -2703,7 +2703,9 @@ dependencies = [
 
 [[package]]
 name = "scaleway_api_rs"
-version = "0.1.0"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5ef902879597f20dc6319fe7203d05c98066a48301ec9d383f23b483c881f95"
 dependencies = [
  "reqwest 0.11.4",
  "serde",

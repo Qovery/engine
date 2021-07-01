@@ -61,7 +61,7 @@ rusoto_iam = "0.46.0"
 digitalocean = "0.1.1"
 
 # Scaleway Deps
-scaleway_api_rs = { path = "../scaleway-api-rs" }
+scaleway_api_rs = "0.1.1"
 
 [dev-dependencies]
 test-utilities = { path = "test_utilities" }
