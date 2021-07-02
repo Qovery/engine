@@ -25,7 +25,8 @@ fn test_create_registry_namespace() {
         context,
         "".to_string(),
         format!("test-{}", Uuid::new_v4()),
-        secrets.SCALEWAY_SECRET_TOKEN.unwrap_or("undefined".to_string()),
+        secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string()),
+        secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string()),
         secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string()),
         Region::Paris, // TODO(benjaminch): maybe change the default region or make it customizable
     );

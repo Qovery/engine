@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
@@ -11,7 +10,6 @@ pub mod ecr;
 pub mod scaleway_cr;
 pub mod utilities;
 
-#[async_trait]
 pub trait ContainerRegistry: Listen {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
@@ -25,7 +23,7 @@ pub trait ContainerRegistry: Listen {
     fn on_create_error(&self) -> Result<(), EngineError>;
     fn on_delete(&self) -> Result<(), EngineError>;
     fn on_delete_error(&self) -> Result<(), EngineError>;
-    async fn does_image_exists(&self, image: &Image) -> bool;
+    fn does_image_exists(&self, image: &Image) -> bool;
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError>;
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {

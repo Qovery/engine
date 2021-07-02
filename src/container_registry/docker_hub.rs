@@ -1,6 +1,5 @@
 extern crate reqwest;
 
-use async_trait::async_trait;
 use reqwest::StatusCode;
 
 use crate::build_platform::Image;
@@ -34,7 +33,6 @@ impl DockerHub {
     }
 }
 
-#[async_trait]
 impl ContainerRegistry for DockerHub {
     fn context(&self) -> &Context {
         &self.context
@@ -88,7 +86,7 @@ impl ContainerRegistry for DockerHub {
         Ok(())
     }
 
-    async fn does_image_exists(&self, image: &Image) -> bool {
+    fn does_image_exists(&self, image: &Image) -> bool {
         use reqwest::blocking::Client;
         let client = Client::new();
         let path = format!(
@@ -132,7 +130,7 @@ impl ContainerRegistry for DockerHub {
         let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        if !force_push && self.does_image_exists(image).await {
+        if !force_push && self.does_image_exists(image){
             // check if image does exist - if yes, do not upload it again
             let info_message = format!(
                 "image {:?} found on DockerHub {} repository, container build is not required",

@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use async_trait::async_trait;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
@@ -266,7 +265,6 @@ impl ECR {
     }
 }
 
-#[async_trait]
 impl ContainerRegistry for ECR {
     fn context(&self) -> &Context {
         &self.context
@@ -317,7 +315,7 @@ impl ContainerRegistry for ECR {
         unimplemented!()
     }
 
-    async fn does_image_exists(&self, image: &Image) -> bool {
+    fn does_image_exists(&self, image: &Image) -> bool {
         self.get_image(image).is_some()
     }
 
