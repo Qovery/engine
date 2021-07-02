@@ -1,5 +1,6 @@
 extern crate digitalocean;
 
+use async_trait::async_trait;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -183,6 +184,7 @@ impl DOCR {
     }
 }
 
+#[async_trait]
 impl ContainerRegistry for DOCR {
     fn context(&self) -> &Context {
         &self.context
@@ -220,7 +222,7 @@ impl ContainerRegistry for DOCR {
         Ok(())
     }
 
-    fn does_image_exists(&self, image: &Image) -> bool {
+    async fn does_image_exists(&self, image: &Image) -> bool {
         let registry_name = match self.get_registry_name(image) {
             Ok(registry_name) => registry_name,
             Err(err) => {

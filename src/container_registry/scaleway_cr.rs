@@ -11,6 +11,7 @@ use crate::models::{
 };
 use crate::runtime::block_on;
 use crate::{cmd, utilities};
+use async_trait::async_trait;
 use reqwest::StatusCode;
 use retry::delay::Fixed;
 use retry::Error::Operation;
@@ -47,11 +48,11 @@ impl ScalewayCR {
         }
     }
 
-    fn get_registry_namespace(&self, image: &Image) -> Option<ScalewayRegistryNamespace> {
+    async fn get_registry_namespace(&self, image: &Image) -> Option<scaleway_api_rs::models::ScalewayRegistryV1Namespace> {
         // https://developers.scaleway.com/en/products/registry/api/#get-09e004
         let configuration = scaleway_api_rs::apis::configuration::Configuration {
             bearer_access_token: Some(self.secret_token.clone()),
-            ..Default()
+            ..scaleway_api_rs::apis::configuration::Configuration::default()
         };
 
         let scaleway_registry_namespaces = match scaleway_api_rs::apis::namespaces_api::list_namespaces(
@@ -62,14 +63,14 @@ impl ScalewayCR {
             None,
             None,
             Some(self.default_project_id.as_str()),
-            image.registry_name.as_str(),
+            image.registry_name.as_deref(),
         )
         .await
         {
             Ok(res) => res.namespaces,
             Err(e) => {
                 error!(
-                    "Error while interacting with Scaleway API, error: {}, image: {}",
+                    "Error while interacting with Scaleway API (list_namespaces), error: {}, image: {}",
                     e, &image.name
                 );
                 return None;
@@ -77,17 +78,20 @@ impl ScalewayCR {
         };
 
         // We consider every registry namespace names are unique
-        match scaleway_registry_namespaces.len() {
-            0 => None,
-            _ => Some(scaleway_registry_namespaces.first().unwrap().clone()),
+        if let Some(registry) = scaleway_registry_namespaces {
+            if registry.len() > 0 {
+                return Some(registry.into_iter().nth(0).unwrap());
+            }
         }
+
+        None
     }
 
-    fn get_image(&self, image: &Image) -> Option<ScalewayImage> {
+    async fn get_image(&self, image: &Image) -> Option<scaleway_api_rs::models::ScalewayRegistryV1Image> {
         // https://developers.scaleway.com/en/products/registry/api/#get-a6f1bc
         let configuration = scaleway_api_rs::apis::configuration::Configuration {
             bearer_access_token: Some(self.secret_token.clone()),
-            ..Default()
+            ..scaleway_api_rs::apis::configuration::Configuration::default()
         };
 
         let scaleway_images = match scaleway_api_rs::apis::images_api::list_images1(
@@ -99,14 +103,14 @@ impl ScalewayCR {
             None,
             Some(image.name.as_str()),
             None,
-            image.registry_name.as_str(),
+            Some(image.registry_name.as_ref().unwrap_or(&"".to_string()).as_str()),
         )
         .await
         {
             Ok(res) => res.images,
             Err(e) => {
                 error!(
-                    "Error while interacting with Scaleway API, error: {}, image: {}",
+                    "Error while interacting with Scaleway API (list_images), error: {}, image: {}",
                     e, &image.name
                 );
                 return None;
@@ -117,7 +121,7 @@ impl ScalewayCR {
             // Scaleway doesn't allow to specify any tags while getting image
             // so we need to check if tags are the ones we are looking for
             for scaleway_image in images.into_iter() {
-                if scaleway_image.tags.is_some() && scaleway_image.tags.unwrap().contains(&image.tag) {
+                if scaleway_image.tags.is_some() && scaleway_image.tags.as_ref().unwrap().contains(&image.tag) {
                     return Some(scaleway_image);
                 }
             }
@@ -126,87 +130,39 @@ impl ScalewayCR {
         None
     }
 
-    pub fn create_registry_namespace(&self, image: &Image) -> Result<ScalewayRegistryNamespace, EngineError> {
+    pub async fn create_registry_namespace(&self, image: &Image) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
         // https://developers.scaleway.com/en/products/registry/api/#post-7a8fcc
-        let headers = utilities::get_header_with_bearer(self.secret_token.as_str());
-        let url = format!(
-            "https://api.scaleway.com/registry/v1/regions/{}/namespaces",
-            self.region.to_string().as_str(),
-        );
-
-        let empty_field_value = "";
-        let registry_namespace_name = image.registry_name.as_deref().unwrap_or(empty_field_value);
-
-        let res = reqwest::blocking::Client::new()
-            .post(url.as_str())
-            .headers(headers)
-            .json(&[
-                ("name", registry_namespace_name),
-                ("description", registry_namespace_name),
-                ("project_id", self.default_project_id.as_str()),
-                ("is_public", "false"),
-            ])
-            .send();
-
         let configuration = scaleway_api_rs::apis::configuration::Configuration {
             bearer_access_token: Some(self.secret_token.clone()),
-            ..Default()
+            ..scaleway_api_rs::apis::configuration::Configuration::default()
         };
 
-        scaleway_api_rs::apis::namespaces_api::create_namespace(
+        match scaleway_api_rs::apis::namespaces_api::create_namespace(
             &configuration,
             self.region.to_string().as_str(),
-            scaleway_api_rs::models::inline_object_53::InlineObject53{
-                name: image.registry_name.unwrap_or("".to_string()),
-                description: registry_namespace_name,
+            scaleway_api_rs::models::inline_object_23::InlineObject23{
+                name: image.registry_name.to_owned().unwrap(),
+                description: None,
                 project_id: Some(self.default_project_id.clone()),
                 is_public: Some(false),
-            }
-        )
-
-        let body = match res {
-            Ok(output) => match output.status() {
-                StatusCode::OK => output.text(),
-                _ => {
-                    let message = format!(
-                        "While tyring to create registry namespace for image {}, Scaleway API error (status {}): {:?}",
-                        &image.name,
-                        &output.status(),
-                        &output.text(),
-                    );
-                    error!("{}", message);
-
-                    return Err(self.engine_error(EngineErrorCause::Internal, message));
-                }
+                organization_id: None,
             },
-            Err(_) => {
-                let message = format!(
-                    "While trying to communicate with Scaleway API to create registry namespace image {}",
-                    &image.name
-                );
-                error!("{}", message);
-
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
-            }
-        };
-
-        match serde_json::from_str::<ScalewayRegistryNamespace>(&body.unwrap()) {
+        ).await {
             Ok(res) => Ok(res),
             Err(e) => {
                 let message = format!(
-                    "While trying to deserialize Scaleway registry namespace response, image {}",
-                    &image.name
-                );
-                error!("{}", message);
+                    "Error while interacting with Scaleway API (create_namespace), error: {}, image: {}",
+                    e, &image.name);
 
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
+                error!("{}", message);
+                Err(self.engine_error(EngineErrorCause::Internal, message))
             }
         }
     }
 
-    pub fn delete_registry_namespace(&self, image: &Image) -> Result<ScalewayRegistryNamespace, EngineError> {
+    pub async fn delete_registry_namespace(&self, image: &Image) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
         // https://developers.scaleway.com/en/products/registry/api/#delete-c1ac9b
-        let registry_to_delete = self.get_registry_namespace(image);
+        let registry_to_delete = self.get_registry_namespace(image).await;
         if registry_to_delete.is_none() {
             let message = format!(
                 "While tyring to delete registry namespace for image {}, registry namespace doesn't exist",
@@ -219,7 +175,7 @@ impl ScalewayCR {
 
         let headers = utilities::get_header_with_bearer(self.secret_token.as_str());
         let url = format!(
-            "https://api.scaleway.com/registry/v1/regions/{}/namespaces/{}",
+            "https://api.scaleway.com/registry/v1/regions/{}/namespaces/{:?}",
             self.region.to_string().as_str(),
             registry_to_delete.unwrap().id,
         );
@@ -255,7 +211,7 @@ impl ScalewayCR {
             }
         };
 
-        match serde_json::from_str::<ScalewayRegistryNamespace>(&body.unwrap()) {
+        match serde_json::from_str::<scaleway_api_rs::models::ScalewayRegistryV1Namespace>(&body.unwrap()) {
             Ok(res) => Ok(res),
             Err(e) => {
                 let message = format!(
@@ -269,18 +225,20 @@ impl ScalewayCR {
         }
     }
 
-    fn get_or_create_registry_namespace(&self, image: &Image) -> Result<ScalewayRegistryNamespace, EngineError> {
+    async fn get_or_create_registry_namespace(&self, image: &Image) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
         // check if the repository already exists
-        let registry_namespace = self.get_registry_namespace(&image);
+        let registry_namespace = self.get_registry_namespace(&image).await;
         if registry_namespace.is_some() {
             info!("Scaleway registry namespace {} already exists", image.name.as_str());
             return Ok(registry_namespace.unwrap());
         }
 
-        self.create_registry_namespace(&image)
+        self.create_registry_namespace(&image).await
     }
 }
 
+
+#[async_trait]
 impl ContainerRegistry for ScalewayCR {
     fn context(&self) -> &Context {
         &self.context
@@ -318,8 +276,8 @@ impl ContainerRegistry for ScalewayCR {
         Ok(())
     }
 
-    fn does_image_exists(&self, image: &Image) -> bool {
-        self.get_image(image).is_some()
+    async fn does_image_exists(&self, image: &Image) -> bool {
+        self.get_image(image).await.is_some()
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
