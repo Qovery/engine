@@ -13,7 +13,7 @@ use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::Statefulset;
-use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas, ScalingKind};
+use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
 use crate::cmd::structs::LabelsContent;
 use crate::error::{cast_simple_error_to_engine_error, StringError};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
@@ -484,12 +484,12 @@ pub fn scale_down_database(
         DeploymentTarget::SelfHosted(k, env) => (*k, *env),
     };
 
-    let scaledown_ret = kubectl_exec_scale_replicas(
+    let scaledown_ret = kubectl_exec_scale_replicas_by_selector(
         kubernetes.config_file_path()?,
         kubernetes.cloud_provider().credentials_environment_variables(),
         environment.namespace(),
         Statefulset,
-        service.sanitized_name().as_str(),
+        format!("databaseId={}", service.id()).as_str(),
         replicas_count as u32,
     );
 
@@ -500,7 +500,7 @@ pub fn scale_down_database(
     )
 }
 
-pub fn scale_down_stateless_service(
+pub fn scale_down_application(
     target: &DeploymentTarget,
     service: &impl StatelessService,
     replicas_count: usize,
@@ -517,12 +517,12 @@ pub fn scale_down_stateless_service(
         }
         DeploymentTarget::SelfHosted(k, env) => (*k, *env),
     };
-    let scaledown_ret = kubectl_exec_scale_replicas(
+    let scaledown_ret = kubectl_exec_scale_replicas_by_selector(
         kubernetes.config_file_path()?,
         kubernetes.cloud_provider().credentials_environment_variables(),
         environment.namespace(),
         scaling_kind,
-        service.sanitized_name().as_str(),
+        format!("appId={}", service.id()).as_str(),
         replicas_count as u32,
     );
 

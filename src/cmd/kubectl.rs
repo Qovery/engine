@@ -916,7 +916,7 @@ where
     kubectl_exec::<P, KubernetesApiMetrics>(vec!["get", "--raw", api_url.as_str()], kubernetes_config, envs)
 }
 
-/// Get custom metrics values
+/// scale down replicas by name
 ///
 /// # Arguments
 ///
@@ -955,6 +955,61 @@ where
             &kind_with_name,
             "--replicas",
             &replicas_count.to_string(),
+        ],
+        _envs,
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
+        },
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
+        },
+    )
+}
+
+/// scale down replicas by selector
+///
+/// # Arguments
+///
+/// * `kubernetes_config` - kubernetes config path
+/// * `envs` - environment variables required for kubernetes connection
+/// * `namespace` - kubernetes namespace
+/// * `kind` - kind of kubernetes resource to scale
+/// * `selector` - ressources that must match the selector
+/// * `replicas_count` - desired number of replicas
+pub fn kubectl_exec_scale_replicas_by_selector<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: &str,
+    kind: ScalingKind,
+    selector: &str,
+    replicas_count: u32,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let kind_formatted = match kind {
+        ScalingKind::Deployment => "deployment",
+        ScalingKind::Statefulset => "statefulset",
+    };
+
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    kubectl_exec_with_output(
+        vec![
+            "-n",
+            namespace,
+            "scale",
+            "--replicas",
+            &replicas_count.to_string(),
+            &kind_formatted,
+            "--selector",
+            selector,
         ],
         _envs,
         |out| {
