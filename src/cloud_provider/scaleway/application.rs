@@ -357,7 +357,7 @@ pub enum StorageType {
     LocalSsd,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
 pub enum Region {
     #[serde(rename = "fr-par")]
     Paris,

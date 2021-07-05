@@ -49,4 +49,5 @@ pub enum Kind {
     DockerHub,
     Ecr,
     Docr,
+    ScalewayCr,
 }
