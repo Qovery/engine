@@ -388,7 +388,6 @@ master:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       databaseId: {{ id }}
-      databaseName: {{ sanitized_name }}
     loadBalancerIP:
     # loadBalancerSourceRanges: ["10.0.0.0/8"]
 
