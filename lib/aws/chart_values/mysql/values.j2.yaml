@@ -43,7 +43,7 @@ fullnameOverride: {{ sanitized_name }}
 ##
 clusterDomain: cluster.local
 
-labels:
+commonLabels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}

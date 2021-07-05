@@ -216,7 +216,10 @@ labels:
 podAnnotations: {}
 
 # Additional pod labels to apply
-podLabels: {}
+podLabels:
+  ownerId: {{ owner_id }}
+  envId: {{ environment_id }}
+  databaseId: {{ id }}
 
 ## Use an alternate scheduler, e.g. "stork".
 ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
