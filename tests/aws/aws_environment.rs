@@ -1,10 +1,12 @@
 extern crate test_utilities;
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use self::test_utilities::cloudflare::{
+    cloudflare_create_cname_record, dns_provider_cloudflare, DnsRecord, DnsRecordType,
+};
 use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods_aws, is_pod_restarted_aws_env, FuncTestsSecrets,
 };
-use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
+use qovery_engine::models::{Action, Clone2, Context, CustomDomain, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::context;
 use test_utilities::utilities::init;
@@ -277,58 +279,74 @@ fn deploy_a_working_environment_with_domain() {
     })
 }
 
-// todo: test it
-// fn deploy_a_working_environment_with_custom_domain() {
-//     engine_run_test(|| {
-//         let span = span!(
-//             Level::INFO,
-//             "test",
-//             name = "deploy_a_working_environment_with_custom_domain"
-//         );
-//         let _enter = span.enter();
-//
-//         let context = context();
-//         let context_for_delete = context.clone_not_same_execution_id();
-//         let secrets = FuncTestsSecrets::new();
-//
-//         let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
-//         // Todo: fix domains
-//         environment.routers = environment
-//             .routers
-//             .into_iter()
-//             .map(|mut router| {
-//                 router.custom_domains = vec![CustomDomain {
-//                     // should be the client domain
-//                     domain: format!("test-domain.{}", secrets.clone().CUSTOM_TEST_DOMAIN.unwrap()),
-//                     // should be our domain
-//                     target_domain: format!("target-domain.{}", secrets.clone().DEFAULT_TEST_DOMAIN.unwrap()),
-//                 }];
-//                 router
-//             })
-//             .collect::<Vec<qovery_engine::models::Router>>();
-//
-//         let mut environment_delete = environment.clone();
-//         environment_delete.action = Action::Delete;
-//
-//         let ea = EnvironmentAction::Environment(environment);
-//         let ea_delete = EnvironmentAction::Environment(environment_delete);
-//
-//         match deploy_environment(&context, &ea) {
-//             TransactionResult::Ok => assert!(true),
-//             TransactionResult::Rollback(_) => assert!(false),
-//             TransactionResult::UnrecoverableError(_, _) => assert!(false),
-//         };
-//
-//         // todo: check TLS
-//
-//         match delete_environment(&context_for_delete, &ea_delete) {
-//             TransactionResult::Ok => assert!(true),
-//             TransactionResult::Rollback(_) => assert!(false),
-//             TransactionResult::UnrecoverableError(_, _) => assert!(false),
-//         };
-//         return "deploy_a_working_environment_with_custom_domain".to_string();
-//     })
-// }
+#[cfg(feature = "test-aws-self-hosted")]
+#[test]
+fn deploy_a_working_environment_with_custom_domain() {
+    engine_run_test(|| {
+        let span = span!(
+            Level::INFO,
+            "test",
+            name = "deploy_a_working_environment_with_custom_domain"
+        );
+        let _enter = span.enter();
+
+        let context = context();
+        let context_for_delete = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
+
+        let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+
+        // set custom DNS on Cloudflare
+        //let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
+        let cloudflare_context = dns_provider_cloudflare(&context);
+        let dns_record = DnsRecord {
+            dns_type: DnsRecordType::CNAME,
+            src: format!("testfunc-{}.{}", generate_id(), secrets.CUSTOM_TEST_DOMAIN.unwrap()),
+            dest: format!("testfunc-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap()),
+            ttl: 300,
+            priority: 10,
+            proxied: false,
+            zone_id: secrets.CLOUDFLARE_CUSTOM_TEST_DOMAIN_ZONE_ID.unwrap(),
+        };
+
+        let x = cloudflare_create_cname_record(&cloudflare_context, &dns_record);
+
+        environment.routers = environment
+            .routers
+            .into_iter()
+            .map(|mut router| {
+                router.custom_domains = vec![CustomDomain {
+                    // should be the client domain
+                    domain: dns_record.src.to_string(),
+                    // should be our domain
+                    target_domain: dns_record.dest.to_string(),
+                }];
+                router
+            })
+            .collect::<Vec<qovery_engine::models::Router>>();
+
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // todo: check TLS
+
+        match delete_environment(&context_for_delete, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+        return "deploy_a_working_environment_with_custom_domain".to_string();
+    })
+}
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[test]

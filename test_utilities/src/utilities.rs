@@ -82,6 +82,7 @@ pub struct FuncTestsSecrets {
     pub CLOUDFLARE_DOMAIN: Option<String>,
     pub CLOUDFLARE_ID: Option<String>,
     pub CLOUDFLARE_TOKEN: Option<String>,
+    pub CLOUDFLARE_CUSTOM_TEST_DOMAIN_ZONE_ID: Option<String>,
     pub CUSTOM_TEST_DOMAIN: Option<String>,
     pub DEFAULT_TEST_DOMAIN: Option<String>,
     pub DIGITAL_OCEAN_SPACES_ACCESS_ID: Option<String>,
@@ -153,6 +154,7 @@ impl FuncTestsSecrets {
             CLOUDFLARE_DOMAIN: None,
             CLOUDFLARE_ID: None,
             CLOUDFLARE_TOKEN: None,
+            CLOUDFLARE_CUSTOM_TEST_DOMAIN_ZONE_ID: None,
             CUSTOM_TEST_DOMAIN: None,
             DEFAULT_TEST_DOMAIN: None,
             DIGITAL_OCEAN_SPACES_ACCESS_ID: None,
@@ -222,6 +224,10 @@ impl FuncTestsSecrets {
             CLOUDFLARE_ID: Self::select_secret("CLOUDFLARE_ID", secrets.CLOUDFLARE_ID),
             CLOUDFLARE_TOKEN: Self::select_secret("CLOUDFLARE_TOKEN", secrets.CLOUDFLARE_TOKEN),
             CUSTOM_TEST_DOMAIN: Self::select_secret("CUSTOM_TEST_DOMAIN", secrets.CUSTOM_TEST_DOMAIN),
+            CLOUDFLARE_CUSTOM_TEST_DOMAIN_ZONE_ID: Self::select_secret(
+                "CLOUDFLARE_CUSTOM_TEST_DOMAIN_ZONE_ID",
+                secrets.CLOUDFLARE_CUSTOM_TEST_DOMAIN_ZONE_ID,
+            ),
             DEFAULT_TEST_DOMAIN: Self::select_secret("DEFAULT_TEST_DOMAIN", secrets.DEFAULT_TEST_DOMAIN),
             DIGITAL_OCEAN_SPACES_ACCESS_ID: Self::select_secret(
                 "DIGITAL_OCEAN_SPACES_ACCESS_ID",
