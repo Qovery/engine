@@ -13,6 +13,6 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_worker" {
   min_size      = 3 # TODO(benjaminch) : use : "{{ scw_ks_worker_node.min_size }}"
   max_size      = 10 # TODO(benjaminch) : use : "{{ scw_ks_worker_node.max_size }}"
 
-  tags          =  [for i, v in local.tags_ks : "${i}=${v}"] # NOTE: Scaleway doesn't support KV style tags
+  tags          =  local.tags_ks_list
 }
 # {% endfor %}

@@ -3,7 +3,7 @@ resource "scaleway_k8s_cluster" "kubernetes_cluster" {
   version = "1.20"
   cni     = "cilium"
 
-  tags    =  [for i, v in local.tags_ks : "${i}=${v}"] # NOTE: Scaleway doesn't support KV style tags
+  tags    =  local.tags_ks_list
 
   autoscaler_config {
     # autoscaler FAQ https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md

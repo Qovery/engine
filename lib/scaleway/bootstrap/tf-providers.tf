@@ -11,6 +11,10 @@ terraform {
       source  = "hashicorp/time"
       version = "~> 0.3"
     }
+    vault = {
+      source = "hashicorp/vault"
+      version = "~> 2.18.0"
+    }
   }
   required_version = ">= 0.13"
 }
@@ -35,4 +39,18 @@ provider "kubernetes" {
   cluster_ca_certificate = base64decode(
     null_resource.kubeconfig.triggers.cluster_ca_certificate
   )
+}
+
+provider "vault" {
+  # TODO(benjaminch): un-comment and let jinja template to process it
+  #{% if vault_auth_method == "app_role" and not test_cluster %}
+  #auth_login {
+  #  path = "auth/approle/login"
+  #
+  #  parameters = {
+  #    role_id   = "{{ vault_role_id }}"
+  #    secret_id = "{{ vault_secret_id }}"
+  #  }
+  #}
+  #{% endif %}
 }
