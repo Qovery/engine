@@ -9,8 +9,8 @@ pub struct Cloudflare {
     id: String,
     name: String,
     domain: String,
-    cloudflare_api_token: String,
-    cloudflare_email: String,
+    pub cloudflare_api_token: String,
+    pub cloudflare_email: String,
 }
 
 impl Cloudflare {
