@@ -9,7 +9,7 @@ resource "helm_release" "promtail" {
 
   set {
     name = "loki.serviceName"
-    value = "loki"
+    value = "loki.logging.svc"
   }
 
   # It's mandatory to get this class to ensure paused infra will behave properly on restore
