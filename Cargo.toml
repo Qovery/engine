@@ -66,6 +66,7 @@ scaleway_api_rs = "0.1.1"
 [dev-dependencies]
 test-utilities = { path = "test_utilities" }
 tempdir = "0.3"
+tempfile = "3.2.0"
 uuid = { version = "0.8", features = ["v4"] }
 
 [features]

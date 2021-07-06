@@ -130,7 +130,7 @@ impl ContainerRegistry for DockerHub {
         let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        if !force_push && self.does_image_exists(image){
+        if !force_push && self.does_image_exists(image) {
             // check if image does exist - if yes, do not upload it again
             let info_message = format!(
                 "image {:?} found on DockerHub {} repository, container build is not required",

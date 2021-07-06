@@ -2036,6 +2036,7 @@ dependencies = [
  "sysinfo",
  "tar",
  "tempdir",
+ "tempfile",
  "tera",
  "test-utilities",
  "timeout-readwrite",

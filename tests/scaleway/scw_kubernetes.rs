@@ -5,7 +5,6 @@ use self::test_utilities::utilities::{
     context, engine_run_test, generate_cluster_id, generate_id, init, FuncTestsSecrets,
 };
 use std::env;
-use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
 use qovery_engine::transaction::TransactionResult;
@@ -26,9 +25,11 @@ fn create_upgrade_and_destroy_kubernetes_cluster(
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+        let engine = test_utilities::scaleway::docker_scw_cr_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
+
+        let scw_cluster = test_utilities::scaleway::cloud_provider_scaleway(&context);
 
         // Deploy
 

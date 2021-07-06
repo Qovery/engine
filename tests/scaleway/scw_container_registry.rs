@@ -51,7 +51,9 @@ fn test_get_registry_namespace() {
             registry_url: None,
         };
 
-        container_registry.create_registry_namespace(&image).unwrap();
+        container_registry
+            .create_registry_namespace(&image)
+            .expect("error while creating registry namespace");
 
         // execute:
         debug!("test_get_registry_namespace - {}", region);
@@ -150,7 +152,9 @@ fn test_delete_registry_namespace() {
             registry_url: None,
         };
 
-        container_registry.create_registry_namespace(&image).unwrap();
+        container_registry
+            .create_registry_namespace(&image)
+            .expect("error while creating registry namespace");
 
         // execute:
         debug!("test_delete_registry_namespace - {}", region);
@@ -190,7 +194,9 @@ fn test_get_or_create_registry_namespace() {
             registry_url: None,
         };
 
-        container_registry.create_registry_namespace(&image).unwrap();
+        container_registry
+            .create_registry_namespace(&image)
+            .expect("error while creating registry namespace");
 
         // first try: registry not created, should be created
 

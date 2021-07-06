@@ -18,7 +18,7 @@ pub fn docker_tag_and_push_image(
         Kind::DockerHub => "DockerHub",
         Kind::Ecr => "AWS ECR",
         Kind::Docr => "DigitalOcean Registry",
-        Kind::ScalewayCr => "Scaleway Registry"
+        Kind::ScalewayCr => "Scaleway Registry",
     };
 
     match retry::retry(Fibonacci::from_millis(3000).take(5), || {
