@@ -19,6 +19,7 @@ metadata:
 spec:
   {{- if .Values.useStatefulSet }}
   serviceName: {{ template "mongodb.serviceName" . }}
+  replicas: 1
   updateStrategy:
   {{- else }}
   strategy:
