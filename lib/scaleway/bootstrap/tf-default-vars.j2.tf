@@ -12,12 +12,6 @@ variable "region" {
   type        = string
 }
 
-variable "organization_id" {
-  description = "Qovery Organization ID"
-  default     = "{{ organization_id }}"
-  type        = string
-}
-
 variable "qovery_nats_url" {
   description = "URL of qovery nats server"
   default = "{{ qovery_nats_url }}"
@@ -43,7 +37,35 @@ variable "test_cluster" {
 }
 
 # Scaleway Specifics
+variable "organization_id" {
+  description = "Qovery Organization ID"
+  default     = "{{ organization_id }}"
+  type        = string
+}
 
+variable "scaleway_default_project_id" {
+  description = "Scaleway default project ID ID"
+  default     = "{{ scaleway_default_project_id }}"
+  type        = string
+}
+
+variable "scaleway_access_key" {
+  description = "Scaleway access key"
+  default     = "{{ scaleway_access_key }}"
+  type        = string
+}
+
+variable "scaleway_secret_key" {
+  description = "Scaleway secret key"
+  default     = "{{ scaleway_secret_key }}"
+  type        = string
+}
+
+variable "scaleway_default_zone" {
+  description = "Scaleway defaut zone"
+  default     = "{{ scw_region }}-{{ scaleway_default_zone }}"
+  type        = string
+}
 
 # Kubernetes
 
@@ -55,19 +77,19 @@ variable "cidr_block" {
 
 variable "kubernetes_cluster_id" {
   description = "Kubernetes cluster name"
-  default     = "{{ scaleway_ks_cluster_id }}"
+  default     = "{{ kubernetes_cluster_id }}"
   type        = string
 }
 
 variable "kubernetes_cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "qovery-{{ scaleway_ks_master_name }}"
+  default     = "qovery-{{ kubernetes_cluster_name }}"
   type        = string
 }
 
 variable "scaleway_ks_version" {
   description = "Kubernetes cluster version"
-  default = "{{ scaleway_ks_version }}"
+  default = "{{ kubernetes_cluster_version }}"
   type    = string
 }
 
@@ -132,3 +154,12 @@ variable "metrics_history_enabled" {
   default = {{ metrics_history_enabled }}
   type = bool
 }
+
+{%- if resource_expiration_in_seconds is defined %}
+# Pleco ttl
+variable "resource_expiration_in_seconds" {
+  description = "Resource expiration in seconds"
+  default = {{ resource_expiration_in_seconds }}
+  type = number
+}
+{% endif %}

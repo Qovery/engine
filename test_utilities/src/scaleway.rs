@@ -1,5 +1,7 @@
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::scaleway::application::Region;
+use qovery_engine::cloud_provider::scaleway::kubernetes::node::{Node, NodeType};
+use qovery_engine::cloud_provider::scaleway::kubernetes::Options;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::scaleway_cr::ScalewayCR;
 use qovery_engine::engine::Engine;
@@ -9,6 +11,7 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 use tracing::error;
+use qovery_engine::object_storage::scaleway_os::ScalewayOS;
 
 const SCW_TEST_CLUSTER_NAME: &str = "Qovery test cluster";
 const SCW_TEST_CLUSTER_ID: &str = "qovery-test-cluster";
@@ -53,6 +56,54 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
             region: "eu-west-3".to_string(),
         },
     )
+}
+
+pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> Options {
+    Options::new(
+        "10.0.0.0/16".to_string(),
+        secrets.QOVERY_API_URL.unwrap(),
+        secrets.QOVERY_NATS_URL.unwrap(),
+        secrets.QOVERY_NATS_USERNAME.unwrap(),
+        secrets.QOVERY_NATS_PASSWORD.unwrap(),
+        secrets.QOVERY_SSH_USER.unwrap(),
+        secrets.DISCORD_API_URL.unwrap(),
+        secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
+        secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
+        secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap(),
+        secrets.SCALEWAY_ACCESS_KEY.unwrap(),
+        secrets.SCALEWAY_SECRET_KEY.unwrap(),
+        1,
+        secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
+    )
+}
+
+pub fn scw_object_storage(context: Context, region: Region) -> ScalewayOS {
+    let secrets = FuncTestsSecrets::new();
+    let random_id = generate_id();
+
+    ScalewayOS::new(
+        context,
+        format!("qovery-test-object-storage-{}", random_id.clone()),
+        format!("Qovery Test Object-Storage {}", random_id),
+        secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string()),
+        secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string()),
+        region,
+    )
+}
+
+pub fn scw_kubernetes_nodes() -> Vec<Node> {
+    vec![
+        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1M),
+    ]
 }
 
 pub fn docker_scw_cr_engine(context: &Context) -> Engine {

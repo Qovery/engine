@@ -1,6 +1,6 @@
 resource "scaleway_k8s_cluster" "kubernetes_cluster" {
-  name    = "test-cluster" # TODO(benjaminch) : use : "qovery-${var.kubernetes_cluster_id}"
-  version = "1.20"
+  name    = "qovery-${var.kubernetes_cluster_id}"
+  version = var.scaleway_ks_version
   cni     = "cilium"
 
   tags    =  local.tags_ks_list

@@ -357,14 +357,22 @@ pub enum StorageType {
     LocalSsd,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum Region {
-    #[serde(rename = "fr-par")]
     Paris,
-    #[serde(rename = "nl-ams")]
     Amsterdam,
-    #[serde(rename = "pl-waw")]
     Warsaw,
+}
+
+impl Region {
+    // TODO(benjaminch): improve / refactor this!
+    pub fn as_str(&self) -> &str {
+        match self {
+            Region::Paris => "fr-par",
+            Region::Amsterdam => "nl-ams",
+            Region::Warsaw => "pl-waw",
+        }
+    }
 }
 
 impl fmt::Display for Region {

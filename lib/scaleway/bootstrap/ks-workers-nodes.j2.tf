@@ -1,10 +1,8 @@
-# TODO(benjaminch): For loop to be done
-# {% for scw_ks_worker_node in scw_ks_worker_nodes %}
-# resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
-resource "scaleway_k8s_pool" "kubernetes_cluster_worker" {
+{% for scw_ks_worker_node in scw_ks_worker_nodes %}
+resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   cluster_id    = scaleway_k8s_cluster.kubernetes_cluster.id
-  name          = "test-cluster-integration" # TODO(benjaminch) : use : "qovery-${var.kubernetes_cluster_id}"
-  node_type     = "DEV1-L"
+  name          = "qovery-${var.kubernetes_cluster_id}"
+  node_type     = "DEV1-L" # TODO(benjaminch): to be changed
 
   # use Scaleway built-in cluster autoscaler
   autoscaling   = true # TODO(benjaminch): use scaleway_ks_pool_autoscale variable
@@ -15,4 +13,4 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_worker" {
 
   tags          =  local.tags_ks_list
 }
-# {% endfor %}
+{% endfor %}

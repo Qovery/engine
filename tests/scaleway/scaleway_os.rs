@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cmd::kubectl::kubectl_delete_objects_in_all_namespaces;
-use qovery_engine::object_storage::scaleway_os::ScalewayOs;
+use qovery_engine::object_storage::scaleway_os::ScalewayOS;
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
 
@@ -20,7 +20,7 @@ fn test_delete_bucket() {
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
 
-    let scaleway_os = ScalewayOs::new(
+    let scaleway_os = ScalewayOS::new(
         context.clone(),
         generate_id(),
         "test".to_string(),
@@ -50,7 +50,7 @@ fn test_create_bucket() {
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
 
-    let scaleway_os = ScalewayOs::new(
+    let scaleway_os = ScalewayOS::new(
         context.clone(),
         generate_id(),
         "test".to_string(),
@@ -81,7 +81,7 @@ fn test_put_file() {
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
 
-    let scaleway_os = ScalewayOs::new(
+    let scaleway_os = ScalewayOS::new(
         context.clone(),
         generate_id(),
         "test".to_string(),
@@ -128,7 +128,7 @@ fn test_get_file() {
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
 
-    let scaleway_os = ScalewayOs::new(
+    let scaleway_os = ScalewayOS::new(
         context.clone(),
         generate_id(),
         "test".to_string(),

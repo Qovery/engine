@@ -20,7 +20,7 @@ use rusoto_s3::{
 use tokio::io;
 
 // doc: https://www.scaleway.com/en/docs/object-storage-feature/
-pub struct ScalewayOs {
+pub struct ScalewayOS {
     context: Context,
     id: String,
     name: String,
@@ -29,7 +29,7 @@ pub struct ScalewayOs {
     region: Region,
 }
 
-impl ScalewayOs {
+impl ScalewayOS {
     pub fn new(
         context: Context,
         id: String,
@@ -37,8 +37,8 @@ impl ScalewayOs {
         access_key: String,
         secret_token: String,
         region: Region,
-    ) -> ScalewayOs {
-        ScalewayOs {
+    ) -> ScalewayOS {
+        ScalewayOS {
             context,
             id,
             name,
@@ -74,81 +74,10 @@ impl ScalewayOs {
         // and it is recommended to use dashes (-) instead: my-bucket-name.s3.fr-par.scw.cloud.
         Ok(())
     }
-}
-
-impl ObjectStorage for ScalewayOs {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn kind(&self) -> Kind {
-        Kind::ScalewayOs
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn is_valid(&self) -> Result<(), EngineError> {
-        todo!()
-    }
-
-    fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
-        // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        if let Err(message) = ScalewayOs::is_bucket_name_valid(bucket_name) {
-            let message = format!(
-                "While trying to create object-storage bucket, name `{}` is invalid: {}",
-                bucket_name,
-                message.unwrap_or("unknown error".to_string())
-            );
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
-
-        let region = RusotoRegion::Custom {
-            name: self.region.to_string(),
-            endpoint: self.get_endpoint_url_for_region(),
-        };
-
-        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
-        let s3_client = S3Client::new_with_client(client, region.clone());
-
-        if let Err(e) = block_on(s3_client.create_bucket(CreateBucketRequest {
-            bucket: bucket_name.to_string(),
-            ..Default::default()
-        })) {
-            let message = format!(
-                "While trying to create object-storage bucket, name `{}`: {}",
-                bucket_name, e
-            );
-            error!("{}", message);
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
-
-        match block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
-            bucket: bucket_name.to_string(),
-            ..Default::default()
-        })) {
-            Ok(res) => Ok(()),
-            Err(e) => {
-                let message = format!(
-                    "While trying to activate versioning on object-storage bucket, name `{}`: {}",
-                    bucket_name, e
-                );
-                error!("{}", message);
-                // TODO(benjaminch): to be investigated, versioning seems to fail
-                // Err(self.engine_error(EngineErrorCause::Internal, message))
-                Ok(())
-            }
-        }
-    }
 
     fn empty_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        if let Err(message) = ScalewayOs::is_bucket_name_valid(bucket_name) {
+        if let Err(message) = ScalewayOS::is_bucket_name_valid(bucket_name) {
             let message = format!(
                 "While trying to delete object-storage bucket, name `{}` is invalid: {}",
                 bucket_name,
@@ -205,10 +134,81 @@ impl ObjectStorage for ScalewayOs {
 
         Ok(())
     }
+}
+
+impl ObjectStorage for ScalewayOS {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn kind(&self) -> Kind {
+        Kind::ScalewayOs
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn is_valid(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+        // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
+        if let Err(message) = ScalewayOS::is_bucket_name_valid(bucket_name) {
+            let message = format!(
+                "While trying to create object-storage bucket, name `{}` is invalid: {}",
+                bucket_name,
+                message.unwrap_or("unknown error".to_string())
+            );
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
+        }
+
+        let region = RusotoRegion::Custom {
+            name: self.region.to_string(),
+            endpoint: self.get_endpoint_url_for_region(),
+        };
+
+        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
+        let s3_client = S3Client::new_with_client(client, region.clone());
+
+        if let Err(e) = block_on(s3_client.create_bucket(CreateBucketRequest {
+            bucket: bucket_name.to_string(),
+            ..Default::default()
+        })) {
+            let message = format!(
+                "While trying to create object-storage bucket, name `{}`: {}",
+                bucket_name, e
+            );
+            error!("{}", message);
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
+        }
+
+        match block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
+            bucket: bucket_name.to_string(),
+            ..Default::default()
+        })) {
+            Ok(res) => Ok(()),
+            Err(e) => {
+                let message = format!(
+                    "While trying to activate versioning on object-storage bucket, name `{}`: {}",
+                    bucket_name, e
+                );
+                error!("{}", message);
+                // TODO(benjaminch): to be investigated, versioning seems to fail
+                // Err(self.engine_error(EngineErrorCause::Internal, message))
+                Ok(())
+            }
+        }
+    }
 
     fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        if let Err(message) = ScalewayOs::is_bucket_name_valid(bucket_name) {
+        if let Err(message) = ScalewayOS::is_bucket_name_valid(bucket_name) {
             let message = format!(
                 "While trying to delete object-storage bucket, name `{}` is invalid: {}",
                 bucket_name,
@@ -246,7 +246,7 @@ impl ObjectStorage for ScalewayOs {
 
     fn get(&self, bucket_name: &str, object_key: &str, use_cache: bool) -> Result<(StringPath, File), EngineError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        if let Err(message) = ScalewayOs::is_bucket_name_valid(bucket_name) {
+        if let Err(message) = ScalewayOS::is_bucket_name_valid(bucket_name) {
             let message = format!(
                 "While trying to get object `{}` from bucket `{}`, bucket name is invalid: {}",
                 object_key,
@@ -330,7 +330,7 @@ impl ObjectStorage for ScalewayOs {
 
     fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), EngineError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        if let Err(message) = ScalewayOs::is_bucket_name_valid(bucket_name) {
+        if let Err(message) = ScalewayOS::is_bucket_name_valid(bucket_name) {
             let message = format!(
                 "While trying to get object `{}` from bucket `{}`, bucket name is invalid: {}",
                 object_key,
