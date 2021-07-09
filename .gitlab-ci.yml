@@ -7,6 +7,7 @@ variables:
   WORKSPACE_ROOT_DIR: /builds/qovery/qovery-engine
   CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
   GIT_DEPTH: 10
+  ROLLBACK_IMAGE: ""
 
 #cache: &global_cache
 #  key: ${CI_COMMIT_REF_SLUG}
@@ -21,6 +22,9 @@ services:
 stages:
   - build
   - tests
+  - upgrade-dev
+  - e2e-tests
+  - downgrade-dev
   - build
   - release
   - deploy
@@ -261,6 +265,57 @@ aws-self-hosted:
       - /builds/qovery/qovery-engine/.qovery-workspace
     expire_in: 2 week
   interruptible: true
+
+upgrade-engine-dev:
+  stage: upgrade-dev
+  retry: 1
+  before_script:
+    - apk add bash
+  script:
+    - $ROLLBACK_IMAGE=$(kubectl -n qovery get statefulset qovery-engine -ojson | jq --raw-output .spec.template.spec.containers[0].image)
+    - ./helper.sh upgrade_on_dev || ./helper.sh downgrade_on_dev $ROLLBACK_IMAGE
+  when: manual
+  only:
+    refs:
+      - dev
+
+e2e-tests:
+  stage: e2e-tests
+  image: golang:1.16-alpine
+  allow_failure: true
+  dependencies:
+    - upgrade-engine-dev
+  before_script:
+    -  apk add bash
+    - ./helper.sh await_docker
+  script:
+    - apk add --no-cache openssh git build-base
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+    - mkdir /usr/local/qovery
+    - cd /usr/local/qovery
+    - git clone git@github.com:Qovery/qovery-e2e.git
+    - cd qovery-e2e
+    - CORE_URL='https://api-dev.qovery.com' go test -timeout 720s -v ./test...
+  only:
+    refs:
+      - dev
+
+downgrade-engine-dev:
+  stage: downgrade-dev
+  retry: 1
+  dependencies:
+    - e2e-tests
+  before_script:
+    - apk add bash
+  script:
+    - ./helper.sh downgrade_on_dev $ROLLBACK_IMAGE
+  only:
+    refs:
+      - dev
 
 #
 # Main branch

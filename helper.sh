@@ -305,24 +305,41 @@ function release_to_prod() { ## Release GA to prod
   AWS_SECRET_ACCESS_KEY=$AWS_PROD_DEPLOY_SECRET_KEY \
   AWS_DEFAULT_REGION=eu-west-3 \
   helm upgrade --kubeconfig $AWS_PROD_KUBECONFIG --install --history-max 50 --wait --namespace qovery qovery-engine \
-   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine --set \
-image.tag="$tag",\
-environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
-environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_USER",\
-environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
-environmentVariables.CLOUD_PROVIDER="aws",\
-environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
-environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
-environmentVariables.RUST_LOG="DEBUG,rusoto_core::request=info,hyper=info",\
-environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
-environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
-environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
-environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
-environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
-resources.limits.cpu="1",\
-resources.limits.memory="2Gi",\
-resources.requests.cpu="500m",\
-resources.requests.memory="2Gi"
+  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine --set \
+  image.tag="$tag",\
+  environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
+  environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_USER",\
+  environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
+  environmentVariables.CLOUD_PROVIDER="aws",\
+  environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
+  environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
+  environmentVariables.RUST_LOG="DEBUG,rusoto_core::request=info,hyper=info",\
+  environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+  environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
+  environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
+  environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
+  environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+  resources.limits.cpu="1",\
+  resources.limits.memory="2Gi",\
+  resources.requests.cpu="500m",\
+  resources.requests.memory="2Gi"
+}
+
+function upgrade_on_dev() {
+  prepare_engine
+  tag=$(generate_image_tag)
+  kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'qoveryrd/engine:${tag}'}}}}}"
+  kubectl --kubeconfig=$DO_DEV_KUBECONFIG rollout status --watch --timeout=600s -n qovery statefulset/qovery-engine
+}
+
+function downgrade_on_dev() {
+  if [ "$1" == "" ] ; then
+    return
+  fi
+
+  prepare_engine
+  kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'qoveryrd/engine:$1'}}}}}"
+  kubectl --kubeconfig=$DO_DEV_KUBECONFIG rollout status --watch --timeout=600s -n qovery statefulset/qovery-engine
 }
 
 ## Tests
@@ -428,6 +445,18 @@ function lint() {
   # cargo clippy
 }
 
+function await_docker() {
+    if [ ! -z $DOCKER_HOST ] ; then
+      return_code=1
+      while [ $return_code -ne 0 ] ; do
+      echo "waiting docker port 2375 to be available..."
+      sleep 2
+      nc -zv localhost 2375 2>/dev/null
+      return_code=$?
+      done
+    fi
+}
+
 # need to debug?
 if [ ! -z $DEBUG_REQUIRED ] ; then
   echo "DEBUG MODE ENABLED FOR 1H"
@@ -459,6 +488,9 @@ fi
 echo "Detected commit ID: $commit_id"
 
 case $1 in
+await_docker)
+  await_docker
+  ;;
 build)
   build
   ;;
@@ -525,6 +557,12 @@ prepare_engine)
   ;;
 lint)
   lint
+  ;;
+upgrade_on_dev)
+  upgrade_on_dev
+  ;;
+downgrade_on_dev)
+  downgrade_on_dev "$2"
   ;;
 *)
   print_help
