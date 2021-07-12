@@ -5,8 +5,8 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
-    Router as RRouter, Service, ServiceType, StatelessService,
+    default_tera_context, delete_router, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete,
+    Helm, Pause, Router as RRouter, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -196,7 +196,7 @@ impl Service for Router {
                 }
 
                 // Check if there is a custom domain first
-                if !self.custom_domains.is_empty() {
+                if self.has_custom_domains() {
                     let external_ingress_ip_selector =
                         format!("app=nginx-ingress,component=controller,app_id={}", self.id());
 
@@ -267,6 +267,10 @@ impl crate::cloud_provider::service::Router for Router {
 
         _domains
     }
+
+    fn has_custom_domains(&self) -> bool {
+        !self.custom_domains.is_empty()
+    }
 }
 
 impl Helm for Router {
@@ -316,7 +320,7 @@ impl Create for Router {
         // the nginx-ingress must be available to get the external dns target if necessary
         let mut context = self.tera_context(target)?;
 
-        if !self.custom_domains.is_empty() {
+        if self.has_custom_domains() {
             // custom domains? create an NGINX ingress
             info!("setup NGINX ingress for custom domains");
 
@@ -349,7 +353,7 @@ impl Create for Router {
                 crate::cmd::helm::helm_exec_with_upgrade_history_with_override(
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
-                    format!("custom-{}", helm_release_name).as_str(),
+                    &self.custom_router_helm_release_name(),
                     into_dir.as_str(),
                     format!("{}/nginx-ingress.yaml", into_dir.as_str()).as_str(),
                     kubernetes.cloud_provider().credentials_environment_variables(),
@@ -367,9 +371,9 @@ impl Create for Router {
                     kubernetes_config_file_path.as_str(),
                     environment.namespace(),
                     format!(
-                        "{},component=controller,release=custom-{}",
+                        "{},component=controller,release={}",
                         self.selector(),
-                        helm_release_name
+                        &self.custom_router_helm_release_name(),
                     )
                     .as_str(),
                     kubernetes.cloud_provider().credentials_environment_variables(),
@@ -476,10 +480,7 @@ impl Pause for Router {
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.router.on_delete() called for {}", self.name());
-
-        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateless_service(target, self, false)
-        })
+        delete_router(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -488,9 +489,6 @@ impl Delete for Router {
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_delete_error() called for {}", self.name());
-
-        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateless_service(target, self, true)
-        })
+        delete_router(target, self, true)
     }
 }
