@@ -262,7 +262,10 @@ impl FuncTestsSecrets {
             QOVERY_SSH_USER: Self::select_secret("QOVERY_SSH_USER", secrets.QOVERY_SSH_USER),
             RUST_LOG: Self::select_secret("RUST_LOG", secrets.RUST_LOG),
             SCALEWAY_ACCESS_KEY: Self::select_secret("SCALEWAY_ACCESS_KEY", secrets.SCALEWAY_ACCESS_KEY),
-            SCALEWAY_DEFAULT_PROJECT_ID: Self::select_secret("SCALEWAY_DEFAULT_PROJECT_ID", secrets.SCALEWAY_DEFAULT_PROJECT_ID),
+            SCALEWAY_DEFAULT_PROJECT_ID: Self::select_secret(
+                "SCALEWAY_DEFAULT_PROJECT_ID",
+                secrets.SCALEWAY_DEFAULT_PROJECT_ID,
+            ),
             SCALEWAY_SECRET_KEY: Self::select_secret("SCALEWAY_SECRET_KEY", secrets.SCALEWAY_SECRET_KEY),
             TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
                 "TERRAFORM_AWS_ACCESS_KEY_ID",

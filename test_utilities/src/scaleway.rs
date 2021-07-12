@@ -1,7 +1,7 @@
-use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cloud_provider::scaleway::kubernetes::node::{Node, NodeType};
 use qovery_engine::cloud_provider::scaleway::kubernetes::Options;
+use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::scaleway_cr::ScalewayCR;
 use qovery_engine::engine::Engine;
@@ -10,8 +10,8 @@ use qovery_engine::models::Context;
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use tracing::error;
 use qovery_engine::object_storage::scaleway_os::ScalewayOS;
+use tracing::error;
 
 const SCW_TEST_CLUSTER_NAME: &str = "Qovery test cluster";
 const SCW_TEST_CLUSTER_ID: &str = "qovery-test-cluster";
@@ -46,7 +46,10 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
     Scaleway::new(
         context.clone(),
         SCW_TEST_CLUSTER_ID,
-        secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string()).as_str(),
+        secrets
+            .SCALEWAY_DEFAULT_PROJECT_ID
+            .unwrap_or("undefined".to_string())
+            .as_str(),
         SCW_TEST_CLUSTER_NAME,
         secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string()).as_str(),
         secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string()).as_str(),

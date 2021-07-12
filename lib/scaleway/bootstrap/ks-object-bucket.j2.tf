@@ -2,6 +2,7 @@
 resource "scaleway_object_bucket" "object-bucket" {
   # NOTE: name supports only alpha-numerics!
   name = "{{ object_storage_kubeconfig_bucket }}"
+  region = var.region
   acl  = "private"
   versioning {
     enabled = true

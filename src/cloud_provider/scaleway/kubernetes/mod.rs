@@ -152,14 +152,31 @@ impl<'a> Kapsule<'a> {
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
         let mut context = TeraContext::new();
 
+        // Scaleway
+        context.insert(
+            "scaleway_default_project_id",
+            self.options.scaleway_default_project_id.as_str(),
+        );
+        context.insert("scaleway_access_key", self.options.scaleway_access_key.as_str());
+        context.insert("scaleway_secret_key", self.options.scaleway_secret_key.as_str());
+        context.insert(
+            "scaleway_default_zone",
+            self.options.scaleway_default_zone.to_string().as_str(),
+        );
+
         context.insert("scw_region", &self.region.as_str());
         context.insert("organization_id", self.cloud_provider.organization_id());
-        context.insert("test_cluster", &self.context.is_test_cluster());
 
+        let vpc_cidr_block = self.options.vpc_cidr_block.clone();
+        context.insert("vpc_cidr_block", &vpc_cidr_block);
+
+        // Kubernetes
+        context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("kubernetes_cluster_name", self.name());
         context.insert("kubernetes_cluster_version", self.version());
 
+        // Qovery
         context.insert("object_storage_kubeconfig_bucket", &self.kubeconfig_bucket_name());
 
         context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
@@ -167,10 +184,6 @@ impl<'a> Kapsule<'a> {
         context.insert("qovery_nats_user", self.options.qovery_nats_user.as_str());
         context.insert("qovery_nats_password", self.options.qovery_nats_password.as_str());
         context.insert("discord_api_key", self.options.discord_api_key.as_str());
-
-        let vpc_cidr_block = self.options.vpc_cidr_block.clone();
-        context.insert("vpc_cidr_block", &vpc_cidr_block);
-
         context.insert(
             "engine_version_controller_token",
             &self.options.engine_version_controller_token,
@@ -179,21 +192,6 @@ impl<'a> Kapsule<'a> {
             "agent_version_controller_token",
             &self.options.agent_version_controller_token,
         );
-
-        let worker_nodes = self
-            .nodes
-            .iter()
-            .group_by(|e| e.instance_type())
-            .into_iter()
-            .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
-            .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
-                instance_type: instance_type.to_string(),
-                desired_size: "3".to_string(),
-                max_size: nodes.len().to_string(),
-                min_size: "3".to_string(),
-            })
-            .collect::<Vec<WorkerNodeDataTemplate>>();
-        context.insert("scw_ks_worker_nodes", &worker_nodes);
 
         // Qovery features
         context.insert(
@@ -211,17 +209,43 @@ impl<'a> Kapsule<'a> {
             )
         }
 
-        // Scaleway
+        // AWS S3 tfstates storage tfstates
         context.insert(
-            "scaleway_default_project_id",
-            self.options.scaleway_default_project_id.as_str(),
+            "aws_access_key_tfstates_account",
+            self.cloud_provider()
+                .terraform_state_credentials()
+                .access_key_id
+                .as_str(),
         );
-        context.insert("scaleway_access_key", self.options.scaleway_access_key.as_str());
-        context.insert("scaleway_secret_key", self.options.scaleway_secret_key.as_str());
         context.insert(
-            "scaleway_default_zone",
-            self.options.scaleway_default_zone.to_string().as_str(),
+            "aws_secret_key_tfstates_account",
+            self.cloud_provider()
+                .terraform_state_credentials()
+                .secret_access_key
+                .as_str(),
         );
+        context.insert(
+            "aws_region_tfstates_account",
+            self.cloud_provider().terraform_state_credentials().region.as_str(),
+        );
+        context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
+        context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
+
+        // Kubernetes workers
+        let worker_nodes = self
+            .nodes
+            .iter()
+            .group_by(|e| e.instance_type())
+            .into_iter()
+            .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
+            .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
+                instance_type: instance_type.to_string(),
+                desired_size: "3".to_string(),
+                max_size: nodes.len().to_string(),
+                min_size: "3".to_string(),
+            })
+            .collect::<Vec<WorkerNodeDataTemplate>>();
+        context.insert("scw_ks_worker_nodes", &worker_nodes);
 
         return Ok(context);
     }
@@ -359,37 +383,6 @@ impl<'a> Kubernetes for Kapsule<'a> {
         )?;
 
         send_to_customer(format!("Deploying SCW {} cluster deployment with id {}", self.name(), self.id()).as_str());
-
-        // temporary: remove helm/kube management from terraform
-        match terraform_init_validate_state_list(temp_dir.as_str()) {
-            Ok(x) => {
-                let items_type = vec!["helm_release", "kubernetes_namespace"];
-                for item in items_type {
-                    for entry in x.clone() {
-                        if entry.starts_with(item) {
-                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
-                                Ok(_) => info!("successfully removed {}", &entry),
-                                Err(e) => {
-                                    return Err(EngineError {
-                                        cause: EngineErrorCause::Internal,
-                                        scope: EngineErrorScope::Engine,
-                                        execution_id: self.context.execution_id().to_string(),
-                                        message: Some(format!(
-                                            "error while trying to remove {} out of terraform state file. {:?}",
-                                            entry, e.message
-                                        )),
-                                    })
-                                }
-                            }
-                        };
-                    }
-                }
-            }
-            Err(e) => warn!(
-                "no state list exists yet, this is normal if it's a newly created cluster. {:?}",
-                e
-            ),
-        };
 
         // terraform deployment dedicated to cloud resources
         match cast_simple_error_to_engine_error(

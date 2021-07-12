@@ -1,7 +1,19 @@
+provider "aws" {
+  alias = "tfstates"
+  access_key = "{{ aws_access_key_tfstates_account }}"
+  secret_key = "{{ aws_secret_key_tfstates_account }}"
+  region = "{{ aws_region_tfstates_account }}"
+}
+
 terraform {
   required_providers {
     scaleway = {
       source = "scaleway/scaleway"
+      version = "~> 2.1.0"
+    }
+    aws = {
+      source = "hashicorp/aws"
+      version = "~> 3.36.0"
     }
     local = {
       source = "hashicorp/local"
@@ -26,16 +38,6 @@ provider "scaleway" {
   project_id	  = var.scaleway_default_project_id
   zone            = var.scaleway_default_zone
   region          = var.region
-}
-
-provider "kubernetes" {
-  load_config_file = "false"
-
-  host  = null_resource.kubeconfig.triggers.host
-  token = null_resource.kubeconfig.triggers.token
-  cluster_ca_certificate = base64decode(
-    null_resource.kubeconfig.triggers.cluster_ca_certificate
-  )
 }
 
 provider "vault" {
