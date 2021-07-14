@@ -148,6 +148,7 @@ pub trait KubernetesNode {
 pub enum Kind {
     Eks,
     Doks,
+    ScwKapsule,
 }
 
 #[derive(Debug)]
@@ -177,6 +178,8 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
         },
         // FIXME: We don't have any managed service on DO for now
         Kind::Doks => DeploymentTarget::SelfHosted(kubernetes, environment),
+        // TODO(benjaminch): We don't have any managed service on Scaleway for now
+        Kind::ScwKapsule => DeploymentTarget::SelfHosted(kubernetes, environment),
     };
 
     // do not deploy if there is not enough resources

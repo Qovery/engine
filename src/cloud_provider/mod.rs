@@ -16,6 +16,7 @@ pub mod kubernetes;
 pub mod metrics;
 pub mod models;
 pub mod qovery;
+pub mod scaleway;
 pub mod service;
 pub mod utilities;
 
@@ -53,6 +54,7 @@ pub trait CloudProvider: Listen {
 pub enum Kind {
     Aws,
     Do,
+    Scw,
 }
 
 impl Kind {
@@ -60,6 +62,7 @@ impl Kind {
         match self {
             Kind::Aws => "AWS",
             Kind::Do => "Digital Ocean",
+            Kind::Scw => "Scaleway",
         }
     }
 }

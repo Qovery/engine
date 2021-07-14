@@ -5,6 +5,7 @@ use crate::models::{Context, StringPath};
 use std::fs::File;
 
 pub mod s3;
+pub mod scaleway_os;
 pub mod spaces;
 
 pub trait ObjectStorage {
@@ -38,4 +39,5 @@ pub trait ObjectStorage {
 pub enum Kind {
     S3,
     Spaces,
+    ScalewayOs,
 }
