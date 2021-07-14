@@ -4,8 +4,7 @@ pub mod node;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesNodesType,
-    KubernetesUpgradeStatus,
+    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::scaleway::application::Region;
@@ -13,10 +12,9 @@ use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, 
 use crate::cloud_provider::scaleway::kubernetes::node::Node;
 use crate::cloud_provider::scaleway::Scaleway;
 use crate::cloud_provider::{kubernetes, CloudProvider};
-use crate::cmd;
 use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
 use crate::cmd::structs::HelmChart;
-use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
+use crate::cmd::terraform::terraform_init_validate_plan_apply;
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::error::EngineErrorCause::Internal;
@@ -28,10 +26,12 @@ use crate::models::{
 use crate::object_storage::scaleway_os::ScalewayOS;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
+use crate::{cmd, dns_provider};
 use itertools::Itertools;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
+use std::env;
 use std::path::PathBuf;
 use tera::Context as TeraContext;
 
@@ -45,6 +45,8 @@ pub struct Options {
     pub qovery_nats_password: String,
     pub qovery_ssh_key: String,
     pub discord_api_key: String,
+    pub grafana_admin_user: String,
+    pub grafana_admin_password: String,
     pub agent_version_controller_token: String,
     pub engine_version_controller_token: String,
 
@@ -66,6 +68,8 @@ impl Options {
         qovery_nats_user: String,
         qovery_nats_password: String,
         qovery_ssh_key: String,
+        grafana_admin_user: String,
+        grafana_admin_password: String,
         discord_api_key: String,
         agent_version_controller_token: String,
         engine_version_controller_token: String,
@@ -83,6 +87,8 @@ impl Options {
             qovery_nats_password,
             qovery_ssh_key,
             discord_api_key,
+            grafana_admin_user,
+            grafana_admin_password,
             agent_version_controller_token,
             engine_version_controller_token,
             scaleway_default_project_id,
@@ -144,7 +150,7 @@ impl<'a> Kapsule<'a> {
         format!("qovery-kubeconfigs-{}", self.id())
     }
 
-    fn upgrade(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+    fn upgrade(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
         // TODO(benjaminch): to be implemented
         return Ok(());
     }
@@ -169,6 +175,32 @@ impl<'a> Kapsule<'a> {
 
         let vpc_cidr_block = self.options.vpc_cidr_block.clone();
         context.insert("vpc_cidr_block", &vpc_cidr_block);
+
+        // DNS
+        let managed_dns_list = vec![self.dns_provider.name()];
+        let managed_dns_domains_helm_format = vec![format!("{}", self.dns_provider.domain())];
+        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+        let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
+
+        context.insert("managed_dns", &managed_dns_list);
+        context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
+        context.insert(
+            "managed_dns_domains_terraform_format",
+            &managed_dns_domains_terraform_format,
+        );
+        context.insert(
+            "managed_dns_resolvers_terraform_format",
+            &managed_dns_resolvers_terraform_format,
+        );
+        match self.dns_provider.kind() {
+            dns_provider::Kind::Cloudflare => {
+                context.insert("external_dns_provider", self.dns_provider.provider_name());
+                context.insert("cloudflare_api_token", self.dns_provider.token());
+                context.insert("cloudflare_email", self.dns_provider.account());
+            }
+        };
+
+        context.insert("dns_email_report", &self.options.tls_email_report);
 
         // Kubernetes
         context.insert("test_cluster", &self.context.is_test_cluster());
@@ -230,6 +262,36 @@ impl<'a> Kapsule<'a> {
         );
         context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
+
+        // TLS
+        context.insert("acme_server_url", &self.lets_encrypt_url());
+
+        // Vault
+        context.insert("vault_auth_method", "none");
+
+        if let Some(_) = env::var_os("VAULT_ADDR") {
+            // select the correct used method
+            match env::var_os("VAULT_ROLE_ID") {
+                Some(role_id) => {
+                    context.insert("vault_auth_method", "app_role");
+                    context.insert("vault_role_id", role_id.to_str().unwrap());
+
+                    match env::var_os("VAULT_SECRET_ID") {
+                        Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
+                        None => error!("VAULT_SECRET_ID environment variable wasn't found"),
+                    }
+                }
+                None => {
+                    if let Some(_) = env::var_os("VAULT_TOKEN") {
+                        context.insert("vault_auth_method", "token")
+                    }
+                }
+            }
+        };
+
+        // grafana credentials
+        context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
+        context.insert("grafana_admin_password", self.options.grafana_admin_password.as_str());
 
         // Kubernetes workers
         let worker_nodes = self

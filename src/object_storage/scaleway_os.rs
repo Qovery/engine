@@ -2,20 +2,16 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::cloud_provider::scaleway::application::Region;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
+use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{Context, StringPath};
 use crate::object_storage::{Kind, ObjectStorage};
-use crate::utilities;
 
 use crate::runtime::block_on;
-use retry::delay::Fibonacci;
-use retry::{Error, OperationResult};
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest,
-    GetObjectRequest, ListObjectsRequest, ObjectIdentifier, PutBucketVersioningRequest, PutObjectRequest, S3Client,
-    StreamingBody, VersioningConfiguration, S3,
+    CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest, GetObjectRequest, ListObjectsRequest,
+    ObjectIdentifier, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, S3,
 };
 use tokio::io;
 

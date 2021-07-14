@@ -13,9 +13,10 @@ use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecret
 use qovery_engine::object_storage::scaleway_os::ScalewayOS;
 use tracing::error;
 
-const SCW_TEST_CLUSTER_NAME: &str = "Qovery test cluster";
-const SCW_TEST_CLUSTER_ID: &str = "qovery-test-cluster";
-const SCW_TEST_REGION: Region = Region::Paris;
+pub const SCW_TEST_CLUSTER_NAME: &str = "Qovery test cluster";
+pub const SCW_TEST_CLUSTER_ID: &str = "qovery-test-cluster";
+pub const SCW_TEST_REGION: Region = Region::Paris;
+pub const SCW_KUBERNETES_VERSION: &str = "1.18";
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     let secrets = FuncTestsSecrets::new();
@@ -69,6 +70,8 @@ pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> Options {
         secrets.QOVERY_NATS_USERNAME.unwrap(),
         secrets.QOVERY_NATS_PASSWORD.unwrap(),
         secrets.QOVERY_SSH_USER.unwrap(),
+        "admin".to_string(),
+        "qovery".to_string(),
         secrets.DISCORD_API_URL.unwrap(),
         secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
         secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),

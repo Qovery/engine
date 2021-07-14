@@ -511,7 +511,6 @@ pub fn execution_id() -> String {
 // avoid test collisions
 pub fn generate_cluster_id(region: &str) -> String {
     let check_if_running_on_gitlab_env_var = "CI_PROJECT_TITLE";
-    let name = gethostname::gethostname().into_string();
 
     // if running on CI, generate an ID
     match env::var_os(check_if_running_on_gitlab_env_var) {
@@ -519,10 +518,17 @@ pub fn generate_cluster_id(region: &str) -> String {
         Some(_) => return generate_id(),
     };
 
-    match name {
+    match gethostname::gethostname().into_string() {
         // shrink to 15 chars in order to avoid resources name issues
-        Ok(current_name) => {
+        Ok(mut current_name) => {
             let mut shrink_size = 15;
+
+            // override cluster id
+            current_name = match env::var_os("custom_cluster_id") {
+                None => current_name,
+                Some(x) => x.into_string().unwrap(),
+            };
+
             // avoid out of bounds issue
             if current_name.chars().count() < shrink_size {
                 shrink_size = current_name.chars().count()

@@ -1,5 +1,4 @@
 use crate::cloud_provider::kubernetes::KubernetesNode;
-use itertools::Itertools;
 use std::any::Any;
 use std::fmt;
 use std::str::FromStr;
