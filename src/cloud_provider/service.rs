@@ -148,9 +148,6 @@ pub trait Router: StatelessService + Listen + Helm {
         )?;
         Ok(())
     }
-    fn custom_router_helm_release_name(&self) -> String {
-        crate::string::cut(format!("custom-router-{}", self.id()), 50)
-    }
 }
 
 pub trait Database: StatefulService {
@@ -542,13 +539,6 @@ where
     T: Router,
 {
     send_progress_on_long_task(service, crate::cloud_provider::service::Action::Delete, || {
-        if service.has_custom_domains() {
-            let (kubernetes, environment) = match *target {
-                DeploymentTarget::ManagedServices(k, env) => (k, env),
-                DeploymentTarget::SelfHosted(k, env) => (k, env),
-            };
-            helm_uninstall_release(kubernetes, environment, &service.custom_router_helm_release_name())?
-        }
         delete_stateless_service(target, service, is_error)
     })
 }
