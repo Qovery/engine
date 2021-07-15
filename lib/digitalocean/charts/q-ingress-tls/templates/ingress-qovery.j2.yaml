@@ -16,13 +16,22 @@ metadata:
     external-dns.alpha.kubernetes.io/ttl: "300"
     external-dns.alpha.kubernetes.io/target: "{{ external_ingress_hostname_default }}"
     kubernetes.io/tls-acme: "true"
+    {%- if custom_domains|length > 0 %}
+    cert-manager.io/issuer: {{ id }}
+    {%- else %}
     cert-manager.io/cluster-issuer: {{ metadata_annotations_cert_manager_cluster_issuer }}
+    {%- endif %}
     kubernetes.io/ingress.class: "nginx-qovery"
     ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   tls:
-    - hosts:
-        - "{{ router_tls_domain }}"
+    {%- if custom_domains|length > 0 %}
+    - secretName: "router-tls-{{ id }}"
+      hosts:
+        {%- for domain in custom_domains %}
+        - "{{ domain.domain }}"
+        {%- endfor %}
+    {%- endif %}
   # We dont use secret name as we want to rely on default tls certificate from ingress controller
   # which has our wildcard certificate https://cert-manager.io/next-docs/faq/kubed/
   rules:
@@ -35,4 +44,15 @@ spec:
             serviceName: "{{ route.application_name }}"
             servicePort: {{ route.application_port }}
         {%- endfor %}
+    {%- for domain in custom_domains %}
+    - host: "{{ domain.domain }}"
+      http:
+        paths:
+        {%- for route in routes %}
+        - path: "{{ route.path }}"
+          backend:
+            serviceName: "{{ route.application_name }}"
+            servicePort: {{ route.application_port }}
+        {%- endfor %}
+    {%- endfor %}
 {%- endif %}
