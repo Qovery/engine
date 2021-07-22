@@ -136,8 +136,9 @@ pub trait Application: StatelessService {
 
 pub trait ExternalService: StatelessService {}
 
-pub trait Router: StatelessService + Listen {
+pub trait Router: StatelessService + Listen + Helm {
     fn domains(&self) -> Vec<&str>;
+    fn has_custom_domains(&self) -> bool;
     fn check_domains(&self) -> Result<(), EngineError> {
         check_domain_for(
             ListenersHelper::new(self.listeners()),
@@ -533,6 +534,15 @@ pub fn scale_down_application(
     )
 }
 
+pub fn delete_router<T>(target: &DeploymentTarget, service: &T, is_error: bool) -> Result<(), EngineError>
+where
+    T: Router,
+{
+    send_progress_on_long_task(service, crate::cloud_provider::service::Action::Delete, || {
+        delete_stateless_service(target, service, is_error)
+    })
+}
+
 pub fn delete_stateless_service<T>(target: &DeploymentTarget, service: &T, is_error: bool) -> Result<(), EngineError>
 where
     T: Service + Helm,
@@ -549,7 +559,7 @@ where
     }
 
     // clean the resource
-    let _ = do_stateless_service_cleanup(kubernetes, environment, helm_release_name.as_str())?;
+    let _ = helm_uninstall_release(kubernetes, environment, helm_release_name.as_str())?;
 
     Ok(())
 }
@@ -788,7 +798,7 @@ where
             let helm_release_name = service.helm_release_name();
 
             // clean the resource
-            let _ = do_stateless_service_cleanup(*kubernetes, *environment, helm_release_name.as_str())?;
+            let _ = helm_uninstall_release(*kubernetes, *environment, helm_release_name.as_str())?;
         }
     }
 
@@ -1145,7 +1155,7 @@ pub fn get_stateless_resource_information(
     Ok((describe, logs))
 }
 
-pub fn do_stateless_service_cleanup(
+pub fn helm_uninstall_release(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     helm_release_name: &str,
