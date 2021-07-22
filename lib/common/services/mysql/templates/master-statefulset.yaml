@@ -4,6 +4,9 @@ metadata:
   name: {{ template "mysql.master.fullname" . }}
   labels: {{- include "mysql.labels" . | nindent 4 }}
     component: master
+{{- if .Values.commonLabels }}
+  {{- toYaml .Values.commonLabels | nindent 4 }}
+{{- end }}
 spec:
   selector:
     matchLabels: {{- include "mysql.matchLabels" . | nindent 6 }}
@@ -19,6 +22,9 @@ spec:
     metadata:
       labels: {{- include "mysql.labels" . | nindent 8 }}
         component: master
+{{- if .Values.commonLabels }}
+  {{- toYaml .Values.commonLabels | nindent 8 }}
+{{- end }}
       {{- if .Values.master.podAnnotations }}
       annotations: {{ include "mysql.tplValue" ( dict "value" .Values.master.podAnnotations "context" $) | nindent 8 }}
       {{- end }}

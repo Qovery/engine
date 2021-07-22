@@ -120,11 +120,11 @@ impl LocalDocker {
                 let line_string = line.unwrap();
                 error!("{}", line_string.as_str());
 
-                lh.error(ProgressInfo::new(
+                lh.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Application {
                         id: build.image.application_id.clone(),
                     },
-                    ProgressLevel::Error,
+                    ProgressLevel::Warn,
                     Some(line_string.as_str()),
                     self.context.execution_id(),
                 ));
@@ -216,11 +216,11 @@ impl LocalDocker {
                     let line_string = line.unwrap();
                     error!("{}", line_string.as_str());
 
-                    lh.error(ProgressInfo::new(
+                    lh.deployment_in_progress(ProgressInfo::new(
                         ProgressScope::Application {
                             id: build.image.application_id.clone(),
                         },
-                        ProgressLevel::Error,
+                        ProgressLevel::Warn,
                         Some(line_string.as_str()),
                         self.context.execution_id(),
                     ));

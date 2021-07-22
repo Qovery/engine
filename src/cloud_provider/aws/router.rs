@@ -1,12 +1,10 @@
-use retry::delay::Fibonacci;
-use retry::OperationResult;
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
-    Router as RRouter, Service, ServiceType, StatelessService,
+    default_tera_context, delete_router, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete,
+    Helm, Pause, Router as RRouter, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -194,36 +192,6 @@ impl Service for Router {
                         warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
                     }
                 }
-
-                // Check if there is a custom domain first
-                if !self.custom_domains.is_empty() {
-                    let external_ingress_ip_selector =
-                        format!("app=nginx-ingress,component=controller,app_id={}", self.id());
-
-                    let external_ingress_hostname_custom =
-                        crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
-                            kubernetes_config_file_path_string.as_str(),
-                            environment.namespace(),
-                            external_ingress_ip_selector.as_str(),
-                            kubernetes.cloud_provider().credentials_environment_variables(),
-                        );
-
-                    match external_ingress_hostname_custom {
-                        Ok(external_ingress_hostname_custom) => match external_ingress_hostname_custom {
-                            Some(hostname) => {
-                                context.insert("external_ingress_hostname_custom", hostname.as_str());
-                            }
-                            None => {
-                                warn!("unable to get external_ingress_hostname_custom - what's wrong? This must never happened");
-                            }
-                        },
-                        _ => {
-                            // FIXME really?
-                            warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
-                        }
-                    }
-                    context.insert("app_id", kubernetes.id());
-                }
             }
             Err(_) => error!("can't fetch kubernetes config file - what's wrong? This must never happened"), // FIXME should I return an Err?
         }
@@ -266,6 +234,10 @@ impl crate::cloud_provider::service::Router for Router {
         }
 
         _domains
+    }
+
+    fn has_custom_domains(&self) -> bool {
+        !self.custom_domains.is_empty()
     }
 }
 
@@ -314,84 +286,7 @@ impl Create for Router {
 
         // respect order - getting the context here and not before is mandatory
         // the nginx-ingress must be available to get the external dns target if necessary
-        let mut context = self.tera_context(target)?;
-
-        if !self.custom_domains.is_empty() {
-            // custom domains? create an NGINX ingress
-            info!("setup NGINX ingress for custom domains");
-
-            let into_dir = crate::fs::workspace_directory(
-                self.context.workspace_root_dir(),
-                self.context.execution_id(),
-                "routers/nginx-ingress",
-            );
-
-            let _ = cast_simple_error_to_engine_error(
-                self.engine_error_scope(),
-                self.context.execution_id(),
-                crate::template::generate_and_copy_all_files_into_dir(
-                    self.helm_chart_values_dir(),
-                    into_dir.as_str(),
-                    &context,
-                ),
-            )?;
-
-            let _ = cast_simple_error_to_engine_error(
-                self.engine_error_scope(),
-                self.context.execution_id(),
-                crate::template::copy_non_template_files(self.helm_chart_dir(), into_dir.as_str()),
-            )?;
-
-            // do exec helm upgrade and return the last deployment status
-            let helm_history_row = cast_simple_error_to_engine_error(
-                self.engine_error_scope(),
-                self.context.execution_id(),
-                crate::cmd::helm::helm_exec_with_upgrade_history_with_override(
-                    kubernetes_config_file_path.as_str(),
-                    environment.namespace(),
-                    format!("custom-{}", helm_release_name).as_str(),
-                    into_dir.as_str(),
-                    format!("{}/nginx-ingress.yaml", into_dir.as_str()).as_str(),
-                    kubernetes.cloud_provider().credentials_environment_variables(),
-                ),
-            )?;
-
-            // check deployment status
-            if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-                return Err(self.engine_error(EngineErrorCause::Internal, "Router has failed to be deployed".into()));
-            }
-
-            // waiting for the nlb, it should be deploy to get fqdn
-            let external_ingress_hostname_custom_result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
-                let external_ingress_hostname_custom = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
-                    kubernetes_config_file_path.as_str(),
-                    environment.namespace(),
-                    format!(
-                        "{},component=controller,release=custom-{}",
-                        self.selector(),
-                        helm_release_name
-                    )
-                    .as_str(),
-                    kubernetes.cloud_provider().credentials_environment_variables(),
-                );
-
-                match external_ingress_hostname_custom {
-                    Ok(external_ingress_hostname_custom) => OperationResult::Ok(external_ingress_hostname_custom),
-                    Err(err) => {
-                        error!("Waiting NLB endpoint to be available to be able to configure TLS");
-                        OperationResult::Retry(err)
-                    }
-                }
-            });
-
-            match external_ingress_hostname_custom_result {
-                Ok(elb) => {
-                    //put it in the context
-                    context.insert("nlb_ingress_hostname", &elb);
-                }
-                Err(_) => error!("Error getting the NLB endpoint to be able to configure TLS"),
-            }
-        }
+        let context = self.tera_context(target)?;
 
         let from_dir = format!("{}/aws/charts/q-ingress-tls", self.context.lib_root_dir());
         let _ = cast_simple_error_to_engine_error(
@@ -476,10 +371,7 @@ impl Pause for Router {
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.router.on_delete() called for {}", self.name());
-
-        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateless_service(target, self, false)
-        })
+        delete_router(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -488,9 +380,6 @@ impl Delete for Router {
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.router.on_delete_error() called for {}", self.name());
-
-        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateless_service(target, self, true)
-        })
+        delete_router(target, self, true)
     }
 }
