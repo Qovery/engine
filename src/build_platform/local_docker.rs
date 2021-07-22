@@ -136,7 +136,7 @@ impl LocalDocker {
             Ok(_) => Ok(BuildResult { build }),
             Err(err) => Err(self.engine_error(
                 EngineErrorCause::User(
-                    "It looks like there is something wrong in your Dockerfile. Try run locally using `qovery run` or build with `docker build --no-cache`",
+                    "It looks like there is something wrong in your Dockerfile. Try building the application locally with `docker build --no-cache`.",
                 ),
                 format!(
                     "error while building container image {}. Error: {:?}",
