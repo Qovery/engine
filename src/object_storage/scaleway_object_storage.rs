@@ -52,16 +52,6 @@ impl ScalewayOS {
         }
     }
 
-    fn get_configuration(&self) -> scaleway_api_rs::apis::configuration::Configuration {
-        scaleway_api_rs::apis::configuration::Configuration {
-            api_key: Some(scaleway_api_rs::apis::configuration::ApiKey {
-                key: self.secret_token.clone(),
-                prefix: None,
-            }),
-            ..scaleway_api_rs::apis::configuration::Configuration::default()
-        }
-    }
-
     fn get_s3_client(&self) -> S3Client {
         let region = RusotoRegion::Custom {
             name: self.region.to_string(),
@@ -70,7 +60,7 @@ impl ScalewayOS {
 
         let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
 
-        S3Client::new_with_client(client, region.clone())
+        S3Client::new_with_client(client, region)
     }
 
     fn get_credentials(&self) -> StaticProvider {
@@ -96,7 +86,7 @@ impl ScalewayOS {
             let message = format!(
                 "While trying to delete object-storage bucket, name `{}` is invalid: {}",
                 bucket_name,
-                message.unwrap_or("unknown error".to_string())
+                message.unwrap_or_else(|| "unknown error".to_string())
             );
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
@@ -108,8 +98,8 @@ impl ScalewayOS {
             bucket: bucket_name.to_string(),
             ..Default::default()
         })) {
-            Ok(res) => res.contents.unwrap_or(vec![]),
-            Err(e) => {
+            Ok(res) => res.contents.unwrap_or_default(),
+            Err(_) => {
                 vec![]
             }
         };
@@ -182,7 +172,7 @@ impl ObjectStorage for ScalewayOS {
             let message = format!(
                 "While trying to create object-storage bucket, name `{}` is invalid: {}",
                 bucket_name,
-                message.unwrap_or("unknown error".to_string())
+                message.unwrap_or_else(|| "unknown error".to_string())
             );
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
@@ -212,7 +202,7 @@ impl ObjectStorage for ScalewayOS {
             bucket: bucket_name.to_string(),
             ..Default::default()
         })) {
-            Ok(res) => Ok(()),
+            Ok(_) => Ok(()),
             Err(e) => {
                 let message = format!(
                     "While trying to activate versioning on object-storage bucket, name `{}`: {}",
@@ -232,7 +222,7 @@ impl ObjectStorage for ScalewayOS {
             let message = format!(
                 "While trying to delete object-storage bucket, name `{}` is invalid: {}",
                 bucket_name,
-                message.unwrap_or("unknown error".to_string())
+                message.unwrap_or_else(|| "unknown error".to_string())
             );
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
@@ -273,7 +263,7 @@ impl ObjectStorage for ScalewayOS {
                 "While trying to get object `{}` from bucket `{}`, bucket name is invalid: {}",
                 object_key,
                 bucket_name,
-                message.unwrap_or("unknown error".to_string())
+                message.unwrap_or_else(|| "unknown error".to_string())
             );
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
@@ -339,7 +329,7 @@ impl ObjectStorage for ScalewayOS {
                     object_key, bucket_name, e
                 );
                 error!("{}", message);
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
+                Err(self.engine_error(EngineErrorCause::Internal, message))
             }
         }
     }
@@ -351,16 +341,10 @@ impl ObjectStorage for ScalewayOS {
                 "While trying to get object `{}` from bucket `{}`, bucket name is invalid: {}",
                 object_key,
                 bucket_name,
-                message.unwrap_or("unknown error".to_string())
+                message.unwrap_or_else(|| "unknown error".to_string())
             );
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
-
-        let workspace_directory = crate::fs::workspace_directory(
-            self.context().workspace_root_dir(),
-            self.context().execution_id(),
-            format!("object-storage/scaleway_os/{}", self.name()),
-        );
 
         let s3_client = self.get_s3_client();
 
@@ -370,14 +354,14 @@ impl ObjectStorage for ScalewayOS {
             body: Some(StreamingBody::from(std::fs::read(file_path.clone()).unwrap())),
             ..Default::default()
         })) {
-            Ok(res) => Ok(()),
+            Ok(_) => Ok(()),
             Err(e) => {
                 let message = format!(
                     "While trying to put object `{}` from bucket `{}`, error: {}",
                     object_key, bucket_name, e
                 );
                 error!("{}", message);
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
+                Err(self.engine_error(EngineErrorCause::Internal, message))
             }
         }
     }

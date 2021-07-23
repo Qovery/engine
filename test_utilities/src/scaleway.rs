@@ -3,14 +3,14 @@ use qovery_engine::cloud_provider::scaleway::kubernetes::node::{Node, NodeType};
 use qovery_engine::cloud_provider::scaleway::kubernetes::Options;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
-use qovery_engine::container_registry::scaleway_cr::ScalewayCR;
+use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use qovery_engine::object_storage::scaleway_os::{ScalewayOS, BucketDeleteStrategy};
+use qovery_engine::object_storage::scaleway_object_storage::{ScalewayOS, BucketDeleteStrategy};
 use tracing::error;
 
 pub const SCW_TEST_CLUSTER_NAME: &str = "Qovery test cluster";

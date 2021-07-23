@@ -23,7 +23,7 @@ use crate::fs::workspace_directory;
 use crate::models::{
     Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
-use crate::object_storage::scaleway_os::ScalewayOS;
+use crate::object_storage::scaleway_object_storage::ScalewayOS;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
 use crate::{cmd, dns_provider};
@@ -152,7 +152,7 @@ impl<'a> Kapsule<'a> {
 
     fn upgrade(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
         // TODO(benjaminch): to be implemented
-        return Ok(());
+        Ok(())
     }
 
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
@@ -178,7 +178,7 @@ impl<'a> Kapsule<'a> {
 
         // DNS
         let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![format!("{}", self.dns_provider.domain())];
+        let managed_dns_domains_helm_format = vec![self.dns_provider.domain().to_string()];
         let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
         let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
 
@@ -269,7 +269,7 @@ impl<'a> Kapsule<'a> {
         // Vault
         context.insert("vault_auth_method", "none");
 
-        if let Some(_) = env::var_os("VAULT_ADDR") {
+        if env::var_os("VAULT_ADDR").is_some() {
             // select the correct used method
             match env::var_os("VAULT_ROLE_ID") {
                 Some(role_id) => {
@@ -282,7 +282,7 @@ impl<'a> Kapsule<'a> {
                     }
                 }
                 None => {
-                    if let Some(_) = env::var_os("VAULT_TOKEN") {
+                    if env::var_os("VAULT_TOKEN").is_some() {
                         context.insert("vault_auth_method", "token")
                     }
                 }
@@ -309,7 +309,7 @@ impl<'a> Kapsule<'a> {
             .collect::<Vec<WorkerNodeDataTemplate>>();
         context.insert("scw_ks_worker_nodes", &worker_nodes);
 
-        return Ok(context);
+        Ok(context)
     }
 
     fn managed_dns_resolvers_terraform_format(&self) -> String {
@@ -317,7 +317,7 @@ impl<'a> Kapsule<'a> {
             .dns_provider
             .resolvers()
             .iter()
-            .map(|x| format!("{}", x.clone().to_string()))
+            .map(|x| x.clone().to_string())
             .collect();
 
         terraform_list_format(managed_dns_resolvers)
@@ -511,7 +511,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.cloud_provider.organization_id().to_string(),
             self.cloud_provider.default_project_id.to_string(),
             self.region.to_string(),
-            self.cluster_name().to_string(),
+            self.cluster_name(),
             "scaleway".to_string(),
             self.context.is_test_cluster(),
             self.cloud_provider.access_key.to_string(),
@@ -910,12 +910,12 @@ impl<'a> Kubernetes for Kapsule<'a> {
         kubernetes::deploy_environment_error(self, environment)
     }
 
-    fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn pause_environment(&self, _environment: &Environment) -> Result<(), EngineError> {
         warn!("SCW.pause_environment_error() called for {}", self.name());
         Ok(())
     }
 
-    fn pause_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
         warn!("SCW.pause_environment_error() called for {}", self.name());
         Ok(())
     }
@@ -925,7 +925,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         kubernetes::delete_environment(self, environment)
     }
 
-    fn delete_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
         warn!("SCW.delete_environment_error() called for {}", self.name());
         Ok(())
     }

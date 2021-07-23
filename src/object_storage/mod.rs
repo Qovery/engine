@@ -5,7 +5,7 @@ use crate::models::{Context, StringPath};
 use std::fs::File;
 
 pub mod s3;
-pub mod scaleway_os;
+pub mod scaleway_object_storage;
 pub mod spaces;
 
 pub trait ObjectStorage {

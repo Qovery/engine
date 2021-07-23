@@ -86,8 +86,8 @@ impl ScalewayCR {
 
         // We consider every registry namespace names are unique
         if let Some(registry) = scaleway_registry_namespaces {
-            if registry.len() > 0 {
-                return Some(registry.into_iter().nth(0).unwrap());
+            if !registry.is_empty() {
+                return Some(registry.into_iter().next().unwrap());
             }
         }
 
@@ -145,7 +145,7 @@ impl ScalewayCR {
         match block_on(scaleway_api_rs::apis::images_api::delete_image1(
             &self.get_configuration(),
             self.region.to_string().as_str(),
-            image_to_delete.id.to_owned().unwrap().as_str(),
+            image_to_delete.id.unwrap().as_str(),
         )) {
             Ok(res) => Ok(res),
             Err(e) => {
@@ -232,7 +232,7 @@ impl ScalewayCR {
         match block_on(scaleway_api_rs::apis::namespaces_api::delete_namespace(
             &self.get_configuration(),
             self.region.to_string().as_str(),
-            registry_to_delete.id.to_owned().unwrap().as_str(),
+            registry_to_delete.id.unwrap().as_str(),
         )) {
             Ok(res) => Ok(res),
             Err(e) => {
@@ -253,9 +253,9 @@ impl ScalewayCR {
     ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
         // check if the repository already exists
         let registry_namespace = self.get_registry_namespace(&image);
-        if registry_namespace.is_some() {
+        if let Some(namespace) = registry_namespace {
             info!("Scaleway registry namespace {} already exists", image.name.as_str());
-            return Ok(registry_namespace.unwrap());
+            return Ok(namespace);
         }
 
         self.create_registry_namespace(&image)
@@ -315,21 +315,18 @@ impl ContainerRegistry for ScalewayCR {
 
         let envs = self.get_docker_envs();
 
-        match cmd::utilities::exec(
+        if cmd::utilities::exec(
             "docker",
             vec!["login", registry_url, "-u", "nologin", "-p", self.secret_token.as_str()],
             &envs,
-        ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "Your Scaleway account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials.",
-                    ),
-                    format!("failed to login to Scaleway {}", self.name_with_id()),
-                ));
-            }
-            _ => {}
+        ).is_err() {
+            return Err(self.engine_error(
+                EngineErrorCause::User(
+                    "Your Scaleway account seems to be no longer valid (bad Credentials). \
+                Please contact your Organization administrator to fix or change the Credentials.",
+                ),
+                format!("failed to login to Scaleway {}", self.name_with_id()),
+            ));
         };
 
         let image_url = format!("{}/{}", registry_url, image.name_with_tag());
@@ -358,7 +355,7 @@ impl ContainerRegistry for ScalewayCR {
             image.registry_name = Some(registry_name.to_string());
             image.registry_url = Some(image_url.clone());
 
-            return self.push_image(image_url.clone(), &image);
+            return self.push_image(image_url, &image);
         }
 
         Err(self.engine_error(

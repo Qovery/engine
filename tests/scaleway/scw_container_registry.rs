@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::scaleway::application::Region;
-use qovery_engine::container_registry::scaleway_cr::ScalewayCR;
+use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 
 fn regions_to_test() -> Vec<Region> {
     vec![Region::Paris, Region::Amsterdam, Region::Warsaw]

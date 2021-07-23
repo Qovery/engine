@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cmd::kubectl::kubectl_delete_objects_in_all_namespaces;
-use qovery_engine::object_storage::scaleway_os::{BucketDeleteStrategy, ScalewayOS};
+use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
 
