@@ -10,10 +10,15 @@ use crate::runtime::block_on;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest, GetObjectRequest, ListObjectsRequest,
-    ObjectIdentifier, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, S3,
+    CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest, GetObjectRequest, HeadBucketRequest,
+    ListObjectsRequest, ObjectIdentifier, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, S3,
 };
 use tokio::io;
+
+pub enum BucketDeleteStrategy {
+    HardDelete,
+    Empty,
+}
 
 // doc: https://www.scaleway.com/en/docs/object-storage-feature/
 pub struct ScalewayOS {
@@ -23,6 +28,7 @@ pub struct ScalewayOS {
     access_key: String,
     secret_token: String,
     region: Region,
+    bucket_delete_strategy: BucketDeleteStrategy,
 }
 
 impl ScalewayOS {
@@ -33,6 +39,7 @@ impl ScalewayOS {
         access_key: String,
         secret_token: String,
         region: Region,
+        bucket_delete_strategy: BucketDeleteStrategy,
     ) -> ScalewayOS {
         ScalewayOS {
             context,
@@ -41,6 +48,7 @@ impl ScalewayOS {
             access_key,
             secret_token,
             region,
+            bucket_delete_strategy,
         }
     }
 
@@ -52,6 +60,17 @@ impl ScalewayOS {
             }),
             ..scaleway_api_rs::apis::configuration::Configuration::default()
         }
+    }
+
+    fn get_s3_client(&self) -> S3Client {
+        let region = RusotoRegion::Custom {
+            name: self.region.to_string(),
+            endpoint: self.get_endpoint_url_for_region(),
+        };
+
+        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
+
+        S3Client::new_with_client(client, region.clone())
     }
 
     fn get_credentials(&self) -> StaticProvider {
@@ -82,13 +101,7 @@ impl ScalewayOS {
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
-        let region = RusotoRegion::Custom {
-            name: self.region.to_string(),
-            endpoint: self.get_endpoint_url_for_region(),
-        };
-
-        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
-        let s3_client = S3Client::new_with_client(client, region.clone());
+        let s3_client = self.get_s3_client();
 
         // make sure to delete all bucket content before trying to delete the bucket
         let objects_to_be_deleted = match block_on(s3_client.list_objects(ListObjectsRequest {
@@ -130,6 +143,16 @@ impl ScalewayOS {
 
         Ok(())
     }
+
+    pub fn bucket_exists(&self, bucket_name: &str) -> bool {
+        let s3_client = self.get_s3_client();
+
+        block_on(s3_client.head_bucket(HeadBucketRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        }))
+        .is_ok()
+    }
 }
 
 impl ObjectStorage for ScalewayOS {
@@ -164,13 +187,14 @@ impl ObjectStorage for ScalewayOS {
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
-        let region = RusotoRegion::Custom {
-            name: self.region.to_string(),
-            endpoint: self.get_endpoint_url_for_region(),
-        };
+        let s3_client = self.get_s3_client();
 
-        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
-        let s3_client = S3Client::new_with_client(client, region.clone());
+        // check if bucket already exists, if so, no need to recreate it
+        // note: we are not deleting buckets since it takes up to 24 hours to be taken into account
+        // so we better reuse existing ones
+        if self.bucket_exists(bucket_name) {
+            return Ok(());
+        }
 
         if let Err(e) = block_on(s3_client.create_bucket(CreateBucketRequest {
             bucket: bucket_name.to_string(),
@@ -213,31 +237,33 @@ impl ObjectStorage for ScalewayOS {
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
-        let region = RusotoRegion::Custom {
-            name: self.region.to_string(),
-            endpoint: self.get_endpoint_url_for_region(),
-        };
-
-        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
-        let s3_client = S3Client::new_with_client(client, region.clone());
+        let s3_client = self.get_s3_client();
 
         // make sure to delete all bucket content before trying to delete the bucket
-        self.empty_bucket(bucket_name);
-
-        match block_on(s3_client.delete_bucket(DeleteBucketRequest {
-            bucket: bucket_name.to_string(),
-            ..Default::default()
-        })) {
-            Ok(res) => Ok(()),
-            Err(e) => {
-                let message = format!(
-                    "While trying to delete object-storage bucket, name `{}`: {}",
-                    bucket_name, e
-                );
-                error!("{}", message);
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
-            }
+        if let Err(e) = self.empty_bucket(bucket_name) {
+            return Err(e);
         }
+
+        // Note: Do not delete the bucket entirely but empty its content.
+        // Bucket deletion might take up to 24 hours and during this time we are not able to create a bucket with the same name.
+        // So emptying bucket allows future reuse.
+        return match &self.bucket_delete_strategy {
+            BucketDeleteStrategy::HardDelete => match block_on(s3_client.delete_bucket(DeleteBucketRequest {
+                bucket: bucket_name.to_string(),
+                ..Default::default()
+            })) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    let message = format!(
+                        "While trying to delete object-storage bucket, name `{}`: {}",
+                        bucket_name, e
+                    );
+                    error!("{}", message);
+                    return Err(self.engine_error(EngineErrorCause::Internal, message));
+                }
+            },
+            BucketDeleteStrategy::Empty => Ok(()), // Do not delete the bucket
+        };
     }
 
     fn get(&self, bucket_name: &str, object_key: &str, use_cache: bool) -> Result<(StringPath, File), EngineError> {
@@ -271,13 +297,7 @@ impl ObjectStorage for ScalewayOS {
             }
         }
 
-        let region = RusotoRegion::Custom {
-            name: self.region.to_string(),
-            endpoint: self.get_endpoint_url_for_region(),
-        };
-
-        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
-        let s3_client = S3Client::new_with_client(client, region.clone());
+        let s3_client = self.get_s3_client();
 
         match block_on(s3_client.get_object(GetObjectRequest {
             bucket: bucket_name.to_string(),
@@ -342,13 +362,7 @@ impl ObjectStorage for ScalewayOS {
             format!("object-storage/scaleway_os/{}", self.name()),
         );
 
-        let region = RusotoRegion::Custom {
-            name: self.region.to_string(),
-            endpoint: self.get_endpoint_url_for_region(),
-        };
-
-        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
-        let s3_client = S3Client::new_with_client(client, region.clone());
+        let s3_client = self.get_s3_client();
 
         match block_on(s3_client.put_object(PutObjectRequest {
             bucket: bucket_name.to_string(),

@@ -463,7 +463,20 @@ impl<'a> Kubernetes for Kapsule<'a> {
             }
         };
 
-        // Push config file to object storage
+        // push config file to object storage
+        if let Err(e) = self
+            .object_storage
+            .create_bucket(self.kubeconfig_bucket_name().as_str())
+        {
+            let message = format!(
+                "Cannot create object storage bucket for cluster {} with id {}",
+                self.name(),
+                self.id()
+            );
+            error!("{}", message);
+            return Err(e);
+        }
+
         let kubeconfig_name = format!("{}.yaml", self.id());
         if let Err(e) = self.object_storage.put(
             self.kubeconfig_bucket_name().as_str(),
@@ -740,20 +753,30 @@ impl<'a> Kubernetes for Kapsule<'a> {
         );
 
         // required to avoid namespace stuck on deletion
-        match uninstall_cert_manager(
+        if let Err(e) = uninstall_cert_manager(
             &kubernetes_config_file_path,
             self.cloud_provider().credentials_environment_variables(),
         ) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(EngineError::new(
-                    Internal,
-                    self.engine_error_scope(),
-                    self.context().execution_id(),
-                    e.message,
-                ))
-            }
-        };
+            return Err(EngineError::new(
+                Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ));
+        }
+
+        info!("Delete Qovery managed object storage");
+        if let Err(e) = self
+            .object_storage
+            .delete_bucket(self.kubeconfig_bucket_name().as_str())
+        {
+            return Err(EngineError::new(
+                Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ));
+        }
 
         info!("Deleting Qovery managed helm charts");
         let qovery_namespaces = get_qovery_managed_namespaces();

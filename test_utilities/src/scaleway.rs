@@ -10,7 +10,7 @@ use qovery_engine::models::Context;
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use qovery_engine::object_storage::scaleway_os::ScalewayOS;
+use qovery_engine::object_storage::scaleway_os::{ScalewayOS, BucketDeleteStrategy};
 use tracing::error;
 
 pub const SCW_TEST_CLUSTER_NAME: &str = "Qovery test cluster";
@@ -94,6 +94,7 @@ pub fn scw_object_storage(context: Context, region: Region) -> ScalewayOS {
         secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string()),
         secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string()),
         region,
+        BucketDeleteStrategy::Empty, // do not delete bucket due to deletion 24h delay
     )
 }
 
