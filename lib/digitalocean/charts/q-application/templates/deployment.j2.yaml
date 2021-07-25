@@ -16,6 +16,10 @@ spec:
   replicas: {{ total_instances }}
   strategy:
     type: RollingUpdate
+    {% if total_instances == 1 %}
+    rollingUpdate:
+      maxSurge: 1
+    {% endif %}
   selector:
     matchLabels:
       ownerId: {{ owner_id }}
