@@ -72,11 +72,17 @@ impl ScalewayOS {
     }
 
     fn is_bucket_name_valid(bucket_name: &str) -> Result<(), Option<String>> {
-        // TODO(benjaminch): to be implemented
+        if bucket_name.is_empty() {
+            return Err(Some("bucket name cannot be empty".to_string()));
+        }
         // From Scaleway doc
         // Note: The SSL certificate does not support bucket names containing additional dots (.).
         // You may receive a SSL warning in your browser when accessing a bucket like my.bucket.name.s3.fr-par.scw.cloud
         // and it is recommended to use dashes (-) instead: my-bucket-name.s3.fr-par.scw.cloud.
+        if bucket_name.contains('.') {
+            return Err(Some("bucket name cannot contain '.' in its name, recommended to use '-' instead".to_string()));
+        }
+
         Ok(())
     }
 
@@ -363,6 +369,47 @@ impl ObjectStorage for ScalewayOS {
                 error!("{}", message);
                 Err(self.engine_error(EngineErrorCause::Internal, message))
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestCase<'a> {
+        bucket_name_input: &'a str,
+        expected_output: Result<(), Option<String>>,
+        description: &'a str,
+    }
+
+    #[test]
+    fn test_is_bucket_name_valid() {
+        // setup:
+        let test_cases: Vec<TestCase> = vec![
+            TestCase {
+                bucket_name_input: "",
+                expected_output: Err(Some(String::from("bucket name cannot be empty"))),
+                description: "bucket name is empty",
+            },
+            TestCase {
+                bucket_name_input: "containing.dot",
+                expected_output: Err(Some(String::from("bucket name cannot contain '.' in its name, recommended to use '-' instead"))),
+                description: "bucket name contains dot char",
+            },
+            TestCase {
+                bucket_name_input: "valid",
+                expected_output: Ok(()),
+                description: "bucket name is valid",
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result = ScalewayOS::is_bucket_name_valid(tc.bucket_name_input);
+
+            // verify:
+            assert_eq!(tc.expected_output, result);
         }
     }
 }
