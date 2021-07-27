@@ -319,7 +319,9 @@ impl ContainerRegistry for ScalewayCR {
             "docker",
             vec!["login", registry_url, "-u", "nologin", "-p", self.secret_token.as_str()],
             &envs,
-        ).is_err() {
+        )
+        .is_err()
+        {
             return Err(self.engine_error(
                 EngineErrorCause::User(
                     "Your Scaleway account seems to be no longer valid (bad Credentials). \

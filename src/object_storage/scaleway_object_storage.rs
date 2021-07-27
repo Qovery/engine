@@ -80,7 +80,9 @@ impl ScalewayOS {
         // You may receive a SSL warning in your browser when accessing a bucket like my.bucket.name.s3.fr-par.scw.cloud
         // and it is recommended to use dashes (-) instead: my-bucket-name.s3.fr-par.scw.cloud.
         if bucket_name.contains('.') {
-            return Err(Some("bucket name cannot contain '.' in its name, recommended to use '-' instead".to_string()));
+            return Err(Some(
+                "bucket name cannot contain '.' in its name, recommended to use '-' instead".to_string(),
+            ));
         }
 
         Ok(())
@@ -394,7 +396,9 @@ mod tests {
             },
             TestCase {
                 bucket_name_input: "containing.dot",
-                expected_output: Err(Some(String::from("bucket name cannot contain '.' in its name, recommended to use '-' instead"))),
+                expected_output: Err(Some(String::from(
+                    "bucket name cannot contain '.' in its name, recommended to use '-' instead",
+                ))),
                 description: "bucket name contains dot char",
             },
             TestCase {

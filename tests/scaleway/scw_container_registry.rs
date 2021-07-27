@@ -12,16 +12,19 @@ fn regions_to_test() -> Vec<Region> {
     vec![Region::Paris, Region::Amsterdam, Region::Warsaw]
 }
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_push_image() {
     // TODO(benjaminch): Implement
 }
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_delete_image() {
     // TODO(benjaminch): Implement
 }
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_get_registry_namespace() {
     // setup:
@@ -76,6 +79,7 @@ fn test_get_registry_namespace() {
     }
 }
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_create_registry_namespace() {
     // setup:
@@ -123,6 +127,7 @@ fn test_create_registry_namespace() {
     }
 }
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_delete_registry_namespace() {
     // setup:
@@ -165,6 +170,7 @@ fn test_delete_registry_namespace() {
     }
 }
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_get_or_create_registry_namespace() {
     // setup:

@@ -150,6 +150,10 @@ impl<'a> Kapsule<'a> {
         format!("qovery-kubeconfigs-{}", self.id())
     }
 
+    fn logs_bucket_name(&self) -> String {
+        format!("qovery-logs-{}", self.id)
+    }
+
     fn upgrade(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
         // TODO(benjaminch): to be implemented
         Ok(())
@@ -210,6 +214,7 @@ impl<'a> Kapsule<'a> {
 
         // Qovery
         context.insert("object_storage_kubeconfig_bucket", &self.kubeconfig_bucket_name());
+        context.insert("object_storage_logs_bucket", &self.logs_bucket_name());
 
         context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
         context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
@@ -469,7 +474,8 @@ impl<'a> Kubernetes for Kapsule<'a> {
             .create_bucket(self.kubeconfig_bucket_name().as_str())
         {
             let message = format!(
-                "Cannot create object storage bucket for cluster {} with id {}",
+                "Cannot create object storage bucket {} for cluster {} with id {}",
+                self.kubeconfig_bucket_name(),
                 self.name(),
                 self.id()
             );
@@ -491,6 +497,18 @@ impl<'a> Kubernetes for Kapsule<'a> {
         ) {
             let message = format!(
                 "Cannot put kubeconfig into object storage bucket for cluster {} with id {}",
+                self.name(),
+                self.id()
+            );
+            error!("{}", message);
+            return Err(e);
+        }
+
+        // create logs object storage bucket
+        if let Err(e) = self.object_storage.create_bucket(self.logs_bucket_name().as_str()) {
+            let message = format!(
+                "Cannot create object storage bucket {} for cluster {} with id {}",
+                self.logs_bucket_name(),
                 self.name(),
                 self.id()
             );
@@ -765,11 +783,20 @@ impl<'a> Kubernetes for Kapsule<'a> {
             ));
         }
 
-        info!("Delete Qovery managed object storage");
+        info!("Delete Qovery managed object storages");
         if let Err(e) = self
             .object_storage
             .delete_bucket(self.kubeconfig_bucket_name().as_str())
         {
+            return Err(EngineError::new(
+                Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ));
+        }
+
+        if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
             return Err(EngineError::new(
                 Internal,
                 self.engine_error_scope(),

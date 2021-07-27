@@ -85,7 +85,12 @@ fn create_upgrade_and_destroy_kapsule_cluster(
     });
 }
 
-fn create_and_destroy_eks_cluster(region: Region, secrets: FuncTestsSecrets, test_infra_pause: bool, test_name: &str) {
+fn create_and_destroy_kapsule_cluster(
+    region: Region,
+    secrets: FuncTestsSecrets,
+    test_infra_pause: bool,
+    test_name: &str,
+) {
     engine_run_test(|| {
         init();
 
@@ -168,7 +173,7 @@ fn create_and_destroy_eks_cluster(region: Region, secrets: FuncTestsSecrets, tes
 fn create_and_destroy_kapsule_cluster_par() {
     let region = Region::Paris;
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(
+    create_and_destroy_kapsule_cluster(
         region,
         secrets,
         false,

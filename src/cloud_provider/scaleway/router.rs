@@ -8,9 +8,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::error::{
-    EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
-};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind};
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
@@ -141,10 +139,7 @@ impl Helm for Router {
     }
 
     fn helm_chart_values_dir(&self) -> String {
-        format!(
-            "{}/digitalocean/chart_values/nginx-ingress",
-            self.context.lib_root_dir()
-        )
+        format!("{}/scaleway/chart_values/nginx-ingress", self.context.lib_root_dir())
     }
 
     fn helm_chart_external_name_service_dir(&self) -> String {
@@ -166,7 +161,7 @@ impl StatelessService for Router {}
 
 impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("DigitalOcean.router.on_create() called for {}", self.name());
+        info!("Scaleway.router.on_create() called for {}", self.name());
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
