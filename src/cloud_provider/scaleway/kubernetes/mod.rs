@@ -783,28 +783,6 @@ impl<'a> Kubernetes for Kapsule<'a> {
             ));
         }
 
-        info!("Delete Qovery managed object storages");
-        if let Err(e) = self
-            .object_storage
-            .delete_bucket(self.kubeconfig_bucket_name().as_str())
-        {
-            return Err(EngineError::new(
-                Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
-        }
-
-        if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
-            return Err(EngineError::new(
-                Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
-        }
-
         info!("Deleting Qovery managed helm charts");
         let qovery_namespaces = get_qovery_managed_namespaces();
         for qovery_namespace in qovery_namespaces.iter() {
@@ -904,21 +882,46 @@ impl<'a> Kubernetes for Kapsule<'a> {
                 let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
                 info!("{}", &message);
                 send_to_customer(&message);
-                Ok(())
             }
-            Err(Operation { error, .. }) => Err(error),
-            Err(retry::Error::Internal(msg)) => Err(EngineError::new(
-                EngineErrorCause::Internal,
+            Err(Operation { error, .. }) => return Err(error),
+            Err(retry::Error::Internal(msg)) => {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    Some(format!(
+                        "Error while deleting cluster {} with id {}: {}",
+                        self.name(),
+                        self.id(),
+                        msg
+                    )),
+                ))
+            }
+        }
+
+        info!("Delete Qovery managed object storages");
+        if let Err(e) = self
+            .object_storage
+            .delete_bucket(self.kubeconfig_bucket_name().as_str())
+        {
+            return Err(EngineError::new(
+                Internal,
                 self.engine_error_scope(),
                 self.context().execution_id(),
-                Some(format!(
-                    "Error while deleting cluster {} with id {}: {}",
-                    self.name(),
-                    self.id(),
-                    msg
-                )),
-            )),
+                e.message,
+            ));
         }
+
+        if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
+            return Err(EngineError::new(
+                Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ));
+        }
+
+        Ok(())
     }
 
     fn on_delete_error(&self) -> Result<(), EngineError> {
