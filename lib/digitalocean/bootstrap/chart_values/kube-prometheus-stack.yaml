@@ -1,0 +1,82 @@
+defaultRules:
+  create: true
+  rules:
+    etcd: false
+    kubeApiserver: false
+    kubeApiserverAvailability: false
+    kubeApiserverError: false
+    kubeApiserverSlos: false
+    kubeStateMetrics: false
+
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: [ 'job' ]
+      group_wait: 30s
+      group_interval: 2m
+      repeat_interval: 3h
+      receiver: 'discord_webhook'
+      routes:
+        - receiver: 'null'
+          match:
+            alertname: Watchdog
+        - receiver: 'null'
+          match:
+            alertname: KubeDeploymentReplicasMismatch
+        - receiver: 'null'
+          match:
+            alertname: CPUThrottlingHigh
+        - receiver: 'discord_webhook'
+    receivers:
+      - name: 'null'
+      - name: 'discord_webhook'
+        webhook_configs:
+          - url: 'http://alertmanager-discord.prometheus.svc:9095'
+
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: do-volume-standard-0
+          accessModes: [ "ReadWriteOnce" ]
+          resources:
+            requests:
+              storage: "10Gi"
+
+  externalUrl: "http://127.0.0.1:9093/"
+
+grafana:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: false
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    retention: 90d
+    retentionSize: "40GB"
+    walCompression: true
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: do-volume-standard-0
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: "50Gi"
