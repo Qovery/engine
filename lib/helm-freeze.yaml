@@ -13,8 +13,9 @@ charts:
       Need to look if we can move them out of this repo
   - name: nginx-ingress
     version: 1.35.0
-  - name: prometheus-operator
-    version: 8.15.12
+  - name: kube-prometheus-stack
+    repo_name: prometheus-community
+    version: 17.0.3
   - name: aws-node-termination-handler
     repo_name: aws
     dest: aws-bootstrap
