@@ -31,9 +31,6 @@ fn create_upgrade_and_destroy_kapsule_cluster(
 
         let scw_cluster = test_utilities::scaleway::cloud_provider_scaleway(&context);
         let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
-
-        let object_storage = test_utilities::scaleway::scw_object_storage(context.clone(), region);
-
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
@@ -44,7 +41,6 @@ fn create_upgrade_and_destroy_kapsule_cluster(
             region,
             &scw_cluster,
             &cloudflare,
-            object_storage,
             nodes,
             test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
         );
@@ -104,9 +100,6 @@ fn create_and_destroy_kapsule_cluster(
 
         let scw_cluster = test_utilities::scaleway::cloud_provider_scaleway(&context);
         let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
-
-        let object_storage = test_utilities::scaleway::scw_object_storage(context.clone(), region);
-
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
@@ -117,7 +110,6 @@ fn create_and_destroy_kapsule_cluster(
             region,
             &scw_cluster,
             &cloudflare,
-            object_storage,
             nodes,
             test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
         );
