@@ -10,6 +10,7 @@ use tempfile::NamedTempFile;
 
 const TEST_REGION: Region = Region::Paris;
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_delete_bucket_hard_delete_strategy() {
     // setup:
@@ -42,6 +43,7 @@ fn test_delete_bucket_hard_delete_strategy() {
     assert_eq!(false, scaleway_os.bucket_exists(bucket_name.as_str()))
 }
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_delete_bucket_empty_strategy() {
     // setup:
@@ -79,6 +81,7 @@ fn test_delete_bucket_empty_strategy() {
         .unwrap_or_else(|_| panic!("error deleting object storage bucket {}", bucket_name));
 }
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_create_bucket() {
     // setup:
@@ -111,6 +114,7 @@ fn test_create_bucket() {
         .unwrap_or_else(|_| panic!("error deleting object storage bucket {}", bucket_name));
 }
 
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_put_file() {
     // setup:
@@ -159,6 +163,8 @@ fn test_put_file() {
         .delete_bucket(bucket_name.as_str())
         .unwrap_or_else(|_| panic!("error deleting object storage bucket {}", bucket_name));
 }
+
+#[cfg(feature = "test-scw-infra")]
 #[test]
 fn test_get_file() {
     // setup:
