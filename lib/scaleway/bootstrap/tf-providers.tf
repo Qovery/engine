@@ -41,15 +41,14 @@ provider "scaleway" {
 }
 
 provider "vault" {
-  # TODO(benjaminch): un-comment and let jinja template to process it
-  #{% if vault_auth_method == "app_role" and not test_cluster %}
-  #auth_login {
-  #  path = "auth/approle/login"
-  #
-  #  parameters = {
-  #    role_id   = "{{ vault_role_id }}"
-  #    secret_id = "{{ vault_secret_id }}"
-  #  }
-  #}
-  #{% endif %}
+  {% if vault_auth_method == "app_role" and not test_cluster %}
+  auth_login {
+    path = "auth/approle/login"
+
+    parameters = {
+      role_id   = "{{ vault_role_id }}"
+      secret_id = "{{ vault_secret_id }}"
+    }
+  }
+  {% endif %}
 }
