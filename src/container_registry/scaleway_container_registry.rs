@@ -191,7 +191,7 @@ impl ScalewayCR {
             &self.get_configuration(),
             self.region.to_string().as_str(),
             scaleway_api_rs::models::inline_object_23::InlineObject23 {
-                name: image.registry_name.to_owned().unwrap(),
+                name: image.name.clone(),
                 description: None,
                 project_id: Some(self.default_project_id.clone()),
                 is_public: Some(false),
@@ -304,20 +304,44 @@ impl ContainerRegistry for ScalewayCR {
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
-        let undefined_placeholder = "".to_string();
-        let registry_url = image.registry_url.as_ref().unwrap_or(&undefined_placeholder).as_str();
-        let registry_name = image.registry_name.as_ref().unwrap_or(&undefined_placeholder).as_str();
+        let mut image = image.clone();
+        let registry_url: String;
+        let registry_name: String;
 
-        let _ = match self.create_registry_namespace(&image) {
-            Ok(_) => info!("Scaleway {} has been created", registry_name),
-            Err(_) => warn!("Scaleway {} already exists", registry_name),
-        };
+        match self.create_registry_namespace(&image) {
+            Ok(registry) => {
+                info!(
+                    "Scaleway registry namespace for {} has been created",
+                    image.name.as_str()
+                );
+                image.registry_name = registry.name.clone();
+                image.registry_url = registry.endpoint.clone();
+                image.registry_secret = Some(self.secret_token.clone());
+                registry_url = image.registry_url.clone().unwrap_or("undefined".to_string());
+                registry_name = registry.clone().name.unwrap();
+            }
+            Err(e) => {
+                error!(
+                    "Scaleway registry namespace for {} cannot be created, error: {:?}",
+                    image.name.as_str(),
+                    e
+                );
+                return Err(e);
+            }
+        }
 
         let envs = self.get_docker_envs();
 
         if cmd::utilities::exec(
             "docker",
-            vec!["login", registry_url, "-u", "nologin", "-p", self.secret_token.as_str()],
+            vec![
+                "login",
+                registry_url.as_str(),
+                "-u",
+                "nologin",
+                "-p",
+                self.secret_token.as_str(),
+            ],
             &envs,
         )
         .is_err()
@@ -335,7 +359,7 @@ impl ContainerRegistry for ScalewayCR {
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        if !force_push && self.does_image_exists(image) {
+        if !force_push && self.does_image_exists(&image) {
             // check if image does exist - if yes, do not upload it again
             let info_message = format!(
                 "image {:?} found on Scaleway {} repository, container build is not required",
@@ -353,17 +377,29 @@ impl ContainerRegistry for ScalewayCR {
                 self.context.execution_id(),
             ));
 
-            let mut image = image.clone();
-            image.registry_name = Some(registry_name.to_string());
-            image.registry_url = Some(image_url.clone());
+            let image = image.clone();
 
             return self.push_image(image_url, &image);
         }
 
-        Err(self.engine_error(
-            EngineErrorCause::Internal,
-            "unknown error occurring during docker push".to_string(),
-        ))
+        let info_message = format!(
+            "image {:?} does not exist on Scaleway {} repository, starting image upload",
+            image,
+            self.name()
+        );
+
+        info!("{}", info_message.as_str());
+
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
+
+        self.push_image(image_url, &image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {

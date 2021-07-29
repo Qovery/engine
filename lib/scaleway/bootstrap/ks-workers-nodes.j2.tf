@@ -1,7 +1,7 @@
 {% for scw_ks_worker_node in scw_ks_worker_nodes %}
 resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   cluster_id    = scaleway_k8s_cluster.kubernetes_cluster.id
-  name          = "qovery-${var.kubernetes_cluster_id}"
+  name          = var.kubernetes_cluster_id
   node_type     = "DEV1-L" # TODO(benjaminch): to be changed
 
   # use Scaleway built-in cluster autoscaler

@@ -1,5 +1,5 @@
 resource "scaleway_k8s_cluster" "kubernetes_cluster" {
-  name    = "qovery-${var.kubernetes_cluster_id}"
+  name    = var.kubernetes_cluster_id
   version = var.scaleway_ks_version
   cni     = "cilium"
 

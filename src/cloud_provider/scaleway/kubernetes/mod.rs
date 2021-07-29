@@ -36,7 +36,7 @@ use std::path::PathBuf;
 use tera::Context as TeraContext;
 
 #[derive(Clone)]
-pub struct Options {
+pub struct KapsuleOptions {
     vpc_cidr_block: String,
     // Qovery
     pub qovery_api_url: String,
@@ -60,7 +60,7 @@ pub struct Options {
     pub tls_email_report: String,
 }
 
-impl Options {
+impl KapsuleOptions {
     pub fn new(
         vpc_cidr_block: String,
         qovery_api_url: String,
@@ -78,8 +78,8 @@ impl Options {
         scaleway_secret_key: String,
         scaleway_default_zone: u8,
         tls_email_report: String,
-    ) -> Options {
-        Options {
+    ) -> KapsuleOptions {
+        KapsuleOptions {
             vpc_cidr_block,
             qovery_api_url,
             qovery_nats_url,
@@ -111,7 +111,7 @@ pub struct Kapsule<'a> {
     object_storage: ScalewayOS,
     nodes: Vec<Node>,
     template_directory: String,
-    options: Options,
+    options: KapsuleOptions,
     listeners: Listeners,
 }
 
@@ -126,7 +126,7 @@ impl<'a> Kapsule<'a> {
         dns_provider: &'a dyn DnsProvider,
         object_storage: ScalewayOS,
         nodes: Vec<Node>,
-        options: Options,
+        options: KapsuleOptions,
     ) -> Kapsule<'a> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
 
@@ -468,7 +468,10 @@ impl<'a> Kubernetes for Kapsule<'a> {
             }
         };
 
-        // push config file to object storage
+        // TODO(benjaminch): move this elsewhere
+        // Create object-storage buckets
+        info!("Create Qovery managed object storage buckets");
+        // Kubeconfig bucket
         if let Err(e) = self
             .object_storage
             .create_bucket(self.kubeconfig_bucket_name().as_str())
@@ -483,6 +486,19 @@ impl<'a> Kubernetes for Kapsule<'a> {
             return Err(e);
         }
 
+        // Logs bucket
+        if let Err(e) = self.object_storage.create_bucket(self.logs_bucket_name().as_str()) {
+            let message = format!(
+                "Cannot create object storage bucket {} for cluster {} with id {}",
+                self.logs_bucket_name(),
+                self.name(),
+                self.id()
+            );
+            error!("{}", message);
+            return Err(e);
+        }
+
+        // push config file to object storage
         let kubeconfig_name = format!("{}.yaml", self.id());
         if let Err(e) = self.object_storage.put(
             self.kubeconfig_bucket_name().as_str(),
@@ -497,18 +513,6 @@ impl<'a> Kubernetes for Kapsule<'a> {
         ) {
             let message = format!(
                 "Cannot put kubeconfig into object storage bucket for cluster {} with id {}",
-                self.name(),
-                self.id()
-            );
-            error!("{}", message);
-            return Err(e);
-        }
-
-        // create logs object storage bucket
-        if let Err(e) = self.object_storage.create_bucket(self.logs_bucket_name().as_str()) {
-            let message = format!(
-                "Cannot create object storage bucket {} for cluster {} with id {}",
-                self.logs_bucket_name(),
                 self.name(),
                 self.id()
             );
@@ -877,6 +881,30 @@ impl<'a> Kubernetes for Kapsule<'a> {
                 },
             );
 
+        // TODO(benjaminch): move this elsewhere
+        // Delete object-storage buckets
+        info!("Delete Qovery managed object storage buckets");
+        if let Err(e) = self
+            .object_storage
+            .delete_bucket(self.kubeconfig_bucket_name().as_str())
+        {
+            return Err(EngineError::new(
+                Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ));
+        }
+
+        if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
+            return Err(EngineError::new(
+                Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ));
+        }
+
         match terraform_result {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
@@ -897,28 +925,6 @@ impl<'a> Kubernetes for Kapsule<'a> {
                     )),
                 ))
             }
-        }
-
-        info!("Delete Qovery managed object storages");
-        if let Err(e) = self
-            .object_storage
-            .delete_bucket(self.kubeconfig_bucket_name().as_str())
-        {
-            return Err(EngineError::new(
-                Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
-        }
-
-        if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
-            return Err(EngineError::new(
-                Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
         }
 
         Ok(())
