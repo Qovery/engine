@@ -1,7 +1,7 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::{
-    cloudflare_create_cname_record, dns_provider_cloudflare, DnsRecord, DnsRecordType,
+    basic_dns_record_check_exists, cloudflare_create_record, dns_provider_cloudflare, DnsRecord, DnsRecordType,
 };
 use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods_aws, is_pod_restarted_aws_env, FuncTestsSecrets,
@@ -10,7 +10,7 @@ use qovery_engine::models::{Action, Clone2, Context, CustomDomain, EnvironmentAc
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::context;
 use test_utilities::utilities::init;
-use tracing::{span, Level};
+use tracing::{error, info, span, Level};
 
 // TODO:
 //   - Tests that applications are always restarted when recieving a CREATE action
@@ -297,38 +297,34 @@ fn deploy_a_working_environment_with_custom_domain() {
         let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
 
         // set custom DNS on Cloudflare
-        //let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
+        environment.routers[0].custom_domains = vec![CustomDomain {
+            domain: format!("testfunc-{}.{}", generate_id(), secrets.CUSTOM_TEST_DOMAIN.unwrap()),
+            target_domain: environment.routers[0].default_domain.clone(),
+        }];
+
         let cloudflare_context = dns_provider_cloudflare(&context);
         let dns_record = DnsRecord {
             dns_type: DnsRecordType::CNAME,
-            src: format!("testfunc-{}.{}", generate_id(), secrets.CUSTOM_TEST_DOMAIN.unwrap()),
-            dest: format!("testfunc-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap()),
-            ttl: 300,
+            src: environment.routers[0].custom_domains[0].domain.clone(),
+            dest: environment.routers[0].custom_domains[0].target_domain.clone(),
+            ttl: 120,
             priority: 10,
             proxied: false,
             zone_id: secrets.CLOUDFLARE_CUSTOM_TEST_DOMAIN_ZONE_ID.unwrap(),
         };
 
-        let x = cloudflare_create_cname_record(&cloudflare_context, &dns_record);
-
-        environment.routers = environment
-            .routers
-            .into_iter()
-            .map(|mut router| {
-                router.custom_domains = vec![CustomDomain {
-                    // should be the client domain
-                    domain: dns_record.src.to_string(),
-                    // should be our domain
-                    target_domain: dns_record.dest.to_string(),
-                }];
-                router
-            })
-            .collect::<Vec<qovery_engine::models::Router>>();
+        match cloudflare_create_record(&cloudflare_context, &dns_record) {
+            Ok(x) => info!("{:?}", x),
+            Err(e) => {
+                error!("{:?}", e);
+                panic!("error while creating cloudflare record")
+            }
+        };
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
@@ -337,7 +333,15 @@ fn deploy_a_working_environment_with_custom_domain() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check TLS
+        // check DNS
+        if let Err(e) = basic_dns_record_check_exists(environment.routers[0].custom_domains[0].domain.clone()) {
+            error!(
+                "custom DNS check failed: {} -> {}",
+                environment.routers[0].custom_domains[0].domain.clone(),
+                environment.routers[0].custom_domains[0].target_domain.clone(),
+            );
+            panic!("{}", e)
+        };
 
         match delete_environment(&context_for_delete, &ea_delete) {
             TransactionResult::Ok => assert!(true),

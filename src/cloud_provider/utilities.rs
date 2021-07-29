@@ -265,7 +265,7 @@ pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> 
     Ok(VersionsNumber { major, minor, patch })
 }
 
-fn cloudflare_dns_resolver() -> Resolver {
+pub fn cloudflare_dns_resolver() -> Resolver {
     let mut resolver_options = ResolverOpts::default();
 
     //  We want to avoid cache and using host file of the host, as some provider force caching

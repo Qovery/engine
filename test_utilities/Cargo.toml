@@ -18,6 +18,8 @@ curl = "0.4.34"
 reqwest = { version = "0.11.4", features = ["blocking", "json"] }
 tracing = "0.1"
 tracing-subscriber = "0.2"
+trust-dns-resolver = "0.20.3"
+libtls = "1.2.0"
 retry = "1.0.0"
 time = "0.2.23"
 hashicorp_vault = "2.0.1"

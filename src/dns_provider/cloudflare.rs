@@ -4,6 +4,7 @@ use crate::dns_provider::{DnsProvider, Kind};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::Context;
 
+#[derive(Debug)]
 pub struct Cloudflare {
     context: Context,
     id: String,

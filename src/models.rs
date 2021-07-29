@@ -940,7 +940,7 @@ impl<'a> ListenersHelper<'a> {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct Context {
     execution_id: String,
     workspace_root_dir: String,
