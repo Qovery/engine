@@ -1,6 +1,6 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::models::{CustomDomain, Route};
+use crate::cloud_provider::models::{CustomDomain, Route, RouteDataTemplate, CustomDomainDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
     Service, ServiceType, StatelessService,
@@ -105,6 +105,45 @@ impl Service for Router {
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
         let context = default_tera_context(self, kubernetes, environment);
+
+        let applications = environment
+            .stateless_services
+            .iter()
+            .filter(|x| x.service_type() == ServiceType::Application)
+            .collect::<Vec<_>>();
+
+        let _custom_domain_data_templates = self
+            .custom_domains
+            .iter()
+            .map(|cd| {
+                let domain_hash = crate::crypto::to_sha1_truncate_16(cd.domain.as_str());
+                CustomDomainDataTemplate {
+                    domain: cd.domain.clone(),
+                    domain_hash,
+                    target_domain: cd.target_domain.clone(),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let _route_data_templates = self
+            .routes
+            .iter()
+            .map(|r| {
+                match applications
+                    .iter()
+                    .find(|app| app.name() == r.application_name.as_str())
+                {
+                    Some(application) => application.private_port().map(|private_port| RouteDataTemplate {
+                        path: r.path.clone(),
+                        application_name: application.sanitized_name(),
+                        application_port: private_port,
+                    }),
+                    _ => None,
+                }
+            })
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
 
         Ok(context)
     }
