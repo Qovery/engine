@@ -494,7 +494,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context, secrets: Func
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + &test_domain,
+                default_domain: format!("{}.{}", generate_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -506,7 +506,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context, secrets: Func
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + &test_domain,
+                default_domain: format!("{}.{}", generate_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -518,7 +518,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context, secrets: Func
                 id: generate_id(),
                 name: "third-router".to_string(),
                 action: Action::Create,
-                default_domain: generate_id() + &test_domain,
+                default_domain: format!("{}.{}", generate_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -623,7 +623,7 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_ref(),
+            default_domain: format!("{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap()),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -640,7 +640,7 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
 pub fn environnement_2_app_2_routers_1_psql(context: &Context, secrets: FuncTestsSecrets) -> Environment {
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
     let test_domain = secrets.DEFAULT_TEST_DOMAIN.unwrap();
-    let fqdn = format!("{}.{}", fqdn_id.clone(), &test_domain);
+    let fqdn = format!("{}.{}", fqdn_id.clone(), test_domain);
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
@@ -872,7 +872,7 @@ pub fn echo_app_environment(context: &Context, secrets: FuncTestsSecrets) -> Env
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_str(),
+            default_domain: format!("{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap()),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -965,7 +965,7 @@ pub fn environment_only_http_server_router(context: &Context, secrets: FuncTests
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_str(),
+            default_domain: format!("{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap()),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {

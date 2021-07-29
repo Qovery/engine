@@ -185,11 +185,9 @@ impl Create for ExternalService {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.external_service.on_create() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_user_stateless_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_user_stateless_service(target, self)
+        })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -199,37 +197,28 @@ impl Create for ExternalService {
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.external_service.on_create_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_stateless_service_error(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_stateless_service_error(target, self)
+        })
     }
 }
 
 impl Pause for ExternalService {
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.external_service.on_pause() called for {}", self.name());
-
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        info!(
+            "AWS.external_service.on_pause() called for {}, doing nothing",
+            self.name()
+        );
+        Ok(())
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.external_service.on_pause_error() called for {}", self.name());
-
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        Ok(())
     }
 }
 
@@ -237,11 +226,9 @@ impl Delete for ExternalService {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.external_service.on_delete() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateless_service(target, self, false)
+        })
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -251,11 +238,9 @@ impl Delete for ExternalService {
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("AWS.external_service.on_delete_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateless_service(target, self, true)
+        })
     }
 }
 

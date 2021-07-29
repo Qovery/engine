@@ -120,11 +120,11 @@ impl LocalDocker {
                 let line_string = line.unwrap();
                 error!("{}", line_string.as_str());
 
-                lh.error(ProgressInfo::new(
+                lh.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Application {
                         id: build.image.application_id.clone(),
                     },
-                    ProgressLevel::Error,
+                    ProgressLevel::Warn,
                     Some(line_string.as_str()),
                     self.context.execution_id(),
                 ));
@@ -136,7 +136,7 @@ impl LocalDocker {
             Ok(_) => Ok(BuildResult { build }),
             Err(err) => Err(self.engine_error(
                 EngineErrorCause::User(
-                    "It looks like there is something wrong in your Dockerfile. Try run locally using `qovery run` or build with `docker build --no-cache`",
+                    "It looks like there is something wrong in your Dockerfile. Try building the application locally with `docker build --no-cache`.",
                 ),
                 format!(
                     "error while building container image {}. Error: {:?}",
@@ -216,11 +216,11 @@ impl LocalDocker {
                     let line_string = line.unwrap();
                     error!("{}", line_string.as_str());
 
-                    lh.error(ProgressInfo::new(
+                    lh.deployment_in_progress(ProgressInfo::new(
                         ProgressScope::Application {
                             id: build.image.application_id.clone(),
                         },
-                        ProgressLevel::Error,
+                        ProgressLevel::Warn,
                         Some(line_string.as_str()),
                         self.context.execution_id(),
                     ));

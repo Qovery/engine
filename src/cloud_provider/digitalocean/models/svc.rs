@@ -24,7 +24,6 @@ pub struct Metadata {
     pub creation_timestamp: String,
     pub finalizers: Vec<String>,
     pub labels: Labels,
-    pub managed_fields: Vec<ManagedField>,
     pub name: String,
     pub namespace: String,
     pub resource_version: String,

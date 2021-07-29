@@ -353,7 +353,10 @@ master:
     envId: {{ environment_id }}
     databaseId: {{ id }}
   annotations: {}
-  podLabels: {}
+  podLabels:
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    databaseId: {{ id }}
   podAnnotations: {}
   priorityClassName: ""
   ## Extra init containers

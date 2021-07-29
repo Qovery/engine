@@ -31,7 +31,7 @@ where
     F: FnMut(Result<String, Error>),
     X: FnMut(Result<String, Error>),
 {
-    match exec_with_envs_and_output(
+    if let Err(err) = exec_with_envs_and_output(
         "kubectl",
         args.clone(),
         envs.clone(),
@@ -39,13 +39,10 @@ where
         stderr_output,
         Duration::max_value(),
     ) {
-        Err(err) => {
-            let args_string = args.join(" ");
-            let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
-            error!("{}", &msg);
-            return Err(err);
-        }
-        Ok(_) => {}
+        let args_string = args.join(" ");
+        let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
+        error!("{}", &msg);
+        return Err(err);
     };
 
     Ok(())
@@ -126,7 +123,7 @@ where
         Err(err) => {
             error!("{:?}", err);
             error!("{}", output_string.as_str());
-            return Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)));
+            Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)))
         }
     }
 }
@@ -275,6 +272,22 @@ where
     }
 }
 
+pub fn kubectl_exec_get_secrets<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<Item>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, KubernetesList<Item>>(
+        vec!["get", "secrets", "-o", "json", "-n", namespace, "-l", selector],
+        kubernetes_config,
+        envs,
+    )
+}
+
 pub fn kubectl_exec_is_pod_ready<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -292,11 +305,7 @@ where
 
     let first_item = result.items.first().unwrap();
 
-    let is_ready = match first_item.status.phase {
-        KubernetesPodStatusPhase::Running => true,
-        _ => false,
-    };
-
+    let is_ready = matches!(first_item.status.phase, KubernetesPodStatusPhase::Running);
     Ok(Some(is_ready))
 }
 
@@ -393,10 +402,7 @@ where
         },
     );
 
-    match result {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    result.is_ok()
 }
 
 pub fn kubectl_exec_create_namespace_without_labels(namespace: &str, kube_config: &str, envs: Vec<(&str, &str)>) {
@@ -453,7 +459,7 @@ pub fn kubectl_add_labels_to_namespace<P>(
 where
     P: AsRef<Path>,
 {
-    if labels.iter().count() == 0 {
+    if labels.is_empty() {
         return Err(SimpleError::new(
             SimpleErrorKind::Other,
             Some("No labels were defined, can't set them"),
@@ -526,13 +532,13 @@ where
 
     match result {
         Ok(out) => {
-            if out.items.len() == 0 {
+            if out.items.is_empty() {
                 Ok(false)
             } else {
                 Ok(true)
             }
         }
-        Err(e) => return Err(e),
+        Err(e) => Err(e),
     }
 }
 
@@ -606,6 +612,7 @@ where
 
 pub fn kubectl_exec_delete_secret<P>(
     kubernetes_config: P,
+    namespace: &str,
     secret: &str,
     envs: Vec<(&str, &str)>,
 ) -> Result<(), SimpleError>
@@ -617,7 +624,7 @@ where
     _envs.extend(envs);
 
     let _ = kubectl_exec_with_output(
-        vec!["delete", "secret", secret],
+        vec!["-n", namespace, "delete", "secret", secret],
         _envs,
         |out| match out {
             Ok(line) => info!("{}", line),
@@ -901,10 +908,7 @@ pub fn kubectl_exec_api_custom_metrics<P>(
 where
     P: AsRef<Path>,
 {
-    let pods = match specific_pod_name {
-        Some(p) => p,
-        None => "*",
-    };
+    let pods = specific_pod_name.unwrap_or("*");
     let api_url = format!(
         "/apis/custom.metrics.k8s.io/v1beta1/namespaces/{}/pods/{}/{}",
         namespace, pods, metric_name
@@ -912,7 +916,7 @@ where
     kubectl_exec::<P, KubernetesApiMetrics>(vec!["get", "--raw", api_url.as_str()], kubernetes_config, envs)
 }
 
-/// Get custom metrics values
+/// scale down replicas by name
 ///
 /// # Arguments
 ///
@@ -933,11 +937,11 @@ pub fn kubectl_exec_scale_replicas<P>(
 where
     P: AsRef<Path>,
 {
-    let kind_formated = match kind {
+    let kind_formatted = match kind {
         ScalingKind::Deployment => "deployment.v1.apps",
         ScalingKind::Statefulset => "statefulset.v1.apps",
     };
-    let kind_with_name = format!("{}/{}", kind_formated, name);
+    let kind_with_name = format!("{}/{}", kind_formatted, name);
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -953,13 +957,70 @@ where
             &replicas_count.to_string(),
         ],
         _envs,
-        |out| match out {
-            Err(err) => error!("{:?}", err),
-            _ => {}
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
         },
-        |out| match out {
-            Err(err) => error!("{:?}", err),
-            _ => {}
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
+        },
+    )
+}
+
+/// scale down replicas by selector
+///
+/// # Arguments
+///
+/// * `kubernetes_config` - kubernetes config path
+/// * `envs` - environment variables required for kubernetes connection
+/// * `namespace` - kubernetes namespace
+/// * `kind` - kind of kubernetes resource to scale
+/// * `selector` - ressources that must match the selector
+/// * `replicas_count` - desired number of replicas
+pub fn kubectl_exec_scale_replicas_by_selector<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: &str,
+    kind: ScalingKind,
+    selector: &str,
+    replicas_count: u32,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let kind_formatted = match kind {
+        ScalingKind::Deployment => "deployment",
+        ScalingKind::Statefulset => "statefulset",
+    };
+
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    kubectl_exec_with_output(
+        vec![
+            "-n",
+            namespace,
+            "scale",
+            "--replicas",
+            &replicas_count.to_string(),
+            &kind_formatted,
+            "--selector",
+            selector,
+        ],
+        _envs,
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
+        },
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
         },
     )
 }

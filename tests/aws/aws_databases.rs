@@ -8,9 +8,9 @@ use qovery_engine::models::{
 };
 use qovery_engine::transaction::TransactionResult;
 
-use crate::aws::aws_environment::{delete_environment, deploy_environment};
+use crate::aws::aws_environment::{ctx_pause_environment, delete_environment, deploy_environment};
 
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, is_pod_restarted_aws_env};
+use self::test_utilities::utilities::{context, engine_run_test, generate_id, get_pods_aws, is_pod_restarted_aws_env};
 
 /**
 **
@@ -53,6 +53,49 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
     for con in connections {
         assert_eq!(con, true);
     }*/
+
+    match delete_environment(&context_for_deletion, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[test]
+fn deploy_an_environment_with_db_and_pause_it() {
+    init();
+
+    let span = span!(Level::INFO, "test", name = "deploy_an_environment_with_db_and_pause_it");
+    let _enter = span.enter();
+
+    let context = context();
+    let context_for_deletion = context.clone_not_same_execution_id();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::aws::environnement_2_app_2_routers_1_psql(&context, secrets.clone());
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment.clone());
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match deploy_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    match ctx_pause_environment(&context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    // Check that we have actually 0 pods running for this db
+    let app_name = format!("postgresql{}-0", environment.databases[0].name);
+    let ret = get_pods_aws(environment.clone(), app_name.clone().as_str(), secrets.clone());
+    assert_eq!(ret.is_ok(), true);
+    assert_eq!(ret.unwrap().items.is_empty(), true);
 
     match delete_environment(&context_for_deletion, &ea_delete) {
         TransactionResult::Ok => assert!(true),

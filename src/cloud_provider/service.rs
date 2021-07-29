@@ -12,7 +12,8 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::cmd::kubectl::kubectl_exec_delete_secret;
+use crate::cmd::kubectl::ScalingKind::Statefulset;
+use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
 use crate::cmd::structs::LabelsContent;
 use crate::error::{cast_simple_error_to_engine_error, StringError};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
@@ -135,8 +136,9 @@ pub trait Application: StatelessService {
 
 pub trait ExternalService: StatelessService {}
 
-pub trait Router: StatelessService + Listen {
+pub trait Router: StatelessService + Listen + Helm {
     fn domains(&self) -> Vec<&str>;
+    fn has_custom_domains(&self) -> bool;
     fn check_domains(&self) -> Result<(), EngineError> {
         check_domain_for(
             ListenersHelper::new(self.listeners()),
@@ -470,6 +472,77 @@ where
     Ok(())
 }
 
+pub fn scale_down_database(
+    target: &DeploymentTarget,
+    service: &impl Database,
+    replicas_count: usize,
+) -> Result<(), EngineError> {
+    let (kubernetes, environment) = match target {
+        DeploymentTarget::ManagedServices(_, _) => {
+            info!("Doing nothing for pause database as it is a managed service");
+            return Ok(());
+        }
+        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+    };
+
+    let scaledown_ret = kubectl_exec_scale_replicas_by_selector(
+        kubernetes.config_file_path()?,
+        kubernetes.cloud_provider().credentials_environment_variables(),
+        environment.namespace(),
+        Statefulset,
+        format!("databaseId={}", service.id()).as_str(),
+        replicas_count as u32,
+    );
+
+    cast_simple_error_to_engine_error(
+        service.engine_error_scope(),
+        service.context().execution_id(),
+        scaledown_ret,
+    )
+}
+
+pub fn scale_down_application(
+    target: &DeploymentTarget,
+    service: &impl StatelessService,
+    replicas_count: usize,
+    scaling_kind: ScalingKind,
+) -> Result<(), EngineError> {
+    let (kubernetes, environment) = match target {
+        DeploymentTarget::ManagedServices(_, _) => {
+            return Err(EngineError {
+                cause: EngineErrorCause::Internal,
+                scope: EngineErrorScope::Engine,
+                execution_id: service.context().execution_id().to_string(),
+                message: Some(format!("Cannot scale down managed service: {}", service.name_with_id())),
+            })
+        }
+        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+    };
+    let scaledown_ret = kubectl_exec_scale_replicas_by_selector(
+        kubernetes.config_file_path()?,
+        kubernetes.cloud_provider().credentials_environment_variables(),
+        environment.namespace(),
+        scaling_kind,
+        format!("appId={}", service.id()).as_str(),
+        replicas_count as u32,
+    );
+
+    cast_simple_error_to_engine_error(
+        service.engine_error_scope(),
+        service.context().execution_id(),
+        scaledown_ret,
+    )
+}
+
+pub fn delete_router<T>(target: &DeploymentTarget, service: &T, is_error: bool) -> Result<(), EngineError>
+where
+    T: Router,
+{
+    send_progress_on_long_task(service, crate::cloud_provider::service::Action::Delete, || {
+        delete_stateless_service(target, service, is_error)
+    })
+}
+
 pub fn delete_stateless_service<T>(target: &DeploymentTarget, service: &T, is_error: bool) -> Result<(), EngineError>
 where
     T: Service + Helm,
@@ -486,7 +559,7 @@ where
     }
 
     // clean the resource
-    let _ = do_stateless_service_cleanup(kubernetes, environment, helm_release_name.as_str())?;
+    let _ = helm_uninstall_release(kubernetes, environment, helm_release_name.as_str())?;
 
     Ok(())
 }
@@ -660,7 +733,7 @@ where
     T: StatefulService + Helm + Terraform,
 {
     match target {
-        DeploymentTarget::ManagedServices(kubernetes, _) => {
+        DeploymentTarget::ManagedServices(kubernetes, environment) => {
             let workspace_dir = service.workspace_directory();
             let tera_context = service.tera_context(target)?;
 
@@ -706,8 +779,12 @@ where
 
             match crate::cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
                 Ok(_) => {
-                    info!("let's delete secrets containing tfstates");
-                    let _ = delete_terraform_tfstate_secret(*kubernetes, &get_tfstate_name(service));
+                    info!("deleting secret containing tfstates");
+                    let _ = delete_terraform_tfstate_secret(
+                        *kubernetes,
+                        environment.namespace(),
+                        &get_tfstate_name(service),
+                    );
                 }
                 Err(e) => {
                     let message = format!("{:?}", e);
@@ -721,7 +798,7 @@ where
             let helm_release_name = service.helm_release_name();
 
             // clean the resource
-            let _ = do_stateless_service_cleanup(*kubernetes, *environment, helm_release_name.as_str())?;
+            let _ = helm_uninstall_release(*kubernetes, *environment, helm_release_name.as_str())?;
         }
     }
 
@@ -789,12 +866,17 @@ where
     }
 }
 
-fn delete_terraform_tfstate_secret(kubernetes: &dyn Kubernetes, secret_name: &str) -> Result<(), EngineError> {
+fn delete_terraform_tfstate_secret(
+    kubernetes: &dyn Kubernetes,
+    namespace: &str,
+    secret_name: &str,
+) -> Result<(), EngineError> {
     let config_file_path = kubernetes.config_file_path()?;
 
     //create the namespace to insert the tfstate in secrets
     let _ = kubectl_exec_delete_secret(
         config_file_path,
+        namespace,
         secret_name,
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
@@ -1073,7 +1155,7 @@ pub fn get_stateless_resource_information(
     Ok((describe, logs))
 }
 
-pub fn do_stateless_service_cleanup(
+pub fn helm_uninstall_release(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     helm_release_name: &str,

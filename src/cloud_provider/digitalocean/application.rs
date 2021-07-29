@@ -8,11 +8,13 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
-    send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Service, ServiceType, StatelessService,
+    scale_down_application, send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Service, ServiceType,
+    StatelessService,
 };
 use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_and_burstable};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::container_registry::docr::subscribe_kube_cluster_to_container_registry;
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
@@ -68,6 +70,10 @@ impl Application {
             environment_variables,
             listeners,
         }
+    }
+
+    fn is_stateful(&self) -> bool {
+        self.storage.len() > 0
     }
 }
 
@@ -285,11 +291,9 @@ impl Create for Application {
             Err(e) => error!("Unable to get cluster uuid {:?}", e.message),
         };
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_user_stateless_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_user_stateless_service(target, self)
+        })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -299,11 +303,9 @@ impl Create for Application {
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("DO.application.on_create_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_stateless_service_error(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_stateless_service_error(target, self)
+        })
     }
 }
 
@@ -311,25 +313,24 @@ impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.application.on_pause() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
+            scale_down_application(
+                target,
+                self,
+                0,
+                if self.is_stateful() { Statefulset } else { Deployment },
+            )
+        })
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("DO.application.on_pause_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        Ok(())
     }
 }
 
@@ -337,11 +338,9 @@ impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.application.on_delete() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateless_service(target, self, false)
+        })
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -351,11 +350,9 @@ impl Delete for Application {
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("DO.application.on_delete_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateless_service(target, self, true)
+        })
     }
 }
 
