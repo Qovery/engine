@@ -128,6 +128,10 @@ impl crate::cloud_provider::service::Router for Router {
 
         _domains
     }
+
+    fn has_custom_domains(&self) -> bool {
+        !self.custom_domains.is_empty()
+    }
 }
 
 impl Helm for Router {
