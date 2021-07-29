@@ -23,7 +23,7 @@ use crate::fs::workspace_directory;
 use crate::models::{
     Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
-use crate::object_storage::scaleway_object_storage::ScalewayOS;
+use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
 use crate::{cmd, dns_provider};
@@ -31,11 +31,12 @@ use itertools::Itertools;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
+use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
 use tera::Context as TeraContext;
 
-#[derive(Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KapsuleOptions {
     vpc_cidr_block: String,
     // Qovery
@@ -121,11 +122,20 @@ impl<'a> Kapsule<'a> {
         region: Region,
         cloud_provider: &'a Scaleway,
         dns_provider: &'a dyn DnsProvider,
-        object_storage: ScalewayOS,
         nodes: Vec<Node>,
         options: KapsuleOptions,
     ) -> Kapsule<'a> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
+
+        let object_storage = ScalewayOS::new(
+            context.clone(),
+            "s3-temp-id".to_string(),
+            "default-s3".to_string(),
+            cloud_provider.access_key.clone(),
+            cloud_provider.secret_key.clone(),
+            region,
+            BucketDeleteStrategy::Empty,
+        );
 
         Kapsule {
             context,

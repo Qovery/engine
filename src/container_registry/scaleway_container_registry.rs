@@ -16,8 +16,8 @@ pub struct ScalewayCR {
     context: Context,
     id: String,
     name: String,
-    secret_token: String,
     default_project_id: String,
+    secret_token: String,
     region: Region,
     listeners: Listeners,
 }
@@ -25,18 +25,18 @@ pub struct ScalewayCR {
 impl ScalewayCR {
     pub fn new(
         context: Context,
-        id: String,
-        name: String,
-        secret_token: String,
-        default_project_id: String,
+        id: &str,
+        name: &str,
+        default_project_id: &str,
+        secret_token: &str,
         region: Region,
     ) -> ScalewayCR {
         ScalewayCR {
             context,
-            id,
-            name,
-            secret_token,
-            default_project_id,
+            id: id.to_string(),
+            name: name.to_string(),
+            default_project_id: default_project_id.to_string(),
+            secret_token: secret_token.to_string(),
             region,
             listeners: Vec::new(),
         }

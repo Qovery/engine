@@ -11,8 +11,8 @@ pub mod router;
 pub struct Scaleway {
     context: Context,
     id: String,
-    default_project_id: String,
     name: String,
+    default_project_id: String,
     pub access_key: String,
     pub secret_key: String,
     terraform_state_credentials: TerraformStateCredentials,
@@ -23,8 +23,8 @@ impl Scaleway {
     pub fn new(
         context: Context,
         id: &str,
-        default_project_id: &str,
         name: &str,
+        default_project_id: &str,
         access_key: &str,
         secret_key: &str,
         terraform_state_credentials: TerraformStateCredentials,
@@ -32,8 +32,8 @@ impl Scaleway {
         Scaleway {
             context,
             id: id.to_string(),
-            default_project_id: default_project_id.to_string(),
             name: name.to_string(),
+            default_project_id: default_project_id.to_string(),
             access_key: access_key.to_string(),
             secret_key: secret_key.to_string(),
             terraform_state_credentials,
