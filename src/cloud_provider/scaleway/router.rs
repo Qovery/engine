@@ -8,7 +8,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind};
+use crate::error::{EngineError, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
@@ -104,7 +104,8 @@ impl Service for Router {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
-        let mut context = default_tera_context(self, kubernetes, environment);
+        let context = default_tera_context(self, kubernetes, environment);
+
         Ok(context)
     }
 
@@ -162,19 +163,19 @@ impl StatelessService for Router {}
 impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("Scaleway.router.on_create() called for {}", self.name());
-        let (kubernetes, environment) = match target {
+        let (kubernetes, _environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let workspace_dir = self.workspace_directory();
-        let helm_release_name = self.helm_release_name();
+        let _workspace_dir = self.workspace_directory();
+        let _helm_release_name = self.helm_release_name();
 
-        let kubernetes_config_file_path = kubernetes.config_file_path()?;
+        let _kubernetes_config_file_path = kubernetes.config_file_path()?;
 
         // respect order - getting the context here and not before is mandatory
         // the nginx-ingress must be available to get the external dns target if necessary
-        let mut context = self.tera_context(target)?;
+        let _context = self.tera_context(target)?;
 
         Ok(())
     }

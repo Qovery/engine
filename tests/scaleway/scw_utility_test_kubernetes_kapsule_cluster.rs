@@ -1,10 +1,9 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
+use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
 use tracing::{span, Level};
 
-use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::transaction::TransactionResult;
 
@@ -35,7 +34,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
-            context.clone(),
+            context,
             test_utilities::scaleway::SCW_TEST_CLUSTER_ID.to_string(),
             test_utilities::scaleway::SCW_TEST_CLUSTER_NAME.to_string(),
             test_utilities::scaleway::SCW_KUBERNETES_VERSION.to_string(),
@@ -88,7 +87,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
-            context.clone(),
+            context,
             test_utilities::scaleway::SCW_TEST_CLUSTER_ID.to_string(),
             test_utilities::scaleway::SCW_TEST_CLUSTER_NAME.to_string(),
             test_utilities::scaleway::SCW_KUBERNETES_VERSION.to_string(),

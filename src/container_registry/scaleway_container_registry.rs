@@ -377,7 +377,7 @@ impl ContainerRegistry for ScalewayCR {
                 self.context.execution_id(),
             ));
 
-            let image = image.clone();
+            let image = image;
 
             return self.push_image(image_url, &image);
         }

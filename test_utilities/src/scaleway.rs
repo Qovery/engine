@@ -6,10 +6,7 @@ use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::{
-    Action, Application, Context, Database, DatabaseKind, Environment, EnvironmentVariable, GitCredentials, Kind,
-    Route, Router, Storage, StorageType,
-};
+use qovery_engine::models::{Action, Application, Context, Environment, GitCredentials, Kind, Route, Router};
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 
 use crate::cloudflare::dns_provider_cloudflare;

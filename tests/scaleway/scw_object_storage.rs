@@ -1,11 +1,9 @@
 extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, generate_id, FuncTestsSecrets};
-use tracing::debug;
-use uuid::Uuid;
 
 use qovery_engine::cloud_provider::scaleway::application::Region;
-use qovery_engine::cmd::kubectl::kubectl_delete_objects_in_all_namespaces;
+
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
@@ -21,7 +19,7 @@ fn test_delete_bucket_hard_delete_strategy() {
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
-        context.clone(),
+        context,
         generate_id(),
         "test".to_string(),
         scw_access_key,
@@ -53,7 +51,7 @@ fn test_delete_bucket_empty_strategy() {
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
-        context.clone(),
+        context,
         generate_id(),
         "test".to_string(),
         scw_access_key,
@@ -78,7 +76,7 @@ fn test_delete_bucket_empty_strategy() {
     // clean-up:
     scaleway_os
         .delete_bucket(bucket_name.as_str())
-        .expect(format!("error deleting object storage bucket {}", bucket_name).as_str());
+        .unwrap_or_else(|_| panic!("error deleting object storage bucket {}", bucket_name));
 }
 
 #[test]
@@ -90,7 +88,7 @@ fn test_create_bucket() {
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
-        context.clone(),
+        context,
         generate_id(),
         "test".to_string(),
         scw_access_key,
@@ -110,7 +108,7 @@ fn test_create_bucket() {
     // clean-up:
     scaleway_os
         .delete_bucket(bucket_name.as_str())
-        .expect(format!("error deleting object storage bucket {}", bucket_name).as_str());
+        .unwrap_or_else(|_| panic!("error deleting object storage bucket {}", bucket_name));
 }
 
 #[test]
@@ -122,7 +120,7 @@ fn test_put_file() {
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
-        context.clone(),
+        context,
         generate_id(),
         "test".to_string(),
         scw_access_key,
@@ -138,7 +136,7 @@ fn test_put_file() {
         .create_bucket(bucket_name.as_str())
         .expect("error while creating object-storage bucket");
 
-    let mut temp_file = NamedTempFile::new().expect("error while creating tempfile");
+    let temp_file = NamedTempFile::new().expect("error while creating tempfile");
 
     // compute:
     let result = scaleway_os.put(
@@ -159,7 +157,7 @@ fn test_put_file() {
     // clean-up:
     scaleway_os
         .delete_bucket(bucket_name.as_str())
-        .expect(format!("error deleting object storage bucket {}", bucket_name).as_str());
+        .unwrap_or_else(|_| panic!("error deleting object storage bucket {}", bucket_name));
 }
 #[test]
 fn test_get_file() {
@@ -170,7 +168,7 @@ fn test_get_file() {
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
-        context.clone(),
+        context,
         generate_id(),
         "test".to_string(),
         scw_access_key,
@@ -186,13 +184,13 @@ fn test_get_file() {
         .create_bucket(bucket_name.as_str())
         .expect("error while creating object-storage bucket");
 
-    let mut temp_file = NamedTempFile::new().expect("error while creating tempfile");
+    let temp_file = NamedTempFile::new().expect("error while creating tempfile");
     let tempfile_path = temp_file.into_temp_path();
     let tempfile_path = tempfile_path.to_str().unwrap();
 
     scaleway_os
         .put(bucket_name.as_str(), object_key.as_str(), tempfile_path)
-        .expect(format!("error while putting file {} into bucket {}", tempfile_path, bucket_name).as_str());
+        .unwrap_or_else(|_| panic!("error while putting file {} into bucket {}", tempfile_path, bucket_name));
 
     // compute:
     let result = scaleway_os.get(bucket_name.as_str(), object_key.as_str(), false);
@@ -209,5 +207,5 @@ fn test_get_file() {
     // clean-up:
     scaleway_os
         .delete_bucket(bucket_name.as_str())
-        .expect(format!("error deleting object storage bucket {}", bucket_name).as_str());
+        .unwrap_or_else(|_| panic!("error deleting object storage bucket {}", bucket_name));
 }

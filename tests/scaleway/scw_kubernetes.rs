@@ -37,7 +37,7 @@ fn create_upgrade_and_destroy_kapsule_cluster(
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
-            context.clone(),
+            context,
             generate_cluster_id(region.as_str()),
             generate_cluster_id(region.as_str()),
             boot_version.to_string(),
@@ -110,7 +110,7 @@ fn create_and_destroy_kapsule_cluster(
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
-            context.clone(),
+            context,
             generate_cluster_id(region.as_str()),
             generate_cluster_id(region.as_str()),
             SCW_KUBERNETES_VERSION.to_string(),

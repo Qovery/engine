@@ -1,13 +1,10 @@
 extern crate test_utilities;
 
-use self::test_utilities::cloudflare;
-use self::test_utilities::utilities::{engine_run_test, generate_id, FuncTestsSecrets};
+use self::test_utilities::utilities::{context, engine_run_test, FuncTestsSecrets};
 use qovery_engine::cloud_provider::scaleway::application::Region;
-use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
+use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use std::str::FromStr;
-use test_utilities::utilities::context;
-use test_utilities::utilities::init;
 use tracing::{span, Level};
 
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
