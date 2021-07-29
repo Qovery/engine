@@ -4,7 +4,7 @@ charts:
     repo_name: jetstack
   - name: external-dns
     repo_name: bitnami
-    version: 3.4.0
+    version: 5.2.2
   - name: grafana
     version: 5.3.4
     no_sync: true
