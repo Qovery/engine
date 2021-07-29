@@ -1,20 +1,26 @@
 use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cloud_provider::scaleway::kubernetes::node::{Node, NodeType};
-use qovery_engine::cloud_provider::scaleway::kubernetes::Options;
+use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOptions};
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
+use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::Context;
+use qovery_engine::models::{
+    Action, Application, Context, Database, DatabaseKind, Environment, EnvironmentVariable, GitCredentials, Kind,
+    Route, Router, Storage, StorageType,
+};
+use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use qovery_engine::object_storage::scaleway_object_storage::{ScalewayOS, BucketDeleteStrategy};
+use chrono::Utc;
+use std::str::FromStr;
 use tracing::error;
 
-pub const SCW_TEST_CLUSTER_NAME: &str = "Qovery test cluster";
-pub const SCW_TEST_CLUSTER_ID: &str = "qovery-test-cluster";
+pub const SCW_TEST_CLUSTER_NAME: &str = "DO-NOT-DELETE-Qovery-test-cluster";
+pub const SCW_TEST_CLUSTER_ID: &str = "do-not-delete-qovery-test-cluster";
 pub const SCW_TEST_REGION: Region = Region::Paris;
 pub const SCW_KUBERNETES_VERSION: &str = "1.18";
 
@@ -62,8 +68,8 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
     )
 }
 
-pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> Options {
-    Options::new(
+pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
+    KapsuleOptions::new(
         "10.0.0.0/16".to_string(),
         secrets.QOVERY_API_URL.unwrap(),
         secrets.QOVERY_NATS_URL.unwrap(),
@@ -132,4 +138,117 @@ pub fn docker_scw_cr_engine(context: &Context) -> Engine {
         cloud_provider,
         dns_provider,
     )
+}
+
+pub fn scw_kubernetes_kapsule<'a>(
+    context: &Context,
+    cloud_provider: &'a Scaleway,
+    dns_provider: &'a dyn DnsProvider,
+    object_storage: ScalewayOS,
+    nodes: Vec<Node>,
+) -> Kapsule<'a> {
+    let secrets = FuncTestsSecrets::new();
+    Kapsule::<'a>::new(
+        context.clone(),
+        SCW_TEST_CLUSTER_ID.to_string(),
+        SCW_TEST_CLUSTER_NAME.to_string(),
+        SCW_KUBERNETES_VERSION.to_string(),
+        Region::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap(),
+        cloud_provider,
+        dns_provider,
+        object_storage,
+        nodes,
+        scw_kubernetes_kapsule_options(secrets),
+    )
+}
+
+fn scw_kubernetes_kapsule_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
+    KapsuleOptions::new(
+        "10.0.0.0/16".to_string(),
+        secrets.QOVERY_API_URL.unwrap(),
+        secrets.QOVERY_NATS_URL.unwrap(),
+        secrets.QOVERY_NATS_USERNAME.unwrap(),
+        secrets.QOVERY_NATS_PASSWORD.unwrap(),
+        secrets.QOVERY_SSH_USER.unwrap(),
+        "admin".to_string(),
+        "qovery".to_string(),
+        secrets.DISCORD_API_URL.unwrap(),
+        secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
+        secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
+        secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap(),
+        secrets.SCALEWAY_ACCESS_KEY.unwrap(),
+        secrets.SCALEWAY_SECRET_KEY.unwrap(),
+        1,
+        secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
+    )
+}
+
+// TODO(benjaminch): To be refactored, move it to common test utilities
+pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
+    let suffix = generate_id();
+    Environment {
+        execution_id: context.execution_id().to_string(),
+        id: generate_id(),
+        kind: Kind::Development,
+        owner_id: generate_id(),
+        project_id: generate_id(),
+        organization_id: secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap().to_string(),
+        action: Action::Create,
+        applications: vec![Application {
+            id: generate_id(),
+            name: format!("{}-{}", "simple-app".to_string(), &suffix),
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+            commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
+            dockerfile_path: Some("Dockerfile".to_string()),
+            root_path: String::from("/"),
+            action: Action::Create,
+            git_credentials: Some(GitCredentials {
+                login: "x-access-token".to_string(),
+                access_token: "xxx".to_string(),
+                expired_at: Utc::now(),
+            }),
+            storage: vec![],
+            environment_variables: vec![],
+            branch: "basic-app-deploy".to_string(),
+            private_port: Some(80),
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 256,
+            total_instances: 2,
+            cpu_burst: "100m".to_string(),
+            start_timeout_in_seconds: 60,
+        }],
+        routers: vec![Router {
+            id: generate_id(),
+            name: "main".to_string(),
+            action: Action::Create,
+            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_ref(),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
+            }],
+        }],
+        databases: vec![],
+        external_services: vec![],
+        clone_from_environment_id: None,
+    }
+}
+
+// TODO(benjaminch): To be refactored, move it to common test utilities
+pub fn non_working_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
+    let mut environment = working_minimal_environment(context, secrets);
+
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
+            app.branch = "bugged-image".to_string();
+            app.commit_id = "c2b2d7b5d96832732df25fe992721f53842b5eac".to_string();
+            app
+        })
+        .collect::<Vec<_>>();
+
+    environment
 }

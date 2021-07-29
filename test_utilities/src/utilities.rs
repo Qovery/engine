@@ -104,6 +104,7 @@ pub struct FuncTestsSecrets {
     pub SCALEWAY_DEFAULT_PROJECT_ID: Option<String>,
     pub SCALEWAY_ACCESS_KEY: Option<String>,
     pub SCALEWAY_SECRET_KEY: Option<String>,
+    pub SCALEWAY_DEFAULT_REGION: Option<String>,
     pub TERRAFORM_AWS_ACCESS_KEY_ID: Option<String>,
     pub TERRAFORM_AWS_SECRET_ACCESS_KEY: Option<String>,
     pub TERRAFORM_AWS_REGION: Option<String>,
@@ -178,6 +179,7 @@ impl FuncTestsSecrets {
             SCALEWAY_ACCESS_KEY: None,
             SCALEWAY_DEFAULT_PROJECT_ID: None,
             SCALEWAY_SECRET_KEY: None,
+            SCALEWAY_DEFAULT_REGION: None,
             TERRAFORM_AWS_ACCESS_KEY_ID: None,
             TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
             TERRAFORM_AWS_REGION: None,
@@ -267,6 +269,7 @@ impl FuncTestsSecrets {
                 secrets.SCALEWAY_DEFAULT_PROJECT_ID,
             ),
             SCALEWAY_SECRET_KEY: Self::select_secret("SCALEWAY_SECRET_KEY", secrets.SCALEWAY_SECRET_KEY),
+            SCALEWAY_DEFAULT_REGION: Self::select_secret("SCALEWAY_DEFAULT_REGION", secrets.SCALEWAY_DEFAULT_REGION),
             TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
                 "TERRAFORM_AWS_ACCESS_KEY_ID",
                 secrets.TERRAFORM_AWS_ACCESS_KEY_ID,

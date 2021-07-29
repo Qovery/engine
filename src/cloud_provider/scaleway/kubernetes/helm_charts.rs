@@ -3,7 +3,7 @@ use crate::cloud_provider::helm::{
     HelmChartNamespaces,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::cloud_provider::scaleway::kubernetes::Options;
+use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -36,7 +36,7 @@ pub struct ChartsConfigPrerequisites {
     pub cloudflare_api_token: String,
     pub disable_pleco: bool,
     // qovery options form json input
-    pub infra_options: Options,
+    pub infra_options: KapsuleOptions,
 }
 
 impl ChartsConfigPrerequisites {
@@ -60,7 +60,7 @@ impl ChartsConfigPrerequisites {
         cloudflare_email: String,
         cloudflare_api_token: String,
         disable_pleco: bool,
-        infra_options: Options,
+        infra_options: KapsuleOptions,
     ) -> Self {
         ChartsConfigPrerequisites {
             organization_id,
