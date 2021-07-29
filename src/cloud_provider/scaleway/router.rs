@@ -1,6 +1,6 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::models::{CustomDomain, Route, RouteDataTemplate, CustomDomainDataTemplate};
+use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
     Service, ServiceType, StatelessService,
