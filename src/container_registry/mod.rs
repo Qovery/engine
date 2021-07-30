@@ -7,6 +7,7 @@ use crate::models::{Context, Listen};
 pub mod docker_hub;
 pub mod docr;
 pub mod ecr;
+pub mod scaleway_container_registry;
 pub mod utilities;
 
 pub trait ContainerRegistry: Listen {
@@ -48,4 +49,5 @@ pub enum Kind {
     DockerHub,
     Ecr,
     Docr,
+    ScalewayCr,
 }

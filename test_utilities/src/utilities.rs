@@ -1,6 +1,7 @@
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
+use gethostname;
 use std::fs::read_to_string;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
@@ -101,6 +102,10 @@ pub struct FuncTestsSecrets {
     pub QOVERY_NATS_PASSWORD: Option<String>,
     pub QOVERY_SSH_USER: Option<String>,
     pub RUST_LOG: Option<String>,
+    pub SCALEWAY_DEFAULT_PROJECT_ID: Option<String>,
+    pub SCALEWAY_ACCESS_KEY: Option<String>,
+    pub SCALEWAY_SECRET_KEY: Option<String>,
+    pub SCALEWAY_DEFAULT_REGION: Option<String>,
     pub TERRAFORM_AWS_ACCESS_KEY_ID: Option<String>,
     pub TERRAFORM_AWS_SECRET_ACCESS_KEY: Option<String>,
     pub TERRAFORM_AWS_REGION: Option<String>,
@@ -172,6 +177,10 @@ impl FuncTestsSecrets {
             QOVERY_NATS_PASSWORD: None,
             QOVERY_SSH_USER: None,
             RUST_LOG: None,
+            SCALEWAY_ACCESS_KEY: None,
+            SCALEWAY_DEFAULT_PROJECT_ID: None,
+            SCALEWAY_SECRET_KEY: None,
+            SCALEWAY_DEFAULT_REGION: None,
             TERRAFORM_AWS_ACCESS_KEY_ID: None,
             TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
             TERRAFORM_AWS_REGION: None,
@@ -255,6 +264,13 @@ impl FuncTestsSecrets {
             QOVERY_NATS_PASSWORD: Self::select_secret("QOVERY_NATS_PASSWORD", secrets.QOVERY_NATS_PASSWORD),
             QOVERY_SSH_USER: Self::select_secret("QOVERY_SSH_USER", secrets.QOVERY_SSH_USER),
             RUST_LOG: Self::select_secret("RUST_LOG", secrets.RUST_LOG),
+            SCALEWAY_ACCESS_KEY: Self::select_secret("SCALEWAY_ACCESS_KEY", secrets.SCALEWAY_ACCESS_KEY),
+            SCALEWAY_DEFAULT_PROJECT_ID: Self::select_secret(
+                "SCALEWAY_DEFAULT_PROJECT_ID",
+                secrets.SCALEWAY_DEFAULT_PROJECT_ID,
+            ),
+            SCALEWAY_SECRET_KEY: Self::select_secret("SCALEWAY_SECRET_KEY", secrets.SCALEWAY_SECRET_KEY),
+            SCALEWAY_DEFAULT_REGION: Self::select_secret("SCALEWAY_DEFAULT_REGION", secrets.SCALEWAY_DEFAULT_REGION),
             TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
                 "TERRAFORM_AWS_ACCESS_KEY_ID",
                 secrets.TERRAFORM_AWS_ACCESS_KEY_ID,
@@ -522,4 +538,42 @@ pub fn execution_id() -> String {
         .replace(":", "-")
         .replace(".", "-")
         .replace("+", "-")
+}
+
+// avoid test collisions
+pub fn generate_cluster_id(region: &str) -> String {
+    let check_if_running_on_gitlab_env_var = "CI_PROJECT_TITLE";
+
+    // if running on CI, generate an ID
+    match env::var_os(check_if_running_on_gitlab_env_var) {
+        None => {}
+        Some(_) => return generate_id(),
+    };
+
+    match gethostname::gethostname().into_string() {
+        // shrink to 15 chars in order to avoid resources name issues
+        Ok(mut current_name) => {
+            let mut shrink_size = 15;
+
+            // override cluster id
+            current_name = match env::var_os("custom_cluster_id") {
+                None => current_name,
+                Some(x) => x.into_string().unwrap(),
+            };
+
+            // avoid out of bounds issue
+            if current_name.chars().count() < shrink_size {
+                shrink_size = current_name.chars().count()
+            }
+            let mut final_name = format!("{}", &current_name[..shrink_size]);
+            // do not end with a non alphanumeric char
+            while !final_name.chars().last().unwrap().is_alphanumeric() {
+                shrink_size -= 1;
+                final_name = format!("{}", &current_name[..shrink_size]);
+            }
+            // note ensure you use only lowercase  (uppercase are not allowed in lot of AWS resources)
+            format!("{}-{}", final_name.to_lowercase(), region.to_lowercase())
+        }
+        _ => generate_id(),
+    }
 }
