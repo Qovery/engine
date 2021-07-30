@@ -27,8 +27,8 @@ impl ScalewayCR {
         context: Context,
         id: &str,
         name: &str,
-        default_project_id: &str,
         secret_token: &str,
+        default_project_id: &str,
         region: Region,
     ) -> ScalewayCR {
         ScalewayCR {
