@@ -343,8 +343,8 @@ impl ContainerRegistry {
                 context,
                 self.id.as_str(),
                 self.name.as_str(),
-                organization_id,
                 self.options.token.as_ref()?.as_str(),
+                organization_id,
                 Region::from_str(self.options.region.as_ref()?.as_str()).unwrap(),
             ))),
         }
