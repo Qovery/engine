@@ -11,6 +11,7 @@ use tempfile::NamedTempFile;
 const TEST_REGION: Region = Region::Paris;
 
 #[cfg(feature = "test-scw-infra")]
+#[ignore] // To be ran only on demand to help with debugging
 #[test]
 fn test_delete_bucket_hard_delete_strategy() {
     // setup:
@@ -44,6 +45,7 @@ fn test_delete_bucket_hard_delete_strategy() {
 }
 
 #[cfg(feature = "test-scw-infra")]
+#[ignore] // To be ran only on demand to help with debugging
 #[test]
 fn test_delete_bucket_empty_strategy() {
     // setup:
@@ -82,6 +84,7 @@ fn test_delete_bucket_empty_strategy() {
 }
 
 #[cfg(feature = "test-scw-infra")]
+#[ignore] // To be ran only on demand to help with debugging
 #[test]
 fn test_create_bucket() {
     // setup:
@@ -115,6 +118,7 @@ fn test_create_bucket() {
 }
 
 #[cfg(feature = "test-scw-infra")]
+#[ignore] // To be ran only on demand to help with debugging
 #[test]
 fn test_put_file() {
     // setup:
@@ -165,6 +169,7 @@ fn test_put_file() {
 }
 
 #[cfg(feature = "test-scw-infra")]
+#[ignore] // To be ran only on demand to help with debugging
 #[test]
 fn test_get_file() {
     // setup:
