@@ -1,29 +1,18 @@
-use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
-    get_chart_namespace, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart,
-    HelmChart, HelmChartNamespaces,
+    get_chart_namespace, ChartInfo, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmChart,
+    HelmChartNamespaces,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
+use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::thread::sleep;
-use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AwsQoveryTerraformConfig {
-    pub aws_iam_eks_user_mapper_key: String,
-    pub aws_iam_eks_user_mapper_secret: String,
-    pub aws_iam_cluster_autoscaler_key: String,
-    pub aws_iam_cluster_autoscaler_secret: String,
-    pub aws_iam_cloudwatch_key: String,
-    pub aws_iam_cloudwatch_secret: String,
-    pub loki_storage_config_aws_s3: String,
-    pub aws_iam_loki_storage_key: String,
-    pub aws_iam_loki_storage_secret: String,
+pub struct ScalewayQoveryTerraformConfig {
+    pub loki_storage_config_scaleway_s3: String,
 }
 
 pub struct ChartsConfigPrerequisites {
@@ -33,8 +22,8 @@ pub struct ChartsConfigPrerequisites {
     pub cluster_name: String,
     pub cloud_provider: String,
     pub test_cluster: bool,
-    pub aws_access_key_id: String,
-    pub aws_secret_access_key: String,
+    pub scw_access_key: String,
+    pub scw_secret_key: String,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
@@ -47,28 +36,79 @@ pub struct ChartsConfigPrerequisites {
     pub cloudflare_api_token: String,
     pub disable_pleco: bool,
     // qovery options form json input
-    pub infra_options: Options,
+    pub infra_options: KapsuleOptions,
 }
 
-pub fn aws_helm_charts(
+impl ChartsConfigPrerequisites {
+    pub fn new(
+        organization_id: String,
+        cluster_id: String,
+        region: String,
+        cluster_name: String,
+        cloud_provider: String,
+        test_cluster: bool,
+        scw_access_key: String,
+        scw_secret_key: String,
+        ff_log_history_enabled: bool,
+        ff_metrics_history_enabled: bool,
+        managed_dns_name: String,
+        managed_dns_helm_format: String,
+        managed_dns_resolvers_terraform_format: String,
+        external_dns_provider: String,
+        dns_email_report: String,
+        acme_url: String,
+        cloudflare_email: String,
+        cloudflare_api_token: String,
+        disable_pleco: bool,
+        infra_options: KapsuleOptions,
+    ) -> Self {
+        ChartsConfigPrerequisites {
+            organization_id,
+            cluster_id,
+            region,
+            cluster_name,
+            cloud_provider,
+            test_cluster,
+            scw_access_key,
+            scw_secret_key,
+            ff_log_history_enabled,
+            ff_metrics_history_enabled,
+            managed_dns_name,
+            managed_dns_helm_format,
+            managed_dns_resolvers_terraform_format,
+            external_dns_provider,
+            dns_email_report,
+            acme_url,
+            cloudflare_email,
+            cloudflare_api_token,
+            disable_pleco,
+            infra_options,
+        }
+    }
+}
+
+pub fn scw_helm_charts(
     qovery_terraform_config_file: &str,
     chart_config_prerequisites: &ChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
-    kubernetes_config: &Path,
-    envs: &[(String, String)],
+    _kubernetes_config: &Path,
+    _envs: &[(String, String)],
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError> {
     info!("preparing chart configuration to be deployed");
 
     let content_file = match File::open(&qovery_terraform_config_file) {
         Ok(x) => x,
-        Err(e) => return Err(SimpleError{ kind: SimpleErrorKind::Other, message: Some(
-            format!("Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?. {:?}", e)
-        )}),
+        Err(e) => return Err(SimpleError {
+            kind: SimpleErrorKind::Other,
+            message: Some(
+                format!("Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?. {:?}", e)
+            )
+        }),
     };
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
     let reader = BufReader::new(content_file);
-    let qovery_terraform_config: AwsQoveryTerraformConfig = match serde_json::from_reader(reader) {
+    let qovery_terraform_config: ScalewayQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
             error!(
@@ -95,220 +135,6 @@ pub fn aws_helm_charts(
         chart_info: ChartInfo {
             name: "q-storageclass".to_string(),
             path: chart_path("/charts/q-storageclass"),
-            ..Default::default()
-        },
-    };
-
-    let mut aws_vpc_cni_chart = AwsVpcCniChart {
-        chart_info: ChartInfo {
-            name: "aws-vpc-cni".to_string(),
-            path: chart_path("charts/aws-vpc-cni"),
-            values: vec![
-                ChartSetValue {
-                    key: "image.region".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
-                },
-                ChartSetValue {
-                    key: "image.pullPolicy".to_string(),
-                    value: "IfNotPresent".to_string(),
-                },
-                ChartSetValue {
-                    key: "crd.create".to_string(),
-                    value: "false".to_string(),
-                },
-                // label ENIs
-                ChartSetValue {
-                    key: "env.CLUSTER_NAME".to_string(),
-                    value: chart_config_prerequisites.cluster_name.clone(),
-                },
-                // number of total IP addresses that the daemon should attempt to allocate for pod assignment on the node (init phase)
-                ChartSetValue {
-                    key: "env.MINIMUM_IP_TARGET".to_string(),
-                    value: "60".to_string(),
-                },
-                // number of free IP addresses that the daemon should attempt to keep available for pod assignment on the node
-                ChartSetValue {
-                    key: "env.WARM_IP_TARGET".to_string(),
-                    value: "10".to_string(),
-                },
-                // maximum number of ENIs that will be attached to the node (k8s recommend to avoid going over 100)
-                ChartSetValue {
-                    key: "env.MAX_ENI".to_string(),
-                    value: "100".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "50m".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
-    let is_cni_old_installed_version = match aws_vpc_cni_chart.is_cni_old_installed_version(kubernetes_config, &envs) {
-        Ok(x) => x,
-        Err(e) => return Err(e),
-    };
-    aws_vpc_cni_chart.chart_info.values.push(ChartSetValue {
-        key: "originalMatchLabels".to_string(),
-        value: is_cni_old_installed_version.to_string(),
-    });
-
-    let aws_iam_eks_user_mapper = CommonChart {
-        chart_info: ChartInfo {
-            name: "iam-eks-user-mapper".to_string(),
-            path: chart_path("charts/iam-eks-user-mapper"),
-            values: vec![
-                ChartSetValue {
-                    key: "aws.accessKey".to_string(),
-                    value: qovery_terraform_config.aws_iam_eks_user_mapper_key,
-                },
-                ChartSetValue {
-                    key: "aws.secretKey".to_string(),
-                    value: qovery_terraform_config.aws_iam_eks_user_mapper_secret,
-                },
-                ChartSetValue {
-                    key: "aws.region".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
-                },
-                ChartSetValue {
-                    key: "syncIamGroup".to_string(),
-                    value: "Admins".to_string(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "20m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "10m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
-
-    let aws_node_term_handler = CommonChart {
-        chart_info: ChartInfo {
-            name: "aws-node-term-handler".to_string(),
-            path: chart_path("charts/aws-node-termination-handler"),
-            values: vec![
-                ChartSetValue {
-                    key: "nameOverride".to_string(),
-                    value: "aws-node-term-handler".to_string(),
-                },
-                ChartSetValue {
-                    key: "fullnameOverride".to_string(),
-                    value: "aws-node-term-handler".to_string(),
-                },
-                ChartSetValue {
-                    key: "enableSpotInterruptionDraining".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "enableScheduledEventDraining".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "deleteLocalData".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "ignoreDaemonSets".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "podTerminationGracePeriod".to_string(),
-                    value: "300".to_string(),
-                },
-                ChartSetValue {
-                    key: "nodeTerminationGracePeriod".to_string(),
-                    value: "120".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
-
-    // Calico for AWS
-    let aws_calico = CommonChart {
-        chart_info: ChartInfo {
-            name: "calico".to_string(),
-            path: chart_path("charts/aws-calico"),
-            ..Default::default()
-        },
-    };
-
-    let cluster_autoscaler = CommonChart {
-        chart_info: ChartInfo {
-            name: "cluster-autoscaler".to_string(),
-            path: chart_path("common/charts/cluster-autoscaler"),
-            values: vec![
-                ChartSetValue {
-                    key: "cloudProvider".to_string(),
-                    value: chart_config_prerequisites.cloud_provider.clone(),
-                },
-                ChartSetValue {
-                    key: "awsRegion".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
-                },
-                ChartSetValue {
-                    key: "autoDiscovery.clusterName".to_string(),
-                    value: chart_config_prerequisites.cluster_name.clone(),
-                },
-                ChartSetValue {
-                    key: "awsAccessKeyID".to_string(),
-                    value: qovery_terraform_config.aws_iam_cluster_autoscaler_key,
-                },
-                ChartSetValue {
-                    key: "awsSecretAccessKey".to_string(),
-                    value: qovery_terraform_config.aws_iam_cluster_autoscaler_secret,
-                },
-                // It's mandatory to get this class to ensure paused infra will behave properly on restore
-                ChartSetValue {
-                    key: "priorityClassName".to_string(),
-                    value: "system-cluster-critical".to_string(),
-                },
-                // cluster autoscaler options
-                ChartSetValue {
-                    key: "extraArgs.balance-similar-node-groups".to_string(),
-                    value: "true".to_string(),
-                },
-                // observability
-                ChartSetValue {
-                    key: "serviceMonitor.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
-                },
-                ChartSetValue {
-                    key: "serviceMonitor.namespace".to_string(),
-                    value: get_chart_namespace(prometheus_namespace),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "300Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "300Mi".to_string(),
-                },
-            ],
             ..Default::default()
         },
     };
@@ -408,23 +234,29 @@ pub fn aws_helm_charts(
             values: vec![
                 ChartSetValue {
                     key: "config.storage_config.aws.s3".to_string(),
-                    value: qovery_terraform_config.loki_storage_config_aws_s3,
+                    value: qovery_terraform_config.loki_storage_config_scaleway_s3,
+                },
+                ChartSetValue {
+                    key: "config.storage_config.aws.endpoint".to_string(),
+                    value: format!("s3.{}.scw.cloud", chart_config_prerequisites.region.clone()),
                 },
                 ChartSetValue {
                     key: "config.storage_config.aws.region".to_string(),
                     value: chart_config_prerequisites.region.clone(),
                 },
+                // we're not using dedicated keys as Scaleway do not yet support IAM
                 ChartSetValue {
                     key: "aws_iam_loki_storage_key".to_string(),
-                    value: qovery_terraform_config.aws_iam_loki_storage_key,
+                    value: chart_config_prerequisites.scw_access_key.clone(),
                 },
                 ChartSetValue {
                     key: "aws_iam_loki_storage_secret".to_string(),
-                    value: qovery_terraform_config.aws_iam_loki_storage_secret,
+                    value: chart_config_prerequisites.scw_secret_key.clone(),
                 },
+                // Scaleway do not support encryption yet
                 ChartSetValue {
                     key: "config.storage_config.aws.sse_encryption".to_string(),
-                    value: "true".to_string(),
+                    value: "false".to_string(),
                 },
                 // resources limits
                 ChartSetValue {
@@ -549,6 +381,7 @@ pub fn aws_helm_charts(
         })
     }
 
+    // todo: fix it, strange behavior from the logs
     let prometheus_adapter = CommonChart {
         chart_info: ChartInfo {
             name: "prometheus-adapter".to_string(),
@@ -593,31 +426,7 @@ pub fn aws_helm_charts(
         },
     };
 
-    let metric_server = CommonChart {
-        chart_info: ChartInfo {
-            name: "metrics-server".to_string(),
-            path: chart_path("common/charts/metrics-server"),
-            values: vec![
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "250m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "250m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "256Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "256Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
+    // metric-server is built-in Scaleway cluster, no need to manage it
 
     let kube_state_metrics = CommonChart {
         chart_info: ChartInfo {
@@ -669,23 +478,12 @@ datasources:
       - name: Loki
         type: loki
         url: \"http://{}.{}.svc:3100\"
-      - name: Cloudwatch
-        type: cloudwatch
-        jsonData:
-          authType: keys
-          defaultRegion: {}
-        secureJsonData:
-          accessKey: '{}'
-          secretKey: '{}'
       ",
         prometheus_internal_url.clone(),
         &loki.chart_info.name,
         get_chart_namespace(loki_namespace),
         &loki.chart_info.name,
         get_chart_namespace(loki_namespace),
-        chart_config_prerequisites.region.clone(),
-        qovery_terraform_config.aws_iam_cloudwatch_key,
-        qovery_terraform_config.aws_iam_cloudwatch_secret,
     );
 
     let grafana = CommonChart {
@@ -878,12 +676,12 @@ datasources:
             values_files: vec![chart_path("chart_values/pleco.yaml")],
             values: vec![
                 ChartSetValue {
-                    key: "environmentVariables.AWS_ACCESS_KEY_ID".to_string(),
-                    value: chart_config_prerequisites.aws_access_key_id.clone(),
+                    key: "environmentVariables.SCALEWAY_ACCESS_KEY_ID".to_string(),
+                    value: chart_config_prerequisites.scw_access_key.clone(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.AWS_SECRET_ACCESS_KEY".to_string(),
-                    value: chart_config_prerequisites.aws_secret_access_key.clone(),
+                    key: "environmentVariables.SCALEWAY_SECRET_ACCESS_KEY".to_string(),
+                    value: chart_config_prerequisites.scw_secret_key.clone(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.PLECO_IDENTIFIER".to_string(),
@@ -897,87 +695,6 @@ datasources:
             ..Default::default()
         },
     };
-
-    // let qovery_portal_fqdn = format!(
-    //     "qovery-{}.{}",
-    //     chart_config_prerequisites.cluster_id.clone(),
-    //     chart_config_prerequisites.managed_dns_name
-    // );
-    // let qovery_portal = CommonChart {
-    //     chart_info: ChartInfo {
-    //         name: "qovery-portal".to_string(),
-    //         path: chart_path("common/charts/qovery-portal"),
-    //         namespace: HelmChartNamespaces::Qovery,
-    //         values: vec![
-    //             ChartSetValue {
-    //                 key: "hostName".to_string(),
-    //                 value: qovery_portal_fqdn.clone(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "portal.title".to_string(),
-    //                 value: qovery_portal_fqdn.clone(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.redirectUrl".to_string(),
-    //                 value: format!("https://{}/oauth2/callback", &qovery_portal_fqdn),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.upstreams".to_string(),
-    //                 value: format!("https://{}/", &qovery_portal_fqdn),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.oidcIssuerUrl".to_string(),
-    //                 value: "https://qovery.eu.auth0.com/".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.clientId".to_string(),
-    //                 value: "shouldn't be client propagated".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.clientSecret".to_string(),
-    //                 value: "shouldn't be client propagated".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.cookieName".to_string(),
-    //                 value: "xxx".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.cookieSecret".to_string(),
-    //                 value: "xxx".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.emailDomains".to_string(),
-    //                 value: "shouldn't be client propagated".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "clusterIssuer".to_string(),
-    //                 value: "????????????".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "ingressClass".to_string(),
-    //                 value: "nginx-ingress".to_string(),
-    //             },
-    //             // resources limits
-    //             ChartSetValue {
-    //                 key: "resources.limits.cpu".to_string(),
-    //                 value: "1".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "resources.requests.cpu".to_string(),
-    //                 value: "200m".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "resources.limits.memory".to_string(),
-    //                 value: "500Mi".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "resources.requests.memory".to_string(),
-    //                 value: "500Mi".to_string(),
-    //             },
-    //         ],
-    //         ..Default::default()
-    //     },
-    // };
 
     let qovery_agent_version: QoveryAgent = match get_qovery_app_version(
         QoveryAppName::Agent,
@@ -1099,7 +816,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "volumes.storageClassName".to_string(),
-                    value: "aws-ebs-gp2-0".to_string(),
+                    value: "scw-sbv-ssd-0".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.QOVERY_NATS_URL".to_string(),
@@ -1176,25 +893,13 @@ datasources:
     };
 
     // chart deployment order matters!!!
-    let level_1: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(q_storage_class),
-        Box::new(coredns_config),
-        Box::new(aws_vpc_cni_chart),
-    ];
+    let level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config)];
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
-    let mut level_3: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(cluster_autoscaler),
-        Box::new(aws_iam_eks_user_mapper),
-        Box::new(aws_calico),
-    ];
+    let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
 
-    let mut level_4: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(metric_server),
-        Box::new(aws_node_term_handler),
-        Box::new(external_dns),
-    ];
+    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(external_dns)];
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager)];
 
@@ -1204,7 +909,7 @@ datasources:
         Box::new(qovery_engine),
     ];
 
-    // observability
+    // // observability
     if chart_config_prerequisites.ff_metrics_history_enabled {
         level_2.push(Box::new(prometheus_operator));
         level_4.push(Box::new(prometheus_adapter));
@@ -1226,168 +931,4 @@ datasources:
 
     info!("charts configuration preparation finished");
     Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6])
-}
-
-// AWS CNI
-
-#[derive(Default)]
-pub struct AwsVpcCniChart {
-    pub chart_info: ChartInfo,
-}
-
-impl HelmChart for AwsVpcCniChart {
-    fn get_chart_info(&self) -> &ChartInfo {
-        &self.chart_info
-    }
-
-    fn pre_exec(
-        &self,
-        kubernetes_config: &Path,
-        envs: &[(String, String)],
-        _payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, SimpleError> {
-        let kinds = vec!["daemonSet", "clusterRole", "clusterRoleBinding", "serviceAccount"];
-        let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-        environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
-
-        match self.enable_cni_managed_by_helm(kubernetes_config, envs) {
-            true => {
-                info!("Enabling AWS CNI support by Helm");
-
-                for kind in kinds {
-                    info!("setting annotations and labels on {}/aws-node", &kind);
-                    let steps = || -> Result<(), SimpleError> {
-                        kubectl_exec_with_output(
-                            vec![
-                                "-n",
-                                "kube-system",
-                                "annotate",
-                                "--overwrite",
-                                kind,
-                                "aws-node",
-                                format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
-                            ],
-                            environment_variables.clone(),
-                            |_| {},
-                            |_| {},
-                        )?;
-                        kubectl_exec_with_output(
-                            vec![
-                                "-n",
-                                "kube-system",
-                                "annotate",
-                                "--overwrite",
-                                kind,
-                                "aws-node",
-                                "meta.helm.sh/release-namespace=kube-system",
-                            ],
-                            environment_variables.clone(),
-                            |_| {},
-                            |_| {},
-                        )?;
-                        kubectl_exec_with_output(
-                            vec![
-                                "-n",
-                                "kube-system",
-                                "label",
-                                "--overwrite",
-                                kind,
-                                "aws-node",
-                                "app.kubernetes.io/managed-by=Helm",
-                            ],
-                            environment_variables.clone(),
-                            |_| {},
-                            |_| {},
-                        )?;
-                        Ok(())
-                    };
-
-                    if let Err(e) = steps() {
-                        return Err(SimpleError {
-                            kind: SimpleErrorKind::Other,
-                            message: Some(format!(
-                                "error while adding annotations for AWS VPC CNI. {:?}",
-                                e.message
-                            )),
-                        });
-                    }
-                }
-
-                info!("AWS CNI successfully deployed");
-                // sleep in order to be sure the daemonset is updated
-                sleep(Duration::from_secs(30))
-            }
-            false => info!("AWS CNI is already supported by Helm, nothing to do"),
-        };
-
-        Ok(None)
-    }
-}
-
-impl AwsVpcCniChart {
-    // this is required to know if we need to keep old annotation/labels values or not
-    fn is_cni_old_installed_version(
-        &self,
-        kubernetes_config: &Path,
-        envs: &[(String, String)],
-    ) -> Result<bool, SimpleError> {
-        let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-
-        match kubectl_exec_get_daemonset(
-            kubernetes_config,
-            "aws-node",
-            self.namespace().as_str(),
-            None,
-            environment_variables,
-        ) {
-            Ok(x) => {
-                if x.spec.is_none() {
-                    return Err(SimpleError {
-                        kind: SimpleErrorKind::Other,
-                        message: Some(format!(
-                            "spec was not found in json output while looking at daemonset {}",
-                            &self.chart_info.name
-                        )),
-                    });
-                }
-
-                match x.spec.unwrap().selector.match_labels.k8s_app {
-                    Some(x) if x == "aws-node" => Ok(true),
-                    _ => Ok(false),
-                }
-            }
-            Err(e) => {
-                let msg = format!(
-                    "error while getting daemonset info for chart {}, won't deploy CNI chart. {:?}",
-                    &self.chart_info.name, e
-                );
-                error!("{}", &msg);
-                Err(SimpleError {
-                    kind: SimpleErrorKind::Other,
-                    message: Some(msg),
-                })
-            }
-        }
-    }
-
-    fn enable_cni_managed_by_helm(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> bool {
-        let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-
-        match kubectl_exec_get_daemonset(
-            kubernetes_config,
-            &self.chart_info.name,
-            self.namespace().as_str(),
-            Some("k8s-app=aws-node,app.kubernetes.io/managed-by=Helm"),
-            environment_variables,
-        ) {
-            Ok(x) => x.items.is_some() && x.items.unwrap().is_empty(),
-            Err(e) => {
-                error!(
-                    "error while getting daemonset info for chart {}, won't deploy CNI chart. {:?}",
-                    &self.chart_info.name, e
-                );
-                false
-            }
-        }
-    }
 }

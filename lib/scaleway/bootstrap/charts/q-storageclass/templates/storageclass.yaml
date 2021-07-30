@@ -1,0 +1,15 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: scw-sbv-ssd-0
+  labels:
+    scw-type: "b_ssd"
+    qovery-type: "ssd"
+    reclaim: "0"
+provisioner: csi.scaleway.com
+parameters:
+  csi.storage.k8s.io/fstype: ext4
+  type: b_ssd
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
