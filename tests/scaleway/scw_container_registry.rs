@@ -36,10 +36,10 @@ fn test_get_registry_namespace() {
     for region in regions_to_test().into_iter() {
         let container_registry = ScalewayCR::new(
             context.clone(),
-            "".to_string(),
-            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()),
-            scw_secret_key.to_owned(),
-            scw_default_project_id.to_owned(),
+            "",
+            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()).as_str(),
+            scw_secret_key.as_str(),
+            scw_default_project_id.as_str(),
             region,
         );
 
@@ -91,10 +91,10 @@ fn test_create_registry_namespace() {
     for region in regions_to_test().into_iter() {
         let container_registry = ScalewayCR::new(
             context.clone(),
-            "".to_string(),
-            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()),
-            scw_secret_key.to_owned(),
-            scw_default_project_id.to_owned(),
+            "",
+            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()).as_str(),
+            scw_secret_key.as_str(),
+            scw_default_project_id.as_str(),
             region,
         );
 
@@ -139,10 +139,10 @@ fn test_delete_registry_namespace() {
     for region in regions_to_test().into_iter() {
         let container_registry = ScalewayCR::new(
             context.clone(),
-            "".to_string(),
-            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()),
-            scw_secret_key.to_owned(),
-            scw_default_project_id.to_owned(),
+            "",
+            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()).as_str(),
+            scw_secret_key.as_str(),
+            scw_default_project_id.as_str(),
             region,
         );
 
@@ -182,10 +182,10 @@ fn test_get_or_create_registry_namespace() {
     for region in regions_to_test().into_iter() {
         let container_registry = ScalewayCR::new(
             context.clone(),
-            "".to_string(),
-            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()),
-            scw_secret_key.to_owned(),
-            scw_default_project_id.to_owned(),
+            "",
+            format!("test-{}-{}", Uuid::new_v4(), &region.to_string()).as_str(),
+            scw_secret_key.as_str(),
+            scw_default_project_id.as_str(),
             region,
         );
 

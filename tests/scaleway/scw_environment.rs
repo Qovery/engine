@@ -26,7 +26,7 @@ pub fn deploy_environment(
     let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
     let dns_provider = test_utilities::cloudflare::dns_provider_cloudflare(context);
     let object_storage = test_utilities::scaleway::scw_object_storage(context.clone(), region);
-    let kapsule = test_utilities::scaleway::scw_kubernetes_kapsule(context, &cp, &dns_provider, object_storage, nodes);
+    let kapsule = test_utilities::scaleway::scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
 
     let _ = tx.deploy_environment_with_options(
         &kapsule,
@@ -53,7 +53,7 @@ pub fn delete_environment(
     let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
     let dns_provider = test_utilities::cloudflare::dns_provider_cloudflare(context);
     let object_storage = test_utilities::scaleway::scw_object_storage(context.clone(), region);
-    let kapsule = test_utilities::scaleway::scw_kubernetes_kapsule(context, &cp, &dns_provider, object_storage, nodes);
+    let kapsule = test_utilities::scaleway::scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
 
     let _ = tx.delete_environment(&kapsule, &environment_action);
 

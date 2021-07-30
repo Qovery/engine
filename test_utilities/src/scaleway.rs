@@ -140,7 +140,6 @@ pub fn scw_kubernetes_kapsule<'a>(
     context: &Context,
     cloud_provider: &'a Scaleway,
     dns_provider: &'a dyn DnsProvider,
-    object_storage: ScalewayOS,
     nodes: Vec<Node>,
 ) -> Kapsule<'a> {
     let secrets = FuncTestsSecrets::new();
