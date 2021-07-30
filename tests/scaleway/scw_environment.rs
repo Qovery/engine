@@ -62,6 +62,7 @@ pub fn delete_environment(
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_no_router_on_scaleway_kapsule() {
     engine_run_test(|| {
         let span = span!(
@@ -103,6 +104,7 @@ fn deploy_a_working_environment_with_no_router_on_scaleway_kapsule() {
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[test]
+#[ignore]
 fn deploy_a_not_working_environment_with_no_router_on_scaleway_kapsule() {
     engine_run_test(|| {
         let span = span!(
@@ -144,6 +146,7 @@ fn deploy_a_not_working_environment_with_no_router_on_scaleway_kapsule() {
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[test]
+#[ignore]
 fn build_with_buildpacks_and_deploy_a_working_environment_on_scaleway_kapsule() {
     engine_run_test(|| {
         let span = span!(
@@ -194,6 +197,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment_on_scaleway_kapsule() 
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[test]
+#[ignore]
 fn deploy_a_working_environment_with_domain_on_scaleway_kapsule() {
     engine_run_test(|| {
         let span = span!(
