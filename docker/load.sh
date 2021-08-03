@@ -53,7 +53,7 @@ function download() { ## Download prerequisites binaries for the engine
 
   # Dumb init
   echo "Downloading Dumb init"
-  curl -sLo dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_${ARCH}
+  curl -sLo dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_x86_64
   mv dumb-init $BIN_DEST_FOLDER/
 
   # Vault
