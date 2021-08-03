@@ -25,7 +25,6 @@ pub fn deploy_environment(
     let cp = test_utilities::scaleway::cloud_provider_scaleway(context);
     let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
     let dns_provider = test_utilities::cloudflare::dns_provider_cloudflare(context);
-    let object_storage = test_utilities::scaleway::scw_object_storage(context.clone(), region);
     let kapsule = test_utilities::scaleway::scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
 
     let _ = tx.deploy_environment_with_options(
@@ -52,7 +51,6 @@ pub fn delete_environment(
     let cp = test_utilities::scaleway::cloud_provider_scaleway(context);
     let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
     let dns_provider = test_utilities::cloudflare::dns_provider_cloudflare(context);
-    let object_storage = test_utilities::scaleway::scw_object_storage(context.clone(), region);
     let kapsule = test_utilities::scaleway::scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
 
     let _ = tx.delete_environment(&kapsule, &environment_action);
@@ -62,7 +60,6 @@ pub fn delete_environment(
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[test]
-#[ignore]
 fn deploy_a_working_environment_with_no_router_on_scaleway_kapsule() {
     engine_run_test(|| {
         let span = span!(
@@ -104,7 +101,6 @@ fn deploy_a_working_environment_with_no_router_on_scaleway_kapsule() {
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[test]
-#[ignore]
 fn deploy_a_not_working_environment_with_no_router_on_scaleway_kapsule() {
     engine_run_test(|| {
         let span = span!(
@@ -129,15 +125,15 @@ fn deploy_a_not_working_environment_with_no_router_on_scaleway_kapsule() {
         let region = Region::from_str(secrets.SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
 
         match deploy_environment(&context, region, env_action) {
-            TransactionResult::Ok => assert!(true),
+            TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
         match delete_environment(&context_for_delete, region, env_action_for_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
         return "deploy_a_not_working_environment_with_no_router_on_scaleway_kapsule".to_string();
@@ -146,7 +142,7 @@ fn deploy_a_not_working_environment_with_no_router_on_scaleway_kapsule() {
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[test]
-#[ignore]
+#[ignore] // TODO(benjaminch): Activate it
 fn build_with_buildpacks_and_deploy_a_working_environment_on_scaleway_kapsule() {
     engine_run_test(|| {
         let span = span!(
@@ -197,7 +193,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment_on_scaleway_kapsule() 
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[test]
-#[ignore]
+#[ignore] // TODO(benjaminch): Activate it
 fn deploy_a_working_environment_with_domain_on_scaleway_kapsule() {
     engine_run_test(|| {
         let span = span!(

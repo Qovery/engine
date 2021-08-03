@@ -2,13 +2,13 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete, Helm, Pause,
-    Service, ServiceType, StatelessService,
+    default_tera_context, delete_router, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete,
+    Helm, Pause, Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::sanitize_name;
+use crate::cloud_provider::utilities::{check_cname_for, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::error::{EngineError, EngineErrorScope};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Router {
@@ -104,7 +104,7 @@ impl Service for Router {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
-        let context = default_tera_context(self, kubernetes, environment);
+        let mut context = default_tera_context(self, kubernetes, environment);
 
         let applications = environment
             .stateless_services
@@ -112,7 +112,7 @@ impl Service for Router {
             .filter(|x| x.service_type() == ServiceType::Application)
             .collect::<Vec<_>>();
 
-        let _custom_domain_data_templates = self
+        let custom_domain_data_templates = self
             .custom_domains
             .iter()
             .map(|cd| {
@@ -125,7 +125,7 @@ impl Service for Router {
             })
             .collect::<Vec<_>>();
 
-        let _route_data_templates = self
+        let route_data_templates = self
             .routes
             .iter()
             .map(|r| {
@@ -144,6 +144,51 @@ impl Service for Router {
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
+
+        let kubernetes_config_file_path = kubernetes.config_file_path();
+
+        match kubernetes_config_file_path {
+            Ok(kubernetes_config_file_path_string) => {
+                // Default domain
+                let external_ingress_hostname_default = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
+                    kubernetes_config_file_path_string.as_str(),
+                    "nginx-ingress",
+                    "app=nginx-ingress,component=controller",
+                    kubernetes.cloud_provider().credentials_environment_variables(),
+                );
+
+                match external_ingress_hostname_default {
+                    Ok(external_ingress_hostname_default) => match external_ingress_hostname_default {
+                        Some(hostname) => context.insert("external_ingress_hostname_default", hostname.as_str()),
+                        None => {
+                            warn!("unable to get external_ingress_hostname_default - what's wrong? This must never happened");
+                        }
+                    },
+                    _ => {
+                        // FIXME really?
+                        warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
+                    }
+                }
+            }
+            Err(_) => error!("can't fetch kubernetes config file - what's wrong? This must never happened"), // FIXME should I return an Err?
+        }
+
+        let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
+
+        let tls_domain = format!("*.{}", kubernetes.dns_provider().domain());
+        context.insert("router_tls_domain", tls_domain.as_str());
+        context.insert("router_default_domain", self.default_domain.as_str());
+        context.insert("router_default_domain_hash", router_default_domain_hash.as_str());
+        context.insert("custom_domains", &custom_domain_data_templates);
+        context.insert("routes", &route_data_templates);
+        context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
+        context.insert("metadata_annotations_cert_manager_cluster_issuer", "letsencrypt-qovery");
+
+        let lets_encrypt_url = match self.context.is_test_cluster() {
+            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
+            false => "https://acme-v02.api.letsencrypt.org/directory",
+        };
+        context.insert("spec_acme_server", lets_encrypt_url);
 
         Ok(context)
     }
@@ -206,19 +251,44 @@ impl StatelessService for Router {}
 impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("Scaleway.router.on_create() called for {}", self.name());
-        let (kubernetes, _environment) = match target {
+        let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let _workspace_dir = self.workspace_directory();
-        let _helm_release_name = self.helm_release_name();
+        let workspace_dir = self.workspace_directory();
+        let helm_release_name = self.helm_release_name();
 
-        let _kubernetes_config_file_path = kubernetes.config_file_path()?;
+        let kubernetes_config_file_path = kubernetes.config_file_path()?;
 
         // respect order - getting the context here and not before is mandatory
         // the nginx-ingress must be available to get the external dns target if necessary
-        let _context = self.tera_context(target)?;
+        let context = self.tera_context(target)?;
+
+        let from_dir = format!("{}/scaleway/charts/q-ingress-tls", self.context.lib_root_dir());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), &context),
+        )?;
+
+        // do exec helm upgrade and return the last deployment status
+        let helm_history_row = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::cmd::helm::helm_exec_with_upgrade_history(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                helm_release_name.as_str(),
+                workspace_dir.as_str(),
+                Timeout::Default,
+                kubernetes.cloud_provider().credentials_environment_variables(),
+            ),
+        )?;
+
+        if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
+            return Err(self.engine_error(EngineErrorCause::Internal, "Router has failed to be deployed".into()));
+        }
 
         Ok(())
     }
@@ -228,6 +298,26 @@ impl Create for Router {
 
         // check non custom domains
         self.check_domains()?;
+
+        // Wait/Check that custom domain is a CNAME targeting qovery
+        for domain_to_check in self.custom_domains.iter() {
+            match check_cname_for(
+                self.progress_scope(),
+                self.listeners(),
+                &domain_to_check.domain,
+                self.context.execution_id(),
+            ) {
+                Ok(cname) if cname.trim_end_matches('.') == domain_to_check.target_domain.trim_end_matches('.') => {
+                    continue
+                }
+                Ok(err) | Err(err) => {
+                    warn!(
+                        "Invalid CNAME for {}. Might not be an issue if user is using a CDN: {}",
+                        domain_to_check.domain, err
+                    );
+                }
+            }
+        }
 
         Ok(())
     }
@@ -244,40 +334,25 @@ impl Create for Router {
 }
 
 impl Pause for Router {
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.router.on_pause() called for {}", self.name());
-
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+        Ok(())
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("SCW.router.on_pause_error() called for {}", self.name());
-
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        Ok(())
     }
 }
 
 impl Delete for Router {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.router.on_delete() called for {}", self.name());
-
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+        delete_router(target, self, false)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -286,11 +361,6 @@ impl Delete for Router {
 
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("SCW.router.on_delete_error() called for {}", self.name());
-
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        delete_router(target, self, true)
     }
 }

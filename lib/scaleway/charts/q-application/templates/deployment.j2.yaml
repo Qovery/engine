@@ -1,0 +1,89 @@
+{%- if not is_storage %}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ sanitized_name }}
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    appId: {{ id }}
+    app: {{ sanitized_name }}
+  annotations:
+    releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
+spec:
+  replicas: {{ total_instances }}
+  strategy:
+    type: RollingUpdate
+    {% if total_instances == 1 %}
+    rollingUpdate:
+      maxSurge: 1
+    {% endif %}
+  selector:
+    matchLabels:
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+      appId: {{ id }}
+      app: {{ sanitized_name }}
+  template:
+    metadata:
+      labels:
+        ownerId: {{ owner_id }}
+        envId: {{ environment_id }}
+        appId: {{ id }}
+        app: {{ sanitized_name }}
+      annotations:
+        checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                    - {{ sanitized_name }}
+              topologyKey: "kubernetes.io/hostname"
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {}
+      {%- if is_registry_secret %}
+      imagePullSecrets:
+        - name: {{ registry_secret_name }}
+      {%- endif %}
+      containers:
+        - name: {{ sanitized_name }}
+          image: "{{ image_name_with_tag }}"
+          env:
+            {%- for ev in environment_variables %}
+            - name: "{{ ev.key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ sanitized_name }}
+                  key: {{ ev.key }}
+            {%- endfor %}
+            {%- if private_port %}
+          ports:
+            - containerPort: {{ private_port }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: {{ private_port }}
+            initialDelaySeconds: {{ start_timeout_in_seconds }}
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ private_port }}
+            initialDelaySeconds: {{ start_timeout_in_seconds }}
+            periodSeconds: 20
+            {%- endif %}
+          resources:
+            limits:
+              cpu: {{ cpu_burst }}
+              memory: {{ total_ram_in_mib }}Mi
+            requests:
+              cpu: {{ total_cpus }}
+              memory: {{ total_ram_in_mib }}Mi
+{%- endif %}

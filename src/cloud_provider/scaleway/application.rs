@@ -167,7 +167,10 @@ impl Service for Application {
         context.insert("helm_app_version", &commit_id[..7]);
 
         match &self.image().registry_url {
-            Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
+            Some(registry_url) => context.insert(
+                "image_name_with_tag",
+                format!("{}/{}", registry_url.as_str(), self.image().name_with_tag()).as_str(),
+            ),
             None => {
                 let image_name_with_tag = self.image().name_with_tag();
                 warn!(
@@ -190,9 +193,9 @@ impl Service for Application {
         context.insert("environment_variables", &environment_variables);
 
         match self.image.registry_name.as_ref() {
-            Some(registry_name) => {
+            Some(_) => {
                 context.insert("is_registry_secret", &true);
-                context.insert("registry_secret", registry_name);
+                context.insert("registry_secret_name", "container-registry-token");
             }
             None => {
                 context.insert("is_registry_secret", &false);
@@ -248,6 +251,12 @@ impl Service for Application {
                 &self.context.resource_expiration_in_seconds(),
             )
         }
+
+        // container registry credentials
+        context.insert(
+            "container_registry_docker_json_config",
+            self.image.clone().registry_docker_json_config.unwrap().as_str(),
+        );
 
         Ok(context)
     }

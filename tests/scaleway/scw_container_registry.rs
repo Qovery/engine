@@ -56,6 +56,7 @@ fn test_get_registry_namespace() {
             registry_name: Some(registry_name.to_string()),
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         };
 
         container_registry
@@ -114,6 +115,7 @@ fn test_create_registry_namespace() {
             registry_name: Some(registry_name.to_string()),
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         };
 
         // execute:
@@ -165,6 +167,7 @@ fn test_delete_registry_namespace() {
             registry_name: Some(registry_name.to_string()),
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         };
 
         container_registry
@@ -211,6 +214,7 @@ fn test_get_or_create_registry_namespace() {
             registry_name: Some(registry_name.to_string()),
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         };
 
         container_registry

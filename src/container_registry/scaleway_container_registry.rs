@@ -11,6 +11,9 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::runtime::block_on;
+use retry::delay::Fixed;
+use retry::Error::Operation;
+use retry::OperationResult;
 
 pub struct ScalewayCR {
     context: Context,
@@ -105,7 +108,7 @@ impl ScalewayCR {
             None,
             Some(image.name.as_str()),
             None,
-            Some(image.registry_name.as_ref().unwrap_or(&"".to_string()).as_str()),
+            Some(self.default_project_id.as_str()),
         )) {
             Ok(res) => res.images,
             Err(e) => {
@@ -169,16 +172,35 @@ impl ScalewayCR {
             image.tag.clone(),
             image_url.clone(),
         ) {
-            Ok(_) => {
-                let mut image = image.clone();
-                image.registry_url = Some(image_url);
-                Ok(PushResult { image })
+            Ok(_) => {}
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    e.message
+                        .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
+                ))
             }
-            Err(e) => Err(self.engine_error(
-                EngineErrorCause::Internal,
-                e.message
-                    .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
-            )),
+        };
+
+        let result = retry::retry(Fixed::from_millis(10000).take(12), || {
+            match self.does_image_exists(&image) {
+                true => OperationResult::Ok(&image),
+                false => {
+                    warn!("image is not yet available on Scaleway Registry Namespace, retrying in a few seconds...");
+                    OperationResult::Retry(())
+                }
+            }
+        });
+
+        let image_not_reachable = Err(self.engine_error(
+            EngineErrorCause::Internal,
+            "image has been pushed on Scaleway Registry Namespace but is not yet available after 2min. Please try to redeploy in a few minutes".to_string(),
+        ));
+
+        match result {
+            Ok(_) => Ok(PushResult { image: image.clone() }),
+            Err(Operation { .. }) => image_not_reachable,
+            Err(retry::Error::Internal(_)) => image_not_reachable,
         }
     }
 
@@ -260,6 +282,17 @@ impl ScalewayCR {
 
         self.create_registry_namespace(&image)
     }
+
+    fn get_docker_json_config_raw(&self) -> String {
+        base64::encode(
+            format!(
+                "{{\"auths\":{{\"rg.{}.scw.cloud\":{{\"auth\":\"{}\"}}}}}}",
+                self.region.as_str(),
+                base64::encode(format!("nologin:{}", self.secret_token).as_bytes())
+            )
+            .as_bytes(),
+        )
+    }
 }
 
 impl ContainerRegistry for ScalewayCR {
@@ -317,8 +350,9 @@ impl ContainerRegistry for ScalewayCR {
                 image.registry_name = registry.name.clone();
                 image.registry_url = registry.endpoint.clone();
                 image.registry_secret = Some(self.secret_token.clone());
-                registry_url = image.registry_url.clone().unwrap_or("undefined".to_string());
-                registry_name = registry.clone().name.unwrap();
+                image.registry_docker_json_config = Some(self.get_docker_json_config_raw());
+                registry_url = registry.endpoint.unwrap_or_else(|| "undefined".to_string());
+                registry_name = registry.name.unwrap();
             }
             Err(e) => {
                 error!(
