@@ -158,7 +158,7 @@ impl Service for Router {
                 );
 
                 match external_ingress_hostname_default {
-                    Ok(external_ingress_hostname_default) => match external_ingress_hostname_default {
+                    Ok(external_ingress_hostname_default_result) => match external_ingress_hostname_default_result {
                         Some(hostname) => context.insert("external_ingress_hostname_default", hostname.as_str()),
                         None => {
                             warn!("unable to get external_ingress_hostname_default - what's wrong? This must never happened");
