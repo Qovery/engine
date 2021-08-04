@@ -70,7 +70,7 @@ impl Application {
     }
 
     fn is_stateful(&self) -> bool {
-        self.storage.len() > 0
+        !self.storage.is_empty()
     }
 }
 

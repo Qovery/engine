@@ -9,12 +9,13 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
-    send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
-    StatelessService,
+    scale_down_application, send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm,
+    Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_and_burstable};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
@@ -69,6 +70,10 @@ impl Application {
             environment_variables,
             listeners,
         }
+    }
+
+    fn is_stateful(&self) -> bool {
+        !self.storage.is_empty()
     }
 }
 
@@ -300,11 +305,14 @@ impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.application.on_pause() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
+            scale_down_application(
+                target,
+                self,
+                0,
+                if self.is_stateful() { Statefulset } else { Deployment },
+            )
+        })
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {

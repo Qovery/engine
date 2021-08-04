@@ -4,29 +4,36 @@ use dirs::home_dir;
 use gethostname;
 use std::fs::read_to_string;
 use std::fs::File;
-use std::io::{Error, ErrorKind, Write};
+use std::io::{Error, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::Path;
+use std::str::FromStr;
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
+use std::fs::OpenOptions;
 use std::os::unix::fs::PermissionsExt;
 use tracing::{info, warn};
 use tracing_subscriber;
 
-use crate::aws::KUBE_CLUSTER_ID;
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::cloud_provider::Kind;
+use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cmd;
-use qovery_engine::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use qovery_engine::constants::{
+    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
+};
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use time::Instant;
+use qovery_engine::object_storage::scaleway_object_storage::{ScalewayOS, BucketDeleteStrategy};
+use qovery_engine::object_storage::ObjectStorage;
 
 pub fn context() -> Context {
     let execution_id = execution_id();
@@ -369,33 +376,35 @@ fn curl_path(path: &str) -> bool {
 }
 
 fn kubernetes_config_path(
+    provider_kind: Kind,
+    context: Context,
     workspace_directory: &str,
     kubernetes_cluster_id: &str,
-    access_key_id: &str,
-    secret_access_key: &str,
+    secrets: FuncTestsSecrets,
 ) -> Result<String, SimpleError> {
     let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", kubernetes_cluster_id);
     let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
-
     let kubernetes_config_file_path = format!("{}/kubernetes_config_{}", workspace_directory, kubernetes_cluster_id);
 
     let _ = get_kubernetes_config_file(
-        access_key_id,
-        secret_access_key,
-        kubernetes_config_bucket_name.as_str(),
-        kubernetes_config_object_key.as_str(),
-        kubernetes_config_file_path.as_str(),
+        provider_kind,
+        context,
+        kubernetes_config_bucket_name,
+        kubernetes_config_object_key,
+        kubernetes_config_file_path.clone(),
+        secrets.clone(),
     )?;
 
     Ok(kubernetes_config_file_path)
 }
 
 fn get_kubernetes_config_file<P>(
-    access_key_id: &str,
-    secret_access_key: &str,
-    kubernetes_config_bucket_name: &str,
-    kubernetes_config_object_key: &str,
+    provider_kind: Kind,
+    context: Context,
+    kubernetes_config_bucket_name: String,
+    kubernetes_config_object_key: String,
     file_path: P,
+    secrets: FuncTestsSecrets,
 ) -> Result<File, SimpleError>
 where
     P: AsRef<Path>,
@@ -406,12 +415,31 @@ where
         Err(_) => {}
     };
 
+    let access_key_id = match provider_kind {
+        Kind::Aws => secrets.clone().AWS_ACCESS_KEY_ID.unwrap(),
+        Kind::Do => todo!(),
+        Kind::Scw => secrets.clone().SCALEWAY_ACCESS_KEY.unwrap(),
+    };
+    let secret_access_key = match provider_kind {
+        Kind::Aws => secrets.clone().AWS_SECRET_ACCESS_KEY.unwrap(),
+        Kind::Do => todo!(),
+        Kind::Scw => secrets.clone().SCALEWAY_SECRET_KEY.unwrap(),
+    };
+    let region = match provider_kind {
+        Kind::Aws => secrets.clone().AWS_DEFAULT_REGION.unwrap(),
+        Kind::Do => todo!(),
+        Kind::Scw => secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap(),
+    };
+
     let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
-        let file_content = get_object_via_aws_cli(
-            access_key_id,
-            secret_access_key,
-            kubernetes_config_bucket_name,
-            kubernetes_config_object_key,
+        let file_content = get_object_from_object_storage(
+            provider_kind.clone(),
+            context.clone(),
+            access_key_id.as_str(),
+            secret_access_key.as_str(),
+            region.as_str(),
+            kubernetes_config_bucket_name.as_str(),
+            kubernetes_config_object_key.as_str(),
         );
 
         match file_content {
@@ -440,31 +468,97 @@ where
     Ok(kubernetes_config_file)
 }
 
-/// gets an aws s3 object using aws-cli
-/// used as a failover when rusoto_s3 acts up
-fn get_object_via_aws_cli(
+type KubernetesCredentials<'a> = Vec<(&'a str, &'a str)>;
+
+fn get_cloud_provider_credentials<'a>(provider_kind: Kind, secrets: &'a FuncTestsSecrets) -> KubernetesCredentials<'a> {
+    match provider_kind {
+        Kind::Aws => vec![
+            (AWS_ACCESS_KEY_ID, secrets.AWS_ACCESS_KEY_ID.as_ref().unwrap().as_str()),
+            (AWS_SECRET_ACCESS_KEY, secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str()),
+        ],
+        Kind::Do => todo!(),
+        Kind::Scw => vec![
+            (SCALEWAY_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
+            (SCALEWAY_SECRET_KEY, secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str()),
+            (
+                SCALEWAY_DEFAULT_PROJECT_ID,
+                secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str(),
+            ),
+        ],
+    }
+}
+
+fn get_object_from_object_storage(
+    provider_kind: Kind,
+    context: Context,
     access_key_id: &str,
     secret_access_key: &str,
+    region: &str,
     bucket_name: &str,
     object_key: &str,
 ) -> Result<String, SimpleError> {
-    let s3_url = format!("s3://{}/{}", bucket_name, object_key);
     let local_path = format!("/tmp/{}", object_key); // FIXME: change hardcoded /tmp/
 
-    qovery_engine::cmd::utilities::exec(
-        "aws",
-        vec!["s3", "cp", &s3_url, &local_path],
-        &vec![
-            (AWS_ACCESS_KEY_ID, access_key_id),
-            (AWS_SECRET_ACCESS_KEY, secret_access_key),
-        ],
-    )?;
+    match provider_kind {
+        Kind::Aws => {
+            // gets an aws s3 object using aws-cli
+            // used as a failover when rusoto_s3 acts up
+            let s3_url = format!("s3://{}/{}", bucket_name, object_key);
+
+            qovery_engine::cmd::utilities::exec(
+                "aws",
+                vec!["s3", "cp", &s3_url, &local_path],
+                &vec![
+                    (AWS_ACCESS_KEY_ID, access_key_id),
+                    (AWS_SECRET_ACCESS_KEY, secret_access_key),
+                ],
+            )?;
+
+        },
+        Kind::Do => todo!(),
+        Kind::Scw => {
+            let object_storage = ScalewayOS::new(context, "test".to_string(), "test".to_string(), access_key_id.to_string(), secret_access_key.to_string(), Region::from_str(region).unwrap(), BucketDeleteStrategy::Empty);
+
+            match object_storage.get(bucket_name, object_key, false) {
+                Ok((_, mut file)) => {
+                    let mut content = String::new();
+                    match file.read_to_string(&mut content) {
+                        Ok(_) => {
+                            let mut local_file = OpenOptions::new()
+                                .read(true)
+                                .write(true)
+                                .create(true)
+                                .open(local_path.clone())
+                                .unwrap();
+
+                            local_file.seek(SeekFrom::Start(0)).unwrap();
+                            local_file.write_all(content.as_bytes()).unwrap();
+
+                            Ok(content)
+                        },
+                        Err(e) => {
+                            let message = format!("{:?}", e);
+                            Err(SimpleError::new(SimpleErrorKind::Other, Some(message)))
+                        }
+                    }
+                },
+                Err(e) => {
+                    let message = format!("{:?}", e);
+                    Err(SimpleError::new(SimpleErrorKind::Other, Some(message)))
+                }
+            };
+        }
+    }
 
     let s = read_to_string(&local_path)?;
+
     Ok(s)
 }
 
-pub fn is_pod_restarted_aws_env(
+pub fn is_pod_restarted_env(
+    provider_kind: Kind,
+    context: Context,
+    kube_cluster_id: &str,
     environment_check: Environment,
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
@@ -475,14 +569,13 @@ pub fn is_pod_restarted_aws_env(
         &environment_check.id.clone(),
     );
 
-    let access_key = secrets.AWS_ACCESS_KEY_ID.unwrap();
-    let secret_key = secrets.AWS_SECRET_ACCESS_KEY.unwrap();
-    let aws_credentials_envs = vec![
-        ("AWS_ACCESS_KEY_ID", access_key.as_str()),
-        ("AWS_SECRET_ACCESS_KEY", secret_key.as_str()),
-    ];
-
-    let kubernetes_config = kubernetes_config_path("/tmp", KUBE_CLUSTER_ID, access_key.as_str(), secret_key.as_str());
+    let kubernetes_config = kubernetes_config_path(
+        provider_kind.clone(),
+        context,
+        "/tmp",
+        kube_cluster_id,
+        secrets.clone(),
+    );
 
     match kubernetes_config {
         Ok(path) => {
@@ -490,7 +583,7 @@ pub fn is_pod_restarted_aws_env(
                 path.as_str(),
                 namespace_name.clone().as_str(),
                 pod_to_check,
-                aws_credentials_envs,
+                get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
             );
             match restarted_database {
                 Ok(count) => match count.trim().eq("0") {
@@ -504,9 +597,12 @@ pub fn is_pod_restarted_aws_env(
     }
 }
 
-pub fn get_pods_aws(
+pub fn get_pods(
+    provider_kind: Kind,
+    context: Context,
     environment_check: Environment,
     pod_to_check: &str,
+    kube_cluster_id: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, SimpleError> {
     let namespace_name = format!(
@@ -515,20 +611,19 @@ pub fn get_pods_aws(
         &environment_check.id.clone(),
     );
 
-    let access_key = secrets.AWS_ACCESS_KEY_ID.unwrap();
-    let secret_key = secrets.AWS_SECRET_ACCESS_KEY.unwrap();
-    let aws_credentials_envs = vec![
-        ("AWS_ACCESS_KEY_ID", access_key.as_str()),
-        ("AWS_SECRET_ACCESS_KEY", secret_key.as_str()),
-    ];
-
-    let kubernetes_config = kubernetes_config_path("/tmp", KUBE_CLUSTER_ID, access_key.as_str(), secret_key.as_str());
+    let kubernetes_config = kubernetes_config_path(
+        provider_kind.clone(),
+        context,
+        "/tmp",
+        kube_cluster_id,
+        secrets.clone(),
+    );
 
     cmd::kubectl::kubectl_exec_get_pod(
         kubernetes_config.unwrap().as_str(),
         namespace_name.clone().as_str(),
         pod_to_check,
-        aws_credentials_envs,
+        get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
     )
 }
 
