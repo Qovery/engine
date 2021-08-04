@@ -266,6 +266,90 @@ aws-self-hosted:
     expire_in: 2 week
   interruptible: true
 
+scw-infra:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh scw_infra
+  dependencies:
+    - linter
+    - build
+  when: always
+  tags:
+    - 2cpu-4gmem-0g
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-scw-infra/
+      - $TESTS_TO_RUN =~ /test-scw-all/
+      - $TESTS_TO_RUN =~ /test-all/
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities
+      - /builds/qovery/qovery-engine/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+scw-managed-services:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh scw_managed_services
+  dependencies:
+    - linter
+    - build
+  tags:
+    - 2cpu-12gmem-0g
+  when: always
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-scw-managed-services/
+      - $TESTS_TO_RUN =~ /test-scw-all/
+      - $TESTS_TO_RUN =~ /test-all/
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities
+      - /builds/qovery/qovery-engine/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+scw-self-hosted:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh scw_self_hosted
+  dependencies:
+    - linter
+    - build
+  tags:
+    - 2cpu-12gmem-0g
+  when: always
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-scw-self-hosted/
+      - $TESTS_TO_RUN =~ /test-scw-all/
+      - $TESTS_TO_RUN =~ /test-all/
+  artifacts:
+    when: always
+    reports:
+      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+    paths:
+      - /builds/qovery/qovery-engine/gitlab-log-utilities
+      - /builds/qovery/qovery-engine/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
 upgrade-engine-dev:
   stage: upgrade-dev
   retry: 1

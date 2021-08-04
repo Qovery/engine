@@ -521,6 +521,9 @@ get_release_ga)
 aws_self_hosted)
   run_tests test-aws-self-hosted $commit_id 20
   ;;
+scw_self_hosted)
+  run_tests test-scw-self-hosted $commit_id 20
+  ;;
 do_self_hosted)
   run_tests test-do-self-hosted $commit_id 20
   ;;
@@ -530,6 +533,9 @@ all_self_hosted)
 aws_managed_services)
   run_tests test-aws-managed-services $commit_id 20
   ;;
+scw_managed_services)
+  run_tests test-scw-managed-services $commit_id 20
+  ;;
 do_managed_services)
   run_tests test-do-managed-services $commit_id 20
   ;;
@@ -538,6 +544,9 @@ all_managed_services)
   ;;
 aws_infra)
   run_tests test-aws-infra $commit_id 20
+  ;;
+scw_infra)
+  run_tests test-scw-infra $commit_id 20
   ;;
 do_infra)
   run_tests test-do-infra $commit_id 20
