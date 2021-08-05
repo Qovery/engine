@@ -1,11 +1,13 @@
+extern crate base64;
+extern crate bstr;
 extern crate scaleway_api_rs;
 
+use base64::decode;
+use bstr::ByteSlice;
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
-use std::fs::read_to_string;
-use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::str::FromStr;
@@ -15,7 +17,7 @@ use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
-use std::fs::OpenOptions;
+use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tracing::{error, info, warn};
 use tracing_subscriber;
@@ -32,12 +34,12 @@ use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
+use crate::scaleway::SCW_TEST_CLUSTER_ID;
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
 use time::Instant;
-use crate::scaleway::SCW_TEST_CLUSTER_ID;
 
 pub fn context() -> Context {
     let execution_id = execution_id();
@@ -397,6 +399,7 @@ fn kubernetes_config_path(
         kubernetes_config_object_key,
         kubernetes_config_file_path.clone(),
         secrets.clone(),
+        false,
     )?;
 
     Ok(kubernetes_config_file_path)
@@ -409,15 +412,18 @@ fn get_kubernetes_config_file<P>(
     kubernetes_config_object_key: String,
     file_path: P,
     secrets: FuncTestsSecrets,
-) -> Result<File, SimpleError>
+    use_local_cache: bool,
+) -> Result<fs::File, SimpleError>
 where
     P: AsRef<Path>,
 {
-    // return the file if it already exists
-    let _ = match File::open(file_path.as_ref()) {
-        Ok(f) => return Ok(f),
-        Err(_) => {}
-    };
+    // return the file if it already exists and should use cache
+    if use_local_cache {
+        let _ = match fs::File::open(file_path.as_ref()) {
+            Ok(f) => return Ok(f),
+            Err(_) => {}
+        };
+    }
 
     let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
         let file_content = match provider_kind {
@@ -431,9 +437,10 @@ where
                     kubernetes_config_bucket_name.as_str(),
                     kubernetes_config_object_key.as_str(),
                 )
-            },
+            }
             Kind::Do => todo!(),
             Kind::Scw => {
+                // TODO(benjaminch): refactor all of this properly
                 let access_key_id = secrets.clone().SCALEWAY_ACCESS_KEY.unwrap();
                 let secret_access_key = secrets.clone().SCALEWAY_SECRET_KEY.unwrap();
                 let region = Region::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
@@ -489,22 +496,32 @@ where
                                     cluster.id.as_ref().unwrap().as_str(),
                                 )) {
                                     Ok(res) => {
-                                        return OperationResult::Ok(res.content.unwrap());
-                                    },
+                                        return OperationResult::Ok(
+                                            base64::decode(res.content.unwrap())
+                                                .unwrap()
+                                                .to_str()
+                                                .unwrap()
+                                                .to_string(),
+                                        );
+                                    }
                                     Err(e) => {
-                                        let message = format!("error while trying to get clusters, error: {}", e.to_string());
+                                        let message =
+                                            format!("error while trying to get clusters, error: {}", e.to_string());
                                         error!("{}", message);
 
-                                        return OperationResult::Retry(SimpleError::new(SimpleErrorKind::Other, Some(message.as_str())));
-                                    },
-                                }
+                                        return OperationResult::Retry(SimpleError::new(
+                                            SimpleErrorKind::Other,
+                                            Some(message.as_str()),
+                                        ));
+                                    }
+                                };
                             }
                         }
                     }
                 }
 
                 Err(SimpleError::new(SimpleErrorKind::Other, Some("Test cluster not found")))
-            },
+            }
         };
 
         match file_content {
@@ -523,13 +540,16 @@ where
         }
     };
 
-    let mut kubernetes_config_file = File::create(file_path.as_ref())?;
+    let mut kubernetes_config_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(file_path.as_ref())?;
     let _ = kubernetes_config_file.write_all(file_content.as_bytes())?;
     // removes warning kubeconfig is (world/group) readable
-    let metadata = kubernetes_config_file.metadata()?;
-    let mut permissions = metadata.permissions();
-    permissions.set_mode(0o400);
-    std::fs::set_permissions(file_path.as_ref(), permissions)?;
+    let mut perms = fs::metadata(file_path.as_ref())?.permissions();
+    perms.set_readonly(false);
+    fs::set_permissions(file_path.as_ref(), perms)?;
     Ok(kubernetes_config_file)
 }
 
@@ -583,7 +603,7 @@ fn aws_s3_get_object(
         ],
     )?;
 
-    let s = read_to_string(&local_path)?;
+    let s = fs::read_to_string(&local_path)?;
 
     Ok(s)
 }

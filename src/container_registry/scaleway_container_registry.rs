@@ -11,7 +11,7 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::runtime::block_on;
-use retry::delay::Fixed;
+use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
 
@@ -341,13 +341,13 @@ impl ContainerRegistry for ScalewayCR {
         let registry_url: String;
         let registry_name: String;
 
-        match self.create_registry_namespace(&image) {
+        match self.get_or_create_registry_namespace(&image) {
             Ok(registry) => {
                 info!(
                     "Scaleway registry namespace for {} has been created",
                     image.name.as_str()
                 );
-                image.registry_name = registry.name.clone();
+                image.registry_name = Some(image.name.clone()); // Note: Repository namespace should have the same name as the image name
                 image.registry_url = registry.endpoint.clone();
                 image.registry_secret = Some(self.secret_token.clone());
                 image.registry_docker_json_config = Some(self.get_docker_json_config_raw());
