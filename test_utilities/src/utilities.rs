@@ -399,7 +399,6 @@ fn kubernetes_config_path(
         kubernetes_config_object_key,
         kubernetes_config_file_path.clone(),
         secrets.clone(),
-        false,
     )?;
 
     Ok(kubernetes_config_file_path)
@@ -412,18 +411,15 @@ fn get_kubernetes_config_file<P>(
     kubernetes_config_object_key: String,
     file_path: P,
     secrets: FuncTestsSecrets,
-    use_local_cache: bool,
 ) -> Result<fs::File, SimpleError>
 where
     P: AsRef<Path>,
 {
     // return the file if it already exists and should use cache
-    if use_local_cache {
-        let _ = match fs::File::open(file_path.as_ref()) {
-            Ok(f) => return Ok(f),
-            Err(_) => {}
-        };
-    }
+    let _ = match fs::File::open(file_path.as_ref()) {
+        Ok(f) => return Ok(f),
+        Err(_) => {}
+    };
 
     let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
         let file_content = match provider_kind {
