@@ -46,7 +46,7 @@ spec:
       securityContext: {}
       {%- if is_registry_secret %}
       imagePullSecrets:
-        - name: {{ registry_secret }}
+        - name: {{ registry_secret_name }}
       {%- endif %}
       containers:
         - name: {{ sanitized_name }}

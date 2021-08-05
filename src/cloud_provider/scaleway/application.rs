@@ -233,7 +233,10 @@ impl Service for Application {
                 id: s.id.clone(),
                 name: s.name.clone(),
                 storage_type: match s.storage_type {
-                    StorageType::BlockSsd => "b_ssd",
+                    // TODO(benjaminch): Switch to proper storage class
+                    // Note: Seems volume storage type are not supported, only blocked storage for the time being
+                    // https://github.com/scaleway/scaleway-csi/tree/master/examples/kubernetes#different-storageclass
+                    StorageType::BlockSsd => "scw-sbv-ssd-0", // "b_ssd",
                     StorageType::LocalSsd => "l_ssd",
                 }
                 .to_string(),

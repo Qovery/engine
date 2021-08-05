@@ -281,3 +281,58 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         test_name.to_string()
     })
 }
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[test]
+fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
+    engine_run_test(|| {
+        let test_name = "scaleway_kapsule_deploy_a_working_environment_with_storage";
+        let span = span!(Level::INFO, "test", name = test_name,);
+        let _enter = span.enter();
+
+        let context = context();
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
+
+        let mut environment = test_utilities::scaleway::working_minimal_environment(&context, secrets);
+
+        // Todo: make an image that check there is a mounted disk
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.storage = vec![Storage {
+                    id: generate_id(),
+                    name: "photos".to_string(),
+                    storage_type: StorageType::Ssd,
+                    size_in_gib: 10,
+                    mount_point: "/mnt/photos".to_string(),
+                    snapshot_retention_in_days: 0,
+                }];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+
+        let env_action = EnvironmentAction::Environment(environment);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+
+        match deploy_environment(&context, env_action) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // todo: check the disk is here and with correct size
+
+        match delete_environment(&context_for_deletion, env_action_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        test_name.to_string()
+    })
+}
