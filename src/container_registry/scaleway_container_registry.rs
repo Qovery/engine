@@ -11,7 +11,7 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::runtime::block_on;
-use retry::delay::{Fibonacci, Fixed};
+use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::OperationResult;
 

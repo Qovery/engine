@@ -2,7 +2,7 @@ extern crate test_utilities;
 
 use self::test_utilities::cloudflare;
 use self::test_utilities::scaleway::SCW_TEST_CLUSTER_ID;
-use self::test_utilities::utilities::{engine_run_test, generate_id, get_pods, FuncTestsSecrets};
+use self::test_utilities::utilities::{engine_run_test, generate_id, get_pods, is_pod_restarted_env, FuncTestsSecrets};
 use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
@@ -258,7 +258,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let context = context();
         let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+        let environment = test_utilities::scaleway::working_minimal_environment(&context, secrets.clone());
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -325,12 +325,348 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check the disk is here and with correct size
+        // TODO(benjaminch): check the disk is here and with correct size, can use Scaleway API
 
         match delete_environment(&context_for_deletion, env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[test]
+fn scaleway_kapsule_redeploy_same_app() {
+    engine_run_test(|| {
+        let test_name = "scaleway_kapsule_redeploy_same_app";
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let context = context();
+        let context_bis = context.clone_not_same_execution_id();
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
+
+        let mut environment = test_utilities::scaleway::working_minimal_environment(&context, secrets.clone());
+
+        // Todo: make an image that check there is a mounted disk
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.storage = vec![Storage {
+                    id: generate_id(),
+                    name: "photos".to_string(),
+                    storage_type: StorageType::Ssd,
+                    size_in_gib: 10,
+                    mount_point: "/mnt/photos".to_string(),
+                    snapshot_retention_in_days: 0,
+                }];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+
+        let environment_redeploy = environment.clone();
+        let environment_check1 = environment.clone();
+        let environment_check2 = environment.clone();
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+
+        let env_action = EnvironmentAction::Environment(environment);
+        let env_action_redeploy = EnvironmentAction::Environment(environment_redeploy);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+
+        match deploy_environment(&context, env_action) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        let app_name = format!("{}-0", &environment_check1.applications[0].name);
+        let (_, number) = is_pod_restarted_env(
+            Kind::Scw,
+            context.clone(),
+            SCW_TEST_CLUSTER_ID,
+            environment_check1,
+            app_name.clone().as_str(),
+            secrets.clone(),
+        );
+
+        match deploy_environment(&context_bis, env_action_redeploy) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        let (_, number2) = is_pod_restarted_env(
+            Kind::Scw,
+            context.clone(),
+            SCW_TEST_CLUSTER_ID,
+            environment_check2,
+            app_name.as_str(),
+            secrets,
+        );
+
+        // nothing changed in the app, so, it shouldn't be restarted
+        assert!(number.eq(&number2));
+
+        match delete_environment(&context_for_deletion, env_action_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[test]
+fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environment() {
+    engine_run_test(|| {
+        let test_name = "scaleway_kapsule_deploy_a_not_working_environment_and_after_working_environment";
+        let span = span!(Level::INFO, "test", name = test_name,);
+        let _enter = span.enter();
+
+        let context = context();
+        let context_for_not_working = context.clone_not_same_execution_id();
+        let context_for_delete = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
+
+        // env part generation
+        let environment = test_utilities::scaleway::working_minimal_environment(&context, secrets);
+        let mut environment_for_not_working = environment.clone();
+        // this environment is broken by container exit
+        environment_for_not_working.applications = environment_for_not_working
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
+                app.branch = "1app_fail_deploy".to_string();
+                app.commit_id = "5b89305b9ae8a62a1f16c5c773cddf1d12f70db1".to_string();
+                app.environment_variables = vec![];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // environment actions
+        let env_action = EnvironmentAction::Environment(environment);
+        let env_action_not_working = EnvironmentAction::Environment(environment_for_not_working);
+        let env_action_delete = EnvironmentAction::Environment(environment_for_delete);
+
+        match deploy_environment(&context_for_not_working, env_action_not_working) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+        match deploy_environment(&context, env_action) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+        match delete_environment(&context_for_delete, env_action_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[test]
+#[ignore] // TODO(benjaminch): Make it work (it doesn't work on AWS neither)
+fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
+    engine_run_test(|| {
+        let test_name = "scaleway_kapsule_deploy_ok_fail_fail_ok_environment";
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        // working env
+        let context = context();
+        let secrets = FuncTestsSecrets::new();
+        let environment = test_utilities::scaleway::working_minimal_environment(&context, secrets);
+
+        // not working 1
+        let context_for_not_working_1 = context.clone_not_same_execution_id();
+        let mut not_working_env_1 = environment.clone();
+        not_working_env_1.applications = not_working_env_1
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.git_url = "https://gitlab.com/maathor/my-exit-container".to_string();
+                app.branch = "master".to_string();
+                app.commit_id = "55bc95a23fbf91a7699c28c5f61722d4f48201c9".to_string();
+                app.environment_variables = vec![];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+
+        // not working 2
+        let context_for_not_working_2 = context.clone_not_same_execution_id();
+        let not_working_env_2 = not_working_env_1.clone();
+
+        // work for delete
+        let context_for_delete = context.clone_not_same_execution_id();
+        let mut delete_env = environment.clone();
+        delete_env.action = Action::Delete;
+
+        let env_action = EnvironmentAction::Environment(environment);
+        let env_action_not_working_1 = EnvironmentAction::Environment(not_working_env_1);
+        let env_action_not_working_2 = EnvironmentAction::Environment(not_working_env_2);
+        let env_action_delete = EnvironmentAction::Environment(delete_env);
+
+        // OK
+        match deploy_environment(&context, env_action.clone()) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // FAIL and rollback
+        match deploy_environment(&context_for_not_working_1, env_action_not_working_1) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(true),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+
+        // FAIL and Rollback again
+        match deploy_environment(&context_for_not_working_2, env_action_not_working_2) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(true),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+
+        // Should be working
+        match deploy_environment(&context, env_action.clone()) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        match delete_environment(&context_for_delete, env_action_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[test]
+fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
+    engine_run_test(|| {
+        let test_name = "scaleway_kapsule_deploy_a_non_working_environment_with_no_failover";
+        let span = span!(Level::INFO, "test", name = test_name,);
+        let _enter = span.enter();
+
+        let context = context();
+        let secrets = FuncTestsSecrets::new();
+        let environment = test_utilities::scaleway::non_working_environment(&context, secrets);
+
+        let context_for_delete = context.clone_not_same_execution_id();
+        let mut delete_env = environment.clone();
+        delete_env.action = Action::Delete;
+
+        let env_action = EnvironmentAction::Environment(environment);
+        let env_action_delete = EnvironmentAction::Environment(delete_env);
+
+        match deploy_environment(&context, env_action) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+        match delete_environment(&context_for_delete, env_action_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[test]
+fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
+    engine_run_test(|| {
+        let test_name = "scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover";
+        let span = span!(Level::INFO, "test", name = test_name,);
+        let _enter = span.enter();
+
+        // context for non working environment
+        let context = context();
+        let secrets = FuncTestsSecrets::new();
+
+        let environment = test_utilities::scaleway::non_working_environment(&context, secrets.clone());
+        let failover_environment = test_utilities::scaleway::working_minimal_environment(&context, secrets.clone());
+
+        // context for deletion
+        let context_deletion = context.clone_not_same_execution_id();
+        let mut delete_env = test_utilities::scaleway::working_minimal_environment(&context_deletion, secrets);
+        delete_env.action = Action::Delete;
+
+        let env_action_delete = EnvironmentAction::Environment(delete_env);
+        let env_action = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+
+        match deploy_environment(&context, env_action) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+
+        match delete_environment(&context_deletion, env_action_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[test]
+fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover() {
+    engine_run_test(|| {
+        let test_name = "scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover";
+        let span = span!(Level::INFO, "test", name = test_name,);
+        let _enter = span.enter();
+
+        let context = context();
+        let secrets = FuncTestsSecrets::new();
+
+        let environment = test_utilities::scaleway::non_working_environment(&context, secrets.clone());
+        let failover_environment = test_utilities::scaleway::non_working_environment(&context, secrets.clone());
+
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let mut delete_env = test_utilities::scaleway::non_working_environment(&context_for_deletion, secrets);
+        delete_env.action = Action::Delete;
+
+        // environment action initialize
+        let env_action_delete = EnvironmentAction::Environment(delete_env);
+        let env_action = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+
+        match deploy_environment(&context, env_action) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+
+        match delete_environment(&context_for_deletion, env_action_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
         test_name.to_string()
