@@ -609,8 +609,7 @@ pub fn is_pod_restarted_env(
         &environment_check.id.clone(),
     );
 
-    let kubernetes_config =
-        kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
 
     match kubernetes_config {
         Ok(path) => {
@@ -645,8 +644,7 @@ pub fn get_pods(
         &environment_check.id.clone(),
     );
 
-    let kubernetes_config =
-        kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
 
     cmd::kubectl::kubectl_exec_get_pod(
         kubernetes_config.unwrap().as_str(),
