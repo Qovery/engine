@@ -478,7 +478,7 @@ where
                     if cluster.tags.is_some() {
                         for tag in cluster.tags.as_ref().unwrap().iter() {
                             if tag.as_str() == expected_test_server_tag.as_str() {
-                                return match block_on(scaleway_api_rs::apis::clusters_api::get_cluster_kube_config(
+                                match block_on(scaleway_api_rs::apis::clusters_api::get_cluster_kube_config(
                                     &configuration,
                                     region.as_str(),
                                     cluster.id.as_ref().unwrap().as_str(),
