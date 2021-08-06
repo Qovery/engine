@@ -36,8 +36,8 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 
     ScalewayCR::new(
         context.clone(),
-        format!("default-ecr-registry-qovery-test-{}", random_id.clone()).as_str(),
-        format!("default-ecr-registry-qovery-test-{}", random_id.clone()).as_str(),
+        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
+        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         SCW_TEST_REGION,

@@ -1,9 +1,9 @@
 extern crate test_utilities;
 
+use self::test_utilities::aws::KUBE_CLUSTER_ID;
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{
-    engine_run_test, generate_id, get_pods_aws, is_pod_restarted_aws_env, FuncTestsSecrets,
-};
+use self::test_utilities::utilities::{engine_run_test, generate_id, get_pods, is_pod_restarted_env, FuncTestsSecrets};
+use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::context;
@@ -133,7 +133,13 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         // Check that we have actually 0 pods running for this app
         let app_name = format!("{}-0", environment.applications[0].name);
-        let ret = get_pods_aws(environment.clone(), app_name.clone().as_str(), secrets.clone());
+        let ret = get_pods(
+            Kind::Aws,
+            environment.clone(),
+            app_name.clone().as_str(),
+            KUBE_CLUSTER_ID,
+            secrets.clone(),
+        );
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
@@ -434,7 +440,13 @@ fn redeploy_same_app_with_ebs() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
-        let (_, number) = is_pod_restarted_aws_env(environment_check1, app_name.clone().as_str(), secrets.clone());
+        let (_, number) = is_pod_restarted_env(
+            Kind::Aws,
+            KUBE_CLUSTER_ID,
+            environment_check1,
+            app_name.clone().as_str(),
+            secrets.clone(),
+        );
 
         match deploy_environment(&context_bis, &ea2) {
             TransactionResult::Ok => assert!(true),
@@ -442,7 +454,13 @@ fn redeploy_same_app_with_ebs() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        let (_, number2) = is_pod_restarted_aws_env(environment_check2, app_name.as_str(), secrets);
+        let (_, number2) = is_pod_restarted_env(
+            Kind::Aws,
+            KUBE_CLUSTER_ID,
+            environment_check2,
+            app_name.as_str(),
+            secrets,
+        );
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
         match delete_environment(&context_for_deletion, &ea_delete) {

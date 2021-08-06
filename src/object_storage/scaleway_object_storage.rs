@@ -413,7 +413,7 @@ mod tests {
             let result = ScalewayOS::is_bucket_name_valid(tc.bucket_name_input);
 
             // verify:
-            assert_eq!(tc.expected_output, result);
+            assert_eq!(tc.expected_output, result, "{}", tc.description);
         }
     }
 }

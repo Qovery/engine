@@ -9,12 +9,13 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
-    send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm, Pause, Service, ServiceType,
-    StatelessService,
+    scale_down_application, send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm,
+    Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_and_burstable};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
+use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
@@ -69,6 +70,10 @@ impl Application {
             environment_variables,
             listeners,
         }
+    }
+
+    fn is_stateful(&self) -> bool {
+        !self.storage.is_empty()
     }
 }
 
@@ -167,7 +172,10 @@ impl Service for Application {
         context.insert("helm_app_version", &commit_id[..7]);
 
         match &self.image().registry_url {
-            Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
+            Some(registry_url) => context.insert(
+                "image_name_with_tag",
+                format!("{}/{}", registry_url.as_str(), self.image().name_with_tag()).as_str(),
+            ),
             None => {
                 let image_name_with_tag = self.image().name_with_tag();
                 warn!(
@@ -190,9 +198,9 @@ impl Service for Application {
         context.insert("environment_variables", &environment_variables);
 
         match self.image.registry_name.as_ref() {
-            Some(registry_name) => {
+            Some(_) => {
                 context.insert("is_registry_secret", &true);
-                context.insert("registry_secret", registry_name);
+                context.insert("registry_secret_name", "container-registry-token");
             }
             None => {
                 context.insert("is_registry_secret", &false);
@@ -225,7 +233,10 @@ impl Service for Application {
                 id: s.id.clone(),
                 name: s.name.clone(),
                 storage_type: match s.storage_type {
-                    StorageType::BlockSsd => "b_ssd",
+                    // TODO(benjaminch): Switch to proper storage class
+                    // Note: Seems volume storage type are not supported, only blocked storage for the time being
+                    // https://github.com/scaleway/scaleway-csi/tree/master/examples/kubernetes#different-storageclass
+                    StorageType::BlockSsd => "scw-sbv-ssd-0", // "b_ssd",
                     StorageType::LocalSsd => "l_ssd",
                 }
                 .to_string(),
@@ -248,6 +259,16 @@ impl Service for Application {
                 &self.context.resource_expiration_in_seconds(),
             )
         }
+
+        // container registry credentials
+        context.insert(
+            "container_registry_docker_json_config",
+            self.image
+                .clone()
+                .registry_docker_json_config
+                .unwrap_or("".to_string())
+                .as_str(),
+        );
 
         Ok(context)
     }
@@ -291,11 +312,14 @@ impl Pause for Application {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.application.on_pause() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
+            scale_down_application(
+                target,
+                self,
+                0,
+                if self.is_stateful() { Statefulset } else { Deployment },
+            )
+        })
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {

@@ -7,6 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+base64 = "0.13.0"
+bstr = "0.2.16"
 qovery-engine = { path = "../" }
 chrono = "0.4.11"
 dirs = "3.0.1"
@@ -25,3 +27,6 @@ hashicorp_vault = "2.0.1"
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"
+
+# Scaleway Deps
+scaleway_api_rs = "0.1.1"

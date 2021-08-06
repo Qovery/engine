@@ -3,6 +3,7 @@ extern crate test_utilities;
 use test_utilities::utilities::{init, FuncTestsSecrets};
 use tracing::{span, Level};
 
+use qovery_engine::cloud_provider::Kind as ProviderKind;
 use qovery_engine::models::{
     Action, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction, EnvironmentVariable, Kind,
 };
@@ -10,7 +11,8 @@ use qovery_engine::transaction::TransactionResult;
 
 use crate::aws::aws_environment::{ctx_pause_environment, delete_environment, deploy_environment};
 
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, get_pods_aws, is_pod_restarted_aws_env};
+use self::test_utilities::aws::KUBE_CLUSTER_ID;
+use self::test_utilities::utilities::{context, engine_run_test, generate_id, get_pods, is_pod_restarted_env};
 
 /**
 **
@@ -93,7 +95,13 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
     // Check that we have actually 0 pods running for this db
     let app_name = format!("postgresql{}-0", environment.databases[0].name);
-    let ret = get_pods_aws(environment.clone(), app_name.clone().as_str(), secrets.clone());
+    let ret = get_pods(
+        ProviderKind::Aws,
+        environment.clone(),
+        app_name.clone().as_str(),
+        KUBE_CLUSTER_ID,
+        secrets.clone(),
+    );
     assert_eq!(ret.is_ok(), true);
     assert_eq!(ret.unwrap().items.is_empty(), true);
 
@@ -151,7 +159,13 @@ fn postgresql_failover_dev_environment_with_all_options() {
     };
     // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
     let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
-    match is_pod_restarted_aws_env(environment_check.clone(), database_name.as_str(), secrets.clone()) {
+    match is_pod_restarted_env(
+        ProviderKind::Aws,
+        KUBE_CLUSTER_ID,
+        environment_check.clone(),
+        database_name.as_str(),
+        secrets.clone(),
+    ) {
         (true, _) => assert!(true),
         (false, _) => assert!(false),
     }
@@ -161,7 +175,13 @@ fn postgresql_failover_dev_environment_with_all_options() {
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
     // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY EVEN IF FAIL
-    match is_pod_restarted_aws_env(environment_check.clone(), database_name.as_str(), secrets) {
+    match is_pod_restarted_env(
+        ProviderKind::Aws,
+        KUBE_CLUSTER_ID,
+        environment_check.clone(),
+        database_name.as_str(),
+        secrets,
+    ) {
         (true, _) => assert!(true),
         (false, _) => assert!(false),
     }
@@ -322,7 +342,13 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
-        match is_pod_restarted_aws_env(environment_check, database_name.as_str(), secrets) {
+        match is_pod_restarted_env(
+            ProviderKind::Aws,
+            KUBE_CLUSTER_ID,
+            environment_check,
+            database_name.as_str(),
+            secrets,
+        ) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
         }

@@ -140,7 +140,9 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90682c8d613ad3373e66de8c6411e0ae2ab2571e879d2efbf73558cc66f21279"
 dependencies = [
+ "lazy_static",
  "memchr",
+ "regex-automata",
 ]
 
 [[package]]
@@ -3126,6 +3128,8 @@ dependencies = [
 name = "test-utilities"
 version = "0.1.0"
 dependencies = [
+ "base64 0.13.0",
+ "bstr",
  "chrono",
  "curl",
  "digitalocean",
@@ -3136,6 +3140,7 @@ dependencies = [
  "rand 0.7.3",
  "reqwest 0.10.10",
  "retry",
+ "scaleway_api_rs",
  "serde",
  "serde_derive",
  "serde_json",

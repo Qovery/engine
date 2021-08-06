@@ -1,0 +1,53 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ sanitized_name }}-default
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    app: {{ sanitized_name }}
+    envId: {{ environment_id }}
+spec:
+  # Deny all ingress by default to this application
+  podSelector:
+    matchLabels:
+      appId: {{ id }}
+      app: {{ sanitized_name }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ sanitized_name }}-app-access
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    app: {{ sanitized_name }}
+    envId: {{ environment_id }}
+spec:
+  # Then allow some ingress to this application
+  podSelector:
+    matchLabels:
+      appId: {{ id }}
+      app: {{ sanitized_name }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+  ingress:
+  # Allow ingress from same environment
+  - from:
+    - podSelector:
+        matchLabels:
+          ownerId: {{ owner_id }}
+          envId: {{ environment_id }}
+
+  # Allow ingress from everywhere but only to application port
+  {% if is_private_port %}
+  - ports:
+    - port: {{ private_port }}
+  {% endif %}

@@ -328,6 +328,7 @@ impl Application {
             registry_name: None,
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         }
     }
 
@@ -837,6 +838,7 @@ impl ExternalService {
             registry_name: None,
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         }
     }
 

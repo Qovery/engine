@@ -81,6 +81,7 @@ fn create_upgrade_and_destroy_kapsule_cluster(
     });
 }
 
+#[allow(dead_code)]
 fn create_and_destroy_kapsule_cluster(
     region: Region,
     secrets: FuncTestsSecrets,
