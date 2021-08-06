@@ -101,17 +101,18 @@ pub fn scw_object_storage(context: Context, region: Region) -> ScalewayOS {
 }
 
 pub fn scw_kubernetes_nodes() -> Vec<Node> {
+    // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
     vec![
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
-        Node::new(NodeType::Dev1M),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
+        Node::new(NodeType::Dev1L),
     ]
 }
 
