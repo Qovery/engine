@@ -145,34 +145,6 @@ impl Service for Router {
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
-        let kubernetes_config_file_path = kubernetes.config_file_path();
-
-        match kubernetes_config_file_path {
-            Ok(kubernetes_config_file_path_string) => {
-                // Default domain
-                let external_ingress_hostname_default = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
-                    kubernetes_config_file_path_string.as_str(),
-                    "nginx-ingress",
-                    "app=nginx-ingress,component=controller",
-                    kubernetes.cloud_provider().credentials_environment_variables(),
-                );
-
-                match external_ingress_hostname_default {
-                    Ok(external_ingress_hostname_default_result) => match external_ingress_hostname_default_result {
-                        Some(hostname) => context.insert("external_ingress_hostname_default", hostname.as_str()),
-                        None => {
-                            warn!("unable to get external_ingress_hostname_default - what's wrong? This must never happened");
-                        }
-                    },
-                    _ => {
-                        // FIXME really?
-                        warn!("can't fetch kubernetes config file - what's wrong? This must never happened");
-                    }
-                }
-            }
-            Err(_) => error!("can't fetch kubernetes config file - what's wrong? This must never happened"), // FIXME should I return an Err?
-        }
-
         let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
         let tls_domain = format!("*.{}", kubernetes.dns_provider().domain());

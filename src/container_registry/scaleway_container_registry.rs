@@ -286,7 +286,7 @@ impl ScalewayCR {
     fn get_docker_json_config_raw(&self) -> String {
         base64::encode(
             format!(
-                "{{\"auths\":{{\"rg.{}.scw.cloud\":{{\"auth\":\"{}\"}}}}}}",
+                r#"{{"auths":{{"rg.{}.scw.cloud":{{"auth":"{}"}}}}}}"#,
                 self.region.as_str(),
                 base64::encode(format!("nologin:{}", self.secret_token).as_bytes())
             )

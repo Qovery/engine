@@ -25,7 +25,6 @@ spec:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       appId: {{ id }}
-      app: {{ sanitized_name }}
   template:
     metadata:
       labels:
@@ -44,7 +43,7 @@ spec:
                   - key: "app"
                     operator: In
                     values:
-                    - {{ sanitized_name }}
+                    - {{ id }}
               topologyKey: "kubernetes.io/hostname"
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60

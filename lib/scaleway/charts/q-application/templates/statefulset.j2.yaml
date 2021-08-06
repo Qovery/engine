@@ -39,7 +39,7 @@ spec:
                   - key: "app"
                     operator: In
                     values:
-                    - {{ sanitized_name }}
+                    - {{ id }}
               topologyKey: "kubernetes.io/hostname"
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
