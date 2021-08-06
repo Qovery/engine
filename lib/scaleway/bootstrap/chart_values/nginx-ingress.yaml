@@ -11,6 +11,8 @@ controller:
       maxUnavailable: 1
   autoscaling:
     enabled: true
+  publishService:
+    enabled: true
   service:
     # https://github.com/scaleway/scaleway-cloud-controller-manager/blob/master/docs/loadbalancer-annotations.md
     annotations:
