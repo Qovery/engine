@@ -319,6 +319,7 @@ impl<'a> Kapsule<'a> {
             })
             .collect::<Vec<WorkerNodeDataTemplate>>();
         context.insert("scw_ks_worker_nodes", &worker_nodes);
+        context.insert("scw_ks_pool_autoscale", &true);
 
         Ok(context)
     }
