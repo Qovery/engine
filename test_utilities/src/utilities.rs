@@ -2,13 +2,12 @@ extern crate base64;
 extern crate bstr;
 extern crate scaleway_api_rs;
 
-use base64::decode;
 use bstr::ByteSlice;
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
-use std::io::{Error, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -18,7 +17,6 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use tracing::{error, info, warn};
 use tracing_subscriber;
 
@@ -36,8 +34,6 @@ use serde::{Deserialize, Serialize};
 extern crate time;
 use crate::scaleway::SCW_TEST_CLUSTER_ID;
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
-use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
-use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
 use time::Instant;
 
@@ -383,7 +379,6 @@ fn curl_path(path: &str) -> bool {
 
 fn kubernetes_config_path(
     provider_kind: Kind,
-    context: Context,
     workspace_directory: &str,
     kubernetes_cluster_id: &str,
     secrets: FuncTestsSecrets,
@@ -394,7 +389,6 @@ fn kubernetes_config_path(
 
     let _ = get_kubernetes_config_file(
         provider_kind,
-        context,
         kubernetes_config_bucket_name,
         kubernetes_config_object_key,
         kubernetes_config_file_path.clone(),
@@ -406,7 +400,6 @@ fn kubernetes_config_path(
 
 fn get_kubernetes_config_file<P>(
     provider_kind: Kind,
-    context: Context,
     kubernetes_config_bucket_name: String,
     kubernetes_config_object_key: String,
     file_path: P,
@@ -437,10 +430,9 @@ where
             Kind::Do => todo!(),
             Kind::Scw => {
                 // TODO(benjaminch): refactor all of this properly
-                let access_key_id = secrets.clone().SCALEWAY_ACCESS_KEY.unwrap();
-                let secret_access_key = secrets.clone().SCALEWAY_SECRET_KEY.unwrap();
                 let region = Region::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
                 let project_id = secrets.clone().SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
+                let secret_access_key = secrets.clone().SCALEWAY_SECRET_KEY.unwrap();
 
                 let configuration = scaleway_api_rs::apis::configuration::Configuration {
                     api_key: Some(scaleway_api_rs::apis::configuration::ApiKey {
@@ -606,7 +598,6 @@ fn aws_s3_get_object(
 
 pub fn is_pod_restarted_env(
     provider_kind: Kind,
-    context: Context,
     kube_cluster_id: &str,
     environment_check: Environment,
     pod_to_check: &str,
@@ -619,7 +610,7 @@ pub fn is_pod_restarted_env(
     );
 
     let kubernetes_config =
-        kubernetes_config_path(provider_kind.clone(), context, "/tmp", kube_cluster_id, secrets.clone());
+        kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
 
     match kubernetes_config {
         Ok(path) => {
@@ -643,7 +634,6 @@ pub fn is_pod_restarted_env(
 
 pub fn get_pods(
     provider_kind: Kind,
-    context: Context,
     environment_check: Environment,
     pod_to_check: &str,
     kube_cluster_id: &str,
@@ -656,7 +646,7 @@ pub fn get_pods(
     );
 
     let kubernetes_config =
-        kubernetes_config_path(provider_kind.clone(), context, "/tmp", kube_cluster_id, secrets.clone());
+        kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
 
     cmd::kubectl::kubectl_exec_get_pod(
         kubernetes_config.unwrap().as_str(),

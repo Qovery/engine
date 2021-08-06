@@ -8,6 +8,7 @@ use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrateg
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
 
+#[allow(dead_code)]
 const TEST_REGION: Region = Region::Paris;
 
 #[cfg(feature = "test-scw-infra")]

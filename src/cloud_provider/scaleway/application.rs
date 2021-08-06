@@ -263,7 +263,11 @@ impl Service for Application {
         // container registry credentials
         context.insert(
             "container_registry_docker_json_config",
-            self.image.clone().registry_docker_json_config.unwrap().as_str(),
+            self.image
+                .clone()
+                .registry_docker_json_config
+                .unwrap_or("".to_string())
+                .as_str(),
         );
 
         Ok(context)

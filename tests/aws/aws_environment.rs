@@ -135,7 +135,6 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let app_name = format!("{}-0", environment.applications[0].name);
         let ret = get_pods(
             Kind::Aws,
-            context.clone(),
             environment.clone(),
             app_name.clone().as_str(),
             KUBE_CLUSTER_ID,
@@ -443,7 +442,6 @@ fn redeploy_same_app_with_ebs() {
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
         let (_, number) = is_pod_restarted_env(
             Kind::Aws,
-            context.clone(),
             KUBE_CLUSTER_ID,
             environment_check1,
             app_name.clone().as_str(),
@@ -458,7 +456,6 @@ fn redeploy_same_app_with_ebs() {
 
         let (_, number2) = is_pod_restarted_env(
             Kind::Aws,
-            context.clone(),
             KUBE_CLUSTER_ID,
             environment_check2,
             app_name.as_str(),

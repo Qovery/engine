@@ -1,10 +1,9 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
+use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
 use tracing::{span, Level};
 
-use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::transaction::TransactionResult;
 

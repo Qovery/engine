@@ -1,15 +1,11 @@
 extern crate test_utilities;
 
-use self::test_utilities::cloudflare;
 use self::test_utilities::scaleway::SCW_TEST_CLUSTER_ID;
 use self::test_utilities::utilities::{engine_run_test, generate_id, get_pods, is_pod_restarted_env, FuncTestsSecrets};
-use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use std::str::FromStr;
 use test_utilities::utilities::context;
-use test_utilities::utilities::init;
 use tracing::{span, Level};
 
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
@@ -87,7 +83,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
 
         let env_action = EnvironmentAction::Environment(environment);
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
-        let region = Region::from_str(secrets.SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
 
         match deploy_environment(&context, env_action) {
             TransactionResult::Ok => assert!(true),
@@ -173,7 +168,6 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let app_name = format!("{}-0", environment.applications[0].name);
         let ret = get_pods(
             Kind::Scw,
-            context.clone(),
             environment.clone(),
             app_name.clone().as_str(),
             SCW_TEST_CLUSTER_ID,
@@ -388,7 +382,6 @@ fn scaleway_kapsule_redeploy_same_app() {
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
         let (_, number) = is_pod_restarted_env(
             Kind::Scw,
-            context.clone(),
             SCW_TEST_CLUSTER_ID,
             environment_check1,
             app_name.clone().as_str(),
@@ -403,7 +396,6 @@ fn scaleway_kapsule_redeploy_same_app() {
 
         let (_, number2) = is_pod_restarted_env(
             Kind::Scw,
-            context.clone(),
             SCW_TEST_CLUSTER_ID,
             environment_check2,
             app_name.as_str(),
@@ -586,6 +578,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
         match delete_environment(&context_for_delete, env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),

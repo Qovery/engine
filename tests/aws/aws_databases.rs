@@ -97,7 +97,6 @@ fn deploy_an_environment_with_db_and_pause_it() {
     let app_name = format!("postgresql{}-0", environment.databases[0].name);
     let ret = get_pods(
         ProviderKind::Aws,
-        context.clone(),
         environment.clone(),
         app_name.clone().as_str(),
         KUBE_CLUSTER_ID,
@@ -162,7 +161,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
     let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
     match is_pod_restarted_env(
         ProviderKind::Aws,
-        context.clone(),
         KUBE_CLUSTER_ID,
         environment_check.clone(),
         database_name.as_str(),
@@ -179,7 +177,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
     // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY EVEN IF FAIL
     match is_pod_restarted_env(
         ProviderKind::Aws,
-        context.clone(),
         KUBE_CLUSTER_ID,
         environment_check.clone(),
         database_name.as_str(),
@@ -347,7 +344,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_env(
             ProviderKind::Aws,
-            context.clone(),
             KUBE_CLUSTER_ID,
             environment_check,
             database_name.as_str(),
