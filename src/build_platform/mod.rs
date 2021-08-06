@@ -75,6 +75,21 @@ impl Image {
     }
 }
 
+impl Default for Image {
+    fn default() -> Self {
+        Image {
+            application_id: "".to_string(),
+            name: "".to_string(),
+            tag: "".to_string(),
+            commit_id: "".to_string(),
+            registry_name: None,
+            registry_docker_json_config: None,
+            registry_secret: None,
+            registry_url: None,
+        }
+    }
+}
+
 pub struct BuildResult {
     pub build: Build,
 }
