@@ -25,7 +25,6 @@ stages:
   - upgrade-dev
   - e2e-tests
   - downgrade-dev
-  - build
   - release
   - deploy
 
