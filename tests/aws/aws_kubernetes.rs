@@ -2,6 +2,7 @@ extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
+use ::function_name::named;
 use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
@@ -171,42 +172,29 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
 */
 
 #[cfg(feature = "test-aws-infra")]
+#[named]
 #[test]
 fn create_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(
-        &region,
-        secrets,
-        false,
-        &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
-    );
+    create_and_destroy_eks_cluster(&region, secrets, false, function_name!());
 }
 
 #[cfg(feature = "test-aws-infra")]
+#[named]
 #[test]
 fn create_and_destroy_eks_cluster_in_us_east_2() {
     let region = "us-east-2";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(
-        &region,
-        secrets,
-        true,
-        &format!("create_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
-    );
+    create_and_destroy_eks_cluster(&region, secrets, true, function_name!());
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-//#[test]
 #[allow(dead_code)]
+#[named]
+//#[test]
 fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_upgrade_and_destroy_eks_cluster(
-        &region,
-        secrets,
-        "1.16",
-        "1.17",
-        &format!("create_upgrade_and_destroy_eks_cluster_in_{}", region.replace("-", "_")),
-    );
+    create_upgrade_and_destroy_eks_cluster(&region, secrets, "1.16", "1.17", function_name!());
 }

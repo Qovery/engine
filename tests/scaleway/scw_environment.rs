@@ -1,7 +1,10 @@
 extern crate test_utilities;
 
 use self::test_utilities::scaleway::SCW_TEST_CLUSTER_ID;
-use self::test_utilities::utilities::{engine_run_test, generate_id, get_pods, is_pod_restarted_env, FuncTestsSecrets};
+use self::test_utilities::utilities::{
+    engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
+};
+use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
@@ -64,11 +67,14 @@ pub fn pause_environment(context: &Context, environment_action: EnvironmentActio
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_a_working_environment_with_no_router";
-        let span = span!(Level::INFO, "test", name = test_name,);
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -101,10 +107,13 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_a_not_working_environment_with_no_router";
+        init();
+
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -138,10 +147,13 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_a_working_environment_and_pause";
+        init();
+
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -196,10 +208,13 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment";
+        init();
+
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -242,10 +257,13 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_a_working_environment_with_domain";
+        init();
+
         let span = span!(Level::INFO, "test",);
         let _enter = span.enter();
 
@@ -277,10 +295,13 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_a_working_environment_with_storage";
+        init();
+
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -332,10 +353,13 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_redeploy_same_app() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_redeploy_same_app";
+        init();
+
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -416,10 +440,13 @@ fn scaleway_kapsule_redeploy_same_app() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environment() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_a_not_working_environment_and_after_working_environment";
+        init();
+
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -473,11 +500,13 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 #[ignore] // TODO(benjaminch): Make it work (it doesn't work on AWS neither)
 fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_ok_fail_fail_ok_environment";
+        init();
 
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
@@ -555,10 +584,13 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_a_non_working_environment_with_no_failover";
+        init();
+
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -590,10 +622,13 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover";
+        init();
+
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -629,10 +664,13 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[named]
 #[test]
 fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover";
+        init();
+
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 

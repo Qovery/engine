@@ -2,6 +2,7 @@ extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
+use ::function_name::named;
 use tracing::{span, Level};
 
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
@@ -11,15 +12,16 @@ use qovery_engine::transaction::TransactionResult;
 // Note: this test creates the test cluster where all application tests will be ran
 // This is not really a test but a convenient way to create the test cluster if needed to be manually created at some point.
 #[allow(dead_code)]
-#[test]
-#[ignore]
+#[named]
+//#[test]
 fn create_scaleway_kubernetes_kapsule_test_cluster() {
     let secrets = FuncTestsSecrets::new();
-    let utility_name = "create_scaleway_kubernetes_kapsule_test_cluster";
+    let test_name = function_name!();
 
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "utility", name = utility_name,);
+
+        let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -53,7 +55,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        utility_name.to_string()
+        test_name.to_string()
     });
 }
 
@@ -61,15 +63,16 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
 // Note: this test destroys the test cluster where all application tests will be ran
 // This is not really a test but a convenient way to create the test cluster if needed to be manually destroyed at some point.
 #[allow(dead_code)]
-#[test]
-#[ignore]
+#[named]
+//#[test]
 fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
     let secrets = FuncTestsSecrets::new();
-    let utility_name = "delete_scaleway_kubernetes_kapsule_test_cluster";
+    let test_name = function_name!();
 
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "utility", name = utility_name,);
+
+        let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -103,6 +106,6 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        utility_name.to_string()
+        test_name.to_string()
     });
 }
