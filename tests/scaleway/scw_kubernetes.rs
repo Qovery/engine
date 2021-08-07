@@ -2,6 +2,7 @@ extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
+use ::function_name::named;
 use tracing::{span, Level};
 
 use qovery_engine::cloud_provider::scaleway::application::Region;
@@ -166,35 +167,20 @@ fn create_and_destroy_kapsule_cluster(
 }
 
 #[cfg(feature = "test-scw-infra")]
+#[named]
 #[test]
 fn create_and_destroy_kapsule_cluster_par() {
     let region = Region::Paris;
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_kapsule_cluster(
-        region,
-        secrets,
-        false,
-        &format!(
-            "create_and_destroy_kapsule_cluster_in_{}",
-            region.as_str().replace("-", "_")
-        ),
-    );
+    create_and_destroy_kapsule_cluster(region, secrets, false, function_name!());
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
 //#[test]
 #[allow(dead_code)]
+#[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_fr_par() {
     let region = Region::Paris;
     let secrets = FuncTestsSecrets::new();
-    create_upgrade_and_destroy_kapsule_cluster(
-        region,
-        secrets,
-        "1.18",
-        "1.19",
-        &format!(
-            "create_upgrade_and_destroy_kapsule_cluster_in_{}",
-            region.as_str().replace("-", "_")
-        ),
-    );
+    create_upgrade_and_destroy_kapsule_cluster(region, secrets, "1.18", "1.19", function_name!());
 }
