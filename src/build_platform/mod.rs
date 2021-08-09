@@ -61,6 +61,8 @@ pub struct Image {
     pub commit_id: String,
     // registry name where the image has been pushed: Optional
     pub registry_name: Option<String>,
+    // registry docker json config: Optional
+    pub registry_docker_json_config: Option<String>,
     // registry secret to pull image: Optional
     pub registry_secret: Option<String>,
     // complete registry URL where the image has been pushed

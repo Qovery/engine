@@ -220,6 +220,24 @@ impl Application {
                     listeners,
                 ),
             )),
+            CPKind::Scw => Some(Box::new(
+                crate::cloud_provider::scaleway::application::Application::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.private_port,
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.total_instances,
+                    self.start_timeout_in_seconds,
+                    image.clone(),
+                    self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
+                    environment_variables,
+                    listeners,
+                ),
+            )),
         }
     }
 
@@ -273,6 +291,24 @@ impl Application {
                     listeners,
                 ),
             )),
+            CPKind::Scw => Some(Box::new(
+                crate::cloud_provider::scaleway::application::Application::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.private_port,
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.total_instances,
+                    self.start_timeout_in_seconds,
+                    image,
+                    self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
+                    environment_variables,
+                    listeners,
+                ),
+            )),
         }
     }
 
@@ -292,6 +328,7 @@ impl Application {
             registry_name: None,
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         }
     }
 
@@ -395,6 +432,19 @@ impl Storage {
             snapshot_retention_in_days: self.snapshot_retention_in_days,
         }
     }
+
+    pub fn to_scw_storage(
+        &self,
+    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::scaleway::application::StorageType> {
+        crate::cloud_provider::models::Storage {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            storage_type: crate::cloud_provider::scaleway::application::StorageType::BlockSsd,
+            size_in_gib: self.size_in_gib,
+            mount_point: self.mount_point.clone(),
+            snapshot_retention_in_days: self.snapshot_retention_in_days,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -460,6 +510,19 @@ impl Router {
                         routes,
                         listeners,
                     ));
+                Some(router)
+            }
+            CPKind::Scw => {
+                let router: Box<dyn StatelessService> = Box::new(crate::cloud_provider::scaleway::router::Router::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    self.action.to_service_action(),
+                    self.default_domain.as_str(),
+                    custom_domains,
+                    routes,
+                    listeners,
+                ));
                 Some(router)
             }
         }
@@ -668,6 +731,7 @@ impl Database {
                     Some(db)
                 }
             },
+            CPKind::Scw => None, // TODO(benjaminch): Implement it
         }
     }
 }
@@ -774,6 +838,7 @@ impl ExternalService {
             registry_name: None,
             registry_secret: None,
             registry_url: None,
+            registry_docker_json_config: None,
         }
     }
 

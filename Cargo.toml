@@ -60,9 +60,15 @@ rusoto_iam = "0.46.0"
 # Digital Ocean Deps
 digitalocean = "0.1.1"
 
+# Scaleway Deps
+scaleway_api_rs = "0.1.1"
+
 [dev-dependencies]
 test-utilities = { path = "test_utilities" }
 tempdir = "0.3"
+tempfile = "3.2.0"
+uuid = { version = "0.8", features = ["v4"] }
+function_name = "0.2.0"
 
 [features]
 default = []
@@ -71,16 +77,20 @@ test-all = ["test-all-self-hosted", "test-all-infra", "test-all-managed-services
 # functionnal tests by type
 test-aws-self-hosted = []
 test-do-self-hosted = []
-test-all-self-hosted = ["test-aws-self-hosted", "test-do-self-hosted"]
+test-scw-self-hosted = []
+test-all-self-hosted = ["test-aws-self-hosted", "test-do-self-hosted", "test-scw-self-hosted"]
 
 test-aws-managed-services = []
 test-do-managed-services = []
-test-all-managed-services = ["test-aws-managed-services", "test-do-managed-services"]
+test-scw-managed-services = []
+test-all-managed-services = ["test-aws-managed-services", "test-do-managed-services", "test-scw-managed-services"]
 
 test-aws-infra = []
 test-do-infra = []
-test-all-infra = ["test-aws-infra", "test-do-infra"]
+test-scw-infra = []
+test-all-infra = ["test-aws-infra", "test-do-infra", "test-scw-infra"]
 
 # functionnal tests by provider
-test-do-all = ["test-do-infra", "test-do-managed-services", "test-do-self-hosted"]
 test-aws-all = ["test-aws-infra", "test-aws-infra", "test-aws-self-hosted"]
+test-do-all = ["test-do-infra", "test-do-managed-services", "test-do-self-hosted"]
+test-scw-all = ["test-scw-infra", "test-scw-infra", "test-scw-self-hosted"]

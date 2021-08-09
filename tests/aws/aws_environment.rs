@@ -1,9 +1,10 @@
 extern crate test_utilities;
 
+use self::test_utilities::aws::KUBE_CLUSTER_ID;
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{
-    engine_run_test, generate_id, get_pods_aws, is_pod_restarted_aws_env, FuncTestsSecrets,
-};
+use self::test_utilities::utilities::{engine_run_test, generate_id, get_pods, is_pod_restarted_env, FuncTestsSecrets};
+use ::function_name::named;
+use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::context;
@@ -67,14 +68,13 @@ pub fn delete_environment(context: &Context, environment_action: &EnvironmentAct
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "test",
-            name = "deploy_a_working_environment_with_no_router_on_aws_eks"
-        );
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -101,15 +101,18 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        return "deploy_a_working_environment_with_no_router_on_aws_eks".to_string();
+
+        return test_name.to_string();
     })
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_a_working_environment_and_pause_it_eks() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let test_name = "deploy_a_working_environment_and_pause_it";
+        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -133,7 +136,13 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         // Check that we have actually 0 pods running for this app
         let app_name = format!("{}-0", environment.applications[0].name);
-        let ret = get_pods_aws(environment.clone(), app_name.clone().as_str(), secrets.clone());
+        let ret = get_pods(
+            Kind::Aws,
+            environment.clone(),
+            app_name.clone().as_str(),
+            KUBE_CLUSTER_ID,
+            secrets.clone(),
+        );
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
@@ -156,14 +165,13 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "test",
-            name = "deploy_a_not_working_environment_with_no_router_on_aws_eks"
-        );
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -191,19 +199,19 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
-        return "deploy_a_not_working_environment_with_no_router_on_aws_eks".to_string();
+        return test_name.to_string();
     })
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn build_with_buildpacks_and_deploy_a_working_environment() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "test",
-            name = "build_with_buildpacks_and_deploy_a_working_environment"
-        );
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -240,15 +248,19 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        return "build_with_buildpacks_and_deploy_a_working_environment".to_string();
+        return test_name.to_string();
     })
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_a_working_environment_with_domain() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let span = span!(Level::INFO, "test", name = "deploy_a_working_environment_with_domain");
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -273,7 +285,8 @@ fn deploy_a_working_environment_with_domain() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        return "deploy_a_working_environment_with_domain".to_string();
+
+        return test_name.to_string();
     })
 }
 
@@ -331,14 +344,14 @@ fn deploy_a_working_environment_with_domain() {
 // }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "test",
-            name = "deploy_a_working_environment_with_storage_on_aws_eks"
-        );
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -383,16 +396,21 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        return "deploy_a_working_environment_with_storage_on_aws_eks".to_string();
+
+        return test_name.to_string();
     })
 }
 
 // to check if app redeploy or not, it shouldn't
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn redeploy_same_app_with_ebs() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let span = span!(Level::INFO, "test", name = "redeploy_same_app_with_ebs");
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -434,7 +452,13 @@ fn redeploy_same_app_with_ebs() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
-        let (_, number) = is_pod_restarted_aws_env(environment_check1, app_name.clone().as_str(), secrets.clone());
+        let (_, number) = is_pod_restarted_env(
+            Kind::Aws,
+            KUBE_CLUSTER_ID,
+            environment_check1,
+            app_name.clone().as_str(),
+            secrets.clone(),
+        );
 
         match deploy_environment(&context_bis, &ea2) {
             TransactionResult::Ok => assert!(true),
@@ -442,7 +466,13 @@ fn redeploy_same_app_with_ebs() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        let (_, number2) = is_pod_restarted_aws_env(environment_check2, app_name.as_str(), secrets);
+        let (_, number2) = is_pod_restarted_env(
+            Kind::Aws,
+            KUBE_CLUSTER_ID,
+            environment_check2,
+            app_name.as_str(),
+            secrets,
+        );
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
         match delete_environment(&context_for_deletion, &ea_delete) {
@@ -450,7 +480,7 @@ fn redeploy_same_app_with_ebs() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        return "redeploy_same_app_with_ebs".to_string();
+        return test_name.to_string();
     })
 }
 
@@ -533,14 +563,14 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
 }*/
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_a_not_working_environment_and_after_working_environment() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "test",
-            name = "deploy_a_not_working_environment_and_after_working_environment"
-        );
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
         // let mut contex_envs = generate_contexts_and_environments(3, test_utilities::aws::working_minimal_environment);
@@ -587,97 +617,104 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        return "deploy_a_not_working_environment_and_after_working_environment".to_string();
+
+        return test_name.to_string();
     })
 }
 
 // #[cfg(feature = "test-aws-self-hosted")]
 // #[test]
+#[named]
 #[allow(dead_code)] // todo: make it work
 fn deploy_ok_fail_fail_ok_environment() {
-    init();
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
 
-    let span = span!(Level::INFO, "test", name = "deploy_ok_fail_fail_ok_environment");
-    let _enter = span.enter();
+        let span = span!(Level::INFO, "test", name = "deploy_ok_fail_fail_ok_environment");
+        let _enter = span.enter();
 
-    // working env
-    let context = context();
-    let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::aws::working_minimal_environment(&context, secrets);
+        // working env
+        let context = context();
+        let secrets = FuncTestsSecrets::new();
+        let environment = test_utilities::aws::working_minimal_environment(&context, secrets);
 
-    // not working 1
-    let context_for_not_working_1 = context.clone_not_same_execution_id();
-    let mut not_working_env_1 = environment.clone();
-    not_working_env_1.applications = not_working_env_1
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.git_url = "https://gitlab.com/maathor/my-exit-container".to_string();
-            app.branch = "master".to_string();
-            app.commit_id = "55bc95a23fbf91a7699c28c5f61722d4f48201c9".to_string();
-            app.environment_variables = vec![];
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
+        // not working 1
+        let context_for_not_working_1 = context.clone_not_same_execution_id();
+        let mut not_working_env_1 = environment.clone();
+        not_working_env_1.applications = not_working_env_1
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.git_url = "https://gitlab.com/maathor/my-exit-container".to_string();
+                app.branch = "master".to_string();
+                app.commit_id = "55bc95a23fbf91a7699c28c5f61722d4f48201c9".to_string();
+                app.environment_variables = vec![];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
 
-    // not working 2
-    let context_for_not_working_2 = context.clone_not_same_execution_id();
-    let not_working_env_2 = not_working_env_1.clone();
+        // not working 2
+        let context_for_not_working_2 = context.clone_not_same_execution_id();
+        let not_working_env_2 = not_working_env_1.clone();
 
-    // work for delete
-    let context_for_delete = context.clone_not_same_execution_id();
-    let mut delete_env = environment.clone();
-    delete_env.action = Action::Delete;
+        // work for delete
+        let context_for_delete = context.clone_not_same_execution_id();
+        let mut delete_env = environment.clone();
+        delete_env.action = Action::Delete;
 
-    let ea = EnvironmentAction::Environment(environment);
-    let ea_not_working_1 = EnvironmentAction::Environment(not_working_env_1);
-    let ea_not_working_2 = EnvironmentAction::Environment(not_working_env_2);
-    let ea_delete = EnvironmentAction::Environment(delete_env);
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_not_working_1 = EnvironmentAction::Environment(not_working_env_1);
+        let ea_not_working_2 = EnvironmentAction::Environment(not_working_env_2);
+        let ea_delete = EnvironmentAction::Environment(delete_env);
 
-    // OK
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+        // OK
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
 
-    // FAIL and rollback
-    match deploy_environment(&context_for_not_working_1, &ea_not_working_1) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(true),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
+        // FAIL and rollback
+        match deploy_environment(&context_for_not_working_1, &ea_not_working_1) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(true),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
 
-    // FAIL and Rollback again
-    match deploy_environment(&context_for_not_working_2, &ea_not_working_2) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(true),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
+        // FAIL and Rollback again
+        match deploy_environment(&context_for_not_working_2, &ea_not_working_2) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(true),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
 
-    // Should be working
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+        // Should be working
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
 
-    match delete_environment(&context_for_delete, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+        match delete_environment(&context_for_delete, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        return test_name.to_string();
+    })
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
+    let test_name = function_name!();
     engine_run_test(|| {
-        let span = span!(
-            Level::INFO,
-            "test",
-            name = "deploy_a_non_working_environment_with_no_failover_on_aws_eks"
-        );
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
         let context = context();
@@ -701,45 +738,48 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        return "deploy_a_non_working_environment_with_no_failover_on_aws_eks".to_string();
+
+        return test_name.to_string();
     })
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
-    init();
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
 
-    let span = span!(
-        Level::INFO,
-        "test",
-        name = "deploy_a_non_working_environment_with_a_working_failover_on_aws_eks"
-    );
-    let _enter = span.enter();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    // context for non working environment
-    let context = context();
-    let secrets = FuncTestsSecrets::new();
+        // context for non working environment
+        let context = context();
+        let secrets = FuncTestsSecrets::new();
 
-    let environment = test_utilities::aws::non_working_environment(&context, secrets.clone());
-    let failover_environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
-    // context for deletion
-    let context_deletion = context.clone_not_same_execution_id();
-    let mut delete_env = test_utilities::aws::working_minimal_environment(&context_deletion, secrets);
-    delete_env.action = Action::Delete;
-    let ea_delete = EnvironmentAction::Environment(delete_env);
-    let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+        let environment = test_utilities::aws::non_working_environment(&context, secrets.clone());
+        let failover_environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+        // context for deletion
+        let context_deletion = context.clone_not_same_execution_id();
+        let mut delete_env = test_utilities::aws::working_minimal_environment(&context_deletion, secrets);
+        delete_env.action = Action::Delete;
+        let ea_delete = EnvironmentAction::Environment(delete_env);
+        let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
 
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
-    match delete_environment(&context_deletion, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+        match delete_environment(&context_deletion, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        return test_name.to_string();
+    })
 }
 
 // fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
@@ -800,40 +840,42 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 // }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
-    init();
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
 
-    let span = span!(
-        Level::INFO,
-        "test",
-        name = "deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks"
-    );
-    let _enter = span.enter();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    let context = context();
-    let secrets = FuncTestsSecrets::new();
+        let context = context();
+        let secrets = FuncTestsSecrets::new();
 
-    let environment = test_utilities::aws::non_working_environment(&context, secrets.clone());
-    let failover_environment = test_utilities::aws::non_working_environment(&context, secrets.clone());
+        let environment = test_utilities::aws::non_working_environment(&context, secrets.clone());
+        let failover_environment = test_utilities::aws::non_working_environment(&context, secrets.clone());
 
-    let context_for_deletion = context.clone_not_same_execution_id();
-    let mut delete_env = test_utilities::aws::non_working_environment(&context_for_deletion, secrets);
-    delete_env.action = Action::Delete;
-    // environment action initialize
-    let ea_delete = EnvironmentAction::Environment(delete_env);
-    let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let mut delete_env = test_utilities::aws::non_working_environment(&context_for_deletion, secrets);
+        delete_env.action = Action::Delete;
+        // environment action initialize
+        let ea_delete = EnvironmentAction::Environment(delete_env);
+        let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
 
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
-    match delete_environment(&context_for_deletion, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
-    };
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(false),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+        match delete_environment(&context_for_deletion, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+
+        return test_name.to_string();
+    })
 }
 
 /*#[test]

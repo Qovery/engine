@@ -1,0 +1,20 @@
+{%- if custom_domains|length > 0 %}
+---
+apiVersion: cert-manager.io/v1alpha2
+kind: Issuer
+metadata:
+  name: {{ id }}
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+spec:
+  acme:
+    server: {{ spec_acme_server }}
+    email: {{ spec_acme_email }}
+    privateKeySecretRef:
+      name: acme-{{ id }}-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx-qovery
+{%- endif %}

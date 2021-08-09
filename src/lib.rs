@@ -17,7 +17,7 @@ pub mod fs;
 pub mod git;
 pub mod models;
 pub mod object_storage;
-mod runtime;
+pub mod runtime;
 pub mod session;
 mod string;
 mod template;

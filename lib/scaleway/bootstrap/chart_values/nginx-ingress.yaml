@@ -1,0 +1,25 @@
+controller:
+  useComponentLabel: true
+  config:
+    proxy-body-size: 100m
+    server-tokens: "false"
+  ingressClass: nginx-qovery
+  extraArgs:
+    default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+  autoscaling:
+    enabled: true
+  publishService:
+    enabled: true
+  service:
+    # https://github.com/scaleway/scaleway-cloud-controller-manager/blob/master/docs/loadbalancer-annotations.md
+    annotations:
+      service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: roundrobin
+      service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
+      service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "true"
+    externalTrafficPolicy: "Local"
