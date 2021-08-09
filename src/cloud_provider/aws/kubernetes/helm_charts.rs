@@ -707,7 +707,6 @@ datasources:
             name: "cert-manager".to_string(),
             path: chart_path("common/charts/cert-manager"),
             namespace: HelmChartNamespaces::CertManager,
-            values_files: vec![chart_path("chart_values/cert-manager.yaml")],
             values: vec![
                 ChartSetValue {
                     key: "installCRDs".to_string(),

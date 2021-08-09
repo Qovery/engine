@@ -168,6 +168,7 @@ impl<'a> DOKS<'a> {
         let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
 
         context.insert("managed_dns", &managed_dns_list);
+        context.insert("managed_dns_domain", self.dns_provider.domain());
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
 
         context.insert(
