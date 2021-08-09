@@ -75,7 +75,7 @@ function check_untracked_files() {
     fi
 
     if [ $no_commit -eq 0 ] ; then
-      echo "There are some untracked files changes by git. Ensure you've commited all your files first"chefclub.tv
+      echo "There are some untracked files changes by git. Ensure you've commited all your files first"
       git status
       exit 1
     fi
