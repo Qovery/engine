@@ -1095,7 +1095,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
-                    value: "true".to_string(),
+                    value: "false".to_string(),
                 },
                 ChartSetValue {
                     key: "volumes.storageClassName".to_string(),
