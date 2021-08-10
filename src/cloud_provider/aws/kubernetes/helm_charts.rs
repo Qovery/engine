@@ -1055,7 +1055,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
+                    value: "false".to_string(),
                 },
                 ChartSetValue {
                     key: "volumes.storageClassName".to_string(),
@@ -1151,7 +1151,7 @@ datasources:
     ];
 
     let mut level_4: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(metrics_server),
+        Box::new(metric_server),
         Box::new(aws_node_term_handler),
         Box::new(external_dns),
     ];
