@@ -9,7 +9,7 @@ image:
 
 namespace: "qovery"
 metrics:
-  enabled: true
+  enabled: false
   portName: "metrics"
   port: 8080
 
