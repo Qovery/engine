@@ -427,6 +427,7 @@ pub fn scw_helm_charts(
     };
 
     // metric-server is built-in Scaleway cluster, no need to manage it
+
     let kube_state_metrics = CommonChart {
         chart_info: ChartInfo {
             name: "kube-state-metrics".to_string(),
