@@ -257,7 +257,7 @@ controller:
       service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
       service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
       service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: "true"
-      service.beta.kubernetes.io/do-loadbalancer-hostname: qovery-nginx-{{ doks_cluster_id }}.{{ managed_dns_domains_helm_format }}
+      service.beta.kubernetes.io/do-loadbalancer-hostname: qovery-nginx-{{ doks_cluster_id }}.{{ managed_dns_domain }}
 
     labels: {}
     ## Deprecated, instead simply do not provide a clusterIP value
