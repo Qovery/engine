@@ -3,8 +3,10 @@ use std::fs::File;
 use reqwest::StatusCode;
 
 use qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::Options;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::models::cluster::Cluster;
+use qovery_engine::cloud_provider::digitalocean::network::vpc::VpcInitKind;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docr::DOCR;
@@ -13,7 +15,8 @@ use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use crate::utilities::{build_platform_local_docker, generate_cluster_id, FuncTestsSecrets};
+use qovery_engine::cloud_provider::digitalocean::application::Region;
 
 pub const ORGANIZATION_ID: &str = "a8nb94c7fwxzr2ja";
 pub const DO_KUBERNETES_VERSION: &str = "1.18.10-do.3";
@@ -64,7 +67,7 @@ pub fn do_kubernetes_ks<'a>(
         DOKS_CLUSTER_ID,
         DOKS_CLUSTER_NAME,
         DO_KUBERNETES_VERSION,
-        "fra1",
+        Region::Frankfurt,
         cloud_provider,
         dns_provider,
         options_values,
@@ -103,6 +106,28 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
             region: "eu-west-3".to_string(),
         },
     )
+}
+
+pub fn do_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> Options {
+    Options {
+        vpc_cidr_block: "".to_string(),
+        vpc_cidr_set: VpcInitKind::Autodetect,
+        vpc_name: format!(
+            "vpc-test-{}",
+            generate_cluster_id(&secrets.DIGITAL_OCEAN_DEFAULT_REGION.unwrap())
+        ),
+        qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
+        engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
+        agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
+        grafana_admin_user: "admin".to_string(),
+        grafana_admin_password: "qovery".to_string(),
+        discord_api_key: secrets.DISCORD_API_URL.unwrap(),
+        qovery_nats_url: secrets.QOVERY_NATS_URL.unwrap(),
+        qovery_nats_user: secrets.QOVERY_NATS_USERNAME.unwrap(),
+        qovery_nats_password: secrets.QOVERY_NATS_PASSWORD.unwrap(),
+        qovery_ssh_key: secrets.QOVERY_SSH_USER.unwrap(),
+        tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
+    }
 }
 
 pub fn get_kube_cluster_name_from_uuid(uuid: &str) -> String {
