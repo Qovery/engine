@@ -91,6 +91,6 @@ test-scw-infra = []
 test-all-infra = ["test-aws-infra", "test-do-infra", "test-scw-infra"]
 
 # functionnal tests by provider
-test-aws-all = ["test-aws-infra", "test-aws-infra", "test-aws-self-hosted"]
+test-aws-all = ["test-aws-infra", "test-aws-managed-services", "test-aws-self-hosted"]
 test-do-all = ["test-do-infra", "test-do-managed-services", "test-do-self-hosted"]
-test-scw-all = ["test-scw-infra", "test-scw-infra", "test-scw-self-hosted"]
+test-scw-all = ["test-scw-infra", "test-scw-managed-services", "test-scw-self-hosted"]
