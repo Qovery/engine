@@ -117,7 +117,7 @@ fn search_uuid_cluster_for(kube_name: &str, clusters: Clusters) -> Option<String
 
 #[cfg(test)]
 mod tests_do_api_output {
-    use crate::cloud_provider::digitalocean::common::get_ip_from_do_load_balancer_api_output;
+    use crate::cloud_provider::digitalocean::network::load_balancer::get_ip_from_do_load_balancer_api_output;
 
     #[test]
     fn check_load_balancer_ip() {

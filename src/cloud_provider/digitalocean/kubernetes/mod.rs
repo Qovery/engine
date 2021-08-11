@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
+use crate::cloud_provider::digitalocean::network::vpc::{VpcInitKind, get_do_name_available_from_api, get_do_random_available_subnet_from_api};
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
@@ -10,7 +11,7 @@ use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
-use crate::error::{cast_simple_error_to_engine_error, EngineError};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -18,6 +19,8 @@ use crate::models::{
 use crate::object_storage::spaces::Spaces;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
+use std::env;
+use crate::cloud_provider::digitalocean::application::Region;
 
 pub mod cidr;
 pub mod node;
@@ -27,6 +30,7 @@ pub struct Options {
     // Digital Ocean
     pub vpc_cidr_block: String,
     pub vpc_name: String,
+    pub vpc_cidr_set: VpcInitKind,
     // Qovery
     pub qovery_api_url: String,
     pub engine_version_controller_token: String,
@@ -47,7 +51,7 @@ pub struct DOKS<'a> {
     id: String,
     name: String,
     version: String,
-    region: String,
+    region: Region,
     cloud_provider: &'a DO,
     nodes: Vec<Node>,
     dns_provider: &'a dyn DnsProvider,
@@ -63,7 +67,7 @@ impl<'a> DOKS<'a> {
         id: &str,
         name: &str,
         version: &str,
-        region: &str,
+        region: Region,
         cloud_provider: &'a DO,
         dns_provider: &'a dyn DnsProvider,
         options: Options,
@@ -77,7 +81,7 @@ impl<'a> DOKS<'a> {
             "my-spaces-object-storage".to_string(),
             cloud_provider.spaces_access_id.clone(),
             cloud_provider.spaces_secret_key.clone(),
-            region.to_string(),
+            region,
         );
 
         DOKS {
@@ -85,7 +89,7 @@ impl<'a> DOKS<'a> {
             id: id.to_string(),
             name: name.to_string(),
             version: version.to_string(),
-            region: region.to_string(),
+            region,
             cloud_provider,
             dns_provider,
             spaces,
@@ -96,11 +100,93 @@ impl<'a> DOKS<'a> {
         }
     }
 
+    fn kubeconfig_bucket_name(&self) -> String {
+        format!("qovery-kubeconfigs-{}", self.id())
+    }
+
+    fn logs_bucket_name(&self) -> String {
+        format!("qovery-logs-{}", self.id)
+    }
+
     // create a context to render tf files (terraform) contained in lib/digitalocean/
-    fn tera_context(&self) -> TeraContext {
+    fn tera_context(&self) -> Result<TeraContext, EngineError> {
         let mut context = TeraContext::new();
 
-        // OKS
+        // Digital Ocean
+        context.insert("digitalocean_token", &self.cloud_provider.token);
+        context.insert("do_region", &self.region.to_string());
+
+        // Digital Ocean: Spaces Credentials
+        context.insert("spaces_access_id", &self.cloud_provider.spaces_access_id);
+        context.insert("spaces_secret_key", &self.cloud_provider.spaces_secret_key);
+
+        let space_kubeconfig_bucket = format!("qovery-kubeconfigs-{}", self.id.as_str());
+        context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
+
+        // Digital Ocean: Network
+        context.insert("vpc_name", self.options.vpc_name.as_str());
+        let vpc_cidr_block = match self.options.vpc_cidr_set {
+            // VPC subnet is not set, getting a non used subnet
+            VpcInitKind::Autodetect => {
+                match get_do_name_available_from_api(&self.cloud_provider.token, self.options.vpc_name.clone()) {
+                    Ok(vpcs) => match vpcs{
+                        // new vpc: select a random non used subnet
+                        None => {
+                            match get_do_random_available_subnet_from_api(&self.cloud_provider.token, self.region) {
+                                Ok(x) => x,
+                                Err(e) => return Err(EngineError {
+                                    cause: EngineErrorCause::Internal,
+                                    scope: EngineErrorScope::Engine,
+                                    execution_id: self.context.execution_id().to_string(),
+                                    message: e.message
+                                }),
+                            }
+                        }
+                        // existing vpc: assign current subnet in this case
+                        Some(vpc) => vpc.ip_range
+                    }
+                    Err(e) => return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: e.message
+                    })
+                }
+            }
+            VpcInitKind::Manual => {
+                self.options.vpc_cidr_block.clone()
+            }
+        };
+        context.insert("vpc_cidr_block", vpc_cidr_block.as_str());
+
+        // DNS
+        let managed_dns_list = vec![self.dns_provider.name()];
+        let managed_dns_domains_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
+        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+        let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
+
+        context.insert("managed_dns", &managed_dns_list);
+        context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
+        context.insert(
+            "managed_dns_domains_terraform_format",
+            &managed_dns_domains_terraform_format,
+        );
+        context.insert(
+            "managed_dns_resolvers_terraform_format",
+            &managed_dns_resolvers_terraform_format,
+        );
+        match self.dns_provider.kind() {
+            dns_provider::Kind::Cloudflare => {
+                context.insert("external_dns_provider", self.dns_provider.provider_name());
+                context.insert("cloudflare_api_token", self.dns_provider.token());
+                context.insert("cloudflare_email", self.dns_provider.account());
+            }
+        };
+
+        context.insert("dns_email_report", &self.options.tls_email_report);
+
+        // DOKS
+        context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("doks_cluster_id", &self.id());
         context.insert("doks_master_name", &self.name());
         context.insert("doks_version", &self.version());
@@ -111,6 +197,9 @@ impl<'a> DOKS<'a> {
 
         // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
+        context.insert("object_storage_kubeconfig_bucket", &self.kubeconfig_bucket_name());
+        context.insert("object_storage_logs_bucket", &self.logs_bucket_name());
+
         context.insert(
             "engine_version_controller_token",
             &self.options.engine_version_controller_token,
@@ -138,6 +227,12 @@ impl<'a> DOKS<'a> {
             "metrics_history_enabled",
             &self.context.is_feature_enabled(&Features::MetricsHistory),
         );
+        if self.context.resource_expiration_in_seconds().is_some() {
+            context.insert(
+                "resource_expiration_in_seconds",
+                &self.context.resource_expiration_in_seconds(),
+            )
+        }
 
         // grafana credentials
         context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
@@ -145,60 +240,7 @@ impl<'a> DOKS<'a> {
         context.insert("grafana_admin_password", self.options.grafana_admin_password.as_str());
 
         // TLS
-        let lets_encrypt_url = match self.context.is_test_cluster() {
-            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
-            false => "https://acme-v02.api.letsencrypt.org/directory",
-        };
-
-        context.insert("acme_server_url", lets_encrypt_url);
-        context.insert("dns_email_report", &self.options.tls_email_report);
-
-        // DNS management
-        let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![format!("\"{}\"", self.dns_provider.domain())];
-        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
-
-        let managed_dns_resolvers: Vec<String> = self
-            .dns_provider
-            .resolvers()
-            .iter()
-            .map(|x| format!("{}", x.clone().to_string()))
-            .collect();
-
-        let managed_dns_resolvers_terraform_format = terraform_list_format(managed_dns_resolvers);
-
-        context.insert("managed_dns", &managed_dns_list);
-        context.insert("managed_dns_domain", self.dns_provider.domain());
-        context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
-
-        context.insert(
-            "managed_dns_domains_terraform_format",
-            &managed_dns_domains_terraform_format,
-        );
-
-        context.insert(
-            "managed_dns_resolvers_terraform_format",
-            &managed_dns_resolvers_terraform_format,
-        );
-
-        match self.dns_provider.kind() {
-            dns_provider::Kind::Cloudflare => {
-                context.insert("external_dns_provider", "cloudflare");
-                context.insert("cloudflare_api_token", self.dns_provider.token());
-                context.insert("cloudflare_email", self.dns_provider.account());
-            }
-        };
-
-        // Digital Ocean
-        context.insert("digitalocean_token", &self.cloud_provider.token);
-        context.insert("do_region", &self.region);
-
-        // Spaces Credentials
-        context.insert("spaces_access_id", &self.cloud_provider.spaces_access_id);
-        context.insert("spaces_secret_key", &self.cloud_provider.spaces_secret_key);
-
-        let space_kubeconfig_bucket = format!("qovery-kubeconfigs-{}", self.id.as_str());
-        context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
+        context.insert("acme_server_url", &self.lets_encrypt_url());
 
         // AWS S3 tfstates storage tfstates
         context.insert(
@@ -232,6 +274,29 @@ impl<'a> DOKS<'a> {
         context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
 
+        // Vault
+        context.insert("vault_auth_method", "none");
+
+        if env::var_os("VAULT_ADDR").is_some() {
+            // select the correct used method
+            match env::var_os("VAULT_ROLE_ID") {
+                Some(role_id) => {
+                    context.insert("vault_auth_method", "app_role");
+                    context.insert("vault_role_id", role_id.to_str().unwrap());
+
+                    match env::var_os("VAULT_SECRET_ID") {
+                        Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
+                        None => error!("VAULT_SECRET_ID environment variable wasn't found"),
+                    }
+                }
+                None => {
+                    if env::var_os("VAULT_TOKEN").is_some() {
+                        context.insert("vault_auth_method", "token")
+                    }
+                }
+            }
+        };
+
         // kubernetes workers
         let worker_nodes = self
             .nodes
@@ -249,7 +314,26 @@ impl<'a> DOKS<'a> {
 
         context.insert("doks_worker_nodes", &worker_nodes);
 
-        context
+        Ok(context)
+    }
+
+    fn managed_dns_resolvers_terraform_format(&self) -> String {
+        let managed_dns_resolvers: Vec<String> = self
+            .dns_provider
+            .resolvers()
+            .iter()
+            .map(|x| x.clone().to_string())
+            .collect();
+
+        terraform_list_format(managed_dns_resolvers)
+    }
+
+    fn lets_encrypt_url(&self) -> String {
+        match &self.context.is_test_cluster() {
+            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
+            false => "https://acme-v02.api.letsencrypt.org/directory",
+        }
+            .to_string()
     }
 }
 
@@ -319,7 +403,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         );
 
         // generate terraform files and copy them into temp dir
-        let context = self.tera_context();
+        let context = self.tera_context()?;
 
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),

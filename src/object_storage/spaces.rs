@@ -8,6 +8,7 @@ use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use tokio::io;
 
+use crate::cloud_provider::digitalocean::application::Region as DoRegion;
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{Context, StringPath};
@@ -20,7 +21,7 @@ pub struct Spaces {
     name: String,
     access_key_id: String,
     secret_access_key: String,
-    region: String,
+    region: DoRegion,
 }
 
 impl Spaces {
@@ -30,7 +31,7 @@ impl Spaces {
         name: String,
         access_key_id: String,
         secret_access_key: String,
-        region: String,
+        region: DoRegion,
     ) -> Self {
         Spaces {
             context,
@@ -54,7 +55,7 @@ impl Spaces {
         X: AsRef<Path>,
     {
         let region = Region::Custom {
-            name: self.region.clone(),
+            name: self.region.to_string(),
             endpoint: format!("https://{}.digitaloceanspaces.com", self.region),
         };
 
