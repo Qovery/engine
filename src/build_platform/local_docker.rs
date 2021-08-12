@@ -199,7 +199,7 @@ impl LocalDocker {
             // Just a fallback for now to help our bot loving users deploy their apps
             // Long term solution requires lots of changes in UI and Core as well
             // And passing some params to the engine
-            if let Ok(content) = fs::read_to_string(into_dir_docker_style.clone().to_owned() + "/Procfile") {
+            if let Ok(content) = fs::read_to_string(format!("{}/{}", into_dir_docker_style, "Procfile")) {
                 if content.contains("worker") {
                     buildpacks_args.push("--default-process");
                     buildpacks_args.push("worker");
