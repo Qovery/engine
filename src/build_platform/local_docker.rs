@@ -1,10 +1,9 @@
-use std::{env, fs};
 use std::path::Path;
+use std::{env, fs};
 
 use chrono::Duration;
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::{cmd, git};
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
@@ -12,6 +11,7 @@ use crate::git::checkout_submodules;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
+use crate::{cmd, git};
 
 const BUILD_DURATION_TIMEOUT_MIN: i64 = 30;
 
