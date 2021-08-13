@@ -1,17 +1,30 @@
+use std::env;
+
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::digitalocean::application::Region;
+use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
+use crate::cloud_provider::digitalocean::kubernetes::doks_api::{
+    get_do_latest_doks_slug_from_api, get_doks_info_from_name,
+};
+use crate::cloud_provider::digitalocean::kubernetes::helm_charts::{do_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
-use crate::cloud_provider::digitalocean::network::vpc::{VpcInitKind, get_do_name_available_from_api, get_do_random_available_subnet_from_api};
+use crate::cloud_provider::digitalocean::models::doks::KubernetesCluster;
+use crate::cloud_provider::digitalocean::network::vpc::{
+    get_do_random_available_subnet_from_api, get_do_vpc_name_available_from_api, VpcInitKind,
+};
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
+use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use crate::fs::workspace_directory;
 use crate::models::{
     Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -19,14 +32,15 @@ use crate::models::{
 use crate::object_storage::spaces::Spaces;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
-use std::env;
-use crate::cloud_provider::digitalocean::application::Region;
+use std::path::PathBuf;
 
 pub mod cidr;
+pub mod doks_api;
+pub mod helm_charts;
 pub mod node;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Options {
+pub struct DoksOptions {
     // Digital Ocean
     pub vpc_cidr_block: String,
     pub vpc_name: String,
@@ -57,21 +71,21 @@ pub struct DOKS<'a> {
     dns_provider: &'a dyn DnsProvider,
     spaces: Spaces,
     template_directory: String,
-    options: Options,
+    options: DoksOptions,
     listeners: Listeners,
 }
 
 impl<'a> DOKS<'a> {
     pub fn new(
         context: Context,
-        id: &str,
-        name: &str,
-        version: &str,
+        id: String,
+        name: String,
+        version: String,
         region: Region,
         cloud_provider: &'a DO,
         dns_provider: &'a dyn DnsProvider,
-        options: Options,
         nodes: Vec<Node>,
+        options: DoksOptions,
     ) -> Self {
         let template_directory = format!("{}/digitalocean/bootstrap", context.lib_root_dir());
 
@@ -108,6 +122,10 @@ impl<'a> DOKS<'a> {
         format!("qovery-logs-{}", self.id)
     }
 
+    fn kubeconfig_file_name(&self) -> String {
+        format!("{}.yaml", self.id)
+    }
+
     // create a context to render tf files (terraform) contained in lib/digitalocean/
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
         let mut context = TeraContext::new();
@@ -128,34 +146,36 @@ impl<'a> DOKS<'a> {
         let vpc_cidr_block = match self.options.vpc_cidr_set {
             // VPC subnet is not set, getting a non used subnet
             VpcInitKind::Autodetect => {
-                match get_do_name_available_from_api(&self.cloud_provider.token, self.options.vpc_name.clone()) {
-                    Ok(vpcs) => match vpcs{
+                match get_do_vpc_name_available_from_api(&self.cloud_provider.token, self.options.vpc_name.clone()) {
+                    Ok(vpcs) => match vpcs {
                         // new vpc: select a random non used subnet
                         None => {
                             match get_do_random_available_subnet_from_api(&self.cloud_provider.token, self.region) {
                                 Ok(x) => x,
-                                Err(e) => return Err(EngineError {
-                                    cause: EngineErrorCause::Internal,
-                                    scope: EngineErrorScope::Engine,
-                                    execution_id: self.context.execution_id().to_string(),
-                                    message: e.message
-                                }),
+                                Err(e) => {
+                                    return Err(EngineError {
+                                        cause: EngineErrorCause::Internal,
+                                        scope: EngineErrorScope::Engine,
+                                        execution_id: self.context.execution_id().to_string(),
+                                        message: e.message,
+                                    })
+                                }
                             }
                         }
                         // existing vpc: assign current subnet in this case
-                        Some(vpc) => vpc.ip_range
+                        Some(vpc) => vpc.ip_range,
+                    },
+                    Err(e) => {
+                        return Err(EngineError {
+                            cause: EngineErrorCause::Internal,
+                            scope: EngineErrorScope::Engine,
+                            execution_id: self.context.execution_id().to_string(),
+                            message: e.message,
+                        })
                     }
-                    Err(e) => return Err(EngineError {
-                        cause: EngineErrorCause::Internal,
-                        scope: EngineErrorScope::Engine,
-                        execution_id: self.context.execution_id().to_string(),
-                        message: e.message
-                    })
                 }
             }
-            VpcInitKind::Manual => {
-                self.options.vpc_cidr_block.clone()
-            }
+            VpcInitKind::Manual => self.options.vpc_cidr_block.clone(),
         };
         context.insert("vpc_cidr_block", vpc_cidr_block.as_str());
 
@@ -166,6 +186,7 @@ impl<'a> DOKS<'a> {
         let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
 
         context.insert("managed_dns", &managed_dns_list);
+        context.insert("managed_dns_domain", self.dns_provider.domain());
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
         context.insert(
             "managed_dns_domains_terraform_format",
@@ -189,7 +210,38 @@ impl<'a> DOKS<'a> {
         context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("doks_cluster_id", &self.id());
         context.insert("doks_master_name", &self.name());
-        context.insert("doks_version", &self.version());
+        let doks_version = match self.get_doks_info_from_name_api() {
+            Ok(x) => match x {
+                // new cluster, we check the wished version is supported by DO
+                None => match get_do_latest_doks_slug_from_api(self.cloud_provider.token.as_str(), self.version()) {
+                    Ok(version) => match version {
+                        None => return Err(EngineError {
+                            cause: EngineErrorCause::Internal,
+                            scope: EngineErrorScope::Engine,
+                            execution_id: self.context.execution_id().to_string(),
+                            message: Some(format!("from the DigitalOcean API, no slug version match the required version ({}). This version is not supported anymore or not yet by DigitalOcean.", self.version()))
+                        }),
+                        Some(v) => v,
+                    }
+                    Err(e) => return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: e.message,
+                    })
+                },
+                // use the same deployed version number
+                Some(x) => x.version
+            }
+            Err(e) => return Err(EngineError {
+                cause: EngineErrorCause::Internal,
+                scope: EngineErrorScope::Engine,
+                execution_id: self.context.execution_id().to_string(),
+                message: e.message
+            })
+        };
+        context.insert("doks_version", doks_version.as_str());
+        context.insert("do_space_kubeconfig_filename", &self.kubeconfig_file_name());
 
         // Network
         context.insert("vpc_name", self.options.vpc_name.as_str());
@@ -333,7 +385,14 @@ impl<'a> DOKS<'a> {
             true => "https://acme-staging-v02.api.letsencrypt.org/directory",
             false => "https://acme-v02.api.letsencrypt.org/directory",
         }
-            .to_string()
+        .to_string()
+    }
+
+    // return cluster info from name if exists
+    fn get_doks_info_from_name_api(&self) -> Result<Option<KubernetesCluster>, SimpleError> {
+        let api_url = format!("{}/clusters", DoApiType::Doks.api_url());
+        let json_content = do_get_from_api(self.cloud_provider.token.as_str(), DoApiType::Doks, api_url)?;
+        get_doks_info_from_name(json_content.as_str(), self.name().to_string())
     }
 }
 
@@ -416,7 +475,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         )?;
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        // this is due to the required dependencies of lib/digitialocean/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -427,16 +486,191 @@ impl<'a> Kubernetes for DOKS<'a> {
             ),
         )?;
 
-        let _ = cast_simple_error_to_engine_error(
+        // temporary: remove helm/kube management from terraform
+        match terraform_init_validate_state_list(temp_dir.as_str()) {
+            Ok(x) => {
+                let items_type = vec!["helm_release", "kubernetes_namespace"];
+                for item in items_type {
+                    for entry in x.clone() {
+                        if entry.starts_with(item) {
+                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
+                                Ok(_) => info!("successfully removed {}", &entry),
+                                Err(e) => {
+                                    return Err(EngineError {
+                                        cause: EngineErrorCause::Internal,
+                                        scope: EngineErrorScope::Engine,
+                                        execution_id: self.context.execution_id().to_string(),
+                                        message: Some(format!(
+                                            "error while trying to remove {} out of terraform state file. {:?}",
+                                            entry, e.message
+                                        )),
+                                    })
+                                }
+                            }
+                        };
+                    }
+                }
+            }
+            Err(e) => warn!(
+                "no state list exists yet, this is normal if it's a newly created cluster. {:?}",
+                e
+            ),
+        };
+
+        info!("Create Qovery managed object storage buckets");
+        // Kubeconfig bucket
+        if let Err(e) = self.spaces.create_bucket(self.kubeconfig_bucket_name().as_str()) {
+            let message = format!(
+                "Cannot create object storage bucket {} for cluster {} with id {}",
+                self.kubeconfig_bucket_name(),
+                self.name(),
+                self.id()
+            );
+            error!("{}", message);
+            return Err(e);
+        }
+
+        // Logs bucket
+        if let Err(e) = self.spaces.create_bucket(self.logs_bucket_name().as_str()) {
+            let message = format!(
+                "Cannot create object storage bucket {} for cluster {} with id {}",
+                self.logs_bucket_name(),
+                self.name(),
+                self.id()
+            );
+            error!("{}", message);
+            return Err(e);
+        }
+
+        // terraform deployment dedicated to cloud resources
+        match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context.execution_id(),
-            crate::cmd::terraform::terraform_init_validate_plan_apply(
+            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                format!(
+                    "Error while deploying cluster {} with Terraform with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(e);
+            }
+        };
+
+        // push config file to object storage
+        let kubeconfig_name = format!("{}.yaml", self.id());
+        if let Err(e) = self.spaces.put(
+            self.kubeconfig_bucket_name().as_str(),
+            kubeconfig_name.as_str(),
+            format!(
+                "{}/{}/{}",
                 temp_dir.as_str(),
-                self.context.is_dry_run_deploy(),
+                self.kubeconfig_bucket_name().as_str(),
+                kubeconfig_name.as_str()
+            )
+            .as_str(),
+        ) {
+            let message = format!(
+                "Cannot put kubeconfig into object storage bucket for cluster {} with id {}",
+                self.name(),
+                self.id()
+            );
+            error!("{}. {:?}", message, e);
+            return Err(e);
+        }
+
+        // kubernetes helm deployments on the cluster
+        // todo: instead of downloading kubeconfig file, use the one that has just been generated by terraform
+        let kubeconfig_file = match self.config_file() {
+            Ok(x) => x.0,
+            Err(e) => {
+                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
+                return Err(e);
+            }
+        };
+        let kubeconfig = PathBuf::from(&kubeconfig_file);
+        let credentials_environment_variables: Vec<(String, String)> = self
+            .cloud_provider
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|x| (x.0.to_string(), x.1.to_string()))
+            .collect();
+
+        let doks_id = match self.get_doks_info_from_name_api() {
+            Ok(info) => match info {
+                None => {
+                    return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: Some(format!(
+                            "DigitalOcean API reported no cluster id, while it has been deployed, please retry later"
+                        )),
+                    })
+                }
+                Some(cluster) => cluster.id,
+            },
+            Err(e) => {
+                return Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: e.message,
+                })
+            }
+        };
+
+        let charts_prerequisites = ChartsConfigPrerequisites {
+            organization_id: self.cloud_provider.organization_id().to_string(),
+            infra_options: self.options.clone(),
+            cluster_id: self.id.clone(),
+            do_cluster_id: doks_id,
+            region: self.region().to_string(),
+            cluster_name: self.cluster_name().to_string(),
+            cloud_provider: "digitalocean".to_string(),
+            test_cluster: self.context.is_test_cluster(),
+            do_token: self.cloud_provider.token.to_string(),
+            do_space_access_id: self.cloud_provider.spaces_access_id.to_string(),
+            do_space_secret_key: self.cloud_provider.spaces_secret_key.to_string(),
+            do_space_bucket_kubeconfig: self.kubeconfig_bucket_name(),
+            do_space_kubeconfig_filename: self.kubeconfig_file_name(),
+            ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
+            ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
+            managed_dns_name: self.dns_provider.domain().to_string(),
+            managed_dns_helm_format: self.dns_provider.domain_helm_format(),
+            managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
+            external_dns_provider: self.dns_provider.provider_name().to_string(),
+            dns_email_report: self.options.tls_email_report.clone(),
+            acme_url: self.lets_encrypt_url(),
+            cloudflare_email: self.dns_provider.account().to_string(),
+            cloudflare_api_token: self.dns_provider.token().to_string(),
+            disable_pleco: self.context.disable_pleco(),
+        };
+
+        let helm_charts_to_deploy = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            do_helm_charts(
+                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+                &charts_prerequisites,
+                Some(&temp_dir),
+                &kubeconfig,
+                &credentials_environment_variables,
             ),
         )?;
 
-        Ok(())
+        cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            deploy_charts_levels(
+                &kubeconfig,
+                &credentials_environment_variables,
+                helm_charts_to_deploy,
+                self.context.is_dry_run_deploy(),
+            ),
+        )
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {

@@ -521,7 +521,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
                 self.name(),
                 self.id()
             );
-            error!("{}", message);
+            error!("{}. {:?}", message, e);
             return Err(e);
         }
 

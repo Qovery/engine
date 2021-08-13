@@ -1,8 +1,6 @@
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::digitalocean::network::load_balancer::get_uuid_of_cluster_from_name;
-use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
@@ -15,7 +13,6 @@ use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
-use crate::container_registry::docr::subscribe_kube_cluster_to_container_registry;
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
@@ -271,27 +268,28 @@ impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.application.on_create() called for {}", self.name);
 
-        let (kubernetes, _) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
+        // todo(pmavro): I don't get wy this is done here and not in hte
+        // let (kubernetes, _) = match target {
+        //     DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+        //     DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        // };
 
         // FIXME: remove downcast
-        let digitalocean = kubernetes.cloud_provider().as_any().downcast_ref::<DO>().unwrap();
+        //let digitalocean = kubernetes.cloud_provider().as_any().downcast_ref::<DO>().unwrap();
 
-        // retrieve the cluster uuid, useful to link DO registry to k8s cluster
-        let cluster_uuid_res = get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
-
-        match cluster_uuid_res {
-            // ensure DO registry is linked to k8s cluster
-            Ok(uuid) => {
-                match subscribe_kube_cluster_to_container_registry(digitalocean.token.as_str(), uuid.as_str()) {
-                    Ok(_) => info!("Container registry is well linked with the Cluster"),
-                    Err(e) => error!("Unable to link cluster to registry {:?}", e.message),
-                }
-            }
-            Err(e) => error!("Unable to get cluster uuid {:?}", e.message),
-        };
+        // // retrieve the cluster uuid, useful to link DO registry to k8s cluster
+        // let cluster_uuid_res = get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
+        //
+        // match cluster_uuid_res {
+        //     // ensure DO registry is linked to k8s cluster
+        //     Ok(uuid) => {
+        //         match subscribe_kube_cluster_to_container_registry(digitalocean.token.as_str(), uuid.as_str()) {
+        //             Ok(_) => info!("Container registry is well linked with the Cluster"),
+        //             Err(e) => error!("Unable to link cluster to registry {:?}", e.message),
+        //         }
+        //     }
+        //     Err(e) => error!("Unable to get cluster uuid {:?}", e.message),
+        // };
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_user_stateless_service(target, self)
