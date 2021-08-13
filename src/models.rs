@@ -1093,8 +1093,8 @@ impl Context {
 
     pub fn disable_pleco(&self) -> bool {
         match &self.metadata {
-            Some(meta) => meta.disable_pleco.unwrap_or(false),
-            _ => false,
+            Some(meta) => meta.disable_pleco.unwrap_or(true),
+            _ => true,
         }
     }
 
