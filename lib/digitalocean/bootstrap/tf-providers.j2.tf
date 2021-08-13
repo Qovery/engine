@@ -11,18 +11,6 @@ provider "digitalocean" {
   spaces_secret_key = "{{ spaces_secret_key }}"
 }
 
-provider "helm" {
-  debug           = true
-  kubernetes {
-    host = digitalocean_kubernetes_cluster.kubernetes_cluster.endpoint
-    client_certificate     = base64decode(digitalocean_kubernetes_cluster.kubernetes_cluster.kube_config.0.client_certificate)
-    client_key             = base64decode(digitalocean_kubernetes_cluster.kubernetes_cluster.kube_config.0.client_key)
-    cluster_ca_certificate = base64decode(digitalocean_kubernetes_cluster.kubernetes_cluster.kube_config.0.cluster_ca_certificate)
-    load_config_file       = false
-    token                  = digitalocean_kubernetes_cluster.kubernetes_cluster.kube_config.0.token
-  }
-}
-
 terraform {
   required_providers {
     aws = {
@@ -31,15 +19,11 @@ terraform {
     }
     digitalocean = {
       source = "digitalocean/digitalocean"
-      version = "~> 1.22.1"
+      version = "~> 2.11.0"
     }
     external = {
       source = "hashicorp/external"
       version = "~> 1.2"
-    }
-    helm = {
-      source = "hashicorp/helm"
-      version = "~> 1.3.2"
     }
     local = {
       source = "hashicorp/local"
@@ -54,5 +38,5 @@ terraform {
       version = "~> 2.3"
     }
   }
-  required_version = ">= 0.13"
+  required_version = ">= 0.14"
 }

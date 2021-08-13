@@ -1,11 +1,9 @@
-use crate::cloud_provider::digitalocean::application::Region;
-use crate::cloud_provider::digitalocean::models::vpc::{Vpcs, Vpc};
-use crate::error::{SimpleError, SimpleErrorKind};
-use crate::utilities::get_header_with_bearer;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
-pub const DO_VPC_API_PATH: &str = "https://api.digitalocean.com/v2/vpcs";
+use crate::cloud_provider::digitalocean::application::Region;
+use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
+use crate::cloud_provider::digitalocean::models::vpc::{Vpc, Vpcs};
+use crate::error::{SimpleError, SimpleErrorKind};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub enum VpcInitKind {
@@ -25,7 +23,7 @@ pub fn get_do_subnet_available_from_api(
     region: Region,
 ) -> Result<Option<Vpc>, SimpleError> {
     // get subnets from the API
-    let vpcs = match do_get_vpc_info_from_api(token) {
+    let vpcs = match do_get_from_api(token, DoApiType::Vpc, DoApiType::Vpc.api_url()) {
         Ok(x) => do_get_vpcs_from_api_output(x.as_str())?,
         Err(e) => return Err(e),
     };
@@ -34,12 +32,9 @@ pub fn get_do_subnet_available_from_api(
     get_do_vpc_from_subnet(desired_subnet, vpcs, region)
 }
 
-pub fn get_do_name_available_from_api(
-    token: &str,
-    desired_name: String,
-) -> Result<Option<Vpc>, SimpleError> {
+pub fn get_do_vpc_name_available_from_api(token: &str, desired_name: String) -> Result<Option<Vpc>, SimpleError> {
     // get names from the API
-    let vpcs = match do_get_vpc_info_from_api(token) {
+    let vpcs = match do_get_from_api(token, DoApiType::Vpc, DoApiType::Vpc.api_url()) {
         Ok(x) => do_get_vpcs_from_api_output(x.as_str())?,
         Err(e) => return Err(e),
     };
@@ -49,7 +44,7 @@ pub fn get_do_name_available_from_api(
 }
 
 pub fn get_do_random_available_subnet_from_api(token: &str, region: Region) -> Result<String, SimpleError> {
-    let json_content = do_get_vpc_info_from_api(token)?;
+    let json_content = do_get_from_api(token, DoApiType::Vpc, DoApiType::Vpc.api_url())?;
     let existing_vpcs = do_get_vpcs_from_api_output(&json_content)?;
     get_random_available_subnet(existing_vpcs, region)
 }
@@ -67,13 +62,16 @@ fn get_random_available_subnet(existing_vpcs: Vec<Vpc>, region: Region) -> Resul
                 None => return Ok(current_subnet),
                 // already used
                 Some(_) => continue,
-            }
+            },
             // reserved ip
             Err(_) => continue,
         }
-    };
+    }
 
-    Err(SimpleError{ kind: SimpleErrorKind::Other, message: Some("no available subnet found on this Digital Ocean account.".to_string()) })
+    Err(SimpleError {
+        kind: SimpleErrorKind::Other,
+        message: Some("no available subnet found on this Digital Ocean account.".to_string()),
+    })
 }
 
 fn get_do_vpc_from_name(desired_name: String, existing_vpcs: Vec<Vpc>) -> Option<Vpc> {
@@ -89,11 +87,21 @@ fn get_do_vpc_from_name(desired_name: String, existing_vpcs: Vec<Vpc>) -> Option
     exists
 }
 
-fn get_do_vpc_from_subnet(desired_subnet: String, existing_vpcs: Vec<Vpc>, region: Region) -> Result<Option<Vpc>, SimpleError> {
+fn get_do_vpc_from_subnet(
+    desired_subnet: String,
+    existing_vpcs: Vec<Vpc>,
+    region: Region,
+) -> Result<Option<Vpc>, SimpleError> {
     let mut exists = None;
 
     match is_do_reserved_vpc_subnets(region, desired_subnet.as_str()) {
-        true => Err(SimpleError{ kind: SimpleErrorKind::Other, message: Some(format!("subnet {} can't be used because it's a DigitalOcean dedicated subnet", desired_subnet)) }),
+        true => Err(SimpleError {
+            kind: SimpleErrorKind::Other,
+            message: Some(format!(
+                "subnet {} can't be used because it's a DigitalOcean dedicated subnet",
+                desired_subnet
+            )),
+        }),
         false => {
             for vpc in existing_vpcs {
                 if vpc.ip_range == desired_subnet {
@@ -102,7 +110,7 @@ fn get_do_vpc_from_subnet(desired_subnet: String, existing_vpcs: Vec<Vpc>, regio
                 }
             }
             Ok(exists)
-        },
+        }
     }
 }
 
@@ -115,31 +123,9 @@ fn do_get_vpcs_from_api_output(json_content: &str) -> Result<Vec<Vpc>, SimpleErr
         Err(e) => Err(SimpleError::new(
             SimpleErrorKind::Other,
             Some(format!(
-                "Error While trying to deserialize json received from Digital Ocean VPC API. {}",
+                "error while trying to deserialize json received from Digital Ocean VPC API. {}",
                 e
             )),
-        )),
-    }
-}
-
-fn do_get_vpc_info_from_api(token: &str) -> Result<String, SimpleError> {
-    let headers = get_header_with_bearer(token);
-    let res = reqwest::blocking::Client::new()
-        .get(DO_VPC_API_PATH)
-        .headers(headers)
-        .send();
-
-    match res {
-        Ok(response) => match response.status() {
-            StatusCode::OK => Ok(response.text().unwrap()),
-            _ => Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("Unknown status code received from Digital Ocean Kubernetes API while retrieving VPC information"),
-            )),
-        },
-        Err(_) => Err(SimpleError::new(
-            SimpleErrorKind::Other,
-            Some("Unable to get a response from Digital Ocean VPC API"),
         )),
     }
 }
@@ -178,7 +164,10 @@ fn is_do_reserved_vpc_subnets(region: Region, subnet: &str) -> bool {
 #[cfg(test)]
 mod tests_do_vpcs {
     use crate::cloud_provider::digitalocean::application::Region;
-    use crate::cloud_provider::digitalocean::network::vpc::{is_do_reserved_vpc_subnets, do_get_vpcs_from_api_output, get_do_vpc_from_subnet, get_do_vpc_from_name, get_random_available_subnet};
+    use crate::cloud_provider::digitalocean::network::vpc::{
+        do_get_vpcs_from_api_output, get_do_vpc_from_name, get_do_vpc_from_subnet, get_random_available_subnet,
+        is_do_reserved_vpc_subnets,
+    };
 
     fn do_get_vpc_json() -> String {
         // https://developers.digitalocean.com/documentation/v2/#retrieve-an-existing-load-balancer
@@ -275,21 +264,25 @@ mod tests_do_vpcs {
         let vpcs = do_get_vpcs_from_api_output(&json_content).unwrap();
 
         // available
-        assert!(get_do_vpc_from_subnet(
-            "10.3.0.0/16".to_string(),
-            vpcs.clone(),
-            Region::Frankfurt
-        ).unwrap().is_none());
+        assert!(
+            get_do_vpc_from_subnet("10.3.0.0/16".to_string(), vpcs.clone(), Region::Frankfurt)
+                .unwrap()
+                .is_none()
+        );
         // already used
-        assert_eq!(get_do_vpc_from_subnet("10.2.0.0/16".to_string(), vpcs.clone(), Region::Frankfurt).unwrap().unwrap().ip_range, "10.2.0.0/16".to_string());
+        assert_eq!(
+            get_do_vpc_from_subnet("10.2.0.0/16".to_string(), vpcs.clone(), Region::Frankfurt)
+                .unwrap()
+                .unwrap()
+                .ip_range,
+            "10.2.0.0/16".to_string()
+        );
         // DO reserved subnet in the same region
         assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs.clone(), Region::Frankfurt).is_err());
         // DO reserved subnet in another region
-        assert!(get_do_vpc_from_subnet(
-            "10.19.0.0/16".to_string(),
-            vpcs,
-            Region::London
-        ).unwrap().is_none());
+        assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs, Region::London)
+            .unwrap()
+            .is_none());
     }
 
     #[test]

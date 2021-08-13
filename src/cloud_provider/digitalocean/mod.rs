@@ -11,6 +11,7 @@ use crate::models::{Context, Listen, Listener, Listeners};
 
 pub mod application;
 pub mod databases;
+pub mod do_api_common;
 pub mod kubernetes;
 pub mod models;
 pub mod network;
