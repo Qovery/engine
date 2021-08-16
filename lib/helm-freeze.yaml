@@ -32,7 +32,7 @@ charts:
     version: 9.4.0
   - name: metrics-server
     repo_name: bitnami
-    version: 4.3.1
+    version: 5.9.2
   - name: kube-state-metrics
     repo_name: prometheus-community
     version: 3.2.0
