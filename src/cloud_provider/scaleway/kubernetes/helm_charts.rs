@@ -280,15 +280,15 @@ pub fn scw_helm_charts(
         },
     };
 
-    let mut prometheus_operator = CommonChart {
+    let mut kube_prometheus_stack = CommonChart {
         chart_info: ChartInfo {
-            name: "prometheus-operator".to_string(),
-            path: chart_path("/common/charts/prometheus-operator"),
+            name: "kube-prometheus-stack".to_string(),
+            path: chart_path("/common/charts/kube-prometheus-stack"),
             namespace: prometheus_namespace,
             // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
             // to upgrade because of the CRD and the number of elements it has to deploy
             timeout: "480".to_string(),
-            values_files: vec![chart_path("chart_values/prometheus_operator.yaml")],
+            values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
             values: vec![
                 ChartSetValue {
                     key: "nameOverride".to_string(),
@@ -301,23 +301,6 @@ pub fn scw_helm_charts(
                 ChartSetValue {
                     key: "prometheus.prometheusSpec.externalUrl".to_string(),
                     value: prometheus_internal_url.clone(),
-                },
-                // Limits kube-state-metrics
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.requests.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.limits.memory".to_string(),
-                    value: "256Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.requests.memory".to_string(),
-                    value: "256Mi".to_string(),
                 },
                 // Limits prometheus-node-exporter
                 ChartSetValue {
@@ -335,23 +318,6 @@ pub fn scw_helm_charts(
                 ChartSetValue {
                     key: "prometheus-node-exporter.resources.requests.memory".to_string(),
                     value: "32Mi".to_string(),
-                },
-                // Limits kube-state-metrics
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.limits.cpu".to_string(),
-                    value: "30m".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.requests.cpu".to_string(),
-                    value: "10m".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
                 },
                 // resources limits
                 ChartSetValue {
@@ -374,14 +340,7 @@ pub fn scw_helm_charts(
             ..Default::default()
         },
     };
-    if chart_config_prerequisites.test_cluster {
-        prometheus_operator.chart_info.values.push(ChartSetValue {
-            key: "defaultRules.config".to_string(),
-            value: "{}".to_string(),
-        })
-    }
 
-    // todo: fix it, strange behavior from the logs
     let prometheus_adapter = CommonChart {
         chart_info: ChartInfo {
             name: "prometheus-adapter".to_string(),
@@ -407,19 +366,19 @@ pub fn scw_helm_charts(
                 // resources limits
                 ChartSetValue {
                     key: "resources.limits.cpu".to_string(),
-                    value: "100m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
             ],
             ..Default::default()
@@ -911,7 +870,7 @@ datasources:
 
     // // observability
     if chart_config_prerequisites.ff_metrics_history_enabled {
-        level_2.push(Box::new(prometheus_operator));
+        level_2.push(Box::new(kube_prometheus_stack));
         level_4.push(Box::new(prometheus_adapter));
         level_4.push(Box::new(kube_state_metrics));
     }
