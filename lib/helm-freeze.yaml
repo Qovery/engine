@@ -30,7 +30,7 @@ charts:
     version: 0.3.1
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
-    version: 9.4.0
+    version: 9.10.4
   - name: metrics-server
     repo_name: bitnami
     version: 5.9.2
