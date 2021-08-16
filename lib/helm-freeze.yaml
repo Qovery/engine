@@ -75,7 +75,7 @@ charts:
     dest: do-bootstrap
     repo_name: do-k8s-token-rotate
   - name: prometheus-adapter
-    version: 2.12.1
+    version: 2.15.2
     repo_name: prometheus-community
   - name: digital-mobius
     version: 0.1.4
