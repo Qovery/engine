@@ -38,9 +38,8 @@ charts:
     repo_name: prometheus-community
     version: 3.4.2
   - name: loki
-    repo_name: loki
-    version: 0.31.1
-    comment: https://github.com/grafana/loki/tree/master/production/helm
+    repo_name: grafana
+    version: 2.6.0
   - name: promtail
     repo_name: loki
     version: 0.24.0
@@ -93,8 +92,8 @@ repos:
     url: https://honestica.github.io/lifen-charts
   - name: aws
     url: https://aws.github.io/eks-charts
-  - name: loki
-    url: https://grafana.github.io/loki/charts
+  - name: grafana
+    url: https://grafana.github.io/helm-charts
   - name: pleco
     url: https://qovery.github.io/pleco/
   - name: cluster-autoscaler
