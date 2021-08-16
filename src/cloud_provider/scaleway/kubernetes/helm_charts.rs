@@ -305,19 +305,19 @@ pub fn scw_helm_charts(
                 // Limits kube-state-metrics
                 ChartSetValue {
                     key: "kube-state-metrics.resources.limits.cpu".to_string(),
-                    value: "100m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "kube-state-metrics.resources.requests.cpu".to_string(),
-                    value: "20m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "kube-state-metrics.resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "kube-state-metrics.resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
                 // Limits prometheus-node-exporter
                 ChartSetValue {

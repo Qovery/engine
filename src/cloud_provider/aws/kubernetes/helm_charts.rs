@@ -539,19 +539,19 @@ pub fn aws_helm_charts(
                 // resources limits
                 ChartSetValue {
                     key: "resources.limits.cpu".to_string(),
-                    value: "100m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
             ],
             ..Default::default()
