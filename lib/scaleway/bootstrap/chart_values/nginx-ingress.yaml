@@ -23,3 +23,7 @@ controller:
       service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
       service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
     externalTrafficPolicy: "Local"
+
+defaultBackend:
+  enabled: true
+  name: default-backend

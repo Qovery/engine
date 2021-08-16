@@ -11,8 +11,9 @@ charts:
     comment: |
       Dashboard have been set into it as the chart suggest but it's a problem with helm-freeze
       Need to look if we can move them out of this repo
-  - name: nginx-ingress
-    version: 1.35.0
+  - name: ingress-nginx
+    repo_name: ingress-nginx
+    version: 3.35.0
   - name: kube-prometheus-stack
     repo_name: prometheus-community
     version: 17.0.3
@@ -105,6 +106,8 @@ repos:
     url: https://prometheus-community.github.io/helm-charts
   - name: digital-mobius
     url: https://qovery.github.io/digital-mobius
+  - name: ingress-nginx
+    url: https://kubernetes.github.io/ingress-nginx/
 
 
 destinations:
