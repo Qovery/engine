@@ -3,7 +3,6 @@ extern crate test_utilities;
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
 use ::function_name::named;
-use test_utilities::aws::AWS_KUBERNETES_VERSION;
 use tracing::{span, Level};
 
 use self::test_utilities::aws::eks_options;
@@ -112,7 +111,7 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             context,
             generate_cluster_id(region).as_str(),
             generate_cluster_id(region).as_str(),
-            AWS_KUBERNETES_VERSION,
+            test_utilities::aws::AWS_KUBERNETES_VERSION,
             region,
             &aws,
             &cloudflare,

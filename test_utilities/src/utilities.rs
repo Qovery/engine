@@ -96,6 +96,7 @@ pub struct FuncTestsSecrets {
     pub DEFAULT_TEST_DOMAIN: Option<String>,
     pub DIGITAL_OCEAN_SPACES_ACCESS_ID: Option<String>,
     pub DIGITAL_OCEAN_SPACES_SECRET_ID: Option<String>,
+    pub DIGITAL_OCEAN_DEFAULT_REGION: Option<String>,
     pub DIGITAL_OCEAN_TOKEN: Option<String>,
     pub DISCORD_API_URL: Option<String>,
     pub EKS_ACCESS_CIDR_BLOCKS: Option<String>,
@@ -171,6 +172,7 @@ impl FuncTestsSecrets {
             DEFAULT_TEST_DOMAIN: None,
             DIGITAL_OCEAN_SPACES_ACCESS_ID: None,
             DIGITAL_OCEAN_SPACES_SECRET_ID: None,
+            DIGITAL_OCEAN_DEFAULT_REGION: None,
             DIGITAL_OCEAN_TOKEN: None,
             DISCORD_API_URL: None,
             EKS_ACCESS_CIDR_BLOCKS: None,
@@ -248,6 +250,10 @@ impl FuncTestsSecrets {
             DIGITAL_OCEAN_SPACES_SECRET_ID: Self::select_secret(
                 "DIGITAL_OCEAN_SPACES_SECRET_ID",
                 secrets.DIGITAL_OCEAN_SPACES_SECRET_ID,
+            ),
+            DIGITAL_OCEAN_DEFAULT_REGION: Self::select_secret(
+                "DIGITAL_OCEAN_DEFAULT_REGION",
+                secrets.DIGITAL_OCEAN_DEFAULT_REGION,
             ),
             DIGITAL_OCEAN_TOKEN: Self::select_secret("DIGITAL_OCEAN_TOKEN", secrets.DIGITAL_OCEAN_TOKEN),
             DISCORD_API_URL: Self::select_secret("DISCORD_API_URL", secrets.DISCORD_API_URL),
