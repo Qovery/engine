@@ -109,6 +109,12 @@ variable "space_secret_key" {
   type = string
 }
 
+variable "kubeconfig_filename" {
+  description = "kubeconfig filename stored in space bucket"
+  default = "{{ do_space_kubeconfig_filename }}"
+  type = string
+}
+
 # Engine info
 
 variable "qovery_engine_info" {

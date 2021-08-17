@@ -1,6 +1,6 @@
 charts:
   - name: cert-manager
-    version: v1.0.4
+    version: v1.1.1
     repo_name: jetstack
   - name: external-dns
     repo_name: bitnami
@@ -32,10 +32,10 @@ charts:
     version: 9.4.0
   - name: metrics-server
     repo_name: bitnami
-    version: 4.3.1
+    version: 5.9.2
   - name: kube-state-metrics
     repo_name: prometheus-community
-    version: 3.2.0
+    version: 3.4.2
   - name: loki
     repo_name: loki
     version: 0.31.1
