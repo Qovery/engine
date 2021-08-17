@@ -89,7 +89,7 @@ pub fn aws_helm_charts(
         get_chart_namespace(prometheus_namespace)
     );
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_prefix = format!("loki.{}.svc", get_chart_namespace(loki_namespace));
+    let loki_kube_dns_prefix = format!("http://loki.{}.svc:3100/loki/api/v1/push", get_chart_namespace(loki_namespace));
 
     // Qovery storage class
     let q_storage_class = CommonChart {
@@ -370,7 +370,7 @@ pub fn aws_helm_charts(
             namespace: HelmChartNamespaces::KubeSystem,
             values: vec![
                 ChartSetValue {
-                    key: "loki.serviceName".to_string(),
+                    key: "config.lokiAddress".to_string(),
                     value: loki_kube_dns_prefix.clone(),
                 },
                 // it's mandatory to get this class to ensure paused infra will behave properly on restore
