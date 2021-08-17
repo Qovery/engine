@@ -195,5 +195,5 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
 fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_upgrade_and_destroy_eks_cluster(&region, secrets, "1.16", "1.17", function_name!());
+    create_upgrade_and_destroy_eks_cluster(&region, secrets, "1.18", "1.19", function_name!());
 }
