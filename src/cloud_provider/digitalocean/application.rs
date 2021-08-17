@@ -1,8 +1,6 @@
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
-use crate::cloud_provider::digitalocean::common::get_uuid_of_cluster_from_name;
-use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
@@ -15,10 +13,11 @@ use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
-use crate::container_registry::docr::subscribe_kube_cluster_to_container_registry;
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
+use std::fmt;
+use std::str::FromStr;
 
 pub struct Application {
     context: Context,
@@ -269,27 +268,28 @@ impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DO.application.on_create() called for {}", self.name);
 
-        let (kubernetes, _) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
+        // todo(pmavro): I don't get wy this is done here and not in hte
+        // let (kubernetes, _) = match target {
+        //     DeploymentTarget::ManagedServices(k, env) => (*k, *env),
+        //     DeploymentTarget::SelfHosted(k, env) => (*k, *env),
+        // };
 
         // FIXME: remove downcast
-        let digitalocean = kubernetes.cloud_provider().as_any().downcast_ref::<DO>().unwrap();
+        //let digitalocean = kubernetes.cloud_provider().as_any().downcast_ref::<DO>().unwrap();
 
-        // retrieve the cluster uuid, useful to link DO registry to k8s cluster
-        let cluster_uuid_res = get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
-
-        match cluster_uuid_res {
-            // ensure DO registry is linked to k8s cluster
-            Ok(uuid) => {
-                match subscribe_kube_cluster_to_container_registry(digitalocean.token.as_str(), uuid.as_str()) {
-                    Ok(_) => info!("Container registry is well linked with the Cluster"),
-                    Err(e) => error!("Unable to link cluster to registry {:?}", e.message),
-                }
-            }
-            Err(e) => error!("Unable to get cluster uuid {:?}", e.message),
-        };
+        // // retrieve the cluster uuid, useful to link DO registry to k8s cluster
+        // let cluster_uuid_res = get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
+        //
+        // match cluster_uuid_res {
+        //     // ensure DO registry is linked to k8s cluster
+        //     Ok(uuid) => {
+        //         match subscribe_kube_cluster_to_container_registry(digitalocean.token.as_str(), uuid.as_str()) {
+        //             Ok(_) => info!("Container registry is well linked with the Cluster"),
+        //             Err(e) => error!("Unable to link cluster to registry {:?}", e.message),
+        //         }
+        //     }
+        //     Err(e) => error!("Unable to get cluster uuid {:?}", e.message),
+        // };
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_user_stateless_service(target, self)
@@ -369,4 +369,84 @@ impl Listen for Application {
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub enum StorageType {
     Standard,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum Region {
+    NewYorkCity1,
+    NewYorkCity2,
+    NewYorkCity3,
+    Amsterdam2,
+    Amsterdam3,
+    SanFrancisco1,
+    SanFrancisco2,
+    SanFrancisco3,
+    Singapore,
+    London,
+    Frankfurt,
+    Toronto,
+    Bangalore,
+}
+
+impl Region {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Region::NewYorkCity1 => "nyc1",
+            Region::NewYorkCity2 => "nyc2",
+            Region::NewYorkCity3 => "nyc3",
+            Region::Amsterdam2 => "ams2",
+            Region::Amsterdam3 => "ams3",
+            Region::SanFrancisco1 => "sfo1",
+            Region::SanFrancisco2 => "sfo2",
+            Region::SanFrancisco3 => "sfo3",
+            Region::Singapore => "sgp1",
+            Region::London => "lon1",
+            Region::Frankfurt => "fra1",
+            Region::Toronto => "tor1",
+            Region::Bangalore => "blr1",
+        }
+    }
+}
+
+impl fmt::Display for Region {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Region::NewYorkCity1 => write!(f, "nyc1"),
+            Region::NewYorkCity2 => write!(f, "nyc2"),
+            Region::NewYorkCity3 => write!(f, "nyc3"),
+            Region::Amsterdam2 => write!(f, "ams2"),
+            Region::Amsterdam3 => write!(f, "ams3"),
+            Region::SanFrancisco1 => write!(f, "sfo1"),
+            Region::SanFrancisco2 => write!(f, "sfo2"),
+            Region::SanFrancisco3 => write!(f, "sfo3"),
+            Region::Singapore => write!(f, "sgp1"),
+            Region::London => write!(f, "lon1"),
+            Region::Frankfurt => write!(f, "fra1"),
+            Region::Toronto => write!(f, "tor1"),
+            Region::Bangalore => write!(f, "blr1"),
+        }
+    }
+}
+
+impl FromStr for Region {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Region, ()> {
+        match s {
+            "nyc1" => Ok(Region::NewYorkCity1),
+            "nyc2" => Ok(Region::NewYorkCity2),
+            "nyc3" => Ok(Region::NewYorkCity3),
+            "ams2" => Ok(Region::Amsterdam2),
+            "ams3" => Ok(Region::Amsterdam3),
+            "sfo1" => Ok(Region::SanFrancisco1),
+            "sfo2" => Ok(Region::SanFrancisco2),
+            "sfo3" => Ok(Region::SanFrancisco3),
+            "sgp1" => Ok(Region::Singapore),
+            "lon1" => Ok(Region::London),
+            "fra1" => Ok(Region::Frankfurt),
+            "tor1" => Ok(Region::Toronto),
+            "blr1" => Ok(Region::Bangalore),
+            _ => Err(()),
+        }
+    }
 }

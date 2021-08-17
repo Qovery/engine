@@ -23,7 +23,7 @@ use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecret
 
 pub const ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-2";
-pub const AWS_KUBERNETES_VERSION: &str = "1.17";
+pub const AWS_KUBERNETES_VERSION: &str = "1.18";
 pub const KUBE_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
 
 pub fn execution_id() -> String {

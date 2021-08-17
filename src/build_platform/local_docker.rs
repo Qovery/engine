@@ -1,3 +1,9 @@
+use std::path::Path;
+use std::{env, fs};
+
+use chrono::Duration;
+use sysinfo::{Disk, DiskExt, SystemExt};
+
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
@@ -6,10 +12,6 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::{cmd, git};
-use chrono::Duration;
-use std::env;
-use std::path::Path;
-use sysinfo::{Disk, DiskExt, SystemExt};
 
 const BUILD_DURATION_TIMEOUT_MIN: i64 = 30;
 
@@ -193,6 +195,16 @@ impl LocalDocker {
 
             buildpacks_args.push("-B");
             buildpacks_args.push(builder_name);
+
+            // Just a fallback for now to help our bot loving users deploy their apps
+            // Long term solution requires lots of changes in UI and Core as well
+            // And passing some params to the engine
+            if let Ok(content) = fs::read_to_string(format!("{}/{}", into_dir_docker_style, "Procfile")) {
+                if content.contains("worker") {
+                    buildpacks_args.push("--default-process");
+                    buildpacks_args.push("worker");
+                }
+            }
 
             // buildpacks build
             exit_status = cmd::utilities::exec_with_envs_and_output(

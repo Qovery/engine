@@ -359,7 +359,18 @@ impl ObjectStorage for ScalewayOS {
         match block_on(s3_client.put_object(PutObjectRequest {
             bucket: bucket_name.to_string(),
             key: object_key.to_string(),
-            body: Some(StreamingBody::from(std::fs::read(file_path.clone()).unwrap())),
+            body: Some(StreamingBody::from(match std::fs::read(file_path.clone()) {
+                Ok(x) => x,
+                Err(e) => {
+                    return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        format!(
+                            "error while uploading object {} to bucket {}. {}",
+                            object_key, bucket_name, e
+                        ),
+                    ))
+                }
+            })),
             ..Default::default()
         })) {
             Ok(_) => Ok(()),
