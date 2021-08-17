@@ -1,9 +1,9 @@
+use crate::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use crate::cloud_provider::helm::{
     get_chart_namespace, ChartInfo, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmChart,
     HelmChartNamespaces,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -11,19 +11,23 @@ use std::io::BufReader;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScalewayQoveryTerraformConfig {
-    pub loki_storage_config_scaleway_s3: String,
+pub struct DigitalOceanQoveryTerraformConfig {
+    pub loki_storage_config_do_space: String,
 }
 
 pub struct ChartsConfigPrerequisites {
     pub organization_id: String,
     pub cluster_id: String,
+    pub do_cluster_id: String,
     pub region: String,
     pub cluster_name: String,
     pub cloud_provider: String,
     pub test_cluster: bool,
-    pub scw_access_key: String,
-    pub scw_secret_key: String,
+    pub do_token: String,
+    pub do_space_access_id: String,
+    pub do_space_secret_key: String,
+    pub do_space_bucket_kubeconfig: String,
+    pub do_space_kubeconfig_filename: String,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
@@ -36,19 +40,23 @@ pub struct ChartsConfigPrerequisites {
     pub cloudflare_api_token: String,
     pub disable_pleco: bool,
     // qovery options form json input
-    pub infra_options: KapsuleOptions,
+    pub infra_options: DoksOptions,
 }
 
 impl ChartsConfigPrerequisites {
     pub fn new(
         organization_id: String,
         cluster_id: String,
+        do_cluster_id: String,
         region: String,
         cluster_name: String,
         cloud_provider: String,
         test_cluster: bool,
-        scw_access_key: String,
-        scw_secret_key: String,
+        do_token: String,
+        do_space_access_id: String,
+        do_space_secret_key: String,
+        do_space_bucket_kubeconfig: String,
+        do_space_kubeconfig_filename: String,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
         managed_dns_name: String,
@@ -60,17 +68,21 @@ impl ChartsConfigPrerequisites {
         cloudflare_email: String,
         cloudflare_api_token: String,
         disable_pleco: bool,
-        infra_options: KapsuleOptions,
+        infra_options: DoksOptions,
     ) -> Self {
         ChartsConfigPrerequisites {
             organization_id,
             cluster_id,
+            do_cluster_id,
             region,
             cluster_name,
             cloud_provider,
             test_cluster,
-            scw_access_key,
-            scw_secret_key,
+            do_token,
+            do_space_access_id,
+            do_space_secret_key,
+            do_space_bucket_kubeconfig,
+            do_space_kubeconfig_filename,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
             managed_dns_name,
@@ -87,7 +99,7 @@ impl ChartsConfigPrerequisites {
     }
 }
 
-pub fn scw_helm_charts(
+pub fn do_helm_charts(
     qovery_terraform_config_file: &str,
     chart_config_prerequisites: &ChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
@@ -98,17 +110,14 @@ pub fn scw_helm_charts(
 
     let content_file = match File::open(&qovery_terraform_config_file) {
         Ok(x) => x,
-        Err(e) => return Err(SimpleError {
-            kind: SimpleErrorKind::Other,
-            message: Some(
-                format!("Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?. {:?}", e)
-            )
-        }),
+        Err(e) => return Err(SimpleError{ kind: SimpleErrorKind::Other, message: Some(
+            format!("Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?. {:?}", e)
+        )}),
     };
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
     let reader = BufReader::new(content_file);
-    let qovery_terraform_config: ScalewayQoveryTerraformConfig = match serde_json::from_reader(reader) {
+    let qovery_terraform_config: DigitalOceanQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
             error!(
@@ -234,26 +243,26 @@ pub fn scw_helm_charts(
             values: vec![
                 ChartSetValue {
                     key: "config.storage_config.aws.s3".to_string(),
-                    value: qovery_terraform_config.loki_storage_config_scaleway_s3,
+                    value: qovery_terraform_config.loki_storage_config_do_space,
                 },
                 ChartSetValue {
                     key: "config.storage_config.aws.endpoint".to_string(),
-                    value: format!("s3.{}.scw.cloud", chart_config_prerequisites.region.clone()),
+                    value: format!("{}.digitaloceanspaces.com", chart_config_prerequisites.region.clone()),
                 },
                 ChartSetValue {
                     key: "config.storage_config.aws.region".to_string(),
                     value: chart_config_prerequisites.region.clone(),
                 },
-                // we're not using dedicated keys as Scaleway do not yet support IAM
                 ChartSetValue {
                     key: "aws_iam_loki_storage_key".to_string(),
-                    value: chart_config_prerequisites.scw_access_key.clone(),
+                    value: chart_config_prerequisites.do_space_access_id.clone(),
                 },
                 ChartSetValue {
                     key: "aws_iam_loki_storage_secret".to_string(),
-                    value: chart_config_prerequisites.scw_secret_key.clone(),
+                    value: chart_config_prerequisites.do_space_secret_key.clone(),
                 },
-                // Scaleway do not support encryption yet
+                // DigitalOcean do not support encryption yet
+                // https://docs.digitalocean.com/reference/api/spaces-api/
                 ChartSetValue {
                     key: "config.storage_config.aws.sse_encryption".to_string(),
                     value: "false".to_string(),
@@ -381,7 +390,6 @@ pub fn scw_helm_charts(
         })
     }
 
-    // todo: fix it, strange behavior from the logs
     let prometheus_adapter = CommonChart {
         chart_info: ChartInfo {
             name: "prometheus-adapter".to_string(),
@@ -426,7 +434,40 @@ pub fn scw_helm_charts(
         },
     };
 
-    // metric-server is built-in Scaleway cluster, no need to manage it
+    let metrics_server = CommonChart {
+        chart_info: ChartInfo {
+            name: "metrics-server".to_string(),
+            path: chart_path("common/charts/metrics-server"),
+            values: vec![
+                ChartSetValue {
+                    key: "extraArgs.kubelet-preferred-address-types".to_string(),
+                    value: "InternalIP".to_string(),
+                },
+                ChartSetValue {
+                    key: "apiService.create".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.limits.cpu".to_string(),
+                    value: "250m".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.requests.cpu".to_string(),
+                    value: "250m".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.limits.memory".to_string(),
+                    value: "256Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.requests.memory".to_string(),
+                    value: "256Mi".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
     let kube_state_metrics = CommonChart {
         chart_info: ChartInfo {
             name: "kube-state-metrics".to_string(),
@@ -668,6 +709,37 @@ datasources:
         },
     };
 
+    let digital_mobius = CommonChart {
+        chart_info: ChartInfo {
+            name: "digital-mobius".to_string(),
+            path: "charts/digital-mobius".to_string(),
+            values: vec![
+                ChartSetValue {
+                    key: "environmentVariables.LOG_LEVEL".to_string(),
+                    value: "debug".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DELAY_NODE_CREATION".to_string(),
+                    value: "5m".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DIGITAL_OCEAN_TOKEN".to_string(),
+                    value: chart_config_prerequisites.do_token.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DIGITAL_OCEAN_CLUSTER_ID".to_string(),
+                    // todo: fill this
+                    value: "".to_string(),
+                },
+                ChartSetValue {
+                    key: "enabledFeatures.disableDryRun".to_string(),
+                    value: "true".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
     let pleco = CommonChart {
         chart_info: ChartInfo {
             name: "pleco".to_string(),
@@ -675,20 +747,50 @@ datasources:
             values_files: vec![chart_path("chart_values/pleco.yaml")],
             values: vec![
                 ChartSetValue {
-                    key: "environmentVariables.SCALEWAY_ACCESS_KEY_ID".to_string(),
-                    value: chart_config_prerequisites.scw_access_key.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SCALEWAY_SECRET_ACCESS_KEY".to_string(),
-                    value: chart_config_prerequisites.scw_secret_key.clone(),
-                },
-                ChartSetValue {
                     key: "environmentVariables.PLECO_IDENTIFIER".to_string(),
                     value: chart_config_prerequisites.cluster_id.clone(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.LOG_LEVEL".to_string(),
                     value: "debug".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
+    let k8s_token_rotate = CommonChart {
+        chart_info: ChartInfo {
+            name: "k8s-token-rotate".to_string(),
+            path: "charts/do-k8s-token-rotate".to_string(),
+            values: vec![
+                ChartSetValue {
+                    key: "environmentVariables.DO_API_TOKEN".to_string(),
+                    value: chart_config_prerequisites.do_token.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.SPACES_KEY_ACCESS".to_string(),
+                    value: chart_config_prerequisites.do_space_access_id.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.SPACES_SECRET_KEY".to_string(),
+                    value: chart_config_prerequisites.do_space_secret_key.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.SPACES_BUCKET".to_string(),
+                    value: chart_config_prerequisites.do_space_bucket_kubeconfig.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.SPACES_REGION".to_string(),
+                    value: chart_config_prerequisites.region.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.SPACES_FILENAME".to_string(),
+                    value: chart_config_prerequisites.do_space_kubeconfig_filename.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.K8S_CLUSTER_ID".to_string(),
+                    value: chart_config_prerequisites.cluster_id.clone(),
                 },
             ],
             ..Default::default()
@@ -815,7 +917,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "volumes.storageClassName".to_string(),
-                    value: "scw-sbv-ssd-0".to_string(),
+                    value: "do-volume-standard-0".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.QOVERY_NATS_URL".to_string(),
@@ -898,7 +1000,7 @@ datasources:
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
 
-    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(external_dns)];
+    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(metrics_server), Box::new(external_dns)];
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager)];
 
@@ -906,9 +1008,11 @@ datasources:
         Box::new(cert_manager_config),
         Box::new(qovery_agent),
         Box::new(qovery_engine),
+        Box::new(digital_mobius),
+        Box::new(k8s_token_rotate),
     ];
 
-    // // observability
+    // observability
     if chart_config_prerequisites.ff_metrics_history_enabled {
         level_2.push(Box::new(prometheus_operator));
         level_4.push(Box::new(prometheus_adapter));
