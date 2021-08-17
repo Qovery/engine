@@ -142,7 +142,7 @@ impl<'a> DOKS<'a> {
         context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
 
         // Digital Ocean: Network
-        context.insert("vpc_name", self.options.vpc_name.as_str());
+        context.insert("do_vpc_name", self.options.vpc_name.as_str());
         let vpc_cidr_block = match self.options.vpc_cidr_set {
             // VPC subnet is not set, getting a non used subnet
             VpcInitKind::Autodetect => {
@@ -177,7 +177,7 @@ impl<'a> DOKS<'a> {
             }
             VpcInitKind::Manual => self.options.vpc_cidr_block.clone(),
         };
-        context.insert("vpc_cidr_block", vpc_cidr_block.as_str());
+        context.insert("do_vpc_cidr_block", vpc_cidr_block.as_str());
 
         // DNS
         let managed_dns_list = vec![self.dns_provider.name()];
@@ -521,7 +521,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         // Kubeconfig bucket
         if let Err(e) = self.spaces.create_bucket(self.kubeconfig_bucket_name().as_str()) {
             let message = format!(
-                "Cannot create object storage bucket {} for cluster {} with id {}",
+                "cannot create object storage bucket {} for cluster {} with id {}",
                 self.kubeconfig_bucket_name(),
                 self.name(),
                 self.id()
@@ -533,7 +533,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         // Logs bucket
         if let Err(e) = self.spaces.create_bucket(self.logs_bucket_name().as_str()) {
             let message = format!(
-                "Cannot create object storage bucket {} for cluster {} with id {}",
+                "cannot create object storage bucket {} for cluster {} with id {}",
                 self.logs_bucket_name(),
                 self.name(),
                 self.id()

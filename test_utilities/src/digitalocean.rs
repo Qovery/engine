@@ -103,7 +103,7 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
 
 pub fn do_kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_name: String) -> DoksOptions {
     DoksOptions {
-        vpc_cidr_block: "".to_string(), // vpc_cidr_set to autodetect will fil this empty string
+        vpc_cidr_block: "should-not-bet-set".to_string(), // vpc_cidr_set to autodetect will fil this empty string
         vpc_cidr_set: VpcInitKind::Autodetect,
         vpc_name: cluster_name,
         qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
