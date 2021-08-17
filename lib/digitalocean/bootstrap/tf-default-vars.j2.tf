@@ -46,7 +46,7 @@ variable "test_cluster" {
 
 variable "vpc_name" {
   description = "VPC name, should be unique"
-  default = "{{ vpc_name }}"
+  default = "{{ do_vpc_name }}"
   type = string
 }
 
@@ -54,7 +54,7 @@ variable "vpc_name" {
 
 variable "cidr_block" {
   description = "CIDR block for VPC segmentation"
-  default = "{{ vpc_cidr_block }}"
+  default = "{{ do_vpc_cidr_block }}"
   type = string
 }
 
