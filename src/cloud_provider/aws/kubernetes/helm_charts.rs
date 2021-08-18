@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_chart_namespace, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart,
-    HelmChart, HelmChartNamespaces,
+    HelmAction, HelmChart, HelmChartNamespaces,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
@@ -453,7 +453,16 @@ pub fn aws_helm_charts(
         },
     };
 
-    let mut kube_prometheus_stack = CommonChart {
+    let old_prometheus_operator = CommonChart {
+        chart_info: ChartInfo {
+            name: "prometheus-operator".to_string(),
+            namespace: prometheus_namespace,
+            action: HelmAction::Destroy,
+            ..Default::default()
+        },
+    };
+
+    let kube_prometheus_stack = CommonChart {
         chart_info: ChartInfo {
             name: "kube-prometheus-stack".to_string(),
             path: chart_path("/common/charts/kube-prometheus-stack"),
@@ -1145,6 +1154,7 @@ datasources:
         Box::new(q_storage_class),
         Box::new(coredns_config),
         Box::new(aws_vpc_cni_chart),
+        Box::new(old_prometheus_operator),
     ];
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
@@ -1156,7 +1166,7 @@ datasources:
     ];
 
     let mut level_4: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(metric_server),
+        Box::new(metrics_server),
         Box::new(aws_node_term_handler),
         Box::new(external_dns),
     ];
