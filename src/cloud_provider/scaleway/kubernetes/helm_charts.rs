@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{
-    get_chart_namespace, ChartInfo, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmChart,
-    HelmChartNamespaces,
+    get_chart_namespace, ChartInfo, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmAction,
+    HelmChart, HelmChartNamespaces,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
@@ -280,7 +280,16 @@ pub fn scw_helm_charts(
         },
     };
 
-    let mut kube_prometheus_stack = CommonChart {
+    let old_prometheus_operator = CommonChart {
+        chart_info: ChartInfo {
+            name: "prometheus-operator".to_string(),
+            namespace: prometheus_namespace,
+            action: HelmAction::Destroy,
+            ..Default::default()
+        },
+    };
+
+    let kube_prometheus_stack = CommonChart {
         chart_info: ChartInfo {
             name: "kube-prometheus-stack".to_string(),
             path: chart_path("/common/charts/kube-prometheus-stack"),
@@ -852,7 +861,11 @@ datasources:
     };
 
     // chart deployment order matters!!!
-    let level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config)];
+    let level_1: Vec<Box<dyn HelmChart>> = vec![
+        Box::new(q_storage_class),
+        Box::new(coredns_config),
+        Box::new(old_prometheus_operator),
+    ];
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
