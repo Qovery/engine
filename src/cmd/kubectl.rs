@@ -610,6 +610,34 @@ where
     Ok(())
 }
 
+pub fn kubectl_exec_delete_crd<P>(
+    kubernetes_config: P,
+    crd_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let _ = kubectl_exec_with_output(
+        vec!["delete", "crd", crd_name],
+        _envs,
+        |out| match out {
+            Ok(line) => info!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+        |out| match out {
+            Ok(line) => error!("{}", line),
+            Err(err) => error!("{:?}", err),
+        },
+    )?;
+
+    Ok(())
+}
+
 pub fn kubectl_exec_delete_secret<P>(
     kubernetes_config: P,
     namespace: &str,
