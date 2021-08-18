@@ -44,12 +44,12 @@ resource "helm_release" "loki" {
   # Limits
   set {
     name = "resources.limits.cpu"
-    value = "100m"
+    value = "2"
   }
 
   set {
     name = "resources.requests.cpu"
-    value = "100m"
+    value = "1"
   }
 
   set {
