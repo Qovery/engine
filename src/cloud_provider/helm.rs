@@ -5,8 +5,8 @@ use crate::cmd::helm::{
     is_chart_deployed,
 };
 use crate::cmd::kubectl::{
-    kubectl_exec_get_configmap, kubectl_exec_get_events, kubectl_exec_rollout_restart_deployment,
-    kubectl_exec_with_output,
+    kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
+    kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
 };
 use crate::cmd::structs::HelmHistoryRow;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -252,7 +252,14 @@ pub fn deploy_charts_levels(
     // first show diff
     for level in &charts {
         for chart in level {
-            let _ = helm_upgrade_diff_with_chart_info(&kubernetes_config, envs, chart.get_chart_info());
+            let chart_info = chart.get_chart_info();
+            match chart_info.action {
+                // don't do diff on destroy or skip
+                HelmAction::Deploy => {
+                    let _ = helm_upgrade_diff_with_chart_info(&kubernetes_config, envs, chart.get_chart_info());
+                }
+                _ => {}
+            }
         }
     }
 
@@ -480,6 +487,62 @@ impl HelmChart for CoreDNSConfigChart {
             &environment_variables,
         )?;
         Ok(None)
+    }
+}
+
+// Prometheus Operator
+
+#[derive(Default)]
+pub struct PrometheusOperatorConfigChart {
+    pub chart_info: ChartInfo,
+}
+
+impl HelmChart for PrometheusOperatorConfigChart {
+    fn get_chart_info(&self) -> &ChartInfo {
+        &self.chart_info
+    }
+
+    fn exec(
+        &self,
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
+        payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, SimpleError> {
+        let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+        match self.get_chart_info().action {
+            HelmAction::Deploy => {
+                helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, self.get_chart_info())?
+            }
+            HelmAction::Destroy => {
+                let chart_info = self.get_chart_info();
+                match is_chart_deployed(
+                    kubernetes_config,
+                    environment_variables.clone(),
+                    Some(get_chart_namespace(chart_info.namespace.clone()).as_str()),
+                    chart_info.name.clone(),
+                ) {
+                    Ok(deployed) => {
+                        if deployed {
+                            let prometheus_crds = [
+                                "prometheuses.monitoring.coreos.com",
+                                "prometheusrules.monitoring.coreos.com",
+                                "servicemonitors.monitoring.coreos.com",
+                                "podmonitors.monitoring.coreos.com",
+                                "alertmanagers.monitoring.coreos.com",
+                                "thanosrulers.monitoring.coreos.com",
+                            ];
+                            helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, chart_info)?;
+                            for crd in prometheus_crds {
+                                kubectl_exec_delete_crd(kubernetes_config, crd, environment_variables.clone());
+                            }
+                        }
+                    }
+                    Err(e) => return Err(e),
+                };
+            }
+            HelmAction::Skip => {}
+        }
+        Ok(payload)
     }
 }
 

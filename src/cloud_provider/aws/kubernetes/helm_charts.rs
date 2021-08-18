@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_chart_namespace, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart,
-    HelmAction, HelmChart, HelmChartNamespaces,
+    HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
@@ -453,7 +453,7 @@ pub fn aws_helm_charts(
         },
     };
 
-    let old_prometheus_operator = CommonChart {
+    let old_prometheus_operator = PrometheusOperatorConfigChart {
         chart_info: ChartInfo {
             name: "prometheus-operator".to_string(),
             namespace: prometheus_namespace,
@@ -462,7 +462,7 @@ pub fn aws_helm_charts(
         },
     };
 
-    let kube_prometheus_stack = CommonChart {
+    let kube_prometheus_stack = PrometheusOperatorConfigChart {
         chart_info: ChartInfo {
             name: "kube-prometheus-stack".to_string(),
             path: chart_path("/common/charts/kube-prometheus-stack"),
