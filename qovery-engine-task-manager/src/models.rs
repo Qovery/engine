@@ -7,7 +7,6 @@ use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cloud_provider::scaleway::kubernetes::node::NodeType;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -226,29 +225,30 @@ impl Kubernetes {
             )),
             qovery_engine::cloud_provider::kubernetes::Kind::Doks => Box::new(DOKS::new(
                 context.clone(),
-                self.id.as_str(),
-                self.name.as_str(),
-                self.version.as_str(),
-                self.region.as_str(),
+                self.id.clone(),
+                self.name.clone(),
+                self.version.clone(),
+                qovery_engine::cloud_provider::digitalocean::application::Region::from_str(self.region.as_str())
+                    .unwrap(),
                 cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
                 dns_provider,
-                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::Options>(
-                    self.options.clone(),
-                )
-                .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
                 nodes
                     .iter()
                     .map(|x| {
                         qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(x.instance_type())
                     })
                     .collect::<Vec<_>>(),
+                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions>(
+                    self.options.clone(),
+                )
+                .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
             )),
             qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => Box::new(Kapsule::new(
                 context.clone(),
                 self.id.clone(),
                 self.name.clone(),
                 self.version.clone(),
-                Region::from_str(self.region.as_str()).unwrap(),
+                qovery_engine::cloud_provider::scaleway::application::Region::from_str(self.region.as_str()).unwrap(),
                 cloud_provider.as_any().downcast_ref::<Scaleway>().unwrap(),
                 dns_provider,
                 nodes
@@ -345,7 +345,10 @@ impl ContainerRegistry {
                 self.name.as_str(),
                 self.options.token.as_ref()?.as_str(),
                 organization_id,
-                Region::from_str(self.options.region.as_ref()?.as_str()).unwrap(),
+                qovery_engine::cloud_provider::scaleway::application::Region::from_str(
+                    self.options.region.as_ref()?.as_str(),
+                )
+                .unwrap(),
             ))),
         }
     }
