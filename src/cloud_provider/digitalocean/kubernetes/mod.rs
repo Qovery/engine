@@ -40,6 +40,7 @@ pub mod helm_charts;
 pub mod node;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct DoksOptions {
     // Digital Ocean
     pub vpc_cidr_block: String,
