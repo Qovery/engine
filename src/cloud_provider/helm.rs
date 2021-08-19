@@ -532,8 +532,8 @@ impl HelmChart for PrometheusOperatorConfigChart {
                                 "thanosrulers.monitoring.coreos.com",
                             ];
                             helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, chart_info)?;
-                            for crd in prometheus_crds {
-                                kubectl_exec_delete_crd(kubernetes_config, crd, environment_variables.clone());
+                            for crd in &prometheus_crds {
+                                kubectl_exec_delete_crd(kubernetes_config, crd, environment_variables.clone())?;
                             }
                         }
                     }
