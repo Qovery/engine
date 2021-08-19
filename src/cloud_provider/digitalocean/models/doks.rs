@@ -17,7 +17,7 @@ pub struct KubernetesCluster {
 }
 
 #[derive(Default, Serialize, Deserialize, PartialEq, Debug)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct DoksOptions {
     pub options: Options,
 }
