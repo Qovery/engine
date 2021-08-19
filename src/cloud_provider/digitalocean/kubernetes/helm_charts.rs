@@ -495,7 +495,7 @@ datasources:
         get_chart_namespace(loki_namespace),
     );
 
-    let grafana = CommonChart {
+    let _grafana = CommonChart {
         chart_info: ChartInfo {
             name: "grafana".to_string(),
             path: chart_path("common/charts/grafana"),
@@ -681,7 +681,7 @@ datasources:
     let digital_mobius = CommonChart {
         chart_info: ChartInfo {
             name: "digital-mobius".to_string(),
-            path: "charts/digital-mobius".to_string(),
+            path: chart_path("charts/digital-mobius"),
             values: vec![
                 ChartSetValue {
                     key: "environmentVariables.LOG_LEVEL".to_string(),
@@ -697,8 +697,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.DIGITAL_OCEAN_CLUSTER_ID".to_string(),
-                    // todo: fill this
-                    value: "".to_string(),
+                    value: chart_config_prerequisites.do_cluster_id.to_string(),
                 },
                 ChartSetValue {
                     key: "enabledFeatures.disableDryRun".to_string(),
@@ -731,7 +730,7 @@ datasources:
     let k8s_token_rotate = CommonChart {
         chart_info: ChartInfo {
             name: "k8s-token-rotate".to_string(),
-            path: "charts/do-k8s-token-rotate".to_string(),
+            path: chart_path("charts/do-k8s-token-rotate"),
             values: vec![
                 ChartSetValue {
                     key: "environmentVariables.DO_API_TOKEN".to_string(),
@@ -870,6 +869,7 @@ datasources:
             name: "qovery-engine".to_string(),
             path: chart_path("common/charts/qovery-engine"),
             namespace: HelmChartNamespaces::Qovery,
+            timeout: "600".to_string(),
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),
@@ -977,7 +977,7 @@ datasources:
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager)];
 
-    let mut level_6: Vec<Box<dyn HelmChart>> = vec![
+    let level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(qovery_agent),
         Box::new(qovery_engine),
@@ -996,9 +996,9 @@ datasources:
         level_4.push(Box::new(loki));
     }
 
-    if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
-        level_6.push(Box::new(grafana))
-    };
+    // if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
+    //     level_6.push(Box::new(grafana))
+    // };
 
     // pleco
     if !chart_config_prerequisites.disable_pleco {
