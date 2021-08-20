@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 use std::fs;
 use std::fs::{create_dir_all, File};
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::path::Path;
 
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use std::ffi::OsStr;
 use walkdir::WalkDir;
 
 pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), Error> {
@@ -52,16 +53,15 @@ where
     S: AsRef<Path>,
     P: AsRef<Path>,
 {
-    let dir = format!(
-        "{}/.qovery-workspace/{}/{}",
-        working_root_dir.as_ref().to_str().unwrap(),
-        execution_id.as_ref().to_str().unwrap(),
-        dir_name.as_ref().to_str().unwrap(),
-    );
+    let dir = working_root_dir
+        .as_ref()
+        .join(".qovery-workspace")
+        .join(execution_id)
+        .join(dir_name);
 
+    // FIXME: Handle errors
     let _ = create_dir_all(&dir);
-
-    dir
+    dir.to_str().unwrap().to_string()
 }
 
 fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
@@ -71,24 +71,31 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
 
     let enc = GzEncoder::new(tgz_file, Compression::fast());
     let mut tar = tar::Builder::new(enc);
-
-    let excluded_files: HashSet<&'static str> = vec![".terraform.lock.hcl", ".terraform"].into_iter().collect();
-
-    for entry in WalkDir::new(workspace_dir.clone())
+    let excluded_files: HashSet<&'static OsStr> = vec![OsStr::new(".terraform.lock.hcl"), OsStr::new(".terraform")]
         .into_iter()
-        .filter_entry(|e| !excluded_files.contains(e.file_name().to_str().expect("error getting file name string")))
+        .collect();
+
+    for entry in WalkDir::new(&workspace_dir)
+        .into_iter()
+        .filter_entry(|e| !excluded_files.contains(&e.file_name()))
     {
-        let entry = entry.expect("error reading file");
-        let entry_path = entry.path();
-        if entry_path.is_file() {
-            tar.append_path_with_name(
-                entry_path,
-                entry_path
-                    .strip_prefix(workspace_dir.as_str())
-                    .expect("error building relative path for file to place it in archive"),
-            )
-            .expect("error adding file to archive");
+        let entry = match &entry {
+            Ok(val) => val.path(),
+            Err(err) => {
+                error!("Cannot read file {:?}", err);
+                continue;
+            }
+        };
+
+        if !entry.is_file() {
+            continue;
         }
+
+        let relative_path = entry
+            .strip_prefix(workspace_dir.as_str())
+            .map_err(|err| Error::new(ErrorKind::InvalidInput, err))?;
+
+        tar.append_path_with_name(entry, relative_path)?;
     }
 
     Ok(tgz_file_path)
