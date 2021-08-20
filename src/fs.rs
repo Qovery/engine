@@ -39,7 +39,7 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
     Ok(())
 }
 
-pub fn root_workspace_directory<X, S>(working_root_dir: X, execution_id: S) -> String
+pub fn root_workspace_directory<X, S>(working_root_dir: X, execution_id: S) -> Result<String, std::io::Error>
 where
     X: AsRef<Path>,
     S: AsRef<Path>,
@@ -47,7 +47,7 @@ where
     workspace_directory(working_root_dir, execution_id, ".")
 }
 
-pub fn workspace_directory<X, S, P>(working_root_dir: X, execution_id: S, dir_name: P) -> String
+pub fn workspace_directory<X, S, P>(working_root_dir: X, execution_id: S, dir_name: P) -> Result<String, std::io::Error>
 where
     X: AsRef<Path>,
     S: AsRef<Path>,
@@ -59,13 +59,15 @@ where
         .join(execution_id)
         .join(dir_name);
 
-    // FIXME: Handle errors
-    let _ = create_dir_all(&dir);
-    dir.to_str().unwrap().to_string()
+    create_dir_all(&dir)?;
+
+    dir.to_str()
+        .map(|e| e.to_string())
+        .ok_or_else(|| Error::from(ErrorKind::NotFound))
 }
 
 fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
-    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id);
+    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id)?;
     let tgz_file_path = format!("{}/.qovery-workspace/{}.tgz", working_root_dir, execution_id);
     let tgz_file = File::create(tgz_file_path.as_str())?;
 
@@ -101,9 +103,9 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
     Ok(tgz_file_path)
 }
 
-pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) {
-    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id);
-    let _ = std::fs::remove_dir_all(workspace_dir);
+pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<(), std::io::Error> {
+    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id)?;
+    std::fs::remove_dir_all(workspace_dir)
 }
 
 pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
@@ -116,7 +118,7 @@ pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> R
         }
         Ok(file) => {
             info!("workspace directory is archived");
-            cleanup_workspace_directory(working_root_dir, execution_id);
+            cleanup_workspace_directory(working_root_dir, execution_id)?;
             Ok(file)
         }
     }

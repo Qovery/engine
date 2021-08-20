@@ -315,7 +315,8 @@ impl BuildPlatform for LocalDocker {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("build/{}", build.image.name.as_str()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         info!(
             "cloning repository: {} to {}",

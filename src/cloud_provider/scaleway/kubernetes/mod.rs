@@ -427,7 +427,8 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -664,7 +665,8 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
