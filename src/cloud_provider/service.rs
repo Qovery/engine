@@ -42,6 +42,7 @@ pub trait Service {
             self.context().execution_id(),
             format!("{}/{}", dir_root, self.name()),
         )
+        .unwrap()
     }
     fn version(&self) -> &str;
     fn action(&self) -> &Action;
