@@ -72,7 +72,7 @@ variable "kubernetes_cluster_id" {
 
 variable "kubernetes_cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "qovery-{{ doks_master_name }}"
+  default     = "{{ doks_master_name }}"
   type        = string
 }
 
