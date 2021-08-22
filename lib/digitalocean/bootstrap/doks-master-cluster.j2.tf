@@ -1,5 +1,5 @@
 resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
-  name = var.kubernetes_cluster_id
+  name = var.kubernetes_cluster_name
   region = var.region
   version = var.doks_version
   vpc_uuid = digitalocean_vpc.qovery_vpc.id
