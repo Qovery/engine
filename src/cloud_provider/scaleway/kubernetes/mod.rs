@@ -212,6 +212,7 @@ impl<'a> Kapsule<'a> {
         context.insert("dns_email_report", &self.options.tls_email_report);
 
         // Kubernetes
+        context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("kubernetes_cluster_name", self.name());
         context.insert("kubernetes_cluster_version", self.version());
