@@ -28,7 +28,7 @@ lazy_static = "1.4.0"
 
 # tar gz
 flate2 = "1.0.20" # tar gz
-tar = "0.4.35"
+tar = ">=0.4.36"
 
 # logger
 tracing = "0.1.26"
@@ -47,7 +47,7 @@ serde = "1.0.126"
 serde_json = "1.0.64"
 serde_derive = "1.0.126"
 # AWS deps
-tokio = { version = "1.6.1", features = ["full"] }
+tokio = { version = "1.10.0", features = ["full"] }
 rusoto_core = "0.46.0"
 rusoto_sts = "0.46.0"
 rusoto_credential = "0.46.0"

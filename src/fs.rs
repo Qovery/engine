@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 use std::fs;
 use std::fs::{create_dir_all, File};
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::path::Path;
 
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use std::ffi::OsStr;
 use walkdir::WalkDir;
 
 pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), Error> {
@@ -38,7 +39,7 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
     Ok(())
 }
 
-pub fn root_workspace_directory<X, S>(working_root_dir: X, execution_id: S) -> String
+pub fn root_workspace_directory<X, S>(working_root_dir: X, execution_id: S) -> Result<String, std::io::Error>
 where
     X: AsRef<Path>,
     S: AsRef<Path>,
@@ -46,57 +47,65 @@ where
     workspace_directory(working_root_dir, execution_id, ".")
 }
 
-pub fn workspace_directory<X, S, P>(working_root_dir: X, execution_id: S, dir_name: P) -> String
+pub fn workspace_directory<X, S, P>(working_root_dir: X, execution_id: S, dir_name: P) -> Result<String, std::io::Error>
 where
     X: AsRef<Path>,
     S: AsRef<Path>,
     P: AsRef<Path>,
 {
-    let dir = format!(
-        "{}/.qovery-workspace/{}/{}",
-        working_root_dir.as_ref().to_str().unwrap(),
-        execution_id.as_ref().to_str().unwrap(),
-        dir_name.as_ref().to_str().unwrap(),
-    );
+    let dir = working_root_dir
+        .as_ref()
+        .join(".qovery-workspace")
+        .join(execution_id)
+        .join(dir_name);
 
-    let _ = create_dir_all(&dir);
+    create_dir_all(&dir)?;
 
-    dir
+    dir.to_str()
+        .map(|e| e.to_string())
+        .ok_or_else(|| Error::from(ErrorKind::NotFound))
 }
 
 fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
-    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id);
+    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id)?;
     let tgz_file_path = format!("{}/.qovery-workspace/{}.tgz", working_root_dir, execution_id);
     let tgz_file = File::create(tgz_file_path.as_str())?;
 
     let enc = GzEncoder::new(tgz_file, Compression::fast());
     let mut tar = tar::Builder::new(enc);
-
-    let excluded_files: HashSet<&'static str> = vec![".terraform.lock.hcl", ".terraform"].into_iter().collect();
-
-    for entry in WalkDir::new(workspace_dir.clone())
+    let excluded_files: HashSet<&'static OsStr> = vec![OsStr::new(".terraform.lock.hcl"), OsStr::new(".terraform")]
         .into_iter()
-        .filter_entry(|e| !excluded_files.contains(e.file_name().to_str().expect("error getting file name string")))
+        .collect();
+
+    for entry in WalkDir::new(&workspace_dir)
+        .into_iter()
+        .filter_entry(|e| !excluded_files.contains(&e.file_name()))
     {
-        let entry = entry.expect("error reading file");
-        let entry_path = entry.path();
-        if entry_path.is_file() {
-            tar.append_path_with_name(
-                entry_path,
-                entry_path
-                    .strip_prefix(workspace_dir.as_str())
-                    .expect("error building relative path for file to place it in archive"),
-            )
-            .expect("error adding file to archive");
+        let entry = match &entry {
+            Ok(val) => val.path(),
+            Err(err) => {
+                error!("Cannot read file {:?}", err);
+                continue;
+            }
+        };
+
+        if !entry.is_file() {
+            continue;
         }
+
+        let relative_path = entry
+            .strip_prefix(workspace_dir.as_str())
+            .map_err(|err| Error::new(ErrorKind::InvalidInput, err))?;
+
+        tar.append_path_with_name(entry, relative_path)?;
     }
 
     Ok(tgz_file_path)
 }
 
-pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) {
-    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id);
-    let _ = std::fs::remove_dir_all(workspace_dir);
+pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<(), std::io::Error> {
+    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id)?;
+    std::fs::remove_dir_all(workspace_dir)
 }
 
 pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
@@ -109,7 +118,7 @@ pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> R
         }
         Ok(file) => {
             info!("workspace directory is archived");
-            cleanup_workspace_directory(working_root_dir, execution_id);
+            cleanup_workspace_directory(working_root_dir, execution_id)?;
             Ok(file)
         }
     }

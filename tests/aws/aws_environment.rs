@@ -255,6 +255,55 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let context = context();
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
+        let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets);
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.private_port = None;
+                app.commit_id = "4f35f4ab3e98426c5a3eaa91e788ff8ab466f19a".to_string();
+                app.branch = "buildpack-process".to_string();
+                app.dockerfile_path = None;
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        match delete_environment(&context_for_deletion, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        return test_name.to_string();
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
 fn deploy_a_working_environment_with_domain() {
     let test_name = function_name!();
     engine_run_test(|| {

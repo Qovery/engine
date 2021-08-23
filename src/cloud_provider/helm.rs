@@ -2,6 +2,7 @@ use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
 use crate::cmd::helm::{
     helm_exec_uninstall_with_chart_info, helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info,
+    is_chart_deployed,
 };
 use crate::cmd::kubectl::{
     kubectl_exec_get_configmap, kubectl_exec_get_events, kubectl_exec_rollout_restart_deployment,
@@ -158,7 +159,20 @@ pub trait HelmChart: Send {
                 helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, self.get_chart_info())?
             }
             HelmAction::Destroy => {
-                helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, self.get_chart_info())?
+                let chart_info = self.get_chart_info();
+                match is_chart_deployed(
+                    kubernetes_config,
+                    environment_variables.clone(),
+                    Some(get_chart_namespace(chart_info.namespace.clone()).as_str()),
+                    chart_info.name.clone(),
+                ) {
+                    Ok(deployed) => {
+                        if deployed {
+                            helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, chart_info)?
+                        }
+                    }
+                    Err(e) => return Err(e),
+                };
             }
             HelmAction::Skip => {}
         }

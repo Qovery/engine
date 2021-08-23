@@ -424,7 +424,8 @@ impl<'a> EKS<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         let kubeconfig = match self.config_file() {
             Ok(f) => f.0,
@@ -740,7 +741,8 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -953,7 +955,8 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
@@ -1135,7 +1138,8 @@ impl<'a> Kubernetes for EKS<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;

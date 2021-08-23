@@ -180,9 +180,7 @@ impl<'a> Kapsule<'a> {
             "scaleway_default_zone",
             self.options.scaleway_default_zone.to_string().as_str(),
         );
-
         context.insert("scw_region", &self.region.as_str());
-        context.insert("organization_id", self.cloud_provider.organization_id());
 
         let vpc_cidr_block = self.options.vpc_cidr_block.clone();
         context.insert("vpc_cidr_block", &vpc_cidr_block);
@@ -214,12 +212,12 @@ impl<'a> Kapsule<'a> {
         context.insert("dns_email_report", &self.options.tls_email_report);
 
         // Kubernetes
-        context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("kubernetes_cluster_name", self.name());
         context.insert("kubernetes_cluster_version", self.version());
 
         // Qovery
+        context.insert("organization_id", self.cloud_provider.organization_id());
         context.insert("object_storage_kubeconfig_bucket", &self.kubeconfig_bucket_name());
         context.insert("object_storage_logs_bucket", &self.logs_bucket_name());
 
@@ -429,7 +427,8 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -523,7 +522,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
                 self.name(),
                 self.id()
             );
-            error!("{}", message);
+            error!("{}. {:?}", message, e);
             return Err(e);
         }
 
@@ -666,7 +665,8 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;

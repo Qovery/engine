@@ -707,6 +707,9 @@ spec:
                   type: array
                   items:
                     type: string
+                encodeUsagesInRequest:
+                  description: EncodeUsagesInRequest controls whether key usages should be present in the CertificateRequest
+                  type: boolean
                 ipAddresses:
                   description: IPAddresses is a list of IP address subjectAltNames to be set on the Certificate.
                   type: array
@@ -745,8 +748,6 @@ spec:
                 keySize:
                   description: KeySize is the key bit size of the corresponding private key for this certificate. If `keyAlgorithm` is set to `RSA`, valid values are `2048`, `4096` or `8192`, and will default to `2048` if not specified. If `keyAlgorithm` is set to `ECDSA`, valid values are `256`, `384` or `521`, and will default to `256` if not specified. No other values are allowed.
                   type: integer
-                  maximum: 8192
-                  minimum: 0
                 keystores:
                   description: Keystores configures additional keystore output formats stored in the `secretName` Secret resource.
                   type: object
@@ -1001,6 +1002,9 @@ spec:
                   type: array
                   items:
                     type: string
+                encodeUsagesInRequest:
+                  description: EncodeUsagesInRequest controls whether key usages should be present in the CertificateRequest
+                  type: boolean
                 ipAddresses:
                   description: IPAddresses is a list of IP address subjectAltNames to be set on the Certificate.
                   type: array
@@ -1039,8 +1043,6 @@ spec:
                 keySize:
                   description: KeySize is the key bit size of the corresponding private key for this certificate. If `keyAlgorithm` is set to `RSA`, valid values are `2048`, `4096` or `8192`, and will default to `2048` if not specified. If `keyAlgorithm` is set to `ECDSA`, valid values are `256`, `384` or `521`, and will default to `256` if not specified. No other values are allowed.
                   type: integer
-                  maximum: 8192
-                  minimum: 0
                 keystores:
                   description: Keystores configures additional keystore output formats stored in the `secretName` Secret resource.
                   type: object
@@ -1297,6 +1299,9 @@ spec:
                   type: array
                   items:
                     type: string
+                encodeUsagesInRequest:
+                  description: EncodeUsagesInRequest controls whether key usages should be present in the CertificateRequest
+                  type: boolean
                 ipAddresses:
                   description: IPAddresses is a list of IP address subjectAltNames to be set on the Certificate.
                   type: array
@@ -1390,8 +1395,6 @@ spec:
                     size:
                       description: Size is the key bit size of the corresponding private key for this certificate. If `algorithm` is set to `RSA`, valid values are `2048`, `4096` or `8192`, and will default to `2048` if not specified. If `algorithm` is set to `ECDSA`, valid values are `256`, `384` or `521`, and will default to `256` if not specified. No other values are allowed.
                       type: integer
-                      maximum: 8192
-                      minimum: 0
                 renewBefore:
                   description: The amount of time before the currently issued certificate's `notAfter` time that cert-manager will begin to attempt to renew the certificate. If this value is greater than the total duration of the certificate (i.e. notAfter - notBefore), it will be automatically renewed 2/3rds of the way through the certificate's duration.
                   type: string
@@ -1593,6 +1596,9 @@ spec:
                   type: array
                   items:
                     type: string
+                encodeUsagesInRequest:
+                  description: EncodeUsagesInRequest controls whether key usages should be present in the CertificateRequest
+                  type: boolean
                 ipAddresses:
                   description: IPAddresses is a list of IP address subjectAltNames to be set on the Certificate.
                   type: array
@@ -1686,8 +1692,6 @@ spec:
                     size:
                       description: Size is the key bit size of the corresponding private key for this certificate. If `algorithm` is set to `RSA`, valid values are `2048`, `4096` or `8192`, and will default to `2048` if not specified. If `algorithm` is set to `ECDSA`, valid values are `256`, `384` or `521`, and will default to `256` if not specified. No other values are allowed.
                       type: integer
-                      maximum: 8192
-                      minimum: 0
                 renewBefore:
                   description: The amount of time before the currently issued certificate's `notAfter` time that cert-manager will begin to attempt to renew the certificate. If this value is greater than the total duration of the certificate (i.e. notAfter - notBefore), it will be automatically renewed 2/3rds of the way through the certificate's duration.
                   type: string
@@ -5254,6 +5258,9 @@ spec:
                     email:
                       description: Email is the email address to be associated with the ACME account. This field is optional, but it is strongly recommended to be set. It will be used to contact you in case of issues with your account or certificates, including expiry notification emails. This field may be updated after the account is initially registered.
                       type: string
+                    enableDurationFeature:
+                      description: Enables requesting a Not After date on certificates that matches the duration of the certificate. This is not supported by all ACME servers like Let's Encrypt. If set to true when the ACME server does not support it it will create an error on the Order. Defaults to false.
+                      type: boolean
                     externalAccountBinding:
                       description: ExternalAccountBinding is a reference to a CA external account of the ACME server. If set, upon registration cert-manager will attempt to associate the given external account credentials with the registered ACME account.
                       type: object
@@ -6280,6 +6287,9 @@ spec:
                     email:
                       description: Email is the email address to be associated with the ACME account. This field is optional, but it is strongly recommended to be set. It will be used to contact you in case of issues with your account or certificates, including expiry notification emails. This field may be updated after the account is initially registered.
                       type: string
+                    enableDurationFeature:
+                      description: Enables requesting a Not After date on certificates that matches the duration of the certificate. This is not supported by all ACME servers like Let's Encrypt. If set to true when the ACME server does not support it it will create an error on the Order. Defaults to false.
+                      type: boolean
                     externalAccountBinding:
                       description: ExternalAccountBinding is a reference to a CA external account of the ACME server. If set, upon registration cert-manager will attempt to associate the given external account credentials with the registered ACME account.
                       type: object
@@ -7308,6 +7318,9 @@ spec:
                     email:
                       description: Email is the email address to be associated with the ACME account. This field is optional, but it is strongly recommended to be set. It will be used to contact you in case of issues with your account or certificates, including expiry notification emails. This field may be updated after the account is initially registered.
                       type: string
+                    enableDurationFeature:
+                      description: Enables requesting a Not After date on certificates that matches the duration of the certificate. This is not supported by all ACME servers like Let's Encrypt. If set to true when the ACME server does not support it it will create an error on the Order. Defaults to false.
+                      type: boolean
                     externalAccountBinding:
                       description: ExternalAccountBinding is a reference to a CA external account of the ACME server. If set, upon registration cert-manager will attempt to associate the given external account credentials with the registered ACME account.
                       type: object
@@ -8336,6 +8349,9 @@ spec:
                     email:
                       description: Email is the email address to be associated with the ACME account. This field is optional, but it is strongly recommended to be set. It will be used to contact you in case of issues with your account or certificates, including expiry notification emails. This field may be updated after the account is initially registered.
                       type: string
+                    enableDurationFeature:
+                      description: Enables requesting a Not After date on certificates that matches the duration of the certificate. This is not supported by all ACME servers like Let's Encrypt. If set to true when the ACME server does not support it it will create an error on the Order. Defaults to false.
+                      type: boolean
                     externalAccountBinding:
                       description: ExternalAccountBinding is a reference to a CA external account of the ACME server. If set, upon registration cert-manager will attempt to associate the given external account credentials with the registered ACME account.
                       type: object
@@ -9401,6 +9417,9 @@ spec:
                     email:
                       description: Email is the email address to be associated with the ACME account. This field is optional, but it is strongly recommended to be set. It will be used to contact you in case of issues with your account or certificates, including expiry notification emails. This field may be updated after the account is initially registered.
                       type: string
+                    enableDurationFeature:
+                      description: Enables requesting a Not After date on certificates that matches the duration of the certificate. This is not supported by all ACME servers like Let's Encrypt. If set to true when the ACME server does not support it it will create an error on the Order. Defaults to false.
+                      type: boolean
                     externalAccountBinding:
                       description: ExternalAccountBinding is a reference to a CA external account of the ACME server. If set, upon registration cert-manager will attempt to associate the given external account credentials with the registered ACME account.
                       type: object
@@ -10427,6 +10446,9 @@ spec:
                     email:
                       description: Email is the email address to be associated with the ACME account. This field is optional, but it is strongly recommended to be set. It will be used to contact you in case of issues with your account or certificates, including expiry notification emails. This field may be updated after the account is initially registered.
                       type: string
+                    enableDurationFeature:
+                      description: Enables requesting a Not After date on certificates that matches the duration of the certificate. This is not supported by all ACME servers like Let's Encrypt. If set to true when the ACME server does not support it it will create an error on the Order. Defaults to false.
+                      type: boolean
                     externalAccountBinding:
                       description: ExternalAccountBinding is a reference to a CA external account of the ACME server. If set, upon registration cert-manager will attempt to associate the given external account credentials with the registered ACME account.
                       type: object
@@ -11455,6 +11477,9 @@ spec:
                     email:
                       description: Email is the email address to be associated with the ACME account. This field is optional, but it is strongly recommended to be set. It will be used to contact you in case of issues with your account or certificates, including expiry notification emails. This field may be updated after the account is initially registered.
                       type: string
+                    enableDurationFeature:
+                      description: Enables requesting a Not After date on certificates that matches the duration of the certificate. This is not supported by all ACME servers like Let's Encrypt. If set to true when the ACME server does not support it it will create an error on the Order. Defaults to false.
+                      type: boolean
                     externalAccountBinding:
                       description: ExternalAccountBinding is a reference to a CA external account of the ACME server. If set, upon registration cert-manager will attempt to associate the given external account credentials with the registered ACME account.
                       type: object
@@ -12483,6 +12508,9 @@ spec:
                     email:
                       description: Email is the email address to be associated with the ACME account. This field is optional, but it is strongly recommended to be set. It will be used to contact you in case of issues with your account or certificates, including expiry notification emails. This field may be updated after the account is initially registered.
                       type: string
+                    enableDurationFeature:
+                      description: Enables requesting a Not After date on certificates that matches the duration of the certificate. This is not supported by all ACME servers like Let's Encrypt. If set to true when the ACME server does not support it it will create an error on the Order. Defaults to false.
+                      type: boolean
                     externalAccountBinding:
                       description: ExternalAccountBinding is a reference to a CA external account of the ACME server. If set, upon registration cert-manager will attempt to associate the given external account credentials with the registered ACME account.
                       type: object
@@ -13541,11 +13569,10 @@ spec:
               type: object
               required:
                 - csr
-                - dnsNames
                 - issuerRef
               properties:
                 commonName:
-                  description: CommonName is the common name as specified on the DER encoded CSR. If specified, this value must also be present in `dnsNames`. This field must match the corresponding field on the DER encoded CSR.
+                  description: CommonName is the common name as specified on the DER encoded CSR. If specified, this value must also be present in `dnsNames` or `ipAddresses`. This field must match the corresponding field on the DER encoded CSR.
                   type: string
                 csr:
                   description: Certificate signing request bytes in DER encoding. This will be used when finalizing the order. This field must be set on the order.
@@ -13553,6 +13580,14 @@ spec:
                   format: byte
                 dnsNames:
                   description: DNSNames is a list of DNS names that should be included as part of the Order validation process. This field must match the corresponding field on the DER encoded CSR.
+                  type: array
+                  items:
+                    type: string
+                duration:
+                  description: Duration is the duration for the not after date for the requested certificate. this is set on order creation as pe the ACME spec.
+                  type: string
+                ipAddresses:
+                  description: IPAddresses is a list of IP addresses that should be included as part of the Order validation process. This field must match the corresponding field on the DER encoded CSR.
                   type: array
                   items:
                     type: string
@@ -13691,11 +13726,10 @@ spec:
               type: object
               required:
                 - csr
-                - dnsNames
                 - issuerRef
               properties:
                 commonName:
-                  description: CommonName is the common name as specified on the DER encoded CSR. If specified, this value must also be present in `dnsNames`. This field must match the corresponding field on the DER encoded CSR.
+                  description: CommonName is the common name as specified on the DER encoded CSR. If specified, this value must also be present in `dnsNames` or `ipAddresses`. This field must match the corresponding field on the DER encoded CSR.
                   type: string
                 csr:
                   description: Certificate signing request bytes in DER encoding. This will be used when finalizing the order. This field must be set on the order.
@@ -13703,6 +13737,14 @@ spec:
                   format: byte
                 dnsNames:
                   description: DNSNames is a list of DNS names that should be included as part of the Order validation process. This field must match the corresponding field on the DER encoded CSR.
+                  type: array
+                  items:
+                    type: string
+                duration:
+                  description: Duration is the duration for the not after date for the requested certificate. this is set on order creation as pe the ACME spec.
+                  type: string
+                ipAddresses:
+                  description: IPAddresses is a list of IP addresses that should be included as part of the Order validation process. This field must match the corresponding field on the DER encoded CSR.
                   type: array
                   items:
                     type: string
@@ -13841,15 +13883,22 @@ spec:
             spec:
               type: object
               required:
-                - dnsNames
                 - issuerRef
                 - request
               properties:
                 commonName:
-                  description: CommonName is the common name as specified on the DER encoded CSR. If specified, this value must also be present in `dnsNames`. This field must match the corresponding field on the DER encoded CSR.
+                  description: CommonName is the common name as specified on the DER encoded CSR. If specified, this value must also be present in `dnsNames` or `ipAddresses`. This field must match the corresponding field on the DER encoded CSR.
                   type: string
                 dnsNames:
                   description: DNSNames is a list of DNS names that should be included as part of the Order validation process. This field must match the corresponding field on the DER encoded CSR.
+                  type: array
+                  items:
+                    type: string
+                duration:
+                  description: Duration is the duration for the not after date for the requested certificate. this is set on order creation as pe the ACME spec.
+                  type: string
+                ipAddresses:
+                  description: IPAddresses is a list of IP addresses that should be included as part of the Order validation process. This field must match the corresponding field on the DER encoded CSR.
                   type: array
                   items:
                     type: string
@@ -13992,15 +14041,22 @@ spec:
             spec:
               type: object
               required:
-                - dnsNames
                 - issuerRef
                 - request
               properties:
                 commonName:
-                  description: CommonName is the common name as specified on the DER encoded CSR. If specified, this value must also be present in `dnsNames`. This field must match the corresponding field on the DER encoded CSR.
+                  description: CommonName is the common name as specified on the DER encoded CSR. If specified, this value must also be present in `dnsNames` or `ipAddresses`. This field must match the corresponding field on the DER encoded CSR.
                   type: string
                 dnsNames:
                   description: DNSNames is a list of DNS names that should be included as part of the Order validation process. This field must match the corresponding field on the DER encoded CSR.
+                  type: array
+                  items:
+                    type: string
+                duration:
+                  description: Duration is the duration for the not after date for the requested certificate. this is set on order creation as pe the ACME spec.
+                  type: string
+                ipAddresses:
+                  description: IPAddresses is a list of IP addresses that should be included as part of the Order validation process. This field must match the corresponding field on the DER encoded CSR.
                   type: array
                   items:
                     type: string
