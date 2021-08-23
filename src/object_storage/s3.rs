@@ -92,7 +92,8 @@ impl ObjectStorage for S3 {
             self.context().workspace_root_dir(),
             self.context().execution_id(),
             format!("object-storage/s3/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         let s3_url = format!("s3://{}/{}", bucket_name, object_key);
         let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);

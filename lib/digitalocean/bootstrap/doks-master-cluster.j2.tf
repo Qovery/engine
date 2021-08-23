@@ -1,5 +1,5 @@
 resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
-  name = "qovery-${var.kubernetes_cluster_id}"
+  name = var.kubernetes_cluster_id
   region = var.region
   version = var.doks_version
   vpc_uuid = digitalocean_vpc.qovery_vpc.id
@@ -10,7 +10,7 @@ resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
 
   node_pool {
     tags = [digitalocean_tag.cluster_tag.id]
-    name = "qovery-${var.kubernetes_cluster_id}"
+    name = var.kubernetes_cluster_id
     size = "{{ doks_worker_nodes[0].instance_type }}"
     # use Digital Ocean built-in cluster autoscaler
     auto_scale = true

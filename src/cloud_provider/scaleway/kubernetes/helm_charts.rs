@@ -812,7 +812,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
-                    value: "true".to_string(),
+                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
                 },
                 ChartSetValue {
                     key: "volumes.storageClassName".to_string(),

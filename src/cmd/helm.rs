@@ -686,6 +686,26 @@ where
         .map(|helm_history_row| helm_history_row.clone()))
 }
 
+pub fn is_chart_deployed<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+    chart_name: String,
+) -> Result<bool, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let deployed_charts = helm_list(kubernetes_config, envs, namespace)?;
+
+    for chart in deployed_charts {
+        if chart.name == chart_name {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 /// List deployed helm charts
 ///
 /// # Arguments

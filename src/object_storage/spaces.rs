@@ -5,14 +5,17 @@ use retry::delay::Fibonacci;
 use retry::{Error, OperationResult};
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
-use rusoto_s3::{GetObjectRequest, S3Client, S3};
+use rusoto_s3::{
+    CreateBucketRequest, GetObjectRequest, HeadBucketRequest, PutObjectRequest, S3Client, StreamingBody, S3,
+};
 use tokio::io;
 
-use crate::error::EngineErrorCause::Internal;
+use crate::cloud_provider::digitalocean::application::Region as DoRegion;
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{Context, StringPath};
 use crate::object_storage::{Kind, ObjectStorage};
 use crate::runtime;
+use crate::runtime::block_on;
 
 pub struct Spaces {
     context: Context,
@@ -20,7 +23,7 @@ pub struct Spaces {
     name: String,
     access_key_id: String,
     secret_access_key: String,
-    region: String,
+    region: DoRegion,
 }
 
 impl Spaces {
@@ -30,7 +33,7 @@ impl Spaces {
         name: String,
         access_key_id: String,
         secret_access_key: String,
-        region: String,
+        region: DoRegion,
     ) -> Self {
         Spaces {
             context,
@@ -40,6 +43,103 @@ impl Spaces {
             secret_access_key,
             region,
         }
+    }
+
+    fn get_endpoint_url_for_region(&self) -> String {
+        format!("https://{}.digitaloceanspaces.com", self.region)
+    }
+
+    fn get_credentials(&self) -> StaticProvider {
+        StaticProvider::new(self.access_key_id.clone(), self.secret_access_key.clone(), None, None)
+    }
+
+    fn get_s3_client(&self) -> S3Client {
+        let region = Region::Custom {
+            name: self.region.to_string(),
+            endpoint: self.get_endpoint_url_for_region(),
+        };
+
+        let credentials = self.get_credentials();
+        let client = Client::new_with(credentials, HttpClient::new().unwrap());
+
+        S3Client::new_with_client(client, region)
+    }
+
+    fn is_bucket_name_valid(bucket_name: &str) -> Result<(), Option<String>> {
+        if bucket_name.is_empty() {
+            return Err(Some("bucket name cannot be empty".to_string()));
+        }
+
+        if bucket_name.contains('.') {
+            return Err(Some(
+                "bucket name cannot contain '.' in its name, recommended to use '-' instead".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    // fn empty_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+    //     if let Err(message) = Spaces::is_bucket_name_valid(bucket_name) {
+    //         let message = format!(
+    //             "While trying to delete object-storage bucket, name `{}` is invalid: {}",
+    //             bucket_name,
+    //             message.unwrap_or_else(|| "unknown error".to_string())
+    //         );
+    //         return Err(self.engine_error(EngineErrorCause::Internal, message));
+    //     }
+    //
+    //     let s3_client = self.get_s3_client();
+    //
+    //     // make sure to delete all bucket content before trying to delete the bucket
+    //     let objects_to_be_deleted = match block_on(s3_client.list_objects(ListObjectsRequest {
+    //         bucket: bucket_name.to_string(),
+    //         ..Default::default()
+    //     })) {
+    //         Ok(res) => res.contents.unwrap_or_default(),
+    //         Err(_) => {
+    //             vec![]
+    //         }
+    //     };
+    //
+    //     if !objects_to_be_deleted.is_empty() {
+    //         if let Err(e) = block_on(
+    //             s3_client.delete_objects(DeleteObjectsRequest {
+    //                 bucket: bucket_name.to_string(),
+    //                 delete: Delete {
+    //                     objects: objects_to_be_deleted
+    //                         .iter()
+    //                         .filter_map(|e| e.key.clone())
+    //                         .map(|e| ObjectIdentifier {
+    //                             key: e,
+    //                             version_id: None,
+    //                         })
+    //                         .collect(),
+    //                     ..Default::default()
+    //                 },
+    //                 ..Default::default()
+    //             }),
+    //         ) {
+    //             let message = format!(
+    //                 "While trying to delete object-storage bucket `{}`, cannot delete content: {}",
+    //                 bucket_name, e
+    //             );
+    //             error!("{}", message);
+    //             return Err(self.engine_error(EngineErrorCause::Internal, message));
+    //         }
+    //     }
+    //
+    //     Ok(())
+    // }
+
+    pub fn bucket_exists(&self, bucket_name: &str) -> bool {
+        let s3_client = self.get_s3_client();
+
+        block_on(s3_client.head_bucket(HeadBucketRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        }))
+        .is_ok()
     }
 
     async fn get_object<T, S, X>(
@@ -54,7 +154,7 @@ impl Spaces {
         X: AsRef<Path>,
     {
         let region = Region::Custom {
-            name: self.region.clone(),
+            name: self.region.to_string(),
             endpoint: format!("https://{}.digitaloceanspaces.com", self.region),
         };
 
@@ -118,8 +218,38 @@ impl ObjectStorage for Spaces {
         Ok(())
     }
 
-    fn create_bucket(&self, _bucket_name: &str) -> Result<(), EngineError> {
-        unimplemented!()
+    fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+        if let Err(message) = Spaces::is_bucket_name_valid(bucket_name) {
+            let message = format!(
+                "error while trying to create object-storage bucket `{}` is invalid: {}",
+                bucket_name,
+                message.unwrap_or_else(|| "unknown error".to_string())
+            );
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
+        }
+
+        let s3_client = self.get_s3_client();
+
+        // check if bucket already exists, if so, no need to recreate it
+        // note: we are not deleting buckets since it takes up to 3/4 weeks to be taken into account
+        // so we better reuse existing ones
+        if self.bucket_exists(bucket_name) {
+            return Ok(());
+        }
+
+        if let Err(e) = block_on(s3_client.create_bucket(CreateBucketRequest {
+            bucket: bucket_name.to_string(),
+            ..Default::default()
+        })) {
+            let message = format!(
+                "error while trying to create object-storage bucket `{}`: {}",
+                bucket_name, e
+            );
+            error!("{}", message);
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
+        }
+
+        Ok(())
     }
 
     fn delete_bucket(&self, _bucket_name: &str) -> Result<(), EngineError> {
@@ -131,7 +261,8 @@ impl ObjectStorage for Spaces {
             self.context().workspace_root_dir(),
             self.context().execution_id(),
             format!("object-storage/spaces/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
 
@@ -176,7 +307,46 @@ impl ObjectStorage for Spaces {
         }
     }
 
-    fn put(&self, _bucket_name: &str, _object_key: &str, _file_path: &str) -> Result<(), EngineError> {
-        Err(self.engine_error(Internal, "spaces.put(..) is not implemented".to_string()))
+    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), EngineError> {
+        // TODO(benjamin): switch to `digitalocean-api-rs` once we'll made the auo-generated lib
+        if let Err(message) = Spaces::is_bucket_name_valid(bucket_name) {
+            let message = format!(
+                "While trying to get object `{}` from bucket `{}`, bucket name is invalid: {}",
+                object_key,
+                bucket_name,
+                message.unwrap_or_else(|| "unknown error".to_string())
+            );
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
+        }
+
+        let s3_client = self.get_s3_client();
+
+        match block_on(s3_client.put_object(PutObjectRequest {
+            bucket: bucket_name.to_string(),
+            key: object_key.to_string(),
+            body: Some(StreamingBody::from(match std::fs::read(file_path.clone()) {
+                Ok(x) => x,
+                Err(e) => {
+                    return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        format!(
+                            "error while uploading object {} to bucket {}. {}",
+                            object_key, bucket_name, e
+                        ),
+                    ))
+                }
+            })),
+            ..Default::default()
+        })) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let message = format!(
+                    "While trying to put object `{}` from bucket `{}`, error: {}",
+                    object_key, bucket_name, e
+                );
+                error!("{}", message);
+                Err(self.engine_error(EngineErrorCause::Internal, message))
+            }
+        }
     }
 }

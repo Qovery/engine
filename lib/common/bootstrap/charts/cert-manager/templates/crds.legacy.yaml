@@ -316,6 +316,10 @@ spec:
               items:
                 type: string
               type: array
+            encodeUsagesInRequest:
+              description: EncodeUsagesInRequest controls whether key usages should
+                be present in the CertificateRequest
+              type: boolean
             ipAddresses:
               description: IPAddresses is a list of IP address subjectAltNames to
                 be set on the Certificate.
@@ -455,8 +459,6 @@ spec:
                     if not specified. If `algorithm` is set to `ECDSA`, valid values
                     are `256`, `384` or `521`, and will default to `256` if not specified.
                     No other values are allowed.
-                  maximum: 8192
-                  minimum: 0
                   type: integer
               type: object
             renewBefore:
@@ -2225,6 +2227,13 @@ spec:
                     your account or certificates, including expiry notification emails.
                     This field may be updated after the account is initially registered.
                   type: string
+                enableDurationFeature:
+                  description: Enables requesting a Not After date on certificates
+                    that matches the duration of the certificate. This is not supported
+                    by all ACME servers like Let's Encrypt. If set to true when the
+                    ACME server does not support it it will create an error on the
+                    Order. Defaults to false.
+                  type: boolean
                 externalAccountBinding:
                   description: ExternalAccountBinding is a reference to a CA external
                     account of the ACME server. If set, upon registration cert-manager
@@ -4145,6 +4154,13 @@ spec:
                     your account or certificates, including expiry notification emails.
                     This field may be updated after the account is initially registered.
                   type: string
+                enableDurationFeature:
+                  description: Enables requesting a Not After date on certificates
+                    that matches the duration of the certificate. This is not supported
+                    by all ACME servers like Let's Encrypt. If set to true when the
+                    ACME server does not support it it will create an error on the
+                    Order. Defaults to false.
+                  type: boolean
                 externalAccountBinding:
                   description: ExternalAccountBinding is a reference to a CA external
                     account of the ACME server. If set, upon registration cert-manager
@@ -6050,11 +6066,24 @@ spec:
           properties:
             commonName:
               description: CommonName is the common name as specified on the DER encoded
-                CSR. If specified, this value must also be present in `dnsNames`.
-                This field must match the corresponding field on the DER encoded CSR.
+                CSR. If specified, this value must also be present in `dnsNames` or
+                `ipAddresses`. This field must match the corresponding field on the
+                DER encoded CSR.
               type: string
             dnsNames:
               description: DNSNames is a list of DNS names that should be included
+                as part of the Order validation process. This field must match the
+                corresponding field on the DER encoded CSR.
+              items:
+                type: string
+              type: array
+            duration:
+              description: Duration is the duration for the not after date for the
+                requested certificate. this is set on order creation as pe the ACME
+                spec.
+              type: string
+            ipAddresses:
+              description: IPAddresses is a list of IP addresses that should be included
                 as part of the Order validation process. This field must match the
                 corresponding field on the DER encoded CSR.
               items:
@@ -6086,7 +6115,6 @@ spec:
               format: byte
               type: string
           required:
-          - dnsNames
           - issuerRef
           - request
           type: object
