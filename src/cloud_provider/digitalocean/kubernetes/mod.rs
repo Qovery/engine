@@ -178,6 +178,7 @@ impl<'a> DOKS<'a> {
             VpcInitKind::Manual => self.options.vpc_cidr_block.clone(),
         };
         context.insert("do_vpc_cidr_block", vpc_cidr_block.as_str());
+        context.insert("do_vpc_cidr_set", self.options.vpc_cidr_set.to_string().as_str());
 
         // DNS
         let managed_dns_list = vec![self.dns_provider.name()];

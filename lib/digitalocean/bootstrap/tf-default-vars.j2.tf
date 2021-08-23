@@ -58,6 +58,12 @@ variable "cidr_block" {
   type = string
 }
 
+variable "vpc_cidr_set" {
+  description = "VPC IP declaration mode"
+  default = "{{ do_vpc_cidr_set }}"
+  type = string
+}
+
 variable "kubernetes_cluster_id" {
   description = "Kubernetes cluster name"
   default     = "{{ doks_cluster_id }}"

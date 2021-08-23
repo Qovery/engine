@@ -11,6 +11,15 @@ pub enum VpcInitKind {
     Manual,
 }
 
+impl ToString for VpcInitKind {
+    fn to_string(&self) -> String {
+        match self {
+            &VpcInitKind::Autodetect => "autodetect".to_string(),
+            &VpcInitKind::Manual => "manual".to_string(),
+        }
+    }
+}
+
 impl Default for VpcInitKind {
     fn default() -> Self {
         VpcInitKind::Autodetect
@@ -166,7 +175,7 @@ mod tests_do_vpcs {
     use crate::cloud_provider::digitalocean::application::Region;
     use crate::cloud_provider::digitalocean::network::vpc::{
         do_get_vpcs_from_api_output, get_do_vpc_from_name, get_do_vpc_from_subnet, get_random_available_subnet,
-        is_do_reserved_vpc_subnets,
+        is_do_reserved_vpc_subnets, VpcInitKind,
     };
 
     fn do_get_vpc_json() -> String {
@@ -300,5 +309,25 @@ mod tests_do_vpcs {
         let existing_vpcs = do_get_vpcs_from_api_output(&json_content).unwrap();
 
         assert!(get_random_available_subnet(existing_vpcs.clone(), Region::Frankfurt).is_ok());
+    }
+
+    #[test]
+    fn test_do_vpc_set_to_string() {
+        // setup:
+        let variants = vec![VpcInitKind::Autodetect, VpcInitKind::Manual];
+
+        for variant in variants.iter() {
+            // execute:
+            let result = variant.to_string();
+
+            // verify:
+            assert_eq!(
+                match variant {
+                    VpcInitKind::Autodetect => "autodetect".to_string(),
+                    VpcInitKind::Manual => "manual".to_string(),
+                },
+                result
+            );
+        }
     }
 }
