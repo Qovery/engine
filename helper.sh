@@ -23,8 +23,8 @@ export AWS_ACCESS_KEY_ID="$AWS_PROD_DEPLOY_ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="$AWS_PROD_DEPLOY_SECRET_KEY"
 
 export DOCKER_BUILDKIT=0
-export GITLAB_LOG_UTILITIES_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities"
-export GITLAB_LOG_OUTPUT_DIR="/builds/qovery/qovery-engine/gitlab-log-utilities/output"
+export GITLAB_LOG_UTILITIES_DIR="$CI_PROJECT_DIR/gitlab-log-utilities"
+export GITLAB_LOG_OUTPUT_DIR="$CI_PROJECT_DIR/gitlab-log-utilities/output"
 export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
 export RUNNING_ON_CI=0
 export ENGINE_BRANCH=""
