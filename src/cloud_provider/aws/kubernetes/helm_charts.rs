@@ -131,6 +131,11 @@ pub fn aws_helm_charts(
                     key: "env.WARM_IP_TARGET".to_string(),
                     value: "10".to_string(),
                 },
+                // enable VPC peering connectivity by default
+                ChartSetValue {
+                    key: "env.AWS_VPC_K8S_CNI_EXTERNALSNAT".to_string(),
+                    value: "true".to_string(),
+                },
                 // maximum number of ENIs that will be attached to the node (k8s recommend to avoid going over 100)
                 ChartSetValue {
                     key: "env.MAX_ENI".to_string(),

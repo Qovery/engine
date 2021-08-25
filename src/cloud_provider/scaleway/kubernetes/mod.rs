@@ -212,6 +212,7 @@ impl<'a> Kapsule<'a> {
         context.insert("dns_email_report", &self.options.tls_email_report);
 
         // Kubernetes
+        context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("kubernetes_cluster_name", self.name());
         context.insert("kubernetes_cluster_version", self.version());
@@ -427,7 +428,8 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -664,7 +666,8 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("bootstrap/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;

@@ -261,7 +261,8 @@ impl ObjectStorage for Spaces {
             self.context().workspace_root_dir(),
             self.context().execution_id(),
             format!("object-storage/spaces/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
 

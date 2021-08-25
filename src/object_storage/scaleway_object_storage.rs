@@ -280,7 +280,8 @@ impl ObjectStorage for ScalewayOS {
             self.context().workspace_root_dir(),
             self.context().execution_id(),
             format!("object-storage/scaleway_os/{}", self.name()),
-        );
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
 
