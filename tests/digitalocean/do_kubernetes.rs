@@ -75,14 +75,14 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
         }
 
         // Destroy
-        // if let Err(err) = tx.delete_kubernetes(&kubernetes) {
-        //     panic!("{:?}", err)
-        // }
-        // match tx.commit() {
-        //     TransactionResult::Ok => assert!(true),
-        //     TransactionResult::Rollback(_) => assert!(false),
-        //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        // };
+        if let Err(err) = tx.delete_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
+        }
+        match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
 
         test_name.to_string()
     });

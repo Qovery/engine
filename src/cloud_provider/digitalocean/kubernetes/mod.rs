@@ -18,12 +18,15 @@ use crate::cloud_provider::digitalocean::network::vpc::{
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
-use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesNode};
+use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::{kubernetes, CloudProvider};
+use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
+use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
-use crate::dns_provider;
+use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
+use crate::error::EngineErrorCause::Internal;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use crate::fs::workspace_directory;
 use crate::models::{
@@ -32,6 +35,10 @@ use crate::models::{
 use crate::object_storage::spaces::Spaces;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
+use crate::{cmd, dns_provider};
+use retry::delay::Fibonacci;
+use retry::Error::Operation;
+use retry::OperationResult;
 use std::path::PathBuf;
 
 pub mod cidr;
@@ -705,6 +712,270 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn on_delete(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_delete() called for {}", self.name());
+
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let send_to_customer = |message: &str| {
+            listeners_helper.delete_in_progress(ProgressInfo::new(
+                ProgressScope::Infrastructure {
+                    execution_id: self.context.execution_id().to_string(),
+                },
+                ProgressLevel::Info,
+                Some(message),
+                self.context.execution_id(),
+            ))
+        };
+        send_to_customer(format!("Preparing to delete DOKS cluster {} with id {}", self.name(), self.id()).as_str());
+
+        let temp_dir = workspace_directory(
+            self.context.workspace_root_dir(),
+            self.context.execution_id(),
+            format!("bootstrap/{}", self.name()),
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+
+        // generate terraform files and copy them into temp dir
+        let context = self.tera_context()?;
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/digitalocean/bootstrap/common/charts directory.
+        // this is due to the required dependencies of lib/digital/bootstrap/*.tf files
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        let kubernetes_config_file_path = self.config_file_path()?;
+
+        let all_namespaces = kubectl_exec_get_all_namespaces(
+            &kubernetes_config_file_path,
+            self.cloud_provider().credentials_environment_variables(),
+        );
+
+        // should apply before destroy to be sure destroy will compute on all resources
+        // don't exit on failure, it can happen if we resume a destroy process
+        let message = format!(
+            "Ensuring everything is up to date before deleting cluster {}/{}",
+            self.name(),
+            self.id()
+        );
+        info!("{}", &message);
+        send_to_customer(&message);
+
+        info!("Running Terraform apply before running a delete");
+        if let Err(e) = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false),
+        ) {
+            error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message);
+        };
+
+        // should make the diff between all namespaces and qovery managed namespaces
+        let message = format!(
+            "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
+            self.name(),
+            self.id()
+        );
+        info!("{}", &message);
+        send_to_customer(&message);
+
+        match all_namespaces {
+            Ok(namespace_vec) => {
+                let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
+                let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
+
+                info!("Deleting non Qovery namespaces");
+                for namespace_to_delete in namespaces_to_delete.iter() {
+                    info!("Starting namespace {} deletion process", namespace_to_delete);
+                    let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+                        &kubernetes_config_file_path,
+                        namespace_to_delete,
+                        self.cloud_provider().credentials_environment_variables(),
+                    );
+
+                    match deletion {
+                        Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
+                        Err(e) => {
+                            if e.message.is_some() && e.message.unwrap().contains("not found") {
+                                {}
+                            } else {
+                                error!("Can't delete the namespace {}", namespace_to_delete);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Err(e) => error!(
+                "Error while getting all namespaces for Kubernetes cluster {}: error {:?}",
+                self.name_with_id(),
+                e.message
+            ),
+        }
+
+        let message = format!(
+            "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
+            self.name(),
+            self.id()
+        );
+        info!("{}", &message);
+        send_to_customer(&message);
+
+        // delete custom metrics api to avoid stale namespaces on deletion
+        let _ = cmd::helm::helm_uninstall_list(
+            &kubernetes_config_file_path,
+            vec![HelmChart {
+                name: "metrics-server".to_string(),
+                namespace: "kube-system".to_string(),
+            }],
+            self.cloud_provider().credentials_environment_variables(),
+        );
+
+        // required to avoid namespace stuck on deletion
+        if let Err(e) = uninstall_cert_manager(
+            &kubernetes_config_file_path,
+            self.cloud_provider().credentials_environment_variables(),
+        ) {
+            return Err(EngineError::new(
+                Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ));
+        }
+
+        info!("Deleting Qovery managed helm charts");
+        let qovery_namespaces = get_qovery_managed_namespaces();
+        for qovery_namespace in qovery_namespaces.iter() {
+            info!(
+                "Starting Qovery managed charts deletion process in {} namespace",
+                qovery_namespace
+            );
+            let charts_to_delete = cmd::helm::helm_list(
+                &kubernetes_config_file_path,
+                self.cloud_provider().credentials_environment_variables(),
+                Some(qovery_namespace),
+            );
+            match charts_to_delete {
+                Ok(charts) => {
+                    for chart in charts {
+                        info!("Deleting chart {} in {} namespace", chart.name, chart.namespace);
+                        match cmd::helm::helm_exec_uninstall(
+                            &kubernetes_config_file_path,
+                            &chart.namespace,
+                            &chart.name,
+                            self.cloud_provider().credentials_environment_variables(),
+                        ) {
+                            Ok(_) => info!("chart {} deleted", chart.name),
+                            Err(e) => error!("{:?}", e),
+                        }
+                    }
+                }
+                Err(e) => {
+                    if e.message.is_some() && e.message.unwrap().contains("not found") {
+                        {}
+                    } else {
+                        error!("Can't delete the namespace {}", qovery_namespace);
+                    }
+                }
+            }
+        }
+
+        info!("Deleting Qovery managed Namespaces");
+        for qovery_namespace in qovery_namespaces.iter() {
+            info!("Starting namespace {} deletion process", qovery_namespace);
+            let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+                &kubernetes_config_file_path,
+                qovery_namespace,
+                self.cloud_provider().credentials_environment_variables(),
+            );
+            match deletion {
+                Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
+                Err(e) => {
+                    if e.message.is_some() && e.message.unwrap().contains("not found") {
+                        {}
+                    } else {
+                        error!("Can't delete the namespace {}", qovery_namespace);
+                    }
+                }
+            }
+        }
+
+        info!("Delete all remaining deployed helm applications");
+        match cmd::helm::helm_list(
+            &kubernetes_config_file_path,
+            self.cloud_provider().credentials_environment_variables(),
+            None,
+        ) {
+            Ok(helm_charts) => {
+                for chart in helm_charts {
+                    info!("Deleting chart {} in progress...", chart.name);
+                    let _ = cmd::helm::helm_uninstall_list(
+                        &kubernetes_config_file_path,
+                        vec![chart],
+                        self.cloud_provider().credentials_environment_variables(),
+                    );
+                }
+            }
+            Err(_) => error!("Unable to get helm list"),
+        }
+
+        let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
+        info!("{}", &message);
+        send_to_customer(&message);
+
+        info!("Running Terraform destroy");
+        let terraform_result =
+            retry::retry(
+                Fibonacci::from_millis(60000).take(3),
+                || match cast_simple_error_to_engine_error(
+                    self.engine_error_scope(),
+                    self.context.execution_id(),
+                    cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false),
+                ) {
+                    Ok(_) => OperationResult::Ok(()),
+                    Err(e) => OperationResult::Retry(e),
+                },
+            );
+
+        match terraform_result {
+            Ok(_) => {
+                let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
+                info!("{}", &message);
+                send_to_customer(&message);
+            }
+            Err(Operation { error, .. }) => return Err(error),
+            Err(retry::Error::Internal(msg)) => {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    Some(format!(
+                        "Error while deleting cluster {} with id {}: {}",
+                        self.name(),
+                        self.id(),
+                        msg
+                    )),
+                ))
+            }
+        }
+
         Ok(())
     }
 
