@@ -4,7 +4,7 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
   DOCKER_HOST: tcp://localhost:2375
   DOCKER_TLS_CERTDIR: ""
-  WORKSPACE_ROOT_DIR: /builds/qovery/qovery-engine
+  WORKSPACE_ROOT_DIR: $CI_PROJECT_DIR
   CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
   GIT_DEPTH: 10
   ROLLBACK_IMAGE: ""
@@ -76,10 +76,10 @@ all-self-hosted-mr:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities
-      - /builds/qovery/qovery-engine/.qovery-workspace
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 1 week
   interruptible: true
 
@@ -103,10 +103,10 @@ all-managed-services-mr:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities
-      - /builds/qovery/qovery-engine/.qovery-workspace
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 1 week
   interruptible: true
 
@@ -130,10 +130,10 @@ test-all-mr:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities
-      - /builds/qovery/qovery-engine/.qovery-workspace
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 1 week
   interruptible: true
 
@@ -202,10 +202,10 @@ aws-infra:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities
-      - /builds/qovery/qovery-engine/.qovery-workspace
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
 
@@ -230,10 +230,10 @@ aws-managed-services:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities
-      - /builds/qovery/qovery-engine/.qovery-workspace
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
 
@@ -258,10 +258,10 @@ aws-self-hosted:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities
-      - /builds/qovery/qovery-engine/.qovery-workspace
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
 
@@ -286,10 +286,10 @@ scw-infra:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities
-      - /builds/qovery/qovery-engine/.qovery-workspace
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
 
@@ -314,10 +314,10 @@ scw-managed-services:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities
-      - /builds/qovery/qovery-engine/.qovery-workspace
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
 
@@ -342,10 +342,10 @@ scw-self-hosted:
   artifacts:
     when: always
     reports:
-      junit: /builds/qovery/qovery-engine/cloned-engine/results.xml
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
     paths:
-      - /builds/qovery/qovery-engine/gitlab-log-utilities
-      - /builds/qovery/qovery-engine/.qovery-workspace
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
 

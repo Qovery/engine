@@ -7,7 +7,6 @@ use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cloud_provider::scaleway::kubernetes::node::NodeType;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -65,7 +64,7 @@ impl Request {
 
         let mut container_registry = self
             .container_registry
-            .to_engine_container_registry(context.clone(), self.organization_id.as_str())
+            .to_engine_container_registry(context.clone())
             .ok_or_else(|| {
                 RequestError::ContainerRegistry(format!(
                     "Invalid container registry info: {:?}",
@@ -173,9 +172,9 @@ impl CloudProvider {
                 context,
                 self.id.as_str(),
                 self.name.as_str(),
-                organization_id,
-                self.options.access_key_id.as_ref()?.as_str(),
-                self.options.secret_access_key.as_ref()?.as_str(),
+                self.options.scaleway_project_id.as_ref()?.as_str(),
+                self.options.scaleway_access_key.as_ref()?.as_str(),
+                self.options.scaleway_secret_key.as_ref()?.as_str(),
                 terraform_state_credentials,
             ))),
         }
@@ -226,29 +225,30 @@ impl Kubernetes {
             )),
             qovery_engine::cloud_provider::kubernetes::Kind::Doks => Box::new(DOKS::new(
                 context.clone(),
-                self.id.as_str(),
-                self.name.as_str(),
-                self.version.as_str(),
-                self.region.as_str(),
+                self.id.clone(),
+                self.name.clone(),
+                self.version.clone(),
+                qovery_engine::cloud_provider::digitalocean::application::Region::from_str(self.region.as_str())
+                    .unwrap(),
                 cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
                 dns_provider,
-                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::Options>(
-                    self.options.clone(),
-                )
-                .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
                 nodes
                     .iter()
                     .map(|x| {
                         qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(x.instance_type())
                     })
                     .collect::<Vec<_>>(),
+                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions>(
+                    self.options.clone(),
+                )
+                .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
             )),
             qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => Box::new(Kapsule::new(
                 context.clone(),
                 self.id.clone(),
                 self.name.clone(),
                 self.version.clone(),
-                Region::from_str(self.region.as_str()).unwrap(),
+                qovery_engine::cloud_provider::scaleway::application::Region::from_str(self.region.as_str()).unwrap(),
                 cloud_provider.as_any().downcast_ref::<Scaleway>().unwrap(),
                 dns_provider,
                 nodes
@@ -315,7 +315,6 @@ impl ContainerRegistry {
     pub fn to_engine_container_registry(
         &self,
         context: Context,
-        organization_id: &str,
     ) -> Option<Box<dyn qovery_engine::container_registry::ContainerRegistry>> {
         match self.kind {
             qovery_engine::container_registry::Kind::DockerHub => Some(Box::new(DockerHub::new(
@@ -343,9 +342,12 @@ impl ContainerRegistry {
                 context,
                 self.id.as_str(),
                 self.name.as_str(),
-                self.options.token.as_ref()?.as_str(),
-                organization_id,
-                Region::from_str(self.options.region.as_ref()?.as_str()).unwrap(),
+                self.options.scaleway_secret_key.as_ref()?.as_str(),
+                self.options.scaleway_project_id.as_ref()?.as_str(),
+                qovery_engine::cloud_provider::scaleway::application::Region::from_str(
+                    self.options.region.as_ref()?.as_str(),
+                )
+                .unwrap(),
             ))),
         }
     }
@@ -385,12 +387,16 @@ impl DnsProvider {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Options {
+    // TODO(benjaminch): Refactor this struct properly, each providers might have their own options
     login: Option<String>,
     password: Option<String>,
     access_key_id: Option<String>,
     secret_access_key: Option<String>,
     spaces_access_id: Option<String>,
     spaces_secret_key: Option<String>,
+    scaleway_project_id: Option<String>,
+    scaleway_access_key: Option<String>,
+    scaleway_secret_key: Option<String>,
     token: Option<String>,
     region: Option<String>,
 }
