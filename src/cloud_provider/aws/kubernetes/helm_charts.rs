@@ -1052,6 +1052,7 @@ datasources:
             name: "qovery-engine".to_string(),
             path: chart_path("common/charts/qovery-engine"),
             namespace: HelmChartNamespaces::Qovery,
+            timeout: "600".to_string(),
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),
