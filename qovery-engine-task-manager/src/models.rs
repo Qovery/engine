@@ -64,7 +64,7 @@ impl Request {
 
         let mut container_registry = self
             .container_registry
-            .to_engine_container_registry(context.clone(), self.organization_id.as_str())
+            .to_engine_container_registry(context.clone())
             .ok_or_else(|| {
                 RequestError::ContainerRegistry(format!(
                     "Invalid container registry info: {:?}",
@@ -172,9 +172,9 @@ impl CloudProvider {
                 context,
                 self.id.as_str(),
                 self.name.as_str(),
-                organization_id,
-                self.options.access_key_id.as_ref()?.as_str(),
-                self.options.secret_access_key.as_ref()?.as_str(),
+                self.options.scaleway_project_id.as_ref()?.as_str(),
+                self.options.scaleway_access_key.as_ref()?.as_str(),
+                self.options.scaleway_secret_key.as_ref()?.as_str(),
                 terraform_state_credentials,
             ))),
         }
@@ -315,7 +315,6 @@ impl ContainerRegistry {
     pub fn to_engine_container_registry(
         &self,
         context: Context,
-        organization_id: &str,
     ) -> Option<Box<dyn qovery_engine::container_registry::ContainerRegistry>> {
         match self.kind {
             qovery_engine::container_registry::Kind::DockerHub => Some(Box::new(DockerHub::new(
@@ -343,8 +342,8 @@ impl ContainerRegistry {
                 context,
                 self.id.as_str(),
                 self.name.as_str(),
-                self.options.token.as_ref()?.as_str(),
-                organization_id,
+                self.options.scaleway_secret_key.as_ref()?.as_str(),
+                self.options.scaleway_project_id.as_ref()?.as_str(),
                 qovery_engine::cloud_provider::scaleway::application::Region::from_str(
                     self.options.region.as_ref()?.as_str(),
                 )
@@ -388,12 +387,16 @@ impl DnsProvider {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Options {
+    // TODO(benjaminch): Refactor this struct properly, each providers might have their own options
     login: Option<String>,
     password: Option<String>,
     access_key_id: Option<String>,
     secret_access_key: Option<String>,
     spaces_access_id: Option<String>,
     spaces_secret_key: Option<String>,
+    scaleway_project_id: Option<String>,
+    scaleway_access_key: Option<String>,
+    scaleway_secret_key: Option<String>,
     token: Option<String>,
     region: Option<String>,
 }
