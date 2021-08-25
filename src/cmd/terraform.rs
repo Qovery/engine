@@ -6,7 +6,9 @@ use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
+use rand::Rng;
 use retry::Error::Operation;
+use std::{thread, time};
 
 fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     // terraform init
@@ -14,6 +16,23 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
         match terraform_exec(root_dir, vec!["init"]) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
+                // Error: Failed to install provider from shared cache
+                // in order to avoid lock errors on parallel run, let's sleep a bit
+                if err.message.is_some() {
+                    let message = err.message.clone();
+                    if message
+                        .unwrap()
+                        .contains("Failed to install provider from shared cache")
+                    {
+                        let sleep_time_int = rand::thread_rng().gen_range(30..75);
+                        let sleep_time = time::Duration::from_millis(sleep_time_int);
+                        info!(
+                            "another terraform command is trying to use shared provider cache which is forbidden, sleeping {} before retrying...",
+                            sleep_time_int
+                        );
+                        thread::sleep(sleep_time);
+                    }
+                };
                 error!("error while trying to run terraform init, retrying...");
                 OperationResult::Retry(err)
             }
