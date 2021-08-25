@@ -8,7 +8,7 @@ use tracing::debug;
 use uuid::Uuid;
 
 fn regions_to_test() -> Vec<Region> {
-    vec![Region::Paris, Region::Amsterdam, Region::Warsaw]
+    vec![Region::Paris1, Region::Paris2, Region::Amsterdam, Region::Warsaw]
 }
 
 #[cfg(feature = "test-scw-infra")]

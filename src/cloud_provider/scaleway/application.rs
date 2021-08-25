@@ -383,7 +383,8 @@ pub enum StorageType {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum Region {
-    Paris,
+    Paris1,
+    Paris2,
     Amsterdam,
     Warsaw,
 }
@@ -392,9 +393,10 @@ impl Region {
     // TODO(benjaminch): improve / refactor this!
     pub fn as_str(&self) -> &str {
         match self {
-            Region::Paris => "fr-par",
-            Region::Amsterdam => "nl-ams",
-            Region::Warsaw => "pl-waw",
+            Region::Paris1 => "fr-par-1",
+            Region::Paris2 => "fr-par-2",
+            Region::Amsterdam => "nl-ams-1",
+            Region::Warsaw => "pl-waw-1",
         }
     }
 }
@@ -402,9 +404,10 @@ impl Region {
 impl fmt::Display for Region {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Region::Paris => write!(f, "fr-par"),
-            Region::Amsterdam => write!(f, "nl-ams"),
-            Region::Warsaw => write!(f, "pl-waw"),
+            Region::Paris1 => write!(f, "fr-par-1"),
+            Region::Paris2 => write!(f, "fr-par-2"),
+            Region::Amsterdam => write!(f, "nl-ams-1"),
+            Region::Warsaw => write!(f, "pl-waw-1"),
         }
     }
 }
@@ -414,9 +417,10 @@ impl FromStr for Region {
 
     fn from_str(s: &str) -> Result<Region, ()> {
         match s {
-            "fr-par" => Ok(Region::Paris),
-            "nl-ams" => Ok(Region::Amsterdam),
-            "pl-waw" => Ok(Region::Warsaw),
+            "fr-par-1" => Ok(Region::Paris1),
+            "fr-par-2" => Ok(Region::Paris2),
+            "nl-ams-1" => Ok(Region::Amsterdam),
+            "pl-waw-1" => Ok(Region::Warsaw),
             _ => Err(()),
         }
     }

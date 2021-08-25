@@ -170,7 +170,7 @@ fn create_and_destroy_kapsule_cluster(
 #[named]
 #[test]
 fn create_and_destroy_kapsule_cluster_par() {
-    let region = Region::Paris;
+    let region = Region::Paris1;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(region, secrets, false, function_name!());
 }
@@ -180,7 +180,7 @@ fn create_and_destroy_kapsule_cluster_par() {
 #[allow(dead_code)]
 #[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_fr_par() {
-    let region = Region::Paris;
+    let region = Region::Paris1;
     let secrets = FuncTestsSecrets::new();
     create_upgrade_and_destroy_kapsule_cluster(region, secrets, "1.18", "1.19", function_name!());
 }

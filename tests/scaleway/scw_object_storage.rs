@@ -9,7 +9,7 @@ use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
 
 #[allow(dead_code)]
-const TEST_REGION: Region = Region::Paris;
+const TEST_REGION: Region = Region::Paris1;
 
 #[cfg(feature = "test-scw-infra")]
 #[ignore] // To be ran only on demand to help with debugging

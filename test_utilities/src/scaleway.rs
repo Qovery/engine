@@ -18,7 +18,7 @@ use tracing::error;
 
 pub const SCW_TEST_CLUSTER_NAME: &str = "DO-NOT-DELETE-Qovery-test-cluster";
 pub const SCW_TEST_CLUSTER_ID: &str = "do-not-delete-qovery-test-cluster";
-pub const SCW_TEST_REGION: Region = Region::Paris;
+pub const SCW_TEST_REGION: Region = Region::Paris1;
 pub const SCW_KUBERNETES_VERSION: &str = "1.18";
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
