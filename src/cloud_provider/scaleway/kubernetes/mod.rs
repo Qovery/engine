@@ -51,7 +51,7 @@ pub struct KapsuleOptions {
     pub engine_version_controller_token: String,
 
     // Scaleway
-    pub scaleway_default_project_id: String,
+    pub scaleway_project_id: String,
     pub scaleway_access_key: String,
     pub scaleway_secret_key: String,
     pub scaleway_default_zone: u8,
