@@ -12,6 +12,12 @@ variable "region" {
   type        = string
 }
 
+variable "zone" {
+  description = "Scaleway zone to store terraform state and lock"
+  default     = "{{ scw_zone }}"
+  type        = string
+}
+
 variable "qovery_nats_url" {
   description = "URL of qovery nats server"
   default = "{{ qovery_nats_url }}"

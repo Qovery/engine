@@ -2,13 +2,13 @@ extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, FuncTestsSecrets};
 use qovery_engine::build_platform::Image;
-use qovery_engine::cloud_provider::scaleway::application::Region;
+use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use tracing::debug;
 use uuid::Uuid;
 
-fn regions_to_test() -> Vec<Region> {
-    vec![Region::Paris1, Region::Paris2, Region::Amsterdam, Region::Warsaw]
+fn zones_to_test() -> Vec<Zone> {
+    vec![Zone::Paris1, Zone::Paris2, Zone::Amsterdam1, Zone::Warsaw1]
 }
 
 #[cfg(feature = "test-scw-infra")]
@@ -36,7 +36,7 @@ fn test_get_registry_namespace() {
     let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
 
     // testing it in all regions
-    for region in regions_to_test().into_iter() {
+    for region in zones_to_test().into_iter() {
         let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
 
         let container_registry = ScalewayCR::new(
@@ -95,7 +95,7 @@ fn test_create_registry_namespace() {
     let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
 
     // testing it in all regions
-    for region in regions_to_test().into_iter() {
+    for region in zones_to_test().into_iter() {
         let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
 
         let container_registry = ScalewayCR::new(
@@ -147,7 +147,7 @@ fn test_delete_registry_namespace() {
     let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
 
     // testing it in all regions
-    for region in regions_to_test().into_iter() {
+    for region in zones_to_test().into_iter() {
         let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
 
         let container_registry = ScalewayCR::new(
@@ -194,7 +194,7 @@ fn test_get_or_create_registry_namespace() {
     let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
 
     // testing it in all regions
-    for region in regions_to_test().into_iter() {
+    for region in zones_to_test().into_iter() {
         let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
 
         let container_registry = ScalewayCR::new(

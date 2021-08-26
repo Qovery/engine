@@ -1,4 +1,4 @@
-use qovery_engine::cloud_provider::scaleway::application::Region;
+use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::node::{Node, NodeType};
 use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOptions};
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -18,7 +18,7 @@ use tracing::error;
 
 pub const SCW_TEST_CLUSTER_NAME: &str = "DO-NOT-DELETE-Qovery-test-cluster";
 pub const SCW_TEST_CLUSTER_ID: &str = "do-not-delete-qovery-test-cluster";
-pub const SCW_TEST_REGION: Region = Region::Paris1;
+pub const SCW_TEST_ZONE: Zone = Zone::Paris1;
 pub const SCW_KUBERNETES_VERSION: &str = "1.18";
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
@@ -40,7 +40,7 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
-        SCW_TEST_REGION,
+        SCW_TEST_ZONE,
     )
 }
 
@@ -85,7 +85,7 @@ pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptio
     )
 }
 
-pub fn scw_object_storage(context: Context, region: Region) -> ScalewayOS {
+pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
     let secrets = FuncTestsSecrets::new();
     let random_id = generate_id();
 
@@ -149,7 +149,7 @@ pub fn scw_kubernetes_kapsule<'a>(
         SCW_TEST_CLUSTER_ID.to_string(),
         SCW_TEST_CLUSTER_NAME.to_string(),
         SCW_KUBERNETES_VERSION.to_string(),
-        Region::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap(),
+        Zone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap(),
         cloud_provider,
         dns_provider,
         nodes,
