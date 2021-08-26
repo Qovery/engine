@@ -1,6 +1,5 @@
 ARG BIN_DEST_FOLDER="/binaries"
 
-# docker build stage / sccache (0.2.13 requires rust <= 1.48, not more) for redis support : https://github.com/mozilla/sccache/issues/970
 FROM rust:1.54.0-slim-bullseye as build
 
 ARG BIN_DEST_FOLDER
@@ -21,7 +20,6 @@ RUN ./docker/load.sh download $BIN_DEST_FOLDER
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
 
-# get sccache (0.2.13 requires rust <= 1.48, not more)
 RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/releases/latest" | sed -r 's/^.+tag\/(.+)">.+/\1/') && \
     curl -sLo /usr/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache && \
     chmod 755 /usr/bin/sccache
