@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::Path;
 
-use crate::cloud_provider::scaleway::application::Region;
+use crate::cloud_provider::scaleway::application::Zone;
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{Context, StringPath};
 use crate::object_storage::{Kind, ObjectStorage};
@@ -27,7 +27,7 @@ pub struct ScalewayOS {
     name: String,
     access_key: String,
     secret_token: String,
-    region: Region,
+    zone: Zone,
     bucket_delete_strategy: BucketDeleteStrategy,
 }
 
@@ -38,7 +38,7 @@ impl ScalewayOS {
         name: String,
         access_key: String,
         secret_token: String,
-        region: Region,
+        region: Zone,
         bucket_delete_strategy: BucketDeleteStrategy,
     ) -> ScalewayOS {
         ScalewayOS {
@@ -47,14 +47,14 @@ impl ScalewayOS {
             name,
             access_key,
             secret_token,
-            region,
+            zone: region,
             bucket_delete_strategy,
         }
     }
 
     fn get_s3_client(&self) -> S3Client {
         let region = RusotoRegion::Custom {
-            name: self.region.to_string(),
+            name: self.zone.to_string(),
             endpoint: self.get_endpoint_url_for_region(),
         };
 
@@ -68,7 +68,7 @@ impl ScalewayOS {
     }
 
     fn get_endpoint_url_for_region(&self) -> String {
-        format!("https://s3.{}.scw.cloud", self.region.to_string())
+        format!("https://s3.{}.scw.cloud", self.zone.to_string())
     }
 
     fn is_bucket_name_valid(bucket_name: &str) -> Result<(), Option<String>> {

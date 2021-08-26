@@ -2,14 +2,14 @@ extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, generate_id, FuncTestsSecrets};
 
-use qovery_engine::cloud_provider::scaleway::application::Region;
+use qovery_engine::cloud_provider::scaleway::application::Zone;
 
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
 
 #[allow(dead_code)]
-const TEST_REGION: Region = Region::Paris1;
+const TEST_ZONE: Zone = Zone::Paris1;
 
 #[cfg(feature = "test-scw-infra")]
 #[ignore] // To be ran only on demand to help with debugging
@@ -27,7 +27,7 @@ fn test_delete_bucket_hard_delete_strategy() {
         "test".to_string(),
         scw_access_key,
         scw_secret_key,
-        TEST_REGION,
+        TEST_ZONE,
         BucketDeleteStrategy::HardDelete,
     );
 
@@ -61,7 +61,7 @@ fn test_delete_bucket_empty_strategy() {
         "test".to_string(),
         scw_access_key,
         scw_secret_key,
-        TEST_REGION,
+        TEST_ZONE,
         BucketDeleteStrategy::Empty,
     );
 
@@ -100,7 +100,7 @@ fn test_create_bucket() {
         "test".to_string(),
         scw_access_key,
         scw_secret_key,
-        TEST_REGION,
+        TEST_ZONE,
         BucketDeleteStrategy::HardDelete,
     );
 
@@ -134,7 +134,7 @@ fn test_put_file() {
         "test".to_string(),
         scw_access_key,
         scw_secret_key,
-        TEST_REGION,
+        TEST_ZONE,
         BucketDeleteStrategy::HardDelete,
     );
 
@@ -185,7 +185,7 @@ fn test_get_file() {
         "test".to_string(),
         scw_access_key,
         scw_secret_key,
-        TEST_REGION,
+        TEST_ZONE,
         BucketDeleteStrategy::HardDelete,
     );
 

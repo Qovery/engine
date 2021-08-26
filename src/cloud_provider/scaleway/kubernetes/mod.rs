@@ -7,7 +7,7 @@ use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
-use crate::cloud_provider::scaleway::application::Region;
+use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::Node;
 use crate::cloud_provider::scaleway::Scaleway;
@@ -103,7 +103,7 @@ pub struct Kapsule<'a> {
     id: String,
     name: String,
     version: String,
-    region: Region,
+    zone: Zone,
     cloud_provider: &'a Scaleway,
     dns_provider: &'a dyn DnsProvider,
     object_storage: ScalewayOS,
@@ -119,7 +119,7 @@ impl<'a> Kapsule<'a> {
         id: String,
         name: String,
         version: String,
-        region: Region,
+        region: Zone,
         cloud_provider: &'a Scaleway,
         dns_provider: &'a dyn DnsProvider,
         nodes: Vec<Node>,
@@ -142,7 +142,7 @@ impl<'a> Kapsule<'a> {
             id,
             name,
             version,
-            region,
+            zone: region,
             cloud_provider,
             dns_provider,
             object_storage,
@@ -177,7 +177,8 @@ impl<'a> Kapsule<'a> {
             "scaleway_default_zone",
             self.options.scaleway_default_zone.to_string().as_str(),
         );
-        context.insert("scw_region", &self.region.as_str());
+        context.insert("scw_region", &self.zone.region().as_str());
+        context.insert("scw_zone", &self.zone.as_str());
 
         let vpc_cidr_block = self.options.vpc_cidr_block.clone();
         context.insert("vpc_cidr_block", &vpc_cidr_block);
@@ -362,7 +363,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn region(&self) -> &str {
-        self.region.as_str()
+        self.zone.as_str()
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
@@ -536,7 +537,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
             self.cloud_provider.default_project_id.to_string(),
-            self.region.to_string(),
+            self.zone.to_string(),
             self.cluster_name(),
             "scaleway".to_string(),
             self.context.is_test_cluster(),
