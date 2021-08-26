@@ -346,8 +346,7 @@ impl ContainerRegistry {
                 self.options.scaleway_project_id.as_ref()?.as_str(),
                 qovery_engine::cloud_provider::scaleway::application::Zone::from_str(
                     self.options.region.as_ref()?.as_str(),
-                )
-                .unwrap(),
+                )?,
             ))),
         }
     }
