@@ -302,7 +302,13 @@ impl Node {
             }
             qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => {
                 Box::new(qovery_engine::cloud_provider::scaleway::kubernetes::node::Node::new(
-                    NodeType::from_str(&self.instance_type).unwrap(),
+                    NodeType::from_str(&self.instance_type).expect(
+                        format!(
+                            "cannot parse `{}`, it doesn't seem to be a valid SCW node type",
+                            &self.instance_type
+                        )
+                        .as_str(),
+                    ),
                 ))
             }
         }
