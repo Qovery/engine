@@ -1,7 +1,7 @@
 ARG BIN_DEST_FOLDER="/binaries"
 
 # docker build stage / sccache (0.2.13 requires rust <= 1.48, not more) for redis support : https://github.com/mozilla/sccache/issues/970
-FROM rust:1.48.0-slim-buster as build
+FROM rust:1.54.0-slim-bullseye as build
 
 ARG BIN_DEST_FOLDER
 ARG SCCACHE_REDIS
@@ -30,7 +30,7 @@ RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/relea
 RUN sccache --version && sccache -s && cargo build --release && sccache -s
 
 # Final image
-FROM debian:buster-slim as run
+FROM debian:bulleseye-slim as run
 
 ARG BIN_DEST_FOLDER
 
