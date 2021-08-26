@@ -36,7 +36,7 @@ provider "scaleway" {
   access_key      = var.scaleway_access_key
   secret_key      = var.scaleway_secret_key
   project_id	  = var.scaleway_default_project_id
-  zone            = var.scaleway_default_zone
+  zone            = var.zone
   region          = var.region
 }
 

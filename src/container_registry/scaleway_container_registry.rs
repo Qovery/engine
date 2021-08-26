@@ -1,6 +1,6 @@
 extern crate scaleway_api_rs;
 
-use crate::cloud_provider::scaleway::application::Region;
+use crate::cloud_provider::scaleway::application::Zone;
 
 use crate::build_platform::Image;
 use crate::cmd;
@@ -21,7 +21,7 @@ pub struct ScalewayCR {
     name: String,
     default_project_id: String,
     secret_token: String,
-    region: Region,
+    zone: Zone,
     listeners: Listeners,
 }
 
@@ -32,7 +32,7 @@ impl ScalewayCR {
         name: &str,
         secret_token: &str,
         default_project_id: &str,
-        region: Region,
+        region: Zone,
     ) -> ScalewayCR {
         ScalewayCR {
             context,
@@ -40,7 +40,7 @@ impl ScalewayCR {
             name: name.to_string(),
             default_project_id: default_project_id.to_string(),
             secret_token: secret_token.to_string(),
-            region,
+            zone: region,
             listeners: Vec::new(),
         }
     }
@@ -69,7 +69,7 @@ impl ScalewayCR {
         // https://developers.scaleway.com/en/products/registry/api/#get-09e004
         let scaleway_registry_namespaces = match block_on(scaleway_api_rs::apis::namespaces_api::list_namespaces(
             &self.get_configuration(),
-            self.region.to_string().as_str(),
+            self.zone.to_string().as_str(),
             None,
             None,
             None,
@@ -101,7 +101,7 @@ impl ScalewayCR {
         // https://developers.scaleway.com/en/products/registry/api/#get-a6f1bc
         let scaleway_images = match block_on(scaleway_api_rs::apis::images_api::list_images1(
             &self.get_configuration(),
-            self.region.to_string().as_str(),
+            self.zone.to_string().as_str(),
             None,
             None,
             None,
@@ -147,7 +147,7 @@ impl ScalewayCR {
 
         match block_on(scaleway_api_rs::apis::images_api::delete_image1(
             &self.get_configuration(),
-            self.region.to_string().as_str(),
+            self.zone.to_string().as_str(),
             image_to_delete.id.unwrap().as_str(),
         )) {
             Ok(res) => Ok(res),
@@ -211,7 +211,7 @@ impl ScalewayCR {
         // https://developers.scaleway.com/en/products/registry/api/#post-7a8fcc
         match block_on(scaleway_api_rs::apis::namespaces_api::create_namespace(
             &self.get_configuration(),
-            self.region.to_string().as_str(),
+            self.zone.to_string().as_str(),
             scaleway_api_rs::models::inline_object_23::InlineObject23 {
                 name: image.name.clone(),
                 description: None,
@@ -253,7 +253,7 @@ impl ScalewayCR {
 
         match block_on(scaleway_api_rs::apis::namespaces_api::delete_namespace(
             &self.get_configuration(),
-            self.region.to_string().as_str(),
+            self.zone.to_string().as_str(),
             registry_to_delete.id.unwrap().as_str(),
         )) {
             Ok(res) => Ok(res),
@@ -287,7 +287,7 @@ impl ScalewayCR {
         base64::encode(
             format!(
                 r#"{{"auths":{{"rg.{}.scw.cloud":{{"auth":"{}"}}}}}}"#,
-                self.region.as_str(),
+                self.zone.as_str(),
                 base64::encode(format!("nologin:{}", self.secret_token).as_bytes())
             )
             .as_bytes(),
