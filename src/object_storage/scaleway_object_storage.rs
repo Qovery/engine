@@ -10,8 +10,9 @@ use crate::runtime::block_on;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest, GetObjectRequest, HeadBucketRequest,
-    ListObjectsRequest, ObjectIdentifier, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, S3,
+    CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest,
+    GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier, PutBucketVersioningRequest,
+    PutObjectRequest, S3Client, StreamingBody, S3,
 };
 use tokio::io;
 
@@ -38,7 +39,7 @@ impl ScalewayOS {
         name: String,
         access_key: String,
         secret_token: String,
-        region: Zone,
+        zone: Zone,
         bucket_delete_strategy: BucketDeleteStrategy,
     ) -> ScalewayOS {
         ScalewayOS {
@@ -47,14 +48,14 @@ impl ScalewayOS {
             name,
             access_key,
             secret_token,
-            zone: region,
+            zone,
             bucket_delete_strategy,
         }
     }
 
     fn get_s3_client(&self) -> S3Client {
         let region = RusotoRegion::Custom {
-            name: self.zone.to_string(),
+            name: self.zone.region().to_string(),
             endpoint: self.get_endpoint_url_for_region(),
         };
 
@@ -68,7 +69,7 @@ impl ScalewayOS {
     }
 
     fn get_endpoint_url_for_region(&self) -> String {
-        format!("https://s3.{}.scw.cloud", self.zone.to_string())
+        format!("https://s3.{}.scw.cloud", self.zone.region().to_string())
     }
 
     fn is_bucket_name_valid(bucket_name: &str) -> Result<(), Option<String>> {
@@ -196,6 +197,9 @@ impl ObjectStorage for ScalewayOS {
 
         if let Err(e) = block_on(s3_client.create_bucket(CreateBucketRequest {
             bucket: bucket_name.to_string(),
+            create_bucket_configuration: Some(CreateBucketConfiguration {
+                location_constraint: Some(self.zone.region().to_string()),
+            }),
             ..Default::default()
         })) {
             let message = format!(

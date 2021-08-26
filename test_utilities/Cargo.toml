@@ -29,4 +29,4 @@ hashicorp_vault = "2.0.1"
 digitalocean = "0.1.1"
 
 # Scaleway Deps
-scaleway_api_rs = "0.1.1"
+scaleway_api_rs = "=0.1.1"
