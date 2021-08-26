@@ -173,6 +173,8 @@ fn create_and_destroy_kapsule_cluster_par_1() {
 #[cfg(feature = "test-scw-infra")]
 #[named]
 #[test]
+#[ignore]
+#[allow(dead_code)]
 fn create_and_destroy_kapsule_cluster_par_2() {
     let zone = Zone::Paris2;
     let secrets = FuncTestsSecrets::new();
@@ -182,6 +184,8 @@ fn create_and_destroy_kapsule_cluster_par_2() {
 #[cfg(feature = "test-scw-infra")]
 #[named]
 #[test]
+#[ignore]
+#[allow(dead_code)]
 fn create_and_destroy_kapsule_cluster_ams_1() {
     let zone = Zone::Amsterdam1;
     let secrets = FuncTestsSecrets::new();
