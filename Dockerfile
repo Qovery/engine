@@ -30,7 +30,7 @@ RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/relea
 RUN sccache --version && sccache -s && cargo build --release && sccache -s
 
 # Final image
-FROM debian:bulleseye-slim as run
+FROM debian:bullseye-slim as run
 
 ARG BIN_DEST_FOLDER
 
