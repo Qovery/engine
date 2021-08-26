@@ -205,6 +205,7 @@ fn create_and_destroy_kapsule_cluster_war_1() {
 #[test]
 #[ignore]
 #[allow(dead_code)]
+#[allow(unused_attributes)]
 #[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
     let zone = Zone::Paris1;
@@ -215,6 +216,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
 // only enable this test manually when we want to perform and validate upgrade process
 #[test]
 #[ignore]
+#[allow(unused_attributes)]
 #[allow(dead_code)]
 #[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
@@ -226,6 +228,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
 // only enable this test manually when we want to perform and validate upgrade process
 #[test]
 #[ignore]
+#[allow(unused_attributes)]
 #[allow(dead_code)]
 #[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
@@ -237,6 +240,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
 // only enable this test manually when we want to perform and validate upgrade process
 #[test]
 #[ignore]
+#[allow(unused_attributes)]
 #[allow(dead_code)]
 #[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_war_1() {

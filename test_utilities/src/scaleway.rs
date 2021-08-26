@@ -67,7 +67,6 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
 
 pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
     KapsuleOptions::new(
-        "10.0.0.0/16".to_string(),
         secrets.QOVERY_API_URL.unwrap(),
         secrets.QOVERY_NATS_URL.unwrap(),
         secrets.QOVERY_NATS_USERNAME.unwrap(),
@@ -159,7 +158,6 @@ pub fn scw_kubernetes_kapsule<'a>(
 
 fn scw_kubernetes_kapsule_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
     KapsuleOptions::new(
-        "10.0.0.0/16".to_string(),
         secrets.QOVERY_API_URL.unwrap(),
         secrets.QOVERY_NATS_URL.unwrap(),
         secrets.QOVERY_NATS_USERNAME.unwrap(),

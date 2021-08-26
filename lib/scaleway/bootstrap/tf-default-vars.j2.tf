@@ -75,12 +75,6 @@ variable "scaleway_default_zone" {
 
 # Kubernetes
 
-variable "cidr_block" {
-  description = "CIDR block for VPC segmentation"
-  default = "{{ vpc_cidr_block }}"
-  type = string
-}
-
 variable "kubernetes_cluster_id" {
   description = "Kubernetes cluster name"
   default     = "{{ kubernetes_cluster_id }}"

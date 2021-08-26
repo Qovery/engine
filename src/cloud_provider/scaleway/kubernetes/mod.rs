@@ -38,7 +38,6 @@ use tera::Context as TeraContext;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KapsuleOptions {
-    vpc_cidr_block: String,
     // Qovery
     pub qovery_api_url: String,
     pub qovery_nats_url: String,
@@ -62,7 +61,6 @@ pub struct KapsuleOptions {
 
 impl KapsuleOptions {
     pub fn new(
-        vpc_cidr_block: String,
         qovery_api_url: String,
         qovery_nats_url: String,
         qovery_nats_user: String,
@@ -79,7 +77,6 @@ impl KapsuleOptions {
         tls_email_report: String,
     ) -> KapsuleOptions {
         KapsuleOptions {
-            vpc_cidr_block,
             qovery_api_url,
             qovery_nats_url,
             qovery_nats_user,
@@ -179,9 +176,6 @@ impl<'a> Kapsule<'a> {
         );
         context.insert("scw_region", &self.zone.region().as_str());
         context.insert("scw_zone", &self.zone.as_str());
-
-        let vpc_cidr_block = self.options.vpc_cidr_block.clone();
-        context.insert("vpc_cidr_block", &vpc_cidr_block);
 
         // DNS
         let managed_dns_list = vec![self.dns_provider.name()];
