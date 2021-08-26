@@ -420,6 +420,8 @@ main-set-ga:
   retry: 2
   script:
     - ./helper.sh set_release_ga
+  tags:
+    - 250mcpu-1gmem-0g
   when: manual
   only:
     refs:
@@ -430,6 +432,8 @@ main-deploy-engine-infra:
   retry: 0
   script:
     - ./helper.sh release_to_prod
+  tags:
+    - 250mcpu-1gmem-0g
   when: manual
   only:
     refs:
