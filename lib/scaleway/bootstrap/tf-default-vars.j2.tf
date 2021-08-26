@@ -43,9 +43,9 @@ variable "organization_id" {
   type        = string
 }
 
-variable "scaleway_default_project_id" {
-  description = "Scaleway default project ID ID"
-  default     = "{{ scaleway_default_project_id }}"
+variable "scaleway_project_id" {
+  description = "Scaleway project ID (namespace)"
+  default     = "{{ scaleway_project_id }}"
   type        = string
 }
 

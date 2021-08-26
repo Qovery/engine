@@ -51,7 +51,7 @@ pub struct KapsuleOptions {
     pub engine_version_controller_token: String,
 
     // Scaleway
-    pub scaleway_default_project_id: String,
+    pub scaleway_project_id: String,
     pub scaleway_access_key: String,
     pub scaleway_secret_key: String,
     pub scaleway_default_zone: u8,
@@ -72,7 +72,7 @@ impl KapsuleOptions {
         grafana_admin_password: String,
         agent_version_controller_token: String,
         engine_version_controller_token: String,
-        scaleway_default_project_id: String,
+        scaleway_project_id: String,
         scaleway_access_key: String,
         scaleway_secret_key: String,
         scaleway_default_zone: u8,
@@ -89,7 +89,7 @@ impl KapsuleOptions {
             grafana_admin_password,
             agent_version_controller_token,
             engine_version_controller_token,
-            scaleway_default_project_id,
+            scaleway_project_id,
             scaleway_access_key,
             scaleway_secret_key,
             scaleway_default_zone,
@@ -170,10 +170,7 @@ impl<'a> Kapsule<'a> {
         let mut context = TeraContext::new();
 
         // Scaleway
-        context.insert(
-            "scaleway_default_project_id",
-            self.options.scaleway_default_project_id.as_str(),
-        );
+        context.insert("scaleway_project_id", self.options.scaleway_project_id.as_str());
         context.insert("scaleway_access_key", self.options.scaleway_access_key.as_str());
         context.insert("scaleway_secret_key", self.options.scaleway_secret_key.as_str());
         context.insert(
