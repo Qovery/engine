@@ -248,7 +248,13 @@ impl Kubernetes {
                 self.id.clone(),
                 self.name.clone(),
                 self.version.clone(),
-                qovery_engine::cloud_provider::scaleway::application::Region::from_str(self.region.as_str()).unwrap(),
+                qovery_engine::cloud_provider::scaleway::application::Zone::from_str(self.region.as_str()).expect(
+                    format!(
+                        "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
+                        self.region.as_str()
+                    )
+                    .as_str(),
+                ),
                 cloud_provider.as_any().downcast_ref::<Scaleway>().unwrap(),
                 dns_provider,
                 nodes
@@ -344,10 +350,16 @@ impl ContainerRegistry {
                 self.name.as_str(),
                 self.options.scaleway_secret_key.as_ref()?.as_str(),
                 self.options.scaleway_project_id.as_ref()?.as_str(),
-                qovery_engine::cloud_provider::scaleway::application::Region::from_str(
+                qovery_engine::cloud_provider::scaleway::application::Zone::from_str(
                     self.options.region.as_ref()?.as_str(),
                 )
-                .unwrap(),
+                .expect(
+                    format!(
+                        "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
+                        self.options.region.as_ref()?.as_str(),
+                    )
+                    .as_str(),
+                ),
             ))),
         }
     }
