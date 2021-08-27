@@ -13,7 +13,8 @@ use qovery_engine::transaction::TransactionResult;
 // This is not really a test but a convenient way to create the test cluster if needed to be manually created at some point.
 #[allow(dead_code)]
 #[named]
-//#[test]
+#[test]
+#[ignore]
 fn create_scaleway_kubernetes_kapsule_test_cluster() {
     let secrets = FuncTestsSecrets::new();
     let test_name = function_name!();
@@ -64,7 +65,8 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
 // This is not really a test but a convenient way to create the test cluster if needed to be manually destroyed at some point.
 #[allow(dead_code)]
 #[named]
-//#[test]
+#[test]
+#[ignore]
 fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
     let secrets = FuncTestsSecrets::new();
     let test_name = function_name!();
