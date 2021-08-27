@@ -786,7 +786,7 @@ impl<'a> Kubernetes for EKS<'a> {
                                         scope: EngineErrorScope::Engine,
                                         execution_id: self.context.execution_id().to_string(),
                                         message: Some(format!(
-                                            "error while trying to remove {} out of terraform state file. {:?}",
+                                            "error while trying to remove {} out of terraform state file.\n {:?}",
                                             entry, e.message
                                         )),
                                     })
