@@ -79,7 +79,6 @@ pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptio
         secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap(),
         secrets.SCALEWAY_ACCESS_KEY.unwrap(),
         secrets.SCALEWAY_SECRET_KEY.unwrap(),
-        1,
         secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
     )
 }
@@ -170,7 +169,6 @@ fn scw_kubernetes_kapsule_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
         secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap(),
         secrets.SCALEWAY_ACCESS_KEY.unwrap(),
         secrets.SCALEWAY_SECRET_KEY.unwrap(),
-        1,
         secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
     )
 }
