@@ -48,12 +48,6 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // check connectivity
-        let connections = test_utilities::utilities::check_all_connections(&environment);
-        for con in connections {
-            assert_eq!(con, true);
-        }
-
         match delete_environment(&context_for_deletion, &ea_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
