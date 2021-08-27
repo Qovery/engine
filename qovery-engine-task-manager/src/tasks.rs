@@ -198,7 +198,12 @@ impl EnvironmentTask {
         pre_run_callback: Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>,
     ) -> Self {
         EnvironmentTask {
-            group_id: request.target_environment.as_ref().unwrap().id.clone(),
+            group_id: request
+                .target_environment
+                .as_ref()
+                .expect("missing `target_environment` to create EnvironmentTask")
+                .id
+                .clone(),
             context,
             request,
             pre_run_callback: Arc::new(pre_run_callback),
@@ -206,7 +211,13 @@ impl EnvironmentTask {
     }
 
     fn action_context(&self, level: ProgressLevel) -> ActionContext {
-        let target_environment_id = self.request.target_environment.as_ref().unwrap().id.to_string();
+        let target_environment_id = self
+            .request
+            .target_environment
+            .as_ref()
+            .expect("missing `target_environment` to create ActionContext")
+            .id
+            .to_string();
 
         ActionContext::new(
             ProgressScope::Environment {
