@@ -53,7 +53,6 @@ pub struct KapsuleOptions {
     pub scaleway_project_id: String,
     pub scaleway_access_key: String,
     pub scaleway_secret_key: String,
-    pub scaleway_default_zone: u8,
 
     // Other
     pub tls_email_report: String,
@@ -73,7 +72,6 @@ impl KapsuleOptions {
         scaleway_project_id: String,
         scaleway_access_key: String,
         scaleway_secret_key: String,
-        scaleway_default_zone: u8,
         tls_email_report: String,
     ) -> KapsuleOptions {
         KapsuleOptions {
@@ -89,7 +87,6 @@ impl KapsuleOptions {
             scaleway_project_id,
             scaleway_access_key,
             scaleway_secret_key,
-            scaleway_default_zone,
             tls_email_report,
         }
     }
@@ -170,10 +167,6 @@ impl<'a> Kapsule<'a> {
         context.insert("scaleway_project_id", self.options.scaleway_project_id.as_str());
         context.insert("scaleway_access_key", self.options.scaleway_access_key.as_str());
         context.insert("scaleway_secret_key", self.options.scaleway_secret_key.as_str());
-        context.insert(
-            "scaleway_default_zone",
-            self.options.scaleway_default_zone.to_string().as_str(),
-        );
         context.insert("scw_region", &self.zone.region().as_str());
         context.insert("scw_zone", &self.zone.as_str());
 

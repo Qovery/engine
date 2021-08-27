@@ -67,23 +67,17 @@ variable "scaleway_secret_key" {
   type        = string
 }
 
-variable "scaleway_default_zone" {
-  description = "Scaleway defaut zone"
-  default     = "{{ scw_region }}-{{ scaleway_default_zone }}"
-  type        = string
-}
-
 # Kubernetes
 
 variable "kubernetes_cluster_id" {
-  description = "Kubernetes cluster name"
+  description = "Kubernetes cluster id"
   default     = "{{ kubernetes_cluster_id }}"
   type        = string
 }
 
 variable "kubernetes_cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "qovery-{{ kubernetes_cluster_name }}"
+  default     = "qovery-{{ kubernetes_cluster_id }}" # TODO(benjaminch): handle name creation in code
   type        = string
 }
 
