@@ -296,7 +296,7 @@ impl<'a> Kapsule<'a> {
             .into_iter()
             .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
             .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
-                instance_type: instance_type.to_string(),
+                instance_type: instance_type.to_string().to_uppercase(),
                 desired_size: "3".to_string(),
                 max_size: nodes.len().to_string(),
                 min_size: "3".to_string(),
