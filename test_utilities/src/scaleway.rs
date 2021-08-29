@@ -16,6 +16,7 @@ use chrono::Utc;
 use std::str::FromStr;
 use tracing::error;
 
+pub const ORGANIZATION_ID: &str = "zztopuuidscw";
 pub const SCW_TEST_CLUSTER_NAME: &str = "DO-NOT-DELETE-Qovery-test-cluster";
 pub const SCW_TEST_CLUSTER_ID: &str = "do-not-delete-qovery-test-cluster";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris1;
@@ -50,6 +51,7 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
     Scaleway::new(
         context.clone(),
         SCW_TEST_CLUSTER_ID,
+        ORGANIZATION_ID,
         secrets
             .SCALEWAY_DEFAULT_PROJECT_ID
             .unwrap_or("undefined".to_string())
