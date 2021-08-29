@@ -171,6 +171,7 @@ impl CloudProvider {
             qovery_engine::cloud_provider::Kind::Scw => Some(Box::new(Scaleway::new(
                 context,
                 self.id.as_str(),
+                organization_id,
                 self.name.as_str(),
                 self.options.scaleway_project_id.as_ref()?.as_str(),
                 self.options.scaleway_access_key.as_ref()?.as_str(),
