@@ -213,7 +213,7 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_ref(),
+            default_domain: format!("{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap()),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
