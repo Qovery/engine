@@ -8,7 +8,7 @@ use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
 use rand::Rng;
 use retry::Error::Operation;
-use std::{fs, thread, time};
+use std::{env, fs, thread, time};
 
 fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
@@ -184,15 +184,21 @@ pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>,
 }
 
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, SimpleError> {
-    let home_dir = home_dir().expect("Could not find $HOME");
-    let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
+    // override if environment variable is set
+    let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
+        Some(val) => format!("{:?}", val),
+        None => {
+            let home_dir = home_dir().expect("Could not find $HOME");
+            format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap())
+        }
+    };
 
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
     let result = exec_with_envs_and_output(
         format!("{} terraform", root_dir).as_str(),
         args,
-        vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
+        vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
         |line: Result<String, std::io::Error>| {
             let output = line.unwrap();
             stdout.push(output.clone());
@@ -221,16 +227,15 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Si
 mod tests {
     use crate::cmd::terraform::terraform_init_validate;
     use std::fs;
-    //use tracing::{span, Level};
-    //use tracing_test::traced_test;
+    use tracing::{span, Level};
+    use tracing_test::traced_test;
 
     #[test]
-    #[ignore]
-    //#[traced_test]
+    #[traced_test]
     // https://github.com/hashicorp/terraform/issues/28041
     fn test_terraform_init_lock_issue() {
-        //let span = span!(Level::TRACE, "terraform_test");
-        //let _enter = span.enter();
+        let span = span!(Level::TRACE, "terraform_test");
+        let _enter = span.enter();
 
         // those 2 files are a voluntary broken config, it should detect it and auto repair
         let terraform_lock_file = r#"
