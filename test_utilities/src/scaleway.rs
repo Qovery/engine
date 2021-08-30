@@ -183,8 +183,8 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
         id: generate_id(),
         kind: Kind::Development,
         owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap().to_string(),
+        project_id: secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap(),
+        organization_id: ORGANIZATION_ID.to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
