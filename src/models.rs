@@ -318,7 +318,6 @@ impl Application {
         let mut hasher = DefaultHasher::new();
         self.root_path.hash(&mut hasher);
         self.dockerfile_path.hash(&mut hasher);
-        self.environment_variables.hash(&mut hasher);
         let mut tag = format!("{}-{}", hasher.finish(), self.commit_id);
         tag.truncate(127);
 
