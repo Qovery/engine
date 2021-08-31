@@ -155,6 +155,7 @@ where
     );
 
     // Start the process
+    // TODO(benjaminch): Make sure logging context is properly injected in thread here
     let mut child_process = command(binary, args, &envs, true).spawn().unwrap();
     let process_start_time = Instant::now();
 
