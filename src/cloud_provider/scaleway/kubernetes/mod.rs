@@ -412,7 +412,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
+            format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
@@ -650,7 +650,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
+            format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
