@@ -249,13 +249,13 @@ rbac:
 replicaCount: 1
 
 # resources -- Pod resource requests and limits.
-resources: {}
-  # limits:
+resources:
+  limits:
+    memory: 512Mi
   #   cpu: 100m
-  #   memory: 300Mi
-  # requests:
+  requests:
+    memory: 512Mi
   #   cpu: 100m
-  #   memory: 300Mi
 
 # securityContext -- [Security context for pod](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
 securityContext: {}
