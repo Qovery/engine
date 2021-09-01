@@ -316,8 +316,14 @@ impl Application {
         // Image tag == hash(root_path) + commit_id truncate to 127 char
         // https://github.com/distribution/distribution/blob/6affafd1f030087d88f88841bf66a8abe2bf4d24/reference/regexp.go#L41
         let mut hasher = DefaultHasher::new();
+
+        // If any of those variables changes, we'll get a new hash value, what results in a new image
+        // build and avoids using cache. It is important to build a new image, as those variables may
+        // affect the build result even if user didn't change his code.
         self.root_path.hash(&mut hasher);
         self.dockerfile_path.hash(&mut hasher);
+        self.environment_variables.hash(&mut hasher);
+
         let mut tag = format!("{}-{}", hasher.finish(), self.commit_id);
         tag.truncate(127);
 
