@@ -16,6 +16,7 @@ use chrono::Utc;
 use std::str::FromStr;
 use tracing::error;
 
+pub const ORGANIZATION_ID: &str = "zztopuuidscw";
 pub const SCW_TEST_CLUSTER_NAME: &str = "DO-NOT-DELETE-Qovery-test-cluster";
 pub const SCW_TEST_CLUSTER_ID: &str = "do-not-delete-qovery-test-cluster";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris1;
@@ -50,6 +51,7 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
     Scaleway::new(
         context.clone(),
         SCW_TEST_CLUSTER_ID,
+        ORGANIZATION_ID,
         secrets
             .SCALEWAY_DEFAULT_PROJECT_ID
             .unwrap_or("undefined".to_string())
@@ -181,8 +183,8 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
         id: generate_id(),
         kind: Kind::Development,
         owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap().to_string(),
+        project_id: secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap(),
+        organization_id: ORGANIZATION_ID.to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
@@ -211,7 +213,7 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_ref(),
+            default_domain: format!("{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap()),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {

@@ -808,7 +808,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),
-                    value: chart_config_prerequisites.cloud_provider.clone(),
+                    value: "scw".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.REGION".to_string(),
