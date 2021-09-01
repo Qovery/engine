@@ -104,8 +104,32 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
 }
 
 pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<(), std::io::Error> {
-    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id)?;
-    std::fs::remove_dir_all(workspace_dir)
+    return match crate::fs::root_workspace_directory(working_root_dir, execution_id) {
+        Ok(workspace_dir) => match std::fs::remove_dir_all(workspace_dir.clone()) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!(
+                    "{}",
+                    format!(
+                        "error trying to remove workspace directory '{}', error: {}",
+                        workspace_dir.as_str(),
+                        err
+                    )
+                );
+                Err(err)
+            }
+        },
+        Err(err) => {
+            error!(
+                "{}",
+                format!(
+                    "error trying to get workspace directory from working_root_dir: '{}' execution_id: {}, error: {}",
+                    working_root_dir, execution_id, err
+                )
+            );
+            Err(err)
+        }
+    };
 }
 
 pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
