@@ -297,11 +297,9 @@ impl Create for Router {
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("SCW.router.on_create_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            delete_stateless_service(target, self, true)
+        })
     }
 }
 
