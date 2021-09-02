@@ -29,7 +29,8 @@ jobs:
           export PATH=$GITHUB_WORKSPACE/bin:$PATH
           export RUSTC_WRAPPER=$GITHUB_WORKSPACE/bin/sccache
           export SCCACHE_REDIS=${{ secrets.SCCACHE_REDIS }}
-          mkdir -p $GITHUB_WORKSPACE/bin $GITHUB_WORKSPACE/.terraform.d/plugin-cache
+          export TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache
+          mkdir -p $GITHUB_WORKSPACE/bin $HOME/.terraform.d/plugin-cache
           sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/releases/latest" | sed -r 's/^.+tag\/(.+)">.+/\1/')
           curl -sLo $GITHUB_WORKSPACE/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache
           chmod 755 $GITHUB_WORKSPACE/bin/sccache
