@@ -105,7 +105,10 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
 
 pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<(), std::io::Error> {
     return match crate::fs::root_workspace_directory(working_root_dir, execution_id) {
-        Ok(workspace_dir) => match std::fs::remove_dir_all(workspace_dir.clone()) {
+        Ok(workspace_dir) => match std::fs::remove_dir_all(match workspace_dir.strip_suffix("/.") {
+            Some(striped_workspace_dir) => striped_workspace_dir, // Removing extra dir name allowing to delete directory properly ("/dir/." => "dir")
+            None => workspace_dir.as_str().clone(),
+        }) {
             Ok(_) => Ok(()),
             Err(err) => {
                 error!(
