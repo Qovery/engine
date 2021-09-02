@@ -23,10 +23,9 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
                 // https://github.com/hashicorp/terraform/issues/28041
                 debug!("{:?}", err);
                 if err.message.is_some() {
-                    let message = err.message.clone();
-                    if message
-                        .unwrap()
-                        .contains("Failed to install provider from shared cache")
+                    let message = err.message.clone().unwrap();
+                    if message.contains("Failed to install provider from shared cache")
+                        || message.contains("Failed to install provider")
                     {
                         let sleep_time_int = rand::thread_rng().gen_range(20..45);
                         let sleep_time = time::Duration::from_secs(sleep_time_int);
