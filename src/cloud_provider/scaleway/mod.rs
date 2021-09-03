@@ -30,7 +30,7 @@ impl Scaleway {
         access_key: &str,
         secret_key: &str,
         terraform_state_credentials: TerraformStateCredentials,
-    ) -> Scaleway {
+    ) -> Self {
         Scaleway {
             context,
             id: id.to_string(),

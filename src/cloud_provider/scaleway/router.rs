@@ -32,7 +32,7 @@ impl Router {
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
         listeners: Listeners,
-    ) -> Router {
+    ) -> Self {
         Router {
             context,
             id: id.to_string(),
@@ -104,6 +104,7 @@ impl Service for Router {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
+
         let mut context = default_tera_context(self, kubernetes, environment);
 
         let applications = environment
@@ -266,8 +267,6 @@ impl Create for Router {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        use crate::cloud_provider::service::Router;
-
         // check non custom domains
         self.check_domains()?;
 

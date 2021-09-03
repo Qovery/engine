@@ -53,7 +53,7 @@ impl Application {
         storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
         listeners: Listeners,
-    ) -> Application {
+    ) -> Self {
         Application {
             context,
             id: id.to_string(),

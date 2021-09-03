@@ -33,7 +33,7 @@ impl ScalewayCR {
         secret_token: &str,
         default_project_id: &str,
         zone: Zone,
-    ) -> ScalewayCR {
+    ) -> Self {
         ScalewayCR {
             context,
             id: id.to_string(),
