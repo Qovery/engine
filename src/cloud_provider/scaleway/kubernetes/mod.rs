@@ -143,7 +143,7 @@ impl<'a> Kapsule<'a> {
             nodes,
             template_directory,
             options,
-            listeners: vec![],
+            listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
         }
     }
 
