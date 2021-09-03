@@ -738,7 +738,30 @@ impl Database {
                     Some(db)
                 }
             },
-            CPKind::Scw => None, // TODO(benjaminch): Implement it
+            CPKind::Scw => match self.kind {
+                DatabaseKind::Postgresql => todo!(),
+                DatabaseKind::Mysql => todo!(),
+                DatabaseKind::Redis => todo!(),
+                DatabaseKind::Mongodb => {
+                    let db: Box<dyn StatefulService> =
+                        Box::new(crate::cloud_provider::scaleway::databases::mongodb::MongoDB::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            self.version.as_str(),
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                        ));
+
+                    Some(db)
+                }
+            },
         }
     }
 }
