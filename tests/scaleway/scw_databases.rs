@@ -1,6 +1,5 @@
 use ::function_name::named;
-
-use crate::scaleway::scw_environment;
+use tracing::{span, Level};
 
 use qovery_engine::models::{
     Action, Application, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction, EnvironmentVariable,
@@ -9,7 +8,8 @@ use qovery_engine::models::{
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::scaleway::working_minimal_environment;
 use test_utilities::utilities::{context, engine_run_test, generate_id, init, FuncTestsSecrets};
-use tracing::{span, Level};
+
+use crate::scaleway::scw_environment;
 
 fn test_mongodb_configuration(
     context: Context,
@@ -35,11 +35,6 @@ fn test_mongodb_configuration(
             "mongodb://{}:{}@{}:{}/{}",
             database_username, database_password, database_host, database_port, database_db_name
         );
-        // while waiting the info to be given directly in the database info, we're using this
-        let is_documentdb = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Mongodb,
@@ -55,9 +50,10 @@ fn test_mongodb_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "db.t3.medium".to_string(),
-            database_disk_type: "gp2".to_string(),
+            database_instance_type: "not used".to_string(),
+            database_disk_type: "not used".to_string(),
         }];
+
         environment.applications = environment
             .applications
             .into_iter()
@@ -67,10 +63,6 @@ fn test_mongodb_configuration(
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_variables = vec![
-                    EnvironmentVariable {
-                        key: "IS_DOCUMENTDB".to_string(),
-                        value: is_documentdb.to_string(),
-                    },
                     EnvironmentVariable {
                         key: "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string(),
                         value: database_host.clone(),
@@ -99,6 +91,7 @@ fn test_mongodb_configuration(
                 app
             })
             .collect::<Vec<Application>>();
+
         environment.routers[0].routes[0].application_name = app_name.clone();
 
         let mut environment_delete = environment.clone();
@@ -163,27 +156,4 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(&context, secrets.clone());
     test_mongodb_configuration(context, environment, secrets, "4.4", function_name!());
-}
-
-// MongoDB production environment (DocumentDB)
-#[cfg(feature = "test-scw-managed-services")]
-#[named]
-#[test]
-fn mongodb_v3_6_deploy_a_working_prod_environment() {
-    let context = context();
-    let secrets = FuncTestsSecrets::new();
-    let mut environment = working_minimal_environment(&context, secrets.clone());
-    environment.kind = Kind::Production;
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!());
-}
-
-#[cfg(feature = "test-scw-managed-services")]
-#[named]
-#[test]
-fn mongodb_v4_0_deploy_a_working_prod_environment() {
-    let context = context();
-    let secrets = FuncTestsSecrets::new();
-    let mut environment = working_minimal_environment(&context, secrets.clone());
-    environment.kind = Kind::Production;
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!());
 }

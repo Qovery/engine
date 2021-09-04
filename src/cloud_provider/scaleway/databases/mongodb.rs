@@ -157,8 +157,6 @@ impl Service for MongoDB {
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
-        context.insert("database_instance_type", &self.database_instance_type);
-        context.insert("database_disk_type", &self.options.database_disk_type);
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
