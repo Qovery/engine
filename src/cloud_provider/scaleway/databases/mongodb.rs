@@ -1,6 +1,5 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
