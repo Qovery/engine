@@ -340,7 +340,7 @@ persistence:
   ##
   # storageClass: "-"
   # storageClassSecondary: "-"
-  storageClassName: "scw-sbv-ssd-0"
+  storageClass: "scw-sbv-ssd-0"
   accessModes:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
@@ -349,7 +349,7 @@ persistence:
     envId: {{ environment_id }}
     databaseId: {{ id }}
     databaseName: {{ sanitized_name }}
-    volume.beta.kubernetes.io/storage-class=scw-sbv-ssd-0:
+    # volume.beta.kubernetes.io/storage-class=scw-sbv-ssd-0:
 
 ## Configure the ingress resource that allows you to access the
 ## MongoDB installation. Set up the URL

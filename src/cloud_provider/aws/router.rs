@@ -246,15 +246,15 @@ impl Helm for Router {
         crate::string::cut(format!("router-{}", self.id()), 50)
     }
 
-    fn helm_chart_dir(&self) -> String {
+    fn helm_charts_dir(&self) -> String {
         format!("{}/common/charts/nginx-ingress", self.context().lib_root_dir())
     }
 
-    fn helm_chart_values_dir(&self) -> String {
+    fn helm_charts_values_dir(&self) -> String {
         format!("{}/aws/chart_values/nginx-ingress", self.context.lib_root_dir())
     }
 
-    fn helm_chart_external_name_service_dir(&self) -> String {
+    fn helm_charts_external_name_service_dir(&self) -> String {
         String::new()
     }
 }

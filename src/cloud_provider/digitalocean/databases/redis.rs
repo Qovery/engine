@@ -195,15 +195,16 @@ impl Helm for Redis {
         crate::string::cut(format!("redis-{}", self.id()), 50)
     }
 
-    fn helm_chart_dir(&self) -> String {
+    fn helm_charts_dir(&self) -> String {
         format!("{}/common/services/redis", self.context.lib_root_dir())
     }
 
-    fn helm_chart_values_dir(&self) -> String {
+    fn helm_charts_values_dir(&self) -> String {
         format!("{}/digitalocean/chart_values/redis", self.context.lib_root_dir())
+        // FIXME replace `chart_values` by `charts_values`
     }
 
-    fn helm_chart_external_name_service_dir(&self) -> String {
+    fn helm_charts_external_name_service_dir(&self) -> String {
         format!("{}/common/charts/external-name-svc", self.context.lib_root_dir())
     }
 }

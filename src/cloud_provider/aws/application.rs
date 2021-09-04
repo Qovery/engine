@@ -89,15 +89,15 @@ impl Helm for Application {
         crate::string::cut(format!("application-{}-{}", self.name(), self.id()), 50)
     }
 
-    fn helm_chart_dir(&self) -> String {
+    fn helm_charts_dir(&self) -> String {
         format!("{}/aws/charts/q-application", self.context.lib_root_dir())
     }
 
-    fn helm_chart_values_dir(&self) -> String {
+    fn helm_charts_values_dir(&self) -> String {
         String::new()
     }
 
-    fn helm_chart_external_name_service_dir(&self) -> String {
+    fn helm_charts_external_name_service_dir(&self) -> String {
         String::new()
     }
 }
