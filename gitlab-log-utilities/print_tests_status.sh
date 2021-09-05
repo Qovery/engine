@@ -127,10 +127,12 @@ fi
 
 # Tests issues
 if [ "$(wc -l $TESTS_NON_HANDLED_ISSUES 2>/dev/null | awk '{ print $1 }')" != "0" ] ; then
-  echo -e "\n\n\e[31m****************************************************"
-  echo "                OTHER NON HANDLED ISSUES"
-  echo -e "****************************************************\n"
-  cat $TESTS_NON_HANDLED_ISSUES | sort
-  echo -en "\e[0m"
-  echo -e "\nNOTE: See logs above to get failed tests logs output"
+  if [ -f $TESTS_NON_HANDLED_ISSUES ] ; then
+    echo -e "\n\n\e[31m****************************************************"
+    echo "                OTHER NON HANDLED ISSUES"
+    echo -e "****************************************************\n"
+    cat $TESTS_NON_HANDLED_ISSUES | sort
+    echo -en "\e[0m"
+    echo -e "\nNOTE: See logs above to get failed tests logs output"
+  fi
 fi
