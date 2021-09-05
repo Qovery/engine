@@ -215,9 +215,9 @@ pub trait Terraform {
 
 pub trait Helm {
     fn helm_release_name(&self) -> String;
-    fn helm_charts_dir(&self) -> String;
-    fn helm_charts_values_dir(&self) -> String;
-    fn helm_charts_external_name_service_dir(&self) -> String;
+    fn helm_chart_dir(&self) -> String;
+    fn helm_chart_values_dir(&self) -> String;
+    fn helm_chart_external_name_service_dir(&self) -> String;
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -369,7 +369,7 @@ where
         service.engine_error_scope(),
         service.context().execution_id(),
         crate::template::generate_and_copy_all_files_into_dir(
-            service.helm_charts_dir(),
+            service.helm_chart_dir(),
             workspace_dir.as_str(),
             &tera_context,
         ),
@@ -607,7 +607,7 @@ where
                 service.engine_error_scope(),
                 service.context().execution_id(),
                 crate::template::generate_and_copy_all_files_into_dir(
-                    service.helm_charts_external_name_service_dir(),
+                    service.helm_chart_external_name_service_dir(),
                     format!("{}/{}", workspace_dir, "external-name-svc"),
                     &context,
                 ),
@@ -640,7 +640,7 @@ where
                 service.engine_error_scope(),
                 service.context().execution_id(),
                 crate::template::generate_and_copy_all_files_into_dir(
-                    service.helm_charts_dir(),
+                    service.helm_chart_dir(),
                     workspace_dir.as_str(),
                     &context,
                 ),
@@ -651,7 +651,7 @@ where
                 service.engine_error_scope(),
                 service.context().execution_id(),
                 crate::template::generate_and_copy_all_files_into_dir(
-                    service.helm_charts_values_dir(),
+                    service.helm_chart_values_dir(),
                     workspace_dir.as_str(),
                     &context,
                 ),
@@ -762,7 +762,7 @@ where
                 service.engine_error_scope(),
                 service.context().execution_id(),
                 crate::template::generate_and_copy_all_files_into_dir(
-                    service.helm_charts_external_name_service_dir(),
+                    service.helm_chart_external_name_service_dir(),
                     format!("{}/{}", workspace_dir, "external-name-svc"),
                     &tera_context,
                 ),
@@ -772,7 +772,7 @@ where
                 service.engine_error_scope(),
                 service.context().execution_id(),
                 crate::template::generate_and_copy_all_files_into_dir(
-                    service.helm_charts_external_name_service_dir(),
+                    service.helm_chart_external_name_service_dir(),
                     workspace_dir.as_str(),
                     &tera_context,
                 ),

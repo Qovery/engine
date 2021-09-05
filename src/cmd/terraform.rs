@@ -6,14 +6,44 @@ use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
+use rand::Rng;
 use retry::Error::Operation;
+use std::{env, fs, thread, time};
 
 fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
+    let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
+
     // terraform init
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         match terraform_exec(root_dir, vec!["init"]) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
+                // Error: Failed to install provider from shared cache
+                // in order to avoid lock errors on parallel run, let's sleep a bit
+                // https://github.com/hashicorp/terraform/issues/28041
+                debug!("{:?}", err);
+                if err.message.is_some() {
+                    let message = err.message.clone().unwrap();
+                    if message.contains("Failed to install provider from shared cache")
+                        || message.contains("Failed to install provider")
+                    {
+                        let sleep_time_int = rand::thread_rng().gen_range(20..45);
+                        let sleep_time = time::Duration::from_secs(sleep_time_int);
+                        warn!(
+                            "failed to install provider from shared cache, cleaning and sleeping {} before retrying...",
+                            sleep_time_int
+                        );
+                        thread::sleep(sleep_time);
+
+                        match fs::remove_file(&terraform_provider_lock) {
+                            Ok(_) => info!("terraform lock file {} has been removed", &terraform_provider_lock),
+                            Err(e) => error!(
+                                "wasn't able to delete terraform lock file {}: {}",
+                                &terraform_provider_lock, e
+                            ),
+                        }
+                    }
+                };
                 error!("error while trying to run terraform init, retrying...");
                 OperationResult::Retry(err)
             }
@@ -153,26 +183,94 @@ pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>,
 }
 
 pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, SimpleError> {
-    let home_dir = home_dir().expect("Could not find $HOME");
-    let tf_plugin_cache_dir = format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap());
+    // override if environment variable is set
+    let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
+        Some(val) => format!("{:?}", val),
+        None => {
+            let home_dir = home_dir().expect("Could not find $HOME");
+            format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap())
+        }
+    };
 
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
     let result = exec_with_envs_and_output(
         format!("{} terraform", root_dir).as_str(),
         args,
-        vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir.as_str())],
+        vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
         |line: Result<String, std::io::Error>| {
             let output = line.unwrap();
+            stdout.push(output.clone());
             info!("{}", &output)
         },
         |line: Result<String, std::io::Error>| {
             let output = line.unwrap();
+            stderr.push(output.clone());
             error!("{}", &output);
         },
         Duration::max_value(),
     );
 
+    stdout.extend(stderr);
+
     match result {
         Ok(_) => Ok(result.unwrap()),
-        Err(e) => Err(e),
+        Err(mut e) => {
+            e.message = Some(stdout.join("\n"));
+            Err(e)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cmd::terraform::terraform_init_validate;
+    use std::fs;
+    use tracing::{span, Level};
+    use tracing_test::traced_test;
+
+    #[test]
+    #[traced_test]
+    // https://github.com/hashicorp/terraform/issues/28041
+    fn test_terraform_init_lock_issue() {
+        let span = span!(Level::TRACE, "terraform_test");
+        let _enter = span.enter();
+
+        // those 2 files are a voluntary broken config, it should detect it and auto repair
+        let terraform_lock_file = r#"
+# This file is maintained automatically by "terraform init".
+# Manual edits may be lost in future updates.
+
+provider "registry.terraform.io/hashicorp/local" {
+  version     = "1.4.0"
+  constraints = "~> 1.4"
+  hashes = [
+    "h1:bZN53L85E49Pc5o3HUUCUqP5rZBziMF2KfKOaFsqN7w=",
+    "zh:1b265fcfdce8cc3ccb51969c6d7a61531bf8a6e1218d95c1a74c40f25595c74b",
+  ]
+}
+        "#;
+
+        let provider_file = r#"
+terraform {
+  required_providers {
+    local = {
+      source = "hashicorp/local"
+      version = "~> 1.4"
+    }
+  }
+  required_version = ">= 0.14"
+}
+        "#;
+
+        let dest_dir = "/tmp/test";
+        let _ = fs::create_dir_all(&dest_dir).unwrap();
+
+        let _ = fs::write(format!("{}/.terraform.lock.hcl", &dest_dir), terraform_lock_file);
+        let _ = fs::write(format!("{}/providers.tf", &dest_dir), provider_file);
+
+        let res = terraform_init_validate(dest_dir);
+
+        assert!(res.is_ok());
     }
 }

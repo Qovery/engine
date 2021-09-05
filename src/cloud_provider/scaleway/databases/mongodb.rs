@@ -196,15 +196,15 @@ impl Helm for MongoDB {
         crate::string::cut(format!("mongodb-{}", self.id()), 50)
     }
 
-    fn helm_charts_dir(&self) -> String {
+    fn helm_chart_dir(&self) -> String {
         format!("{}/common/services/mongodb", self.context.lib_root_dir())
     }
 
-    fn helm_charts_values_dir(&self) -> String {
-        format!("{}/scaleway/charts_values/mongodb", self.context.lib_root_dir())
+    fn helm_chart_values_dir(&self) -> String {
+        format!("{}/scaleway/chart_values/mongodb", self.context.lib_root_dir())
     }
 
-    fn helm_charts_external_name_service_dir(&self) -> String {
+    fn helm_chart_external_name_service_dir(&self) -> String {
         format!("{}/common/charts/external-name-svc", self.context.lib_root_dir())
     }
 }

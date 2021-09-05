@@ -33,6 +33,7 @@ tar = ">=0.4.36"
 # logger
 tracing = "0.1.26"
 tracing-subscriber = "0.2.18"
+tracing-test = "0.1.0"
 
 # Docker deps
 # shiplift = "0.6.0"
