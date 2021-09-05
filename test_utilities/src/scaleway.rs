@@ -102,18 +102,11 @@ pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
 
 pub fn scw_kubernetes_nodes() -> Vec<Node> {
     // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-    vec![
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-    ]
+    scw_kubernetes_custom_nodes(10, NodeType::Dev1L)
+}
+
+pub fn scw_kubernetes_custom_nodes(count: usize, node_type: NodeType) -> Vec<Node> {
+    vec![Node::new(node_type); count]
 }
 
 pub fn docker_scw_cr_engine(context: &Context) -> Engine {
