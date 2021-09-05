@@ -321,7 +321,7 @@ persistence:
   ##
   subPath: ""
 
-  storageClass: "do-block-storage"
+  storageClass: {{ database_disk_type }}
   accessModes:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi

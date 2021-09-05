@@ -311,7 +311,7 @@ master:
     ##   GKE, AWS & OpenStack)
     ##
     # storageClass: "-"
-    storageClass: "do-block-storage"
+    storageClass: {{ database_disk_type }}
     ## PVC annotations
     ##
     annotations:
