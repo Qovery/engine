@@ -16,7 +16,7 @@ use chrono::Utc;
 use std::str::FromStr;
 use tracing::error;
 
-pub const ORGANIZATION_ID: &str = "zztopuuidscw";
+pub const ORGANIZATION_ID: &str = "cf8e78e6"; // Qovery tests Scaleway
 pub const SCW_TEST_CLUSTER_NAME: &str = "DO-NOT-DELETE-Qovery-test-cluster";
 pub const SCW_TEST_CLUSTER_ID: &str = "do-not-delete-qovery-test-cluster";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris1;
