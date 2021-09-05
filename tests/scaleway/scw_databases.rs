@@ -3,7 +3,6 @@ use tracing::{span, Level};
 
 use qovery_engine::models::{
     Action, Application, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction, EnvironmentVariable,
-    Kind,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::scaleway::working_minimal_environment;
