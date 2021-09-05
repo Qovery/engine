@@ -58,8 +58,8 @@ fn test_postgresql_configuration(
             total_cpus: "100m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "db.t2.micro".to_string(),
-            database_disk_type: "gp2".to_string(),
+            database_instance_type: "not-used".to_string(),
+            database_disk_type: "scw-sbv-ssd-0".to_string(),
         }];
         environment.applications = environment
             .applications
@@ -228,7 +228,7 @@ fn test_mongodb_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not used".to_string(),
+            database_instance_type: "not-used".to_string(),
             database_disk_type: "scw-sbv-ssd-0".to_string(),
         }];
 
