@@ -378,12 +378,14 @@ master:
     ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
     ##
     annotations:
-      service.beta.kubernetes.io/scw-loadbalancer-id: "{{ id }}"
-      service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
-      service.beta.kubernetes.io/scw-loadbalancer-health-check-type: "tcp"
-      external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
-      service.beta.kubernetes.io/scw-loadbalancer-type: "lb-s"
-      external-dns.alpha.kubernetes.io/scw-loadbalancer-server-timeout: "300s"
+    service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
+    service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
+    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
+    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
+    service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
+    service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
+    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+    external-dns.alpha.kubernetes.io/ttl: "300"
     labels:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
@@ -409,7 +411,7 @@ master:
     ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
     ##   GKE, AWS & OpenStack)
     ##
-    storageClass: "scw-sbv-ssd-0"
+    storageClass: {{ database_disk_type }}
     accessModes:
       - ReadWriteOnce
     size: {{ database_disk_size_in_gib }}Gi

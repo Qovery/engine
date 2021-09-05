@@ -16,7 +16,7 @@ controller:
   service:
     # https://github.com/scaleway/scaleway-cloud-controller-manager/blob/master/docs/loadbalancer-annotations.md
     annotations:
-      service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: roundrobin
+      service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
       service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
