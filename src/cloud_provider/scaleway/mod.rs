@@ -5,6 +5,7 @@ use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_SECRET_KEY};
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub mod application;
+pub mod databases;
 pub mod kubernetes;
 pub mod router;
 

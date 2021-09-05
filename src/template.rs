@@ -129,7 +129,7 @@ pub fn write_rendered_templates(rendered_templates: &[RenderedTemplate], into: &
         // write rendered template into the new file
         f.write_all(rt.content.as_bytes())?;
 
-        // perform spcific action based on the extension
+        // perform specific action based on the extension
         let extension = Path::new(&dest).extension().and_then(OsStr::to_str);
         if let Some("sh") = extension {
             set_file_permission(&f, 0o755)
