@@ -378,14 +378,14 @@ master:
     ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
     ##
     annotations:
-    service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
-    service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
-    service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
-    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
-    external-dns.alpha.kubernetes.io/ttl: "300"
+      service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
+      service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
+      service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
+      external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+      external-dns.alpha.kubernetes.io/ttl: "300"
     labels:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}

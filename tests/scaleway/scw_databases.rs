@@ -9,7 +9,6 @@ use qovery_engine::transaction::TransactionResult;
 use test_utilities::scaleway::working_minimal_environment;
 use test_utilities::utilities::{context, engine_run_test, generate_id, init, FuncTestsSecrets};
 
-use crate::scaleway::scw_environment;
 use crate::scaleway::scw_environment::{delete_environment, deploy_environment};
 
 /**
@@ -101,7 +100,7 @@ fn test_postgresql_configuration(
         let ea = EnvironmentAction::Environment(environment);
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, &ea) {
+        match deploy_environment(&context, ea) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -109,7 +108,7 @@ fn test_postgresql_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&context_for_delete, &ea_delete) {
+        match delete_environment(&context_for_delete, ea_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
