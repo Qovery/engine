@@ -18,7 +18,7 @@ use tracing::error;
 
 pub const ORGANIZATION_ID: &str = "cf8e78e6-159b-45b6-bfb5-2430c9505080";
 pub const SCW_TEST_CLUSTER_NAME: &str = "qovery-zb3a2b3b8";
-pub const SCW_TEST_CLUSTER_ID: &str = "324664b2-ca86-4c95-acbf-09cc4f6b4a79";
+pub const SCW_TEST_CLUSTER_ID: &str = "zb3a2b3b8";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
 pub const SCW_KUBERNETES_VERSION: &str = "1.18";
 

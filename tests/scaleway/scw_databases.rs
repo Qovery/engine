@@ -3,12 +3,191 @@ use tracing::{span, Level};
 
 use qovery_engine::models::{
     Action, Application, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction, EnvironmentVariable,
+    Kind,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::scaleway::working_minimal_environment;
 use test_utilities::utilities::{context, engine_run_test, generate_id, init, FuncTestsSecrets};
 
 use crate::scaleway::scw_environment;
+use crate::scaleway::scw_environment::{delete_environment, deploy_environment};
+
+/**
+ **
+ ** PostgreSQL tests
+ **
+ **/
+
+fn test_postgresql_configuration(
+    context: Context,
+    mut environment: Environment,
+    secrets: FuncTestsSecrets,
+    version: &str,
+    test_name: &str,
+) {
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+        let context_for_delete = context.clone_not_same_execution_id();
+
+        let app_name = format!("postgresql-app-{}", generate_id());
+        let database_host = format!("postgresql-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_port = 5432;
+        let database_db_name = "postgres".to_string();
+        let database_username = "superuser".to_string();
+        let database_password = generate_id();
+
+        let _is_rds = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
+
+        environment.databases = vec![Database {
+            kind: DatabaseKind::Postgresql,
+            action: Action::Create,
+            id: generate_id(),
+            name: database_db_name.clone(),
+            version: version.to_string(),
+            fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
+            fqdn: database_host.clone(),
+            port: database_port.clone(),
+            username: database_username.clone(),
+            password: database_password.clone(),
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 512,
+            disk_size_in_gib: 10,
+            database_instance_type: "db.t2.micro".to_string(),
+            database_disk_type: "gp2".to_string(),
+        }];
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                app.branch = app_name.clone();
+                app.commit_id = "ad65b24a0470e7e8aa0983e036fb9a05928fd973".to_string();
+                app.private_port = Some(1234);
+                app.dockerfile_path = Some(format!("Dockerfile-{}", version));
+                app.environment_variables = vec![
+                    EnvironmentVariable {
+                        key: "PG_HOST".to_string(),
+                        value: database_host.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_PORT".to_string(),
+                        value: database_port.clone().to_string(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_DBNAME".to_string(),
+                        value: database_db_name.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_USERNAME".to_string(),
+                        value: database_username.clone(),
+                    },
+                    EnvironmentVariable {
+                        key: "PG_PASSWORD".to_string(),
+                        value: database_password.clone(),
+                    },
+                ];
+                app
+            })
+            .collect::<Vec<qovery_engine::models::Application>>();
+        environment.routers[0].routes[0].application_name = app_name.clone();
+
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+        let ea = EnvironmentAction::Environment(environment);
+        let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+        match deploy_environment(&context, &ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // todo: check the database disk is here and with correct size
+
+        match delete_environment(&context_for_delete, &ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        };
+        return test_name.to_string();
+    })
+}
+
+// Postgres environment environment
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn postgresql_v10_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!());
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn postgresql_v11_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!());
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn postgresql_v12_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!());
+}
+
+// Postgres production environment
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn postgresql_v10_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+    environment.kind = Kind::Production;
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!());
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn postgresql_v11_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+    environment.kind = Kind::Production;
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!());
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn postgresql_v12_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+    environment.kind = Kind::Production;
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!());
+}
+
+/**
+ **
+ ** MongoDB tests
+ **
+ **/
 
 fn test_mongodb_configuration(
     context: Context,
@@ -50,7 +229,7 @@ fn test_mongodb_configuration(
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
             database_instance_type: "not used".to_string(),
-            database_disk_type: "not used".to_string(),
+            database_disk_type: "scw-sbv-ssd-0".to_string(),
         }];
 
         environment.applications = environment
@@ -98,7 +277,7 @@ fn test_mongodb_configuration(
         let env_action = EnvironmentAction::Environment(environment);
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match scw_environment::deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -106,7 +285,7 @@ fn test_mongodb_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match scw_environment::delete_environment(&context_for_delete, env_action_delete) {
+        match delete_environment(&context_for_delete, env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
