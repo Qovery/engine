@@ -63,6 +63,7 @@ fn test_delete_bucket_empty_strategy() {
         scw_secret_key,
         TEST_ZONE,
         BucketDeleteStrategy::Empty,
+        false,
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -102,6 +103,7 @@ fn test_create_bucket() {
         scw_secret_key,
         TEST_ZONE,
         BucketDeleteStrategy::HardDelete,
+        false,
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -136,6 +138,7 @@ fn test_put_file() {
         scw_secret_key,
         TEST_ZONE,
         BucketDeleteStrategy::HardDelete,
+        false,
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -187,6 +190,7 @@ fn test_get_file() {
         scw_secret_key,
         TEST_ZONE,
         BucketDeleteStrategy::HardDelete,
+        false,
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());

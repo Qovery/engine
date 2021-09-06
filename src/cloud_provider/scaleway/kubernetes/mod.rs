@@ -129,6 +129,7 @@ impl<'a> Kapsule<'a> {
             cloud_provider.secret_key.clone(),
             region,
             BucketDeleteStrategy::Empty,
+            false,
         );
 
         Kapsule {

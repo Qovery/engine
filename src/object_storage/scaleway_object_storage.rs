@@ -30,6 +30,7 @@ pub struct ScalewayOS {
     secret_token: String,
     zone: Zone,
     bucket_delete_strategy: BucketDeleteStrategy,
+    bucket_versioning_activated: bool,
 }
 
 impl ScalewayOS {
@@ -41,6 +42,7 @@ impl ScalewayOS {
         secret_token: String,
         zone: Zone,
         bucket_delete_strategy: BucketDeleteStrategy,
+        bucket_versioning_activated: bool,
     ) -> ScalewayOS {
         ScalewayOS {
             context,
@@ -50,6 +52,7 @@ impl ScalewayOS {
             secret_token,
             zone,
             bucket_delete_strategy,
+            bucket_versioning_activated,
         }
     }
 
@@ -210,21 +213,24 @@ impl ObjectStorage for ScalewayOS {
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
-        match block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
-            bucket: bucket_name.to_string(),
-            ..Default::default()
-        })) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                let message = format!(
-                    "While trying to activate versioning on object-storage bucket, name `{}`: {}",
-                    bucket_name, e
-                );
-                error!("{}", message);
-                // TODO(benjaminch): to be investigated, versioning seems to fail
-                // Err(self.engine_error(EngineErrorCause::Internal, message))
-                Ok(())
-            }
+        match self.bucket_versioning_activated {
+            true => match block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
+                bucket: bucket_name.to_string(),
+                ..Default::default()
+            })) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    let message = format!(
+                        "While trying to activate versioning on object-storage bucket, name `{}`: {}",
+                        bucket_name, e
+                    );
+                    error!("{}", message);
+                    // TODO(benjaminch): to be investigated, versioning seems to fail
+                    // Err(self.engine_error(EngineErrorCause::Internal, message))
+                    Ok(())
+                }
+            },
+            false => Ok(()),
         }
     }
 
