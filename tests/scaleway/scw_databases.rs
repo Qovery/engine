@@ -7,7 +7,7 @@ use qovery_engine::models::{
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
-    context, engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
+    context, engine_run_test, generate_id, generate_password, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 
 use test_utilities::common::working_minimal_environment;
@@ -362,7 +362,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_port = 5432;
         let database_db_name = "postgresql".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
+        let database_password = generate_password();
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
@@ -475,7 +475,7 @@ fn test_postgresql_configuration(
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
+        let database_password = generate_password();
 
         let _is_rds = match environment.kind {
             Kind::Production => true,
@@ -496,8 +496,8 @@ fn test_postgresql_configuration(
             total_cpus: "100m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "scw-sbv-ssd-0".to_string(),
+            database_instance_type: SCW_DATABASE_INSTANCE_TYPE.to_string(),
+            database_disk_type: SCW_DATABASE_DISK_TYPE.to_string(),
         }];
         environment.applications = environment
             .applications
@@ -633,7 +633,7 @@ fn test_mongodb_configuration(
         let database_port = 27017;
         let database_db_name = "my-mongodb".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
+        let database_password = generate_password();
         let database_uri = format!(
             "mongodb://{}:{}@{}:{}/{}",
             database_username, database_password, database_host, database_port, database_db_name
@@ -653,8 +653,8 @@ fn test_mongodb_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "scw-sbv-ssd-0".to_string(),
+            database_instance_type: SCW_DATABASE_INSTANCE_TYPE.to_string(),
+            database_disk_type: SCW_DATABASE_DISK_TYPE.to_string(),
         }];
 
         environment.applications = environment
@@ -811,7 +811,7 @@ fn test_mysql_configuration(
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
+        let database_password = generate_password();
 
         let _is_rds = match environment.kind {
             Kind::Production => true,
@@ -832,8 +832,8 @@ fn test_mysql_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "scw-sbv-ssd-0".to_string(),
+            database_instance_type: SCW_DATABASE_INSTANCE_TYPE.to_string(),
+            database_disk_type: SCW_DATABASE_DISK_TYPE.to_string(),
         }];
         environment.applications = environment
             .applications
@@ -920,7 +920,25 @@ fn mysql_v8_deploy_a_working_dev_environment() {
     test_mysql_configuration(context, environment, secrets, "8.0", function_name!());
 }
 
-// MySQL production environment
+// MySQL production environment (RDS)
+#[cfg(feature = "test-scw-managed-services")]
+#[named]
+#[test]
+fn mysql_v8_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let mut environment = test_utilities::common::working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    environment.kind = Kind::Production;
+    test_mysql_configuration(context, environment, secrets, "8", function_name!());
+}
 
 /**
  **
@@ -999,8 +1017,8 @@ fn test_redis_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action = EnvironmentAction::Environment(environment);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, ea, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),

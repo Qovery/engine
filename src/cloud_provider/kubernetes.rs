@@ -40,6 +40,7 @@ pub trait Kubernetes: Listen {
     }
     fn version(&self) -> &str;
     fn region(&self) -> &str;
+    fn zone(&self) -> &str;
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn config_file_store(&self) -> &dyn ObjectStorage;

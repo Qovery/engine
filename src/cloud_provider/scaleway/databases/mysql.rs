@@ -1,17 +1,21 @@
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
     DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
     Upgrade,
 };
-use crate::cloud_provider::utilities::{get_self_hosted_mysql_version, sanitize_name};
+use crate::cloud_provider::utilities::{
+    generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use, sanitize_name,
+};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorScope};
+use crate::error::{EngineError, EngineErrorScope, StringError};
 use crate::models::{Context, Listen, Listener, Listeners};
+use std::collections::HashMap;
 
 pub struct MySQL {
     context: Context,
@@ -59,8 +63,27 @@ impl MySQL {
         }
     }
 
-    fn matching_correct_version(&self) -> Result<String, EngineError> {
-        check_service_version(get_self_hosted_mysql_version(self.version()), self)
+    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
+        check_service_version(Self::get_mysql_version(self.version(), is_managed_services), self)
+    }
+
+    fn get_mysql_version(requested_version: &str, is_managed_service: bool) -> Result<String, StringError> {
+        if is_managed_service {
+            Self::get_managed_mysql_version(requested_version)
+        } else {
+            get_self_hosted_mysql_version(requested_version)
+        }
+    }
+
+    fn get_managed_mysql_version(requested_version: &str) -> Result<String, StringError> {
+        // Scaleway supported MySQL versions
+        // https://api.scaleway.com/rdb/v1/regions/fr-par/database-engines
+        let mut supported_mysql_versions = HashMap::new();
+
+        // {"name": "MySQL", "version":"8","end_of_life":"2026-04-01T00:00:00Z"}
+        supported_mysql_versions.insert("8".to_string(), "8".to_string());
+
+        get_supported_version_to_use("RDS MySQL", supported_mysql_versions, requested_version)
     }
 }
 
@@ -127,6 +150,11 @@ impl Service for MySQL {
 
         let mut context = default_tera_context(self, kubernetes, environment);
 
+        let is_managed_services = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
+
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kube_config_file_path = kubernetes.config_file_path()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
@@ -139,7 +167,7 @@ impl Service for MySQL {
 
         context.insert("namespace", environment.namespace());
 
-        let version = &self.matching_correct_version()?;
+        let version = &self.matching_correct_version(is_managed_services)?;
         context.insert("version", &version);
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
@@ -158,6 +186,7 @@ impl Service for MySQL {
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
         context.insert("database_instance_type", &self.database_instance_type);
         context.insert("database_disk_type", &self.options.database_disk_type);
+        context.insert("database_name", &self.sanitized_name());
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
@@ -166,6 +195,7 @@ impl Service for MySQL {
         context.insert("tfstate_name", &get_tfstate_name(self));
 
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
+        context.insert("skip_final_snapshot", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
                 "resource_expiration_in_seconds",

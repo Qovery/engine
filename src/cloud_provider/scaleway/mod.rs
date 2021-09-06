@@ -1,11 +1,12 @@
 use std::any::Any;
 
 use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCredentials};
-use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_SECRET_KEY};
+use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY};
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub mod application;
 pub mod databases;
+pub mod external_service;
 pub mod kubernetes;
 pub mod router;
 
@@ -16,6 +17,7 @@ pub struct Scaleway {
     organization_id: String,
     pub access_key: String,
     pub secret_key: String,
+    pub project_id: String,
     terraform_state_credentials: TerraformStateCredentials,
     listeners: Listeners,
 }
@@ -28,6 +30,7 @@ impl Scaleway {
         name: &str,
         access_key: &str,
         secret_key: &str,
+        project_id: &str,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Scaleway {
         Scaleway {
@@ -37,6 +40,7 @@ impl Scaleway {
             name: name.to_string(),
             access_key: access_key.to_string(),
             secret_key: secret_key.to_string(),
+            project_id: project_id.to_string(),
             terraform_state_credentials,
             listeners: vec![],
         }
@@ -73,6 +77,7 @@ impl CloudProvider for Scaleway {
         vec![
             (SCALEWAY_ACCESS_KEY, self.access_key.as_str()),
             (SCALEWAY_SECRET_KEY, self.secret_key.as_str()),
+            (SCALEWAY_DEFAULT_PROJECT_ID, self.project_id.as_str()),
         ]
     }
 
@@ -80,6 +85,7 @@ impl CloudProvider for Scaleway {
         vec![
             ("scaleway_access_key", self.access_key.as_str()),
             ("scaleway_secret_key", self.secret_key.as_str()),
+            ("scaleway_project_id", self.project_id.as_str()),
         ]
     }
 

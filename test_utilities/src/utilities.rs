@@ -1,5 +1,6 @@
 extern crate base64;
 extern crate bstr;
+extern crate passwords;
 extern crate scaleway_api_rs;
 
 use bstr::ByteSlice;
@@ -11,6 +12,7 @@ use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
 
+use passwords::PasswordGenerator;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
@@ -353,6 +355,23 @@ pub fn generate_id() -> String {
         }
     }
     uuid
+}
+
+pub fn generate_password() -> String {
+    let pg = PasswordGenerator::new()
+        .length(32)
+        .numbers(true)
+        .lowercase_letters(true)
+        .uppercase_letters(true)
+        .symbols(true)
+        .spaces(false)
+        .exclude_similar_characters(true)
+        .strict(true);
+
+    pg.generate_one()
+        .expect("error while trying to generate a password")
+        .to_string()
+        .replace("\\", "$") // most tools do not allow \ char, hence replacing it by something else
 }
 
 pub fn check_all_connections(env: &Environment) -> Vec<bool> {

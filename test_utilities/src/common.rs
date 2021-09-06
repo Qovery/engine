@@ -9,7 +9,7 @@ use qovery_engine::models::{
     StorageType,
 };
 
-use crate::utilities::generate_id;
+use crate::utilities::{generate_id, generate_password};
 use base64;
 use std::collections::BTreeMap;
 
@@ -37,7 +37,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
-    let database_password_mongo = generate_id();
+    let database_password_mongo = generate_password();
     let database_uri_mongo = format!(
         "mongodb://{}:{}@{}:{}/{}",
         database_username_mongo,
@@ -53,7 +53,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let fqdn = format!("{}.{}", fqdn_id, &test_domain);
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_id();
+    let database_password = generate_password();
     let database_name = "postgresql".to_string();
 
     // pSQL 2 management part
@@ -343,7 +343,7 @@ pub fn environnement_2_app_2_routers_1_psql(
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_id();
+    let database_password = generate_password();
     let database_name = "postgresql".to_string();
 
     let suffix = generate_id();

@@ -431,6 +431,10 @@ impl<'a> Kubernetes for DOKS<'a> {
         self.region.as_str()
     }
 
+    fn zone(&self) -> &str {
+        ""
+    }
+
     fn cloud_provider(&self) -> &dyn CloudProvider {
         self.cloud_provider
     }

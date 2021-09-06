@@ -437,6 +437,16 @@ impl Zone {
             Zone::Warsaw1 => Region::Warsaw,
         }
     }
+
+    // TODO(benjaminch): improve / refactor this!
+    pub fn region_str(&self) -> &str {
+        match self {
+            Zone::Paris1 => "fr-par",
+            Zone::Paris2 => "fr-par",
+            Zone::Amsterdam1 => "nl-ams",
+            Zone::Warsaw1 => "pl-waw",
+        }
+    }
 }
 
 impl fmt::Display for Zone {

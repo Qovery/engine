@@ -22,7 +22,7 @@ pub const SCW_KUBE_TEST_CLUSTER_NAME: &str = "qovery-zb3a2b3b8";
 pub const SCW_KUBE_TEST_CLUSTER_ID: &str = "zb3a2b3b8";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
 pub const SCW_KUBERNETES_VERSION: &str = "1.18";
-pub const SCW_DATABASE_INSTANCE_TYPE: &str = "not-used";
+pub const SCW_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_DATABASE_DISK_TYPE: &str = "scw-sbv-ssd-0";
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
@@ -67,6 +67,10 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
         secrets
             .SCALEWAY_SECRET_KEY
             .expect("SCALEWAY_SECRET_KEY is not set in secrets")
+            .as_str(),
+        secrets
+            .SCALEWAY_DEFAULT_PROJECT_ID
+            .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets")
             .as_str(),
         TerraformStateCredentials {
             access_key_id: secrets
