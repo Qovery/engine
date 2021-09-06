@@ -719,11 +719,11 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),
-                    value: chart_config_prerequisites.cloud_provider.clone(),
+                    value: "scw".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.KUBERNETES_ID".to_string(),
-                    value: chart_config_prerequisites.cluster_id.clone(),
+                    value: chart_config_prerequisites.organization_id.clone(),
                 },
                 // resources limits
                 ChartSetValue {

@@ -16,10 +16,10 @@ use chrono::Utc;
 use std::str::FromStr;
 use tracing::error;
 
-pub const ORGANIZATION_ID: &str = "zztopuuidscw";
-pub const SCW_TEST_CLUSTER_NAME: &str = "DO-NOT-DELETE-Qovery-test-cluster";
-pub const SCW_TEST_CLUSTER_ID: &str = "do-not-delete-qovery-test-cluster";
-pub const SCW_TEST_ZONE: Zone = Zone::Paris1;
+pub const ORGANIZATION_ID: &str = "cf8e78e6-159b-45b6-bfb5-2430c9505080";
+pub const SCW_TEST_CLUSTER_NAME: &str = "qovery-zb3a2b3b8";
+pub const SCW_TEST_CLUSTER_ID: &str = "zb3a2b3b8";
+pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
 pub const SCW_KUBERNETES_VERSION: &str = "1.18";
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
