@@ -525,7 +525,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
             self.id().to_string(),
-            self.zone.to_string(),
+            self.zone,
             self.cluster_name(),
             "scw".to_string(),
             self.context.is_test_cluster(),
