@@ -681,7 +681,7 @@ datasources:
             });
         }
     };
-    let qovery_agent = CommonChart {
+    let mut qovery_agent = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-agent".to_string(),
             path: chart_path("common/charts/qovery-agent"),
@@ -747,6 +747,12 @@ datasources:
             ..Default::default()
         },
     };
+    if chart_config_prerequisites.ff_log_history_enabled {
+        qovery_agent.chart_info.values.push(ChartSetValue {
+            key: "environmentVariables.FEATURES".to_string(),
+            value: "LogsHistory".to_string(),
+        })
+    }
 
     let qovery_engine_version: QoveryEngine = match get_qovery_app_version(
         QoveryAppName::Engine,
