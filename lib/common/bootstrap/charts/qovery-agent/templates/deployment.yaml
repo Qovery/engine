@@ -14,10 +14,10 @@ spec:
       {{- include "qovery-agent.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-    {{- with .Values.podAnnotations }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- toYaml . | nindent 8 }}
+    {{- with .Values.podAnnotations }}
     {{- end }}
       labels:
         {{- include "qovery-agent.selectorLabels" . | nindent 8 }}
