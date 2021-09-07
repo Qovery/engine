@@ -52,10 +52,6 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
         context.clone(),
         SCW_TEST_CLUSTER_ID,
         ORGANIZATION_ID,
-        secrets
-            .SCALEWAY_DEFAULT_PROJECT_ID
-            .unwrap_or("undefined".to_string())
-            .as_str(),
         SCW_TEST_CLUSTER_NAME,
         secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string()).as_str(),
         secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string()).as_str(),
