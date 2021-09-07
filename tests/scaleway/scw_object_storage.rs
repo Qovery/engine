@@ -29,6 +29,7 @@ fn test_delete_bucket_hard_delete_strategy() {
         scw_secret_key,
         TEST_ZONE,
         BucketDeleteStrategy::HardDelete,
+        false,
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());

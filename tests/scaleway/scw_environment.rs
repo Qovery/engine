@@ -6,7 +6,7 @@ use self::test_utilities::utilities::{
 };
 use ::function_name::named;
 use qovery_engine::build_platform::Image;
-use qovery_engine::cloud_provider::scaleway::application::Region;
+use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::error::EngineError;
@@ -79,7 +79,7 @@ pub fn delete_container_registry(
 ) -> Result<ScalewayRegistryV1Namespace, EngineError> {
     let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
     let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
-    let region = Region::from_str(secrets.SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
+    let zone = Zone::from_str(secrets.SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
 
     let container_registry_client = ScalewayCR::new(
         context.clone(),
@@ -87,7 +87,7 @@ pub fn delete_container_registry(
         "test",
         secret_token.as_str(),
         project_id.as_str(),
-        region,
+        zone,
     );
 
     container_registry_client.delete_registry_namespace(&Image {
