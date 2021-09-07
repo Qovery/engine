@@ -5,9 +5,15 @@ use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 use ::function_name::named;
+use qovery_engine::build_platform::Image;
+use qovery_engine::cloud_provider::scaleway::application::Region;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
+use qovery_engine::error::EngineError;
 use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
+use scaleway_api_rs::models::ScalewayRegistryV1Namespace;
+use std::str::FromStr;
 use test_utilities::utilities::context;
 use tracing::{span, Level};
 
@@ -66,6 +72,30 @@ pub fn pause_environment(context: &Context, environment_action: EnvironmentActio
     tx.commit()
 }
 
+pub fn delete_container_registry(
+    context: Context,
+    container_registry_name: &str,
+    secrets: FuncTestsSecrets,
+) -> Result<ScalewayRegistryV1Namespace, EngineError> {
+    let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
+    let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
+    let region = Region::from_str(secrets.SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
+
+    let container_registry_client = ScalewayCR::new(
+        context.clone(),
+        "test",
+        "test",
+        secret_token.as_str(),
+        project_id.as_str(),
+        region,
+    );
+
+    container_registry_client.delete_registry_namespace(&Image {
+        name: container_registry_name.to_string(),
+        ..Default::default()
+    })
+}
+
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
@@ -87,7 +117,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         environment_for_delete.routers = vec![];
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
 
         match deploy_environment(&context, env_action) {
@@ -101,6 +131,14 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
@@ -127,7 +165,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
 
         match deploy_environment(&context, env_action) {
@@ -141,6 +179,14 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
@@ -203,6 +249,14 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
+
         test_name.to_string()
     })
 }
@@ -237,7 +291,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
 
         match deploy_environment(&context, env_action) {
@@ -251,6 +305,14 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
@@ -275,7 +337,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, env_action) {
@@ -289,6 +351,14 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
@@ -309,7 +379,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
 
-        let mut environment = test_utilities::scaleway::working_minimal_environment(&context, secrets);
+        let mut environment = test_utilities::scaleway::working_minimal_environment(&context, secrets.clone());
 
         // Todo: make an image that check there is a mounted disk
         environment.applications = environment
@@ -331,7 +401,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, env_action) {
@@ -347,6 +417,14 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
@@ -393,7 +471,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_redeploy = EnvironmentAction::Environment(environment_redeploy);
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
@@ -423,7 +501,7 @@ fn scaleway_kapsule_redeploy_same_app() {
             SCW_TEST_CLUSTER_ID,
             environment_check2,
             app_name.as_str(),
-            secrets,
+            secrets.clone(),
         );
 
         // nothing changed in the app, so, it shouldn't be restarted
@@ -434,6 +512,14 @@ fn scaleway_kapsule_redeploy_same_app() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
@@ -456,7 +542,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
         let secrets = FuncTestsSecrets::new();
 
         // env part generation
-        let environment = test_utilities::scaleway::working_minimal_environment(&context, secrets);
+        let environment = test_utilities::scaleway::working_minimal_environment(&context, secrets.clone());
         let mut environment_for_not_working = environment.clone();
         // this environment is broken by container exit
         environment_for_not_working.applications = environment_for_not_working
@@ -475,7 +561,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
         environment_for_delete.action = Action::Delete;
 
         // environment actions
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_not_working = EnvironmentAction::Environment(environment_for_not_working);
         let env_action_delete = EnvironmentAction::Environment(environment_for_delete);
 
@@ -494,6 +580,14 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
@@ -514,7 +608,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         // working env
         let context = context();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::scaleway::working_minimal_environment(&context, secrets);
+        let environment = test_utilities::scaleway::working_minimal_environment(&context, secrets.clone());
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
@@ -540,7 +634,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_not_working_1 = EnvironmentAction::Environment(not_working_env_1);
         let env_action_not_working_2 = EnvironmentAction::Environment(not_working_env_2);
         let env_action_delete = EnvironmentAction::Environment(delete_env);
@@ -579,6 +673,14 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
+
         test_name.to_string()
     })
 }
@@ -596,13 +698,13 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
 
         let context = context();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::scaleway::non_working_environment(&context, secrets);
+        let environment = test_utilities::scaleway::non_working_environment(&context, secrets.clone());
 
         let context_for_delete = context.clone_not_same_execution_id();
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(delete_env);
 
         match deploy_environment(&context, env_action) {
@@ -616,6 +718,14 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
@@ -641,11 +751,11 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
 
         // context for deletion
         let context_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::scaleway::working_minimal_environment(&context_deletion, secrets);
+        let mut delete_env = test_utilities::scaleway::working_minimal_environment(&context_deletion, secrets.clone());
         delete_env.action = Action::Delete;
 
         let env_action_delete = EnvironmentAction::Environment(delete_env);
-        let env_action = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment);
 
         match deploy_environment(&context, env_action) {
             TransactionResult::Ok => assert!(false),
@@ -658,6 +768,14 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
@@ -681,12 +799,12 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover
         let failover_environment = test_utilities::scaleway::non_working_environment(&context, secrets.clone());
 
         let context_for_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::scaleway::non_working_environment(&context_for_deletion, secrets);
+        let mut delete_env = test_utilities::scaleway::non_working_environment(&context_for_deletion, secrets.clone());
         delete_env.action = Action::Delete;
 
         // environment action initialize
         let env_action_delete = EnvironmentAction::Environment(delete_env);
-        let env_action = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment);
 
         match deploy_environment(&context, env_action) {
             TransactionResult::Ok => assert!(false),
@@ -699,6 +817,14 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete container registries created during the test
+        for app in environment.applications.iter() {
+            assert_eq!(
+                true,
+                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
+            );
+        }
 
         test_name.to_string()
     })
