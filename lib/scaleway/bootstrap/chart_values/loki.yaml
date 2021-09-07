@@ -21,10 +21,7 @@ config:
   storage_config:
     aws:
       s3: ""
-      endpoint: ""
       region: ""
-      access_key_id: ""
-      secret_access_key: ""
     boltdb_shipper:
       active_index_directory: /data/loki/index
       shared_store: s3

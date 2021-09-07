@@ -1,7 +1,7 @@
 locals {
   qovery_tf_config = <<TF_CONFIG
 {
-  "loki_storage_config_scaleway_s3": "s3://${urlencode(var.scaleway_access_key)}:${urlencode(var.scaleway_secret_key)}@${var.region}/{{ object_storage_logs_bucket }}/${var.kubernetes_cluster_id}"
+  "loki_storage_config_scaleway_s3": "s3://${urlencode(var.scaleway_access_key)}:${urlencode(var.scaleway_secret_key)}@s3.${var.region}.scw.cloud/{{ object_storage_logs_bucket }}"
 }
 TF_CONFIG
 }
