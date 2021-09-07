@@ -524,10 +524,10 @@ impl<'a> Kubernetes for Kapsule<'a> {
 
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
-            self.cloud_provider.default_project_id.to_string(),
+            self.id().to_string(),
             self.zone.to_string(),
             self.cluster_name(),
-            "scaleway".to_string(),
+            "scw".to_string(),
             self.context.is_test_cluster(),
             self.cloud_provider.access_key.to_string(),
             self.cloud_provider.secret_key.to_string(),
