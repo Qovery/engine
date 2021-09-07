@@ -16,7 +16,7 @@ use chrono::Utc;
 use std::str::FromStr;
 use tracing::error;
 
-pub const ORGANIZATION_ID: &str = "cf8e78e6-159b-45b6-bfb5-2430c9505080";
+pub const SCW_QOVERY_ORGANIZATION_ID: &str = "cf8e78e6-159b-45b6-bfb5-2430c9505080";
 pub const SCW_TEST_CLUSTER_NAME: &str = "qovery-zb3a2b3b8";
 pub const SCW_TEST_CLUSTER_ID: &str = "zb3a2b3b8";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
@@ -55,7 +55,7 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
     Scaleway::new(
         context.clone(),
         SCW_TEST_CLUSTER_ID,
-        ORGANIZATION_ID,
+        SCW_QOVERY_ORGANIZATION_ID,
         SCW_TEST_CLUSTER_NAME,
         secrets
             .SCALEWAY_ACCESS_KEY
@@ -186,82 +186,4 @@ pub fn scw_kubernetes_kapsule<'a>(
         nodes,
         scw_kubernetes_cluster_options(secrets),
     )
-}
-
-// TODO(benjaminch): To be refactored, move it to common test utilities
-pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
-    let suffix = generate_id();
-    Environment {
-        execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        kind: Kind::Development,
-        owner_id: generate_id(),
-        project_id: secrets
-            .SCALEWAY_DEFAULT_PROJECT_ID
-            .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
-        organization_id: ORGANIZATION_ID.to_string(),
-        action: Action::Create,
-        applications: vec![Application {
-            id: generate_id(),
-            name: format!("{}-{}", "simple-app".to_string(), &suffix),
-            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
-            dockerfile_path: Some("Dockerfile".to_string()),
-            root_path: String::from("/"),
-            action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
-            storage: vec![],
-            environment_variables: vec![],
-            branch: "basic-app-deploy".to_string(),
-            private_port: Some(80),
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
-            total_instances: 2,
-            cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
-        }],
-        routers: vec![Router {
-            id: generate_id(),
-            name: "main".to_string(),
-            action: Action::Create,
-            default_domain: format!(
-                "{}.{}",
-                generate_id(),
-                secrets
-                    .DEFAULT_TEST_DOMAIN
-                    .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            ),
-            public_port: 443,
-            custom_domains: vec![],
-            routes: vec![Route {
-                path: "/".to_string(),
-                application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
-            }],
-        }],
-        databases: vec![],
-        external_services: vec![],
-        clone_from_environment_id: None,
-    }
-}
-
-// TODO(benjaminch): To be refactored, move it to common test utilities
-pub fn non_working_environment(context: &Context, secrets: FuncTestsSecrets) -> Environment {
-    let mut environment = working_minimal_environment(context, secrets);
-
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
-            app.branch = "bugged-image".to_string();
-            app.commit_id = "c2b2d7b5d96832732df25fe992721f53842b5eac".to_string();
-            app
-        })
-        .collect::<Vec<_>>();
-
-    environment
 }

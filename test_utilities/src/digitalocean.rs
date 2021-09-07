@@ -13,7 +13,7 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 
-pub const ORGANIZATION_ID: &str = "a8nb94c7fwxzr2ja";
+pub const DO_QOVERY_ORGANIZATION_ID: &str = "a8nb94c7fwxzr2ja";
 pub const DO_KUBERNETES_VERSION: &str = "1.19";
 pub const DOCR_ID: &str = "gu9ep7t68htdu78l";
 pub const DOKS_CLUSTER_ID: &str = "gqgyb7zy4ykwumak";
@@ -88,7 +88,7 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
     DO::new(
         context.clone(),
         DOKS_CLUSTER_ID,
-        ORGANIZATION_ID,
+        DO_QOVERY_ORGANIZATION_ID,
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
         secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().as_str(),
         secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().as_str(),
