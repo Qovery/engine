@@ -32,8 +32,12 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         std::process::exit(1)
     }
     let random_id = generate_id();
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.expect("SCALEWAY_SECRET_KEY is not set in secrets");
-    let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets");
+    let scw_secret_key = secrets
+        .SCALEWAY_SECRET_KEY
+        .expect("SCALEWAY_SECRET_KEY is not set in secrets");
+    let scw_default_project_id = secrets
+        .SCALEWAY_DEFAULT_PROJECT_ID
+        .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets");
 
     ScalewayCR::new(
         context.clone(),
@@ -54,12 +58,20 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
         ORGANIZATION_ID,
         SCW_TEST_CLUSTER_NAME,
         secrets
-            .SCALEWAY_ACCESS_KEY.expect("SCALEWAY_ACCESS_KEY is not set in secrets").as_str(),
+            .SCALEWAY_ACCESS_KEY
+            .expect("SCALEWAY_ACCESS_KEY is not set in secrets")
+            .as_str(),
         secrets
-            .SCALEWAY_SECRET_KEY.expect("SCALEWAY_SECRET_KEY is not set in secrets").as_str(),
+            .SCALEWAY_SECRET_KEY
+            .expect("SCALEWAY_SECRET_KEY is not set in secrets")
+            .as_str(),
         TerraformStateCredentials {
-            access_key_id: secrets.TERRAFORM_AWS_ACCESS_KEY_ID.expect("TERRAFORM_AWS_ACCESS_KEY_ID is not set in secrets"),
-            secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set in secrets"),
+            access_key_id: secrets
+                .TERRAFORM_AWS_ACCESS_KEY_ID
+                .expect("TERRAFORM_AWS_ACCESS_KEY_ID is not set in secrets"),
+            secret_access_key: secrets
+                .TERRAFORM_AWS_SECRET_ACCESS_KEY
+                .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set in secrets"),
             region: "eu-west-3".to_string(),
         },
     )
@@ -69,17 +81,33 @@ pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptio
     KapsuleOptions::new(
         secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
         secrets.QOVERY_NATS_URL.expect("QOVERY_NATS_URL is not set in secrets"),
-        secrets.QOVERY_NATS_USERNAME.expect("QOVERY_NATS_USERNAME is not set in secrets"),
-        secrets.QOVERY_NATS_PASSWORD.expect("QOVERY_NATS_PASSWORD is not set in secrets"),
+        secrets
+            .QOVERY_NATS_USERNAME
+            .expect("QOVERY_NATS_USERNAME is not set in secrets"),
+        secrets
+            .QOVERY_NATS_PASSWORD
+            .expect("QOVERY_NATS_PASSWORD is not set in secrets"),
         secrets.QOVERY_SSH_USER.expect("QOVERY_SSH_USER is not set in secrets"),
         "admin".to_string(),
         "qovery".to_string(),
-        secrets.QOVERY_AGENT_CONTROLLER_TOKEN.expect("QOVERY_AGENT_CONTROLLER_TOKEN is not set in secrets"),
-        secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.expect("QOVERY_ENGINE_CONTROLLER_TOKEN is not set in secrets"),
-        secrets.SCALEWAY_DEFAULT_PROJECT_ID.expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
-        secrets.SCALEWAY_ACCESS_KEY.expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
-        secrets.SCALEWAY_SECRET_KEY.expect("SCALEWAY_SECRET_KEY is not set in secrets"),
-        secrets.LETS_ENCRYPT_EMAIL_REPORT.expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
+        secrets
+            .QOVERY_AGENT_CONTROLLER_TOKEN
+            .expect("QOVERY_AGENT_CONTROLLER_TOKEN is not set in secrets"),
+        secrets
+            .QOVERY_ENGINE_CONTROLLER_TOKEN
+            .expect("QOVERY_ENGINE_CONTROLLER_TOKEN is not set in secrets"),
+        secrets
+            .SCALEWAY_DEFAULT_PROJECT_ID
+            .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
+        secrets
+            .SCALEWAY_ACCESS_KEY
+            .expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
+        secrets
+            .SCALEWAY_SECRET_KEY
+            .expect("SCALEWAY_SECRET_KEY is not set in secrets"),
+        secrets
+            .LETS_ENCRYPT_EMAIL_REPORT
+            .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
     )
 }
 
@@ -91,8 +119,12 @@ pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
         context,
         format!("qovery-test-object-storage-{}", random_id.clone()),
         format!("Qovery Test Object-Storage {}", random_id),
-        secrets.SCALEWAY_ACCESS_KEY.expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
-        secrets.SCALEWAY_SECRET_KEY.expect("SCALEWAY_SECRET_KEY is not set in secrets"),
+        secrets
+            .SCALEWAY_ACCESS_KEY
+            .expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
+        secrets
+            .SCALEWAY_SECRET_KEY
+            .expect("SCALEWAY_SECRET_KEY is not set in secrets"),
         region,
         BucketDeleteStrategy::Empty, // do not delete bucket due to deletion 24h delay
         false,
@@ -141,7 +173,14 @@ pub fn scw_kubernetes_kapsule<'a>(
         SCW_TEST_CLUSTER_ID.to_string(),
         SCW_TEST_CLUSTER_NAME.to_string(),
         SCW_KUBERNETES_VERSION.to_string(),
-        Zone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.expect("SCALEWAY_DEFAULT_REGION is not set in secrets").as_str()).unwrap(),
+        Zone::from_str(
+            secrets
+                .clone()
+                .SCALEWAY_DEFAULT_REGION
+                .expect("SCALEWAY_DEFAULT_REGION is not set in secrets")
+                .as_str(),
+        )
+        .unwrap(),
         cloud_provider,
         dns_provider,
         nodes,
@@ -157,7 +196,9 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
         id: generate_id(),
         kind: Kind::Development,
         owner_id: generate_id(),
-        project_id: secrets.SCALEWAY_DEFAULT_PROJECT_ID.expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
+        project_id: secrets
+            .SCALEWAY_DEFAULT_PROJECT_ID
+            .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
         organization_id: ORGANIZATION_ID.to_string(),
         action: Action::Create,
         applications: vec![Application {
@@ -187,7 +228,13 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: format!("{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.expect("DEFAULT_TEST_DOMAIN is not set in secrets")),
+            default_domain: format!(
+                "{}.{}",
+                generate_id(),
+                secrets
+                    .DEFAULT_TEST_DOMAIN
+                    .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            ),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {

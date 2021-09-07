@@ -3,6 +3,7 @@ use crate::cloud_provider::helm::{
     HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
+use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ pub struct ScalewayQoveryTerraformConfig {
 pub struct ChartsConfigPrerequisites {
     pub organization_id: String,
     pub cluster_id: String,
-    pub region: String,
+    pub zone: Zone,
     pub cluster_name: String,
     pub cloud_provider: String,
     pub test_cluster: bool,
@@ -43,7 +44,7 @@ impl ChartsConfigPrerequisites {
     pub fn new(
         organization_id: String,
         cluster_id: String,
-        region: String,
+        zone: Zone,
         cluster_name: String,
         cloud_provider: String,
         test_cluster: bool,
@@ -65,7 +66,7 @@ impl ChartsConfigPrerequisites {
         ChartsConfigPrerequisites {
             organization_id,
             cluster_id,
-            region,
+            zone,
             cluster_name,
             cloud_provider,
             test_cluster,
@@ -238,11 +239,11 @@ pub fn scw_helm_charts(
                 },
                 ChartSetValue {
                     key: "config.storage_config.aws.endpoint".to_string(),
-                    value: format!("s3.{}.scw.cloud", chart_config_prerequisites.region.clone()),
+                    value: format!("s3.{}.scw.cloud", chart_config_prerequisites.zone.region().as_str()),
                 },
                 ChartSetValue {
                     key: "config.storage_config.aws.region".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
+                    value: chart_config_prerequisites.zone.region().to_string(),
                 },
                 // we're not using dedicated keys as Scaleway do not yet support IAM
                 ChartSetValue {
@@ -715,7 +716,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_REGION".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
+                    value: chart_config_prerequisites.zone.to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),
@@ -812,7 +813,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.REGION".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
+                    value: chart_config_prerequisites.zone.to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.LIB_ROOT_DIR".to_string(),
