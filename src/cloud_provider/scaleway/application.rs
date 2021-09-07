@@ -200,7 +200,7 @@ impl Service for Application {
         match self.image.registry_name.as_ref() {
             Some(_) => {
                 context.insert("is_registry_secret", &true);
-                context.insert("registry_secret_name", "container-registry-token");
+                context.insert("registry_secret_name", &format!("registry-token-{}", &self.id));
             }
             None => {
                 context.insert("is_registry_secret", &false);
