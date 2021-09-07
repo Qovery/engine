@@ -19,7 +19,8 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        let cluster_id = format!("qovery-test-{}", generate_cluster_id(&region.to_string()));
+        let cluster_id = format!("doks-test-id{}", generate_cluster_id(&region.to_string()));
+        let cluster_name = format!("doks-test-name{}", generate_cluster_id(&region.to_string()));
         let context = context();
         let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
         let session = engine.session().unwrap();
@@ -32,7 +33,7 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
         let kubernetes = DOKS::new(
             context,
             cluster_id.clone(),
-            cluster_id.clone(),
+            cluster_name.clone(),
             DO_KUBERNETES_VERSION.to_string(),
             region,
             &do_cluster,
@@ -74,14 +75,14 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
         }
 
         // Destroy
-        // if let Err(err) = tx.delete_kubernetes(&kubernetes) {
-        //     panic!("{:?}", err)
-        // }
-        // match tx.commit() {
-        //     TransactionResult::Ok => assert!(true),
-        //     TransactionResult::Rollback(_) => assert!(false),
-        //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        // };
+        if let Err(err) = tx.delete_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
+        }
+        match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
 
         test_name.to_string()
     });

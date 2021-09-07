@@ -12,6 +12,12 @@ variable "region" {
   type        = string
 }
 
+variable "zone" {
+  description = "Scaleway zone to store terraform state and lock"
+  default     = "{{ scw_zone }}"
+  type        = string
+}
+
 variable "qovery_nats_url" {
   description = "URL of qovery nats server"
   default = "{{ qovery_nats_url }}"
@@ -43,9 +49,9 @@ variable "organization_id" {
   type        = string
 }
 
-variable "scaleway_default_project_id" {
-  description = "Scaleway default project ID ID"
-  default     = "{{ scaleway_default_project_id }}"
+variable "scaleway_project_id" {
+  description = "Scaleway project ID (namespace)"
+  default     = "{{ scaleway_project_id }}"
   type        = string
 }
 
@@ -61,29 +67,17 @@ variable "scaleway_secret_key" {
   type        = string
 }
 
-variable "scaleway_default_zone" {
-  description = "Scaleway defaut zone"
-  default     = "{{ scw_region }}-{{ scaleway_default_zone }}"
-  type        = string
-}
-
 # Kubernetes
 
-variable "cidr_block" {
-  description = "CIDR block for VPC segmentation"
-  default = "{{ vpc_cidr_block }}"
-  type = string
-}
-
 variable "kubernetes_cluster_id" {
-  description = "Kubernetes cluster name"
+  description = "Kubernetes cluster id"
   default     = "{{ kubernetes_cluster_id }}"
   type        = string
 }
 
 variable "kubernetes_cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "qovery-{{ kubernetes_cluster_name }}"
+  default     = "qovery-{{ kubernetes_cluster_id }}" # TODO(benjaminch): handle name creation in code
   type        = string
 }
 

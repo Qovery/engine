@@ -316,7 +316,14 @@ impl Application {
         // Image tag == hash(root_path) + commit_id truncate to 127 char
         // https://github.com/distribution/distribution/blob/6affafd1f030087d88f88841bf66a8abe2bf4d24/reference/regexp.go#L41
         let mut hasher = DefaultHasher::new();
+
+        // If any of those variables changes, we'll get a new hash value, what results in a new image
+        // build and avoids using cache. It is important to build a new image, as those variables may
+        // affect the build result even if user didn't change his code.
         self.root_path.hash(&mut hasher);
+        self.dockerfile_path.hash(&mut hasher);
+        self.environment_variables.hash(&mut hasher);
+
         let mut tag = format!("{}-{}", hasher.finish(), self.commit_id);
         tag.truncate(127);
 
@@ -731,7 +738,84 @@ impl Database {
                     Some(db)
                 }
             },
-            CPKind::Scw => None, // TODO(benjaminch): Implement it
+            CPKind::Scw => match self.kind {
+                DatabaseKind::Postgresql => {
+                    let db: Box<dyn StatefulService> =
+                        Box::new(crate::cloud_provider::scaleway::databases::postgresql::PostgreSQL::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            self.version.as_str(),
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                        ));
+
+                    Some(db)
+                }
+                DatabaseKind::Mysql => {
+                    let db: Box<dyn StatefulService> =
+                        Box::new(crate::cloud_provider::scaleway::databases::mysql::MySQL::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            self.version.as_str(),
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                        ));
+
+                    Some(db)
+                }
+                DatabaseKind::Redis => {
+                    let db: Box<dyn StatefulService> =
+                        Box::new(crate::cloud_provider::scaleway::databases::redis::Redis::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            self.version.as_str(),
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                        ));
+
+                    Some(db)
+                }
+                DatabaseKind::Mongodb => {
+                    let db: Box<dyn StatefulService> =
+                        Box::new(crate::cloud_provider::scaleway::databases::mongodb::MongoDB::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            self.version.as_str(),
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                        ));
+
+                    Some(db)
+                }
+            },
         }
     }
 }

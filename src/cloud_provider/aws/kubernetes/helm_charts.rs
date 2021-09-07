@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_chart_namespace, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart,
-    HelmChart, HelmChartNamespaces,
+    HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
@@ -448,15 +448,24 @@ pub fn aws_helm_charts(
         },
     };
 
-    let mut prometheus_operator = CommonChart {
+    let old_prometheus_operator = PrometheusOperatorConfigChart {
         chart_info: ChartInfo {
             name: "prometheus-operator".to_string(),
-            path: chart_path("/common/charts/prometheus-operator"),
+            namespace: prometheus_namespace,
+            action: HelmAction::Destroy,
+            ..Default::default()
+        },
+    };
+
+    let kube_prometheus_stack = PrometheusOperatorConfigChart {
+        chart_info: ChartInfo {
+            name: "kube-prometheus-stack".to_string(),
+            path: chart_path("/common/charts/kube-prometheus-stack"),
             namespace: prometheus_namespace,
             // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
             // to upgrade because of the CRD and the number of elements it has to deploy
             timeout: "480".to_string(),
-            values_files: vec![chart_path("chart_values/prometheus_operator.yaml")],
+            values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
             values: vec![
                 ChartSetValue {
                     key: "nameOverride".to_string(),
@@ -469,23 +478,6 @@ pub fn aws_helm_charts(
                 ChartSetValue {
                     key: "prometheus.prometheusSpec.externalUrl".to_string(),
                     value: prometheus_internal_url.clone(),
-                },
-                // Limits kube-state-metrics
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.limits.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.requests.cpu".to_string(),
-                    value: "20m".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
                 },
                 // Limits prometheus-node-exporter
                 ChartSetValue {
@@ -503,23 +495,6 @@ pub fn aws_helm_charts(
                 ChartSetValue {
                     key: "prometheus-node-exporter.resources.requests.memory".to_string(),
                     value: "32Mi".to_string(),
-                },
-                // Limits kube-state-metrics
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.limits.cpu".to_string(),
-                    value: "30m".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.requests.cpu".to_string(),
-                    value: "10m".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "kube-state-metrics.resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
                 },
                 // resources limits
                 ChartSetValue {
@@ -542,12 +517,6 @@ pub fn aws_helm_charts(
             ..Default::default()
         },
     };
-    if chart_config_prerequisites.test_cluster {
-        prometheus_operator.chart_info.values.push(ChartSetValue {
-            key: "defaultRules.config".to_string(),
-            value: "{}".to_string(),
-        })
-    }
 
     let prometheus_adapter = CommonChart {
         chart_info: ChartInfo {
@@ -574,19 +543,19 @@ pub fn aws_helm_charts(
                 // resources limits
                 ChartSetValue {
                     key: "resources.limits.cpu".to_string(),
-                    value: "100m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
             ],
             ..Default::default()
@@ -1083,6 +1052,7 @@ datasources:
             name: "qovery-engine".to_string(),
             path: chart_path("common/charts/qovery-engine"),
             namespace: HelmChartNamespaces::Qovery,
+            timeout: "900".to_string(),
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),
@@ -1180,6 +1150,7 @@ datasources:
         Box::new(q_storage_class),
         Box::new(coredns_config),
         Box::new(aws_vpc_cni_chart),
+        Box::new(old_prometheus_operator),
     ];
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
@@ -1206,7 +1177,7 @@ datasources:
 
     // observability
     if chart_config_prerequisites.ff_metrics_history_enabled {
-        level_2.push(Box::new(prometheus_operator));
+        level_2.push(Box::new(kube_prometheus_stack));
         level_4.push(Box::new(prometheus_adapter));
         level_4.push(Box::new(kube_state_metrics));
     }

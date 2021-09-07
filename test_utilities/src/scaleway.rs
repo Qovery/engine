@@ -1,4 +1,4 @@
-use qovery_engine::cloud_provider::scaleway::application::Region;
+use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::node::{Node, NodeType};
 use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOptions};
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -16,9 +16,10 @@ use chrono::Utc;
 use std::str::FromStr;
 use tracing::error;
 
-pub const SCW_TEST_CLUSTER_NAME: &str = "DO-NOT-DELETE-Qovery-test-cluster";
-pub const SCW_TEST_CLUSTER_ID: &str = "do-not-delete-qovery-test-cluster";
-pub const SCW_TEST_REGION: Region = Region::Paris;
+pub const ORGANIZATION_ID: &str = "cf8e78e6-159b-45b6-bfb5-2430c9505080";
+pub const SCW_TEST_CLUSTER_NAME: &str = "qovery-zb3a2b3b8";
+pub const SCW_TEST_CLUSTER_ID: &str = "zb3a2b3b8";
+pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
 pub const SCW_KUBERNETES_VERSION: &str = "1.18";
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
@@ -40,7 +41,7 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
-        SCW_TEST_REGION,
+        SCW_TEST_ZONE,
     )
 }
 
@@ -50,6 +51,7 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
     Scaleway::new(
         context.clone(),
         SCW_TEST_CLUSTER_ID,
+        ORGANIZATION_ID,
         secrets
             .SCALEWAY_DEFAULT_PROJECT_ID
             .unwrap_or("undefined".to_string())
@@ -67,7 +69,6 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
 
 pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
     KapsuleOptions::new(
-        "10.0.0.0/16".to_string(),
         secrets.QOVERY_API_URL.unwrap(),
         secrets.QOVERY_NATS_URL.unwrap(),
         secrets.QOVERY_NATS_USERNAME.unwrap(),
@@ -80,12 +81,11 @@ pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptio
         secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap(),
         secrets.SCALEWAY_ACCESS_KEY.unwrap(),
         secrets.SCALEWAY_SECRET_KEY.unwrap(),
-        1,
         secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
     )
 }
 
-pub fn scw_object_storage(context: Context, region: Region) -> ScalewayOS {
+pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
     let secrets = FuncTestsSecrets::new();
     let random_id = generate_id();
 
@@ -102,18 +102,11 @@ pub fn scw_object_storage(context: Context, region: Region) -> ScalewayOS {
 
 pub fn scw_kubernetes_nodes() -> Vec<Node> {
     // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-    vec![
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-        Node::new(NodeType::Dev1L),
-    ]
+    scw_kubernetes_custom_nodes(10, NodeType::Dev1L)
+}
+
+pub fn scw_kubernetes_custom_nodes(count: usize, node_type: NodeType) -> Vec<Node> {
+    vec![Node::new(node_type); count]
 }
 
 pub fn docker_scw_cr_engine(context: &Context) -> Engine {
@@ -149,7 +142,7 @@ pub fn scw_kubernetes_kapsule<'a>(
         SCW_TEST_CLUSTER_ID.to_string(),
         SCW_TEST_CLUSTER_NAME.to_string(),
         SCW_KUBERNETES_VERSION.to_string(),
-        Region::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap(),
+        Zone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap(),
         cloud_provider,
         dns_provider,
         nodes,
@@ -159,7 +152,6 @@ pub fn scw_kubernetes_kapsule<'a>(
 
 fn scw_kubernetes_kapsule_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
     KapsuleOptions::new(
-        "10.0.0.0/16".to_string(),
         secrets.QOVERY_API_URL.unwrap(),
         secrets.QOVERY_NATS_URL.unwrap(),
         secrets.QOVERY_NATS_USERNAME.unwrap(),
@@ -172,7 +164,6 @@ fn scw_kubernetes_kapsule_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
         secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap(),
         secrets.SCALEWAY_ACCESS_KEY.unwrap(),
         secrets.SCALEWAY_SECRET_KEY.unwrap(),
-        1,
         secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
     )
 }
@@ -185,8 +176,8 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
         id: generate_id(),
         kind: Kind::Development,
         owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap().to_string(),
+        project_id: secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap(),
+        organization_id: ORGANIZATION_ID.to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
@@ -215,7 +206,7 @@ pub fn working_minimal_environment(context: &Context, secrets: FuncTestsSecrets)
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: generate_id() + secrets.DEFAULT_TEST_DOMAIN.unwrap().as_ref(),
+            default_domain: format!("{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap()),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {

@@ -5,6 +5,7 @@ use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_SECRET_KEY};
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub mod application;
+pub mod databases;
 pub mod kubernetes;
 pub mod router;
 
@@ -12,6 +13,7 @@ pub struct Scaleway {
     context: Context,
     id: String,
     name: String,
+    organization_id: String,
     default_project_id: String,
     pub access_key: String,
     pub secret_key: String,
@@ -23,6 +25,7 @@ impl Scaleway {
     pub fn new(
         context: Context,
         id: &str,
+        organization_id: &str,
         name: &str,
         default_project_id: &str,
         access_key: &str,
@@ -32,6 +35,7 @@ impl Scaleway {
         Scaleway {
             context,
             id: id.to_string(),
+            organization_id: organization_id.to_string(),
             name: name.to_string(),
             default_project_id: default_project_id.to_string(),
             access_key: access_key.to_string(),
@@ -56,7 +60,7 @@ impl CloudProvider for Scaleway {
     }
 
     fn organization_id(&self) -> &str {
-        self.default_project_id.as_str()
+        self.organization_id.as_str()
     }
 
     fn name(&self) -> &str {

@@ -31,23 +31,7 @@ admin:
   userKey: admin-user
   passwordKey: admin-password
 
-{% if test_cluster %}
 notifiers: {}
-{% else %}
-notifiers:
-  notifiers.yaml:
-    notifiers:
-      - name: "Interrupt alerts"
-        type: discord
-        uid: qovery_discord_interrupt
-        is_default: true
-        send_reminder: true
-        frequency: 2h
-        disable_resolve_message: false
-        settings:
-          content: "{{ kubernetes_cluster_id }}"
-          url: "{{ discord_api_key }}"
-{% endif %}
 
 dashboardProviders:
   dashboardproviders.yaml:

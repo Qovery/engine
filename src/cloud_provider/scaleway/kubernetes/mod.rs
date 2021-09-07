@@ -7,7 +7,7 @@ use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
-use crate::cloud_provider::scaleway::application::Region;
+use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::Node;
 use crate::cloud_provider::scaleway::Scaleway;
@@ -38,7 +38,6 @@ use tera::Context as TeraContext;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KapsuleOptions {
-    vpc_cidr_block: String,
     // Qovery
     pub qovery_api_url: String,
     pub qovery_nats_url: String,
@@ -51,10 +50,9 @@ pub struct KapsuleOptions {
     pub engine_version_controller_token: String,
 
     // Scaleway
-    pub scaleway_default_project_id: String,
+    pub scaleway_project_id: String,
     pub scaleway_access_key: String,
     pub scaleway_secret_key: String,
-    pub scaleway_default_zone: u8,
 
     // Other
     pub tls_email_report: String,
@@ -62,7 +60,6 @@ pub struct KapsuleOptions {
 
 impl KapsuleOptions {
     pub fn new(
-        vpc_cidr_block: String,
         qovery_api_url: String,
         qovery_nats_url: String,
         qovery_nats_user: String,
@@ -72,14 +69,12 @@ impl KapsuleOptions {
         grafana_admin_password: String,
         agent_version_controller_token: String,
         engine_version_controller_token: String,
-        scaleway_default_project_id: String,
+        scaleway_project_id: String,
         scaleway_access_key: String,
         scaleway_secret_key: String,
-        scaleway_default_zone: u8,
         tls_email_report: String,
     ) -> KapsuleOptions {
         KapsuleOptions {
-            vpc_cidr_block,
             qovery_api_url,
             qovery_nats_url,
             qovery_nats_user,
@@ -89,10 +84,9 @@ impl KapsuleOptions {
             grafana_admin_password,
             agent_version_controller_token,
             engine_version_controller_token,
-            scaleway_default_project_id,
+            scaleway_project_id,
             scaleway_access_key,
             scaleway_secret_key,
-            scaleway_default_zone,
             tls_email_report,
         }
     }
@@ -103,7 +97,7 @@ pub struct Kapsule<'a> {
     id: String,
     name: String,
     version: String,
-    region: Region,
+    zone: Zone,
     cloud_provider: &'a Scaleway,
     dns_provider: &'a dyn DnsProvider,
     object_storage: ScalewayOS,
@@ -119,7 +113,7 @@ impl<'a> Kapsule<'a> {
         id: String,
         name: String,
         version: String,
-        region: Region,
+        region: Zone,
         cloud_provider: &'a Scaleway,
         dns_provider: &'a dyn DnsProvider,
         nodes: Vec<Node>,
@@ -142,14 +136,14 @@ impl<'a> Kapsule<'a> {
             id,
             name,
             version,
-            region,
+            zone: region,
             cloud_provider,
             dns_provider,
             object_storage,
             nodes,
             template_directory,
             options,
-            listeners: vec![],
+            listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
         }
     }
 
@@ -170,20 +164,11 @@ impl<'a> Kapsule<'a> {
         let mut context = TeraContext::new();
 
         // Scaleway
-        context.insert(
-            "scaleway_default_project_id",
-            self.options.scaleway_default_project_id.as_str(),
-        );
+        context.insert("scaleway_project_id", self.options.scaleway_project_id.as_str());
         context.insert("scaleway_access_key", self.options.scaleway_access_key.as_str());
         context.insert("scaleway_secret_key", self.options.scaleway_secret_key.as_str());
-        context.insert(
-            "scaleway_default_zone",
-            self.options.scaleway_default_zone.to_string().as_str(),
-        );
-        context.insert("scw_region", &self.region.as_str());
-
-        let vpc_cidr_block = self.options.vpc_cidr_block.clone();
-        context.insert("vpc_cidr_block", &vpc_cidr_block);
+        context.insert("scw_region", &self.zone.region().as_str());
+        context.insert("scw_zone", &self.zone.as_str());
 
         // DNS
         let managed_dns_list = vec![self.dns_provider.name()];
@@ -212,6 +197,7 @@ impl<'a> Kapsule<'a> {
         context.insert("dns_email_report", &self.options.tls_email_report);
 
         // Kubernetes
+        context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("kubernetes_cluster_name", self.name());
         context.insert("kubernetes_cluster_version", self.version());
@@ -310,7 +296,7 @@ impl<'a> Kapsule<'a> {
             .into_iter()
             .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
             .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
-                instance_type: instance_type.to_string(),
+                instance_type: instance_type.to_string().to_uppercase(),
                 desired_size: "3".to_string(),
                 max_size: nodes.len().to_string(),
                 min_size: "3".to_string(),
@@ -364,7 +350,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn region(&self) -> &str {
-        self.region.as_str()
+        self.zone.as_str()
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
@@ -426,7 +412,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
+            format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
@@ -538,7 +524,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
             self.cloud_provider.default_project_id.to_string(),
-            self.region.to_string(),
+            self.zone.to_string(),
             self.cluster_name(),
             "scaleway".to_string(),
             self.context.is_test_cluster(),
@@ -664,7 +650,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
+            format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 

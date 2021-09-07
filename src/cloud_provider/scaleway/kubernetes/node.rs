@@ -19,15 +19,15 @@ pub enum NodeType {
 impl NodeType {
     pub fn as_str(&self) -> &str {
         match self {
-            NodeType::Gp1Xs => "GP1-XS",
-            NodeType::Gp1S => "GP1-S",
-            NodeType::Gp1M => "GP1-M",
-            NodeType::Gp1L => "GP1-L",
-            NodeType::Gp1Xl => "GP1-XL",
-            NodeType::Dev1M => "DEV1-M",
-            NodeType::Dev1L => "DEV1-L",
-            NodeType::Dev1Xl => "DEV1-XL",
-            NodeType::RenderS => "RENDER-S",
+            NodeType::Gp1Xs => "gp1-xs",
+            NodeType::Gp1S => "gp1-s",
+            NodeType::Gp1M => "gp1-m",
+            NodeType::Gp1L => "gp1-l",
+            NodeType::Gp1Xl => "gp1-xl",
+            NodeType::Dev1M => "dev1-m",
+            NodeType::Dev1L => "dev1-l",
+            NodeType::Dev1Xl => "dev1-xl",
+            NodeType::RenderS => "render-s",
         }
     }
 }
@@ -35,15 +35,15 @@ impl NodeType {
 impl fmt::Display for NodeType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            NodeType::Gp1Xs => write!(f, "GP1-XS"),
-            NodeType::Gp1S => write!(f, "GP1-S"),
-            NodeType::Gp1M => write!(f, "GP1-M"),
-            NodeType::Gp1L => write!(f, "GP1-L"),
-            NodeType::Gp1Xl => write!(f, "GP1-XL"),
-            NodeType::Dev1M => write!(f, "DEV1-M"),
-            NodeType::Dev1L => write!(f, "DEV1-L"),
-            NodeType::Dev1Xl => write!(f, "DEV1-XL"),
-            NodeType::RenderS => write!(f, "RENDER-S"),
+            NodeType::Gp1Xs => write!(f, "gp1-xs"),
+            NodeType::Gp1S => write!(f, "gp1-s"),
+            NodeType::Gp1M => write!(f, "gp1-m"),
+            NodeType::Gp1L => write!(f, "gp1-l"),
+            NodeType::Gp1Xl => write!(f, "gp1-xl"),
+            NodeType::Dev1M => write!(f, "dev1-m"),
+            NodeType::Dev1L => write!(f, "dev1-l"),
+            NodeType::Dev1Xl => write!(f, "dev1-xl"),
+            NodeType::RenderS => write!(f, "render-s"),
         }
     }
 }
@@ -53,15 +53,15 @@ impl FromStr for NodeType {
 
     fn from_str(s: &str) -> Result<NodeType, ()> {
         match s {
-            "GP1-XS" => Ok(NodeType::Gp1Xs),
-            "GP1-S" => Ok(NodeType::Gp1S),
-            "GP1-M" => Ok(NodeType::Gp1M),
-            "GP1-L" => Ok(NodeType::Gp1L),
-            "GP1-XL" => Ok(NodeType::Gp1Xl),
-            "DEV1-M" => Ok(NodeType::Dev1M),
-            "DEV1-L" => Ok(NodeType::Dev1L),
-            "DEV1-XL" => Ok(NodeType::Dev1Xl),
-            "RENDER-S" => Ok(NodeType::RenderS),
+            "gp1-xs" => Ok(NodeType::Gp1Xs),
+            "gp1-s" => Ok(NodeType::Gp1S),
+            "gp1-m" => Ok(NodeType::Gp1M),
+            "gp1-l" => Ok(NodeType::Gp1L),
+            "gp1-xl" => Ok(NodeType::Gp1Xl),
+            "dev1-m" => Ok(NodeType::Dev1M),
+            "dev1-l" => Ok(NodeType::Dev1L),
+            "dev1-xl" => Ok(NodeType::Dev1Xl),
+            "render-s" => Ok(NodeType::RenderS),
             _ => Err(()),
         }
     }
@@ -97,14 +97,14 @@ mod tests {
 
     #[test]
     fn test_node_types() {
-        assert_eq!(Node::new(NodeType::Dev1M).instance_type(), "DEV1-M");
-        assert_eq!(Node::new(NodeType::Dev1L).instance_type(), "DEV1-L");
-        assert_eq!(Node::new(NodeType::Dev1Xl).instance_type(), "DEV1-XL");
-        assert_eq!(Node::new(NodeType::Gp1Xs).instance_type(), "GP1-XS");
-        assert_eq!(Node::new(NodeType::Gp1S).instance_type(), "GP1-S");
-        assert_eq!(Node::new(NodeType::Gp1M).instance_type(), "GP1-M");
-        assert_eq!(Node::new(NodeType::Gp1L).instance_type(), "GP1-L");
-        assert_eq!(Node::new(NodeType::Gp1Xl).instance_type(), "GP1-XL");
-        assert_eq!(Node::new(NodeType::RenderS).instance_type(), "RENDER-S");
+        assert_eq!(Node::new(NodeType::Dev1M).instance_type(), "dev1-m");
+        assert_eq!(Node::new(NodeType::Dev1L).instance_type(), "dev1-l");
+        assert_eq!(Node::new(NodeType::Dev1Xl).instance_type(), "dev1-xl");
+        assert_eq!(Node::new(NodeType::Gp1Xs).instance_type(), "gp1-xs");
+        assert_eq!(Node::new(NodeType::Gp1S).instance_type(), "gp1-s");
+        assert_eq!(Node::new(NodeType::Gp1M).instance_type(), "gp1-m");
+        assert_eq!(Node::new(NodeType::Gp1L).instance_type(), "gp1-l");
+        assert_eq!(Node::new(NodeType::Gp1Xl).instance_type(), "gp1-xl");
+        assert_eq!(Node::new(NodeType::RenderS).instance_type(), "render-s");
     }
 }

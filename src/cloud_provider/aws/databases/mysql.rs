@@ -232,7 +232,7 @@ impl Helm for MySQL {
     }
 
     fn helm_chart_values_dir(&self) -> String {
-        format!("{}/aws/chart_values/mysql", self.context.lib_root_dir())
+        format!("{}/aws/chart_values/mysql", self.context.lib_root_dir()) // FIXME replace `chart_values` by `charts_values`
     }
 
     fn helm_chart_external_name_service_dir(&self) -> String {

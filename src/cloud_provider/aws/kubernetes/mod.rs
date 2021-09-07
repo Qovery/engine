@@ -423,7 +423,7 @@ impl<'a> EKS<'a> {
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
+            format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
@@ -740,7 +740,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
+            format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
@@ -786,7 +786,7 @@ impl<'a> Kubernetes for EKS<'a> {
                                         scope: EngineErrorScope::Engine,
                                         execution_id: self.context.execution_id().to_string(),
                                         message: Some(format!(
-                                            "error while trying to remove {} out of terraform state file. {:?}",
+                                            "error while trying to remove {} out of terraform state file.\n {:?}",
                                             entry, e.message
                                         )),
                                     })
@@ -954,7 +954,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
+            format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
@@ -1137,7 +1137,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("bootstrap/{}", self.name()),
+            format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 

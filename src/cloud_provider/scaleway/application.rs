@@ -286,11 +286,9 @@ impl Create for Application {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.application.on_create() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_user_stateless_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_user_stateless_service(target, self)
+        })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -300,11 +298,9 @@ impl Create for Application {
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("SCW.application.on_create_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_stateless_service_error(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_stateless_service_error(target, self)
+        })
     }
 }
 
@@ -326,14 +322,10 @@ impl Pause for Application {
         Ok(())
     }
 
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("SCW.application.on_pause_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        Ok(())
     }
 }
 
@@ -341,11 +333,9 @@ impl Delete for Application {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.application.on_delete() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, false)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateless_service(target, self, false)
+        })
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -355,11 +345,9 @@ impl Delete for Application {
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         warn!("SCW.application.on_delete_error() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateless_service(target, self, true)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateless_service(target, self, true)
+        })
     }
 }
 
@@ -419,5 +407,103 @@ impl FromStr for Region {
             "pl-waw" => Ok(Region::Warsaw),
             _ => Err(()),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum Zone {
+    Paris1,
+    Paris2,
+    Amsterdam1,
+    Warsaw1,
+}
+
+impl Zone {
+    // TODO(benjaminch): improve / refactor this!
+    pub fn as_str(&self) -> &str {
+        match self {
+            Zone::Paris1 => "fr-par-1",
+            Zone::Paris2 => "fr-par-2",
+            Zone::Amsterdam1 => "nl-ams-1",
+            Zone::Warsaw1 => "pl-waw-1",
+        }
+    }
+
+    pub fn region(&self) -> Region {
+        match self {
+            Zone::Paris1 => Region::Paris,
+            Zone::Paris2 => Region::Paris,
+            Zone::Amsterdam1 => Region::Amsterdam,
+            Zone::Warsaw1 => Region::Warsaw,
+        }
+    }
+}
+
+impl fmt::Display for Zone {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Zone::Paris1 => write!(f, "fr-par-1"),
+            Zone::Paris2 => write!(f, "fr-par-2"),
+            Zone::Amsterdam1 => write!(f, "nl-ams-1"),
+            Zone::Warsaw1 => write!(f, "pl-waw-1"),
+        }
+    }
+}
+
+impl FromStr for Zone {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Zone, ()> {
+        match s {
+            "fr-par-1" => Ok(Zone::Paris1),
+            "fr-par-2" => Ok(Zone::Paris2),
+            "nl-ams-1" => Ok(Zone::Amsterdam1),
+            "pl-waw-1" => Ok(Zone::Warsaw1),
+            _ => Err(()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Region, Zone};
+    use std::str::FromStr;
+
+    #[test]
+    fn test_region_to_str() {
+        assert_eq!("fr-par", Region::Paris.as_str());
+        assert_eq!("nl-ams", Region::Amsterdam.as_str());
+        assert_eq!("pl-waw", Region::Warsaw.as_str());
+    }
+
+    #[test]
+    fn test_region_from_str() {
+        assert_eq!(Region::from_str("fr-par"), Ok(Region::Paris));
+        assert_eq!(Region::from_str("nl-ams"), Ok(Region::Amsterdam));
+        assert_eq!(Region::from_str("pl-waw"), Ok(Region::Warsaw));
+    }
+
+    #[test]
+    fn test_zone_to_str() {
+        assert_eq!("fr-par-1", Zone::Paris1.as_str());
+        assert_eq!("fr-par-2", Zone::Paris2.as_str());
+        assert_eq!("nl-ams-1", Zone::Amsterdam1.as_str());
+        assert_eq!("pl-waw-1", Zone::Warsaw1.as_str());
+    }
+
+    #[test]
+    fn test_zone_from_str() {
+        assert_eq!(Zone::from_str("fr-par-1"), Ok(Zone::Paris1));
+        assert_eq!(Zone::from_str("fr-par-2"), Ok(Zone::Paris2));
+        assert_eq!(Zone::from_str("nl-ams-1"), Ok(Zone::Amsterdam1));
+        assert_eq!(Zone::from_str("pl-waw-1"), Ok(Zone::Warsaw1));
+    }
+
+    #[test]
+    fn test_zone_region() {
+        assert_eq!(Zone::Paris1.region(), Region::Paris);
+        assert_eq!(Zone::Paris2.region(), Region::Paris);
+        assert_eq!(Zone::Amsterdam1.region(), Region::Amsterdam);
+        assert_eq!(Zone::Warsaw1.region(), Region::Warsaw);
     }
 }

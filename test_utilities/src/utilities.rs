@@ -22,7 +22,7 @@ use tracing_subscriber;
 
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::scaleway::application::Region;
+use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
@@ -436,7 +436,7 @@ where
             Kind::Do => todo!(),
             Kind::Scw => {
                 // TODO(benjaminch): refactor all of this properly
-                let region = Region::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
+                let zone = Zone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
                 let project_id = secrets.clone().SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
                 let secret_access_key = secrets.clone().SCALEWAY_SECRET_KEY.unwrap();
 
@@ -450,7 +450,7 @@ where
 
                 let clusters_res = block_on(scaleway_api_rs::apis::clusters_api::list_clusters(
                     &configuration,
-                    region.to_string().as_str(),
+                    zone.region().to_string().as_str(),
                     None,
                     Some(project_id.as_str()),
                     None,
@@ -486,7 +486,7 @@ where
                             if tag.as_str() == expected_test_server_tag.as_str() {
                                 match block_on(scaleway_api_rs::apis::clusters_api::get_cluster_kube_config(
                                     &configuration,
-                                    region.as_str(),
+                                    zone.region().as_str(),
                                     cluster.id.as_ref().unwrap().as_str(),
                                 )) {
                                     Ok(res) => {

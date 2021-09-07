@@ -671,10 +671,12 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
     })
 }
 
-// #[cfg(feature = "test-aws-self-hosted")]
-// #[test]
+#[cfg(feature = "test-aws-self-hosted")]
+#[test]
+#[ignore]
 #[named]
-#[allow(dead_code)] // todo: make it work
+#[allow(dead_code)] // todo: make it work and remove the next line
+#[allow(unused_attributes)]
 fn deploy_ok_fail_fail_ok_environment() {
     let test_name = function_name!();
     engine_run_test(|| {

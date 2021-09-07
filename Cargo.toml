@@ -33,6 +33,7 @@ tar = ">=0.4.36"
 # logger
 tracing = "0.1.26"
 tracing-subscriber = "0.2.18"
+tracing-test = "0.1.0"
 
 # Docker deps
 # shiplift = "0.6.0"
@@ -61,7 +62,7 @@ rusoto_iam = "0.46.0"
 digitalocean = "0.1.1"
 
 # Scaleway Deps
-scaleway_api_rs = "0.1.1"
+scaleway_api_rs = "=0.1.1"
 
 [dev-dependencies]
 test-utilities = { path = "test_utilities" }
@@ -91,6 +92,6 @@ test-scw-infra = []
 test-all-infra = ["test-aws-infra", "test-do-infra", "test-scw-infra"]
 
 # functionnal tests by provider
-test-aws-all = ["test-aws-infra", "test-aws-infra", "test-aws-self-hosted"]
+test-aws-all = ["test-aws-infra", "test-aws-managed-services", "test-aws-self-hosted"]
 test-do-all = ["test-do-infra", "test-do-managed-services", "test-do-self-hosted"]
-test-scw-all = ["test-scw-infra", "test-scw-infra", "test-scw-self-hosted"]
+test-scw-all = ["test-scw-infra", "test-scw-managed-services", "test-scw-self-hosted"]

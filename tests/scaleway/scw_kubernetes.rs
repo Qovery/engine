@@ -5,7 +5,7 @@ use self::test_utilities::utilities::{context, engine_run_test, generate_cluster
 use ::function_name::named;
 use tracing::{span, Level};
 
-use qovery_engine::cloud_provider::scaleway::application::Region;
+use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::transaction::TransactionResult;
 
@@ -13,7 +13,7 @@ use test_utilities::scaleway::SCW_KUBERNETES_VERSION;
 
 #[allow(dead_code)]
 fn create_upgrade_and_destroy_kapsule_cluster(
-    region: Region,
+    zone: Zone,
     secrets: FuncTestsSecrets,
     boot_version: &str,
     _upgrade_to_version: &str,
@@ -34,14 +34,14 @@ fn create_upgrade_and_destroy_kapsule_cluster(
         let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let cluster_id = format!("qovery-test-{}", generate_cluster_id(region.as_str()));
+        let cluster_id = format!("qovery-test-{}", generate_cluster_id(zone.as_str()));
 
         let kubernetes = Kapsule::new(
             context,
             cluster_id.clone(),
             cluster_id,
             boot_version.to_string(),
-            region,
+            zone,
             &scw_cluster,
             &cloudflare,
             nodes,
@@ -85,12 +85,7 @@ fn create_upgrade_and_destroy_kapsule_cluster(
 }
 
 #[allow(dead_code)]
-fn create_and_destroy_kapsule_cluster(
-    region: Region,
-    secrets: FuncTestsSecrets,
-    test_infra_pause: bool,
-    test_name: &str,
-) {
+fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, test_infra_pause: bool, test_name: &str) {
     engine_run_test(|| {
         init();
 
@@ -106,14 +101,14 @@ fn create_and_destroy_kapsule_cluster(
         let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let cluster_id = format!("qovery-test-{}", generate_cluster_id(region.as_str()));
+        let cluster_id = format!("qovery-test-{}", generate_cluster_id(zone.as_str()));
 
         let kubernetes = Kapsule::new(
             context,
             cluster_id.clone(),
             cluster_id,
             SCW_KUBERNETES_VERSION.to_string(),
-            region,
+            zone,
             &scw_cluster,
             &cloudflare,
             nodes,
@@ -169,18 +164,87 @@ fn create_and_destroy_kapsule_cluster(
 #[cfg(feature = "test-scw-infra")]
 #[named]
 #[test]
-fn create_and_destroy_kapsule_cluster_par() {
-    let region = Region::Paris;
+fn create_and_destroy_kapsule_cluster_par_1() {
+    let zone = Zone::Paris1;
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_kapsule_cluster(region, secrets, false, function_name!());
+    create_and_destroy_kapsule_cluster(zone, secrets, false, function_name!());
+}
+
+#[cfg(feature = "test-scw-infra")]
+#[named]
+#[test]
+#[ignore]
+#[allow(dead_code)]
+fn create_and_destroy_kapsule_cluster_par_2() {
+    let zone = Zone::Paris2;
+    let secrets = FuncTestsSecrets::new();
+    create_and_destroy_kapsule_cluster(zone, secrets, false, function_name!());
+}
+
+#[cfg(feature = "test-scw-infra")]
+#[named]
+#[test]
+#[ignore]
+#[allow(dead_code)]
+fn create_and_destroy_kapsule_cluster_ams_1() {
+    let zone = Zone::Amsterdam1;
+    let secrets = FuncTestsSecrets::new();
+    create_and_destroy_kapsule_cluster(zone, secrets, false, function_name!());
+}
+
+#[cfg(feature = "test-scw-infra")]
+#[named]
+#[test]
+fn create_and_destroy_kapsule_cluster_war_1() {
+    let zone = Zone::Warsaw1;
+    let secrets = FuncTestsSecrets::new();
+    create_and_destroy_kapsule_cluster(zone, secrets, false, function_name!());
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-//#[test]
+#[test]
+#[ignore]
+#[allow(dead_code)]
+#[allow(unused_attributes)]
+#[named]
+fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
+    let zone = Zone::Paris1;
+    let secrets = FuncTestsSecrets::new();
+    create_upgrade_and_destroy_kapsule_cluster(zone, secrets, "1.18", "1.19", function_name!());
+}
+
+// only enable this test manually when we want to perform and validate upgrade process
+#[test]
+#[ignore]
+#[allow(unused_attributes)]
 #[allow(dead_code)]
 #[named]
-fn create_upgrade_and_destroy_kapsule_cluster_in_fr_par() {
-    let region = Region::Paris;
+fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
+    let zone = Zone::Paris2;
     let secrets = FuncTestsSecrets::new();
-    create_upgrade_and_destroy_kapsule_cluster(region, secrets, "1.18", "1.19", function_name!());
+    create_upgrade_and_destroy_kapsule_cluster(zone, secrets, "1.18", "1.19", function_name!());
+}
+
+// only enable this test manually when we want to perform and validate upgrade process
+#[test]
+#[ignore]
+#[allow(unused_attributes)]
+#[allow(dead_code)]
+#[named]
+fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
+    let zone = Zone::Amsterdam1;
+    let secrets = FuncTestsSecrets::new();
+    create_upgrade_and_destroy_kapsule_cluster(zone, secrets, "1.18", "1.19", function_name!());
+}
+
+// only enable this test manually when we want to perform and validate upgrade process
+#[test]
+#[ignore]
+#[allow(unused_attributes)]
+#[allow(dead_code)]
+#[named]
+fn create_upgrade_and_destroy_kapsule_cluster_in_war_1() {
+    let zone = Zone::Warsaw1;
+    let secrets = FuncTestsSecrets::new();
+    create_upgrade_and_destroy_kapsule_cluster(zone, secrets, "1.18", "1.19", function_name!());
 }
