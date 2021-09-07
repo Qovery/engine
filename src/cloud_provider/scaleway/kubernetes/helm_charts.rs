@@ -238,26 +238,13 @@ pub fn scw_helm_charts(
                     value: qovery_terraform_config.loki_storage_config_scaleway_s3,
                 },
                 ChartSetValue {
-                    key: "config.storage_config.aws.endpoint".to_string(),
-                    value: format!("s3.{}.scw.cloud", chart_config_prerequisites.zone.region().as_str()),
-                },
-                ChartSetValue {
                     key: "config.storage_config.aws.region".to_string(),
                     value: chart_config_prerequisites.zone.region().to_string(),
                 },
-                // we're not using dedicated keys as Scaleway do not yet support IAM
-                ChartSetValue {
-                    key: "aws_iam_loki_storage_key".to_string(),
-                    value: chart_config_prerequisites.scw_access_key.clone(),
-                },
-                ChartSetValue {
-                    key: "aws_iam_loki_storage_secret".to_string(),
-                    value: chart_config_prerequisites.scw_secret_key.clone(),
-                },
                 // Scaleway do not support encryption yet
                 ChartSetValue {
-                    key: "config.storage_config.aws.sse_encryption".to_string(),
-                    value: "false".to_string(),
+                    key: "config.storage_config.aws.s3forcepathstyle".to_string(),
+                    value: "true".to_string(),
                 },
                 // resources limits
                 ChartSetValue {
