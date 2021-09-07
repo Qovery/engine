@@ -97,6 +97,7 @@ pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
         secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string()),
         region,
         BucketDeleteStrategy::Empty, // do not delete bucket due to deletion 24h delay
+        false,
     )
 }
 
