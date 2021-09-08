@@ -32,7 +32,7 @@ use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
-use crate::scaleway::SCW_TEST_CLUSTER_ID;
+use crate::scaleway::SCW_KUBE_TEST_CLUSTER_ID;
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::runtime::block_on;
 use time::Instant;
@@ -478,7 +478,7 @@ where
                 }
 
                 let clusters = clusters.clusters.unwrap();
-                let expected_test_server_tag = format!("ClusterId={}", SCW_TEST_CLUSTER_ID);
+                let expected_test_server_tag = format!("ClusterId={}", SCW_KUBE_TEST_CLUSTER_ID);
 
                 for cluster in clusters.iter() {
                     if cluster.tags.is_some() {
