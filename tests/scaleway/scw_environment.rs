@@ -1,6 +1,6 @@
 extern crate test_utilities;
 
-use self::test_utilities::scaleway::{SCW_QOVERY_ORGANIZATION_ID, SCW_TEST_CLUSTER_ID};
+use self::test_utilities::scaleway::{SCW_KUBE_TEST_CLUSTER_ID, SCW_QOVERY_ORGANIZATION_ID};
 use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
@@ -252,7 +252,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
             Kind::Scw,
             environment.clone(),
             app_name.clone().as_str(),
-            SCW_TEST_CLUSTER_ID,
+            SCW_KUBE_TEST_CLUSTER_ID,
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -540,7 +540,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
         let (_, number) = is_pod_restarted_env(
             Kind::Scw,
-            SCW_TEST_CLUSTER_ID,
+            SCW_KUBE_TEST_CLUSTER_ID,
             environment_check1,
             app_name.clone().as_str(),
             secrets.clone(),
@@ -554,7 +554,7 @@ fn scaleway_kapsule_redeploy_same_app() {
 
         let (_, number2) = is_pod_restarted_env(
             Kind::Scw,
-            SCW_TEST_CLUSTER_ID,
+            SCW_KUBE_TEST_CLUSTER_ID,
             environment_check2,
             app_name.as_str(),
             secrets.clone(),

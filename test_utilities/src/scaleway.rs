@@ -16,10 +16,12 @@ use std::str::FromStr;
 use tracing::error;
 
 pub const SCW_QOVERY_ORGANIZATION_ID: &str = "zslbgcfanc6r2nbs";
-pub const SCW_TEST_CLUSTER_NAME: &str = "qovery-zb3a2b3b8";
-pub const SCW_TEST_CLUSTER_ID: &str = "zb3a2b3b8";
+pub const SCW_KUBE_TEST_CLUSTER_NAME: &str = "qovery-zb3a2b3b8";
+pub const SCW_KUBE_TEST_CLUSTER_ID: &str = "zb3a2b3b8";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
 pub const SCW_KUBERNETES_VERSION: &str = "1.18";
+pub const SCW_DATABASE_INSTANCE_TYPE: &str = "not-used";
+pub const SCW_DATABASE_DISK_TYPE: &str = "scw-sbv-ssd-0";
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     let secrets = FuncTestsSecrets::new();
@@ -53,9 +55,9 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
 
     Scaleway::new(
         context.clone(),
-        SCW_TEST_CLUSTER_ID,
+        SCW_KUBE_TEST_CLUSTER_ID,
         SCW_QOVERY_ORGANIZATION_ID,
-        SCW_TEST_CLUSTER_NAME,
+        SCW_KUBE_TEST_CLUSTER_NAME,
         secrets
             .SCALEWAY_ACCESS_KEY
             .expect("SCALEWAY_ACCESS_KEY is not set in secrets")
@@ -169,8 +171,8 @@ pub fn scw_kubernetes_kapsule<'a>(
     let secrets = FuncTestsSecrets::new();
     Kapsule::<'a>::new(
         context.clone(),
-        SCW_TEST_CLUSTER_ID.to_string(),
-        SCW_TEST_CLUSTER_NAME.to_string(),
+        SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+        SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
         SCW_KUBERNETES_VERSION.to_string(),
         Zone::from_str(
             secrets

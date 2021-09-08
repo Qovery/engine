@@ -23,6 +23,8 @@ pub fn environment_3_apps_3_routers_3_databases(
     context: &Context,
     organization_id: &str,
     test_domain: &str,
+    database_instance_type: &str,
+    database_disk_type: &str,
 ) -> Environment {
     let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
     let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
@@ -282,8 +284,8 @@ pub fn environment_3_apps_3_routers_3_databases(
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
-                database_instance_type: "db.t2.micro".to_string(),
-                database_disk_type: "gp2".to_string(),
+                database_instance_type: database_instance_type.to_string(),
+                database_disk_type: database_disk_type.to_string(),
             },
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -299,8 +301,8 @@ pub fn environment_3_apps_3_routers_3_databases(
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
-                database_instance_type: "db.t2.micro".to_string(),
-                database_disk_type: "gp2".to_string(),
+                database_instance_type: database_instance_type.to_string(),
+                database_disk_type: database_disk_type.to_string(),
             },
             Database {
                 kind: DatabaseKind::Mongodb,
@@ -316,8 +318,8 @@ pub fn environment_3_apps_3_routers_3_databases(
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
-                database_instance_type: "db.t3.medium".to_string(),
-                database_disk_type: "gp2".to_string(),
+                database_instance_type: database_instance_type.to_string(),
+                database_disk_type: database_disk_type.to_string(),
             },
         ],
         external_services: vec![],
@@ -381,6 +383,8 @@ pub fn environnement_2_app_2_routers_1_psql(
     context: &Context,
     organization_id: &str,
     test_domain: &str,
+    database_instance_type: &str,
+    database_disk_type: &str,
 ) -> Environment {
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
     let fqdn = format!("{}.{}", fqdn_id.clone(), test_domain);
@@ -416,8 +420,8 @@ pub fn environnement_2_app_2_routers_1_psql(
             total_cpus: "100m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "db.t2.micro".to_string(),
-            database_disk_type: "gp2".to_string(),
+            database_instance_type: database_instance_type.to_string(),
+            database_disk_type: database_disk_type.to_string(),
         }],
         applications: vec![
             Application {

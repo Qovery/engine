@@ -37,8 +37,8 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
 
         let kubernetes = Kapsule::new(
             context.clone(),
-            test_utilities::scaleway::SCW_TEST_CLUSTER_ID.to_string(),
-            test_utilities::scaleway::SCW_TEST_CLUSTER_NAME.to_string(),
+            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
             test_utilities::scaleway::SCW_KUBERNETES_VERSION.to_string(),
             test_utilities::scaleway::SCW_TEST_ZONE,
             &scw_cluster,
@@ -89,8 +89,8 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
 
         let kubernetes = Kapsule::new(
             context.clone(),
-            test_utilities::scaleway::SCW_TEST_CLUSTER_ID.to_string(),
-            test_utilities::scaleway::SCW_TEST_CLUSTER_NAME.to_string(),
+            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
             test_utilities::scaleway::SCW_KUBERNETES_VERSION.to_string(),
             test_utilities::scaleway::SCW_TEST_ZONE,
             &scw_cluster,

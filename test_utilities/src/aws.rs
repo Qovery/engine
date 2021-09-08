@@ -18,7 +18,9 @@ use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "us-east-2";
 pub const AWS_KUBERNETES_VERSION: &str = "1.18";
-pub const KUBE_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
+pub const AWS_KUBE_TEST_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
+pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t2.micro";
+pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 
 pub fn container_registry_ecr(context: &Context) -> ECR {
     let secrets = FuncTestsSecrets::new();
@@ -236,8 +238,8 @@ pub fn aws_kubernetes_eks<'a>(
     let secrets = FuncTestsSecrets::new();
     EKS::<'a>::new(
         context.clone(),
-        KUBE_CLUSTER_ID,
-        KUBE_CLUSTER_ID,
+        AWS_KUBE_TEST_CLUSTER_ID,
+        AWS_KUBE_TEST_CLUSTER_ID,
         AWS_KUBERNETES_VERSION,
         secrets.clone().AWS_DEFAULT_REGION.unwrap().as_str(),
         cloud_provider,
