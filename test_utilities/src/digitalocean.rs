@@ -16,8 +16,8 @@ use qovery_engine::cloud_provider::digitalocean::application::Region;
 pub const DO_QOVERY_ORGANIZATION_ID: &str = "a8nb94c7fwxzr2ja";
 pub const DO_KUBERNETES_VERSION: &str = "1.19";
 pub const DOCR_ID: &str = "gu9ep7t68htdu78l";
-pub const DOKS_CLUSTER_ID: &str = "gqgyb7zy4ykwumak";
-pub const DOKS_CLUSTER_NAME: &str = "QoveryDigitalOceanTest";
+pub const DOKS_KUBE_TEST_CLUSTER_ID: &str = "gqgyb7zy4ykwumak";
+pub const DOKS_KUBE_TEST_CLUSTER_NAME: &str = "QoveryDigitalOceanTest";
 
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     let secrets = FuncTestsSecrets::new();
@@ -57,14 +57,14 @@ pub fn do_kubernetes_ks<'a>(
     let secrets = FuncTestsSecrets::new();
     DOKS::<'a>::new(
         context.clone(),
-        DOKS_CLUSTER_ID.to_string(),
-        DOKS_CLUSTER_NAME.to_string(),
+        DOKS_KUBE_TEST_CLUSTER_ID.to_string(),
+        DOKS_KUBE_TEST_CLUSTER_NAME.to_string(),
         DO_KUBERNETES_VERSION.to_string(),
         Region::Frankfurt,
         cloud_provider,
         dns_provider,
         nodes,
-        do_kubernetes_cluster_options(secrets, DOKS_CLUSTER_ID.to_string()),
+        do_kubernetes_cluster_options(secrets, DOKS_KUBE_TEST_CLUSTER_ID.to_string()),
     )
 }
 
@@ -87,12 +87,12 @@ pub fn cloud_provider_digitalocean(context: &Context) -> DO {
     let secrets = FuncTestsSecrets::new();
     DO::new(
         context.clone(),
-        DOKS_CLUSTER_ID,
+        DOKS_KUBE_TEST_CLUSTER_ID,
         DO_QOVERY_ORGANIZATION_ID,
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
         secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().as_str(),
         secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().as_str(),
-        DOKS_CLUSTER_NAME,
+        DOKS_KUBE_TEST_CLUSTER_NAME,
         TerraformStateCredentials {
             access_key_id: secrets.TERRAFORM_AWS_ACCESS_KEY_ID.unwrap(),
             secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
