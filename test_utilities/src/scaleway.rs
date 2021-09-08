@@ -6,17 +6,16 @@ use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::{Action, Application, Context, Environment, GitCredentials, Kind, Route, Router};
+use qovery_engine::models::Context;
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use chrono::Utc;
 use std::str::FromStr;
 use tracing::error;
 
-pub const SCW_QOVERY_ORGANIZATION_ID: &str = "cf8e78e6-159b-45b6-bfb5-2430c9505080";
+pub const SCW_QOVERY_ORGANIZATION_ID: &str = "zslbgcfanc6r2nbs";
 pub const SCW_TEST_CLUSTER_NAME: &str = "qovery-zb3a2b3b8";
 pub const SCW_TEST_CLUSTER_ID: &str = "zb3a2b3b8";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;

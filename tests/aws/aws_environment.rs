@@ -1,11 +1,11 @@
 extern crate test_utilities;
 
-use self::test_utilities::aws::KUBE_CLUSTER_ID;
+use self::test_utilities::aws::{AWS_QOVERY_ORGANIZATION_ID, KUBE_CLUSTER_ID};
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{engine_run_test, generate_id, get_pods, is_pod_restarted_env, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
+use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, EnvironmentVariable, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use test_utilities::utilities::context;
 use test_utilities::utilities::init;
@@ -80,7 +80,14 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let context = context();
         let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets);
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         let mut environment_for_delete = environment.clone();
         environment.routers = vec![];
@@ -119,7 +126,15 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let context = context();
         let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         let ea = EnvironmentAction::Environment(environment.clone());
         match deploy_environment(&context, &ea) {
@@ -178,7 +193,14 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
 
-        let mut environment = test_utilities::aws::non_working_environment(&context, secrets);
+        let mut environment = test_utilities::common::non_working_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
         environment.routers = vec![];
 
         let mut environment_delete = environment.clone();
@@ -217,7 +239,14 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets);
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
         environment.applications = environment
             .applications
             .into_iter()
@@ -266,7 +295,14 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets);
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
         environment.applications = environment
             .applications
             .into_iter()
@@ -315,7 +351,14 @@ fn deploy_a_working_environment_with_domain() {
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::aws::working_minimal_environment(&context, secrets);
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -407,7 +450,14 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
 
-        let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets);
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         // Todo: make an image that check there is a mounted disk
         environment.applications = environment
@@ -467,7 +517,15 @@ fn redeploy_same_app_with_ebs() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
 
-        let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         // Todo: make an image that check there is a mounted disk
         environment.applications = environment
@@ -629,7 +687,14 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let secrets = FuncTestsSecrets::new();
 
         // env part generation
-        let environment = test_utilities::aws::working_minimal_environment(&context, secrets);
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
         let mut environment_for_not_working = environment.clone();
         // this environment is broken by container exit
         environment_for_not_working.applications = environment_for_not_working
@@ -688,7 +753,14 @@ fn deploy_ok_fail_fail_ok_environment() {
         // working env
         let context = context();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::aws::working_minimal_environment(&context, secrets);
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
@@ -770,7 +842,14 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 
         let context = context();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::aws::non_working_environment(&context, secrets);
+        let environment = test_utilities::common::non_working_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         let context_for_delete = context.clone_not_same_execution_id();
         let mut delete_env = environment.clone();
@@ -808,12 +887,25 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
         // context for non working environment
         let context = context();
         let secrets = FuncTestsSecrets::new();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::aws::non_working_environment(&context, secrets.clone());
-        let failover_environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+        let environment =
+            test_utilities::common::non_working_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
+        let failover_environment = test_utilities::common::working_minimal_environment(
+            &context,
+            AWS_QOVERY_ORGANIZATION_ID,
+            test_domain.as_str(),
+        );
         // context for deletion
         let context_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::aws::working_minimal_environment(&context_deletion, secrets);
+        let mut delete_env = test_utilities::common::working_minimal_environment(
+            &context_deletion,
+            AWS_QOVERY_ORGANIZATION_ID,
+            test_domain.as_str(),
+        );
         delete_env.action = Action::Delete;
         let ea_delete = EnvironmentAction::Environment(delete_env);
         let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
@@ -833,62 +925,90 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
     })
 }
 
-// fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
-//     init();
-//     // context for non working environment
-//     let context_failover_1 = context();
-//     let context_failover_2 = context_failover_1.clone_not_same_execution_id();
-//
-//     let context_first_fail_deployement_1 = context_failover_1.clone_not_same_execution_id();
-//     let context_second_fail_deployement_2 = context_failover_1.clone_not_same_execution_id();
-//
-//     let mut failover_environment_1 = test_utilities::aws::echo_app_environment(&context_failover_1);
-//     let mut fail_app_1 =
-//         test_utilities::aws::non_working_environment(&context_first_fail_deployement_1);
-//     let mut failover_environment_2 = test_utilities::aws::echo_app_environment(&context_failover_2);
-//     let mut fail_app_2 =
-//         test_utilities::aws::non_working_environment(&context_second_fail_deployement_2);
-//
-//     failover_environment_2.applications = failover_environment_2
-//         .applications
-//         .into_iter()
-//         .map(|mut app| {
-//             app.environment_variables = vec![EnvironmentVariable {
-//                 key: "ECHO_TEXT".to_string(),
-//                 value: "Lilou".to_string(),
-//             }];
-//             app
-//         })
-//         .collect::<Vec<qovery_engine::models::Application>>();
-//
-//     // context for deletion
-//     let context_deletion = context_failover_1.clone_not_same_execution_id();
-//     let mut delete_env = test_utilities::aws::echo_app_environment(&context_deletion);
-//     delete_env.action = Action::Delete;
-//     let ea_delete = EnvironmentAction::Environment(delete_env);
-//
-//     // first deployement
-//     let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, failover_environment_1);
-//     let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, failover_environment_2);
-//
-//     match deploy_environment(&context_failover_1, &ea1) {
-//         TransactionResult::Ok => assert!(false),
-//         TransactionResult::Rollback(_) => assert!(false),
-//         TransactionResult::UnrecoverableError(_, _) => assert!(true),
-//     };
-//
-//     match deploy_environment(&context_failover_2, &ea2) {
-//         TransactionResult::Ok => assert!(false),
-//         TransactionResult::Rollback(_) => assert!(false),
-//         TransactionResult::UnrecoverableError(_, _) => assert!(true),
-//     };
-//
-//     match delete_environment(&context_deletion, &ea_delete) {
-//         TransactionResult::Ok => assert!(true),
-//         TransactionResult::Rollback(_) => assert!(false),
-//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-//     };
-// }
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+#[ignore]
+fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
+    init();
+    // context for non working environment
+    let context_failover_1 = context();
+    let context_failover_2 = context_failover_1.clone_not_same_execution_id();
+
+    let context_first_fail_deployement_1 = context_failover_1.clone_not_same_execution_id();
+    let context_second_fail_deployement_2 = context_failover_1.clone_not_same_execution_id();
+
+    let secrets = FuncTestsSecrets::new();
+    let test_domain = secrets
+        .DEFAULT_TEST_DOMAIN
+        .as_ref()
+        .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
+
+    let failover_environment_1 = test_utilities::common::echo_app_environment(
+        &context_failover_1,
+        AWS_QOVERY_ORGANIZATION_ID,
+        test_domain.as_str(),
+    );
+    let fail_app_1 = test_utilities::common::non_working_environment(
+        &context_first_fail_deployement_1,
+        AWS_QOVERY_ORGANIZATION_ID,
+        test_domain.as_str(),
+    );
+    let mut failover_environment_2 = test_utilities::common::echo_app_environment(
+        &context_failover_2,
+        AWS_QOVERY_ORGANIZATION_ID,
+        test_domain.as_str(),
+    );
+    let fail_app_2 = test_utilities::common::non_working_environment(
+        &context_second_fail_deployement_2,
+        AWS_QOVERY_ORGANIZATION_ID,
+        test_domain.as_str(),
+    );
+
+    failover_environment_2.applications = failover_environment_2
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.environment_variables = vec![EnvironmentVariable {
+                key: "ECHO_TEXT".to_string(),
+                value: "Lilou".to_string(),
+            }];
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+
+    // context for deletion
+    let context_deletion = context_failover_1.clone_not_same_execution_id();
+    let mut delete_env = test_utilities::common::echo_app_environment(
+        &context_deletion,
+        AWS_QOVERY_ORGANIZATION_ID,
+        test_domain.as_str(),
+    );
+    delete_env.action = Action::Delete;
+    let ea_delete = EnvironmentAction::Environment(delete_env);
+
+    // first deployement
+    let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, failover_environment_1);
+    let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, failover_environment_2);
+
+    match deploy_environment(&context_failover_1, &ea1) {
+        TransactionResult::Ok => assert!(false),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
+
+    match deploy_environment(&context_failover_2, &ea2) {
+        TransactionResult::Ok => assert!(false),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+    };
+
+    match delete_environment(&context_deletion, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+}
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
@@ -903,12 +1023,22 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
 
         let context = context();
         let secrets = FuncTestsSecrets::new();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::aws::non_working_environment(&context, secrets.clone());
-        let failover_environment = test_utilities::aws::non_working_environment(&context, secrets.clone());
+        let environment =
+            test_utilities::common::non_working_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
+        let failover_environment =
+            test_utilities::common::non_working_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
 
         let context_for_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::aws::non_working_environment(&context_for_deletion, secrets);
+        let mut delete_env = test_utilities::common::non_working_environment(
+            &context_for_deletion,
+            AWS_QOVERY_ORGANIZATION_ID,
+            test_domain.as_str(),
+        );
         delete_env.action = Action::Delete;
         // environment action initialize
         let ea_delete = EnvironmentAction::Environment(delete_env);

@@ -1,22 +1,15 @@
 extern crate serde;
 extern crate serde_derive;
-use tracing::error;
 
 use chrono::Utc;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
-use qovery_engine::cloud_provider::TerraformStateCredentials;
-use qovery_engine::container_registry::docker_hub::DockerHub;
-use qovery_engine::container_registry::ecr::ECR;
-use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::engine::Engine;
 use qovery_engine::models::{
     Action, Application, Context, Database, DatabaseKind, Environment, EnvironmentVariable, GitCredentials, Kind,
     Route, Router, Storage, StorageType,
 };
 
-use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
+use crate::utilities::generate_id;
 
 pub fn execution_id() -> String {
     Utc::now()
@@ -26,7 +19,11 @@ pub fn execution_id() -> String {
         .replace("+", "-")
 }
 
-pub fn environment_3_apps_3_routers_3_databases(context: &Context, test_domain: &str, ) -> Environment {
+pub fn environment_3_apps_3_routers_3_databases(
+    context: &Context,
+    organization_id: &str,
+    test_domain: &str,
+) -> Environment {
     let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
     let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
     let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
@@ -67,7 +64,7 @@ pub fn environment_3_apps_3_routers_3_databases(context: &Context, test_domain: 
         kind: Kind::Development,
         owner_id: generate_id(),
         project_id: generate_id(),
-        organization_id: ORGANIZATION_ID.to_string(),
+        organization_id: organization_id.to_string(),
         action: Action::Create,
         applications: vec![
             Application {
@@ -380,7 +377,11 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
     }
 }
 
-pub fn environnement_2_app_2_routers_1_psql(context: &Context, organization_id: &str) -> Environment {
+pub fn environnement_2_app_2_routers_1_psql(
+    context: &Context,
+    organization_id: &str,
+    test_domain: &str,
+) -> Environment {
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
     let fqdn = format!("{}.{}", fqdn_id.clone(), test_domain);
 
@@ -554,8 +555,8 @@ pub fn environnement_2_app_2_routers_1_psql(context: &Context, organization_id: 
     }
 }
 
-pub fn non_working_environment(context: &Context, organization_id: &str) -> Environment {
-    let mut environment = working_minimal_environment(context, organization_id);
+pub fn non_working_environment(context: &Context, organization_id: &str, test_domain: &str) -> Environment {
+    let mut environment = working_minimal_environment(context, organization_id, test_domain);
 
     environment.applications = environment
         .applications
@@ -628,7 +629,7 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
     }
 }
 
-pub fn environment_only_http_server(context: &Context) -> Environment {
+pub fn environment_only_http_server(context: &Context, organization_id: &str) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -636,7 +637,7 @@ pub fn environment_only_http_server(context: &Context) -> Environment {
         kind: Kind::Development,
         owner_id: generate_id(),
         project_id: generate_id(),
-        organization_id: ORGANIZATION_ID.to_string(),
+        organization_id: organization_id.to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
@@ -669,7 +670,7 @@ pub fn environment_only_http_server(context: &Context) -> Environment {
     }
 }
 
-pub fn environment_only_http_server_router(context: &Context, secrets: FuncTestsSecrets) -> Environment {
+pub fn environment_only_http_server_router(context: &Context, organization_id: &str, test_domain: &str) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -677,7 +678,7 @@ pub fn environment_only_http_server_router(context: &Context, secrets: FuncTests
         kind: Kind::Development,
         owner_id: generate_id(),
         project_id: generate_id(),
-        organization_id: ORGANIZATION_ID.to_string(),
+        organization_id: organization_id.to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
@@ -707,7 +708,7 @@ pub fn environment_only_http_server_router(context: &Context, secrets: FuncTests
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: format!("{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap()),
+            default_domain: format!("{}.{}", generate_id(), test_domain),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {

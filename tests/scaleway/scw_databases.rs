@@ -9,7 +9,8 @@ use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{context, engine_run_test, generate_id, init, FuncTestsSecrets};
 
 use crate::scaleway::scw_environment::{delete_environment, deploy_environment};
-use test_utilities::scaleway::working_minimal_environment;
+use test_utilities::common::working_minimal_environment;
+use test_utilities::scaleway::SCW_QOVERY_ORGANIZATION_ID;
 
 /**
  **
@@ -124,7 +125,15 @@ fn test_postgresql_configuration(
 fn postgresql_v10_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_postgresql_configuration(context, environment, secrets, "10", function_name!());
 }
 
@@ -134,7 +143,15 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
 fn postgresql_v11_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_postgresql_configuration(context, environment, secrets, "11", function_name!());
 }
 
@@ -144,7 +161,15 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
 fn postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_postgresql_configuration(context, environment, secrets, "12", function_name!());
 }
 
@@ -269,7 +294,15 @@ fn test_mongodb_configuration(
 fn mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_mongodb_configuration(context, environment, secrets, "3.6", function_name!());
 }
 
@@ -279,7 +312,15 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
 fn mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_mongodb_configuration(context, environment, secrets, "4.0", function_name!());
 }
 
@@ -289,7 +330,15 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
 fn mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_mongodb_configuration(context, environment, secrets, "4.2", function_name!());
 }
 
@@ -299,7 +348,15 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
 fn mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_mongodb_configuration(context, environment, secrets, "4.4", function_name!());
 }
 
@@ -427,7 +484,15 @@ fn test_mysql_configuration(
 fn mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_mysql_configuration(context, environment, secrets, "5.7", function_name!());
 }
 
@@ -437,7 +502,15 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
 fn mysql_v8_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_mysql_configuration(context, environment, secrets, "8.0", function_name!());
 }
 
@@ -567,7 +640,15 @@ fn test_redis_configuration(
 fn redis_v5_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_redis_configuration(context, environment, secrets, "5", function_name!());
 }
 
@@ -577,6 +658,14 @@ fn redis_v5_deploy_a_working_dev_environment() {
 fn redis_v6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(&context, secrets.clone());
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
     test_redis_configuration(context, environment, secrets, "6", function_name!());
 }
