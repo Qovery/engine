@@ -40,17 +40,15 @@ impl Role {
                 role_name: self.role_name.clone(),
             })
             .await;
-        match role {
-            Ok(_) => return Ok(true),
-            Err(e) => {
-                return Err(SimpleError::new(
-                    SimpleErrorKind::Other,
-                    Some(format!(
-                        "Unable to know if {} exist on AWS Account: {:?}",
-                        &self.role_name, e
-                    )),
-                ))
-            }
+        return match role {
+            Ok(_) => Ok(true),
+            Err(e) => Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some(format!(
+                    "Unable to know if {} exist on AWS Account: {:?}",
+                    &self.role_name, e
+                )),
+            )),
         };
     }
 
@@ -77,18 +75,16 @@ impl Role {
                 let created = Runtime::new()
                     .expect("Failed to create Tokio runtime to check if role exist")
                     .block_on(future_create);
-                match created {
-                    Ok(_) => return Ok(true),
-                    Err(e) => {
-                        return Err(SimpleError::new(
-                            SimpleErrorKind::Other,
-                            Some(format!(
-                                "Unable to know if {} exist on AWS Account: {:?}",
-                                &self.role_name, e
-                            )),
-                        ))
-                    }
-                }
+                return match created {
+                    Ok(_) => Ok(true),
+                    Err(e) => Err(SimpleError::new(
+                        SimpleErrorKind::Other,
+                        Some(format!(
+                            "Unable to know if {} exist on AWS Account: {:?}",
+                            &self.role_name, e
+                        )),
+                    )),
+                };
             }
         };
     }
