@@ -99,7 +99,7 @@ impl ScalewayCR {
 
     pub fn get_image(&self, image: &Image) -> Option<scaleway_api_rs::models::ScalewayRegistryV1Image> {
         // https://developers.scaleway.com/en/products/registry/api/#get-a6f1bc
-        let scaleway_images = match block_on(scaleway_api_rs::apis::images_api::list_images1(
+        let scaleway_images = match block_on(scaleway_api_rs::apis::images_api::list_images(
             &self.get_configuration(),
             self.zone.region().to_string().as_str(),
             None,
@@ -145,7 +145,7 @@ impl ScalewayCR {
 
         let image_to_delete = image_to_delete.unwrap();
 
-        match block_on(scaleway_api_rs::apis::images_api::delete_image1(
+        match block_on(scaleway_api_rs::apis::images_api::delete_image(
             &self.get_configuration(),
             self.zone.region().to_string().as_str(),
             image_to_delete.id.unwrap().as_str(),
@@ -212,7 +212,7 @@ impl ScalewayCR {
         match block_on(scaleway_api_rs::apis::namespaces_api::create_namespace(
             &self.get_configuration(),
             self.zone.region().to_string().as_str(),
-            scaleway_api_rs::models::inline_object_23::InlineObject23 {
+            scaleway_api_rs::models::inline_object_29::InlineObject29 {
                 name: image.name.clone(),
                 description: None,
                 project_id: Some(self.default_project_id.clone()),
