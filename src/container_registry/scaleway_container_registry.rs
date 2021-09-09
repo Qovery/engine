@@ -105,8 +105,8 @@ impl ScalewayCR {
             None,
             None,
             None,
-            None,
             Some(image.name.as_str()),
+            None,
             None,
             Some(self.default_project_id.as_str()),
         )) {
