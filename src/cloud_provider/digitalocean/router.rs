@@ -184,7 +184,7 @@ impl Service for Router {
         match kubernetes_config_file_path {
             Ok(kubernetes_config_file_path_string) => {
                 // Default domain
-                let external_ingress_hostname_default = crate::cmd::kubectl::do_kubectl_exec_get_external_ingress_ip(
+                let external_ingress_hostname_default = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
                     kubernetes_config_file_path_string.as_str(),
                     "nginx-ingress",
                     "app=nginx-ingress,component=controller",
@@ -197,12 +197,12 @@ impl Service for Router {
                         None => {
                             return Err(self.engine_error(
                                 EngineErrorCause::Internal,
-                                "Error while trying to get Load Balancer IP from Kubernetes cluster".into(),
+                                "Error while trying to get Load Balancer hostname from Kubernetes cluster".into(),
                             ));
                         }
                     },
                     _ => {
-                        error!("can't fetch external ingress ip");
+                        error!("can't fetch external ingress hostname");
                     }
                 }
             }
