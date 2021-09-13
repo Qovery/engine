@@ -43,7 +43,7 @@ pub trait Service {
         )
         .unwrap()
     }
-    fn version(&self) -> &str;
+    fn version(&self) -> String;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
     fn start_timeout(&self) -> Timeout<u32>;
@@ -243,40 +243,6 @@ pub enum DatabaseType<'a> {
 }
 
 #[derive(Eq, PartialEq)]
-pub struct ServiceVersion {
-    major: u32,
-    minor: u32,
-    update: u32,
-    suffix: Option<&str>,
-}
-
-impl ServiceVersion {
-    fn new(major: u32, minor: u32, update: u32, suffix: Option<&str>) {
-        ServiceVersion {
-            major,
-            minor,
-            update,
-            suffix,
-        }
-    }
-
-    fn to_string(&self) -> String {
-        match self.suffix {
-            Some(s) => format!("{}.{}.{}{}", self.major, self.minor, self.update, s),
-            None => format!("{}.{}.{}", self.major, self.minor, self.update),
-        }
-    }
-
-    fn to_major_string(&self) -> String {
-        format!("{}", self.major),
-    }
-
-    fn to_major_minor_string(&self) -> String {
-        format!("{}.{}", self.major, self.minor),
-    }
-}
-
-#[derive(Eq, PartialEq)]
 pub enum ServiceType<'a> {
     Application,
     Database(DatabaseType<'a>),
@@ -348,7 +314,7 @@ pub fn default_tera_context(
         context.insert("private_port", &service.private_port().unwrap());
     }
 
-    context.insert("version", service.version());
+    context.insert("version", &service.version());
 
     context
 }

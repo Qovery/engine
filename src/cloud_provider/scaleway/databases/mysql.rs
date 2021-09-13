@@ -8,21 +8,22 @@ use crate::cloud_provider::service::{
     Upgrade,
 };
 use crate::cloud_provider::utilities::{
-    generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use, sanitize_name,
+    get_self_hosted_mysql_version, get_supported_version_to_use, sanitize_name, VersionsNumber,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorScope, StringError};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
 use crate::models::{Context, Listen, Listener, Listeners};
 use std::collections::HashMap;
+use std::str::FromStr;
 
 pub struct MySQL {
     context: Context,
     id: String,
     action: Action,
     name: String,
-    version: String,
+    version: VersionsNumber,
     fqdn: String,
     fqdn_id: String,
     total_cpus: String,
@@ -38,7 +39,7 @@ impl MySQL {
         id: &str,
         action: Action,
         name: &str,
-        version: &str,
+        version: VersionsNumber,
         fqdn: &str,
         fqdn_id: &str,
         total_cpus: String,
@@ -52,7 +53,7 @@ impl MySQL {
             action,
             id: id.to_string(),
             name: name.to_string(),
-            version: version.to_string(),
+            version,
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
             total_cpus,
@@ -63,11 +64,18 @@ impl MySQL {
         }
     }
 
-    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
-        check_service_version(Self::get_mysql_version(self.version(), is_managed_services), self)
+    fn matching_correct_version(&self, is_managed_services: bool) -> Result<VersionsNumber, EngineError> {
+        let version = check_service_version(Self::get_mysql_version(self.version(), is_managed_services), self)?;
+        match VersionsNumber::from_str(version.as_str()) {
+            Ok(res) => Ok(res),
+            Err(e) => Err(self.engine_error(
+                EngineErrorCause::Internal,
+                format!("cannot parse database version, err: {}", e),
+            )),
+        }
     }
 
-    fn get_mysql_version(requested_version: &str, is_managed_service: bool) -> Result<String, StringError> {
+    fn get_mysql_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
         if is_managed_service {
             Self::get_managed_mysql_version(requested_version)
         } else {
@@ -75,13 +83,14 @@ impl MySQL {
         }
     }
 
-    fn get_managed_mysql_version(requested_version: &str) -> Result<String, StringError> {
+    fn get_managed_mysql_version(requested_version: String) -> Result<String, StringError> {
         // Scaleway supported MySQL versions
         // https://api.scaleway.com/rdb/v1/regions/fr-par/database-engines
         let mut supported_mysql_versions = HashMap::new();
 
         // {"name": "MySQL", "version":"8","end_of_life":"2026-04-01T00:00:00Z"}
         supported_mysql_versions.insert("8".to_string(), "8".to_string());
+        supported_mysql_versions.insert("8.0".to_string(), "8.0".to_string());
 
         get_supported_version_to_use("RDS MySQL", supported_mysql_versions, requested_version)
     }
@@ -110,8 +119,8 @@ impl Service for MySQL {
         sanitize_name("mysql", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.to_string()
     }
 
     fn action(&self) -> &Action {
@@ -168,7 +177,8 @@ impl Service for MySQL {
         context.insert("namespace", environment.namespace());
 
         let version = &self.matching_correct_version(is_managed_services)?;
-        context.insert("version", &version);
+        context.insert("version_major", &version.to_major_version_string());
+        context.insert("version", &version.to_string()); // Scaleway needs to have major version only
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
             context.insert(k, v);

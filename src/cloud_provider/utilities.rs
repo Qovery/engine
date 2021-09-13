@@ -12,11 +12,12 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::num::ParseFloatError;
+use std::str::FromStr;
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::proto::rr::{RData, RecordType};
 use trust_dns_resolver::Resolver;
 
-pub fn get_self_hosted_postgres_version(requested_version: &str) -> Result<String, StringError> {
+pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_postgres_versions = HashMap::new();
 
     // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
@@ -36,7 +37,7 @@ pub fn get_self_hosted_postgres_version(requested_version: &str) -> Result<Strin
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
 
-pub fn get_self_hosted_mysql_version(requested_version: &str) -> Result<String, StringError> {
+pub fn get_self_hosted_mysql_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_mysql_versions = HashMap::new();
     // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
 
@@ -51,7 +52,7 @@ pub fn get_self_hosted_mysql_version(requested_version: &str) -> Result<String, 
     get_supported_version_to_use("MySQL", supported_mysql_versions, requested_version)
 }
 
-pub fn get_self_hosted_mongodb_version(requested_version: &str) -> Result<String, StringError> {
+pub fn get_self_hosted_mongodb_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_mongodb_versions = HashMap::new();
 
     // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
@@ -75,7 +76,7 @@ pub fn get_self_hosted_mongodb_version(requested_version: &str) -> Result<String
     get_supported_version_to_use("MongoDB", supported_mongodb_versions, requested_version)
 }
 
-pub fn get_self_hosted_redis_version(requested_version: &str) -> Result<String, StringError> {
+pub fn get_self_hosted_redis_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_redis_versions = HashMap::with_capacity(4);
     // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
 
@@ -90,9 +91,9 @@ pub fn get_self_hosted_redis_version(requested_version: &str) -> Result<String, 
 pub fn get_supported_version_to_use(
     database_name: &str,
     all_supported_versions: HashMap<String, String>,
-    version_to_check: &str,
+    version_to_check: String,
 ) -> Result<String, StringError> {
-    let version = match get_version_number(version_to_check) {
+    let version = match VersionsNumber::from_str(version_to_check.as_str()) {
         Ok(version) => version,
         Err(e) => return Err(e),
     };
@@ -225,44 +226,93 @@ pub struct VersionsNumber {
     pub(crate) major: String,
     pub(crate) minor: Option<String>,
     pub(crate) patch: Option<String>,
+    pub(crate) suffix: Option<String>,
 }
 
-impl fmt::Display for VersionsNumber {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl VersionsNumber {
+    pub fn new(major: String, minor: Option<String>, patch: Option<String>, suffix: Option<String>) -> Self {
+        VersionsNumber {
+            major,
+            minor,
+            patch,
+            suffix,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
         let mut version = vec![self.major.to_string()];
+
         if self.minor.is_some() {
             version.push(self.minor.clone().unwrap())
         }
         if self.patch.is_some() {
             version.push(self.patch.clone().unwrap())
         }
-        write!(f, "{}", version.join("."))
+        if self.suffix.is_some() {
+            version.push(self.suffix.clone().unwrap())
+        }
+
+        version.join(".")
+    }
+
+    pub fn to_major_version_string(&self) -> String {
+        self.major.clone()
+    }
+
+    pub fn to_major_minor_version_string(&self, default_minor: &str) -> String {
+        let test = format!(
+            "{}.{}",
+            self.major.clone(),
+            self.minor.as_ref().unwrap_or(&default_minor.to_string())
+        );
+
+        test
     }
 }
 
-pub fn get_version_number(version: &str) -> Result<VersionsNumber, StringError> {
-    let mut version_split = version.split('.');
+impl FromStr for VersionsNumber {
+    type Err = StringError;
 
-    let major = match version_split.next() {
-        Some(major) => {
-            let major = major.to_string();
-            major.replace("v", "")
+    fn from_str(version: &str) -> Result<Self, Self::Err> {
+        if version.trim() == "" {
+            return Err(StringError::from("version cannot be empty"));
         }
-        _ => {
-            return Err(format!(
-                "please check the version you've sent ({}), it can't be checked",
-                version
-            ))
-        }
-    };
 
-    let minor = version_split.next().map(|minor| {
-        let minor = minor.to_string();
-        minor.replace("+", "")
-    });
-    let patch = version_split.next().map(|patch| patch.to_string());
+        let mut version_split = version.splitn(4, '.').map(|v| v.trim());
 
-    Ok(VersionsNumber { major, minor, patch })
+        let major = match version_split.next() {
+            Some(major) => {
+                let major = major.to_string();
+                major.replace("v", "")
+            }
+            None => {
+                return Err(format!(
+                    "please check the version you've sent ({}), it can't be checked",
+                    version
+                ))
+            }
+        };
+
+        let minor = version_split.next().map(|minor| {
+            let minor = minor.to_string();
+            minor.replace("+", "")
+        });
+
+        let patch = version_split.next().map(|patch| patch.to_string());
+
+        let suffix = version_split.next().map(|patch| patch.to_string());
+
+        // TODO(benjaminch): Handle properly the case where versions are empty
+        // eq. 1..2
+
+        Ok(VersionsNumber::new(major, minor, patch, suffix))
+    }
+}
+
+impl fmt::Display for VersionsNumber {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
 }
 
 fn cloudflare_dns_resolver() -> Resolver {
@@ -505,9 +555,11 @@ mod tests {
     use crate::cloud_provider::models::CpuLimits;
     use crate::cloud_provider::utilities::{
         cloudflare_dns_resolver, convert_k8s_cpu_value_to_f32, get_cname_record_value,
-        validate_k8s_required_cpu_and_burstable,
+        validate_k8s_required_cpu_and_burstable, VersionsNumber,
     };
+    use crate::error::StringError;
     use crate::models::ListenersHelper;
+    use std::str::FromStr;
 
     #[test]
     pub fn test_k8s_milli_cpu_convert() {
@@ -554,5 +606,86 @@ mod tests {
         let cname = get_cname_record_value(&resolver, "ci-test-no-delete.qovery.io");
 
         assert_eq!(cname, Some(String::from("qovery.io.")));
+    }
+
+    #[test]
+    pub fn test_versions_number() {
+        // setup:
+        struct TestCase<'a> {
+            input: &'a str,
+            expected_output: Result<VersionsNumber, StringError>,
+            description: &'a str,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "",
+                expected_output: Err(StringError::from("version cannot be empty")),
+                description: "empty version str",
+            },
+            TestCase {
+                input: "    ",
+                expected_output: Err(StringError::from("version cannot be empty")),
+                description: "version a tab str",
+            },
+            TestCase {
+                input: " ",
+                expected_output: Err(StringError::from("version cannot be empty")),
+                description: "version as a space str",
+            },
+            TestCase {
+                input: "-", // TODO(benjaminch): better handle this case, should trigger an error
+                expected_output: Ok(VersionsNumber::new("".to_string(), None, None, Some("".to_string()))),
+                description: "suffix separator only",
+            },
+            TestCase {
+                input: "test",
+                expected_output: Ok(VersionsNumber::new("test".to_string(), None, None, None)),
+                description: "bad string",
+            },
+            TestCase {
+                input: "1,2,3,4", // TODO(benjaminch): better handle this case, should trigger an error
+                expected_output: Ok(VersionsNumber::new("1,2,3,4".to_string(), None, None, None)),
+                description: "bad versions separator",
+            },
+            TestCase {
+                input: "1",
+                expected_output: Ok(VersionsNumber::new("1".to_string(), None, None, None)),
+                description: "major only",
+            },
+            TestCase {
+                input: "1.1",
+                expected_output: Ok(VersionsNumber::new("1".to_string(), Some("1".to_string()), None, None)),
+                description: "major.minor only",
+            },
+            TestCase {
+                input: "1.1.1",
+                expected_output: Ok(VersionsNumber::new(
+                    "1".to_string(),
+                    Some("1".to_string()),
+                    Some("1".to_string()),
+                    None,
+                )),
+                description: "major.minor.update only",
+            },
+            TestCase {
+                input: "1.1.1.suffix",
+                expected_output: Ok(VersionsNumber::new(
+                    "1".to_string(),
+                    Some("1".to_string()),
+                    Some("1".to_string()),
+                    Some("suffix".to_string()),
+                )),
+                description: "major.minor.patch-suffix",
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result = VersionsNumber::from_str(tc.input);
+
+            // verify:
+            assert_eq!(tc.expected_output, result, "case {} : '{}'", tc.description, tc.input);
+        }
     }
 }

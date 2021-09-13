@@ -74,6 +74,12 @@ variable "mysql_version" {
   type = string
 }
 
+variable "mysql_version_major" {
+  description = "MySQL version major"
+  default = "{{ version_major }}"
+  type = string
+}
+
 variable "storage_type" {
   description = "One of lssd or bssd."
   default = "{{ database_disk_type }}"

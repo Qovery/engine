@@ -1,8 +1,9 @@
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::models::doks::KubernetesCluster;
 use crate::cloud_provider::digitalocean::models::doks::{DoksList, DoksOptions, KubernetesVersion};
-use crate::cloud_provider::utilities::get_version_number;
+use crate::cloud_provider::utilities::VersionsNumber;
 use crate::error::{SimpleError, SimpleErrorKind, StringError};
+use std::str::FromStr;
 
 pub fn get_doks_info_from_name(
     json_content: &str,
@@ -76,10 +77,10 @@ fn get_do_kubernetes_latest_slug_version(
     doks_versions: &Vec<KubernetesVersion>,
     wished_version: &str,
 ) -> Result<Option<String>, StringError> {
-    let wished_k8s_version = get_version_number(wished_version)?;
+    let wished_k8s_version = VersionsNumber::from_str(wished_version)?;
 
     for kubernetes_doks_version in doks_versions {
-        let current_k8s_version = get_version_number(kubernetes_doks_version.kubernetes_version.as_str())?;
+        let current_k8s_version = VersionsNumber::from_str(kubernetes_doks_version.kubernetes_version.as_str())?;
         if current_k8s_version.major == wished_k8s_version.major
             && current_k8s_version.minor == wished_k8s_version.minor
         {

@@ -23,7 +23,7 @@ resource "scaleway_rdb_user" "db_admin" {
 resource "scaleway_rdb_instance" "mysql_instance" {
   name              = var.database_name
   node_type         = var.instance_class
-  engine            = "MySQL-${var.mysql_version}"
+  engine            = "MySQL-${var.mysql_version_major}"
   # volume_type       = var.storage_type
   # volume_size_in_gb = var.disk_size
   is_ha_cluster     = true

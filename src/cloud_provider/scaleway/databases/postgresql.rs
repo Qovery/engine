@@ -87,8 +87,8 @@ impl Service for PostgreSQL {
         sanitize_name("postgresql", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {

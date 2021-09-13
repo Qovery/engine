@@ -103,8 +103,8 @@ impl Service for ExternalService {
         format!("ext-service-{}", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.image.commit_id.as_str()
+    fn version(&self) -> String {
+        self.image.commit_id.clone()
     }
 
     fn action(&self) -> &Action {

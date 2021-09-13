@@ -937,7 +937,7 @@ fn mysql_v8_deploy_a_working_prod_environment() {
             .as_str(),
     );
     environment.kind = Kind::Production;
-    test_mysql_configuration(context, environment, secrets, "8", function_name!());
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!());
 }
 
 /**

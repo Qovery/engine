@@ -12,10 +12,13 @@ use crate::cloud_provider::aws::databases::mysql::MySQL;
 use crate::cloud_provider::aws::databases::postgresql::PostgreSQL;
 use crate::cloud_provider::aws::databases::redis::Redis;
 use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
+use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
+use itertools::Itertools;
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -739,25 +742,31 @@ impl Database {
 
                     Some(db)
                 }
-                DatabaseKind::Mysql => {
-                    let db: Box<dyn StatefulService> =
-                        Box::new(crate::cloud_provider::scaleway::databases::mysql::MySQL::new(
-                            context.clone(),
-                            self.id.as_str(),
-                            self.action.to_service_action(),
-                            self.name.as_str(),
-                            self.version.as_str(),
-                            self.fqdn.as_str(),
-                            self.fqdn_id.as_str(),
-                            self.total_cpus.clone(),
-                            self.total_ram_in_mib,
-                            self.database_instance_type.as_str(),
-                            database_options,
-                            listeners,
-                        ));
+                DatabaseKind::Mysql => match VersionsNumber::from_str(self.version.as_str()) {
+                    Ok(v) => {
+                        let db: Box<dyn StatefulService> =
+                            Box::new(crate::cloud_provider::scaleway::databases::mysql::MySQL::new(
+                                context.clone(),
+                                self.id.as_str(),
+                                self.action.to_service_action(),
+                                self.name.as_str(),
+                                v,
+                                self.fqdn.as_str(),
+                                self.fqdn_id.as_str(),
+                                self.total_cpus.clone(),
+                                self.total_ram_in_mib,
+                                self.database_instance_type.as_str(),
+                                database_options,
+                                listeners,
+                            ));
 
-                    Some(db)
-                }
+                        Some(db)
+                    }
+                    Err(e) => {
+                        error!("{}", format!("error while parsing mysql version, error: {}", e));
+                        None
+                    }
+                },
                 DatabaseKind::Redis => {
                     let db: Box<dyn StatefulService> =
                         Box::new(crate::cloud_provider::scaleway::databases::redis::Redis::new(

@@ -68,8 +68,8 @@ impl Service for Router {
         sanitize_name("router", self.name())
     }
 
-    fn version(&self) -> &str {
-        "1.0"
+    fn version(&self) -> String {
+        "1.0".to_string()
     }
 
     fn action(&self) -> &Action {
