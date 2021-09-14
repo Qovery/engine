@@ -26,7 +26,6 @@ fn test_delete_image() {
 }
 
 #[cfg(feature = "test-scw-infra")]
-#[ignore] // To be ran only on demand to help with debugging
 #[test]
 fn test_get_registry_namespace() {
     // setup:
@@ -85,7 +84,6 @@ fn test_get_registry_namespace() {
 }
 
 #[cfg(feature = "test-scw-infra")]
-#[ignore] // To be ran only on demand to help with debugging
 #[test]
 fn test_create_registry_namespace() {
     // setup:
@@ -137,7 +135,6 @@ fn test_create_registry_namespace() {
 }
 
 #[cfg(feature = "test-scw-infra")]
-#[ignore] // To be ran only on demand to help with debugging
 #[test]
 fn test_delete_registry_namespace() {
     // setup:
@@ -184,7 +181,6 @@ fn test_delete_registry_namespace() {
 }
 
 #[cfg(feature = "test-scw-infra")]
-#[ignore] // To be ran only on demand to help with debugging
 #[test]
 fn test_get_or_create_registry_namespace() {
     // setup:
