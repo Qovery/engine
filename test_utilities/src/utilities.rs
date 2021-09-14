@@ -357,13 +357,13 @@ pub fn generate_id() -> String {
     uuid
 }
 
-pub fn generate_password() -> String {
+pub fn generate_password(allow_using_symbols: bool) -> String {
     let pg = PasswordGenerator::new()
         .length(32)
         .numbers(true)
         .lowercase_letters(true)
         .uppercase_letters(true)
-        .symbols(true)
+        .symbols(allow_using_symbols)
         .spaces(false)
         .exclude_similar_characters(true)
         .strict(true);

@@ -13,13 +13,6 @@ locals {
   tags_mysql_list = [for i, v in local.tags_mysql : "${i}=${v}"] # NOTE: Scaleway doesn't support KV style tags
 }
 
-resource "scaleway_rdb_user" "db_admin" {
-  instance_id = scaleway_rdb_instance.mysql_instance.id
-  name        = var.username
-  password    = var.password
-  is_admin    = true
-}
-
 resource "scaleway_rdb_instance" "mysql_instance" {
   name              = var.database_name
   node_type         = var.instance_class
@@ -27,7 +20,7 @@ resource "scaleway_rdb_instance" "mysql_instance" {
   # volume_type       = var.storage_type
   # volume_size_in_gb = var.disk_size
   is_ha_cluster     = true
-  disable_backup    = true
+  disable_backup    = false # TODO(benjaminch): plug backup options (CF AWS)
   user_name         = var.username
   password          = var.password
   # settings: TODO(benjaminch): check what needs to be set here

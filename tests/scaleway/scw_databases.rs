@@ -362,7 +362,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_port = 5432;
         let database_db_name = "postgresql".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password();
+        let database_password = generate_password(true);
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
@@ -475,7 +475,7 @@ fn test_postgresql_configuration(
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password();
+        let database_password = generate_password(true);
 
         let _is_rds = match environment.kind {
             Kind::Production => true,
@@ -633,7 +633,7 @@ fn test_mongodb_configuration(
         let database_port = 27017;
         let database_db_name = "my-mongodb".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password();
+        let database_password = generate_password(false);
         let database_uri = format!(
             "mongodb://{}:{}@{}:{}/{}",
             database_username, database_password, database_host, database_port, database_db_name
@@ -811,7 +811,7 @@ fn test_mysql_configuration(
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password();
+        let database_password = generate_password(true);
 
         let _is_rds = match environment.kind {
             Kind::Production => true,
@@ -970,7 +970,7 @@ fn test_redis_configuration(
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
+        let database_password = generate_password(true);
 
         let is_elasticache = match environment.kind {
             Kind::Production => true,
@@ -991,8 +991,8 @@ fn test_redis_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "scw-sbv-ssd-0".to_string(),
+            database_instance_type: SCW_DATABASE_INSTANCE_TYPE.to_string(),
+            database_disk_type: SCW_DATABASE_DISK_TYPE.to_string(),
         }];
         environment.applications = environment
             .applications
