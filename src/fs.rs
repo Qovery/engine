@@ -255,7 +255,7 @@ mod tests {
         }
 
         // clean:
-        tmp_files.iter().for_each(|f| drop(f));
+        tmp_files.into_iter().for_each(|f| drop(f));
         tmp_dir.close().expect("error closing temporary directory");
     }
 }
