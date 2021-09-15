@@ -5,15 +5,9 @@ use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::build_platform::Image;
-use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::error::EngineError;
 use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use scaleway_api_rs::models::ScalewayRegistryV1Namespace;
-use std::str::FromStr;
 use test_utilities::utilities::context;
 use tracing::{span, Level};
 
@@ -72,30 +66,6 @@ pub fn pause_environment(context: &Context, environment_action: EnvironmentActio
     tx.commit()
 }
 
-pub fn delete_container_registry(
-    context: Context,
-    container_registry_name: &str,
-    secrets: FuncTestsSecrets,
-) -> Result<ScalewayRegistryV1Namespace, EngineError> {
-    let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
-    let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
-    let zone = Zone::from_str(secrets.SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
-
-    let container_registry_client = ScalewayCR::new(
-        context.clone(),
-        "test",
-        "test",
-        secret_token.as_str(),
-        project_id.as_str(),
-        zone,
-    );
-
-    container_registry_client.delete_registry_namespace(&Image {
-        name: container_registry_name.to_string(),
-        ..Default::default()
-    })
-}
-
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
@@ -139,14 +109,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
 
         test_name.to_string()
     })
@@ -195,14 +157,6 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
-
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
 
         test_name.to_string()
     })
@@ -273,14 +227,6 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
-
         test_name.to_string()
     })
 }
@@ -338,14 +284,6 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
-
         test_name.to_string()
     })
 }
@@ -391,14 +329,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
 
         test_name.to_string()
     })
@@ -465,14 +395,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
 
         test_name.to_string()
     })
@@ -569,14 +491,6 @@ fn scaleway_kapsule_redeploy_same_app() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
-
         test_name.to_string()
     })
 }
@@ -644,14 +558,6 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
 
         test_name.to_string()
     })
@@ -745,14 +651,6 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
-
         test_name.to_string()
     })
 }
@@ -798,14 +696,6 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
 
         test_name.to_string()
     })
@@ -862,14 +752,6 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
-
         test_name.to_string()
     })
 }
@@ -920,14 +802,6 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
-
-        // delete container registries created during the test
-        for app in environment.applications.iter() {
-            assert_eq!(
-                true,
-                delete_container_registry(context.clone(), app.name.as_str(), secrets.clone()).is_ok()
-            );
-        }
 
         test_name.to_string()
     })
