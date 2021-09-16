@@ -40,9 +40,8 @@ impl<'a> Drop for LogErrorOnDrop<'a> {
     }
 }
 
-pub fn log_no_spam_builder(msg: &str, every_n_times: u32) -> Box<dyn FnMut()> {
+pub fn log_no_spam_builder(msg: String, every_n_times: u32) -> impl FnMut() {
     let mut loop_counter = 0;
-    let msg = msg.to_string();
     Box::new(move || {
         if loop_counter % every_n_times == 0 {
             debug!("{}", msg);

@@ -1,27 +1,24 @@
 #[macro_use]
-extern crate tracing;
+extern crate lazy_static;
 #[macro_use]
 extern crate prometheus;
 #[macro_use]
 extern crate serde;
 #[macro_use]
-extern crate lazy_static;
+extern crate tracing;
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
 use std::sync::Arc;
-use std::thread::sleep;
+
 use std::time::Duration;
 use std::{env, thread};
 use std::{fs, io, process};
 
-use chrono::Utc;
 use crossbeam_channel::{unbounded, Sender};
 use dirs::home_dir;
 use dotenv::dotenv;
-use retry::delay::Fibonacci;
-use retry::OperationResult;
 use tracing::error;
 use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
 use uuid::Uuid;
@@ -33,13 +30,13 @@ use utils::Mode;
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::ErrorKind::BinVersion;
 use crate::custom_error::{EngineInitError, ErrorKind};
-use crate::models::TaskSelector::{Environment, Infrastructure};
-use crate::models::{Ping, Response, StatusResponse, TaskSelector};
-use crate::nats::{subjects, Connection, Message, Subscription};
+
+use crate::models::{StatusResponse, TaskSelector};
+use crate::nats::{subjects, Connection, Message};
 use crate::task_manager::models::Request;
 use crate::task_manager::task_manager::{PreRun, Task, TaskManager};
 use crate::task_manager::tasks::{EnvironmentTask, InfrastructureTask};
-use crate::utils::LogErrorOnDrop;
+use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 
 mod constants;
 mod custom_error;
@@ -49,149 +46,39 @@ mod task_manager;
 mod utils;
 mod webserver;
 
-fn listen_for_events(
-    workspace_root_dir: String,
-    lib_root_dir: String,
-    docker_tcp_socket: Option<String>,
-    task_selector: &TaskSelector,
-    nc: &Connection,
-    mode: &Mode,
-    tx: Sender<Box<dyn Task>>,
-) -> Result<Subscription, Error> {
-    let subject_name = subjects::get_subject_name(mode, task_selector);
-    let sub = nc.queue_subscribe(&subject_name)?;
-    info!("subscribe to {:?}", subject_name);
-
-    let ts_str = match task_selector {
-        Infrastructure(_) => "infrastructure",
-        Environment(_) => "environment",
-    };
-
-    let _ = {
-        let thread_name = format!("nats-event-receiver-{}", ts_str);
-        let sub = sub.clone();
-        let task_selector = *task_selector;
-
-        thread::Builder::new()
-            .name(thread_name.clone())
-            .spawn(move || {
-                let _drop_logger = LogErrorOnDrop::new(&thread_name);
-
-                loop {
-                    for msg in sub.next() {
-                        debug!("{}", msg);
-
-                        receive_and_queue_task(
-                            msg,
-                            workspace_root_dir.as_str(),
-                            lib_root_dir.as_str(),
-                            &docker_tcp_socket,
-                            &task_selector,
-                            &tx,
-                        );
-                    }
-                }
-            })
-            .unwrap()
-    };
-
-    Ok(sub)
-}
-
-fn receive_and_queue_task(
+fn to_engine_task(
     msg: Message,
     workspace_root_dir: &str,
     lib_root_dir: &str,
     docker_tcp_socket: &Option<String>,
     task_selector: &TaskSelector,
-    tx: &Sender<Box<dyn Task>>,
-) {
-    // call before to run the current task to check that the same task is not running on another engine app
-    // check is_the_same_task_running and is_the_next_task_to_run functions to know more about the details
-    let pre_run_callback = Box::new(move |_task: &dyn Task| PreRun::Yes);
-
-    match serde_json::from_slice::<Request>(&msg.data) {
-        Ok(req) => {
-            let context = Context::new(
-                req.id.to_string(),
-                workspace_root_dir.to_string(),
-                lib_root_dir.to_string(),
-                req.test_cluster,
-                docker_tcp_socket.clone(),
-                req.features.clone(),
-                req.metadata.clone(),
-            );
-
-            let task: Box<dyn Task> = match task_selector {
-                TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(context, req, pre_run_callback)),
-                TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(context, req, pre_run_callback)),
-            };
-
-            let _ = tx
-                .send(task)
-                .map_err(|err| error!("Cannot send task receive_and_queue_task: {}", err));
-
-            let _ = msg
-                .respond(Response::new(None).as_json_string())
-                .map_err(|err| error!("Cannot respond to nats receive_and_queue_task: {}", err));
-        }
+) -> Result<Box<dyn Task>, serde_json::Error> {
+    let request = match serde_json::from_slice::<Request>(&msg.data) {
+        Ok(req) => req,
         Err(err) => {
             error!("{}", msg);
             error!("receiving request but JSON decoding error occurred: {:?}", err);
-            let _ = msg
-                .respond(Response::new(Some(err.to_string())).as_json_string())
-                .map_err(|err| error!("Cannot send response to nats receive_and_queue_task: {}", err));
+            return Err(err);
         }
     };
-}
 
-/// Notify the core server that this engine exists and is running
-/// if the server does not respond - then retry 10 times (with fibonacci retry) -
-/// if it does not respond after all attempts, then gracefully restart the service.
-fn watchdog(name: String, nc: Connection, sig_term_tx: Sender<bool>) {
-    let _ = thread::Builder::new()
-        .name("watchdog".to_string())
-        .spawn(move || {
-            let _drop_logger = LogErrorOnDrop::new("watchdog");
-            let engine_started_at = Utc::now();
-            let ping = Ping::new(engine_started_at, name.as_str());
-            let json = serde_json::to_string(&ping).unwrap();
-            let err_msg = r#"
---------------------------------------------------
-Ping KO!! What's wrong? Let's shutdown the service
---------------------------------------------------
-"#;
-            loop {
-                let ping_res = retry::retry(Fibonacci::from_millis(3000).take(10), || {
-                    let res = nc.request_timeout(&subjects::CORE_PING, json.as_bytes(), Duration::from_secs(5));
-                    match res {
-                        Ok(_) => OperationResult::Ok(0),
-                        _ => {
-                            warn!(
-                                "ping failed ({:?}), let's retry to ping the core server in a few seconds",
-                                *subjects::CORE_PING
-                            );
-                            OperationResult::Retry(0)
-                        }
-                    }
-                });
+    let context = Context::new(
+        request.id.to_string(),
+        workspace_root_dir.to_string(),
+        lib_root_dir.to_string(),
+        request.test_cluster,
+        docker_tcp_socket.clone(),
+        request.features.clone(),
+        request.metadata.clone(),
+    );
 
-                match ping_res {
-                    Ok(_) => {
-                        debug!("ping OK!");
-                        sleep(Duration::from_secs(600));
-                    }
-                    Err(_) => {
-                        error!("{}", err_msg);
-                        let _ = sig_term_tx
-                            .send(true)
-                            .map_err(|err| error!("Cannot send sig term signal in watchdog {}", err));
-                        return;
-                    }
-                }
-            }
-        })
-        .unwrap();
+    let pre_run_callback = Box::new(move |_task: &dyn Task| PreRun::Yes);
+    let task: Box<dyn Task> = match task_selector {
+        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(context, request, pre_run_callback)),
+        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(context, request, pre_run_callback)),
+    };
+
+    Ok(task)
 }
 
 pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
@@ -473,25 +360,24 @@ fn using_nats_server(
 ) -> Result<(), Error> {
     info!("NATS server: {}", nats_server.as_str());
 
-    let name = match &mode {
+    let engine_name = match &mode {
         Mode::Local => "qovery-engine-app.local".to_string(),
         Mode::Cloud(organization, cloud_provider, region) => {
             format!("qovery-engine-app.{}.{}.{}", organization, cloud_provider, region)
         }
     };
 
-    info!("NATS client name: {}", name.as_str());
+    info!("NATS client name: {}", engine_name.as_str());
     info!("connect to the NATS server...");
-    let nc = Connection::new(name.as_str(), nats_server.as_str(), nats_credentials)?;
+    let nc = Connection::new(engine_name.as_str(), nats_server.as_str(), nats_credentials)?;
     info!("connection to the NATS server established");
 
-    let (task_tx, task_rx) = unbounded::<Box<dyn Task>>();
     let mut tm = TaskManager::new();
     let status_rx = tm.run().unwrap();
     let task_manager = Arc::new(tm);
 
     let _ = {
-        let thread_name = "tm-status-core-updater";
+        let thread_name = "deployment-status-sender";
         let nc = nc.clone();
         let func = move || {
             let _drop_logger = LogErrorOnDrop::new(thread_name);
@@ -520,58 +406,6 @@ fn using_nats_server(
             .unwrap()
     };
 
-    let _ = {
-        let thread_name = "tm-task-adder";
-        let task_manager = task_manager.clone();
-        let func = move || {
-            let _drop_logger = LogErrorOnDrop::new(thread_name);
-
-            // FIXME instead of manually implementing the load-balancing ourselves between engines
-            // we should just use NATS queue groups and stop picking task when the taskManager
-            // is currently busy.
-            // The issue is that there is no coordination between threads inside the app
-            // and that each one is unqueue tasks from NATS without really knowing if we can
-            // process them downstream.
-            // A quickfix would be to use bounded queue instead of unbounded one to force
-            // upstream thread to block if the engine can't accept new task quickly enough
-            loop {
-                let task = task_rx.recv().unwrap();
-                // load balance workload before dispatching the task to the current task manager.
-                // request info from other engines
-                // to know how many remaining tasks to run they have?
-                task_manager.add_task(task);
-            }
-        };
-
-        thread::Builder::new()
-            .name(thread_name.to_string())
-            .spawn(func)
-            .unwrap()
-    };
-
-    let infrastructure_task_selector = TaskSelector::Infrastructure("infrastructure");
-    let environment_task_selector = TaskSelector::Environment("environment");
-
-    listen_for_events(
-        workspace_root_dir.clone(),
-        lib_root_dir.clone(),
-        docker_host.clone(),
-        &infrastructure_task_selector,
-        &nc,
-        &mode,
-        task_tx.clone(),
-    )?;
-
-    listen_for_events(
-        workspace_root_dir,
-        lib_root_dir,
-        docker_host,
-        &environment_task_selector,
-        &nc,
-        &mode,
-        task_tx.clone(),
-    )?;
-
     let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
     {
         let nc = nc.clone();
@@ -597,7 +431,36 @@ fn using_nats_server(
             .unwrap();
     }
 
-    watchdog(name, nc, sig_term_tx.clone());
+    // Local engine, does not deploy anything (yet ?)
+    if let Mode::Cloud(_, _, _) = mode {
+        spawn_task_poller(
+            task_manager.clone(),
+            nc.clone(),
+            TaskSelector::Environment("environment"),
+            mode.clone(),
+            workspace_root_dir.clone(),
+            docker_host.clone(),
+            lib_root_dir.clone(),
+            engine_name.clone(),
+            sig_term_tx.clone(),
+        );
+    }
+
+    // Engine that run on cluster don't need to receive infrastructure requests
+    if let Mode::Local = mode {
+        spawn_task_poller(
+            task_manager.clone(),
+            nc.clone(),
+            TaskSelector::Infrastructure("infrastructure"),
+            mode.clone(),
+            workspace_root_dir.clone(),
+            docker_host.clone(),
+            lib_root_dir.clone(),
+            engine_name.clone(),
+            sig_term_tx.clone(),
+        );
+    }
+
     ctrlc::set_handler(move || {
         let _ = sig_term_tx
             .send(true)
@@ -610,4 +473,85 @@ fn using_nats_server(
 
     warn!("end of execution");
     Ok(())
+}
+
+fn spawn_task_poller(
+    task_manager: Arc<TaskManager>,
+    nats: Connection,
+    task_selector: TaskSelector,
+    mode: Mode,
+    workspace_root_dir: String,
+    docker_host: Option<String>,
+    lib_root_dir: String,
+    engine_name: String,
+    sig_term_tx: Sender<bool>,
+) {
+    let task_name = match task_selector {
+        TaskSelector::Infrastructure(name) => name,
+        TaskSelector::Environment(name) => name,
+    };
+
+    let thread_name = format!("{}-poller", task_name);
+    let thread_name_logger = thread_name.clone();
+    let subject = nats::subjects::get_subject_name(&mode, &task_selector);
+
+    let func = move || {
+        let _drop_logger = LogErrorOnDrop::new(thread_name_logger.as_str());
+        let mut nb_failure = 0;
+        let mut log_request = log_no_spam_builder(format!("Requesting deployment task at {}", subject.name), 5);
+
+        // We abort the engine if we don't manage to have answer from the core after
+        // 30 * 10sec = 300 seconds == 5 min
+        while nb_failure < 30 {
+            // We ask to the Core if there is some tasks/deployment available to process
+            log_request();
+            let msg = match nats.request_timeout(&subject, engine_name.as_bytes(), Duration::from_secs(10)) {
+                Err(err) => {
+                    error!("Cannot retrieve deployment tasks from upstream: {}", err);
+                    nb_failure += 1;
+                    continue;
+                }
+                Ok(msg) => {
+                    nb_failure = 0;
+                    msg
+                }
+            };
+
+            // If msg is null, there is no task available just sleep and retry
+            if msg.data == "null".as_bytes() {
+                thread::sleep(Duration::from_secs(5));
+                continue;
+            }
+
+            info!(
+                "{}",
+                std::str::from_utf8(&msg.data).unwrap_or("Received an invalid utf8 msg from Nats")
+            );
+
+            // Convert our nats message into an engine task
+            let engine_task =
+                match to_engine_task(msg, &workspace_root_dir, &lib_root_dir, &docker_host, &task_selector) {
+                    Ok(task) => task,
+                    Err(err) => {
+                        error!("Cannot converts Nats message payload to an engine task: {}", err);
+                        continue;
+                    }
+                };
+
+            // Ask the task manager to process our task
+            task_manager.add_task(engine_task);
+
+            // We wait for the task to finish as we don't want the engine to queue them
+            while task_manager.remaining_tasks_to_run() > 0 {
+                thread::sleep(Duration::from_secs(10))
+            }
+        }
+
+        sig_term_tx.send(true)
+    };
+
+    thread::Builder::new()
+        .name(thread_name.clone())
+        .spawn(func)
+        .expect(format!("Cannot spawn thread {}", thread_name).as_str());
 }

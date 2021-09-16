@@ -176,7 +176,7 @@ impl TaskManager {
             .name(thread_name.to_string())
             .spawn(move || {
                 let _drop_logger = LogErrorOnDrop::new(thread_name);
-                let mut log_debug_waiting = log_no_spam_builder("no task to run, waiting...", 60);
+                let mut log_debug_waiting = log_no_spam_builder("no task to run, waiting...".to_string(), 60);
 
                 while !should_stop.load(Acquire) || !task_executor_rx.is_empty() {
                     if should_stop.load(Relaxed) {

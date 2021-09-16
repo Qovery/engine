@@ -5,8 +5,6 @@ use std::io;
 use std::time::Duration;
 use subjects::Subject;
 
-const QUEUE_GROUP: &str = "engine_queue";
-
 #[derive(Clone, Debug)]
 pub struct Connection {
     cnx: nats::Connection,
@@ -23,11 +21,6 @@ impl Connection {
         };
 
         Ok(Connection { cnx })
-    }
-
-    pub fn queue_subscribe(&self, subject: &Subject) -> io::Result<Subscription> {
-        info!("Subscribing to queue {:?}", subject);
-        self.cnx.queue_subscribe(subject.name.as_str(), QUEUE_GROUP)
     }
 
     pub fn publish(&self, subject: &Subject, payload: &[u8]) -> io::Result<()> {
