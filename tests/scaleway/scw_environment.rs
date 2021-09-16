@@ -1,70 +1,21 @@
 extern crate test_utilities;
 
-use self::test_utilities::scaleway::{SCW_KUBE_TEST_CLUSTER_ID, SCW_QOVERY_ORGANIZATION_ID};
+use self::test_utilities::scaleway::{
+    clean_environments, delete_environment, deploy_environment, pause_environment, SCW_KUBE_TEST_CLUSTER_ID,
+    SCW_QOVERY_ORGANIZATION_ID,
+};
 use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
-use qovery_engine::transaction::{DeploymentOption, TransactionResult};
+use qovery_engine::models::{Action, Clone2, EnvironmentAction, Storage, StorageType};
+use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::context;
-use tracing::{span, Level};
+use tracing::{span, warn, Level};
 
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
 // This cluster should be live in order to have those tests passing properly.
-
-pub fn deploy_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
-    let engine = test_utilities::scaleway::docker_scw_cr_engine(context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = test_utilities::scaleway::cloud_provider_scaleway(context);
-    let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
-    let dns_provider = test_utilities::cloudflare::dns_provider_cloudflare(context);
-    let kapsule = test_utilities::scaleway::scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
-
-    let _ = tx.deploy_environment_with_options(
-        &kapsule,
-        &environment_action,
-        DeploymentOption {
-            force_build: true,
-            force_push: true,
-        },
-    );
-
-    tx.commit()
-}
-
-pub fn delete_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
-    let engine = test_utilities::scaleway::docker_scw_cr_engine(context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = test_utilities::scaleway::cloud_provider_scaleway(context);
-    let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
-    let dns_provider = test_utilities::cloudflare::dns_provider_cloudflare(context);
-    let kapsule = test_utilities::scaleway::scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
-
-    let _ = tx.delete_environment(&kapsule, &environment_action);
-
-    tx.commit()
-}
-
-pub fn pause_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
-    let engine = test_utilities::scaleway::docker_scw_cr_engine(context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = test_utilities::scaleway::cloud_provider_scaleway(context);
-    let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
-    let dns_provider = test_utilities::cloudflare::dns_provider_cloudflare(context);
-    let kapsule = test_utilities::scaleway::scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
-
-    let _ = tx.pause_environment(&kapsule, &environment_action);
-
-    tx.commit()
-}
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
@@ -109,6 +60,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         test_name.to_string()
     })
@@ -157,6 +112,10 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         test_name.to_string()
     })
@@ -227,6 +186,10 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
+
         test_name.to_string()
     })
 }
@@ -284,6 +247,10 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
+
         test_name.to_string()
     })
 }
@@ -329,6 +296,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         test_name.to_string()
     })
@@ -395,6 +366,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         test_name.to_string()
     })
@@ -491,6 +466,10 @@ fn scaleway_kapsule_redeploy_same_app() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
+
         test_name.to_string()
     })
 }
@@ -558,6 +537,10 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         test_name.to_string()
     })
@@ -651,6 +634,10 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
+
         test_name.to_string()
     })
 }
@@ -697,6 +684,10 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
+
         test_name.to_string()
     })
 }
@@ -738,7 +729,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
         delete_env.action = Action::Delete;
 
         let env_action_delete = EnvironmentAction::Environment(delete_env);
-        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment);
+        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
 
         match deploy_environment(&context, env_action) {
             TransactionResult::Ok => assert!(false),
@@ -751,6 +742,14 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        if let Err(e) = clean_environments(
+            &context,
+            vec![environment.clone(), failover_environment.clone()],
+            secrets.clone(),
+        ) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         test_name.to_string()
     })
@@ -789,7 +788,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover
 
         // environment action initialize
         let env_action_delete = EnvironmentAction::Environment(delete_env);
-        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment);
+        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
 
         match deploy_environment(&context, env_action) {
             TransactionResult::Ok => assert!(false),
@@ -802,6 +801,14 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        if let Err(e) = clean_environments(
+            &context,
+            vec![environment.clone(), failover_environment.clone()],
+            secrets.clone(),
+        ) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         test_name.to_string()
     })
