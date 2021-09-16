@@ -1,3 +1,4 @@
+use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::node::{Node, NodeType};
 use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOptions};
@@ -6,8 +7,10 @@ use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::Context;
+use qovery_engine::error::EngineError;
+use qovery_engine::models::{Context, Environment, EnvironmentAction};
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
+use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
@@ -187,4 +190,86 @@ pub fn scw_kubernetes_kapsule<'a>(
         nodes,
         scw_kubernetes_cluster_options(secrets),
     )
+}
+
+pub fn deploy_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
+    let engine = docker_scw_cr_engine(context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = cloud_provider_scaleway(context);
+    let nodes = scw_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(context);
+    let kapsule = scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
+
+    let _ = tx.deploy_environment_with_options(
+        &kapsule,
+        &environment_action,
+        DeploymentOption {
+            force_build: true,
+            force_push: true,
+        },
+    );
+
+    tx.commit()
+}
+
+pub fn delete_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
+    let engine = docker_scw_cr_engine(context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = cloud_provider_scaleway(context);
+    let nodes = scw_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(context);
+    let kapsule = scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
+
+    let _ = tx.delete_environment(&kapsule, &environment_action);
+
+    tx.commit()
+}
+
+pub fn pause_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
+    let engine = docker_scw_cr_engine(context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = cloud_provider_scaleway(context);
+    let nodes = scw_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(context);
+    let kapsule = scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes);
+
+    let _ = tx.pause_environment(&kapsule, &environment_action);
+
+    tx.commit()
+}
+
+pub fn clean_environments(
+    context: &Context,
+    environments: Vec<Environment>,
+    secrets: FuncTestsSecrets,
+) -> Result<(), EngineError> {
+    let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
+    let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
+    let zone = Zone::from_str(secrets.SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
+
+    let container_registry_client = ScalewayCR::new(
+        context.clone(),
+        "test",
+        "test",
+        secret_token.as_str(),
+        project_id.as_str(),
+        zone,
+    );
+
+    // delete images created in registry
+    for env in environments.iter() {
+        for image in env.applications.iter().map(|a| a.to_image()).collect::<Vec<Image>>() {
+            if let Err(e) = container_registry_client.delete_image(&image) {
+                return Err(e);
+            }
+        }
+    }
+
+    Ok(())
 }

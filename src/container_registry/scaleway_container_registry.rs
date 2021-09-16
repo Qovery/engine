@@ -11,7 +11,7 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::runtime::block_on;
-use retry::delay::Fixed;
+use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
 
@@ -182,7 +182,7 @@ impl ScalewayCR {
             }
         };
 
-        let result = retry::retry(Fixed::from_millis(10000).take(12), || {
+        let result = retry::retry(Fibonacci::from_millis(10000).take(10), || {
             match self.does_image_exists(&image) {
                 true => OperationResult::Ok(&image),
                 false => {
@@ -194,7 +194,7 @@ impl ScalewayCR {
 
         let image_not_reachable = Err(self.engine_error(
             EngineErrorCause::Internal,
-            "image has been pushed on Scaleway Registry Namespace but is not yet available after 2min. Please try to redeploy in a few minutes".to_string(),
+            "image has been pushed on Scaleway Registry Namespace but is not yet available after 4min. Please try to redeploy in a few minutes".to_string(),
         ));
 
         match result {

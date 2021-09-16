@@ -1,5 +1,5 @@
 use ::function_name::named;
-use tracing::{span, Level};
+use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::Kind as ProviderKind;
 use qovery_engine::models::{
@@ -11,10 +11,10 @@ use test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 
-use crate::scaleway::scw_environment::{delete_environment, deploy_environment, pause_environment};
 use test_utilities::common::working_minimal_environment;
 use test_utilities::scaleway::{
-    SCW_DATABASE_DISK_TYPE, SCW_DATABASE_INSTANCE_TYPE, SCW_KUBE_TEST_CLUSTER_ID, SCW_QOVERY_ORGANIZATION_ID,
+    clean_environments, delete_environment, deploy_environment, pause_environment, SCW_DATABASE_DISK_TYPE,
+    SCW_DATABASE_INSTANCE_TYPE, SCW_KUBE_TEST_CLUSTER_ID, SCW_QOVERY_ORGANIZATION_ID,
 };
 
 /**
@@ -42,6 +42,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
             &context,
             SCW_QOVERY_ORGANIZATION_ID,
             secrets
+                .clone()
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
@@ -65,6 +66,11 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -131,6 +137,11 @@ fn deploy_an_environment_with_db_and_pause_it() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
+
         return test_name.to_string();
     })
 }
@@ -187,7 +198,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
 
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
-        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete);
+        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
         match deploy_environment(&context, env_action) {
             TransactionResult::Ok => assert!(true),
@@ -217,7 +228,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             SCW_KUBE_TEST_CLUSTER_ID,
             environment_check.clone(),
             database_name.as_str(),
-            secrets,
+            secrets.clone(),
         ) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
@@ -228,6 +239,11 @@ fn postgresql_failover_dev_environment_with_all_options() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment, environment_delete], secrets) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -273,8 +289,8 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         environment_delete.kind = Kind::Development;
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
-        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete);
+        let env_action = EnvironmentAction::Environment(environment.clone());
+        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
         match deploy_environment(&context, env_action) {
             TransactionResult::Ok => assert!(true),
@@ -293,6 +309,11 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment, environment_delete], secrets.clone()) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -395,7 +416,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, env_action) {
@@ -415,7 +436,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             SCW_KUBE_TEST_CLUSTER_ID,
             environment_check,
             database_name.as_str(),
-            secrets,
+            secrets.clone(),
         ) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
@@ -426,6 +447,11 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -452,7 +478,11 @@ fn test_postgresql_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = format!("postgresql-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "postgresql-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
@@ -517,7 +547,7 @@ fn test_postgresql_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, ea) {
@@ -533,6 +563,12 @@ fn test_postgresql_configuration(
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
+
         return test_name.to_string();
     })
 }
@@ -615,7 +651,11 @@ fn test_mongodb_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("mongodb-app-{}", generate_id());
-        let database_host = format!("mongodb-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "mongodb-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 27017;
         let database_db_name = "my-mongodb".to_string();
         let database_username = "superuser".to_string();
@@ -685,7 +725,7 @@ fn test_mongodb_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, env_action) {
@@ -701,6 +741,11 @@ fn test_mongodb_configuration(
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -801,7 +846,11 @@ fn test_mysql_configuration(
         let deletion_context = context.clone_not_same_execution_id();
 
         let app_name = format!("mysql-app-{}", generate_id());
-        let database_host = format!("mysql-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "mysql-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
 
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
@@ -875,7 +924,7 @@ fn test_mysql_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, ea) {
@@ -891,6 +940,11 @@ fn test_mysql_configuration(
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -957,7 +1011,11 @@ fn test_redis_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("redis-app-{}", generate_id());
-        let database_host = format!("redis-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "redis-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();
@@ -1031,7 +1089,7 @@ fn test_redis_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, ea) {
@@ -1047,6 +1105,11 @@ fn test_redis_configuration(
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
+            warn!("cannot clean environements, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
