@@ -25,6 +25,120 @@
         "x": 0,
         "y": 0
       },
+      "id": 22,
+      "title": "Row title",
+      "type": "row"
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": null,
+      "decimals": 0,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "fill": 5,
+      "fillGradient": 10,
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "hiddenSeries": false,
+      "id": 24,
+      "legend": {
+        "alignAsTable": true,
+        "avg": false,
+        "current": true,
+        "max": true,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "sort": "current",
+        "sortDesc": true,
+        "total": true,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null as zero",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": true,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "taskmanager_nb_running_tasks",
+          "interval": "",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Engines deployments",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:34",
+          "decimals": null,
+          "format": "short",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": "0",
+          "show": true
+        },
+        {
+          "$$hashKey": "object:35",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
       "id": 19,
       "title": "Critical errors",
       "type": "row"
@@ -99,7 +213,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 1
+        "y": 11
       },
       "hiddenSeries": false,
       "id": 20,
@@ -217,7 +331,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 18
       },
       "id": 17,
       "options": {
@@ -245,7 +359,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 29
       },
       "id": 9,
       "panels": [],
@@ -322,7 +436,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 30
       },
       "hiddenSeries": false,
       "id": 2,
@@ -440,7 +554,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 37
       },
       "id": 5,
       "options": {
@@ -468,7 +582,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 48
       },
       "id": 11,
       "panels": [],
@@ -545,7 +659,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 49
       },
       "hiddenSeries": false,
       "id": 6,
@@ -663,7 +777,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 57
       },
       "id": 14,
       "options": {
@@ -691,7 +805,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 68
       },
       "id": 13,
       "panels": [],
@@ -768,7 +882,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 69
       },
       "hiddenSeries": false,
       "id": 3,
@@ -885,7 +999,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 69
       },
       "id": 7,
       "options": {
@@ -934,5 +1048,5 @@
   "timezone": "",
   "title": "Engine",
   "uid": "xVPlLnFMk",
-  "version": 2
+  "version": 1
 }

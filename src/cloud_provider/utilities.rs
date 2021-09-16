@@ -426,7 +426,7 @@ pub fn check_domain_for(
 
                 warn!("{}", message);
 
-                listener_helper.error(ProgressInfo::new(
+                listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
                         id: execution_id.to_string(),
                     },
