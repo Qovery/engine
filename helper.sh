@@ -194,9 +194,6 @@ function build() { ## Build engine app with engine lib
   use_sccache
   set -e
 
-  echo "=> Run task-manager tests"
-  cargo test $build_options --manifest-path qovery-engine-task-manager/Cargo.toml
-
   echo "=> Run app tests"
   cargo test $build_options --manifest-path app/Cargo.toml
 

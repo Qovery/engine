@@ -20,7 +20,6 @@ use std::thread::JoinHandle;
 use tracing;
 
 pub type Id = String;
-pub type GroupId = Id;
 pub type Message = Result<InternalTask, Error>;
 
 lazy_static! {
@@ -33,7 +32,7 @@ pub struct TaskManager {
     task_executor_rx: Receiver<InternalTask>,
     should_stop: Arc<AtomicBool>,
     is_stopped: Arc<AtomicBool>,
-    status_by_task_id_r: Mutex<ReadHandle<Id, Status>>,
+    _status_by_task_id_r: Mutex<ReadHandle<Id, Status>>,
     status_by_task_id_w: Arc<Mutex<WriteHandle<Id, Status>>>,
     task_status_tx: Sender<Message>,
     task_status_rx: Receiver<Message>,
@@ -49,7 +48,7 @@ impl TaskManager {
     pub fn new() -> Self {
         let (task_executor_tx, task_executor_rx) = unbounded::<InternalTask>();
         let (status_by_task_id_r, status_by_task_id_w) = evmap::new::<Id, Status>();
-        let status_by_task_id_r = Mutex::new(status_by_task_id_r);
+        let _status_by_task_id_r = Mutex::new(status_by_task_id_r);
         let status_by_task_id_w = Arc::new(Mutex::new(status_by_task_id_w));
         let (task_status_tx, task_status_rx) = unbounded::<Message>();
         let should_stop = Arc::new(AtomicBool::new(false));
@@ -60,7 +59,7 @@ impl TaskManager {
             task_executor_rx,
             should_stop,
             is_stopped,
-            status_by_task_id_r,
+            _status_by_task_id_r,
             status_by_task_id_w,
             task_status_tx,
             task_status_rx,
@@ -92,18 +91,12 @@ impl TaskManager {
         }
     }
 
-    pub fn get_task_status(&self, id: &str) -> Option<Status> {
-        self.status_by_task_id_r
+    pub fn _get_task_status(&self, id: &str) -> Option<Status> {
+        self._status_by_task_id_r
             .lock()
             .unwrap()
             .get_one(id)
             .map(|status| status.as_ref().clone())
-    }
-
-    pub fn get_task_status_by_group_id(&self, group_id: &str) -> Option<Status> {
-        // id and group_id should be unique (I know, this is crazy assumption, but let's do this:)),
-        // so we use the same data structure to store them all
-        self.get_task_status(group_id)
     }
 
     /// gracefully end the remaining tasks but stop accepting new ones
@@ -175,7 +168,6 @@ impl TaskManager {
         let is_stopped = self.is_stopped.clone();
         let should_stop = self.should_stop.clone();
         let task_status_tx = self.task_status_tx.clone();
-        let task_executor_tx = self.task_executor_tx.clone();
         let task_executor_rx = self.task_executor_rx.clone();
         let nb_running_tasks = self.running_tasks.clone();
         let thread_name = "tm-task-processor";
@@ -235,28 +227,6 @@ impl TaskManager {
                                 start_time.elapsed().as_secs()
                             );
                             info!("it remains {} tasks to be run", task_executor_rx.len());
-                        }
-
-                        PreRun::NoAndQueueTail => {
-                            // postpone the task
-                            info!(
-                                "postpone task group id {} with id {}",
-                                internal_task.task.group_id(),
-                                internal_task.task.id()
-                            );
-
-                            // re-add the task
-                            add_task(
-                                &task_executor_tx,
-                                &task_status_tx,
-                                task_executor_rx.len() + nb_running_tasks.get().max(0) as usize,
-                                internal_task.task,
-                            );
-                        }
-
-                        PreRun::NoAndRemove => {
-                            warn!("Dropping task as PreRun asked to do it !");
-                            internal_task.send_status(&task_status_tx);
                         }
                     }
                     nb_running_tasks.dec();
@@ -371,21 +341,6 @@ impl InternalTask {
 
 pub enum PreRun {
     Yes,
-    NoAndQueueTail,
-    NoAndRemove,
-}
-
-impl PreRun {
-    pub fn add(left: PreRun, right: PreRun) -> Self {
-        match left {
-            PreRun::Yes => right,
-            PreRun::NoAndQueueTail => match right {
-                PreRun::NoAndQueueTail | PreRun::Yes => PreRun::NoAndQueueTail,
-                PreRun::NoAndRemove => PreRun::NoAndRemove,
-            },
-            PreRun::NoAndRemove => PreRun::NoAndRemove,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -453,15 +408,6 @@ pub enum State {
     DeleteError,
 }
 
-impl State {
-    pub fn is_in_progress(&self) -> bool {
-        matches!(
-            self,
-            State::DeploymentInProgress | State::PauseInProgress | State::DeleteInProgress
-        )
-    }
-}
-
 impl evmap::shallow_copy::ShallowCopy for Status {
     unsafe fn shallow_copy(&self) -> ManuallyDrop<Self> {
         ManuallyDrop::new(self.clone())
@@ -491,7 +437,9 @@ impl fmt::Display for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task, TaskManager};
+    use crate::task_manager::task_manager::{
+        ActionContext, InternalTask, Message, PreRun, State, Status, Task, TaskManager,
+    };
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
     use qovery_engine::models::{ProgressLevel, ProgressScope};
@@ -623,7 +571,7 @@ mod tests {
         tm.add_task(Box::new(task.clone()));
 
         assert_eq!(task_status_rx.recv().unwrap().unwrap().status.status, State::Waiting);
-        assert_eq!(tm.get_task_status(&id).map(|s| s.status), Some(State::Waiting));
+        assert_eq!(tm._get_task_status(&id).map(|s| s.status), Some(State::Waiting));
 
         task.barrier_begin.wait();
         task.barrier_end.wait();
@@ -643,7 +591,7 @@ mod tests {
         );
 
         assert_eq!(task_status_rx.recv().unwrap().unwrap().status.status, State::Deleted);
-        assert_eq!(tm.get_task_status(&id).map(|s| s.status), None);
+        assert_eq!(tm._get_task_status(&id).map(|s| s.status), None);
 
         tm.stop();
         assert_eq!(tm.wait_shutdown(), ());

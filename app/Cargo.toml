@@ -16,7 +16,6 @@ test-full = ["test-functional"]
 
 [dependencies]
 qovery-engine = { path = "../cloned-engine" }
-qovery-engine-task-manager = { path = "../qovery-engine-task-manager" }
 crossbeam-channel = "0.5.0"
 nats = "0.8.6"
 serde = { version = "1.0", features = ["derive"] }
@@ -28,12 +27,13 @@ retry = "1.0.0"
 dirs = "3.0.1"
 openssl-sys = "0.9"
 openssl = { version = "0.10", features = ["vendored"] }
+evmap = "10.0.2"
 
 # Webserver (For Prometheus, Healthcheck, ...)
 tokio = { version = "1.1.0", features = ["net", "rt-multi-thread"] }
 warp = "0.3.0"
 lazy_static = "1.4.0"
-prometheus = { version = "0.11.0", features = ["process"] }
+prometheus = { version = "0.12.0", features = ["process"] }
 
 # tracing
 tracing = { version = "0.1.26", features = ["log"] }

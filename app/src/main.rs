@@ -4,6 +4,8 @@ extern crate tracing;
 extern crate prometheus;
 #[macro_use]
 extern crate serde;
+#[macro_use]
+extern crate lazy_static;
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
@@ -26,10 +28,6 @@ use uuid::Uuid;
 
 use qovery_engine::cmd;
 use qovery_engine::models::Context;
-use qovery_engine_task_manager::models::Request;
-use qovery_engine_task_manager::task_manager::{PreRun, Task, TaskManager};
-use qovery_engine_task_manager::tasks::{EnvironmentTask, InfrastructureTask};
-use qovery_engine_task_manager::utils::LogErrorOnDrop;
 use utils::Mode;
 
 use crate::constants::ASCII_BANNER;
@@ -38,11 +36,16 @@ use crate::custom_error::{EngineInitError, ErrorKind};
 use crate::models::TaskSelector::{Environment, Infrastructure};
 use crate::models::{Ping, Response, StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message, Subscription};
+use crate::task_manager::models::Request;
+use crate::task_manager::task_manager::{PreRun, Task, TaskManager};
+use crate::task_manager::tasks::{EnvironmentTask, InfrastructureTask};
+use crate::utils::LogErrorOnDrop;
 
 mod constants;
 mod custom_error;
 mod models;
 mod nats;
+mod task_manager;
 mod utils;
 mod webserver;
 

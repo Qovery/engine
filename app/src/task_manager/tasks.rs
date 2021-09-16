@@ -9,8 +9,8 @@ use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::transaction::{RollbackError, TransactionResult};
 
-use crate::models::{Action, Archive, Request};
-use crate::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task};
+use crate::task_manager::models::{Action, Archive, Request};
+use crate::task_manager::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task};
 use qovery_engine::object_storage::ObjectStorage;
 
 #[derive(Clone)]

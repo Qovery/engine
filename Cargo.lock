@@ -44,13 +44,13 @@ dependencies = [
  "ctrlc",
  "dirs",
  "dotenv",
+ "evmap",
  "lazy_static",
  "nats",
  "openssl",
  "openssl-sys",
  "prometheus",
  "qovery-engine",
- "qovery-engine-task-manager",
  "reqwest 0.10.8",
  "retry",
  "serde",
@@ -2536,18 +2536,18 @@ dependencies = [
 
 [[package]]
 name = "prometheus"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8425533e7122f0c3cc7a37e6244b16ad3a2cc32ae7ac6276e2a75da0d9c200d"
+checksum = "5986aa8d62380092d2f50f8b1cdba9cb9b6731ffd4b25b51fd126b6c3e05b99c"
 dependencies = [
  "cfg-if 1.0.0",
  "fnv",
  "lazy_static",
  "libc",
+ "memchr",
  "parking_lot 0.11.1",
  "procfs",
  "protobuf",
- "regex",
  "thiserror",
 ]
 
@@ -2616,22 +2616,6 @@ dependencies = [
  "trust-dns-resolver",
  "uuid 0.8.1",
  "walkdir",
-]
-
-[[package]]
-name = "qovery-engine-task-manager"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "crossbeam-channel",
- "evmap",
- "lazy_static",
- "prometheus",
- "qovery-engine",
- "serde",
- "serde_json",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -3338,9 +3322,9 @@ dependencies = [
 
 [[package]]
 name = "scaleway_api_rs"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ef902879597f20dc6319fe7203d05c98066a48301ec9d383f23b483c881f95"
+checksum = "d20620dd2a8b440dcd2b6777c75c845217115ce69f0c1a9575cb9f7af1e7b49d"
 dependencies = [
  "reqwest 0.11.3",
  "serde",

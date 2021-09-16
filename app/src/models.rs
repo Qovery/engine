@@ -1,5 +1,5 @@
+use crate::task_manager::task_manager::Status;
 use chrono::{DateTime, Utc};
-use qovery_engine_task_manager::task_manager::Status;
 
 #[derive(Clone, Copy, Debug)]
 pub enum TaskSelector {
