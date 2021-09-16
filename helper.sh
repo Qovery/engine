@@ -10,7 +10,7 @@ if [ "$(uname)" == "Darwin" ] ; then
   awk='gawk'
   sed='gsed'
 fi
-all_labels="test-aws-all"
+all_labels="test-all"
 
 function variable_not_found() {
   echo "Required variable not found: $1"
