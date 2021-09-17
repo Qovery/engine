@@ -13,15 +13,21 @@ locals {
   tags_mysql_list = [for i, v in local.tags_mysql : "${i}=${v}"] # NOTE: Scaleway doesn't support KV style tags
 }
 
+# By default, all IPs are authorized => 0.0.0.0/0
+{%- if publicly_accessible %}
+resource "scaleway_rdb_acl" "main" {
+  instance_id = scaleway_rdb_instance.mysql_instance.id
+  acl_rules {
+    ip = "0.0.0.0/0"
+    description = "accessible from any host"
+  }
+  depends_on [
+    scaleway_rdb_instance.mysql_instance
+  ]
+}
+{%- else %}
 
-# TODO:(benjaminch): To be discussed with Pierre
-# resource "scaleway_rdb_acl" "main" {
-#   instance_id = scaleway_rdb_instance.mysql_instance.id
-#   acl_rules {
-#     ip = "1.2.3.4/32"
-#     description = "foo"
-#   }
-# }
+{%- endif %}
 
 resource "scaleway_rdb_instance" "mysql_instance" {
   name              = var.database_name
@@ -31,7 +37,7 @@ resource "scaleway_rdb_instance" "mysql_instance" {
   # volume_type       = var.storage_type
   # volume_size_in_gb = var.disk_size
 
-  is_ha_cluster     = true
+  is_ha_cluster     = var.is_ha_cluster
   disable_backup    = false # TODO(benjaminch): plug backup options (CF AWS)
 
   user_name         = var.username
@@ -43,30 +49,31 @@ resource "scaleway_rdb_instance" "mysql_instance" {
 
   # TODO:(benjaminch): To be discussed with Pierre
   # missing configuration from DB
-  # - port: not sure we can customize it?
+  # - port: not sure we can customize it? => Will do without
   # - create timeout: not sure we can customize it?
   # - update timeout: not sure we can customize it?
   # - delete timeout: not sure we can customize it?
-  # - snapshot id for restore: maybe should use volume ? https://registry.terraform.io/providers/scaleway/scaleway/latest/docs/resources/instance_volume
-  # - certificate: not sure we can customize it?
-  # - db_subnet_group_name: not sure we can customize it?
-  # - vpc_security_group_ids: not sure we can customize it?
-  # - publicly_accessible: Should be done via ACL?
-  # - multi_az: not sure we can customize it?
-  # - maintenance apply_immediately: not sure we can customize it?
-  # - maintenance maintenance_window: not sure we can customize it?
-  # - auto_minor_version_upgrade: not needed, they handle minors
-  # - monitoring_interval: not sure we can customize it?
-  # - monitoring_role_arn: not sure we can customize it?
-  # - backup backup_retention_period: not sure we can customize it?
-  # - backup backup_window: not sure we can customize it?
-  # - backup skip_final_snapshot: not sure we can customize it?
-  # - backup delete_automated_backups: not sure we can customize it?
+  # - snapshot id for restore: maybe should use volume ? https://registry.terraform.io/providers/scaleway/scaleway/latest/docs/resources/instance_volume => Ask them how to do it
+  # - certificate: not sure we can customize it? => Ok
+  # - db_subnet_group_name: not sure we can customize it? => Ok
+  # - vpc_security_group_ids: not sure we can customize it? => Ok
+  # - publicly_accessible: Should be done via ACL? => Check K8s CNI / Core will send all subnets so we will have access / test if accessible from outside without acl or should we set one large one / Whitelist Scaleway private ID range
+  # - multi_az: not sure we can customize it? => Ok
+  # - maintenance apply_immediately: not sure we can customize it? => Ok
+  # - maintenance maintenance_window: not sure we can customize it? => Ok
+  # - auto_minor_version_upgrade: not needed, they handle minors => Ok
+  # - monitoring_interval: not sure we can customize it? => Ok
+  # - monitoring_role_arn: not sure we can customize it? => Ok
+  # - backup backup_retention_period: not sure we can customize it? => Ok
+  # - backup backup_window: not sure we can customize it? => Ok
+  # - backup skip_final_snapshot: not sure we can customize it? => Ok
+  # - backup delete_automated_backups: not sure we can customize it? => Ok
 
   # available settings to be retrieved via API
   # https://developers.scaleway.com/en/products/rdb/api/#get-1eafb7
   # https://api.scaleway.com/rdb/v1/regions/fr-par/database-engines
   # settings          = { }
+  # - activate_slow_queries
 }
 
 resource "scaleway_rdb_database" "mysql_main" {
