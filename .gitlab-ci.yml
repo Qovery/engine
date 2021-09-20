@@ -442,7 +442,7 @@ main-deploy-engine-infra:
       - main
 
 deploy_all_clusters:
-  stage: tests
+  stage: deploy
   retry: 0
   script:
     - ./helper.sh deploy_all_clusters
