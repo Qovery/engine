@@ -710,7 +710,7 @@ datasources:
                     value: "scw".to_string(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.KUBERNETES_ID".to_string(),
+                    key: "environmentVariables.CLUSTER_ID".to_string(),
                     value: chart_config_prerequisites.organization_id.clone(),
                 },
                 // resources limits

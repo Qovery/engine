@@ -823,7 +823,7 @@ datasources:
                     value: chart_config_prerequisites.cloud_provider.clone(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.KUBERNETES_ID".to_string(),
+                    key: "environmentVariables.CLUSTER_ID".to_string(),
                     value: chart_config_prerequisites.cluster_id.clone(),
                 },
                 // resources limits
