@@ -454,6 +454,11 @@ function await_docker() {
     fi
 }
 
+function deploy_all_clusters() {
+  token=$(curl -X POST -H 'Content-Type: application/json' --data-raw "{\"username\": \"qovery-admin\", \"password\": \"$ADMIN_PASSWORD\"}" https://api-admin.qovery.com/auth)
+  curl -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $token" --data-raw '{ "metadata" : { "dry_run_deploy": "false" }' https://api-admin.qovery.com/cluster/deploy
+}
+
 # need to debug?
 if [ ! -z $DEBUG_REQUIRED ] ; then
   echo "DEBUG MODE ENABLED FOR 1H"
@@ -569,6 +574,10 @@ upgrade_on_dev)
   ;;
 downgrade_on_dev)
   downgrade_on_dev "$2"
+  ;;
+
+deploy_all_clusters)
+  deploy_all_clusters
   ;;
 *)
   print_help

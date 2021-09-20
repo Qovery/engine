@@ -27,6 +27,7 @@ stages:
   - downgrade-dev
   - release
   - deploy
+  - deploy-all-clusters
 
 #
 # Merge request only
@@ -136,6 +137,7 @@ test-all-mr:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 1 week
   interruptible: true
+
 
 #
 # Dev branch
@@ -438,3 +440,16 @@ main-deploy-engine-infra:
   only:
     refs:
       - main
+
+deploy_all_clusters:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh deploy_all_clusters
+  only:
+    refs:
+      - main
+  when: manual
+  tags:
+    - 250mcpu-1gmem-0g
+  interruptible: true
