@@ -300,7 +300,7 @@ impl FromStr for VersionsNumber {
 
         let patch = version_split.next().map(|patch| patch.to_string());
 
-        let suffix = version_split.next().map(|patch| patch.to_string());
+        let suffix = version_split.next().map(|suffix| suffix.to_string());
 
         // TODO(benjaminch): Handle properly the case where versions are empty
         // eq. 1..2
@@ -635,7 +635,7 @@ mod tests {
             },
             TestCase {
                 input: "-", // TODO(benjaminch): better handle this case, should trigger an error
-                expected_output: Ok(VersionsNumber::new("".to_string(), None, None, Some("".to_string()))),
+                expected_output: Ok(VersionsNumber::new("-".to_string(), None, None, None)),
                 description: "suffix separator only",
             },
             TestCase {
