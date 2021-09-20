@@ -340,7 +340,6 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
         applications: vec![Application {
             id: generate_id(),
             name: format!("{}-{}", "simple-app".to_string(), &suffix),
-            /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),

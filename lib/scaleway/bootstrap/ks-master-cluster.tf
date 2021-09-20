@@ -3,7 +3,9 @@ resource "scaleway_k8s_cluster" "kubernetes_cluster" {
   version = var.scaleway_ks_version
   cni     = "cilium"
 
-  tags    =  local.tags_ks_list
+  region  = var.region
+
+  tags    = local.tags_ks_list
 
   autoscaler_config {
     # autoscaler FAQ https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md

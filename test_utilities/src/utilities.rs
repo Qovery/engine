@@ -20,6 +20,7 @@ use std::fs;
 use tracing::{error, info, warn};
 use tracing_subscriber;
 
+use crate::scaleway::SCW_KUBE_TEST_CLUSTER_ID;
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
@@ -32,7 +33,6 @@ use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
-use crate::scaleway::SCW_KUBE_TEST_CLUSTER_ID;
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::runtime::block_on;
 use time::Instant;
