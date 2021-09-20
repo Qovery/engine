@@ -311,7 +311,7 @@ master:
     ##   GKE, AWS & OpenStack)
     ##
     # storageClass: "-"
-    storageClass: {{ database_disk_type }}
+    storageClass: scw-sbv-ssd-0
     ## PVC annotations
     ##
     annotations:

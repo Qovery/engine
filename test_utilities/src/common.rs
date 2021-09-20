@@ -240,6 +240,9 @@ pub fn environment_3_apps_3_routers_3_databases(
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.to_string(),
                 database_disk_type: database_disk_type.to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -257,6 +260,9 @@ pub fn environment_3_apps_3_routers_3_databases(
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.to_string(),
                 database_disk_type: database_disk_type.to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
             Database {
                 kind: DatabaseKind::Mongodb,
@@ -274,6 +280,9 @@ pub fn environment_3_apps_3_routers_3_databases(
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.to_string(),
                 database_disk_type: database_disk_type.to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
         ],
         clone_from_environment_id: None,
@@ -374,6 +383,9 @@ pub fn environnement_2_app_2_routers_1_psql(
             disk_size_in_gib: 10,
             database_instance_type: database_instance_type.to_string(),
             database_disk_type: database_disk_type.to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }],
         applications: vec![
             Application {

@@ -549,6 +549,9 @@ pub struct Database {
     pub disk_size_in_gib: u32,
     pub database_instance_type: String,
     pub database_disk_type: String,
+    pub activate_high_availability: bool,
+    pub activate_backups: bool,
+    pub publicly_accessible: bool,
 }
 
 impl Database {
@@ -564,6 +567,9 @@ impl Database {
             port: self.port,
             disk_size_in_gib: self.disk_size_in_gib,
             database_disk_type: self.database_disk_type.clone(),
+            activate_high_availability: self.activate_high_availability,
+            activate_backups: self.activate_backups,
+            publicly_accessible: self.publicly_accessible,
         };
 
         let listeners = cloud_provider.listeners().clone();

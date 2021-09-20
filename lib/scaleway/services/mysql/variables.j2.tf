@@ -146,6 +146,12 @@ variable "maintenance_window" {
 
 # Backups
 
+variable "activate_backups" {
+  description = "Backups activated"
+  default = {{ activate_backups }}
+  type = bool
+}
+
 variable "backup_retention_period" {
   description = "Backup rentention period"
   default = 7
@@ -187,3 +193,11 @@ variable "resource_expiration_in_seconds" {
   type = number
 }
 {% endif %}
+
+# Clustering
+
+variable "activate_high_availability" {
+  description = "Define if DB should be in cluster mode"
+  default = {{ activate_high_availability }}
+  type = bool
+}

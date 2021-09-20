@@ -232,6 +232,9 @@ pub struct DatabaseOptions {
     pub port: u16,
     pub disk_size_in_gib: u32,
     pub database_disk_type: String,
+    pub activate_high_availability: bool,
+    pub activate_backups: bool,
+    pub publicly_accessible: bool,
 }
 
 #[derive(Eq, PartialEq)]

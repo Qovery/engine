@@ -92,7 +92,7 @@ impl MySQL {
         supported_mysql_versions.insert("8".to_string(), "8".to_string());
         supported_mysql_versions.insert("8.0".to_string(), "8.0".to_string());
 
-        get_supported_version_to_use("RDS MySQL", supported_mysql_versions, requested_version)
+        get_supported_version_to_use("RDB MySQL", supported_mysql_versions, requested_version)
     }
 }
 
@@ -204,6 +204,10 @@ impl Service for MySQL {
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
         context.insert("tfstate_name", &get_tfstate_name(self));
 
+        context.insert("publicly_accessible", &self.options.publicly_accessible);
+        context.insert("activate_high_availability", &self.options.activate_high_availability);
+        context.insert("activate_backups", &self.options.activate_backups);
+
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         context.insert("skip_final_snapshot", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
@@ -263,16 +267,13 @@ impl Create for MySQL {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.MySQL.on_create() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_stateful_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_stateful_service(target, self)
+        })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        //FIXME : perform an actual check
-        Ok(())
+        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
     }
 
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -306,11 +307,9 @@ impl Delete for MySQL {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.MySQL.on_delete() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateful_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateful_service(target, self)
+        })
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {

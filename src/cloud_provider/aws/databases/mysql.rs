@@ -473,6 +473,9 @@ mod tests_mysql {
                 port: 3306,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
             vec![],
         );

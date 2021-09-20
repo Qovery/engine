@@ -3,7 +3,7 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_router, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete,
-    Helm, Pause, Service, ServiceType, StatelessService,
+    Helm, Pause, Router as RRouter, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -104,6 +104,7 @@ impl Service for Router {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
+
         let mut context = default_tera_context(self, kubernetes, environment);
 
         let applications = environment
@@ -222,7 +223,7 @@ impl StatelessService for Router {}
 
 impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("Scaleway.router.on_create() called for {}", self.name());
+        info!("SCW.router.on_create() called for {}", self.name());
         let (kubernetes, environment) = match target {
             DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
@@ -266,8 +267,6 @@ impl Create for Router {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        use crate::cloud_provider::service::Router;
-
         // check non custom domains
         self.check_domains()?;
 

@@ -1,6 +1,0 @@
-apiVersion: v2
-name: scaleway-k8s-node-coffee
-description: The Coffee Machine for Scaleway Kubernetes Nodes
-type: application
-version: 0.1.0
-appVersion: 0.1
