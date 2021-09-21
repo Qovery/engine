@@ -573,7 +573,7 @@ fn test_postgresql_configuration(
     })
 }
 
-// Postgres environment environment
+// Postgres self hosted environment
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
@@ -629,6 +629,62 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
 }
 
 // Postgres production environment
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn postgresql_v10_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let mut environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    environment.kind = Kind::Production;
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!());
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn postgresql_v11_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let mut environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    environment.kind = Kind::Production;
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!());
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn postgresql_v12_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let mut environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    environment.kind = Kind::Production;
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!());
+}
 
 /**
  **

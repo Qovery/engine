@@ -65,7 +65,7 @@ impl MySQL {
     }
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<VersionsNumber, EngineError> {
-        let version = check_service_version(Self::get_mysql_version(self.version(), is_managed_services), self)?;
+        let version = check_service_version(Self::pick_mysql_version(self.version(), is_managed_services), self)?;
         match VersionsNumber::from_str(version.as_str()) {
             Ok(res) => Ok(res),
             Err(e) => Err(self.engine_error(
@@ -75,15 +75,15 @@ impl MySQL {
         }
     }
 
-    fn get_mysql_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
+    fn pick_mysql_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
         if is_managed_service {
-            Self::get_managed_mysql_version(requested_version)
+            Self::pick_managed_mysql_version(requested_version)
         } else {
             get_self_hosted_mysql_version(requested_version)
         }
     }
 
-    fn get_managed_mysql_version(requested_version: String) -> Result<String, StringError> {
+    fn pick_managed_mysql_version(requested_version: String) -> Result<String, StringError> {
         // Scaleway supported MySQL versions
         // https://api.scaleway.com/rdb/v1/regions/fr-par/database-engines
         let mut supported_mysql_versions = HashMap::new();

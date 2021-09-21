@@ -568,7 +568,7 @@ where
 
 type KubernetesCredentials<'a> = Vec<(&'a str, &'a str)>;
 
-fn get_cloud_provider_credentials<'a>(provider_kind: Kind, secrets: &'a FuncTestsSecrets) -> KubernetesCredentials<'a> {
+fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecrets) -> KubernetesCredentials {
     match provider_kind {
         Kind::Aws => vec![
             (AWS_ACCESS_KEY_ID, secrets.AWS_ACCESS_KEY_ID.as_ref().unwrap().as_str()),

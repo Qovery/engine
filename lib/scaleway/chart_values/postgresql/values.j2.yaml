@@ -323,7 +323,7 @@ persistence:
   ##
   subPath: ""
 
-  storageClass: {{ database_disk_type }}
+  storageClass: scw-sbv-ssd-0
   accessModes:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
