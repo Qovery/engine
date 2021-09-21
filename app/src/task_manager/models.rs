@@ -175,6 +175,7 @@ impl CloudProvider {
                 self.name.as_str(),
                 self.options.scaleway_access_key.as_ref()?.as_str(),
                 self.options.scaleway_secret_key.as_ref()?.as_str(),
+                self.options.scaleway_project_id.as_ref()?.as_str(),
                 terraform_state_credentials,
             ))),
         }
