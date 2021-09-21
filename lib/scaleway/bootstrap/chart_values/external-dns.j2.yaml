@@ -341,7 +341,7 @@ domainFilters: {{ managed_dns_domains_helm_format }}
 excludeDomains: []
 ## Limit possible target zones by zone id (optional)
 ##
-zoneIdFilters: []
+zoneIdFilters: {{ managed_dns_domains_ids_helm_format }}
 ## Filter sources managed by external-dns via annotation using label selector semantics (optional)
 ##
 annotationFilter: ""

@@ -11,6 +11,7 @@ pub struct Cloudflare {
     domain: String,
     cloudflare_api_token: String,
     cloudflare_email: String,
+    pub domain_id: String,
 }
 
 impl Cloudflare {
@@ -19,6 +20,7 @@ impl Cloudflare {
         id: &str,
         name: &str,
         domain: &str,
+        domain_id: &str,
         cloudflare_api_token: &str,
         cloudflare_email: &str,
     ) -> Self {
@@ -27,6 +29,7 @@ impl Cloudflare {
             id: id.to_string(),
             name: name.to_string(),
             domain: domain.to_string(),
+            domain_id: domain_id.to_string(),
             cloudflare_api_token: cloudflare_api_token.to_string(),
             cloudflare_email: cloudflare_email.to_string(),
         }
@@ -65,6 +68,8 @@ impl DnsProvider for Cloudflare {
     fn domain(&self) -> &str {
         self.domain.as_str()
     }
+
+    fn domain_id(&self) -> &str { self.domain_id.as_str()}
 
     fn resolvers(&self) -> Vec<Ipv4Addr> {
         vec![Ipv4Addr::new(1, 1, 1, 1), Ipv4Addr::new(1, 0, 0, 1)]

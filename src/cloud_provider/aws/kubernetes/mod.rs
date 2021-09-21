@@ -216,6 +216,7 @@ impl<'a> EKS<'a> {
 
         let managed_dns_list = vec![self.dns_provider.name()];
         let managed_dns_domains_helm_format = vec![format!("{}", self.dns_provider.domain())];
+        let managed_dns_domains_ids_helm_format = vec![format!("{}", self.dns_provider.domain_id())];
         let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
         let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
 
@@ -255,6 +256,7 @@ impl<'a> EKS<'a> {
         // DNS configuration
         context.insert("managed_dns", &managed_dns_list);
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
+        context.insert("managed_dns_domains_ids_helm_format", &managed_dns_domains_ids_helm_format);
 
         context.insert(
             "managed_dns_domains_terraform_format",

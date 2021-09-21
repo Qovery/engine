@@ -8,6 +8,7 @@ cloudflare:
 {% endif %}
 
 domainFilters: {{ managed_dns_domains_helm_format }}
+zoneIdFilters: {{ managed_dns_domains_ids_helm_format }}
 triggerLoopOnEvent: true
 policy: sync
 txtOwnerId: "{{ kubernetes_cluster_id }}"

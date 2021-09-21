@@ -19,6 +19,7 @@ pub trait DnsProvider {
     fn account(&self) -> &str;
     fn token(&self) -> &str;
     fn domain(&self) -> &str;
+    fn domain_id(&self) -> &str;
     fn domain_helm_format(&self) -> String {
         format!("{{{}}}", self.domain())
     }
