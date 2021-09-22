@@ -601,7 +601,6 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
         EngineErrorScope::Database(id, type_, name) => format!("{} Database '{}' with id '{}'", type_, name, id),
         EngineErrorScope::Application(id, name) => format!("Application '{}' with id '{}'", name, id),
         EngineErrorScope::Router(id, name) => format!("Router '{}' with id '{}'", name, id),
-        EngineErrorScope::ExternalService(id, name) => format!("External service '{}' with id '{}'", name, id),
         EngineErrorScope::ObjectStorage(id, name) => format!("Object Storage '{}' with id '{}'", name, id),
     };
 
