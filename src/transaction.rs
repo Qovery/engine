@@ -138,28 +138,6 @@ impl<'a> Transaction<'a> {
         environment: &Environment,
         option: &DeploymentOption,
     ) -> Result<Vec<Box<dyn Application>>, EngineError> {
-        let external_services_to_build = environment
-            .external_services
-            .iter()
-            // build only applications that are set with Action: Create
-            .filter(|es| es.action == Action::Create);
-
-        let external_service_and_result_tuples = external_services_to_build
-            .map(|es| {
-                let image = es.to_image();
-                let build_result = if option.force_build || !self.engine.container_registry().does_image_exists(&image)
-                {
-                    // only if the build is forced OR if the image does not exist in the registry
-                    self.engine.build_platform().build(es.to_build(), option.force_build)
-                } else {
-                    // use the cache
-                    Ok(BuildResult::new(es.to_build()))
-                };
-
-                (es, build_result)
-            })
-            .collect::<Vec<_>>();
-
         // do the same for applications
         let apps_to_build = environment
             .applications
@@ -184,31 +162,6 @@ impl<'a> Transaction<'a> {
             .collect::<Vec<_>>();
 
         let mut applications: Vec<Box<dyn Application>> = Vec::with_capacity(application_and_result_tuples.len());
-
-        for (external_service, result) in external_service_and_result_tuples {
-            // catch build error, can't do it in Fn
-            let build_result = match result {
-                Err(err) => {
-                    error!(
-                        "build error for external_service {}: {:?}",
-                        external_service.id.as_str(),
-                        err
-                    );
-                    return Err(err);
-                }
-                Ok(build_result) => build_result,
-            };
-
-            match external_service.to_application(
-                self.engine.context(),
-                &build_result.build.image,
-                self.engine.cloud_provider(),
-            ) {
-                Some(app) => applications.push(app),
-                None => {}
-            }
-        }
-
         for (application, result) in application_and_result_tuples {
             // catch build error, can't do it in Fn
             let build_result = match result {
@@ -327,26 +280,12 @@ impl<'a> Transaction<'a> {
         environment_action: &EnvironmentAction,
     ) -> Result<(), RollbackError> {
         let qe_environment = |environment: &Environment| {
-            let mut _applications = Vec::with_capacity(
-                // ExternalService impl Application (which is a StatelessService)
-                environment.applications.len() + environment.external_services.len(),
-            );
-
+            let mut _applications = Vec::with_capacity(environment.applications.len());
             for application in environment.applications.iter() {
                 let build = application.to_build();
 
                 if let Some(x) =
                     application.to_application(self.engine.context(), &build.image, self.engine.cloud_provider())
-                {
-                    _applications.push(x)
-                }
-            }
-
-            for external_service in environment.external_services.iter() {
-                let build = external_service.to_build();
-
-                if let Some(x) =
-                    external_service.to_application(self.engine.context(), &build.image, self.engine.cloud_provider())
                 {
                     _applications.push(x)
                 }
