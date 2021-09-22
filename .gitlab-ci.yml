@@ -446,6 +446,8 @@ deploy_all_clusters:
   retry: 0
   script:
     - ./helper.sh deploy_all_clusters
+  tags:
+    - 250mcpu-1gmem-0g
   only:
     refs:
       - main
