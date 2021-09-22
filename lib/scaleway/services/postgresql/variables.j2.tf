@@ -195,7 +195,6 @@ variable "resource_expiration_in_seconds" {
 {% endif %}
 
 # Clustering
-
 variable "activate_high_availability" {
   description = "Define if DB should be in cluster mode"
   default = {{ activate_high_availability }}

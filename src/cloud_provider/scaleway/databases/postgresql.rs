@@ -48,7 +48,7 @@ impl PostgreSQL {
         options: DatabaseOptions,
         listeners: Listeners,
     ) -> Self {
-        PostgreSQL {
+        Self {
             context,
             action,
             id: id.to_string(),
@@ -199,13 +199,13 @@ impl Service for PostgreSQL {
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
 
-        context.insert("database_db_name", self.name());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
         context.insert("database_instance_type", &self.database_instance_type);
         context.insert("database_disk_type", &self.options.database_disk_type);
+        context.insert("database_name", &self.sanitized_name());
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
@@ -325,8 +325,7 @@ impl Delete for PostgreSQL {
     }
 
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.PostgreSQL.on_create_error() called for {}", self.name());
-
+        warn!("SCW.MySQL.on_create_error() called for {}", self.name());
         Ok(())
     }
 }

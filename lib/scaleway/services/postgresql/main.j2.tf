@@ -72,9 +72,7 @@ resource "scaleway_rdb_instance" "postgresql_instance" {
   # available settings to be retrieved via API
   # https://developers.scaleway.com/en/products/rdb/api/#get-1eafb7
   # https://api.scaleway.com/rdb/v1/regions/fr-par/database-engines
-  settings          = {
-    slow_query_log = true
-  }
+  # settings          = {} TODO(benjaminch): to activate slow queries logs, but not possible for now via `log_min_duration_statement`
 }
 
 resource "scaleway_rdb_database" "postgresql_main" {
