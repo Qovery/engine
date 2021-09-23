@@ -316,6 +316,7 @@ environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
 environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
 environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+buildContainer.enable="false",\
 resources.limits.cpu="1",\
 resources.limits.memory="2Gi",\
 resources.requests.cpu="500m",\
