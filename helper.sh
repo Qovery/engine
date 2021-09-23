@@ -458,7 +458,7 @@ function await_docker() {
 
 function deploy_all_clusters() {
   token=$(curl -X POST -H 'Content-Type: application/json' --data-raw "{\"username\": \"qovery-admin\", \"password\": \"$ADMIN_PASSWORD\"}" https://api-admin.qovery.com/auth)
-  curl -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $token" --data-raw '{ "metadata" : { "dry_run_deploy": "false" } }' https://api-admin.qovery.com/cluster/deploy
+  curl -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $token" --data-raw '{ "metadata" : { "dry_run_deploy": false } }' https://api-admin.qovery.com/cluster/deploy
 }
 
 # need to debug?
