@@ -317,10 +317,10 @@ environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
 environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 buildContainer.enable="false",\
-resources.limits.cpu="1",\
-resources.limits.memory="2Gi",\
-resources.requests.cpu="500m",\
-resources.requests.memory="2Gi"
+engineResources.limits.cpu="1",\
+engineResources.limits.memory="750Mi",\
+engineResources.requests.cpu="300m",\
+engineResources.requests.memory="750Mi"
 }
 
 function upgrade_on_dev() {
