@@ -1130,7 +1130,7 @@ fn test_redis_configuration(
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
-                    "IS_ELASTICCACHE".to_string() => base64::encode(is_elasticache.to_string()),
+                    "IS_ELASTICCACHE".to_string() => base64::encode(is_managed_db.to_string()),
                     "REDIS_HOST".to_string()      => base64::encode(database_host.clone()),
                     "REDIS_PORT".to_string()      => base64::encode(database_port.clone().to_string()),
                     "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),

@@ -16,7 +16,6 @@ use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
-use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;

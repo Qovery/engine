@@ -6,7 +6,6 @@ use crate::models::{Context, Listen, Listener, Listeners};
 
 pub mod application;
 pub mod databases;
-pub mod external_service;
 pub mod kubernetes;
 pub mod router;
 
