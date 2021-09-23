@@ -42,6 +42,7 @@ volumes:
     path: /var/lib/docker
 
 buildContainer:
+  enable: true
   image: docker
   tag: 19.03.12-dind
 
