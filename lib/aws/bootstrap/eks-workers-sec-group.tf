@@ -43,16 +43,6 @@ resource "aws_security_group_rule" "node_ingress_cluster" {
   type                     = "ingress"
 }
 
-resource "aws_security_group_rule" "ssh_access_to_workers" {
-  description              = "Allow SSH on worker nodes"
-  from_port                = 22
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.eks_cluster_workers.id
-  source_security_group_id = aws_security_group.eks_cluster.id
-  to_port                  = 22
-  type                     = "ingress"
-}
-
 ############################################
 # Worker Node Access to EKS Master Cluster #
 ############################################
