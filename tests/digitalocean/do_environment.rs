@@ -11,6 +11,7 @@ use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, Clone2, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
+use std::collections::BTreeMap;
 use test_utilities::utilities::context;
 use tracing::{span, warn, Level};
 
@@ -18,6 +19,7 @@ use tracing::{span, warn, Level};
 // This cluster should be live in order to have those tests passing properly.
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
@@ -70,6 +72,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
@@ -122,6 +125,7 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_and_pause() {
@@ -195,6 +199,7 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
@@ -256,6 +261,7 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_with_domain() {
@@ -306,6 +312,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_with_storage() {
@@ -376,6 +383,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_redeploy_same_app() {
@@ -475,6 +483,7 @@ fn digitalocean_doks_redeploy_same_app() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environment() {
@@ -509,7 +518,7 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
                 app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
                 app.branch = "1app_fail_deploy".to_string();
                 app.commit_id = "5b89305b9ae8a62a1f16c5c773cddf1d12f70db1".to_string();
-                app.environment_variables = vec![];
+                app.environment_vars = BTreeMap::new();
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -581,7 +590,7 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
                 app.git_url = "https://gitlab.com/maathor/my-exit-container".to_string();
                 app.branch = "master".to_string();
                 app.commit_id = "55bc95a23fbf91a7699c28c5f61722d4f48201c9".to_string();
-                app.environment_variables = vec![];
+                app.environment_vars = BTreeMap::new();
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -643,6 +652,7 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
@@ -693,6 +703,7 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_non_working_environment_with_a_working_failover() {
@@ -757,6 +768,7 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_working_failover() 
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_non_working_environment_with_a_non_working_failover() {

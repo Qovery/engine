@@ -3,8 +3,7 @@ use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::Kind as ProviderKind;
 use qovery_engine::models::{
-    Action, Application, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction, EnvironmentVariable,
-    Kind,
+    Action, Application, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction, Kind,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
@@ -25,6 +24,7 @@ use test_utilities::digitalocean::{
 
 // to check overload between several databases and apps
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn deploy_an_environment_with_3_databases_and_3_apps() {
@@ -77,6 +77,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn deploy_an_environment_with_db_and_pause_it() {
@@ -148,6 +149,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
 // this test ensure containers databases are never restarted, even in failover environment case
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn postgresql_failover_dev_environment_with_all_options() {
@@ -251,6 +253,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
 
 // Ensure a full environment can run correctly
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn postgresql_deploy_a_working_development_environment_with_all_options() {
@@ -326,6 +329,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
 // Ensure redeploy works as expected
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
@@ -388,28 +392,13 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 app.branch = app_name.clone();
                 app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
                 app.private_port = Some(1234);
-                app.environment_variables = vec![
-                    EnvironmentVariable {
-                        key: "PG_HOST".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_DBNAME".to_string(),
-                        value: database_db_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                     "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
+                     "PG_HOST".to_string() => base64::encode(database_host.clone()),
+                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -523,28 +512,13 @@ fn test_postgresql_configuration(
                 app.commit_id = "ad65b24a0470e7e8aa0983e036fb9a05928fd973".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-                app.environment_variables = vec![
-                    EnvironmentVariable {
-                        key: "PG_HOST".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_DBNAME".to_string(),
-                        value: database_db_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                     "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
+                     "PG_HOST".to_string() => base64::encode(database_host.clone()),
+                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -580,6 +554,7 @@ fn test_postgresql_configuration(
 
 // Postgres environment environment
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn postgresql_v10_deploy_a_working_dev_environment() {
@@ -598,6 +573,7 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn postgresql_v11_deploy_a_working_dev_environment() {
@@ -616,6 +592,7 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn postgresql_v12_deploy_a_working_dev_environment() {
@@ -694,32 +671,14 @@ fn test_mongodb_configuration(
                 app.commit_id = "3fdc7e784c1d98b80446be7ff25e35370306d9a8".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-                app.environment_variables = vec![
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string(),
-                        value: database_uri.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "MONGODB_DBNAME".to_string(),
-                        value: database_db_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host.clone()),
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port.to_string()),
+                    "MONGODB_DBNAME".to_string() => base64::encode(database_db_name.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<Application>>();
@@ -756,6 +715,7 @@ fn test_mongodb_configuration(
 
 // development environment
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn mongodb_v3_6_deploy_a_working_dev_environment() {
@@ -774,6 +734,7 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn mongodb_v4_0_deploy_a_working_dev_environment() {
@@ -792,6 +753,7 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn mongodb_v4_2_deploy_a_working_dev_environment() {
@@ -810,6 +772,7 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn mongodb_v4_4_deploy_a_working_dev_environment() {
@@ -890,36 +853,13 @@ fn test_mysql_configuration(
                 app.commit_id = "fc8a87b39cdee84bb789893fb823e3e62a1999c0".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-                app.environment_variables = vec![
-                    // EnvironmentVariable {
-                    //     key: "ENABLE_DEBUG".to_string(),
-                    //     value: "true".to_string(),
-                    // },
-                    // EnvironmentVariable {
-                    //     key: "DEBUG_PAUSE".to_string(),
-                    //     value: "true".to_string(),
-                    // },
-                    EnvironmentVariable {
-                        key: "MYSQL_HOST".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "MYSQL_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "MYSQL_DBNAME".to_string(),
-                        value: database_db_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "MYSQL_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "MYSQL_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                    "MYSQL_HOST".to_string() => base64::encode(database_host.clone()),
+                    "MYSQL_PORT".to_string() => base64::encode(database_port.to_string()),
+                    "MYSQL_DBNAME".to_string()   => base64::encode(database_db_name.clone()),
+                    "MYSQL_USERNAME".to_string() => base64::encode(database_username.clone()),
+                    "MYSQL_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -955,6 +895,7 @@ fn test_mysql_configuration(
 
 // MySQL self-hosted environment
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn mysql_v5_7_deploy_a_working_dev_environment() {
@@ -973,6 +914,7 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn mysql_v8_deploy_a_working_dev_environment() {
@@ -1055,36 +997,13 @@ fn test_redis_configuration(
                 app.commit_id = "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-                app.environment_variables = vec![
-                    // EnvironmentVariable {
-                    //     key: "ENABLE_DEBUG".to_string(),
-                    //     value: "true".to_string(),
-                    // },
-                    // EnvironmentVariable {
-                    //     key: "DEBUG_PAUSE".to_string(),
-                    //     value: "true".to_string(),
-                    // },
-                    EnvironmentVariable {
-                        key: "IS_ELASTICCACHE".to_string(),
-                        value: is_elasticache.to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "REDIS_HOST".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "REDIS_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "REDIS_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "REDIS_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                    "IS_ELASTICCACHE".to_string() => base64::encode(is_elasticache.to_string()),
+                    "REDIS_HOST".to_string()      => base64::encode(database_host.clone()),
+                    "REDIS_PORT".to_string()      => base64::encode(database_port.clone().to_string()),
+                    "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),
+                    "REDIS_PASSWORD".to_string()  => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -1120,6 +1039,7 @@ fn test_redis_configuration(
 
 // Redis self-hosted environment
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn redis_v5_deploy_a_working_dev_environment() {
@@ -1138,6 +1058,7 @@ fn redis_v5_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
+#[ignore]
 #[named]
 #[test]
 fn redis_v6_deploy_a_working_dev_environment() {

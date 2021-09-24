@@ -162,6 +162,7 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
 }
 
 #[cfg(feature = "test-do-infra")]
+#[ignore]
 #[named]
 #[test]
 fn create_and_destroy_doks_cluster_ams_3() {
@@ -171,9 +172,9 @@ fn create_and_destroy_doks_cluster_ams_3() {
 }
 
 #[cfg(feature = "test-do-infra")]
+#[ignore]
 #[named]
 #[test]
-#[ignore]
 #[allow(dead_code)]
 fn create_and_destroy_doks_cluster_nyc_3() {
     let region = Region::NewYorkCity3;
@@ -193,6 +194,7 @@ fn create_and_destroy_doks_cluster_sfo_3() {
 }
 
 #[cfg(feature = "test-do-infra")]
+#[ignore]
 #[named]
 #[test]
 fn create_and_destroy_doks_cluster_london() {
