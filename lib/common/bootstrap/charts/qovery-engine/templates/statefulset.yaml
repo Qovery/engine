@@ -28,20 +28,18 @@ spec:
       serviceAccountName: {{ include "qovery-engine.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      initContainers:
-        - name: clean-data
-          image: busybox:latest
-          command:
-            - /bin/sh
-            - -c
-            - |
-              rm -Rf {{ .Values.volumes.qoveryWorkspace.path }}/* {{ .Values.volumes.dockerGraphStorage.path }}/*
-              chmod 777 {{ .Values.volumes.qoveryWorkspace.path }} {{ .Values.volumes.dockerGraphStorage.path }}
-          volumeMounts:
-            - name: docker-graph-storage
-              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
-            - name: qovery-workspace
-              mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: qovery-engine
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -59,6 +57,7 @@ spec:
             {{ end }}
           resources:
             {{- toYaml .Values.engineResources | nindent 12 }}
+{{ if .Values.buildContainer.enable }}
           volumeMounts:
             - name: qovery-workspace
               mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
@@ -90,18 +89,20 @@ spec:
           volumeMounts:
             - name: docker-graph-storage
               mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      initContainers:
+        - name: clean-data
+          image: busybox:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              rm -Rf {{ .Values.volumes.qoveryWorkspace.path }}/* {{ .Values.volumes.dockerGraphStorage.path }}/*
+              chmod 777 {{ .Values.volumes.qoveryWorkspace.path }} {{ .Values.volumes.dockerGraphStorage.path }}
+          volumeMounts:
+            - name: qovery-workspace
+              mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
+            - name: docker-graph-storage
+              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
   volumeClaimTemplates:
   - metadata:
       name: docker-graph-storage
@@ -125,3 +126,4 @@ spec:
       resources:
         requests:
           storage: {{ .Values.volumes.qoveryWorkspace.size }}
+{{ end }}
