@@ -113,7 +113,7 @@ fn create_and_destroy_eks_cluster(
         let aws = test_utilities::aws::cloud_provider_aws(&context);
         let nodes = test_utilities::aws::aws_kubernetes_nodes();
         let mut eks_options = eks_options(secrets);
-        eks_options.vpc_qovery_network_mode = vpc_network_mode;
+        eks_options.vpc_qovery_network_mode = Some(vpc_network_mode);
 
         let cloudflare = dns_provider_cloudflare(&context);
 
