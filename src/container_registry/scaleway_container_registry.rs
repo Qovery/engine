@@ -396,7 +396,7 @@ impl ContainerRegistry for ScalewayCR {
         if !force_push && self.does_image_exists(&image) {
             // check if image does exist - if yes, do not upload it again
             let info_message = format!(
-                "image {:?} found on Scaleway {} repository, container build is not required",
+                "image {} found on Scaleway {} repository, container build is not required",
                 image, registry_name,
             );
 
@@ -415,7 +415,7 @@ impl ContainerRegistry for ScalewayCR {
         }
 
         let info_message = format!(
-            "image {:?} does not exist on Scaleway {} repository, starting image upload",
+            "image {} does not exist on Scaleway {} repository, starting image upload",
             image,
             self.name()
         );
