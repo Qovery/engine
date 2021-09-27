@@ -32,7 +32,6 @@ pub trait Service {
     fn workspace_directory(&self) -> String {
         let dir_root = match self.service_type() {
             ServiceType::Application => "applications",
-            ServiceType::ExternalService => "external-services",
             ServiceType::Database(_) => "databases",
             ServiceType::Router => "routers",
         };
@@ -101,7 +100,6 @@ pub trait Service {
 
         match self.service_type() {
             ServiceType::Application => ProgressScope::Application { id },
-            ServiceType::ExternalService => ProgressScope::ExternalService { id },
             ServiceType::Database(_) => ProgressScope::Database { id },
             ServiceType::Router => ProgressScope::Router { id },
         }
@@ -134,8 +132,6 @@ pub trait Application: StatelessService {
     fn image(&self) -> &Image;
     fn set_image(&mut self, image: Image);
 }
-
-pub trait ExternalService: StatelessService {}
 
 pub trait Router: StatelessService + Listen + Helm {
     fn domains(&self) -> Vec<&str>;
@@ -249,7 +245,6 @@ pub enum DatabaseType<'a> {
 #[derive(Eq, PartialEq)]
 pub enum ServiceType<'a> {
     Application,
-    ExternalService,
     Database(DatabaseType<'a>),
     Router,
 }
@@ -258,7 +253,6 @@ impl<'a> ServiceType<'a> {
     pub fn name(&self) -> &str {
         match self {
             ServiceType::Application => "Application",
-            ServiceType::ExternalService => "ExternalService",
             ServiceType::Database(db_type) => match db_type {
                 DatabaseType::PostgreSQL(_) => "PostgreSQL database",
                 DatabaseType::MongoDB(_) => "MongoDB database",

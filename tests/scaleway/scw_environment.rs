@@ -11,6 +11,7 @@ use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, Clone2, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
+use std::collections::BTreeMap;
 use test_utilities::utilities::context;
 use tracing::{span, warn, Level};
 
@@ -509,7 +510,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
                 app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
                 app.branch = "1app_fail_deploy".to_string();
                 app.commit_id = "5b89305b9ae8a62a1f16c5c773cddf1d12f70db1".to_string();
-                app.environment_variables = vec![];
+                app.environment_vars = BTreeMap::default();
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -581,7 +582,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
                 app.git_url = "https://gitlab.com/maathor/my-exit-container".to_string();
                 app.branch = "master".to_string();
                 app.commit_id = "55bc95a23fbf91a7699c28c5f61722d4f48201c9".to_string();
-                app.environment_variables = vec![];
+                app.environment_vars = BTreeMap::default();
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
