@@ -6,13 +6,9 @@ controller:
   ingressClass: nginx-qovery
   extraArgs:
     default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
-  defaultBackendService: ""
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
-  terminationGracePeriodSeconds: 60
-  livenessProbe:
-    failureThreshold: 3
 
   autoscaling:
     enabled: true
@@ -28,11 +24,3 @@ controller:
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0
-  admissionWebhooks:
-    enabled: false
-  lifecycle: {}
-
-defaultBackend:
-  enabled: true
-  name: default-backend
-
