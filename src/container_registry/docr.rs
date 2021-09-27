@@ -152,6 +152,14 @@ impl DOCR {
         }
     }
 
+    pub fn get_image(&self, _image: &Image) -> Option<()> {
+        todo!()
+    }
+
+    pub fn delete_image(&self, _image: &Image) -> Result<(), EngineError> {
+        todo!()
+    }
+
     pub fn delete_repository(&self) -> Result<(), EngineError> {
         let headers = utilities::get_header_with_bearer(&self.api_key);
         let res = reqwest::blocking::Client::new()
