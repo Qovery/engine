@@ -171,39 +171,6 @@ fn create_and_destroy_doks_cluster_ams_3() {
     create_and_destroy_doks_cluster(region, secrets, false, function_name!());
 }
 
-#[cfg(feature = "test-do-infra")]
-#[ignore]
-#[named]
-#[test]
-#[allow(dead_code)]
-fn create_and_destroy_doks_cluster_nyc_3() {
-    let region = Region::NewYorkCity3;
-    let secrets = FuncTestsSecrets::new();
-    create_and_destroy_doks_cluster(region, secrets, false, function_name!());
-}
-
-#[cfg(feature = "test-do-infra")]
-#[named]
-#[test]
-#[ignore]
-#[allow(dead_code)]
-fn create_and_destroy_doks_cluster_sfo_3() {
-    let region = Region::SanFrancisco3;
-    let secrets = FuncTestsSecrets::new();
-    create_and_destroy_doks_cluster(region, secrets, false, function_name!());
-}
-
-#[cfg(feature = "test-do-infra")]
-#[ignore]
-#[named]
-#[test]
-fn create_and_destroy_doks_cluster_london() {
-    let region = Region::London;
-    let secrets = FuncTestsSecrets::new();
-    create_and_destroy_doks_cluster(region, secrets, false, function_name!());
-}
-
-// only enable this test manually when we want to perform and validate upgrade process
 #[test]
 #[ignore]
 #[allow(dead_code)]
@@ -211,42 +178,6 @@ fn create_and_destroy_doks_cluster_london() {
 #[named]
 fn create_upgrade_and_destroy_doks_cluster_in_nyc_3() {
     let region = Region::NewYorkCity3;
-    let secrets = FuncTestsSecrets::new();
-    create_upgrade_and_destroy_doks_cluster(region, secrets, "1.19", "1.20", function_name!());
-}
-
-// only enable this test manually when we want to perform and validate upgrade process
-#[test]
-#[ignore]
-#[allow(unused_attributes)]
-#[allow(dead_code)]
-#[named]
-fn create_upgrade_and_destroy_doks_cluster_in_ams_3() {
-    let region = Region::Amsterdam3;
-    let secrets = FuncTestsSecrets::new();
-    create_upgrade_and_destroy_doks_cluster(region, secrets, "1.19", "1.20", function_name!());
-}
-
-// only enable this test manually when we want to perform and validate upgrade process
-#[test]
-#[ignore]
-#[allow(unused_attributes)]
-#[allow(dead_code)]
-#[named]
-fn create_upgrade_and_destroy_doks_cluster_in_sfo_3() {
-    let region = Region::SanFrancisco3;
-    let secrets = FuncTestsSecrets::new();
-    create_upgrade_and_destroy_doks_cluster(region, secrets, "1.19", "1.20", function_name!());
-}
-
-// only enable this test manually when we want to perform and validate upgrade process
-#[test]
-#[ignore]
-#[allow(unused_attributes)]
-#[allow(dead_code)]
-#[named]
-fn create_upgrade_and_destroy_doks_cluster_in_frankfurt() {
-    let region = Region::Frankfurt;
     let secrets = FuncTestsSecrets::new();
     create_upgrade_and_destroy_doks_cluster(region, secrets, "1.19", "1.20", function_name!());
 }
