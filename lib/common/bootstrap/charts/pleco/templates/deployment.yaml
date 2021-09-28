@@ -100,7 +100,7 @@ spec:
             {{ if eq .Values.cloudProvider "scaleway" }}
             {{ if .Values.sclawayFeatures.scalewayZones }}
             - --scw-zones
-            - "{{ join "," .Values.enabledFeatures.scalewayZones }}"
+            - "{{ join "," .Values.sclawayFeatures.scalewayZones }}"
             {{ end }}
             {{ if eq .Values.sclawayFeatures.cr true}}
             - --enable-cr
@@ -114,11 +114,8 @@ spec:
             {{ if eq .Values.sclawayFeatures.db true }}
             - --enable-db
             {{ end }}
-            {{ if eq .Values.sclawayFeatures.s3 true }}
-            - --enable-s3
-            {{ end }}
-            {{ if eq .Values.sclawayFeatures.bucket true }}
-            - --enable-bucket
+            {{ if eq .Values.sclawayFeatures.volume true }}
+            - --enable-volume
             {{ end }}
             {{- end }}
           env:

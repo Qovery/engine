@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: qoveryrd/pleco
   pullPolicy: IfNotPresent
-  plecoImageTag: "0.9.3"
+  plecoImageTag: "0.9.8"
 
 cloudProvider: ""
 
@@ -52,8 +52,7 @@ sclawayFeatures:
   cluster: flase
   lb: false
   db: false
-  s3: false
-  bucket: false
+  volume: false
 
 imagePullSecrets: []
 nameOverride: ""
