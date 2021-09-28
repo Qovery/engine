@@ -16,4 +16,4 @@ sclawayFeatures:
   cluster: true
   lb: true
   db: true
-  bucket: true
+  volume: true
