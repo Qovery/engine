@@ -3,7 +3,7 @@
     <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery-engine-logo.svg" width="318px" alt="Qovery logo" />
   </a>
 </p>
-<h3 align="center">The simplest way to deploy your full-stack apps</h3>
+<h3 align="center">The simplest way to deploy your apps in the Cloud</h3>
 <p align="center">Deploy your apps on any Cloud providers in just a few seconds ⚡</p>
 
 <p align="center">
