@@ -33,7 +33,7 @@ spec:
           {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.plecoImageTag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: [ "pleco", "start" ]
+          command: [ "pleco", "start", {{ .Values.cloudProvider | quote }} ]
           args:
             - --level
             - {{ .Values.environmentVariables.LOG_LEVEL | default "info" }}
@@ -47,50 +47,80 @@ spec:
             {{ if .Values.enabledFeatures.kubernetes }}
             - --kube-conn
             - {{ .Values.enabledFeatures.kubernetes }}
-              {{ end }}
-            {{ if .Values.enabledFeatures.awsRegions }}
+            {{ end }}
+            {{ if eq .Values.enabledFeatures.s3 true }}
+            - --enable-s3
+            {{ end }}
+
+#            AWS features
+            {{ if eq .Values.cloudProvider "aws" }}
+            {{ if .Values.awsFeatures.awsRegions }}
             - --aws-regions
             - "{{ join "," .Values.enabledFeatures.awsRegions }}"
             {{ end }}
-            {{ if eq .Values.enabledFeatures.rds true}}
+            {{ if eq .Values.awsFeatures.rds true}}
             - --enable-rds
             {{ end }}
-            {{ if eq .Values.enabledFeatures.elasticache true}}
+            {{ if eq .Values.awsFeatures.elasticache true}}
             - --enable-elasticache
             {{ end }}
-            {{ if eq .Values.enabledFeatures.documentdb true}}
+            {{ if eq .Values.awsFeatures.documentdb true}}
             - --enable-documentdb
             {{ end }}
-            {{ if eq .Values.enabledFeatures.eks true}}
+            {{ if eq .Values.awsFeatures.eks true}}
             - --enable-eks
             {{ end }}
-            {{ if eq .Values.enabledFeatures.vpc true}}
+            {{ if eq .Values.awsFeatures.vpc true}}
             - --enable-vpc
             {{ end }}
-            {{ if eq .Values.enabledFeatures.s3 true}}
-            - --enable-s3
-            {{ end }}
-            {{ if or (eq .Values.enabledFeatures.elb true) (eq .Values.enabledFeatures.eks true)}}
+            {{ if or (eq .Values.awsFeatures.elb true) (eq .Values.awsFeatures.eks true)}}
             - --enable-elb
             {{ end }}
-            {{ if or (eq .Values.enabledFeatures.ebs true) (eq .Values.enabledFeatures.eks true)}}
+            {{ if or (eq .Values.awsFeatures.ebs true) (eq .Values.awsFeatures.eks true)}}
             - --enable-ebs
             {{ end }}
-            {{ if or (eq .Values.enabledFeatures.kms true)}}
+            {{ if or (eq .Values.awsFeatures.kms true)}}
             - --enable-kms
             {{ end }}
-            {{ if or (eq .Values.enabledFeatures.cloudwatchLogs true)}}
+            {{ if or (eq .Values.awsFeatures.cloudwatchLogs true)}}
             - --enable-cloudwatch-logs
             {{ end }}
-            {{ if or (eq .Values.enabledFeatures.iam true)}}
+            {{ if or (eq .Values.awsFeatures.iam true)}}
             - --enable-iam
             {{ end }}
-            {{ if or (eq .Values.enabledFeatures.sshKeys true)}}
+            {{ if or (eq .Values.awsFeatures.sshKeys true)}}
             - --enable-ssh-keys
             {{ end }}
-            {{ if or (eq .Values.enabledFeatures.ecr true)}}
+            {{ if or (eq .Values.awsFeatures.ecr true)}}
             - --enable-ecr
             {{ end }}
+            {{- end }}
+
+#            Scaleway features
+            {{ if eq .Values.cloudProvider "scaleway" }}
+            {{ if .Values.sclawayFeatures.scalewayZones }}
+            - --scw-zones
+            - "{{ join "," .Values.enabledFeatures.scalewayZones }}"
+            {{ end }}
+            {{ if eq .Values.sclawayFeatures.cr true}}
+            - --enable-cr
+            {{ end }}
+            {{ if eq .Values.sclawayFeatures.cluster true }}
+            - --enable-cluster
+            {{ end }}
+            {{ if eq .Values.sclawayFeatures.lb true }}
+            - --enable-lb
+            {{ end }}
+            {{ if eq .Values.sclawayFeatures.db true }}
+            - --enable-db
+            {{ end }}
+            {{ if eq .Values.sclawayFeatures.s3 true }}
+            - --enable-s3
+            {{ end }}
+            {{ if eq .Values.sclawayFeatures.bucket true }}
+            - --enable-bucket
+            {{ end }}
+            {{- end }}
           env:
             - name: "AWS_EXECUTION_ENV"
               value: "pleco_{{ .Values.image.plecoImageTag }}_{{ .Values.environmentVariables.PLECO_IDENTIFIER }}"
