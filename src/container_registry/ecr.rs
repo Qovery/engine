@@ -255,7 +255,7 @@ impl ECR {
 
     fn get_or_create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
         // check if the repository already exists
-        let repository = self.get_repository(&image);
+        let repository = self.get_repository(image);
         if repository.is_some() {
             info!("ECR repository {} already exists", image.name.as_str());
             return Ok(repository.unwrap());
