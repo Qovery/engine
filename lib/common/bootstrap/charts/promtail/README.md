@@ -1,6 +1,6 @@
 # promtail
 
-![Version: 3.8.1](https://img.shields.io/badge/Version-3.8.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.3.0](https://img.shields.io/badge/AppVersion-2.3.0-informational?style=flat-square)
+![Version: 3.7.0](https://img.shields.io/badge/Version-3.7.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.3.0](https://img.shields.io/badge/AppVersion-2.3.0-informational?style=flat-square)
 
 Promtail is an agent which ships the contents of local logs to a Loki instance
 
@@ -73,7 +73,6 @@ The new release which will pick up again from the existing `positions.yaml`.
 | config.serverPort | int | `3101` | The port of the Promtail server Must be reference in `config.file` to configure `server.http_listen_port` See default config in `values.yaml` |
 | config.snippets | object | See `values.yaml` | A section of reusable snippets that can be reference in `config.file`. Custom snippets may be added in order to reduce redundancy. This is especially helpful when multiple `kubernetes_sd_configs` are use which usually have large parts in common. |
 | config.snippets.extraClientConfigs | string | empty | You can put here any keys that will be directly added to the config file's 'client' block. |
-| config.snippets.extraRelabelConfigs | list | `[]` | You can put here any additional relabel_configs to "kubernetes-pods" job |
 | config.snippets.extraScrapeConfigs | string | empty | You can put here any additional scrape configs you want to add to the config file. |
 | containerSecurityContext | object | `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}` | The security context for containers |
 | defaultVolumeMounts | list | See `values.yaml` | Default volume mounts. Corresponds to `volumes`. |

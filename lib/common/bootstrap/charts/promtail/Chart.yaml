@@ -14,4 +14,4 @@ sources:
 - https://grafana.com/oss/loki/
 - https://grafana.com/docs/loki/latest/
 type: application
-version: 3.8.1
+version: 3.7.0
