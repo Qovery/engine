@@ -246,20 +246,8 @@ pub fn do_helm_charts(
                     value: qovery_terraform_config.loki_storage_config_do_space,
                 },
                 ChartSetValue {
-                    key: "config.storage_config.aws.endpoint".to_string(),
-                    value: format!("{}.digitaloceanspaces.com", chart_config_prerequisites.region.clone()),
-                },
-                ChartSetValue {
-                    key: "config.storage_config.aws.region".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
-                },
-                ChartSetValue {
-                    key: "aws_iam_loki_storage_key".to_string(),
-                    value: chart_config_prerequisites.do_space_access_id.clone(),
-                },
-                ChartSetValue {
-                    key: "aws_iam_loki_storage_secret".to_string(),
-                    value: chart_config_prerequisites.do_space_secret_key.clone(),
+                    key: "config.storage_config.aws.s3forcepathstyle".to_string(),
+                    value: "true".to_string(),
                 },
                 // DigitalOcean do not support encryption yet
                 // https://docs.digitalocean.com/reference/api/spaces-api/
