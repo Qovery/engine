@@ -293,156 +293,44 @@ config:
     # @default -- empty
     extraScrapeConfigs: ""
 
+    # -- You can put here any additional relabel_configs to "kubernetes-pods" job
+    extraRelabelConfigs: []
+
     scrapeConfigs: |
       # See also https://github.com/grafana/loki/blob/master/production/ksonnet/promtail/scrape_config.libsonnet for reference
-
-      # Pods with a label 'app.kubernetes.io/name'
-      - job_name: kubernetes-pods-app-kubernetes-io-name
+      - job_name: kubernetes-pods
         pipeline_stages:
           {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
         kubernetes_sd_configs:
           - role: pod
         relabel_configs:
-          - action: replace
-            source_labels:
-              - __meta_kubernetes_pod_label_app_kubernetes_io_name
-            target_label: app
-          - action: drop
-            regex: ''
-            source_labels:
-              - app
-          - action: replace
-            source_labels:
-              - __meta_kubernetes_pod_label_app_kubernetes_io_component
-            target_label: component
-          {{- if .Values.config.snippets.addScrapeJobLabel }}
-          - action: replace
-            replacement: kubernetes-pods-app-kubernetes-io-name
-            target_label: scrape_job
-          {{- end }}
-          {{- toYaml .Values.config.snippets.common | nindent 4 }}
-
-      # Pods with a label 'app'
-      - job_name: kubernetes-pods-app
-        pipeline_stages:
-          {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
-        kubernetes_sd_configs:
-          - role: pod
-        relabel_configs:
-          # Drop pods with label 'app.kubernetes.io/name'. They are already considered above
-          - action: drop
-            regex: .+
-            source_labels:
-              - __meta_kubernetes_pod_label_app_kubernetes_io_name
-          - action: replace
-            source_labels:
-              - __meta_kubernetes_pod_label_app
-            target_label: app
-          - action: drop
-            regex: ''
-            source_labels:
-              - app
-          - action: replace
-            source_labels:
-              - __meta_kubernetes_pod_label_component
-            target_label: component
-          {{- if .Values.config.snippets.addScrapeJobLabel }}
-          - action: replace
-            replacement: kubernetes-pods-app
-            target_label: scrape_job
-          {{- end }}
-          {{- toYaml .Values.config.snippets.common | nindent 4 }}
-
-      # Pods with direct controllers, such as StatefulSet
-      - job_name: kubernetes-pods-direct-controllers
-        pipeline_stages:
-          {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
-        kubernetes_sd_configs:
-          - role: pod
-        relabel_configs:
-          # Drop pods with label 'app.kubernetes.io/name' or 'app'. They are already considered above
-          - action: drop
-            regex: .+
-            separator: ''
-            source_labels:
+          - source_labels:
+              - __meta_kubernetes_pod_controller_name
+            regex: ([0-9a-z-.]+?)(-[0-9a-f]{8,10})?
+            action: replace
+            target_label: __tmp_controller_name
+          - source_labels:
               - __meta_kubernetes_pod_label_app_kubernetes_io_name
               - __meta_kubernetes_pod_label_app
-          - action: drop
-            regex: '[0-9a-z-.]+-[0-9a-f]{8,10}'
-            source_labels:
-              - __meta_kubernetes_pod_controller_name
-          - action: replace
-            source_labels:
-              - __meta_kubernetes_pod_controller_name
-            target_label: app
-          {{- if .Values.config.snippets.addScrapeJobLabel }}
-          - action: replace
-            replacement: kubernetes-pods-direct-controllers
-            target_label: scrape_job
-          {{- end }}
-          {{- toYaml .Values.config.snippets.common | nindent 4 }}
-
-      # Pods with indirect controllers, such as Deployment
-      - job_name: kubernetes-pods-indirect-controller
-        pipeline_stages:
-          {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
-        kubernetes_sd_configs:
-          - role: pod
-        relabel_configs:
-          # Drop pods with label 'app.kubernetes.io/name' or 'app'. They are already considered above
-          - action: drop
-            regex: .+
-            separator: ''
-            source_labels:
-              - __meta_kubernetes_pod_label_app_kubernetes_io_name
-              - __meta_kubernetes_pod_label_app
-          - action: keep
-            regex: '[0-9a-z-.]+-[0-9a-f]{8,10}'
-            source_labels:
-              - __meta_kubernetes_pod_controller_name
-          - action: replace
-            regex: '([0-9a-z-.]+)-[0-9a-f]{8,10}'
-            source_labels:
-              - __meta_kubernetes_pod_controller_name
-            target_label: app
-          {{- if .Values.config.snippets.addScrapeJobLabel }}
-          - action: replace
-            replacement: kubernetes-pods-indirect-controller
-            target_label: scrape_job
-          {{- end }}
-          {{- toYaml .Values.config.snippets.common | nindent 4 }}
-      # All remaining pods not yet covered
-      - job_name: kubernetes-other
-        pipeline_stages:
-          {{- toYaml .Values.config.snippets.pipelineStages | nindent 4 }}
-        kubernetes_sd_configs:
-          - role: pod
-        relabel_configs:
-          # Drop what has already been covered
-          - action: drop
-            regex: .+
-            separator: ''
-            source_labels:
-              - __meta_kubernetes_pod_label_app_kubernetes_io_name
-              - __meta_kubernetes_pod_label_app
-          - action: drop
-            regex: .+
-            source_labels:
-              - __meta_kubernetes_pod_controller_name
-          - action: replace
-            source_labels:
+              - __tmp_controller_name
               - __meta_kubernetes_pod_name
+            regex: ^;*([^;]+)(;.*)?$
+            action: replace
             target_label: app
-          - action: replace
-            source_labels:
+          - source_labels:
+              - __meta_kubernetes_pod_label_app_kubernetes_io_component
               - __meta_kubernetes_pod_label_component
+            regex: ^;*([^;]+)(;.*)?$
+            action: replace
             target_label: component
           {{- if .Values.config.snippets.addScrapeJobLabel }}
-          - action: replace
-            replacement: kubernetes-other
+          - replacement: kubernetes-pods
             target_label: scrape_job
           {{- end }}
           {{- toYaml .Values.config.snippets.common | nindent 4 }}
+          {{- with .Values.config.snippets.extraRelabelConfigs }}
+          {{- toYaml . | nindent 4 }}
+          {{- end }}
 
   # -- Config file contents for Promtail.
   # Must be configured as string.

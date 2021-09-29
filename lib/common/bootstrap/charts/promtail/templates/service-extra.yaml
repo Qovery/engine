@@ -29,7 +29,7 @@ spec:
   {{- end -}}
   {{- with .externalIPs }}
   externalIPs:
-    {{- toYaml . | indent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
   {{- with .externalTrafficPolicy }}
   externalTrafficPolicy: {{ . }}

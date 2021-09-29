@@ -43,7 +43,7 @@ charts:
     comment: https://github.com/grafana/loki/tree/master/production/helm
   - name: promtail
     repo_name: grafana
-    version: 3.7.0
+    version: 3.8.1
     # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: mongodb
     repo_name: bitnami
