@@ -495,7 +495,7 @@ datasources:
         get_chart_namespace(loki_namespace),
     );
 
-    let _grafana = CommonChart {
+    let grafana = CommonChart {
         chart_info: ChartInfo {
             name: "grafana".to_string(),
             path: chart_path("common/charts/grafana"),
@@ -984,7 +984,7 @@ datasources:
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager)];
 
-    let level_6: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(qovery_agent),
         Box::new(qovery_engine),
@@ -1003,9 +1003,9 @@ datasources:
         level_4.push(Box::new(loki));
     }
 
-    // if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
-    //     level_6.push(Box::new(grafana))
-    // };
+    if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
+        level_6.push(Box::new(grafana))
+    };
 
     // pleco
     if !chart_config_prerequisites.disable_pleco {
