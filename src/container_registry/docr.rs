@@ -287,7 +287,8 @@ impl ContainerRegistry for DOCR {
                             "Unable to deserialize tags from DigitalOcean API for image {}",
                             &image.tag
                         );
-                        return false;
+
+                        false
                     }
                 }
             }

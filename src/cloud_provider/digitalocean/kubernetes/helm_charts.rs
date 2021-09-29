@@ -488,7 +488,7 @@ datasources:
         type: loki
         url: \"http://{}.{}.svc:3100\"
       ",
-        prometheus_internal_url.clone(),
+        prometheus_internal_url,
         &loki.chart_info.name,
         get_chart_namespace(loki_namespace),
         &loki.chart_info.name,
