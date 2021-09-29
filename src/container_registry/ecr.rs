@@ -249,7 +249,7 @@ impl ECR {
                     ),
                 ))
             }
-            _ => Ok(self.get_repository(&image).unwrap()),
+            _ => Ok(self.get_repository(image).unwrap()),
         }
     }
 
@@ -261,7 +261,7 @@ impl ECR {
             return Ok(repository.unwrap());
         }
 
-        self.create_repository(&image)
+        self.create_repository(image)
     }
 }
 
@@ -334,7 +334,7 @@ impl ContainerRegistry for ECR {
                     let decoded_token = base64::decode(b64_token).unwrap();
                     let token = std::str::from_utf8(decoded_token.as_slice()).unwrap();
 
-                    let s_token: Vec<&str> = token.split(":").collect::<Vec<_>>();
+                    let s_token: Vec<&str> = token.split(':').collect::<Vec<_>>();
 
                     (
                         s_token.first().unwrap().to_string(),
