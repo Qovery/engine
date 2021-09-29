@@ -131,7 +131,7 @@ Return the appropriate apiVersion for rbac.
   {{- if .Capabilities.APIVersions.Has "rbac.authorization.k8s.io/v1" }}
     {{- print "rbac.authorization.k8s.io/v1" -}}
   {{- else -}}
-    {{- print "rbac.authorization.k8s.io/v1beta1" -}}
+    {{- print "rbac.authorization.k8s.io/v1" -}}
   {{- end -}}
 {{- end -}}
 
