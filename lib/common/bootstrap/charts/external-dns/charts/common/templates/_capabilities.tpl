@@ -76,7 +76,7 @@ Return the appropriate apiVersion for RBAC resources.
 */}}
 {{- define "common.capabilities.rbac.apiVersion" -}}
 {{- if semverCompare "<1.17-0" (include "common.capabilities.kubeVersion" .) -}}
-{{- print "rbac.authorization.k8s.io/v1" -}}
+{{- print "rbac.authorization.k8s.io/v1beta1" -}}
 {{- else -}}
 {{- print "rbac.authorization.k8s.io/v1" -}}
 {{- end -}}
