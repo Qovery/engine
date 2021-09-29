@@ -258,7 +258,7 @@ impl ContainerRegistry for DOCR {
                         &image.name
                     );
                     
-                    false
+                    return false;
                 }
             },
             Err(_) => {
@@ -267,7 +267,7 @@ impl ContainerRegistry for DOCR {
                     &image.name
                 );
                 
-                false
+                return false;
             }
         };
 
