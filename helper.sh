@@ -295,7 +295,7 @@ function get_release_ga() { ## Get globally available release version
   curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"  || exit 1
 }
 
-function release_to_prod() { ## Release GA to prod
+function deploy_engines_infra() { ## Release GA to prod
   prepare_engine
   tag=$(generate_image_tag)
   AWS_ACCESS_KEY_ID="$AWS_PROD_DEPLOY_ACCESS_KEY" \
@@ -317,6 +317,32 @@ environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
 environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 buildContainer.enable="false",\
+metrics.enable="true",\
+engineResources.limits.cpu="1",\
+engineResources.limits.memory="750Mi",\
+engineResources.requests.cpu="300m",\
+engineResources.requests.memory="750Mi"
+}
+
+function deploy_engines_envs() { ## Release GA to prod
+  prepare_engine
+  tag=$(generate_image_tag)
+  KUBECONFIG="$KUBECONFIG_ENGINES_SCALEWAY"
+  helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --history-max 50 --wait --namespace qovery qovery-engine \
+  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+  --set image.tag="$tag",\
+environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
+environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_USER",\
+environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
+environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
+environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
+environmentVariables.RUST_LOG="DEBUG,rusoto_core::request=info,hyper=info",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
+environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
+environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+buildContainer.enable="true",\
 metrics.enable="true",\
 engineResources.limits.cpu="1",\
 engineResources.limits.memory="750Mi",\
@@ -516,8 +542,13 @@ push_ci_image)
 set_release_ga)
   set_release_ga
   ;;
-release_to_prod)
-  release_to_prod
+# Deploy the engines dedicated for infra deployments
+deploy_engines_infra)
+  deploy-engines-infra
+  ;;
+# Deploy on the engines dedicated for customer's environments deployments
+deploy_engines_envs)
+  deploy-engines-envs
   ;;
 get_release_ga)
   get_release_ga

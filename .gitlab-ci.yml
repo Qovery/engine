@@ -407,7 +407,7 @@ downgrade-engine-dev:
 # Main branch
 #
 
-main-release-image:
+release-image:
   stage: release
   retry: 1
   script:
@@ -418,31 +418,31 @@ main-release-image:
     refs:
       - main
 
-main-set-ga:
+1-set-ga:
   stage: deploy
   retry: 2
   script:
     - ./helper.sh set_release_ga
   tags:
     - 250mcpu-1gmem-0g
-  when: manual
   only:
     refs:
       - main
+  when: manual
 
-main-deploy-engine-infra:
+2-deploy-engine-infra:
   stage: deploy
   retry: 0
   script:
-    - ./helper.sh release_to_prod
+    - ./helper.sh deploy-engine-infra
   tags:
     - 250mcpu-1gmem-0g
-  when: manual
   only:
     refs:
       - main
+  when: manual
 
-deploy_all_clusters:
+3-deploy_all_customers_infra:
   stage: deploy
   retry: 0
   script:
@@ -453,6 +453,15 @@ deploy_all_clusters:
     refs:
       - main
   when: manual
+
+4-deploy_all_engines:
+  stage: deploy
+  retry: 0
+  script:
+    - ./helper.sh deploy_engines_envs
   tags:
     - 250mcpu-1gmem-0g
-  interruptible: true
+  only:
+    refs:
+      - main
+  when: manual
