@@ -398,6 +398,7 @@ downgrade-engine-dev:
     - apk add bash
   script:
     - ./helper.sh downgrade_on_dev $ROLLBACK_IMAGE
+  when: manual
   only:
     refs:
       - dev
