@@ -3,7 +3,6 @@ apiVersion: autoscaling/v2beta2
 kind: HorizontalPodAutoscaler
 metadata:
   name: qovery-engine
-  namespace: {{ .Values.namespace }}
   labels:
     {{- include "qovery-engine.labels" . | nindent 4 }}
 spec:
@@ -13,7 +12,6 @@ spec:
     name: qovery-engine
   minReplicas: {{ .Values.autoscaler.min_replicas }}
   maxReplicas: {{ .Values.autoscaler.max_replicas }}
-  # todo: k8s 1.18 is required to support scaling policies
   metrics:
     - type: Pods
       pods:
