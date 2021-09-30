@@ -71,7 +71,7 @@ impl Default for ChartInfo {
             action: Deploy,
             atomic: true,
             force_upgrade: false,
-            timeout: "180s".to_string(),
+            timeout: "600s".to_string(),
             dry_run: false,
             wait: true,
             values: Vec::new(),

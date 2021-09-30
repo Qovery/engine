@@ -17,7 +17,7 @@ use retry::OperationResult;
 use std::fs::File;
 use std::thread;
 
-const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
+const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
 
 pub enum Timeout<T> {
     Default,
