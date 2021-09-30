@@ -309,11 +309,6 @@ impl ContainerRegistry for DOCR {
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
         let registry_name = self.get_registry_name(image)?;
 
-        let _ = match self.create_repository(image) {
-            Ok(_) => info!("DOCR {} has been created", registry_name.as_str()),
-            Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
-        };
-
         match cmd::utilities::exec(
             "doctl",
             vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],

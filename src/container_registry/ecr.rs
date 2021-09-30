@@ -249,7 +249,7 @@ impl ECR {
                     ),
                 ))
             }
-            _ => Ok(self.get_repository(image).unwrap()),
+            _ => Ok(self.get_repository(image).expect("cannot get repository")),
         }
     }
 
