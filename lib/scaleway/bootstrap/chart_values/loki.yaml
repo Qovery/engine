@@ -61,13 +61,3 @@ extraPorts:
     port: 7946
     protocol: TCP
     targetPort: 7946
-
-persistence:
-  enabled: false
-  accessModes:
-    - ReadWriteOnce
-  size: 20Gi
-  annotations:
-    app: loki
-  storageClassName: scw-sbv-ssd-0
-  subPath: "loki"
