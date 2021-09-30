@@ -847,6 +847,7 @@ datasources:
             ..Default::default()
         },
     };
+
     if chart_config_prerequisites.ff_log_history_enabled {
         qovery_agent.chart_info.values.push(ChartSetValue {
             key: "environmentVariables.FEATURES".to_string(),

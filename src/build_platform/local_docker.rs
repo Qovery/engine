@@ -195,6 +195,10 @@ impl LocalDocker {
 
             buildpacks_args.push("-B");
             buildpacks_args.push(builder_name);
+            if let Some(buildpack_language) = &build.git_repository.buildpack_language {
+                buildpacks_args.push("-b");
+                buildpacks_args.push(buildpack_language.as_str());
+            }
 
             // Just a fallback for now to help our bot loving users deploy their apps
             // Long term solution requires lots of changes in UI and Core as well

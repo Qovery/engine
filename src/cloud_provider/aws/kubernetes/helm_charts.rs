@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::kubernetes::Options;
+use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
     get_chart_namespace, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart,
     HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
@@ -35,6 +35,7 @@ pub struct ChartsConfigPrerequisites {
     pub test_cluster: bool,
     pub aws_access_key_id: String,
     pub aws_secret_access_key: String,
+    pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
