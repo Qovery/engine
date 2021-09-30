@@ -52,23 +52,43 @@ variable "vpc_cidr_block" {
 
 # Kubernetes
 
-variable "eks_subnets_zone_a" {
-  description = "EKS subnets Zone A"
-  default = {{ eks_zone_a_subnet_blocks }}
+variable "eks_subnets_zone_a_private" {
+  description = "EKS private subnets Zone A"
+  default = {{ eks_zone_a_subnet_blocks_private }}
   type = list(string)
 }
 
-variable "eks_subnets_zone_b" {
-  description = "EKS subnets Zone B"
-  default = {{ eks_zone_b_subnet_blocks }}
+variable "eks_subnets_zone_b_private" {
+  description = "EKS private subnets Zone B"
+  default = {{ eks_zone_b_subnet_blocks_private }}
   type = list(string)
 }
 
-variable "eks_subnets_zone_c" {
-  description = "EKS subnets Zone C"
-  default = {{ eks_zone_c_subnet_blocks }}
+variable "eks_subnets_zone_c_private" {
+  description = "EKS private subnets Zone C"
+  default = {{ eks_zone_c_subnet_blocks_private }}
   type = list(string)
 }
+
+{% if vpc_qovery_network_mode == "WithNatGateways" %}
+variable "eks_subnets_zone_a_public" {
+  description = "EKS public subnets Zone A"
+  default = {{ eks_zone_a_subnet_blocks_public }}
+  type = list(string)
+}
+
+variable "eks_subnets_zone_b_public" {
+  description = "EKS public subnets Zone B"
+  default = {{ eks_zone_b_subnet_blocks_public }}
+  type = list(string)
+}
+
+variable "eks_subnets_zone_c_public" {
+  description = "EKS public subnets Zone C"
+  default = {{ eks_zone_c_subnet_blocks_public }}
+  type = list(string)
+}
+{% endif %}
 
 variable "eks_cidr_subnet" {
   description = "EKS CIDR (x.x.x.x/CIDR)"
@@ -98,7 +118,7 @@ variable "kubernetes_cluster_name" {
 }
 
 variable "eks_access_cidr_blocks" {
-  description = "Kubernetes cluster name"
+  description = "Kubernetes CIDR Block"
   default     = {{ eks_access_cidr_blocks }}
   type        = list(string)
 }
@@ -115,17 +135,6 @@ variable "s3_bucket_kubeconfig" {
   description = "S3 bucket containing kubeconfigs"
   default = "{{ s3_kubeconfig_bucket }}"
   type = string
-}
-
-# EC2 SSH default SSH key
-
-variable "ec2_ssh_default_key" {
-  description = "Default SSH key"
-  default = {
-    "key_name" = "qovery-{{ kubernetes_cluster_id }}"
-    "public_key" = "{{ qovery_ssh_key }}"
-  }
-  type = map(string)
 }
 
 # Engine info
