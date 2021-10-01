@@ -15,7 +15,7 @@ metrics:
 imagePullSecrets: []
 
 autoscaler:
-  enabled: true
+  enabled: false
   min_replicas: 2
   max_replicas: 10
 
