@@ -5,13 +5,20 @@ locals {
 }
 
 locals {
-  tags_eks = {
+  tags_common = {
     ClusterId = var.kubernetes_cluster_id
     ClusterName = var.kubernetes_cluster_name,
     Region = var.region
     creationDate = time_static.on_cluster_create.rfc3339
     {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
   }
+
+  tags_eks = merge(
+  local.tags_common,
+  {
+    "Service" = "EKS"
+  }
+  )
 }
 
 resource "time_static" "on_cluster_create" {}
@@ -32,7 +39,16 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   vpc_config {
     security_group_ids = [aws_security_group.eks_cluster.id]
-    subnet_ids = flatten([aws_subnet.eks_zone_a.*.id, aws_subnet.eks_zone_b.*.id,aws_subnet.eks_zone_c.*.id])
+    subnet_ids = flatten([
+      aws_subnet.eks_zone_a[*].id,
+      aws_subnet.eks_zone_b[*].id,
+      aws_subnet.eks_zone_c[*].id,
+      {% if vpc_qovery_network_mode == "WithNatGateways" %}
+      aws_subnet.eks_zone_a_public[*].id,
+      aws_subnet.eks_zone_b_public[*].id,
+      aws_subnet.eks_zone_c_public[*].id
+      {% endif %}
+    ])
   }
 
   tags = local.tags_eks
@@ -41,6 +57,5 @@ resource "aws_eks_cluster" "eks_cluster" {
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy,
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSServicePolicy,
     aws_cloudwatch_log_group.eks_cloudwatch_log_group,
-    aws_key_pair.qovery_ssh_key_{{ kubernetes_cluster_id }}
   ]
 }

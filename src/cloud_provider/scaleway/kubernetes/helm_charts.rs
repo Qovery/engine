@@ -6,6 +6,7 @@ use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryA
 use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
@@ -191,6 +192,7 @@ pub fn scw_helm_charts(
     let promtail = CommonChart {
         chart_info: ChartInfo {
             name: "promtail".to_string(),
+            last_breaking_version_requiring_restart: Some(Version::new(0, 24, 0)),
             path: chart_path("common/charts/promtail"),
             // because of priorityClassName, we need to add it to kube-system
             namespace: HelmChartNamespaces::KubeSystem,
@@ -580,7 +582,7 @@ datasources:
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
             name: "nginx-ingress".to_string(),
-            path: chart_path("common/charts/nginx-ingress"),
+            path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
             timeout: "300".to_string(),
@@ -632,16 +634,16 @@ datasources:
             values_files: vec![chart_path("chart_values/pleco.yaml")],
             values: vec![
                 ChartSetValue {
-                    key: "environmentVariables.SCALEWAY_ACCESS_KEY_ID".to_string(),
+                    key: "environmentVariables.SCW_ACCESS_KEY".to_string(),
                     value: chart_config_prerequisites.scw_access_key.clone(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.SCALEWAY_SECRET_ACCESS_KEY".to_string(),
+                    key: "environmentVariables.SCW_SECRET_KEY".to_string(),
                     value: chart_config_prerequisites.scw_secret_key.clone(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.PLECO_IDENTIFIER".to_string(),
-                    value: chart_config_prerequisites.cluster_id.clone(),
+                    key: "environmentVariables.SCW_VOLUME_TIMEOUT".to_string(),
+                    value: 24.to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.LOG_LEVEL".to_string(),

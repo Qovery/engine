@@ -26,6 +26,7 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
                     let message = err.message.clone().unwrap();
                     if message.contains("Failed to install provider from shared cache")
                         || message.contains("Failed to install provider")
+                        || message.contains("Plugin reinitialization required")
                     {
                         let sleep_time_int = rand::thread_rng().gen_range(20..45);
                         let sleep_time = time::Duration::from_secs(sleep_time_int);
