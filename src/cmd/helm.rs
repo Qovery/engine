@@ -14,7 +14,9 @@ use core::time;
 use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::OperationResult;
+use semver::Version;
 use std::fs::File;
+use std::str::FromStr;
 use std::thread;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
@@ -706,6 +708,29 @@ where
     Ok(false)
 }
 
+pub fn helm_get_chart_version<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+    chart_name: String,
+) -> Option<Version>
+where
+    P: AsRef<Path>,
+{
+    match helm_list(kubernetes_config, envs, namespace) {
+        Ok(deployed_charts) => {
+            for chart in deployed_charts {
+                if chart.name == chart_name {
+                    return chart.version;
+                }
+            }
+
+            None
+        }
+        Err(_) => None,
+    }
+}
+
 /// List deployed helm charts
 ///
 /// # Arguments
@@ -754,7 +779,13 @@ where
     match values {
         Ok(all_helms) => {
             for helm in all_helms {
-                helms_charts.push(HelmChart::new(helm.name, helm.namespace))
+                let raw_version = helm.chart.replace(format!("{}-", helm.name).as_str(), "");
+                let version = match Version::from_str(raw_version.as_str()) {
+                    Ok(v) => Some(v),
+                    Err(_) => None,
+                };
+
+                helms_charts.push(HelmChart::new(helm.name, helm.namespace, version))
             }
         }
         Err(e) => {
@@ -823,6 +854,8 @@ where
     // add last elements
     args_string.push(chart.name.to_string());
     args_string.push(chart.path.to_string());
+
+    //
 
     helm_exec_with_output(
         args_string.iter().map(|x| x.as_str()).collect(),
