@@ -41,13 +41,27 @@ use crate::models::{
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
+use core::fmt;
 use std::path::PathBuf;
 
 pub mod helm_charts;
 pub mod node;
 pub mod roles;
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+// https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VpcQoveryNetworkMode {
+    WithNatGateways,
+    WithoutNatGateways,
+}
+
+impl fmt::Display for VpcQoveryNetworkMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Options {
     // AWS related
     pub eks_zone_a_subnet_blocks: Vec<String>,
@@ -65,6 +79,7 @@ pub struct Options {
     pub elasticsearch_zone_a_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_b_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_c_subnet_blocks: Vec<String>,
+    pub vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
     pub eks_access_cidr_blocks: Vec<String>,
@@ -164,13 +179,63 @@ impl<'a> EKS<'a> {
         .to_string()
     }
 
+    // divide by 2 the total number of subnet to get the exact same number as private and public
+    fn check_odd_subnets(&self, zone_name: &str, subnet_block: &Vec<String>) -> Result<usize, EngineError> {
+        let is_odd = subnet_block.len() % 2;
+
+        if is_odd == 1 {
+            Err(EngineError {
+                cause: EngineErrorCause::Internal,
+                scope: EngineErrorScope::Engine,
+                execution_id: self.context.execution_id().to_string(),
+                message: Some(format!(
+                    "the number of subnets for zone '{}' should be an even number, not an odd!",
+                    zone_name
+                )),
+            })
+        } else {
+            Ok((subnet_block.len() / 2) as usize)
+        }
+    }
+
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
+        let mut context = TeraContext::new();
+
         let format_ips =
             |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
 
-        let eks_zone_a_subnet_blocks = format_ips(&self.options.eks_zone_a_subnet_blocks);
-        let eks_zone_b_subnet_blocks = format_ips(&self.options.eks_zone_b_subnet_blocks);
-        let eks_zone_c_subnet_blocks = format_ips(&self.options.eks_zone_c_subnet_blocks);
+        let mut eks_zone_a_subnet_blocks_private = format_ips(&self.options.eks_zone_a_subnet_blocks);
+        let mut eks_zone_b_subnet_blocks_private = format_ips(&self.options.eks_zone_b_subnet_blocks);
+        let mut eks_zone_c_subnet_blocks_private = format_ips(&self.options.eks_zone_c_subnet_blocks);
+
+        if self.options.vpc_qovery_network_mode.is_some() {
+            match self.options.vpc_qovery_network_mode.clone().unwrap() {
+                VpcQoveryNetworkMode::WithNatGateways => {
+                    let max_subnet_zone_a = self.check_odd_subnets("a", &eks_zone_a_subnet_blocks_private)?;
+                    let max_subnet_zone_b = self.check_odd_subnets("b", &eks_zone_b_subnet_blocks_private)?;
+                    let max_subnet_zone_c = self.check_odd_subnets("c", &eks_zone_c_subnet_blocks_private)?;
+
+                    let eks_zone_a_subnet_blocks_public: Vec<String> =
+                        eks_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
+                    let eks_zone_b_subnet_blocks_public: Vec<String> =
+                        eks_zone_b_subnet_blocks_private.drain(max_subnet_zone_b..).collect();
+                    let eks_zone_c_subnet_blocks_public: Vec<String> =
+                        eks_zone_c_subnet_blocks_private.drain(max_subnet_zone_c..).collect();
+
+                    context.insert("eks_zone_a_subnet_blocks_public", &eks_zone_a_subnet_blocks_public);
+                    context.insert("eks_zone_b_subnet_blocks_public", &eks_zone_b_subnet_blocks_public);
+                    context.insert("eks_zone_c_subnet_blocks_public", &eks_zone_c_subnet_blocks_public);
+                }
+                VpcQoveryNetworkMode::WithoutNatGateways => {}
+            };
+            context.insert(
+                "vpc_qovery_network_mode",
+                &self.options.vpc_qovery_network_mode.clone().unwrap().to_string(),
+            );
+        } else {
+            context.insert("vpc_qovery_network_mode", &"WithoutNatGateways".to_string());
+        }
+
         let rds_zone_a_subnet_blocks = format_ips(&self.options.rds_zone_a_subnet_blocks);
         let rds_zone_b_subnet_blocks = format_ips(&self.options.rds_zone_b_subnet_blocks);
         let rds_zone_c_subnet_blocks = format_ips(&self.options.rds_zone_c_subnet_blocks);
@@ -219,7 +284,6 @@ impl<'a> EKS<'a> {
         let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
         let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
 
-        let mut context = TeraContext::new();
         // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
         context.insert("qovery_api_url", &qovery_api_url);
@@ -343,9 +407,9 @@ impl<'a> EKS<'a> {
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
         context.insert("eks_worker_nodes", &worker_nodes);
-        context.insert("eks_zone_a_subnet_blocks", &eks_zone_a_subnet_blocks);
-        context.insert("eks_zone_b_subnet_blocks", &eks_zone_b_subnet_blocks);
-        context.insert("eks_zone_c_subnet_blocks", &eks_zone_c_subnet_blocks);
+        context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
+        context.insert("eks_zone_b_subnet_blocks_private", &eks_zone_b_subnet_blocks_private);
+        context.insert("eks_zone_c_subnet_blocks_private", &eks_zone_c_subnet_blocks_private);
         context.insert("eks_masters_version", &self.version());
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
@@ -845,6 +909,10 @@ impl<'a> Kubernetes for EKS<'a> {
             test_cluster: self.context.is_test_cluster(),
             aws_access_key_id: self.cloud_provider.access_key_id.to_string(),
             aws_secret_access_key: self.cloud_provider.secret_access_key.to_string(),
+            vpc_qovery_network_mode: match self.options.vpc_qovery_network_mode.clone() {
+                None => VpcQoveryNetworkMode::WithoutNatGateways,
+                Some(x) => x,
+            },
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
             ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
             managed_dns_name: self.dns_provider.domain().to_string(),
@@ -1250,6 +1318,7 @@ impl<'a> Kubernetes for EKS<'a> {
             vec![HelmChart {
                 name: "metrics-server".to_string(),
                 namespace: "kube-system".to_string(),
+                version: None,
             }],
             self.cloud_provider().credentials_environment_variables(),
         );
