@@ -1,0 +1,67 @@
+config:
+  server:
+    http_listen_port: 3100
+  auth_enabled: false
+  distributor:
+    ring:
+      kvstore:
+        store: memberlist                 # qovery setting
+  ingester:
+    chunk_idle_period: 3m                 # qovery setting
+    chunk_block_size: 262144              # qovery setting
+    chunk_retain_period: 1m               # qovery setting
+    max_transfer_retries: 0               # qovery setting
+    lifecycler:
+      ring:
+        kvstore:
+          store: memberlist               # qovery setting
+        replication_factor: 1             # qovery setting
+  limits_config:
+    ingestion_rate_mb: 20                 # qovery setting
+    ingestion_burst_size_mb: 30           # qovery setting
+    enforce_metric_name: false            # qovery setting
+    reject_old_samples: true              # qovery setting
+    reject_old_samples_max_age: 168h      # qovery setting
+  schema_config:
+    configs:
+      - from: 2020-05-15
+        store: boltdb-shipper
+        object_store: s3
+        schema: v11
+        index:
+          prefix: index_
+          period: 24h
+  storage_config:
+    aws:
+      region: ""                          # qovery setting
+      bucketnames: ""                     # qovery setting
+      endpoint: ""                        # qovery setting
+      access_key_id: ""                   # qovery setting
+      secret_access_key: ""               # qovery setting
+      insecure: ""                        # qovery setting
+      sse_encryption: ""                  # qovery setting
+      s3forcepathstyle: ""                # qovery setting
+    boltdb_shipper:
+      active_index_directory: /data/loki/index
+      shared_store: s3
+      resync_interval: 5s
+      cache_location: /data/loki/boltdb-cache
+  chunk_store_config:
+    max_look_back_period: 12w
+  table_manager:
+    retention_deletes_enabled: true
+    retention_period: 12w
+  memberlist:
+    abort_if_cluster_join_fails: false    # qovery setting
+    bind_port: 7946                       # qovery setting
+    join_members:
+      - loki-headless.logging.svc:7946    # qovery setting
+    max_join_backoff: 1m                  # qovery setting
+    max_join_retries: 10                  # qovery setting
+    min_join_backoff: 1s                  # qovery setting
+
+extraPorts:
+  - name: gossip
+    port: 7946
+    protocol: TCP
+    targetPort: 7946
