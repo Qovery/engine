@@ -6,6 +6,7 @@ use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryA
 use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
@@ -191,6 +192,7 @@ pub fn scw_helm_charts(
     let promtail = CommonChart {
         chart_info: ChartInfo {
             name: "promtail".to_string(),
+            last_breaking_version_requiring_restart: Some(Version::new(0, 24, 0)),
             path: chart_path("common/charts/promtail"),
             // because of priorityClassName, we need to add it to kube-system
             namespace: HelmChartNamespaces::KubeSystem,
