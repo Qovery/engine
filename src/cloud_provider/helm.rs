@@ -1,8 +1,8 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
 use crate::cmd::helm::{
-    helm_exec_uninstall_with_chart_info, helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info,
-    is_chart_deployed,
+    helm_destroy_chart_if_breaking_changes_version_detected, helm_exec_uninstall_with_chart_info,
+    helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info, is_chart_deployed,
 };
 use crate::cmd::kubectl::{
     kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
@@ -11,6 +11,7 @@ use crate::cmd::kubectl::{
 use crate::cmd::structs::HelmHistoryRow;
 use crate::error::{SimpleError, SimpleErrorKind};
 use crate::utilities::calculate_hash;
+use semver::Version;
 use std::collections::HashMap;
 use std::path::Path;
 use std::{fs, thread};
@@ -54,6 +55,7 @@ pub struct ChartInfo {
     pub action: HelmAction,
     pub atomic: bool,
     pub force_upgrade: bool,
+    pub last_breaking_version_requiring_restart: Option<Version>,
     pub timeout: String,
     pub dry_run: bool,
     pub wait: bool,
@@ -71,6 +73,7 @@ impl Default for ChartInfo {
             action: Deploy,
             atomic: true,
             force_upgrade: false,
+            last_breaking_version_requiring_restart: None,
             timeout: "180s".to_string(),
             dry_run: false,
             wait: true,
@@ -153,10 +156,22 @@ pub trait HelmChart: Send {
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, SimpleError> {
-        let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-        match self.get_chart_info().action {
+        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+        let chart_info = self.get_chart_info();
+        match chart_info.action {
             HelmAction::Deploy => {
-                helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, self.get_chart_info())?
+                if let Err(e) = helm_destroy_chart_if_breaking_changes_version_detected(
+                    kubernetes_config,
+                    &environment_variables,
+                    chart_info,
+                ) {
+                    warn!(
+                        "error while trying to destroy chart if breaking change is detected: {:?}",
+                        e.message
+                    );
+                }
+
+                helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, chart_info)?
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
@@ -508,10 +523,22 @@ impl HelmChart for PrometheusOperatorConfigChart {
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, SimpleError> {
-        let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-        match self.get_chart_info().action {
+        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+        let chart_info = self.get_chart_info();
+        match chart_info.action {
             HelmAction::Deploy => {
-                helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, self.get_chart_info())?
+                if let Err(e) = helm_destroy_chart_if_breaking_changes_version_detected(
+                    kubernetes_config,
+                    &environment_variables,
+                    chart_info,
+                ) {
+                    warn!(
+                        "error while trying to destroy chart if breaking change is detected: {:?}",
+                        e.message
+                    );
+                }
+
+                helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, chart_info)?
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
