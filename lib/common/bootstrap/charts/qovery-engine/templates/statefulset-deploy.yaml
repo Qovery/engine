@@ -1,14 +1,19 @@
 {{- $kubefullname := include "qovery-engine.fullname" . }}
 apiVersion: apps/v1
+{{ if .Values.buildContainer.enable }}
 kind: StatefulSet
+{{ else }}
+kind: Deployment
+{{ end }}
 metadata:
   name: qovery-engine
-  namespace: {{ .Values.namespace }}
   labels:
     {{- include "qovery-engine.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.autoscaler.min_replicas }}
+  {{ if .Values.buildContainer.enable }}
   serviceName: qovery-engine
+  {{ end }}
   selector:
     matchLabels:
       {{- include "qovery-engine.selectorLabels" . | nindent 6 }}

@@ -67,7 +67,7 @@ charts:
     dest: services
     no_sync: true
   - name: pleco
-    version: 0.8.8
+    version: 0.9.8
     repo_name: pleco
   - name: do-k8s-token-rotate
     version: 0.1.3

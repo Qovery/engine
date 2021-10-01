@@ -6,7 +6,8 @@ use ::function_name::named;
 use tracing::{span, Level};
 
 use self::test_utilities::aws::eks_options;
-use qovery_engine::cloud_provider::aws::kubernetes::EKS;
+use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
+use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
 use qovery_engine::transaction::TransactionResult;
 
 #[allow(dead_code)]
@@ -90,7 +91,13 @@ fn create_upgrade_and_destroy_eks_cluster(
     })
 }
 
-fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_infra_pause: bool, test_name: &str) {
+fn create_and_destroy_eks_cluster(
+    region: &str,
+    secrets: FuncTestsSecrets,
+    test_infra_pause: bool,
+    vpc_network_mode: VpcQoveryNetworkMode,
+    test_name: &str,
+) {
     engine_run_test(|| {
         init();
 
@@ -98,12 +105,15 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
         let _enter = span.enter();
 
         let context = context();
+
         let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
         let aws = test_utilities::aws::cloud_provider_aws(&context);
         let nodes = test_utilities::aws::aws_kubernetes_nodes();
+        let mut eks_options = eks_options(secrets);
+        eks_options.vpc_qovery_network_mode = Some(vpc_network_mode);
 
         let cloudflare = dns_provider_cloudflare(&context);
 
@@ -115,7 +125,7 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
             region,
             &aws,
             &cloudflare,
-            eks_options(secrets),
+            eks_options,
             nodes,
         );
 
@@ -173,10 +183,19 @@ fn create_and_destroy_eks_cluster(region: &str, secrets: FuncTestsSecrets, test_
 #[cfg(feature = "test-aws-infra")]
 #[named]
 #[test]
-fn create_and_destroy_eks_cluster_in_eu_west_3() {
+fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(&region, secrets, false, function_name!());
+    create_and_destroy_eks_cluster(&region, secrets, false, WithoutNatGateways, function_name!());
+}
+
+#[cfg(feature = "test-aws-infra")]
+#[named]
+#[test]
+fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
+    let region = "eu-west-3";
+    let secrets = FuncTestsSecrets::new();
+    create_and_destroy_eks_cluster(&region, secrets, false, WithNatGateways, function_name!());
 }
 
 #[cfg(feature = "test-aws-infra")]
@@ -185,7 +204,7 @@ fn create_and_destroy_eks_cluster_in_eu_west_3() {
 fn create_and_destroy_eks_cluster_in_us_east_2() {
     let region = "us-east-2";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(&region, secrets, true, function_name!());
+    create_and_destroy_eks_cluster(&region, secrets, true, WithoutNatGateways, function_name!());
 }
 
 // only enable this test manually when we want to perform and validate upgrade process

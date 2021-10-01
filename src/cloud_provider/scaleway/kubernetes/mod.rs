@@ -875,6 +875,28 @@ impl<'a> Kubernetes for Kapsule<'a> {
                 },
             );
 
+        match terraform_result {
+            Ok(_) => {
+                let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
+                info!("{}", &message);
+                send_to_customer(&message);
+            }
+            Err(Operation { error, .. }) => return Err(error),
+            Err(retry::Error::Internal(msg)) => {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    Some(format!(
+                        "Error while deleting cluster {} with id {}: {}",
+                        self.name(),
+                        self.id(),
+                        msg
+                    )),
+                ))
+            }
+        }
+
         // TODO(benjaminch): move this elsewhere
         // Delete object-storage buckets
         info!("Delete Qovery managed object storage buckets");
@@ -899,33 +921,11 @@ impl<'a> Kubernetes for Kapsule<'a> {
             ));
         }
 
-        match terraform_result {
-            Ok(_) => {
-                let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
-                info!("{}", &message);
-                send_to_customer(&message);
-            }
-            Err(Operation { error, .. }) => return Err(error),
-            Err(retry::Error::Internal(msg)) => {
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    self.engine_error_scope(),
-                    self.context().execution_id(),
-                    Some(format!(
-                        "Error while deleting cluster {} with id {}: {}",
-                        self.name(),
-                        self.id(),
-                        msg
-                    )),
-                ))
-            }
-        }
-
         Ok(())
     }
 
     fn on_delete_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_delete_error() called for {}", self.name());
+        warn!("SCW.on_delete_error() called for {}", self.name());
         // FIXME What should we do if something goes wrong while deleting the cluster?
         Ok(())
     }
