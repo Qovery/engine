@@ -1,5 +1,7 @@
 rbac:
   create: true
+  ## Use an existing ClusterRole/Role (depending on rbac.namespaced false/true)
+  # useExistingRole: name-of-some-(cluster)role
   pspEnabled: true
   pspUseAppArmor: true
   namespaced: false
@@ -16,8 +18,26 @@ serviceAccount:
   name:
   nameTest:
 #  annotations:
+#    eks.amazonaws.com/role-arn: arn:aws:iam::123456789000:role/iam-role-name-here
+  autoMount: true
 
 replicas: 1
+
+## Create HorizontalPodAutoscaler object for deployment type
+#
+autoscaling:
+  enabled: false
+#   minReplicas: 1
+#   maxReplicas: 10
+#   metrics:
+#   - type: Resource
+#     resource:
+#       name: cpu
+#       targetAverageUtilization: 60
+#   - type: Resource
+#     resource:
+#       name: memory
+#       targetAverageUtilization: 60
 
 ## See `kubectl explain poddisruptionbudget.spec` for more
 ## ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
@@ -50,7 +70,8 @@ livenessProbe:
 
 image:
   repository: grafana/grafana
-  tag: 7.0.1
+  tag: 8.1.5
+  sha: ""
   pullPolicy: IfNotPresent
 
   ## Optionally specify an array of imagePullSecrets.
@@ -72,6 +93,8 @@ securityContext:
   runAsGroup: 472
   fsGroup: 472
 
+containerSecurityContext:
+  {}
 
 extraConfigmapMounts: []
   # - name: certs-configmap
@@ -86,16 +109,21 @@ extraEmptyDirMounts: []
   #   mountPath: /etc/grafana/provisioning/notifiers
 
 
+# Apply extra labels to common labels.
+extraLabels: {}
+
 ## Assign a PriorityClassName to pods if set
 # priorityClassName:
 
 downloadDashboardsImage:
   repository: curlimages/curl
-  tag: 7.70.0
+  tag: 7.73.0
+  sha: ""
   pullPolicy: IfNotPresent
 
 downloadDashboards:
   env: {}
+  envFromSecret: ""
   resources: {}
 
 ## Pod Annotations
@@ -114,6 +142,7 @@ podPortName: grafana
 ## ref: http://kubernetes.io/docs/user-guide/services/
 ##
 service:
+  enabled: true
   type: ClusterIP
   port: 80
   targetPort: 3000
@@ -122,20 +151,47 @@ service:
   labels: {}
   portName: service
 
+serviceMonitor:
+  ## If true, a ServiceMonitor CRD is created for a prometheus operator
+  ## https://github.com/coreos/prometheus-operator
+  ##
+  enabled: false
+  path: /metrics
+  #  namespace: monitoring  (defaults to use the namespace this chart is deployed to)
+  labels: {}
+  interval: 1m
+  scheme: http
+  tlsConfig: {}
+  scrapeTimeout: 30s
+  relabelings: []
+
 extraExposePorts: []
  # - name: keycloak
  #   port: 8080
  #   targetPort: 8080
  #   type: ClusterIP
 
+# overrides pod.spec.hostAliases in the grafana deployment's pods
+hostAliases: []
+  # - ip: "1.2.3.4"
+  #   hostnames:
+  #     - "my.host.com"
+
 ingress:
   enabled: false
+  # For Kubernetes >= 1.18 you should specify the ingress-controller via the field ingressClassName
+  # See https://kubernetes.io/blog/2020/04/02/improvements-to-the-ingress-api-in-kubernetes-1.18/#specifying-the-class-of-an-ingress
+  # ingressClassName: nginx
   # Values can be templated
   annotations: {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   labels: {}
   path: /
+
+  # pathType is only for k8s >= 1.1=
+  pathType: Prefix
+
   hosts:
     - chart-example.local
   ## Extra paths to prepend to every host configuration. This is useful when working with annotation based services.
@@ -144,6 +200,16 @@ ingress:
   #   backend:
   #     serviceName: ssl-redirect
   #     servicePort: use-annotation
+  ## Or for k8s > 1.19
+  # - path: /*
+  #   pathType: Prefix
+  #   backend:
+  #     service:
+  #       name: ssl-redirect
+  #       port:
+  #         name: use-annotation
+
+
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -175,7 +241,8 @@ affinity: {}
 extraInitContainers: []
 
 ## Enable an Specify container in extraContainers. This is meant to allow adding an authentication proxy to a grafana pod
-extraContainers: |
+extraContainers: ""
+# extraContainers: |
 # - name: proxy
 #   image: quay.io/gambol99/keycloak-proxy:latest
 #   args:
@@ -212,8 +279,20 @@ persistence:
   # annotations: {}
   finalizers:
     - kubernetes.io/pvc-protection
+  # selectorLabels: {}
   # subPath: ""
   # existingClaim:
+
+  ## If persistence is not enabled, this allows to mount the
+  ## local storage in-memory to improve performance
+  ##
+  inMemory:
+    enabled: false
+    ## The maximum usage on memory medium EmptyDir would be
+    ## the minimum value between the SizeLimit specified
+    ## here and the sum of memory limits of all containers in a pod
+    ##
+    # sizeLimit: 300Mi
 
 initChownData:
   ## If false, data ownership will not be reset at startup
@@ -226,6 +305,7 @@ initChownData:
   image:
     repository: busybox
     tag: "1.31.1"
+    sha: ""
     pullPolicy: IfNotPresent
 
   ## initChownData resource requests and limits
@@ -263,6 +343,27 @@ admin:
 # schedulerName:
 
 ## Extra environment variables that will be pass onto deployment pods
+##
+## to provide grafana with access to CloudWatch on AWS EKS:
+## 1. create an iam role of type "Web identity" with provider oidc.eks.* (note the provider for later)
+## 2. edit the "Trust relationships" of the role, add a line inside the StringEquals clause using the
+## same oidc eks provider as noted before (same as the existing line)
+## also, replace NAMESPACE and prometheus-operator-grafana with the service account namespace and name
+##
+##  "oidc.eks.us-east-1.amazonaws.com/id/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:sub": "system:serviceaccount:NAMESPACE:prometheus-operator-grafana",
+##
+## 3. attach a policy to the role, you can use a built in policy called CloudWatchReadOnlyAccess
+## 4. use the following env: (replace 123456789000 and iam-role-name-here with your aws account number and role name)
+##
+## env:
+##   AWS_ROLE_ARN: arn:aws:iam::123456789000:role/iam-role-name-here
+##   AWS_WEB_IDENTITY_TOKEN_FILE: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
+##   AWS_REGION: us-east-1
+##
+## 5. uncomment the EKS section in extraSecretMounts: below
+## 6. uncomment the annotation section in the serviceAccount: above
+## make sure to replace arn:aws:iam::123456789000:role/iam-role-name-here with your role arn
+
 env: {}
 
 ## "valueFrom" environment variable references that will be added to deployment pods
@@ -283,6 +384,16 @@ envFromSecret: ""
 ## This can be useful for auth tokens, etc
 envRenderSecret: {}
 
+## The names of secrets in the same kubernetes namespace which contain values to be added to the environment
+## Each entry should contain a name key, and can optionally specify whether the secret must be defined with an optional key.
+envFromSecrets: []
+## - name: secret-name
+##   optional: true
+
+# Inject Kubernetes services as environment variables.
+# See https://kubernetes.io/docs/concepts/services-networking/connect-applications-service/#environment-variables
+enableServiceLinks: true
+
 ## Additional grafana server secret mounts
 # Defines additional mounts with secrets. Secrets must be manually created in the namespace.
 extraSecretMounts: []
@@ -291,14 +402,42 @@ extraSecretMounts: []
   #   secretName: grafana-secret-files
   #   readOnly: true
   #   subPath: ""
+  #
+  # for AWS EKS (cloudwatch) use the following (see also instruction in env: above)
+  # - name: aws-iam-token
+  #   mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
+  #   readOnly: true
+  #   projected:
+  #     defaultMode: 420
+  #     sources:
+  #       - serviceAccountToken:
+  #           audience: sts.amazonaws.com
+  #           expirationSeconds: 86400
+  #           path: token
+  #
+  # for CSI e.g. Azure Key Vault use the following
+  # - name: secrets-store-inline
+  #  mountPath: /run/secrets
+  #  readOnly: true
+  #  csi:
+  #    driver: secrets-store.csi.k8s.io
+  #    readOnly: true
+  #    volumeAttributes:
+  #      secretProviderClass: "akv-grafana-spc"
+  #    nodePublishSecretRef:                       # Only required when using service principal mode
+  #       name: grafana-akv-creds                  # Only required when using service principal mode
 
 ## Additional grafana server volume mounts
 # Defines additional volume mounts.
 extraVolumeMounts: []
-  # - name: extra-volume
-  #   mountPath: /mnt/volume
+  # - name: extra-volume-0
+  #   mountPath: /mnt/volume0
   #   readOnly: true
   #   existingClaim: volume-claim
+  # - name: extra-volume-1
+  #   mountPath: /mnt/volume1
+  #   readOnly: true
+  #   hostPath: /usr/shared/
 
 ## Pass the plugins you want installed as a list.
 ##
@@ -318,6 +457,14 @@ datasources: {}
 #      url: http://prometheus-prometheus-server
 #      access: proxy
 #      isDefault: true
+#    - name: CloudWatch
+#      type: cloudwatch
+#      access: proxy
+#      uid: cloudwatch
+#      editable: false
+#      jsonData:
+#        authType: default
+#        defaultRegion: us-east-1
 
 ## Configure notifiers
 ## ref: http://docs.grafana.org/administration/provisioning/#alert-notification-channels
@@ -374,11 +521,13 @@ dashboards: {}
   #     datasource: Prometheus
   #   local-dashboard:
   #     url: https://example.com/repository/test.json
+  #     token: ''
   #   local-dashboard-base64:
   #     url: https://example.com/repository/test-b64.json
+  #     token: ''
   #     b64content: true
 
-## Reference to external ConfigMap per provider. Use provider name as key and ConfiMap name as value.
+## Reference to external ConfigMap per provider. Use provider name as key and ConfigMap name as value.
 ## A provider dashboards must be defined either by external ConfigMaps or in values.yaml, not in both.
 ## ConfigMap data example:
 ##
@@ -395,7 +544,7 @@ dashboardsConfigMaps: {}
 ##
 grafana.ini:
   paths:
-    data: /var/lib/grafana/data
+    data: /var/lib/grafana/
     logs: /var/log/grafana
     plugins: /var/lib/grafana/plugins
     provisioning: /etc/grafana/provisioning
@@ -405,7 +554,6 @@ grafana.ini:
     mode: console
   grafana_net:
     url: https://grafana.net
-
 ## grafana Authentication can be enabled with the following values on grafana.ini
  # server:
       # The full public facing url you use in browser, used for redirects and emails
@@ -417,7 +565,7 @@ grafana.ini:
  #    scopes: user:email,read:org
  #    auth_url: https://github.com/login/oauth/authorize
  #    token_url: https://github.com/login/oauth/access_token
- #    api_url: https://github.com/user
+ #    api_url: https://api.github.com/user
  #    team_ids:
  #    allowed_organizations:
  #    client_id:
@@ -465,7 +613,10 @@ smtp:
 ## Sidecars that collect the configmaps with specified label and stores the included files them into the respective folders
 ## Requires at least Grafana 5 to work and can't be used together with parameters dashboardProviders, datasources and dashboards
 sidecar:
-  image: kiwigrid/k8s-sidecar:0.1.99
+  image:
+    repository: quay.io/kiwigrid/k8s-sidecar
+    tag: 1.12.3
+    sha: ""
   imagePullPolicy: IfNotPresent
   resources: {}
 #   limits:
@@ -476,19 +627,27 @@ sidecar:
 #     memory: 50Mi
   # skipTlsVerify Set to true to skip tls verification for kube api calls
   # skipTlsVerify: true
+  enableUniqueFilenames: false
   dashboards:
     enabled: false
     SCProvider: true
     # label that the configmaps with dashboards are marked with
     label: grafana_dashboard
+    # value of label that the configmaps with dashboards are set to
+    labelValue: null
     # folder in the pod that should hold the collected dashboards (unless `defaultFolderName` is set)
     folder: /tmp/dashboards
     # The default folder name, it will create a subfolder under the `folder` and put dashboards in there instead
     defaultFolderName: null
-    # If specified, the sidecar will search for dashboard config-maps inside this namespace.
+    # Namespaces list. If specified, the sidecar will search for config-maps/secrets inside these namespaces.
     # Otherwise the namespace in which the sidecar is running will be used.
-    # It's also possible to specify ALL to search in all namespaces
+    # It's also possible to specify ALL to search in all namespaces.
     searchNamespace: null
+    # search in configmap, secret or both
+    resource: both
+    # If specified, the sidecar will look for annotation with this name to create folder and put graph here.
+    # You can use this parameter together with `provider.foldersFromFilesStructure`to annotate configmaps and create folder structure.
+    folderAnnotation: null
     # provider configuration that lets grafana manage the dashboards
     provider:
       # name of the provider, should be unique
@@ -503,15 +662,89 @@ sidecar:
       disableDelete: false
       # allow updating provisioned dashboards from the UI
       allowUiUpdates: false
+      # allow Grafana to replicate dashboard structure from filesystem
+      foldersFromFilesStructure: false
   datasources:
     enabled: false
     # label that the configmaps with datasources are marked with
     label: grafana_datasource
+    # value of label that the configmaps with datasources are set to
+    labelValue: null
     # If specified, the sidecar will search for datasource config-maps inside this namespace.
     # Otherwise the namespace in which the sidecar is running will be used.
     # It's also possible to specify ALL to search in all namespaces
     searchNamespace: null
+    # search in configmap, secret or both
+    resource: both
+  notifiers:
+    enabled: false
+    # label that the configmaps with notifiers are marked with
+    label: grafana_notifier
+    # If specified, the sidecar will search for notifier config-maps inside this namespace.
+    # Otherwise the namespace in which the sidecar is running will be used.
+    # It's also possible to specify ALL to search in all namespaces
+    searchNamespace: null
+    # search in configmap, secret or both
+    resource: both
 
 ## Override the deployment namespace
 ##
 namespaceOverride: ""
+
+## Number of old ReplicaSets to retain
+##
+revisionHistoryLimit: 10
+
+## Add a seperate remote image renderer deployment/service
+imageRenderer:
+  # Enable the image-renderer deployment & service
+  enabled: false
+  replicas: 1
+  image:
+    # image-renderer Image repository
+    repository: grafana/grafana-image-renderer
+    # image-renderer Image tag
+    tag: latest
+    # image-renderer Image sha (optional)
+    sha: ""
+    # image-renderer ImagePullPolicy
+    pullPolicy: Always
+  # extra environment variables
+  env:
+    HTTP_HOST: "0.0.0.0"
+    # RENDERING_ARGS: --no-sandbox,--disable-gpu,--window-size=1280x758
+    # RENDERING_MODE: clustered
+  # image-renderer deployment serviceAccount
+  serviceAccountName: ""
+  # image-renderer deployment securityContext
+  securityContext: {}
+  # image-renderer deployment Host Aliases
+  hostAliases: []
+  # image-renderer deployment priority class
+  priorityClassName: ''
+  service:
+    # Enable the image-renderer service
+    enabled: true
+    # image-renderer service port name
+    portName: 'http'
+    # image-renderer service port used by both service and deployment
+    port: 8081
+    targetPort: 8081
+  # In case a sub_path is used this needs to be added to the image renderer callback
+  grafanaSubPath: ""
+  # name of the image-renderer port on the pod
+  podPortName: http
+  # number of image-renderer replica sets to keep
+  revisionHistoryLimit: 10
+  networkPolicy:
+    # Enable a NetworkPolicy to limit inbound traffic to only the created grafana pods
+    limitIngress: true
+    # Enable a NetworkPolicy to limit outbound traffic to only the created grafana pods
+    limitEgress: false
+  resources: {}
+#   limits:
+#     cpu: 100m
+#     memory: 100Mi
+#   requests:
+#     cpu: 50m
+#     memory: 50Mi
