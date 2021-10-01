@@ -61,12 +61,3 @@ extraPorts:
     port: 7946
     protocol: TCP
     targetPort: 7946
-
-persistence:
-  enabled: false
-  accessModes:
-    - ReadWriteOnce
-  size: 20Gi
-  annotations:
-    app: loki
-  subPath: "loki"
