@@ -1,9 +1,9 @@
 apiVersion: v2
-appVersion: 0.8.8
+appVersion: 0.9.8
 description: Automatically removes Cloud managed services and Kubernetes resources
   based on tags with TTL
 home: https://github.com/Qovery/pleco
 icon: https://github.com/Qovery/pleco/raw/main/assets/pleco_logo.png
 name: pleco
 type: application
-version: 0.8.8
+version: 0.9.8
