@@ -1,0 +1,134 @@
+{{- $kubefullname := include "qovery-engine.fullname" . }}
+apiVersion: apps/v1
+{{ if .Values.buildContainer.enable }}
+kind: StatefulSet
+{{ else }}
+kind: Deployment
+{{ end }}
+metadata:
+  name: qovery-engine
+  labels:
+    {{- include "qovery-engine.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.autoscaler.min_replicas }}
+  {{ if .Values.buildContainer.enable }}
+  serviceName: qovery-engine
+  {{ end }}
+  selector:
+    matchLabels:
+      {{- include "qovery-engine.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "qovery-engine.selectorLabels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "qovery-engine.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: qovery-engine
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+          env:
+            {{ range $key, $value := .Values.environmentVariables -}}
+            - name: "{{ $key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $kubefullname }}
+                  key: {{ $key }}
+            {{ end }}
+          resources:
+            {{- toYaml .Values.engineResources | nindent 12 }}
+{{ if .Values.buildContainer.enable }}
+          volumeMounts:
+            - name: qovery-workspace
+              mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
+              # Required for image cleaning
+            - name: docker-graph-storage
+              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
+        - name: docker-build
+          image: "{{ .Values.buildContainer.image }}:{{ .Values.buildContainer.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+            {{ range $key, $value := .Values.environmentVariables -}}
+            - name: "{{ $key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: qovery-engine
+                  key: {{ $key }}
+            {{ end }}
+          livenessProbe:
+            exec:
+              command: [ "docker", "info" ]
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+          {{- toYaml .Values.buildResources | nindent 12 }}
+          volumeMounts:
+            - name: docker-graph-storage
+              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
+      initContainers:
+        - name: clean-data
+          image: busybox:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              rm -Rf {{ .Values.volumes.qoveryWorkspace.path }}/* {{ .Values.volumes.dockerGraphStorage.path }}/*
+              chmod 777 {{ .Values.volumes.qoveryWorkspace.path }} {{ .Values.volumes.dockerGraphStorage.path }}
+          volumeMounts:
+            - name: qovery-workspace
+              mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
+            - name: docker-graph-storage
+              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
+  volumeClaimTemplates:
+  - metadata:
+      name: docker-graph-storage
+      labels:
+        {{- include "qovery-engine.labels" . | nindent 8 }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: {{ .Values.volumes.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.volumes.dockerGraphStorage.size }}
+  - metadata:
+      name: qovery-workspace
+      labels:
+        {{- include "qovery-engine.labels" . | nindent 8 }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: {{ .Values.volumes.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.volumes.qoveryWorkspace.size }}
+{{ end }}

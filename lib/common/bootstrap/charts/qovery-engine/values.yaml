@@ -7,7 +7,6 @@ image:
   pullPolicy: IfNotPresent
   tag: ""
 
-namespace: "qovery"
 metrics:
   enabled: false
   portName: "metrics"
