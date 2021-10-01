@@ -96,7 +96,7 @@ impl ScalewayOS {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         if let Err(message) = ScalewayOS::is_bucket_name_valid(bucket_name) {
             let message = format!(
-                "While trying to delete object-storage bucket, name `{}` is invalid: {}",
+                "While trying to empty object-storage bucket, name `{}` is invalid: {}",
                 bucket_name,
                 message.unwrap_or_else(|| "unknown error".to_string())
             );
@@ -135,7 +135,7 @@ impl ScalewayOS {
                 }),
             ) {
                 let message = format!(
-                    "While trying to delete object-storage bucket `{}`, cannot delete content: {}",
+                    "While trying to empty object-storage bucket `{}`, cannot delete content: {}",
                     bucket_name, e
                 );
                 error!("{}", message);

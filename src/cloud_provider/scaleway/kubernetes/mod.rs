@@ -875,28 +875,33 @@ impl<'a> Kubernetes for Kapsule<'a> {
                 },
             );
 
-        // TODO(benjaminch): move this elsewhere
-        // Delete object-storage buckets
-        info!("Delete Qovery managed object storage buckets");
-        if let Err(e) = self
-            .object_storage
-            .delete_bucket(self.kubeconfig_bucket_name().as_str())
-        {
-            return Err(EngineError::new(
-                Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
-        }
+        // Delete S3 buckets only if cluster deletion was OK
+        if terraform_result.is_ok() {
+            // TODO(benjaminch): move this elsewhere
+            // Delete object-storage buckets
 
-        if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
-            return Err(EngineError::new(
-                Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
+            info!("Delete Qovery managed object storage buckets");
+
+            if let Err(e) = self
+                .object_storage
+                .delete_bucket(self.kubeconfig_bucket_name().as_str())
+            {
+                return Err(EngineError::new(
+                    Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    e.message,
+                ));
+            }
+
+            if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
+                return Err(EngineError::new(
+                    Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    e.message,
+                ));
+            }
         }
 
         match terraform_result {
@@ -925,7 +930,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn on_delete_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_delete_error() called for {}", self.name());
+        warn!("SCW.on_delete_error() called for {}", self.name());
         // FIXME What should we do if something goes wrong while deleting the cluster?
         Ok(())
     }
