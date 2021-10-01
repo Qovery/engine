@@ -434,7 +434,7 @@ release-image:
   stage: deploy
   retry: 0
   script:
-    - ./helper.sh deploy_engines-infra
+    - ./helper.sh deploy_engines_infra
   tags:
     - 250mcpu-1gmem-0g
   only:
