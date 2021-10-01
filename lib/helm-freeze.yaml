@@ -6,13 +6,14 @@ charts:
     repo_name: bitnami
     version: 5.2.2
   - name: grafana
-    version: 5.3.4
-    no_sync: true
+    version: 6.16.10
+    repo_name: grafana
     comment: |
       Dashboard have been set into it as the chart suggest but it's a problem with helm-freeze
       Need to look if we can move them out of this repo
-  - name: nginx-ingress
-    version: 1.35.0
+  - name: ingress-nginx
+    repo_name: ingress-nginx
+    version: 3.35.0
   - name: kube-prometheus-stack
     repo_name: prometheus-community
     version: 17.0.3
@@ -30,7 +31,7 @@ charts:
     version: 0.3.1
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
-    version: 9.4.0
+    version: 9.10.4
   - name: metrics-server
     repo_name: bitnami
     version: 5.9.2
@@ -38,9 +39,8 @@ charts:
     repo_name: prometheus-community
     version: 3.4.2
   - name: loki
-    repo_name: loki
-    version: 0.31.1
-    comment: https://github.com/grafana/loki/tree/master/production/helm
+    repo_name: grafana
+    version: 2.6.0
   - name: promtail
     repo_name: loki
     version: 0.24.0
@@ -93,8 +93,8 @@ repos:
     url: https://honestica.github.io/lifen-charts
   - name: aws
     url: https://aws.github.io/eks-charts
-  - name: loki
-    url: https://grafana.github.io/loki/charts
+  - name: grafana
+    url: https://grafana.github.io/helm-charts
   - name: pleco
     url: https://qovery.github.io/pleco/
   - name: cluster-autoscaler
@@ -105,6 +105,8 @@ repos:
     url: https://prometheus-community.github.io/helm-charts
   - name: digital-mobius
     url: https://qovery.github.io/digital-mobius
+  - name: ingress-nginx
+    url: https://kubernetes.github.io/ingress-nginx/
 
 
 destinations:

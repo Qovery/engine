@@ -262,7 +262,7 @@ impl Helm for Router {
     }
 
     fn helm_chart_dir(&self) -> String {
-        format!("{}/common/charts/nginx-ingress", self.context().lib_root_dir())
+        format!("{}/common/charts/ingress-nginx", self.context().lib_root_dir())
     }
 
     fn helm_chart_values_dir(&self) -> String {
