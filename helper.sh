@@ -304,7 +304,7 @@ function deploy_engines_infra() { ## Release GA to prod
   helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --history-max 50 --wait --namespace qovery qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
-environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
+environmentVariables.QOVERY_NATS_URL="tls://nats-internal.qovery.io:4222",\
 environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_USER",\
 environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
 environmentVariables.CLOUD_PROVIDER="aws",\
