@@ -875,35 +875,6 @@ impl<'a> Kubernetes for Kapsule<'a> {
                 },
             );
 
-        // Delete S3 buckets only if cluster deletion was OK
-        if terraform_result.is_ok() {
-            // TODO(benjaminch): move this elsewhere
-            // Delete object-storage buckets
-
-            info!("Delete Qovery managed object storage buckets");
-
-            if let Err(e) = self
-                .object_storage
-                .delete_bucket(self.kubeconfig_bucket_name().as_str())
-            {
-                return Err(EngineError::new(
-                    Internal,
-                    self.engine_error_scope(),
-                    self.context().execution_id(),
-                    e.message,
-                ));
-            }
-
-            if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
-                return Err(EngineError::new(
-                    Internal,
-                    self.engine_error_scope(),
-                    self.context().execution_id(),
-                    e.message,
-                ));
-            }
-        }
-
         match terraform_result {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
@@ -924,6 +895,30 @@ impl<'a> Kubernetes for Kapsule<'a> {
                     )),
                 ))
             }
+        }
+
+        // TODO(benjaminch): move this elsewhere
+        // Delete object-storage buckets
+        info!("Delete Qovery managed object storage buckets");
+        if let Err(e) = self
+            .object_storage
+            .delete_bucket(self.kubeconfig_bucket_name().as_str())
+        {
+            return Err(EngineError::new(
+                Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ));
+        }
+
+        if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
+            return Err(EngineError::new(
+                Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ));
         }
 
         Ok(())
