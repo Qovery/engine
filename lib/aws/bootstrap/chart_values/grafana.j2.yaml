@@ -26,11 +26,6 @@ persistence:
   finalizers:
     - kubernetes.io/pvc-protection
 
-  image:
-    repository: busybox
-    tag: "1.31.1"
-    pullPolicy: IfNotPresent
-
 adminUser: "{{ grafana_admin_user }}"
 adminPassword: "{{ grafana_admin_password }}"
 
