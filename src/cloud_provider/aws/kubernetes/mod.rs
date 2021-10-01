@@ -1318,6 +1318,7 @@ impl<'a> Kubernetes for EKS<'a> {
             vec![HelmChart {
                 name: "metrics-server".to_string(),
                 namespace: "kube-system".to_string(),
+                version: None,
             }],
             self.cloud_provider().credentials_environment_variables(),
         );
