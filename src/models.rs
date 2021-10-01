@@ -144,6 +144,7 @@ pub struct Application {
     pub branch: String,
     pub commit_id: String,
     pub dockerfile_path: Option<String>,
+    pub buildpack_language: Option<String>,
     #[serde(default = "default_root_path_value")]
     pub root_path: String,
     pub private_port: Option<u16>,
@@ -327,6 +328,7 @@ impl Application {
                 commit_id: self.commit_id.clone(),
                 dockerfile_path: self.dockerfile_path.clone(),
                 root_path: self.root_path.clone(),
+                buildpack_language: self.buildpack_language.clone(),
             },
             image: self.to_image(),
             options: BuildOptions {

@@ -25,4 +25,9 @@ spec:
   {{- if .Values.persistence.storageClassName }}
   storageClassName: {{ .Values.persistence.storageClassName }}
   {{- end -}}
+  {{- with .Values.persistence.selectorLabels }}
+  selector:
+    matchLabels:
+{{ toYaml . | indent 6 }}
+  {{- end }}
 {{- end -}}

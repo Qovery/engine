@@ -34,7 +34,7 @@ fn create_upgrade_and_destroy_kapsule_cluster(
         let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let cluster_id = format!("qovery-test-{}", generate_cluster_id(zone.as_str()));
+        let cluster_id = generate_cluster_id(zone.as_str());
 
         let kubernetes = Kapsule::new(
             context,
@@ -101,7 +101,7 @@ fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, tes
         let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let cluster_id = format!("qovery-test-{}", generate_cluster_id(zone.as_str()));
+        let cluster_id = generate_cluster_id(zone.as_str());
 
         let kubernetes = Kapsule::new(
             context,
