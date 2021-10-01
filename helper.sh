@@ -544,7 +544,7 @@ set_release_ga)
   ;;
 # Deploy the engines dedicated for infra deployments
 deploy_engines_infra)
-  deploy-engines-infra
+  deploy_engines_infra
   ;;
 # Deploy on the engines dedicated for customer's environments deployments
 deploy_engines_envs)
