@@ -68,6 +68,37 @@ where
         .map(|helm_history_row| helm_history_row.clone()))
 }
 
+pub fn helm_destroy_chart_if_breaking_changes_version_detected(
+    kubernetes_config: &Path,
+    environment_variables: &Vec<(&str, &str)>,
+    chart_info: &ChartInfo,
+) -> Result<(), SimpleError> {
+    // If there is a breaking version set for the current helm chart,
+    // then we compare this breaking version with the currently installed version if any.
+    // If current installed version is older than breaking change one, then we delete
+    // the chart before applying it.
+    if let Some(breaking_version) = &chart_info.last_breaking_version_requiring_restart {
+        let chart_namespace = get_chart_namespace(chart_info.namespace.clone());
+        if let Some(installed_version) = helm_get_chart_version(
+            kubernetes_config,
+            environment_variables.to_owned(),
+            Some(chart_namespace.as_str()),
+            chart_info.name.clone(),
+        ) {
+            if installed_version.le(breaking_version) {
+                return helm_exec_uninstall(
+                    kubernetes_config,
+                    chart_namespace.as_str(),
+                    chart_info.name.as_str(),
+                    environment_variables.to_owned(),
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn helm_exec_upgrade_with_chart_info<P>(
     kubernetes_config: P,
     envs: &Vec<(&str, &str)>,

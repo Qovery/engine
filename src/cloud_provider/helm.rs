@@ -1,8 +1,8 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
 use crate::cmd::helm::{
-    helm_exec_uninstall, helm_exec_uninstall_with_chart_info, helm_exec_upgrade_with_chart_info,
-    helm_get_chart_version, helm_upgrade_diff_with_chart_info, is_chart_deployed,
+    helm_destroy_chart_if_breaking_changes_version_detected, helm_exec_uninstall_with_chart_info,
+    helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info, is_chart_deployed,
 };
 use crate::cmd::kubectl::{
     kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
@@ -13,7 +13,6 @@ use crate::error::{SimpleError, SimpleErrorKind};
 use crate::utilities::calculate_hash;
 use semver::Version;
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::path::Path;
 use std::{fs, thread};
 use thread::spawn;
@@ -56,7 +55,7 @@ pub struct ChartInfo {
     pub action: HelmAction,
     pub atomic: bool,
     pub force_upgrade: bool,
-    pub last_breaking_version: Option<Version>,
+    pub last_breaking_version_requiring_restart: Option<Version>,
     pub timeout: String,
     pub dry_run: bool,
     pub wait: bool,
@@ -74,7 +73,7 @@ impl Default for ChartInfo {
             action: Deploy,
             atomic: true,
             force_upgrade: false,
-            last_breaking_version: None,
+            last_breaking_version_requiring_restart: None,
             timeout: "180s".to_string(),
             dry_run: false,
             wait: true,
@@ -161,7 +160,16 @@ pub trait HelmChart: Send {
         let chart_info = self.get_chart_info();
         match chart_info.action {
             HelmAction::Deploy => {
-                helm_destroy_chart_if_breaking_changes_version(kubernetes_config, &environment_variables, chart_info);
+                if let Err(e) = helm_destroy_chart_if_breaking_changes_version_detected(
+                    kubernetes_config,
+                    &environment_variables,
+                    chart_info,
+                ) {
+                    warn!(
+                        "error while trying to destroy chart if breaking change is detected: {:?}",
+                        e.message
+                    );
+                }
 
                 helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, chart_info)?
             }
@@ -184,34 +192,6 @@ pub trait HelmChart: Send {
             HelmAction::Skip => {}
         }
         Ok(payload)
-    }
-
-    fn helm_destroy_chart_if_breaking_changes_version(
-        kubernetes_config: &Path,
-        environment_variables: &Vec<(&str, &str)>,
-        chart_info: ChartInfo,
-    ) {
-        // If there is a breaking version set for the current helm chart,
-        // then we compare this breaking version with the currently installed version if any.
-        // If current installed version is older than breaking change one, then we delete
-        // the chart before applying it.
-        if let Some(breaking_version) = &chart_info.last_breaking_version {
-            if let Some(installed_version) = helm_get_chart_version(
-                kubernetes_config,
-                environment_variables.to_owned(),
-                Some(get_chart_namespace(chart_info.namespace.clone()).as_str()),
-                chart_info.name.clone(),
-            ) {
-                if installed_version.le(breaking_version) {
-                    helm_exec_uninstall(
-                        kubernetes_config,
-                        chart_info.namespace.as_str(),
-                        chart_info.name.as_str(),
-                        environment_variables.to_owned(),
-                    )
-                }
-            }
-        }
     }
 
     fn post_exec(
@@ -547,7 +527,16 @@ impl HelmChart for PrometheusOperatorConfigChart {
         let chart_info = self.get_chart_info();
         match chart_info.action {
             HelmAction::Deploy => {
-                helm_destroy_chart_if_breaking_changes_version(kubernetes_config, &environment_variables, chart_info);
+                if let Err(e) = helm_destroy_chart_if_breaking_changes_version_detected(
+                    kubernetes_config,
+                    &environment_variables,
+                    chart_info,
+                ) {
+                    warn!(
+                        "error while trying to destroy chart if breaking change is detected: {:?}",
+                        e.message
+                    );
+                }
 
                 helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, chart_info)?
             }
