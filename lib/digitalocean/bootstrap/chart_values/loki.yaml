@@ -33,10 +33,14 @@ config:
           period: 24h
   storage_config:
     aws:
-      s3: ""                              # qovery setting
       region: ""                          # qovery setting
+      bucketnames: ""                     # qovery setting
+      endpoint: ""                        # qovery setting
       access_key_id: ""                   # qovery setting
       secret_access_key: ""               # qovery setting
+      insecure: ""                        # qovery setting
+      sse_encryption: ""                  # qovery setting
+      s3forcepathstyle: ""                # qovery setting
     boltdb_shipper:
       active_index_directory: /data/loki/index
       shared_store: s3
