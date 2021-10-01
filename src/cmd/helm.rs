@@ -855,8 +855,6 @@ where
     args_string.push(chart.name.to_string());
     args_string.push(chart.path.to_string());
 
-    //
-
     helm_exec_with_output(
         args_string.iter().map(|x| x.as_str()).collect(),
         environment_variables
