@@ -45,7 +45,7 @@ jobs:
           sccache --show-stats
           echo "########## START UNIT TESTS ##########"
           cargo test
-  selected-functional-tests:
+  selected-functionnal-tests:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
     needs: build
