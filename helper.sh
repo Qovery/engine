@@ -318,6 +318,8 @@ environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 buildContainer.enable="false",\
 metrics.enable="true",\
+autoscaler.enabled: "false",\
+autoscaler.max_replicas="30",\
 engineResources.limits.cpu="1",\
 engineResources.limits.memory="750Mi",\
 engineResources.requests.cpu="300m",\
