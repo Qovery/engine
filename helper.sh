@@ -310,7 +310,6 @@ environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
-environmentVariables.RUST_LOG="DEBUG,rusoto_core::request=info,hyper=info",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
 environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
@@ -338,7 +337,6 @@ environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_USER",\
 environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
-environmentVariables.RUST_LOG="DEBUG,rusoto_core::request=info,hyper=info",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
 environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
