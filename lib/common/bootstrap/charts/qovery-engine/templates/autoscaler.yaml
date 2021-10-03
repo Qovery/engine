@@ -19,5 +19,5 @@ spec:
           name: taskmanager_nb_running_tasks
         target:
           type: AverageValue
-          averageValue: 1
+          averageValue: 0.5
   {{- end }}
