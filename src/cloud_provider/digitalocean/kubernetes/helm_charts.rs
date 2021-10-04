@@ -213,7 +213,7 @@ pub fn do_helm_charts(
             namespace: HelmChartNamespaces::KubeSystem,
             values: vec![
                 ChartSetValue {
-                    key: "config.lokiAddress".to_string(),
+                    key: "loki.serviceName".to_string(),
                     value: loki_kube_dns_prefix.clone(),
                 },
                 // it's mandatory to get this class to ensure paused infra will behave properly on restore
