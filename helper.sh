@@ -301,7 +301,7 @@ function deploy_engines_infra() { ## Release GA to prod
   AWS_ACCESS_KEY_ID="$AWS_PROD_DEPLOY_ACCESS_KEY" \
   AWS_SECRET_ACCESS_KEY="$AWS_PROD_DEPLOY_SECRET_KEY" \
   AWS_DEFAULT_REGION=eu-west-3 \
-  helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --history-max 50 --wait --namespace qovery qovery-engine \
+  helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --history-max 50 --wait --timeout 3600 --namespace qovery qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
 environmentVariables.QOVERY_NATS_URL="tls://nats-internal.qovery.io:4222",\
@@ -317,7 +317,7 @@ environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 buildContainer.enable="false",\
 metrics.enable="true",\
-autoscaler.enabled: "true",\
+autoscaler.enabled="true",\
 autoscaler.max_replicas="30",\
 autoscaler.min_replicas="1",\
 engineResources.limits.cpu="1",\
