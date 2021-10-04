@@ -142,10 +142,7 @@ pub fn do_helm_charts(
         get_chart_namespace(prometheus_namespace)
     );
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_prefix = format!(
-        "http://loki.{}.svc:3100/loki/api/v1/push",
-        get_chart_namespace(loki_namespace)
-    );
+    let loki_kube_dns_prefix = format!("loki.{}.svc", get_chart_namespace(loki_namespace));
 
     // Qovery storage class
     let q_storage_class = CommonChart {
