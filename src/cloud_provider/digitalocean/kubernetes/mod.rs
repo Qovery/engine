@@ -20,6 +20,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
+use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
 use crate::cmd::structs::HelmChart;
@@ -46,7 +47,7 @@ pub mod doks_api;
 pub mod helm_charts;
 pub mod node;
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DoksOptions {
     // Digital Ocean
@@ -55,6 +56,7 @@ pub struct DoksOptions {
     pub vpc_cidr_set: VpcInitKind,
     // Qovery
     pub qovery_api_url: String,
+    pub qovery_engine_location: EngineLocation,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
     pub grafana_admin_user: String,
@@ -651,6 +653,7 @@ impl<'a> Kubernetes for DOKS<'a> {
             do_space_secret_key: self.cloud_provider.spaces_secret_key.to_string(),
             do_space_bucket_kubeconfig: self.kubeconfig_bucket_name(),
             do_space_kubeconfig_filename: self.kubeconfig_file_name(),
+            qovery_engine_location: self.options.qovery_engine_location.clone(),
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
             ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
             managed_dns_name: self.dns_provider.domain().to_string(),

@@ -20,6 +20,7 @@ use crate::cloud_provider::kubernetes::{
     KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
+use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::{
@@ -89,6 +90,7 @@ pub struct Options {
     pub elasticsearch_cidr_subnet: String,
     // Qovery
     pub qovery_api_url: String,
+    pub qovery_engine_location: EngineLocation,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
     pub grafana_admin_user: String,

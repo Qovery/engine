@@ -1,9 +1,9 @@
 use crate::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use crate::cloud_provider::helm::{
-    get_chart_namespace, ChartInfo, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmAction,
-    HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
+    get_chart_namespace, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated,
+    CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
-use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
+use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::error::{SimpleError, SimpleErrorKind};
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -33,6 +33,7 @@ pub struct ChartsConfigPrerequisites {
     pub do_space_secret_key: String,
     pub do_space_bucket_kubeconfig: String,
     pub do_space_kubeconfig_filename: String,
+    pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
@@ -62,6 +63,7 @@ impl ChartsConfigPrerequisites {
         do_space_secret_key: String,
         do_space_bucket_kubeconfig: String,
         do_space_kubeconfig_filename: String,
+        qovery_engine_location: EngineLocation,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
         managed_dns_name: String,
@@ -88,6 +90,7 @@ impl ChartsConfigPrerequisites {
             do_space_secret_key,
             do_space_bucket_kubeconfig,
             do_space_kubeconfig_filename,
+            qovery_engine_location,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
             managed_dns_name,
@@ -888,6 +891,7 @@ datasources:
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-engine".to_string(),
+            action: get_engine_helm_action_from_location(&chart_config_prerequisites.qovery_engine_location),
             path: chart_path("common/charts/qovery-engine"),
             namespace: HelmChartNamespaces::Qovery,
             timeout: "900".to_string(),
