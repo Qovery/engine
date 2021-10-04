@@ -402,7 +402,7 @@ impl<'a> DOKS<'a> {
         let api_url = format!("{}/clusters", DoApiType::Doks.api_url());
         let json_content = do_get_from_api(self.cloud_provider.token.as_str(), DoApiType::Doks, api_url)?;
         // TODO(benjaminch): `qovery-` to be added into Rust name directly everywhere
-        get_doks_info_from_name(json_content.as_str(), format!("qovery-{}", self.name().to_string()))
+        get_doks_info_from_name(json_content.as_str(), format!("qovery-{}", self.id().to_string()))
     }
 }
 
