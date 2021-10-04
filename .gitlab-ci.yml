@@ -382,9 +382,9 @@ e2e-tests:
     - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
     - mkdir /usr/local/qovery
     - cd /usr/local/qovery
-    - git clone git@github.com:Qovery/qovery-e2e.git
-    - cd qovery-e2e
-    - CORE_URL='https://api-dev.qovery.com' go test -timeout 720s -v ./test...
+    - git clone git@gitlab.com:qovery/quality-streets.git
+    - cd quality-streets/e2e_tests
+    - CORE_URL='https://api-dev.qovery.com' go test -timeout 900s -v ./test...
   only:
     refs:
       - dev
