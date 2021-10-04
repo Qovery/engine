@@ -36,7 +36,7 @@ use std::env;
 use std::path::PathBuf;
 use tera::Context as TeraContext;
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KapsuleOptions {
     // Qovery
     pub qovery_api_url: String,
@@ -47,6 +47,7 @@ pub struct KapsuleOptions {
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
     pub agent_version_controller_token: String,
+    pub qovery_engine_location: EngineLocation,
     pub engine_version_controller_token: String,
 
     // Scaleway
@@ -68,6 +69,7 @@ impl KapsuleOptions {
         grafana_admin_user: String,
         grafana_admin_password: String,
         agent_version_controller_token: String,
+        qovery_engine_location: EngineLocation,
         engine_version_controller_token: String,
         scaleway_project_id: String,
         scaleway_access_key: String,
@@ -83,6 +85,7 @@ impl KapsuleOptions {
             grafana_admin_user,
             grafana_admin_password,
             agent_version_controller_token,
+            qovery_engine_location,
             engine_version_controller_token,
             scaleway_project_id,
             scaleway_access_key,
@@ -536,6 +539,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.cloud_provider.access_key.to_string(),
             self.cloud_provider.secret_key.to_string(),
             self.options.scaleway_project_id.to_string(),
+            self.options.qovery_engine_location.clone(),
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
             self.dns_provider.domain().to_string(),

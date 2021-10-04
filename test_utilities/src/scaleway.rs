@@ -15,6 +15,7 @@ use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
+use qovery_engine::cloud_provider::qovery::EngineLocation;
 use tracing::error;
 
 pub const SCW_QOVERY_ORGANIZATION_ID: &str = "zcf8e78e6";
@@ -102,6 +103,7 @@ pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptio
         secrets
             .QOVERY_AGENT_CONTROLLER_TOKEN
             .expect("QOVERY_AGENT_CONTROLLER_TOKEN is not set in secrets"),
+        EngineLocation::ClientSide,
         secrets
             .QOVERY_ENGINE_CONTROLLER_TOKEN
             .expect("QOVERY_ENGINE_CONTROLLER_TOKEN is not set in secrets"),
