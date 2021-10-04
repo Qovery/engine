@@ -8,7 +8,7 @@ metadata:
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
-    kind: StatefulSet
+    kind: Deployment
     name: qovery-engine
   minReplicas: {{ .Values.autoscaler.min_replicas }}
   maxReplicas: {{ .Values.autoscaler.max_replicas }}

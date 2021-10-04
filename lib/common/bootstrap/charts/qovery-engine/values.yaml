@@ -16,7 +16,7 @@ imagePullSecrets: []
 
 autoscaler:
   enabled: false
-  min_replicas: 2
+  min_replicas: 1
   max_replicas: 10
 
 labels:
