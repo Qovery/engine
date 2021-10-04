@@ -15,7 +15,7 @@ use crate::cloud_provider::service::{DatabaseOptions, StatefulService, Stateless
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
-use itertools::Itertools;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -39,7 +39,6 @@ pub struct Environment {
     pub applications: Vec<Application>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
-    pub external_services: Vec<ExternalService>,
     pub clone_from_environment_id: Option<String>,
 }
 
@@ -54,17 +53,6 @@ impl Environment {
         built_applications: &Vec<Box<dyn crate::cloud_provider::service::Application>>,
         cloud_provider: &dyn CloudProvider,
     ) -> crate::cloud_provider::environment::Environment {
-        let external_services = self
-            .external_services
-            .iter()
-            .map(|x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
-                Some(app) => x.to_stateless_service(context, app.image().clone(), cloud_provider),
-                _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
-            })
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
-            .collect::<Vec<_>>();
-
         let applications = self
             .applications
             .iter()
@@ -85,8 +73,7 @@ impl Environment {
             .collect::<Vec<_>>();
 
         // orders is important, first external services, then applications and then routers.
-        let mut stateless_services = external_services;
-        stateless_services.extend(applications);
+        let mut stateless_services = applications;
         // routers are deployed lastly to avoid to be blacklisted if we request TLS certificates
         // while an app does not start for some reason.
         stateless_services.extend(routers);
@@ -157,6 +144,7 @@ pub struct Application {
     pub branch: String,
     pub commit_id: String,
     pub dockerfile_path: Option<String>,
+    pub buildpack_language: Option<String>,
     #[serde(default = "default_root_path_value")]
     pub root_path: String,
     pub private_port: Option<u16>,
@@ -166,7 +154,9 @@ pub struct Application {
     pub total_instances: u16,
     pub start_timeout_in_seconds: u32,
     pub storage: Vec<Storage>,
-    pub environment_variables: Vec<EnvironmentVariable>,
+    // Key is a String, Value is a base64 encoded String
+    // Use BTreeMap to get Hash trait which is not available on HashMap
+    pub environment_vars: BTreeMap<String, String>,
 }
 
 impl Application {
@@ -176,13 +166,7 @@ impl Application {
         image: &Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
-        let environment_variables = self
-            .environment_variables
-            .iter()
-            .sorted_by_key(|x| &x.key)
-            .map(|ev| ev.to_environment_variable())
-            .collect::<Vec<_>>();
-
+        let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
@@ -247,13 +231,7 @@ impl Application {
         image: Image,
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatelessService>> {
-        let environment_variables = self
-            .environment_variables
-            .iter()
-            .sorted_by_key(|x| &x.key)
-            .map(|ev| ev.to_environment_variable())
-            .collect::<Vec<_>>();
-
+        let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
@@ -322,7 +300,7 @@ impl Application {
         // affect the build result even if user didn't change his code.
         self.root_path.hash(&mut hasher);
         self.dockerfile_path.hash(&mut hasher);
-        self.environment_variables.hash(&mut hasher);
+        self.environment_vars.hash(&mut hasher);
 
         let mut tag = format!("{}-{}", hasher.finish(), self.commit_id);
         tag.truncate(127);
@@ -350,16 +328,16 @@ impl Application {
                 commit_id: self.commit_id.clone(),
                 dockerfile_path: self.dockerfile_path.clone(),
                 root_path: self.root_path.clone(),
+                buildpack_language: self.buildpack_language.clone(),
             },
             image: self.to_image(),
             options: BuildOptions {
                 environment_variables: self
-                    .environment_variables
+                    .environment_vars
                     .iter()
-                    .sorted_by_key(|x| &x.key)
-                    .map(|ev| crate::build_platform::EnvironmentVariable {
-                        key: ev.key.clone(),
-                        value: ev.value.clone(),
+                    .map(|(k, v)| crate::build_platform::EnvironmentVariable {
+                        key: k.clone(),
+                        value: String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or(vec![])).into_owned(),
                     })
                     .collect::<Vec<_>>(),
             },
@@ -373,13 +351,16 @@ pub struct EnvironmentVariable {
     pub value: String,
 }
 
-impl EnvironmentVariable {
-    pub fn to_environment_variable(&self) -> crate::cloud_provider::models::EnvironmentVariable {
-        crate::cloud_provider::models::EnvironmentVariable {
-            key: self.key.clone(),
-            value: self.value.clone(),
-        }
-    }
+pub fn to_environment_variable(
+    env_vars: &BTreeMap<String, String>,
+) -> Vec<crate::cloud_provider::models::EnvironmentVariable> {
+    env_vars
+        .iter()
+        .map(|(k, v)| crate::cloud_provider::models::EnvironmentVariable {
+            key: k.clone(),
+            value: v.clone(),
+        })
+        .collect()
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -829,136 +810,6 @@ pub enum DatabaseKind {
     Redis,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct ExternalService {
-    pub action: Action,
-    pub id: String,
-    pub name: String,
-    pub total_cpus: String,
-    pub total_ram_in_mib: u32,
-    pub git_url: String,
-    pub git_credentials: Option<GitCredentials>,
-    pub branch: String,
-    pub commit_id: String,
-    pub on_create_dockerfile_path: String,
-    pub on_pause_dockerfile_path: String,
-    pub on_delete_dockerfile_path: String,
-    pub environment_variables: Vec<EnvironmentVariable>,
-}
-
-impl ExternalService {
-    pub fn to_application<'a>(
-        &self,
-        context: &Context,
-        image: &Image,
-        cloud_provider: &dyn CloudProvider,
-    ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
-        let environment_variables = self
-            .environment_variables
-            .iter()
-            .sorted_by_key(|x| &x.key)
-            .map(|ev| ev.to_environment_variable())
-            .collect::<Vec<_>>();
-
-        let listeners = cloud_provider.listeners().clone();
-
-        match cloud_provider.kind() {
-            CPKind::Aws => Some(Box::new(
-                crate::cloud_provider::aws::external_service::ExternalService::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    image.clone(),
-                    environment_variables,
-                    listeners,
-                ),
-            )),
-            _ => None,
-        }
-    }
-
-    pub fn to_stateless_service<'a>(
-        &self,
-        context: &Context,
-        image: Image,
-        cloud_provider: &dyn CloudProvider,
-    ) -> Option<Box<(dyn crate::cloud_provider::service::StatelessService)>> {
-        let environment_variables = self
-            .environment_variables
-            .iter()
-            .sorted_by_key(|x| &x.key)
-            .map(|ev| ev.to_environment_variable())
-            .collect::<Vec<_>>();
-
-        let listeners = cloud_provider.listeners().clone();
-
-        match cloud_provider.kind() {
-            CPKind::Aws => Some(Box::new(
-                crate::cloud_provider::aws::external_service::ExternalService::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    image,
-                    environment_variables,
-                    listeners,
-                ),
-            )),
-            _ => None,
-        }
-    }
-
-    pub fn to_image(&self) -> Image {
-        Image {
-            application_id: self.id.clone(),
-            name: self.name.clone(),
-            tag: self.commit_id.clone(),
-            commit_id: self.commit_id.clone(),
-            registry_name: None,
-            registry_secret: None,
-            registry_url: None,
-            registry_docker_json_config: None,
-        }
-    }
-
-    pub fn to_build(&self) -> Build {
-        Build {
-            git_repository: GitRepository {
-                url: self.git_url.clone(),
-                credentials: self.git_credentials.as_ref().map(|credentials| Credentials {
-                    login: credentials.login.clone(),
-                    password: credentials.access_token.clone(),
-                }),
-                commit_id: self.commit_id.clone(),
-                dockerfile_path: Some(match self.action {
-                    Action::Create => self.on_create_dockerfile_path.clone(),
-                    Action::Pause => self.on_pause_dockerfile_path.clone(),
-                    Action::Delete => self.on_delete_dockerfile_path.clone(),
-                    Action::Nothing => self.on_create_dockerfile_path.clone(),
-                }),
-                root_path: default_root_path_value(),
-            },
-            image: self.to_image(),
-            options: BuildOptions {
-                environment_variables: self
-                    .environment_variables
-                    .iter()
-                    .sorted_by_key(|x| &x.key)
-                    .map(|ev| crate::build_platform::EnvironmentVariable {
-                        key: ev.key.clone(),
-                        value: ev.value.clone(),
-                    })
-                    .collect::<Vec<_>>(),
-            },
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EnvironmentError {}
@@ -996,7 +847,6 @@ pub enum ProgressScope {
     Infrastructure { execution_id: String },
     Database { id: String },
     Application { id: String },
-    ExternalService { id: String },
     Router { id: String },
     Environment { id: String },
 }

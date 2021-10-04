@@ -3,21 +3,31 @@ replicaCount: 1
 image:
   repository: qoveryrd/pleco
   pullPolicy: IfNotPresent
-  plecoImageTag: "0.8.5"
+  plecoImageTag: "0.9.8"
+
+cloudProvider: ""
 
 environmentVariables:
   LOG_LEVEL: "info"
   PLECO_IDENTIFIER: "tbd"
+  # KUBECONFIG: ""
+  # AWS
   # AWS_ACCESS_KEY_ID: ""
   # AWS_SECRET_ACCESS_KEY: ""
-  # KUBECONFIG: ""
+  # Scaleway
+  #  SCW_ACCESS_KEY: ""
+  #  SCW_SECRET_KEY: ""
+  #  SCW_VOLUME_TIMEOUT: ""
+
 
 enabledFeatures:
   disableDryRun: false
   checkInterval: 120
   # Choose between in/out/off
   kubernetes: "in"
-  # AWS
+  s3: false
+
+awsFeatures:
   awsRegions: []
   # - eu-west-3
   # - us-east-2
@@ -28,12 +38,21 @@ enabledFeatures:
   elb: false
   ebs: false
   vpc: false
-  s3: false
   kms: false
   cloudwatchLogs: false
   iam: false
   sshKeys: false
   ecr: false
+
+sclawayFeatures:
+  scalewayZones: []
+  #  - fr-par-1
+  #  - nl-ams-1
+  cr: false
+  cluster: flase
+  lb: false
+  db: false
+  volume: false
 
 imagePullSecrets: []
 nameOverride: ""

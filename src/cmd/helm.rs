@@ -14,7 +14,9 @@ use core::time;
 use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::OperationResult;
+use semver::Version;
 use std::fs::File;
+use std::str::FromStr;
 use std::thread;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
@@ -64,6 +66,37 @@ where
     Ok(helm_history_rows
         .first()
         .map(|helm_history_row| helm_history_row.clone()))
+}
+
+pub fn helm_destroy_chart_if_breaking_changes_version_detected(
+    kubernetes_config: &Path,
+    environment_variables: &Vec<(&str, &str)>,
+    chart_info: &ChartInfo,
+) -> Result<(), SimpleError> {
+    // If there is a breaking version set for the current helm chart,
+    // then we compare this breaking version with the currently installed version if any.
+    // If current installed version is older than breaking change one, then we delete
+    // the chart before applying it.
+    if let Some(breaking_version) = &chart_info.last_breaking_version_requiring_restart {
+        let chart_namespace = get_chart_namespace(chart_info.namespace.clone());
+        if let Some(installed_version) = helm_get_chart_version(
+            kubernetes_config,
+            environment_variables.to_owned(),
+            Some(chart_namespace.as_str()),
+            chart_info.name.clone(),
+        ) {
+            if installed_version.le(breaking_version) {
+                return helm_exec_uninstall(
+                    kubernetes_config,
+                    chart_namespace.as_str(),
+                    chart_info.name.as_str(),
+                    environment_variables.to_owned(),
+                );
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub fn helm_exec_upgrade_with_chart_info<P>(
@@ -706,6 +739,29 @@ where
     Ok(false)
 }
 
+pub fn helm_get_chart_version<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+    chart_name: String,
+) -> Option<Version>
+where
+    P: AsRef<Path>,
+{
+    match helm_list(kubernetes_config, envs, namespace) {
+        Ok(deployed_charts) => {
+            for chart in deployed_charts {
+                if chart.name == chart_name {
+                    return chart.version;
+                }
+            }
+
+            None
+        }
+        Err(_) => None,
+    }
+}
+
 /// List deployed helm charts
 ///
 /// # Arguments
@@ -754,7 +810,13 @@ where
     match values {
         Ok(all_helms) => {
             for helm in all_helms {
-                helms_charts.push(HelmChart::new(helm.name, helm.namespace))
+                let raw_version = helm.chart.replace(format!("{}-", helm.name).as_str(), "");
+                let version = match Version::from_str(raw_version.as_str()) {
+                    Ok(v) => Some(v),
+                    Err(_) => None,
+                };
+
+                helms_charts.push(HelmChart::new(helm.name, helm.namespace, version))
             }
         }
         Err(e) => {

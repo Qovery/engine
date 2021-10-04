@@ -1,17 +1,6 @@
 deploymentStrategy:
   type: Recreate
 
-image:
-  tag: 7.0.3
-
-resources:
-  limits:
-    cpu: 100m
-    memory: 128Mi
-  requests:
-    cpu: 100m
-    memory: 128Mi
-
 persistence:
   type: pvc
   enabled: true
@@ -24,12 +13,6 @@ persistence:
 
 adminUser: "{{ grafana_admin_user }}"
 adminPassword: "{{ grafana_admin_password }}"
-
-# Use an existing secret for the admin user.
-admin:
-  existingSecret: ""
-  userKey: admin-user
-  passwordKey: admin-password
 
 {% if test_cluster %}
 notifiers: {}

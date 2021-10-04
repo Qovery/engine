@@ -5,11 +5,13 @@ use chrono::Utc;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::models::{
-    Action, Application, Context, Database, DatabaseKind, Environment, EnvironmentVariable, GitCredentials, Kind,
-    Route, Router, Storage, StorageType,
+    Action, Application, Context, Database, DatabaseKind, Environment, GitCredentials, Kind, Route, Router, Storage,
+    StorageType,
 };
 
 use crate::utilities::generate_id;
+use base64;
+use std::collections::BTreeMap;
 
 pub fn execution_id() -> String {
     Utc::now()
@@ -75,6 +77,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
+                buildpack_language: None,
                 root_path: "/".to_string(),
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
@@ -90,28 +93,13 @@ pub fn environment_3_apps_3_routers_3_databases(
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }],
-                environment_variables: vec![
-                    EnvironmentVariable {
-                        key: "PG_DBNAME".to_string(),
-                        value: database_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_HOST".to_string(),
-                        value: fqdn.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ],
+                environment_vars: btreemap! {
+                     "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
+                     "PG_HOST".to_string() => base64::encode(fqdn.clone()),
+                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                },
                 branch: "master".to_string(),
                 private_port: Some(1234),
                 total_cpus: "100m".to_string(),
@@ -126,6 +114,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
+                buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
@@ -141,28 +130,13 @@ pub fn environment_3_apps_3_routers_3_databases(
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }],
-                environment_variables: vec![
-                    EnvironmentVariable {
-                        key: "PG_DBNAME".to_string(),
-                        value: database_name_2.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_HOST".to_string(),
-                        value: fqdn_2.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_USERNAME".to_string(),
-                        value: database_username_2.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ],
+                environment_vars: btreemap! {
+                     "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
+                     "PG_HOST".to_string() => base64::encode(fqdn.clone()),
+                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                },
                 branch: "master".to_string(),
                 private_port: Some(1234),
                 total_cpus: "100m".to_string(),
@@ -177,6 +151,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string(),
                 dockerfile_path: Some(format!("Dockerfile-{}", version_mongo)),
+                buildpack_language: None,
                 action: Action::Create,
                 root_path: String::from("/"),
                 git_credentials: Some(GitCredentials {
@@ -192,36 +167,15 @@ pub fn environment_3_apps_3_routers_3_databases(
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }],
-                environment_variables: vec![
-                    EnvironmentVariable {
-                        key: "IS_DOCUMENTDB".to_string(),
-                        value: "false".to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string(),
-                        value: database_host_mongo.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string(),
-                        value: database_uri_mongo.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string(),
-                        value: database_port_mongo.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "MONGODB_DBNAME".to_string(),
-                        value: database_db_name_mongo.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string(),
-                        value: database_username_mongo.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string(),
-                        value: database_password_mongo.clone(),
-                    },
-                ],
+                environment_vars: btreemap! {
+                    "IS_DOCUMENTDB".to_string() => base64::encode("false"),
+                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host_mongo.clone()),
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port_mongo.to_string()),
+                    "MONGODB_DBNAME".to_string() => base64::encode(&database_db_name_mongo.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username_mongo.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password_mongo.clone()),
+                },
                 branch: "master".to_string(),
                 private_port: Some(1234),
                 total_cpus: "100m".to_string(),
@@ -322,7 +276,6 @@ pub fn environment_3_apps_3_routers_3_databases(
                 database_disk_type: database_disk_type.to_string(),
             },
         ],
-        external_services: vec![],
         clone_from_environment_id: None,
     }
 }
@@ -343,6 +296,7 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: Some(GitCredentials {
@@ -351,7 +305,7 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
                 expired_at: Utc::now(),
             }),
             storage: vec![],
-            environment_variables: vec![],
+            environment_vars: BTreeMap::default(),
             branch: "basic-app-deploy".to_string(),
             private_port: Some(80),
             total_cpus: "100m".to_string(),
@@ -373,7 +327,6 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
             }],
         }],
         databases: vec![],
-        external_services: vec![],
         clone_from_environment_id: None,
     }
 }
@@ -429,6 +382,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
+                buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
@@ -444,28 +398,13 @@ pub fn environnement_2_app_2_routers_1_psql(
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }],
-                environment_variables: vec![
-                    EnvironmentVariable {
-                        key: "PG_DBNAME".to_string(),
-                        value: database_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_HOST".to_string(),
-                        value: fqdn.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ],
+                environment_vars: btreemap! {
+                     "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
+                     "PG_HOST".to_string() => base64::encode(fqdn.clone()),
+                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                },
                 branch: "master".to_string(),
                 private_port: Some(1234),
                 total_cpus: "100m".to_string(),
@@ -480,6 +419,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
+                buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
                 git_credentials: Some(GitCredentials {
@@ -495,28 +435,13 @@ pub fn environnement_2_app_2_routers_1_psql(
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }],
-                environment_variables: vec![
-                    EnvironmentVariable {
-                        key: "PG_DBNAME".to_string(),
-                        value: database_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_HOST".to_string(),
-                        value: fqdn.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ],
+                environment_vars: btreemap! {
+                     "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
+                     "PG_HOST".to_string() => base64::encode(fqdn.clone()),
+                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                },
                 branch: "master".to_string(),
                 private_port: Some(1234),
                 total_cpus: "100m".to_string(),
@@ -552,8 +477,6 @@ pub fn environnement_2_app_2_routers_1_psql(
                 }],
             },
         ],
-
-        external_services: vec![],
         clone_from_environment_id: None,
     }
 }
@@ -594,6 +517,7 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: Some(GitCredentials {
@@ -602,10 +526,9 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
                 expired_at: Utc::now(),
             }),
             storage: vec![],
-            environment_variables: vec![EnvironmentVariable {
-                key: "ECHO_TEXT".to_string(),
-                value: "42".to_string(),
-            }],
+            environment_vars: btreemap! {
+                "ECHO_TEXT".to_string() => base64::encode("42"),
+            },
             branch: "echo-app".to_string(),
             private_port: Some(5678),
             total_cpus: "100m".to_string(),
@@ -627,7 +550,6 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
             }],
         }],
         databases: vec![],
-        external_services: vec![],
         clone_from_environment_id: None,
     }
 }
@@ -649,6 +571,7 @@ pub fn environment_only_http_server(context: &Context, organization_id: &str) ->
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: Some(GitCredentials {
@@ -657,7 +580,7 @@ pub fn environment_only_http_server(context: &Context, organization_id: &str) ->
                 expired_at: Utc::now(),
             }),
             storage: vec![],
-            environment_variables: vec![],
+            environment_vars: BTreeMap::default(),
             branch: "mini-http".to_string(),
             private_port: Some(3000),
             total_cpus: "100m".to_string(),
@@ -668,7 +591,6 @@ pub fn environment_only_http_server(context: &Context, organization_id: &str) ->
         }],
         routers: vec![],
         databases: vec![],
-        external_services: vec![],
         clone_from_environment_id: None,
     }
 }
@@ -690,6 +612,7 @@ pub fn environment_only_http_server_router(context: &Context, organization_id: &
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: Some(GitCredentials {
@@ -698,7 +621,7 @@ pub fn environment_only_http_server_router(context: &Context, organization_id: &
                 expired_at: Utc::now(),
             }),
             storage: vec![],
-            environment_variables: vec![],
+            environment_vars: BTreeMap::default(),
             branch: "mini-http".to_string(),
             private_port: Some(3000),
             total_cpus: "100m".to_string(),
@@ -720,7 +643,6 @@ pub fn environment_only_http_server_router(context: &Context, organization_id: &
             }],
         }],
         databases: vec![],
-        external_services: vec![],
         clone_from_environment_id: None,
     }
 }

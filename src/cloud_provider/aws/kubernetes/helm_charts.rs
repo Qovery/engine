@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::kubernetes::Options;
+use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
     get_chart_namespace, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart,
     HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
@@ -6,6 +6,7 @@ use crate::cloud_provider::helm::{
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
 use crate::error::{SimpleError, SimpleErrorKind};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
@@ -35,6 +36,7 @@ pub struct ChartsConfigPrerequisites {
     pub test_cluster: bool,
     pub aws_access_key_id: String,
     pub aws_secret_access_key: String,
+    pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
@@ -364,6 +366,7 @@ pub fn aws_helm_charts(
     let promtail = CommonChart {
         chart_info: ChartInfo {
             name: "promtail".to_string(),
+            last_breaking_version_requiring_restart: Some(Version::new(0, 24, 0)),
             path: chart_path("common/charts/promtail"),
             // because of priorityClassName, we need to add it to kube-system
             namespace: HelmChartNamespaces::KubeSystem,
@@ -795,7 +798,7 @@ datasources:
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
             name: "nginx-ingress".to_string(),
-            path: chart_path("common/charts/nginx-ingress"),
+            path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
             timeout: "300".to_string(),

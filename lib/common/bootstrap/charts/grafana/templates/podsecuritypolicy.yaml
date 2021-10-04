@@ -3,11 +3,10 @@ apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
   name: {{ template "grafana.fullname" . }}
-  namespace: {{ template "grafana.namespace" . }}
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
   annotations:
-    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'docker/default'
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'docker/default,runtime/default'
     seccomp.security.alpha.kubernetes.io/defaultProfileName:  'docker/default'
     {{- if .Values.rbac.pspUseAppArmor }}
     apparmor.security.beta.kubernetes.io/allowedProfileNames: 'runtime/default'
@@ -17,23 +16,13 @@ spec:
   privileged: false
   allowPrivilegeEscalation: false
   requiredDropCapabilities:
-    # Default set from Docker, without DAC_OVERRIDE or CHOWN
-    - FOWNER
-    - FSETID
-    - KILL
-    - SETGID
-    - SETUID
-    - SETPCAP
-    - NET_BIND_SERVICE
-    - NET_RAW
-    - SYS_CHROOT
-    - MKNOD
-    - AUDIT_WRITE
-    - SETFCAP
+    # Default set from Docker, with DAC_OVERRIDE and CHOWN
+      - ALL
   volumes:
     - 'configMap'
     - 'emptyDir'
     - 'projected'
+    - 'csi'
     - 'secret'
     - 'downwardAPI'
     - 'persistentVolumeClaim'
@@ -45,8 +34,16 @@ spec:
   seLinux:
     rule: 'RunAsAny'
   supplementalGroups:
-    rule: 'RunAsAny'
+    rule: 'MustRunAs'
+    ranges:
+      # Forbid adding the root group.
+      - min: 1
+        max: 65535
   fsGroup:
-    rule: 'RunAsAny'
+    rule: 'MustRunAs'
+    ranges:
+      # Forbid adding the root group.
+      - min: 1
+        max: 65535
   readOnlyRootFilesystem: false
 {{- end }}
