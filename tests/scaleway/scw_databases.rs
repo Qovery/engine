@@ -1146,7 +1146,7 @@ fn test_redis_configuration(
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, ea, SCW_TEST_ZONE) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -1154,7 +1154,7 @@ fn test_redis_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&context_for_delete, ea_delete, SCW_TEST_ZONE) {
+        match delete_environment(&context_for_delete, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),

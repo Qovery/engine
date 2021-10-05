@@ -12,8 +12,9 @@ use test_utilities::utilities::{
 
 use test_utilities::common::working_minimal_environment;
 use test_utilities::digitalocean::{
-    clean_environments, delete_environment, deploy_environment, pause_environment, DO_DATABASE_DISK_TYPE,
-    DO_DATABASE_INSTANCE_TYPE, DO_KUBE_TEST_CLUSTER_ID, DO_QOVERY_ORGANIZATION_ID, DO_TEST_REGION,
+    clean_environments, delete_environment, deploy_environment, pause_environment, DO_KUBE_TEST_CLUSTER_ID,
+    DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_QOVERY_ORGANIZATION_ID,
+    DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
 };
 
 /**
@@ -46,8 +47,8 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
-            DO_DATABASE_INSTANCE_TYPE,
-            DO_DATABASE_DISK_TYPE,
+            DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
         let mut environment_delete = environment.clone();
@@ -99,8 +100,8 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
-            DO_DATABASE_INSTANCE_TYPE,
-            DO_DATABASE_DISK_TYPE,
+            DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
         let mut environment_delete = environment.clone();
@@ -172,8 +173,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
             &context,
             DO_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
-            DO_DATABASE_INSTANCE_TYPE,
-            DO_DATABASE_DISK_TYPE,
+            DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
         let environment_check = environment.clone();
         let mut environment_never_up = environment.clone();
@@ -190,8 +191,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
             &context_for_deletion,
             DO_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
-            DO_DATABASE_INSTANCE_TYPE,
-            DO_DATABASE_DISK_TYPE,
+            DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
         environment.kind = Kind::Development;
@@ -276,16 +277,16 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             &context,
             DO_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
-            DO_DATABASE_INSTANCE_TYPE,
-            DO_DATABASE_DISK_TYPE,
+            DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
         //let env_to_check = environment.clone();
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
             DO_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
-            DO_DATABASE_INSTANCE_TYPE,
-            DO_DATABASE_DISK_TYPE,
+            DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
         environment.kind = Kind::Development;
@@ -355,6 +356,11 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 .as_str(),
         );
 
+        let is_managed_db = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
+
         let app_name = format!("postgresql-app-{}", generate_id());
         let database_host = format!(
             "postgresql-{}.{}",
@@ -382,8 +388,21 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: DO_DATABASE_INSTANCE_TYPE.to_string(),
-            database_disk_type: DO_DATABASE_DISK_TYPE.to_string(),
+            database_instance_type: if is_managed_db {
+                DO_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if is_managed_db {
+                DO_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -482,7 +501,7 @@ fn test_postgresql_configuration(
         let database_username = "superuser".to_string();
         let database_password = generate_id();
 
-        let _is_rds = match environment.kind {
+        let is_managed_db = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
         };
@@ -501,8 +520,21 @@ fn test_postgresql_configuration(
             total_cpus: "100m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "do-sbv-ssd-0".to_string(),
+            database_instance_type: if is_managed_db {
+                DO_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if is_managed_db {
+                DO_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -630,6 +662,11 @@ fn test_mongodb_configuration(
         let _enter = span.enter();
         let context_for_delete = context.clone_not_same_execution_id();
 
+        let is_managed_db = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
+
         let app_name = format!("mongodb-app-{}", generate_id());
         let database_host = format!(
             "mongodb-{}.{}",
@@ -659,8 +696,21 @@ fn test_mongodb_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "do-sbv-ssd-0".to_string(),
+            database_instance_type: if is_managed_db {
+                DO_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if is_managed_db {
+                DO_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
 
         environment.applications = environment
@@ -823,7 +873,7 @@ fn test_mysql_configuration(
         let database_username = "superuser".to_string();
         let database_password = generate_id();
 
-        let _is_rds = match environment.kind {
+        let is_managed_db = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
         };
@@ -842,8 +892,21 @@ fn test_mysql_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "do-sbv-ssd-0".to_string(),
+            database_instance_type: if is_managed_db {
+                DO_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if is_managed_db {
+                DO_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -966,7 +1029,7 @@ fn test_redis_configuration(
         let database_username = "superuser".to_string();
         let database_password = generate_id();
 
-        let is_elasticache = match environment.kind {
+        let is_managed_db = match environment.kind {
             Kind::Production => true,
             Kind::Development => false,
         };
@@ -985,8 +1048,21 @@ fn test_redis_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "do-sbv-ssd-0".to_string(),
+            database_instance_type: if is_managed_db {
+                DO_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if is_managed_db {
+                DO_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                DO_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -998,7 +1074,6 @@ fn test_redis_configuration(
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
-                    "IS_ELASTICCACHE".to_string() => base64::encode(is_elasticache.to_string()),
                     "REDIS_HOST".to_string()      => base64::encode(database_host.clone()),
                     "REDIS_PORT".to_string()      => base64::encode(database_port.clone().to_string()),
                     "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),
