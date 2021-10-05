@@ -257,6 +257,7 @@ impl ContainerRegistry for DOCR {
                         "While tyring to get all tags for image: {}, maybe this image not exist !",
                         &image.name
                     );
+                    
                     return false;
                 }
             },
@@ -265,6 +266,7 @@ impl ContainerRegistry for DOCR {
                     "While trying to communicate with DigitalOcean API to retrieve all tags for image {}",
                     &image.name
                 );
+                
                 return false;
             }
         };
@@ -287,7 +289,8 @@ impl ContainerRegistry for DOCR {
                             "Unable to deserialize tags from DigitalOcean API for image {}",
                             &image.tag
                         );
-                        return false;
+
+                        false
                     }
                 }
             }
@@ -296,7 +299,8 @@ impl ContainerRegistry for DOCR {
                     "while retrieving tags for image {} Unable to get output from DigitalOcean API",
                     &image.name
                 );
-                return false;
+                
+                false
             }
         }
     }
@@ -304,11 +308,6 @@ impl ContainerRegistry for DOCR {
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
         let registry_name = self.get_registry_name(image)?;
-
-        let _ = match self.create_repository(&image) {
-            Ok(_) => info!("DOCR {} has been created", registry_name.as_str()),
-            Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
-        };
 
         match cmd::utilities::exec(
             "doctl",
@@ -377,7 +376,7 @@ impl ContainerRegistry for DOCR {
             self.context.execution_id(),
         ));
 
-        self.push_image(registry_name, dest, &image)
+        self.push_image(registry_name, dest, image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {

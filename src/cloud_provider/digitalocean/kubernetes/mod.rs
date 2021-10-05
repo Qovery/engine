@@ -108,7 +108,7 @@ impl<'a> DOKS<'a> {
 
         DOKS {
             context,
-            id: id.to_string(),
+            id,
             name: name.to_string(),
             version: version.to_string(),
             region,

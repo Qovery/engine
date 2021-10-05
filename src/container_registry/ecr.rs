@@ -249,19 +249,19 @@ impl ECR {
                     ),
                 ))
             }
-            _ => Ok(self.get_repository(&image).unwrap()),
+            _ => Ok(self.get_repository(image).expect("cannot get repository")),
         }
     }
 
     fn get_or_create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
         // check if the repository already exists
-        let repository = self.get_repository(&image);
+        let repository = self.get_repository(image);
         if repository.is_some() {
             info!("ECR repository {} already exists", image.name.as_str());
             return Ok(repository.unwrap());
         }
 
-        self.create_repository(&image)
+        self.create_repository(image)
     }
 }
 
@@ -334,7 +334,7 @@ impl ContainerRegistry for ECR {
                     let decoded_token = base64::decode(b64_token).unwrap();
                     let token = std::str::from_utf8(decoded_token.as_slice()).unwrap();
 
-                    let s_token: Vec<&str> = token.split(":").collect::<Vec<_>>();
+                    let s_token: Vec<&str> = token.split(':').collect::<Vec<_>>();
 
                     (
                         s_token.first().unwrap().to_string(),

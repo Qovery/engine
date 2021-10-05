@@ -170,7 +170,7 @@ impl ScalewayCR {
             self.get_docker_envs(),
             image.name.clone(),
             image.tag.clone(),
-            image_url.clone(),
+            image_url,
         ) {
             Ok(_) => {}
             Err(e) => {
@@ -183,7 +183,7 @@ impl ScalewayCR {
         };
 
         let result = retry::retry(Fibonacci::from_millis(10000).take(10), || {
-            match self.does_image_exists(&image) {
+            match self.does_image_exists(image) {
                 true => OperationResult::Ok(&image),
                 false => {
                     warn!("image is not yet available on Scaleway Registry Namespace, retrying in a few seconds...");
@@ -280,7 +280,7 @@ impl ScalewayCR {
             return Ok(namespace);
         }
 
-        self.create_registry_namespace(&image)
+        self.create_registry_namespace(image)
     }
 
     fn get_docker_json_config_raw(&self) -> String {
