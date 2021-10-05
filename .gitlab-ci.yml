@@ -379,7 +379,7 @@ e2e-tests:
     - mkdir /usr/local/qovery
     - cd /usr/local/qovery
     - git clone https://gitlab.com/qovery/quality-streets.git
-    - cd quality-streets/e2e_tests
+    - cd quality-streets/e2e_tests/test
     - go test -timeout 900s -v
   only:
     refs:
