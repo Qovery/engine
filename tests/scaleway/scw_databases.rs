@@ -13,7 +13,7 @@ use test_utilities::utilities::{
 use test_utilities::common::working_minimal_environment;
 use test_utilities::scaleway::{
     clean_environments, delete_environment, deploy_environment, pause_environment, SCW_DATABASE_DISK_TYPE,
-    SCW_DATABASE_INSTANCE_TYPE, SCW_KUBE_TEST_CLUSTER_ID, SCW_QOVERY_ORGANIZATION_ID,
+    SCW_DATABASE_INSTANCE_TYPE, SCW_KUBE_TEST_CLUSTER_ID, SCW_QOVERY_ORGANIZATION_ID, SCW_TEST_ZONE,
 };
 
 /**
@@ -54,21 +54,21 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_deletion, env_action_delete) {
+        match delete_environment(&context_for_deletion, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
-            warn!("cannot clean environements, error: {:?}", e);
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
         }
 
         return test_name.to_string();
@@ -106,13 +106,13 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action.clone()) {
+        match deploy_environment(&context, env_action.clone(), SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match pause_environment(&context, env_action) {
+        match pause_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -130,15 +130,15 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
-        match delete_environment(&context_for_deletion, env_action_delete) {
+        match delete_environment(&context_for_deletion, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets.clone()) {
-            warn!("cannot clean environements, error: {:?}", e);
+        if let Err(e) = clean_environments(&context, vec![environment], secrets.clone(), SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
         }
 
         return test_name.to_string();
@@ -199,7 +199,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         let env_action_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
         let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -216,7 +216,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
         }
-        match deploy_environment(&context, env_action_fail_ok) {
+        match deploy_environment(&context, env_action_fail_ok, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(true),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -233,15 +233,15 @@ fn postgresql_failover_dev_environment_with_all_options() {
             (false, _) => assert!(false),
         }
 
-        match delete_environment(&context_for_deletion, env_action_for_deletion) {
+        match delete_environment(&context_for_deletion, env_action_for_deletion, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment, environment_delete], secrets) {
-            warn!("cannot clean environements, error: {:?}", e);
+        if let Err(e) = clean_environments(&context, vec![environment, environment_delete], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
         }
 
         return test_name.to_string();
@@ -291,7 +291,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -303,15 +303,20 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             assert_eq!(con, true);
         }*/
 
-        match delete_environment(&context_for_deletion, env_action_for_deletion) {
+        match delete_environment(&context_for_deletion, env_action_for_deletion, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment, environment_delete], secrets.clone()) {
-            warn!("cannot clean environements, error: {:?}", e);
+        if let Err(e) = clean_environments(
+            &context,
+            vec![environment, environment_delete],
+            secrets.clone(),
+            SCW_TEST_ZONE,
+        ) {
+            warn!("cannot clean environments, error: {:?}", e);
         }
 
         return test_name.to_string();
@@ -403,12 +408,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        match deploy_environment(&context_for_redeploy, env_action_redeploy) {
+        match deploy_environment(&context_for_redeploy, env_action_redeploy, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -426,15 +431,15 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             (false, _) => assert!(false),
         }
 
-        match delete_environment(&context_for_delete, env_action_delete) {
+        match delete_environment(&context_for_delete, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
-            warn!("cannot clean environements, error: {:?}", e);
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
         }
 
         return test_name.to_string();
@@ -519,7 +524,7 @@ fn test_postgresql_configuration(
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, ea) {
+        match deploy_environment(&context, ea, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -527,15 +532,15 @@ fn test_postgresql_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&context_for_delete, ea_delete) {
+        match delete_environment(&context_for_delete, ea_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
-            warn!("cannot clean environements, error: {:?}", e);
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
         }
 
         return test_name.to_string();
@@ -679,7 +684,7 @@ fn test_mongodb_configuration(
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -687,15 +692,15 @@ fn test_mongodb_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&context_for_delete, env_action_delete) {
+        match delete_environment(&context_for_delete, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
-            warn!("cannot clean environements, error: {:?}", e);
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
         }
 
         return test_name.to_string();
@@ -855,7 +860,7 @@ fn test_mysql_configuration(
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, ea) {
+        match deploy_environment(&context, ea, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -863,15 +868,15 @@ fn test_mysql_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&deletion_context, ea_delete) {
+        match delete_environment(&deletion_context, ea_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
-            warn!("cannot clean environements, error: {:?}", e);
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
         }
 
         return test_name.to_string();
@@ -997,7 +1002,7 @@ fn test_redis_configuration(
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, ea) {
+        match deploy_environment(&context, ea, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -1005,15 +1010,15 @@ fn test_redis_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&context_for_delete, ea_delete) {
+        match delete_environment(&context_for_delete, ea_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets) {
-            warn!("cannot clean environements, error: {:?}", e);
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
         }
 
         return test_name.to_string();
