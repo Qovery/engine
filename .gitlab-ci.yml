@@ -380,7 +380,7 @@ e2e-tests:
     - cd /usr/local/qovery
     - git clone https://gitlab.com/qovery/quality-streets.git
     - cd quality-streets/e2e_tests
-    - CORE_URL='https://api-dev.qovery.com' go test -timeout 900s -v ./test...
+    - go test -timeout 900s -v
   only:
     refs:
       - dev
