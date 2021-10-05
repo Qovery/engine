@@ -11,3 +11,4 @@ results.json
 lib/kubernetes_config_*
 tests/assets/eks-options.json
 tests/assets/do-options.json
+Dockerfile

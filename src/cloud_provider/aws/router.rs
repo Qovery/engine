@@ -176,7 +176,7 @@ impl Service for Router {
                 let external_ingress_hostname_default = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
                     kubernetes_config_file_path_string.as_str(),
                     "nginx-ingress",
-                    "app=nginx-ingress,component=controller",
+                    "nginx-ingress-ingress-nginx-controller",
                     kubernetes.cloud_provider().credentials_environment_variables(),
                 );
 
