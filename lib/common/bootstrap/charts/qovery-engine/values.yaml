@@ -15,15 +15,15 @@ metrics:
 imagePullSecrets: []
 
 autoscaler:
-  enabled: true
-  min_replicas: 2
+  enabled: false
+  min_replicas: 1
   max_replicas: 10
 
 labels:
   app: qovery-engine
 
 environmentVariables:
-  RUST_LOG: DEBUG,rusoto_core::request=info,trust_dns_resolver=info,trust_dns_proto=info,reqwest::connect=info,hyper=info
+  RUST_LOG: DEBUG,rusoto_core::request=info,trust_dns_resolver=info,trust_dns_proto=info,reqwest::connect=info,hyper=info,rustls=info
   #LIB_ROOT_DIR: ""
   #DOCKER_HOST: ""
   #QOVERY_NATS_URL: ""

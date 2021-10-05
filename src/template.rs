@@ -43,7 +43,7 @@ where
                 tera::ErrorKind::CallTest(x) => format!("call test: {}", x),
                 tera::ErrorKind::__Nonexhaustive => "non exhaustive error".to_string(),
                 tera::ErrorKind::Io(x) => format!("io error {:?}", x),
-                tera::ErrorKind::Utf8Conversion { .. } => format!("utf-8 conversion issue"),
+                tera::ErrorKind::Utf8Conversion { .. } => "utf-8 conversion issue".to_string(),
             };
 
             error!("{}", context.clone().into_json());
@@ -97,11 +97,11 @@ where
         let j2_path = path_str.replace(root_dir_str, "");
 
         let j2_file_name = file.file_name().to_str().unwrap();
-        let j2_path_split = j2_path.split("/").collect::<Vec<_>>();
+        let j2_path_split = j2_path.split('/').collect::<Vec<_>>();
         let j2_root_path: String = j2_path_split.as_slice()[..j2_path_split.len() - 1].join("/");
         let file_name = j2_file_name.replace(".j2", "");
 
-        let content = tera.render(&j2_path[1..], &context)?;
+        let content = tera.render(&j2_path[1..], context)?;
 
         results.push(RenderedTemplate::new(j2_root_path, file_name, content));
     }
@@ -113,9 +113,9 @@ pub fn write_rendered_templates(rendered_templates: &[RenderedTemplate], into: &
     for rt in rendered_templates {
         let dest = format!("{}/{}", into.to_str().unwrap(), rt.path_and_file_name());
 
-        if dest.contains("/") {
+        if dest.contains('/') {
             // create the parent directories
-            let s_dest = dest.split("/").collect::<Vec<_>>();
+            let s_dest = dest.split('/').collect::<Vec<_>>();
             let dir: String = s_dest.as_slice()[..s_dest.len() - 1].join("/");
             let _ = fs::create_dir_all(dir);
         }

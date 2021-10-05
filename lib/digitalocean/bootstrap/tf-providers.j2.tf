@@ -37,6 +37,27 @@ terraform {
       source = "hashicorp/random"
       version = "~> 2.3"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.3"
+    }
+    vault = {
+      source = "hashicorp/vault"
+      version = "~> 2.18.0"
+    }
   }
   required_version = ">= 0.14"
+}
+
+provider "vault" {
+  {% if vault_auth_method == "app_role" and not test_cluster %}
+  auth_login {
+    path = "auth/approle/login"
+
+    parameters = {
+      role_id   = "{{ vault_role_id }}"
+      secret_id = "{{ vault_secret_id }}"
+    }
+  }
+  {% endif %}
 }

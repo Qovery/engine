@@ -34,7 +34,7 @@ fn create_upgrade_and_destroy_doks_cluster(
         let nodes = test_utilities::digitalocean::do_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let cluster_id = format!("qovery-test-{}", generate_cluster_id(region.as_str()));
+        let cluster_id = generate_cluster_id(region.as_str());
 
         let kubernetes = DOKS::new(
             context,
@@ -101,7 +101,7 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
         let nodes = test_utilities::digitalocean::do_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let cluster_id = format!("qovery-test-{}", generate_cluster_id(region.as_str()));
+        let cluster_id = generate_cluster_id(region.as_str());
 
         let kubernetes = DOKS::new(
             context,
