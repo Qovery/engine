@@ -8,7 +8,7 @@ metadata:
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
-    kind: StatefulSet
+    kind: Deployment
     name: qovery-engine
   minReplicas: {{ .Values.autoscaler.min_replicas }}
   maxReplicas: {{ .Values.autoscaler.max_replicas }}
@@ -19,5 +19,5 @@ spec:
           name: taskmanager_nb_running_tasks
         target:
           type: AverageValue
-          averageValue: 1m
+          averageValue: 0.5
   {{- end }}
