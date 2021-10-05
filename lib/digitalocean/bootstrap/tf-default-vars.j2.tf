@@ -72,7 +72,7 @@ variable "kubernetes_cluster_id" {
 
 variable "kubernetes_cluster_name" {
   description = "Kubernetes cluster name"
-  default     = "{{ doks_master_name }}"
+  default     = "qovery-{{ doks_cluster_id }}"
   type        = string
 }
 
@@ -183,3 +183,12 @@ variable "forced_upgrade" {
   default = {% if force_upgrade %}timestamp(){% else %}"false"{% endif %}
   type = string
 }
+
+{%- if resource_expiration_in_seconds is defined %}
+# Pleco ttl
+variable "resource_expiration_in_seconds" {
+description = "Resource expiration in seconds"
+default = {{ resource_expiration_in_seconds }}
+type = number
+}
+{% endif %}

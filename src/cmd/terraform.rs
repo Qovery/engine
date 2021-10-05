@@ -61,16 +61,15 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     match terraform_exec(root_dir, vec!["validate"]) {
         Err(e) => {
             error!("error while trying to Terraform validate the rendered templates");
-            return Err(e);
+            Err(e)
         }
         Ok(_) => Ok(()),
     }
 }
 
 pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<(), SimpleError> {
-    match terraform_init_validate(root_dir) {
-        Err(e) => return Err(e),
-        Ok(_) => {}
+    if let Err(e) = terraform_init_validate(root_dir) {
+        return Err(e);
     }
 
     if dry_run {
@@ -100,9 +99,8 @@ pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Resu
 
 pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy: bool) -> Result<(), SimpleError> {
     // terraform init
-    match terraform_init_validate(root_dir) {
-        Err(e) => return Err(e),
-        Ok(_) => {}
+    if let Err(e) = terraform_init_validate(root_dir) {
+        return Err(e);
     }
 
     // better to apply before destroy to ensure terraform destroy will delete on all resources
@@ -160,9 +158,8 @@ fn terraform_plan_apply(root_dir: &str) -> Result<(), SimpleError> {
 
 pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>, SimpleError> {
     // terraform init and validate
-    match terraform_init_validate(root_dir) {
-        Err(e) => return Err(e),
-        Ok(_) => {}
+    if let Err(e) = terraform_init_validate(root_dir) {
+        return Err(e);
     }
 
     // get terraform state list output

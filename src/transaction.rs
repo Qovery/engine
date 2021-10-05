@@ -300,8 +300,8 @@ impl<'a> Transaction<'a> {
         match environment_action {
             EnvironmentAction::EnvironmentWithFailover(target_environment, failover_environment) => {
                 // let's reverse changes and rollback on the provided failover version
-                let target_qe_environment = qe_environment(&target_environment);
-                let failover_qe_environment = qe_environment(&failover_environment);
+                let target_qe_environment = qe_environment(target_environment);
+                let failover_qe_environment = qe_environment(failover_environment);
 
                 let action = match failover_environment.action {
                     Action::Create => {
@@ -328,7 +328,7 @@ impl<'a> Transaction<'a> {
             }
             EnvironmentAction::Environment(te) => {
                 // revert changes but there is no failover environment
-                let target_qe_environment = qe_environment(&te);
+                let target_qe_environment = qe_environment(te);
 
                 let action = match te.action {
                     Action::Create => kubernetes.deploy_environment_error(&target_qe_environment),
