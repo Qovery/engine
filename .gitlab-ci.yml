@@ -371,18 +371,14 @@ e2e-tests:
   dependencies:
     - upgrade-engine-dev
   before_script:
-    -  apk add bash
+    - apk add bash
+    - echo -e "machine gitlab.com\nlogin gitlab-ci-token\npassword ${CI_JOB_TOKEN}" > ~/.netrc
     - ./helper.sh await_docker
   script:
-    - apk add --no-cache openssh git build-base
-    - eval $(ssh-agent -s)
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+    - apk add --no-cache git build-base
     - mkdir /usr/local/qovery
     - cd /usr/local/qovery
-    - git clone git@gitlab.com:qovery/quality-streets.git
+    - git clone https://gitlab.com/qovery/quality-streets.git
     - cd quality-streets/e2e_tests
     - CORE_URL='https://api-dev.qovery.com' go test -timeout 900s -v ./test...
   only:
