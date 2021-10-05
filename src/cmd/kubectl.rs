@@ -195,37 +195,24 @@ where
 pub fn kubectl_exec_get_external_ingress_hostname<P>(
     kubernetes_config: P,
     namespace: &str,
-    selector: &str,
+    name: &str,
     envs: Vec<(&str, &str)>,
 ) -> Result<Option<String>, SimpleError>
 where
     P: AsRef<Path>,
 {
-    let result = kubectl_exec::<P, KubernetesList<KubernetesService>>(
-        vec![
-            "get", "svc", "-o", "json", "-n", namespace, "-l", // selector
-            selector,
-        ],
+    let result = kubectl_exec::<P, KubernetesService>(
+        vec!["get", "-n", namespace, "svc", name, "-o", "json"],
         kubernetes_config,
         envs,
     )?;
 
-    if result.items.is_empty() || result.items.first().unwrap().status.load_balancer.ingress.is_empty() {
+    if result.status.load_balancer.ingress.is_empty() {
         return Ok(None);
     }
 
     Ok(Some(
-        result
-            .items
-            .first()
-            .unwrap()
-            .status
-            .load_balancer
-            .ingress
-            .first()
-            .unwrap()
-            .hostname
-            .clone(),
+        result.status.load_balancer.ingress.first().unwrap().hostname.clone(),
     ))
 }
 
