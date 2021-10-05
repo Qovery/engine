@@ -6,7 +6,8 @@ use retry::{Error, OperationResult};
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    CreateBucketRequest, GetObjectRequest, HeadBucketRequest, PutObjectRequest, S3Client, StreamingBody, S3,
+    CreateBucketConfiguration, CreateBucketRequest, GetObjectRequest, HeadBucketRequest, PutObjectRequest, S3Client,
+    StreamingBody, S3,
 };
 use tokio::io;
 
@@ -239,6 +240,9 @@ impl ObjectStorage for Spaces {
 
         if let Err(e) = block_on(s3_client.create_bucket(CreateBucketRequest {
             bucket: bucket_name.to_string(),
+            create_bucket_configuration: Some(CreateBucketConfiguration {
+                location_constraint: Some(self.region.to_string()),
+            }),
             ..Default::default()
         })) {
             let message = format!(
