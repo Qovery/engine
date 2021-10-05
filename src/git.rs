@@ -74,8 +74,8 @@ pub fn checkout_submodules(repo: &Repository) -> Result<(), Error> {
             for mut submodule in submodules {
                 info!("getting submodule {:?} from {:?}", submodule.name(), submodule.url());
 
-                if let Err(e) = submodule.update(true, None) { 
-                    return Err(e)
+                if let Err(e) = submodule.update(true, None) {
+                    return Err(e);
                 }
             }
         }
