@@ -257,7 +257,7 @@ impl ContainerRegistry for DOCR {
                         "While tyring to get all tags for image: {}, maybe this image not exist !",
                         &image.name
                     );
-                    
+
                     return false;
                 }
             },
@@ -266,7 +266,7 @@ impl ContainerRegistry for DOCR {
                     "While trying to communicate with DigitalOcean API to retrieve all tags for image {}",
                     &image.name
                 );
-                
+
                 return false;
             }
         };
@@ -299,7 +299,7 @@ impl ContainerRegistry for DOCR {
                     "while retrieving tags for image {} Unable to get output from DigitalOcean API",
                     &image.name
                 );
-                
+
                 false
             }
         }
