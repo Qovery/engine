@@ -79,7 +79,7 @@ pub struct Options {
     pub elasticsearch_zone_a_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_b_subnet_blocks: Vec<String>,
     pub elasticsearch_zone_c_subnet_blocks: Vec<String>,
-    pub vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
+    pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
     pub eks_access_cidr_blocks: Vec<String>,
@@ -208,33 +208,29 @@ impl<'a> EKS<'a> {
         let mut eks_zone_b_subnet_blocks_private = format_ips(&self.options.eks_zone_b_subnet_blocks);
         let mut eks_zone_c_subnet_blocks_private = format_ips(&self.options.eks_zone_c_subnet_blocks);
 
-        if self.options.vpc_qovery_network_mode.is_some() {
-            match self.options.vpc_qovery_network_mode.clone().unwrap() {
-                VpcQoveryNetworkMode::WithNatGateways => {
-                    let max_subnet_zone_a = self.check_odd_subnets("a", &eks_zone_a_subnet_blocks_private)?;
-                    let max_subnet_zone_b = self.check_odd_subnets("b", &eks_zone_b_subnet_blocks_private)?;
-                    let max_subnet_zone_c = self.check_odd_subnets("c", &eks_zone_c_subnet_blocks_private)?;
+        match self.options.vpc_qovery_network_mode {
+            VpcQoveryNetworkMode::WithNatGateways => {
+                let max_subnet_zone_a = self.check_odd_subnets("a", &eks_zone_a_subnet_blocks_private)?;
+                let max_subnet_zone_b = self.check_odd_subnets("b", &eks_zone_b_subnet_blocks_private)?;
+                let max_subnet_zone_c = self.check_odd_subnets("c", &eks_zone_c_subnet_blocks_private)?;
 
-                    let eks_zone_a_subnet_blocks_public: Vec<String> =
-                        eks_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
-                    let eks_zone_b_subnet_blocks_public: Vec<String> =
-                        eks_zone_b_subnet_blocks_private.drain(max_subnet_zone_b..).collect();
-                    let eks_zone_c_subnet_blocks_public: Vec<String> =
-                        eks_zone_c_subnet_blocks_private.drain(max_subnet_zone_c..).collect();
+                let eks_zone_a_subnet_blocks_public: Vec<String> =
+                    eks_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
+                let eks_zone_b_subnet_blocks_public: Vec<String> =
+                    eks_zone_b_subnet_blocks_private.drain(max_subnet_zone_b..).collect();
+                let eks_zone_c_subnet_blocks_public: Vec<String> =
+                    eks_zone_c_subnet_blocks_private.drain(max_subnet_zone_c..).collect();
 
-                    context.insert("eks_zone_a_subnet_blocks_public", &eks_zone_a_subnet_blocks_public);
-                    context.insert("eks_zone_b_subnet_blocks_public", &eks_zone_b_subnet_blocks_public);
-                    context.insert("eks_zone_c_subnet_blocks_public", &eks_zone_c_subnet_blocks_public);
-                }
-                VpcQoveryNetworkMode::WithoutNatGateways => {}
-            };
-            context.insert(
-                "vpc_qovery_network_mode",
-                &self.options.vpc_qovery_network_mode.clone().unwrap().to_string(),
-            );
-        } else {
-            context.insert("vpc_qovery_network_mode", &"WithoutNatGateways".to_string());
-        }
+                context.insert("eks_zone_a_subnet_blocks_public", &eks_zone_a_subnet_blocks_public);
+                context.insert("eks_zone_b_subnet_blocks_public", &eks_zone_b_subnet_blocks_public);
+                context.insert("eks_zone_c_subnet_blocks_public", &eks_zone_c_subnet_blocks_public);
+            }
+            VpcQoveryNetworkMode::WithoutNatGateways => {}
+        };
+        context.insert(
+            "vpc_qovery_network_mode",
+            &self.options.vpc_qovery_network_mode.to_string(),
+        );
 
         let rds_zone_a_subnet_blocks = format_ips(&self.options.rds_zone_a_subnet_blocks);
         let rds_zone_b_subnet_blocks = format_ips(&self.options.rds_zone_b_subnet_blocks);
@@ -913,10 +909,7 @@ impl<'a> Kubernetes for EKS<'a> {
             test_cluster: self.context.is_test_cluster(),
             aws_access_key_id: self.cloud_provider.access_key_id.to_string(),
             aws_secret_access_key: self.cloud_provider.secret_access_key.to_string(),
-            vpc_qovery_network_mode: match self.options.vpc_qovery_network_mode.clone() {
-                None => VpcQoveryNetworkMode::WithoutNatGateways,
-                Some(x) => x,
-            },
+            vpc_qovery_network_mode: self.options.vpc_qovery_network_mode.clone(),
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
             ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
             managed_dns_name: self.dns_provider.domain().to_string(),
