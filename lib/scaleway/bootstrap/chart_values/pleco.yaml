@@ -6,8 +6,8 @@ enabledFeatures:
   kubernetes: "in"
   s3: true
 
-sclawayFeatures:
-  scalewayZones:
+scwFeatures:
+  scwZones:
     - fr-par-1
     - fr-par-2
     - nl-ams-1
