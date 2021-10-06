@@ -17,3 +17,4 @@ sclawayFeatures:
   lb: true
   db: true
   volume: true
+  sg: true
