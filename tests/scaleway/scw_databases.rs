@@ -629,7 +629,7 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
 }
 
 // Postgres production environment
-#[cfg(feature = "test-scw-self-hosted")]
+#[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
 fn postgresql_v10_deploy_a_working_prod_environment() {
@@ -648,7 +648,7 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
     test_postgresql_configuration(context, environment, secrets, "10", function_name!());
 }
 
-#[cfg(feature = "test-scw-self-hosted")]
+#[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
 fn postgresql_v11_deploy_a_working_prod_environment() {
@@ -667,7 +667,7 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
     test_postgresql_configuration(context, environment, secrets, "11", function_name!());
 }
 
-#[cfg(feature = "test-scw-self-hosted")]
+#[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
 fn postgresql_v12_deploy_a_working_prod_environment() {
