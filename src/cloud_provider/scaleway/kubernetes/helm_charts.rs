@@ -3,7 +3,7 @@ use crate::cloud_provider::helm::{
     HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::cloud_provider::scaleway::application::Zone;
+use crate::cloud_provider::scaleway::application::{Region, Zone};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
 use semver::Version;
@@ -21,11 +21,13 @@ pub struct ChartsConfigPrerequisites {
     pub organization_id: String,
     pub cluster_id: String,
     pub zone: Zone,
+    pub region: Region,
     pub cluster_name: String,
     pub cloud_provider: String,
     pub test_cluster: bool,
     pub scw_access_key: String,
     pub scw_secret_key: String,
+    pub scw_project_id: String,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
@@ -51,6 +53,7 @@ impl ChartsConfigPrerequisites {
         test_cluster: bool,
         scw_access_key: String,
         scw_secret_key: String,
+        scw_project_id: String,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
         managed_dns_name: String,
@@ -68,11 +71,13 @@ impl ChartsConfigPrerequisites {
             organization_id,
             cluster_id,
             zone,
+            region: zone.region(),
             cluster_name,
             cloud_provider,
             test_cluster,
             scw_access_key,
             scw_secret_key,
+            scw_project_id,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
             managed_dns_name,

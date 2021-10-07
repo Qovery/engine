@@ -99,8 +99,8 @@ impl Service for Redis {
         format!("{}{}", prefix, new_name)
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {
@@ -385,7 +385,7 @@ impl Listen for Redis {
     }
 }
 
-fn get_redis_version(requested_version: &str, is_managed_service: bool) -> Result<String, StringError> {
+fn get_redis_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
     if is_managed_service {
         get_managed_redis_version(requested_version)
     } else {
@@ -393,7 +393,7 @@ fn get_redis_version(requested_version: &str, is_managed_service: bool) -> Resul
     }
 }
 
-fn get_managed_redis_version(requested_version: &str) -> Result<String, StringError> {
+fn get_managed_redis_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_redis_versions = HashMap::with_capacity(2);
     // https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/supported-engine-versions.html
 
@@ -412,18 +412,18 @@ mod tests {
     #[test]
     fn check_redis_version() {
         // managed version
-        assert_eq!(get_redis_version("6", true).unwrap(), "6.x");
-        assert_eq!(get_redis_version("5", true).unwrap(), "5.0.6");
+        assert_eq!(get_redis_version("6".to_string(), true).unwrap(), "6.x");
+        assert_eq!(get_redis_version("5".to_string(), true).unwrap(), "5.0.6");
         assert_eq!(
-            get_redis_version("1.0", true).unwrap_err().as_str(),
+            get_redis_version("1.0".to_string(), true).unwrap_err().as_str(),
             "Elasticache 1.0 version is not supported"
         );
 
         // self-hosted version
-        assert_eq!(get_redis_version("6", false).unwrap(), "6.0.9");
-        assert_eq!(get_redis_version("6.0", false).unwrap(), "6.0.9");
+        assert_eq!(get_redis_version("6".to_string(), false).unwrap(), "6.0.9");
+        assert_eq!(get_redis_version("6.0".to_string(), false).unwrap(), "6.0.9");
         assert_eq!(
-            get_redis_version("1.0", false).unwrap_err().as_str(),
+            get_redis_version("1.0".to_string(), false).unwrap_err().as_str(),
             "Redis 1.0 version is not supported"
         );
     }
@@ -459,6 +459,9 @@ mod tests {
                 port: 5432,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
             vec![],
         );

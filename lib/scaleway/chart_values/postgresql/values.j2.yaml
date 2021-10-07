@@ -141,7 +141,7 @@ postgresqlPassword: {{ database_password }}
 ## Create a database
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-on-first-run
 ##
-postgresqlDatabase: {{ database_db_name }}
+postgresqlDatabase: {{ sanitized_name }}
 
 ## PostgreSQL data dir
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md
@@ -323,7 +323,7 @@ persistence:
   ##
   subPath: ""
 
-  storageClass: {{ database_disk_type }}
+  storageClass: scw-sbv-ssd-0
   accessModes:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi

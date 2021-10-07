@@ -43,7 +43,7 @@ pub trait Service {
         )
         .unwrap()
     }
-    fn version(&self) -> &str;
+    fn version(&self) -> String;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
     fn start_timeout(&self) -> Timeout<u32>;
@@ -232,6 +232,9 @@ pub struct DatabaseOptions {
     pub port: u16,
     pub disk_size_in_gib: u32,
     pub database_disk_type: String,
+    pub activate_high_availability: bool,
+    pub activate_backups: bool,
+    pub publicly_accessible: bool,
 }
 
 #[derive(Eq, PartialEq)]
@@ -300,6 +303,7 @@ pub fn default_tera_context(
     context.insert("organization_id", environment.organization_id.as_str());
     context.insert("environment_id", environment.id.as_str());
     context.insert("region", kubernetes.region());
+    context.insert("zone", kubernetes.zone());
     context.insert("name", service.name());
     context.insert("sanitized_name", &service.sanitized_name());
     context.insert("namespace", environment.namespace());
@@ -313,7 +317,7 @@ pub fn default_tera_context(
         context.insert("private_port", &service.private_port().unwrap());
     }
 
-    context.insert("version", service.version());
+    context.insert("version", &service.version());
 
     context
 }

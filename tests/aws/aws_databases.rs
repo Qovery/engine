@@ -351,6 +351,9 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             disk_size_in_gib: 10,
             database_instance_type: "db.t2.micro".to_string(),
             database_disk_type: "gp2".to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -461,6 +464,9 @@ fn test_postgresql_configuration(
             disk_size_in_gib: 10,
             database_instance_type: "db.t2.micro".to_string(),
             database_disk_type: "gp2".to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -670,6 +676,9 @@ fn test_mongodb_configuration(
             disk_size_in_gib: 10,
             database_instance_type: "db.t3.medium".to_string(),
             database_disk_type: "gp2".to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -878,6 +887,9 @@ fn test_mysql_configuration(
             disk_size_in_gib: 10,
             database_instance_type: "db.t2.micro".to_string(),
             database_disk_type: "gp2".to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -1047,6 +1059,9 @@ fn test_redis_configuration(
             disk_size_in_gib: 10,
             database_instance_type: "cache.t3.micro".to_string(),
             database_disk_type: "gp2".to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications

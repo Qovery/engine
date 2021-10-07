@@ -96,8 +96,8 @@ impl Service for MySQL {
         rds_name_sanitizer(max_size, prefix, self.name())
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {
@@ -386,7 +386,7 @@ impl Listen for MySQL {
     }
 }
 
-fn get_mysql_version(requested_version: &str, is_managed_service: bool) -> Result<String, StringError> {
+fn get_mysql_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
     if is_managed_service {
         get_managed_mysql_version(requested_version)
     } else {
@@ -394,7 +394,7 @@ fn get_mysql_version(requested_version: &str, is_managed_service: bool) -> Resul
     }
 }
 
-fn get_managed_mysql_version(requested_version: &str) -> Result<String, StringError> {
+fn get_managed_mysql_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_mysql_versions = HashMap::new();
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
 
@@ -425,19 +425,19 @@ mod tests_mysql {
     #[test]
     fn check_mysql_version() {
         // managed version
-        assert_eq!(get_mysql_version("8", true).unwrap(), "8.0.21");
-        assert_eq!(get_mysql_version("8.0", true).unwrap(), "8.0.21");
-        assert_eq!(get_mysql_version("8.0.16", true).unwrap(), "8.0.16");
+        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.21");
+        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.21");
+        assert_eq!(get_mysql_version("8.0.16".to_string(), true).unwrap(), "8.0.16");
         assert_eq!(
-            get_mysql_version("8.0.18", true).unwrap_err().as_str(),
+            get_mysql_version("8.0.18".to_string(), true).unwrap_err().as_str(),
             "RDS MySQL 8.0.18 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_mysql_version("5", false).unwrap(), "5.7.33");
-        assert_eq!(get_mysql_version("5.7", false).unwrap(), "5.7.33");
-        assert_eq!(get_mysql_version("5.7.31", false).unwrap(), "5.7.31");
+        assert_eq!(get_mysql_version("5".to_string(), false).unwrap(), "5.7.33");
+        assert_eq!(get_mysql_version("5.7".to_string(), false).unwrap(), "5.7.33");
+        assert_eq!(get_mysql_version("5.7.31".to_string(), false).unwrap(), "5.7.31");
         assert_eq!(
-            get_mysql_version("1.0", false).unwrap_err().as_str(),
+            get_mysql_version("1.0".to_string(), false).unwrap_err().as_str(),
             "MySQL 1.0 version is not supported"
         );
     }
@@ -473,6 +473,9 @@ mod tests_mysql {
                 port: 3306,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
             vec![],
         );

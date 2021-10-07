@@ -90,7 +90,7 @@ root:
   ## MySQL admin password
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#setting-the-root-password-on-first-run
   ##
-  password: {{ database_password }}
+  password: "{{ database_password }}"
   ## Option to force users to specify a password. That is required for 'helm upgrade' to work properly.
   ## If it is not force, a random password will be generated.
   ##
@@ -107,7 +107,7 @@ db:
   ## Note that this user should be different from the MySQL replication user (replication.user)
   ##
   user: {{ database_login }}
-  password: {{ database_password }}
+  password: "{{ database_password }}"
   ## Database to create
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#creating-a-database-on-first-run
   ##
@@ -311,7 +311,7 @@ master:
     ##   GKE, AWS & OpenStack)
     ##
     # storageClass: "-"
-    storageClass: {{ database_disk_type }}
+    storageClass: scw-sbv-ssd-0
     ## PVC annotations
     ##
     annotations:

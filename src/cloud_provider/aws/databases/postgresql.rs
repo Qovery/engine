@@ -96,8 +96,8 @@ impl Service for PostgreSQL {
         rds_name_sanitizer(max_size, prefix, self.name())
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {
@@ -375,7 +375,7 @@ impl Listen for PostgreSQL {
     }
 }
 
-fn get_postgres_version(requested_version: &str, is_managed_service: bool) -> Result<String, StringError> {
+fn get_postgres_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
     if is_managed_service {
         get_managed_postgres_version(requested_version)
     } else {
@@ -383,7 +383,7 @@ fn get_postgres_version(requested_version: &str, is_managed_service: bool) -> Re
     }
 }
 
-fn get_managed_postgres_version(requested_version: &str) -> Result<String, StringError> {
+fn get_managed_postgres_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_postgres_versions = HashMap::new();
 
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
@@ -415,22 +415,22 @@ mod tests_postgres {
     #[test]
     fn check_postgres_version() {
         // managed version
-        assert_eq!(get_postgres_version("12", true).unwrap(), "12.5");
-        assert_eq!(get_postgres_version("12.3", true).unwrap(), "12.3");
+        assert_eq!(get_postgres_version("12".to_string(), true).unwrap(), "12.5");
+        assert_eq!(get_postgres_version("12.3".to_string(), true).unwrap(), "12.3");
         assert_eq!(
-            get_postgres_version("12.3.0", true).unwrap_err().as_str(),
+            get_postgres_version("12.3.0".to_string(), true).unwrap_err().as_str(),
             "Postgresql 12.3.0 version is not supported"
         );
         assert_eq!(
-            get_postgres_version("11.3", true).unwrap_err().as_str(),
+            get_postgres_version("11.3".to_string(), true).unwrap_err().as_str(),
             "Postgresql 11.3 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_postgres_version("12", false).unwrap(), "12.6.0");
-        assert_eq!(get_postgres_version("12.3", false).unwrap(), "12.3.0");
-        assert_eq!(get_postgres_version("12.3.0", false).unwrap(), "12.3.0");
+        assert_eq!(get_postgres_version("12".to_string(), false).unwrap(), "12.6.0");
+        assert_eq!(get_postgres_version("12.3".to_string(), false).unwrap(), "12.3.0");
+        assert_eq!(get_postgres_version("12.3.0".to_string(), false).unwrap(), "12.3.0");
         assert_eq!(
-            get_postgres_version("1.0", false).unwrap_err().as_str(),
+            get_postgres_version("1.0".to_string(), false).unwrap_err().as_str(),
             "Postgresql 1.0 version is not supported"
         );
     }
@@ -466,6 +466,9 @@ mod tests_postgres {
                 port: 5432,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
             vec![],
         );
