@@ -276,20 +276,18 @@ pub fn debug_logs<T>(service: &T, deployment_target: &DeploymentTarget) -> Vec<S
 where
     T: Service + ?Sized,
 {
-    match deployment_target {
-        DeploymentTarget::SelfHosted(kubernetes, environment) => {
-            match get_stateless_resource_information_for_user(*kubernetes, *environment, service) {
-                Ok(lines) => lines,
-                Err(err) => {
-                    error!(
-                        "error while retrieving debug logs from {} {}; error: {:?}",
-                        service.service_type().name(),
-                        service.name_with_id(),
-                        err
-                    );
-                    Vec::new()
-                }
-            }
+    let kubernetes = deployment_target.kubernetes;
+    let environment = deployment_target.environment;
+    match get_stateless_resource_information_for_user(kubernetes, environment, service) {
+        Ok(lines) => lines,
+        Err(err) => {
+            error!(
+                "error while retrieving debug logs from {} {}; error: {:?}",
+                service.service_type().name(),
+                service.name_with_id(),
+                err
+            );
+            Vec::new()
         }
     }
 }
@@ -359,10 +357,8 @@ pub fn deploy_stateless_service<T>(
 where
     T: Service + Helm,
 {
-    let (kubernetes, environment) = match target {
-        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-    };
-
+    let kubernetes = target.kubernetes;
+    let environment = target.environment;
     let workspace_dir = service.workspace_directory();
     let tera_context = service.tera_context(target)?;
 
@@ -439,10 +435,8 @@ pub fn deploy_stateless_service_error<T>(target: &DeploymentTarget, service: &T)
 where
     T: Service + Helm,
 {
-    let (kubernetes, environment) = match target {
-        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-    };
-
+    let kubernetes = target.kubernetes;
+    let environment = target.environment;
     let kubernetes_config_file_path = kubernetes.config_file_path()?;
     let helm_release_name = service.helm_release_name();
 
@@ -483,10 +477,8 @@ pub fn scale_down_database(
         return Ok(());
     }
 
-    let (kubernetes, environment) = match target {
-        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-    };
-
+    let kubernetes = target.kubernetes;
+    let environment = target.environment;
     let scaledown_ret = kubectl_exec_scale_replicas_by_selector(
         kubernetes.config_file_path()?,
         kubernetes.cloud_provider().credentials_environment_variables(),
@@ -509,9 +501,8 @@ pub fn scale_down_application(
     replicas_count: usize,
     scaling_kind: ScalingKind,
 ) -> Result<(), EngineError> {
-    let (kubernetes, environment) = match target {
-        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-    };
+    let kubernetes = target.kubernetes;
+    let environment = target.environment;
     let scaledown_ret = kubectl_exec_scale_replicas_by_selector(
         kubernetes.config_file_path()?,
         kubernetes.cloud_provider().credentials_environment_variables(),
@@ -541,10 +532,8 @@ pub fn delete_stateless_service<T>(target: &DeploymentTarget, service: &T, is_er
 where
     T: Service + Helm,
 {
-    let (kubernetes, environment) = match target {
-        DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-    };
-
+    let kubernetes = target.kubernetes;
+    let environment = target.environment;
     let helm_release_name = service.helm_release_name();
 
     if is_error {
@@ -562,10 +551,8 @@ where
     T: StatefulService + Helm + Terraform,
 {
     let workspace_dir = service.workspace_directory();
-    let (kubernetes, environment) = match target {
-        DeploymentTarget::SelfHosted(kubernetes, env) => (*kubernetes, *env),
-    };
-
+    let kubernetes = target.kubernetes;
+    let environment = target.environment;
     if service.is_managed_service() {
         info!(
             "deploy {} with name {} on {}",
@@ -724,10 +711,8 @@ pub fn delete_stateful_service<T>(target: &DeploymentTarget, service: &T) -> Res
 where
     T: StatefulService + Helm + Terraform,
 {
-    let (kubernetes, environment) = match target {
-        DeploymentTarget::SelfHosted(kubernetes, environment) => (*kubernetes, *environment),
-    };
-
+    let kubernetes = target.kubernetes;
+    let environment = target.environment;
     if service.is_managed_service() {
         let workspace_dir = service.workspace_directory();
         let tera_context = service.tera_context(target)?;

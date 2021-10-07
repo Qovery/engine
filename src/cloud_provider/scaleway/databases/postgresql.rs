@@ -165,9 +165,8 @@ impl Service for PostgreSQL {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
 
         let mut context = default_tera_context(self, kubernetes, environment);
 

@@ -136,10 +136,8 @@ impl Service for Redis {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
         let is_managed_services = match self.options.mode {
             DatabaseMode::MANAGED => true,
             DatabaseMode::CONTAINER => false,

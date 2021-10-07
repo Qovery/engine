@@ -137,16 +137,14 @@ impl Service for MongoDB {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
         let is_managed_services = match self.options.mode {
             DatabaseMode::MANAGED => true,
             DatabaseMode::CONTAINER => false,
         };
 
-        let mut context = default_tera_context(self, kubernetes, environment);
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
+        let mut context = default_tera_context(self, target.kubernetes, target.environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kube_config_file_path = kubernetes.config_file_path()?;

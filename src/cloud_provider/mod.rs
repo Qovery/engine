@@ -82,6 +82,7 @@ impl TerraformStateCredentials {
     }
 }
 
-pub enum DeploymentTarget<'a> {
-    SelfHosted(&'a dyn Kubernetes, &'a Environment),
+pub struct DeploymentTarget<'a> {
+    pub kubernetes: &'a dyn Kubernetes,
+    pub environment: &'a Environment,
 }
