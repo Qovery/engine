@@ -431,20 +431,17 @@ fn using_nats_server(
             .unwrap();
     }
 
-    // Local engine, does not deploy anything (yet ?)
-    if let Mode::Cloud(_, _, _) = mode {
-        spawn_task_poller(
-            task_manager.clone(),
-            nc.clone(),
-            TaskSelector::Environment("environment"),
-            mode.clone(),
-            workspace_root_dir.clone(),
-            docker_host.clone(),
-            lib_root_dir.clone(),
-            engine_name.clone(),
-            sig_term_tx.clone(),
-        );
-    }
+    spawn_task_poller(
+        task_manager.clone(),
+        nc.clone(),
+        TaskSelector::Environment("environment"),
+        mode.clone(),
+        workspace_root_dir.clone(),
+        docker_host.clone(),
+        lib_root_dir.clone(),
+        engine_name.clone(),
+        sig_term_tx.clone(),
+    );
 
     // Engine that run on cluster don't need to receive infrastructure requests
     if let Mode::Local = mode {
