@@ -983,6 +983,49 @@ datasources:
         },
     };
 
+    let container_registry_secret = CommonChart {
+        chart_info: ChartInfo {
+            name: "container-registry-secret".to_string(),
+            path: chart_path("charts/container-registry-secret"),
+            namespace: HelmChartNamespaces::KubeSystem,
+            values_files: vec![chart_path("chart_values/container-registry-secret.yaml")],
+            values: vec![
+                ChartSetValue {
+                    key: "do_container_registry_docker_json_config".to_string(),
+                    // https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/
+                    value: base64::encode(
+                        format!(
+                            r#"{{"auths":{{"registry.digitalocean.com":{{"auth":"{}"}}}}}}"#,
+                            base64::encode(
+                                format!(
+                                    "{}:{}",
+                                    chart_config_prerequisites.do_token.clone(),
+                                    chart_config_prerequisites.do_token.clone()
+                                )
+                                .as_bytes()
+                            )
+                        )
+                        .as_bytes(),
+                    )
+                    .to_string(),
+                },
+                ChartSetValue {
+                    key: "do_container_registry_secret_identifier".to_string(),
+                    value: "do-container-registry-secret-for-cluster".to_string(),
+                },
+                ChartSetValue {
+                    key: "do_container_registry_secret_name".to_string(),
+                    value: "do-container-registry-secret-for-cluster".to_string(),
+                },
+                ChartSetValue {
+                    key: "do_container_registry_secret_namespace".to_string(),
+                    value: get_chart_namespace(HelmChartNamespaces::KubeSystem),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
     // chart deployment order matters!!!
     let level_1: Vec<Box<dyn HelmChart>> = vec![
         Box::new(q_storage_class),
@@ -990,7 +1033,7 @@ datasources:
         Box::new(old_prometheus_operator),
     ];
 
-    let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
+    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(container_registry_secret)];
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
 
