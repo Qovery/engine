@@ -110,7 +110,7 @@ pub fn do_kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_name: St
         vpc_cidr_set: VpcInitKind::Autodetect,
         vpc_name: cluster_name,
         qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
-        qovery_engine_location: EngineLocation::ClientSide,
+        qovery_engine_location: Some(EngineLocation::ClientSide),
         engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
         agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
         grafana_admin_user: "admin".to_string(),
