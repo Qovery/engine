@@ -134,7 +134,7 @@ pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
         elasticsearch_zone_a_subnet_blocks: vec!["10.0.184.0/23".to_string(), "10.0.186.0/23".to_string()],
         elasticsearch_zone_b_subnet_blocks: vec!["10.0.188.0/23".to_string(), "10.0.190.0/23".to_string()],
         elasticsearch_zone_c_subnet_blocks: vec!["10.0.192.0/23".to_string(), "10.0.194.0/23".to_string()],
-        vpc_qovery_network_mode: Some(VpcQoveryNetworkMode::WithoutNatGateways),
+        vpc_qovery_network_mode: VpcQoveryNetworkMode::WithoutNatGateways,
         vpc_cidr_block: "10.0.0.0/16".to_string(),
         eks_cidr_subnet: "20".to_string(),
         eks_access_cidr_blocks: secrets

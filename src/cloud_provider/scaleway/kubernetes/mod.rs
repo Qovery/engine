@@ -351,6 +351,10 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn region(&self) -> &str {
+        self.zone.region_str()
+    }
+
+    fn zone(&self) -> &str {
         self.zone.as_str()
     }
 
@@ -531,6 +535,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.is_test_cluster(),
             self.cloud_provider.access_key.to_string(),
             self.cloud_provider.secret_key.to_string(),
+            self.options.scaleway_project_id.to_string(),
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
             self.dns_provider.domain().to_string(),
