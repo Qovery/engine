@@ -212,14 +212,14 @@ impl Service for Application {
 
         context.insert("environment_variables", &environment_variables);
 
-        match self.image.registry_name.as_ref() {
-            Some(registry_name) => {
-                context.insert("is_registry_secret", &true);
-                context.insert("registry_secret", registry_name);
-            }
-            None => {
-                context.insert("is_registry_secret", &false);
-            }
+        if self.image.registry_name.is_some() {
+            context.insert("is_registry_secret", &true);
+            context.insert(
+                "registry_secret",
+                &"do-container-registry-secret-for-cluster".to_string(),
+            );
+        } else {
+            context.insert("is_registry_secret", &false);
         };
 
         let storage = self
