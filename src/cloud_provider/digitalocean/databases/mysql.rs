@@ -100,7 +100,7 @@ impl Service for MySQL {
     }
 
     fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
+        Timeout::Value(600)
     }
 
     fn total_cpus(&self) -> String {
