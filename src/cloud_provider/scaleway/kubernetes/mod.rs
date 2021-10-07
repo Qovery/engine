@@ -365,6 +365,10 @@ impl<'a> Kubernetes for Kapsule<'a> {
         self.zone.as_str()
     }
 
+    fn zone(&self) -> &str {
+        self.zone.as_str()
+    }
+
     fn cloud_provider(&self) -> &dyn CloudProvider {
         self.cloud_provider
     }
