@@ -834,7 +834,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),
-                    value: chart_config_prerequisites.cloud_provider.clone(),
+                    value: "do".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.KUBERNETES_ID".to_string(),
@@ -930,7 +930,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),
-                    value: chart_config_prerequisites.cloud_provider.clone(),
+                    value: "do".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.REGION".to_string(),
