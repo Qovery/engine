@@ -60,7 +60,7 @@ impl MongoDB {
     }
 
     fn matching_correct_version(&self) -> Result<String, EngineError> {
-        check_service_version(get_self_hosted_mongodb_version(self.version()), self)
+        check_service_version(get_self_hosted_mongodb_version(self.version().clone()), self)
     }
 }
 
@@ -87,8 +87,8 @@ impl Service for MongoDB {
         sanitize_name("mongodb", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {

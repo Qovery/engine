@@ -1,6 +1,7 @@
-use crate::cloud_provider::utilities::get_version_number;
+use crate::cloud_provider::utilities::VersionsNumber;
 use crate::error::StringError;
 use crate::models::DatabaseKind;
+use std::str::FromStr;
 
 pub fn rds_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
     let max_size = max_size - prefix.len();
@@ -12,7 +13,7 @@ pub fn rds_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
 }
 
 pub fn get_parameter_group_from_version(version: &str, database_kind: DatabaseKind) -> Result<String, StringError> {
-    let version_number = match get_version_number(version) {
+    let version_number = match VersionsNumber::from_str(version) {
         Ok(v) => {
             if v.minor.is_none() {
                 return Err(format!(

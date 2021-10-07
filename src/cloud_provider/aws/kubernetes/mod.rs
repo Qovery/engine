@@ -726,6 +726,10 @@ impl<'a> Kubernetes for EKS<'a> {
         self.region.name()
     }
 
+    fn zone(&self) -> &str {
+        ""
+    }
+
     fn cloud_provider(&self) -> &dyn CloudProvider {
         self.cloud_provider
     }

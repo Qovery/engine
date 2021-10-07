@@ -87,8 +87,8 @@ impl Service for Redis {
         sanitize_name("redis", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {
