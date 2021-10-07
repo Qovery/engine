@@ -7,6 +7,7 @@ use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
+use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::Node;
@@ -47,7 +48,7 @@ pub struct KapsuleOptions {
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
     pub agent_version_controller_token: String,
-    pub qovery_engine_location: EngineLocation,
+    pub qovery_engine_location: Option<EngineLocation>,
     pub engine_version_controller_token: String,
 
     // Scaleway
@@ -69,7 +70,7 @@ impl KapsuleOptions {
         grafana_admin_user: String,
         grafana_admin_password: String,
         agent_version_controller_token: String,
-        qovery_engine_location: EngineLocation,
+        qovery_engine_location: Option<EngineLocation>,
         engine_version_controller_token: String,
         scaleway_project_id: String,
         scaleway_access_key: String,
@@ -148,6 +149,13 @@ impl<'a> Kapsule<'a> {
             template_directory,
             options,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
+        }
+    }
+
+    fn get_engine_location(&self) -> EngineLocation {
+        match self.options.qovery_engine_location.clone() {
+            None => EngineLocation::QoverySide,
+            Some(x) => x,
         }
     }
 
@@ -354,10 +362,6 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn region(&self) -> &str {
-        self.zone.region_str()
-    }
-
-    fn zone(&self) -> &str {
         self.zone.as_str()
     }
 
@@ -539,7 +543,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.cloud_provider.access_key.to_string(),
             self.cloud_provider.secret_key.to_string(),
             self.options.scaleway_project_id.to_string(),
-            self.options.qovery_engine_location.clone(),
+            self.get_engine_location(),
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
             self.dns_provider.domain().to_string(),

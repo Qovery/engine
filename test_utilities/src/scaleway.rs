@@ -103,7 +103,7 @@ pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptio
         secrets
             .QOVERY_AGENT_CONTROLLER_TOKEN
             .expect("QOVERY_AGENT_CONTROLLER_TOKEN is not set in secrets"),
-        EngineLocation::ClientSide,
+        Some(EngineLocation::ClientSide),
         secrets
             .QOVERY_ENGINE_CONTROLLER_TOKEN
             .expect("QOVERY_ENGINE_CONTROLLER_TOKEN is not set in secrets"),

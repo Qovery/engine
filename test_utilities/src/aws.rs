@@ -152,7 +152,7 @@ pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
         elasticache_cidr_subnet: "23".to_string(),
         elasticsearch_cidr_subnet: "23".to_string(),
         qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
-        qovery_engine_location: ClientSide,
+        qovery_engine_location: Some(ClientSide),
         engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
         agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
         grafana_admin_user: "admin".to_string(),
