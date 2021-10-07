@@ -54,6 +54,7 @@ impl ChartsConfigPrerequisites {
         test_cluster: bool,
         scw_access_key: String,
         scw_secret_key: String,
+        scw_project_id: String,
         qovery_engine_location: EngineLocation,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
