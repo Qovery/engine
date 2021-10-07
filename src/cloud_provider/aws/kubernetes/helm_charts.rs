@@ -111,6 +111,10 @@ pub fn aws_helm_charts(
                     value: chart_config_prerequisites.region.clone(),
                 },
                 ChartSetValue {
+                    key: "init.image.region".to_string(),
+                    value: chart_config_prerequisites.region.clone(),
+                },
+                ChartSetValue {
                     key: "image.pullPolicy".to_string(),
                     value: "IfNotPresent".to_string(),
                 },
