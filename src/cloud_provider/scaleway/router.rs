@@ -101,7 +101,6 @@ impl Service for Router {
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
@@ -225,7 +224,6 @@ impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.router.on_create() called for {}", self.name());
         let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 

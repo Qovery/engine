@@ -74,49 +74,16 @@ impl Environment {
             }
         }
 
-        let mut total_cpu_for_stateful_services: f32 = 0.0;
-        let mut total_ram_in_mib_for_stateful_services: u32 = 0;
-
-        match self.kind {
-            Kind::Development => {
-                // development means stateful services are running on Kubernetes
-                for service in &self.stateful_services {
-                    match *service.action() {
-                        Action::Create | Action::Nothing => {
-                            total_cpu_for_stateful_services += cpu_string_to_float(&service.total_cpus());
-                            total_ram_in_mib_for_stateful_services += &service.total_ram_in_mib();
-                        }
-                        Action::Delete | Action::Pause => {}
-                    }
-                }
-            }
-            Kind::Production => {} // production means databases are running on managed services - so it consumes 0 cpu
-        };
-
-        match self.kind {
-            crate::cloud_provider::environment::Kind::Production => {}
-            crate::cloud_provider::environment::Kind::Development => {
-                for service in &self.stateful_services {
-                    match *service.action() {
-                        Action::Create | Action::Nothing => {
-                            required_pods += service.total_instances();
-                        }
-                        Action::Delete | Action::Pause => {}
-                    }
-                }
-            }
-        }
-
+        // FIXME: rgerard
         EnvironmentResources {
             pods: required_pods,
-            cpu: total_cpu_for_stateless_services + total_cpu_for_stateful_services,
+            cpu: total_cpu_for_stateless_services,
             ram_in_mib: total_ram_in_mib_for_stateless_services + total_ram_in_mib_for_stateless_services,
         }
     }
 }
 
 pub enum Kind {
-    Production,
     Development,
 }
 

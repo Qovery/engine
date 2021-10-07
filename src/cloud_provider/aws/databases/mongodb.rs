@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
@@ -16,7 +15,8 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope, StringError};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::models::DatabaseMode::MANAGED;
+use crate::models::{Context, DatabaseMode, Listen, Listener, Listeners};
 
 pub struct MongoDB {
     context: Context,
@@ -69,7 +69,11 @@ impl MongoDB {
     }
 }
 
-impl StatefulService for MongoDB {}
+impl StatefulService for MongoDB {
+    fn is_managed_service(&self) -> bool {
+        self.options.mode == MANAGED
+    }
+}
 
 impl Service for MongoDB {
     fn context(&self) -> &Context {
@@ -134,13 +138,12 @@ impl Service for MongoDB {
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
-        let is_managed_services = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
+        let is_managed_services = match self.options.mode {
+            DatabaseMode::MANAGED => true,
+            DatabaseMode::CONTAINER => false,
         };
 
         let mut context = default_tera_context(self, kubernetes, environment);
@@ -400,7 +403,7 @@ fn get_managed_mongodb_version(requested_version: String) -> Result<String, Stri
 mod tests_mongodb {
     use crate::cloud_provider::aws::databases::mongodb::{get_mongodb_version, MongoDB};
     use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
-    use crate::models::Context;
+    use crate::models::{Context, DatabaseMode};
 
     #[test]
     fn check_mongodb_version() {
@@ -449,6 +452,7 @@ mod tests_mongodb {
                 password: "".to_string(),
                 host: "".to_string(),
                 port: 5432,
+                mode: DatabaseMode::CONTAINER,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
                 activate_high_availability: false,

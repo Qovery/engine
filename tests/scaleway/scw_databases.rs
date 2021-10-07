@@ -3,13 +3,14 @@ use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::Kind as ProviderKind;
 use qovery_engine::models::{
-    Action, Application, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction, Kind,
+    Action, Application, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Kind,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, generate_password, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 
+use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::working_minimal_environment;
 use test_utilities::scaleway::{
     clean_environments, delete_environment, deploy_environment, pause_environment, SCW_KUBE_TEST_CLUSTER_ID,
@@ -358,10 +359,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_username = "superuser".to_string();
         let database_password = generate_password(true);
 
-        let is_managed_db = match environment.kind {
-            Kind::Development => false,
-            Kind::Production => true,
-        };
+        let database_mode = CONTAINER;
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
@@ -377,13 +375,14 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: if is_managed_db {
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_INSTANCE_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
             }
             .to_string(),
-            database_disk_type: if is_managed_db {
+            database_disk_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_DISK_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_DISK_TYPE
@@ -471,6 +470,7 @@ fn test_postgresql_configuration(
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
+    database_mode: DatabaseMode,
 ) {
     engine_run_test(|| {
         init();
@@ -490,11 +490,6 @@ fn test_postgresql_configuration(
         let database_username = "superuser".to_string();
         let database_password = generate_password(true);
 
-        let is_managed_db = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
-
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
@@ -509,13 +504,14 @@ fn test_postgresql_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: if is_managed_db {
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_INSTANCE_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
             }
             .to_string(),
-            database_disk_type: if is_managed_db {
+            database_disk_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_DISK_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_DISK_TYPE
@@ -589,7 +585,7 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!());
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -607,7 +603,7 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!());
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -625,7 +621,7 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!());
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER);
 }
 
 // Postgres production environment
@@ -635,7 +631,7 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
 fn postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let mut environment = working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         SCW_QOVERY_ORGANIZATION_ID,
         secrets
@@ -644,8 +640,7 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    environment.kind = Kind::Production;
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!());
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), MANAGED);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -654,7 +649,7 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
 fn postgresql_v11_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let mut environment = working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         SCW_QOVERY_ORGANIZATION_ID,
         secrets
@@ -663,8 +658,7 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    environment.kind = Kind::Production;
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!());
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), MANAGED);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -673,7 +667,7 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
 fn postgresql_v12_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let mut environment = working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         SCW_QOVERY_ORGANIZATION_ID,
         secrets
@@ -682,8 +676,7 @@ fn postgresql_v12_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    environment.kind = Kind::Production;
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!());
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED);
 }
 
 /**
@@ -698,6 +691,7 @@ fn test_mongodb_configuration(
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
+    database_mode: DatabaseMode,
 ) {
     engine_run_test(|| {
         init();
@@ -721,11 +715,6 @@ fn test_mongodb_configuration(
             database_username, database_password, database_host, database_port, database_db_name
         );
 
-        let is_managed_db = match environment.kind {
-            Kind::Development => false,
-            Kind::Production => true,
-        };
-
         environment.databases = vec![Database {
             kind: DatabaseKind::Mongodb,
             action: Action::Create,
@@ -740,13 +729,14 @@ fn test_mongodb_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: if is_managed_db {
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_INSTANCE_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
             }
             .to_string(),
-            database_disk_type: if is_managed_db {
+            database_disk_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_DISK_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_DISK_TYPE
@@ -823,7 +813,7 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!());
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -841,7 +831,7 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!());
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -859,7 +849,7 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!());
+    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -877,7 +867,7 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!());
+    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER);
 }
 
 /**
@@ -892,6 +882,7 @@ fn test_mysql_configuration(
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
+    database_mode: DatabaseMode,
 ) {
     engine_run_test(|| {
         init();
@@ -913,11 +904,6 @@ fn test_mysql_configuration(
         let database_username = "superuser".to_string();
         let database_password = generate_password(true);
 
-        let is_managed_db = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
-
         environment.databases = vec![Database {
             kind: DatabaseKind::Mysql,
             action: Action::Create,
@@ -932,13 +918,14 @@ fn test_mysql_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: if is_managed_db {
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_INSTANCE_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
             }
             .to_string(),
-            database_disk_type: if is_managed_db {
+            database_disk_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_DISK_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_DISK_TYPE
@@ -1012,7 +999,7 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "5.7", function_name!());
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -1030,7 +1017,7 @@ fn mysql_v8_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!());
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER);
 }
 
 // MySQL production environment (RDS)
@@ -1040,7 +1027,7 @@ fn mysql_v8_deploy_a_working_dev_environment() {
 fn mysql_v8_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let mut environment = test_utilities::common::working_minimal_environment(
+    let environment = test_utilities::common::working_minimal_environment(
         &context,
         SCW_QOVERY_ORGANIZATION_ID,
         secrets
@@ -1049,8 +1036,7 @@ fn mysql_v8_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    environment.kind = Kind::Production;
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!());
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), MANAGED);
 }
 
 /**
@@ -1065,6 +1051,7 @@ fn test_redis_configuration(
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
+    database_mode: DatabaseMode,
 ) {
     engine_run_test(|| {
         init();
@@ -1085,11 +1072,6 @@ fn test_redis_configuration(
         let database_username = "superuser".to_string();
         let database_password = generate_password(true);
 
-        let is_managed_db = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
-
         environment.databases = vec![Database {
             kind: DatabaseKind::Redis,
             action: Action::Create,
@@ -1104,13 +1086,14 @@ fn test_redis_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: if is_managed_db {
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_INSTANCE_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
             }
             .to_string(),
-            database_disk_type: if is_managed_db {
+            database_disk_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_DISK_TYPE
             } else {
                 SCW_SELF_HOSTED_DATABASE_DISK_TYPE
@@ -1130,7 +1113,7 @@ fn test_redis_configuration(
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
-                    "IS_ELASTICCACHE".to_string() => base64::encode(is_managed_db.to_string()),
+                    "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                     "REDIS_HOST".to_string()      => base64::encode(database_host.clone()),
                     "REDIS_PORT".to_string()      => base64::encode(database_port.clone().to_string()),
                     "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),
@@ -1185,7 +1168,7 @@ fn redis_v5_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "5", function_name!());
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -1203,5 +1186,5 @@ fn redis_v6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "6", function_name!());
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER);
 }

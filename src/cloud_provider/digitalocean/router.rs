@@ -1,6 +1,5 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_router, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete,
@@ -102,7 +101,6 @@ impl Service for Router {
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
@@ -167,18 +165,6 @@ impl Service for Router {
         context.insert("nginx_requests_memory", "128Mi");
         context.insert("nginx_limit_cpu", "200m");
         context.insert("nginx_limit_memory", "128Mi");
-        match environment.kind {
-            Kind::Production => {
-                context.insert("nginx_enable_horizontal_autoscaler", "true");
-                context.insert("nginx_minimum_replicas", "2");
-                context.insert("nginx_requests_cpu", "250m");
-                context.insert("nginx_requests_memory", "384Mi");
-                context.insert("nginx_limit_cpu", "1");
-                context.insert("nginx_limit_memory", "384Mi");
-            }
-            _ => {}
-        };
-
         let kubernetes_config_file_path = kubernetes.config_file_path();
 
         match kubernetes_config_file_path {
@@ -293,7 +279,6 @@ impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DigitalOcean.router.on_create() called for {}", self.name());
         let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (k, env),
             DeploymentTarget::SelfHosted(k, env) => (k, env),
         };
 

@@ -11,6 +11,7 @@ use qovery_engine::models::{
 
 use crate::utilities::{generate_id, generate_password};
 use base64;
+use qovery_engine::models::DatabaseMode::CONTAINER;
 use std::collections::BTreeMap;
 
 pub fn execution_id() -> String {
@@ -243,6 +244,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
+                mode: CONTAINER,
             },
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -263,6 +265,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
+                mode: CONTAINER,
             },
             Database {
                 kind: DatabaseKind::Mongodb,
@@ -283,6 +286,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
+                mode: CONTAINER,
             },
         ],
         clone_from_environment_id: None,
@@ -386,6 +390,7 @@ pub fn environnement_2_app_2_routers_1_psql(
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,
+            mode: CONTAINER,
         }],
         applications: vec![
             Application {

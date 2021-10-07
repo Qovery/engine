@@ -171,9 +171,6 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
 
     let stateful_deployment_target = match kubernetes.kind() {
         Kind::Eks => match environment.kind {
-            crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(kubernetes, environment)
-            }
             crate::cloud_provider::environment::Kind::Development => {
                 DeploymentTarget::SelfHosted(kubernetes, environment)
             }
@@ -279,9 +276,6 @@ pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Envir
     ));
 
     let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Production => {
-            DeploymentTarget::ManagedServices(kubernetes, environment)
-        }
         crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
     };
 
@@ -325,9 +319,6 @@ pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment)
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
     let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Production => {
-            DeploymentTarget::ManagedServices(kubernetes, environment)
-        }
         crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
     };
 
@@ -402,9 +393,6 @@ pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
     let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Production => {
-            DeploymentTarget::ManagedServices(kubernetes, environment)
-        }
         crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
     };
 

@@ -92,7 +92,6 @@ impl Environment {
 
         crate::cloud_provider::environment::Environment::new(
             match self.kind {
-                Kind::Production => crate::cloud_provider::environment::Kind::Production,
                 Kind::Development => crate::cloud_provider::environment::Kind::Development,
             },
             self.id.as_str(),
@@ -108,7 +107,6 @@ impl Environment {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
-    Production,
     Development,
 }
 
@@ -532,6 +530,12 @@ pub struct Route {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub enum DatabaseMode {
+    MANAGED,
+    CONTAINER,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Database {
     pub kind: DatabaseKind,
     pub action: Action,
@@ -551,6 +555,7 @@ pub struct Database {
     pub activate_high_availability: bool,
     pub activate_backups: bool,
     pub publicly_accessible: bool,
+    pub mode: DatabaseMode,
 }
 
 impl Database {
@@ -560,6 +565,7 @@ impl Database {
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatefulService>> {
         let database_options = DatabaseOptions {
+            mode: self.mode.clone(),
             login: self.username.clone(),
             password: self.password.clone(),
             host: self.fqdn.clone(),

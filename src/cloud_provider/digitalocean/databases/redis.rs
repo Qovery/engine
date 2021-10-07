@@ -11,6 +11,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope};
+use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Redis {
@@ -64,7 +65,11 @@ impl Redis {
     }
 }
 
-impl StatefulService for Redis {}
+impl StatefulService for Redis {
+    fn is_managed_service(&self) -> bool {
+        self.options.mode == MANAGED
+    }
+}
 
 impl Service for Redis {
     fn context(&self) -> &Context {
@@ -121,7 +126,6 @@ impl Service for Redis {
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 

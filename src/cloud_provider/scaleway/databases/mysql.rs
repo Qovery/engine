@@ -1,6 +1,5 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
@@ -14,7 +13,8 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::models::DatabaseMode::MANAGED;
+use crate::models::{Context, DatabaseMode, Listen, Listener, Listeners};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -96,7 +96,11 @@ impl MySQL {
     }
 }
 
-impl StatefulService for MySQL {}
+impl StatefulService for MySQL {
+    fn is_managed_service(&self) -> bool {
+        self.options.mode == MANAGED
+    }
+}
 
 impl Service for MySQL {
     fn context(&self) -> &Context {
@@ -153,15 +157,14 @@ impl Service for MySQL {
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
             DeploymentTarget::SelfHosted(k, env) => (*k, *env),
         };
 
         let mut context = default_tera_context(self, kubernetes, environment);
 
-        let is_managed_services = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
+        let is_managed_services = match self.options.mode {
+            DatabaseMode::MANAGED => true,
+            DatabaseMode::CONTAINER => false,
         };
 
         // we need the kubernetes config file to store tfstates file in kube secrets
