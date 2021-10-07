@@ -1,24 +1,29 @@
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
     DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
     Upgrade,
 };
-use crate::cloud_provider::utilities::{get_self_hosted_postgres_version, sanitize_name};
+use crate::cloud_provider::utilities::{
+    get_self_hosted_postgres_version, get_supported_version_to_use, sanitize_name, VersionsNumber,
+};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorScope};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
 use crate::models::{Context, Listen, Listener, Listeners};
+use std::collections::HashMap;
+use std::str::FromStr;
 
 pub struct PostgreSQL {
     context: Context,
     id: String,
     action: Action,
     name: String,
-    version: String,
+    version: VersionsNumber,
     fqdn: String,
     fqdn_id: String,
     total_cpus: String,
@@ -34,7 +39,7 @@ impl PostgreSQL {
         id: &str,
         action: Action,
         name: &str,
-        version: &str,
+        version: VersionsNumber,
         fqdn: &str,
         fqdn_id: &str,
         total_cpus: String,
@@ -43,12 +48,12 @@ impl PostgreSQL {
         options: DatabaseOptions,
         listeners: Listeners,
     ) -> Self {
-        PostgreSQL {
+        Self {
             context,
             action,
             id: id.to_string(),
             name: name.to_string(),
-            version: version.to_string(),
+            version,
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
             total_cpus,
@@ -59,8 +64,44 @@ impl PostgreSQL {
         }
     }
 
-    fn matching_correct_version(&self) -> Result<String, EngineError> {
-        check_service_version(get_self_hosted_postgres_version(self.version()), self)
+    fn matching_correct_version(&self, is_managed_services: bool) -> Result<VersionsNumber, EngineError> {
+        let version = check_service_version(Self::pick_postgres_version(self.version(), is_managed_services), self)?;
+        match VersionsNumber::from_str(version.as_str()) {
+            Ok(res) => Ok(res),
+            Err(e) => Err(self.engine_error(
+                EngineErrorCause::Internal,
+                format!("cannot parse database version, err: {}", e),
+            )),
+        }
+    }
+
+    fn pick_postgres_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
+        if is_managed_service {
+            Self::pick_managed_postgres_version(requested_version)
+        } else {
+            get_self_hosted_postgres_version(requested_version)
+        }
+    }
+
+    fn pick_managed_postgres_version(requested_version: String) -> Result<String, StringError> {
+        // Scaleway supported postgres versions
+        // https://api.scaleway.com/rdb/v1/regions/fr-par/database-engines
+        let mut supported_postgres_versions = HashMap::new();
+
+        // {"name":"PostgreSQL","version":"13","end_of_life":"2025-11-13T00:00:00Z"}
+        // {"name":"PostgreSQL","version":"12","end_of_life":"2024-11-14T00:00:00Z"}
+        // {"name":"PostgreSQL","version":"11","end_of_life":"2023-11-09T00:00:00Z"}
+        // {"name":"PostgreSQL","version":"10","end_of_life":"2022-11-10T00:00:00Z"}
+        supported_postgres_versions.insert("10".to_string(), "10".to_string());
+        supported_postgres_versions.insert("10.0".to_string(), "10.0".to_string());
+        supported_postgres_versions.insert("11".to_string(), "11".to_string());
+        supported_postgres_versions.insert("11.0".to_string(), "11.0".to_string());
+        supported_postgres_versions.insert("12".to_string(), "12".to_string());
+        supported_postgres_versions.insert("12.0".to_string(), "12.0".to_string());
+        supported_postgres_versions.insert("13".to_string(), "13".to_string());
+        supported_postgres_versions.insert("13.0".to_string(), "13.0".to_string());
+
+        get_supported_version_to_use("RDB postgres", supported_postgres_versions, requested_version)
     }
 }
 
@@ -87,8 +128,8 @@ impl Service for PostgreSQL {
         sanitize_name("postgresql", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.to_string()
     }
 
     fn action(&self) -> &Action {
@@ -127,6 +168,11 @@ impl Service for PostgreSQL {
 
         let mut context = default_tera_context(self, kubernetes, environment);
 
+        let is_managed_services = match environment.kind {
+            Kind::Production => true,
+            Kind::Development => false,
+        };
+
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kube_config_file_path = kubernetes.config_file_path()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
@@ -139,8 +185,9 @@ impl Service for PostgreSQL {
 
         context.insert("namespace", environment.namespace());
 
-        let version = self.matching_correct_version()?;
-        context.insert("version", &version);
+        let version = &self.matching_correct_version(is_managed_services)?;
+        context.insert("version_major", &version.to_major_version_string());
+        context.insert("version", &version.to_string()); // Scaleway needs to have major version only
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
             context.insert(k, v);
@@ -152,13 +199,13 @@ impl Service for PostgreSQL {
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn.as_str());
 
-        context.insert("database_db_name", self.name());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
         context.insert("database_instance_type", &self.database_instance_type);
         context.insert("database_disk_type", &self.options.database_disk_type);
+        context.insert("database_name", &self.sanitized_name());
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
@@ -166,8 +213,11 @@ impl Service for PostgreSQL {
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
         context.insert("tfstate_name", &get_tfstate_name(self));
 
+        context.insert("publicly_accessible", &self.options.publicly_accessible);
+        context.insert("activate_high_availability", &self.options.activate_high_availability);
+        context.insert("activate_backups", &self.options.activate_backups);
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
-
+        context.insert("skip_final_snapshot", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
                 "resource_expiration_in_seconds",
@@ -225,11 +275,9 @@ impl Create for PostgreSQL {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.PostgreSQL.on_create() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_stateful_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_stateful_service(target, self)
+        })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -267,11 +315,9 @@ impl Delete for PostgreSQL {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.PostgreSQL.on_delete() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Delete,
-            Box::new(|| delete_stateful_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateful_service(target, self)
+        })
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -279,8 +325,7 @@ impl Delete for PostgreSQL {
     }
 
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.PostgreSQL.on_create_error() called for {}", self.name());
-
+        warn!("SCW.MySQL.on_create_error() called for {}", self.name());
         Ok(())
     }
 }

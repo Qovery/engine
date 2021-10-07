@@ -100,8 +100,8 @@ impl Service for MongoDB {
         new_name
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {
@@ -374,7 +374,7 @@ impl Listen for MongoDB {
     }
 }
 
-fn get_mongodb_version(requested_version: &str, is_managed_service: bool) -> Result<String, StringError> {
+fn get_mongodb_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
     if is_managed_service {
         get_managed_mongodb_version(requested_version)
     } else {
@@ -382,7 +382,7 @@ fn get_mongodb_version(requested_version: &str, is_managed_service: bool) -> Res
     }
 }
 
-fn get_managed_mongodb_version(requested_version: &str) -> Result<String, StringError> {
+fn get_managed_mongodb_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_mongodb_versions = HashMap::new();
 
     // v3.6.0
@@ -405,17 +405,17 @@ mod tests_mongodb {
     #[test]
     fn check_mongodb_version() {
         // managed version
-        assert_eq!(get_mongodb_version("4", true).unwrap(), "4.0.0");
-        assert_eq!(get_mongodb_version("4.0", true).unwrap(), "4.0.0");
+        assert_eq!(get_mongodb_version("4".to_string(), true).unwrap(), "4.0.0");
+        assert_eq!(get_mongodb_version("4.0".to_string(), true).unwrap(), "4.0.0");
         assert_eq!(
-            get_mongodb_version("4.4", true).unwrap_err().as_str(),
+            get_mongodb_version("4.4".to_string(), true).unwrap_err().as_str(),
             "DocumentDB 4.4 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_mongodb_version("4", false).unwrap(), "4.4.4");
-        assert_eq!(get_mongodb_version("4.2", false).unwrap(), "4.2.12");
+        assert_eq!(get_mongodb_version("4".to_string(), false).unwrap(), "4.4.4");
+        assert_eq!(get_mongodb_version("4.2".to_string(), false).unwrap(), "4.2.12");
         assert_eq!(
-            get_mongodb_version("3.4", false).unwrap_err().as_str(),
+            get_mongodb_version("3.4".to_string(), false).unwrap_err().as_str(),
             "MongoDB 3.4 version is not supported"
         );
     }
@@ -451,6 +451,9 @@ mod tests_mongodb {
                 port: 5432,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
             vec![],
         );
