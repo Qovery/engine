@@ -42,7 +42,7 @@ pub fn get_qovery_app_version<T: DeserializeOwned>(
     };
 
     let url = format!(
-        "https://{}/{}/version?type=cluster&clusterId={}",
+        "https://{}/api/v1/{}-version?type=cluster&clusterId={}",
         api_fqdn, app_type, cluster_id
     );
 
