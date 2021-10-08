@@ -170,18 +170,14 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
     let stateful_deployment_target = match kubernetes.kind() {
-        Kind::Eks => match environment.kind {
-            crate::cloud_provider::environment::Kind::Development => DeploymentTarget {
-                kubernetes,
-                environment,
-            },
+        Kind::Eks => DeploymentTarget {
+            kubernetes,
+            environment,
         },
-        // FIXME: We don't have any managed service on DO for now
         Kind::Doks => DeploymentTarget {
             kubernetes,
             environment,
         },
-        // TODO(benjaminch): We don't have any managed service on Scaleway for now
         Kind::ScwKapsule => DeploymentTarget {
             kubernetes,
             environment,
@@ -285,11 +281,9 @@ pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Envir
         kubernetes.context().execution_id(),
     ));
 
-    let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Development => DeploymentTarget {
-            kubernetes,
-            environment,
-        },
+    let stateful_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
     };
 
     // clean up all stateful services (database)
@@ -334,11 +328,9 @@ pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Envir
 pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
-    let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Development => DeploymentTarget {
-            kubernetes,
-            environment,
-        },
+    let stateful_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
     };
 
     // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
@@ -414,11 +406,9 @@ pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment)
 pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
-    let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Development => DeploymentTarget {
-            kubernetes,
-            environment,
-        },
+    let stateful_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
     };
 
     // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.

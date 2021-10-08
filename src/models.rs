@@ -91,9 +91,6 @@ impl Environment {
         let stateful_services = databases;
 
         crate::cloud_provider::environment::Environment::new(
-            match self.kind {
-                Kind::Development => crate::cloud_provider::environment::Kind::Development,
-            },
             self.id.as_str(),
             self.project_id.as_str(),
             self.owner_id.as_str(),

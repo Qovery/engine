@@ -4,7 +4,6 @@ use crate::unit_conversion::cpu_string_to_float;
 
 pub struct Environment {
     namespace: String,
-    pub kind: Kind,
     pub id: String,
     pub project_id: String,
     pub owner_id: String,
@@ -15,7 +14,6 @@ pub struct Environment {
 
 impl Environment {
     pub fn new(
-        kind: Kind,
         id: &str,
         project_id: &str,
         owner_id: &str,
@@ -25,7 +23,6 @@ impl Environment {
     ) -> Self {
         Environment {
             namespace: format!("{}-{}", project_id, id),
-            kind,
             id: id.to_string(),
             project_id: project_id.to_string(),
             owner_id: owner_id.to_string(),
@@ -98,10 +95,6 @@ impl Environment {
             ram_in_mib: total_ram_in_mib_for_stateless_services + total_ram_in_mib_for_stateful_services,
         }
     }
-}
-
-pub enum Kind {
-    Development,
 }
 
 pub struct EnvironmentResources {
