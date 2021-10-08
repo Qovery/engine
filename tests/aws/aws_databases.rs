@@ -3,7 +3,7 @@ extern crate test_utilities;
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind as ProviderKind;
 use qovery_engine::models::{
-    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Kind,
+    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{init, FuncTestsSecrets};
@@ -155,7 +155,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             .DEFAULT_TEST_DOMAIN
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let mut environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
@@ -181,8 +181,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
             AWS_DATABASE_DISK_TYPE,
         );
 
-        environment.kind = Kind::Development;
-        environment_delete.kind = Kind::Development;
         environment_delete.action = Action::Delete;
 
         let ea = EnvironmentAction::Environment(environment.clone());
@@ -253,7 +251,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let mut environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
@@ -269,8 +267,6 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             AWS_DATABASE_DISK_TYPE,
         );
 
-        environment.kind = Kind::Development;
-        environment_delete.kind = Kind::Development;
         environment_delete.action = Action::Delete;
 
         let ea = EnvironmentAction::Environment(environment);

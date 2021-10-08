@@ -3,7 +3,7 @@ use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::Kind as ProviderKind;
 use qovery_engine::models::{
-    Action, Application, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Kind,
+    Action, Application, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
@@ -170,7 +170,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             .DEFAULT_TEST_DOMAIN
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let mut environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
             DO_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
@@ -196,8 +196,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
-        environment.kind = Kind::Development;
-        environment_delete.kind = Kind::Development;
         environment_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
@@ -274,7 +272,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let mut environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
             DO_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
@@ -290,8 +288,6 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
-        environment.kind = Kind::Development;
-        environment_delete.kind = Kind::Development;
         environment_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());

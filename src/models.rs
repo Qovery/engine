@@ -33,7 +33,6 @@ pub type FailoverEnvironment = Environment;
 pub struct Environment {
     pub execution_id: String,
     pub id: String,
-    pub kind: Kind,
     pub owner_id: String,
     pub project_id: String,
     pub organization_id: String,
@@ -99,12 +98,6 @@ impl Environment {
             stateful_services,
         )
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Kind {
-    Development,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
