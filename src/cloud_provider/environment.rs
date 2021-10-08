@@ -74,11 +74,28 @@ impl Environment {
             }
         }
 
-        // FIXME: rgerard
+        let mut total_cpu_for_stateful_services: f32 = 0.0;
+        let mut total_ram_in_mib_for_stateful_services: u32 = 0;
+        for service in &self.stateful_services {
+            if service.is_managed_service() {
+                // If it is a managed service, we don't care of its resources as it is not managed by us
+                continue;
+            }
+
+            match service.action() {
+                Action::Pause | Action::Delete => {
+                    total_cpu_for_stateful_services += cpu_string_to_float(service.total_cpus());
+                    total_ram_in_mib_for_stateful_services += service.total_ram_in_mib();
+                    required_pods += service.total_instances();
+                }
+                Action::Create | Action::Nothing => {}
+            }
+        }
+
         EnvironmentResources {
             pods: required_pods,
-            cpu: total_cpu_for_stateless_services,
-            ram_in_mib: total_ram_in_mib_for_stateless_services + total_ram_in_mib_for_stateless_services,
+            cpu: total_cpu_for_stateless_services + total_cpu_for_stateful_services,
+            ram_in_mib: total_ram_in_mib_for_stateless_services + total_ram_in_mib_for_stateful_services,
         }
     }
 }
