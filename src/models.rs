@@ -548,8 +548,11 @@ pub struct Database {
     pub disk_size_in_gib: u32,
     pub database_instance_type: String,
     pub database_disk_type: String,
+    #[serde(default)] // => false if not present in input
     pub activate_high_availability: bool,
+    #[serde(default)] // => false if not present in input
     pub activate_backups: bool,
+    #[serde(default)] // => false if not present in input
     pub publicly_accessible: bool,
 }
 
