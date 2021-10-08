@@ -6,7 +6,7 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::de::DeserializeOwned;
 
-use crate::cloud_provider::digitalocean::models::svc::DOKubernetesList;
+use crate::cloud_provider::digitalocean::models::svc::DoLoadBalancer;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
@@ -89,9 +89,9 @@ where
 pub fn do_kubectl_exec_describe_service<P>(
     kubernetes_config: P,
     namespace: &str,
-    selector: &str,
+    service_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<DOKubernetesList, SimpleError>
+) -> Result<DoLoadBalancer, SimpleError>
 where
     P: AsRef<Path>,
 {
@@ -101,10 +101,7 @@ where
 
     let mut output_vec: Vec<String> = Vec::with_capacity(20);
     let _ = kubectl_exec_with_output(
-        vec![
-            "get", "svc", "-o", "json", "-n", namespace, "-l", // selector
-            selector,
-        ],
+        vec!["get", "svc", "-n", namespace, service_name, "-o", "json"],
         _envs,
         |out| match out {
             Ok(line) => output_vec.push(line),
@@ -118,7 +115,7 @@ where
 
     let output_string: String = output_vec.join("\n");
 
-    match serde_json::from_str::<DOKubernetesList>(output_string.as_str()) {
+    match serde_json::from_str::<DoLoadBalancer>(output_string.as_str()) {
         Ok(x) => Ok(x),
         Err(err) => {
             error!("{:?}", err);
@@ -140,23 +137,11 @@ where
 {
     match do_kubectl_exec_describe_service(kubernetes_config, namespace, selector, envs) {
         Ok(result) => {
-            if result.items.is_empty() || result.items.first().unwrap().status.load_balancer.ingress.is_empty() {
+            if result.status.load_balancer.ingress.is_empty() {
                 return Ok(None);
             }
 
-            Ok(Some(
-                result
-                    .items
-                    .first()
-                    .unwrap()
-                    .status
-                    .load_balancer
-                    .ingress
-                    .first()
-                    .unwrap()
-                    .ip
-                    .clone(),
-            ))
+            Ok(Some(result.status.load_balancer.ingress.first().unwrap().ip.clone()))
         }
         Err(e) => Err(e),
     }
@@ -165,23 +150,20 @@ where
 pub fn do_kubectl_exec_get_loadbalancer_id<P>(
     kubernetes_config: P,
     namespace: &str,
-    selector: &str,
+    service_name: &str,
     envs: Vec<(&str, &str)>,
 ) -> Result<Option<String>, SimpleError>
 where
     P: AsRef<Path>,
 {
-    match do_kubectl_exec_describe_service(kubernetes_config, namespace, selector, envs) {
+    match do_kubectl_exec_describe_service(kubernetes_config, namespace, service_name, envs) {
         Ok(result) => {
-            if result.items.is_empty() || result.items.first().unwrap().status.load_balancer.ingress.is_empty() {
+            if result.status.load_balancer.ingress.is_empty() {
                 return Ok(None);
             }
 
             Ok(Some(
                 result
-                    .items
-                    .first()
-                    .unwrap()
                     .metadata
                     .annotations
                     .kubernetes_digitalocean_com_load_balancer_id
