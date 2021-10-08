@@ -634,6 +634,44 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
     test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER);
 }
 
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn postgresql_v13_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), CONTAINER);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn postgresql_v14_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "14", function_name!(), CONTAINER);
+}
+
 /**
  **
  ** MongoDB tests
