@@ -287,12 +287,12 @@ function new_release() { ## Release a new engine version with commit ID as tag p
 function set_release_ga() { ## Release a new engine version and mark it as globally available
   prepare_engine
   tag=$(generate_image_tag)
-  curl -s -X PUT -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}" || exit 1
+  curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}" || exit 1
 }
 
 function get_release_ga() { ## Get globally available release version
   echo -e "Last defined GA version: "
-  curl -s -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"  || exit 1
+  curl -s -H 'Content-Type: application/json' -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"  || exit 1
 }
 
 function deploy_engines_infra() { ## Release GA to prod
@@ -330,7 +330,7 @@ function deploy_engines_envs() { ## Release GA to prod
   prepare_engine
   tag=$(generate_image_tag)
   KUBECONFIG="$KUBECONFIG_ENGINES_SCALEWAY"
-  helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --history-max 50 --wait --namespace qovery qovery-engine \
+  helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --create-namespace --history-max 50 --wait --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
 environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
@@ -339,16 +339,19 @@ environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+environmentVariables.CLOUD_PROVIDER="scw",\
+environmentVariables.ORGANIZATION="z0f2bf10c",\
+environmentVariables.REGION="fr-par-2",\
 environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
 environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
 environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
-environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 buildContainer.enable="true",\
 metrics.enable="true",\
+autoscaler.enabled="false",\
 engineResources.limits.cpu="1",\
-engineResources.limits.memory="750Mi",\
+engineResources.limits.memory="4Gi",\
 engineResources.requests.cpu="300m",\
-engineResources.requests.memory="750Mi"
+engineResources.requests.memory="4Gi"
 }
 
 function upgrade_on_dev() {
@@ -549,7 +552,7 @@ deploy_engines_infra)
   ;;
 # Deploy on the engines dedicated for customer's environments deployments
 deploy_engines_envs)
-  deploy-engines-envs
+  deploy_engines_envs
   ;;
 get_release_ga)
   get_release_ga
