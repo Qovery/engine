@@ -1,9 +1,7 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: {{.Values.app_id}}-dns
-  labels:
-    appId: {{.Values.app_id}}
+  name: {{ .Values.serviceName }}
   annotations:
     external-dns.alpha.kubernetes.io/hostname: {{ .Values.source }}
 spec:

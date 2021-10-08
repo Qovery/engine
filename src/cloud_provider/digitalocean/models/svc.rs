@@ -1,15 +1,15 @@
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DOKubernetesList {
+pub struct DoLoadBalancers {
     pub api_version: String,
-    pub items: Vec<Item>,
+    pub items: Vec<DoLoadBalancer>,
     pub kind: String,
     pub metadata: Metadata2,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Item {
+pub struct DoLoadBalancer {
     pub api_version: String,
     pub kind: String,
     pub metadata: Metadata,
@@ -23,7 +23,6 @@ pub struct Metadata {
     pub annotations: Annotations,
     pub creation_timestamp: String,
     pub finalizers: Vec<String>,
-    pub labels: Labels,
     pub name: String,
     pub namespace: String,
     pub resource_version: String,
@@ -52,18 +51,6 @@ pub struct Annotations {
     pub service_beta_kubernetes_io_do_loadbalancer_protocol: String,
     #[serde(rename = "service.beta.kubernetes.io/do-loadbalancer-size-slug")]
     pub service_beta_kubernetes_io_do_loadbalancer_size_slug: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Labels {
-    pub app: String,
-    #[serde(rename = "app.kubernetes.io/managed-by")]
-    pub app_kubernetes_io_managed_by: String,
-    pub chart: String,
-    pub component: String,
-    pub heritage: String,
-    pub release: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
@@ -366,7 +353,6 @@ pub struct Spec {
     pub external_traffic_policy: String,
     pub health_check_node_port: i64,
     pub ports: Vec<Port>,
-    pub selector: Selector,
     pub session_affinity: String,
     #[serde(rename = "type")]
     pub type_field: String,
@@ -380,15 +366,6 @@ pub struct Port {
     pub port: i64,
     pub protocol: String,
     pub target_port: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Selector {
-    pub app: String,
-    #[serde(rename = "app.kubernetes.io/component")]
-    pub app_kubernetes_io_component: String,
-    pub release: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]

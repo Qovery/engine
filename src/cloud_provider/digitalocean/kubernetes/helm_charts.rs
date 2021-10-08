@@ -692,29 +692,6 @@ datasources:
         },
     };
 
-    // required as load balancer do not have hostname (only IP) and are blocker to get a TLS certificate
-    let load_balancer_dns_hostname = CommonChart {
-        chart_info: ChartInfo {
-            name: "nginx-ingress-dns".to_string(),
-            path: chart_path("common/charts/external-name-svc"),
-            namespace: HelmChartNamespaces::NginxIngress,
-            values: vec![
-                ChartSetValue {
-                    key: "source".to_string(),
-                    value: "".to_string(),
-                },
-                ChartSetValue {
-                    key: "destination".to_string(),
-                    value: format!(
-                        "qovery-nginx-{}.{}",
-                        &chart_config_prerequisites.do_cluster_id, &chart_config_prerequisites.managed_dns_helm_format
-                    ),
-                },
-            ],
-            ..Default::default()
-        },
-    };
-
     let digital_mobius = CommonChart {
         chart_info: ChartInfo {
             name: "digital-mobius".to_string(),
@@ -919,10 +896,9 @@ datasources:
                     key: "image.tag".to_string(),
                     value: qovery_engine_version.version,
                 },
-                // need kubernetes 1.18, should be well tested before activating it
                 ChartSetValue {
-                    key: "autoscaler.enabled".to_string(),
-                    value: "false".to_string(),
+                    key: "autoscaler.min_replicas".to_string(),
+                    value: "2".to_string(),
                 },
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),

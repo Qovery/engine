@@ -22,5 +22,5 @@ controller:
       service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
       service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
       service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: "true"
-      service.beta.kubernetes.io/do-loadbalancer-hostname: qovery-nginx-{{ doks_cluster_id }}.{{ managed_dns_domain }}
+      service.beta.kubernetes.io/do-loadbalancer-hostname: {{ do_loadbalancer_hostname }}
     externalTrafficPolicy: "Local"
