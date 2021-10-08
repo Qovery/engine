@@ -399,6 +399,10 @@ fn get_managed_postgres_version(requested_version: String) -> Result<String, Str
     let v12 = generate_supported_version(12, 2, 5, None, None, None);
     supported_postgres_versions.extend(v12);
 
+    // v13
+    let v13 = generate_supported_version(13, 1, 4, None, None, None);
+    supported_postgres_versions.extend(v13);
+
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
 
