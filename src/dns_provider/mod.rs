@@ -19,8 +19,18 @@ pub trait DnsProvider {
     fn account(&self) -> &str;
     fn token(&self) -> &str;
     fn domain(&self) -> &str;
+    fn domain_wildcarded(&self) -> String {
+        format!("*.{}", self.domain())
+    }
     fn domain_helm_format(&self) -> String {
         format!("{{{}}}", self.domain())
+    }
+    fn domain_helm_format_wildcarded(&self) -> String {
+        format!("{{{}}}", self.domain())
+    }
+    fn domain_with_sub_domain(&self, sub_domain: &str) -> String;
+    fn domain_with_sub_domain_helm_format(&self, sub_domain: &str) -> String {
+        format!("{{{}}}", self.domain_with_sub_domain(sub_domain))
     }
     fn resolvers(&self) -> Vec<Ipv4Addr>;
     fn is_valid(&self) -> Result<(), EngineError>;

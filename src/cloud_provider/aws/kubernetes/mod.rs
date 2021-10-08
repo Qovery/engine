@@ -287,11 +287,6 @@ impl<'a> EKS<'a> {
         let elasticache_cidr_subnet = self.options.elasticache_cidr_subnet.clone();
         let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
 
-        let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![format!("{}", self.dns_provider.domain())];
-        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
-        let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
-
         // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
         context.insert("qovery_api_url", &qovery_api_url);
@@ -325,14 +320,18 @@ impl<'a> EKS<'a> {
         );
 
         // DNS configuration
+        let dns_domain = self.dns_provider.domain_with_sub_domain(self.id());
+        let managed_dns_list = vec![self.dns_provider.name()];
+        let managed_dns_domains_helm_format = vec![dns_domain.clone()];
+        let managed_dns_domains_terraform_format = terraform_list_format(vec![dns_domain]);
+        let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
+
         context.insert("managed_dns", &managed_dns_list);
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
-
         context.insert(
             "managed_dns_domains_terraform_format",
             &managed_dns_domains_terraform_format,
         );
-
         context.insert(
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,

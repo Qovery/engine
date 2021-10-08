@@ -66,6 +66,10 @@ impl DnsProvider for Cloudflare {
         self.domain.as_str()
     }
 
+    fn domain_with_sub_domain(&self, sub_domain: &str) -> String {
+        format!("{}.{}", sub_domain, self.domain)
+    }
+
     fn resolvers(&self) -> Vec<Ipv4Addr> {
         vec![Ipv4Addr::new(1, 1, 1, 1), Ipv4Addr::new(1, 0, 0, 1)]
     }
