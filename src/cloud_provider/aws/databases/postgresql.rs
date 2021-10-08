@@ -17,7 +17,7 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope, StringError};
 use crate::models::DatabaseMode::MANAGED;
-use crate::models::{Context, DatabaseMode, Listen, Listener, Listeners};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct PostgreSQL {
     context: Context,
@@ -135,11 +135,6 @@ impl Service for PostgreSQL {
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let kubernetes = target.kubernetes;
         let environment = target.environment;
-        let is_managed_services = match self.options.mode {
-            DatabaseMode::MANAGED => true,
-            DatabaseMode::CONTAINER => false,
-        };
-
         let mut context = default_tera_context(self, kubernetes, environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
@@ -154,7 +149,7 @@ impl Service for PostgreSQL {
 
         context.insert("namespace", environment.namespace());
 
-        let version = self.matching_correct_version(is_managed_services)?;
+        let version = self.matching_correct_version(self.is_managed_service())?;
         context.insert("version", &version);
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {

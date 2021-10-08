@@ -16,7 +16,7 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope, StringError};
 use crate::models::DatabaseMode::MANAGED;
-use crate::models::{Context, DatabaseMode, Listen, Listener, Listeners};
+use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct MongoDB {
     context: Context,
@@ -137,11 +137,6 @@ impl Service for MongoDB {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let is_managed_services = match self.options.mode {
-            DatabaseMode::MANAGED => true,
-            DatabaseMode::CONTAINER => false,
-        };
-
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, target.kubernetes, target.environment);
@@ -158,7 +153,7 @@ impl Service for MongoDB {
 
         context.insert("namespace", environment.namespace());
 
-        let version = self.matching_correct_version(is_managed_services)?;
+        let version = self.matching_correct_version(self.is_managed_service())?;
         context.insert("version", &version);
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {

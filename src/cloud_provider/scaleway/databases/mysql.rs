@@ -14,7 +14,7 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
 use crate::models::DatabaseMode::MANAGED;
-use crate::models::{Context, DatabaseMode, Listen, Listener, Listeners};
+use crate::models::{Context, Listen, Listener, Listeners};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -161,11 +161,6 @@ impl Service for MySQL {
 
         let mut context = default_tera_context(self, kubernetes, environment);
 
-        let is_managed_services = match self.options.mode {
-            DatabaseMode::MANAGED => true,
-            DatabaseMode::CONTAINER => false,
-        };
-
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kube_config_file_path = kubernetes.config_file_path()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
@@ -178,7 +173,7 @@ impl Service for MySQL {
 
         context.insert("namespace", environment.namespace());
 
-        let version = &self.matching_correct_version(is_managed_services)?;
+        let version = &self.matching_correct_version(self.is_managed_service())?;
         context.insert("version_major", &version.to_major_version_string());
         context.insert("version", &version.to_string()); // Scaleway needs to have major version only
 
