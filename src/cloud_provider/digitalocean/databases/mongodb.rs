@@ -11,6 +11,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope};
+use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct MongoDB {
@@ -64,7 +65,11 @@ impl MongoDB {
     }
 }
 
-impl StatefulService for MongoDB {}
+impl StatefulService for MongoDB {
+    fn is_managed_service(&self) -> bool {
+        self.options.mode == MANAGED
+    }
+}
 
 impl Service for MongoDB {
     fn context(&self) -> &Context {
@@ -120,11 +125,8 @@ impl Service for MongoDB {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
