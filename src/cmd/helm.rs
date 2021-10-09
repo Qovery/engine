@@ -295,28 +295,22 @@ where
                 Err(err) => error!("{}", err),
             },
         ) {
-            Ok(_) => {
+            Ok(_) => OperationResult::Ok(()),
+            Err(e) => {
                 if clean_lock {
-                    return match clean_helm_lock(
+                    match clean_helm_lock(
                         &kubernetes_config,
                         &namespace,
                         &release_name,
                         timeout_i64.clone(),
                         envs.clone(),
                     ) {
-                        Ok(_) => {
-                            let e = SimpleError {
-                                kind: SimpleErrorKind::Other,
-                                message: Some("Helm lock detected and cleaned".to_string()),
-                            };
-                            OperationResult::Retry(e)
-                        }
-                        Err(e) => OperationResult::Err(e),
+                        Ok(_) => info!("Helm lock detected and cleaned"),
+                        Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
                     };
                 };
-                OperationResult::Ok(())
+                OperationResult::Retry(e)
             }
-            Err(e) => OperationResult::Retry(e),
         }
     });
 
