@@ -385,18 +385,18 @@ fn get_managed_postgres_version(requested_version: String) -> Result<String, Str
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
 
     // v10
-    let mut v10 = generate_supported_version(10, 1, 15, None, None, None);
+    let mut v10 = generate_supported_version(10, 1, 18, None, None, None);
     v10.remove("10.2"); // non supported version by AWS
     v10.remove("10.8"); // non supported version by AWS
     supported_postgres_versions.extend(v10);
 
     // v11
-    let mut v11 = generate_supported_version(11, 1, 10, None, None, None);
+    let mut v11 = generate_supported_version(11, 1, 13, None, None, None);
     v11.remove("11.3"); // non supported version by AWS
     supported_postgres_versions.extend(v11);
 
     // v12
-    let v12 = generate_supported_version(12, 2, 5, None, None, None);
+    let v12 = generate_supported_version(12, 2, 8, None, None, None);
     supported_postgres_versions.extend(v12);
 
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)

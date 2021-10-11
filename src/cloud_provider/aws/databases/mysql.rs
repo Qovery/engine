@@ -395,7 +395,8 @@ fn get_managed_mysql_version(requested_version: String) -> Result<String, String
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
 
     // v5.7
-    let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
+    let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(34), None);
+    v57.remove("5.7.32");
     v57.remove("5.7.29");
     v57.remove("5.7.27");
     v57.remove("5.7.20");
@@ -403,7 +404,9 @@ fn get_managed_mysql_version(requested_version: String) -> Result<String, String
     supported_mysql_versions.extend(v57);
 
     // v8
-    let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
+    let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(25), None);
+    v8.remove("8.0.24");
+    v8.remove("8.0.22");
     v8.remove("8.0.18");
     v8.remove("8.0.14");
     v8.remove("8.0.12");
