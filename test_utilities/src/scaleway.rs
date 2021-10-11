@@ -19,8 +19,8 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 use tracing::error;
 
 pub const SCW_QOVERY_ORGANIZATION_ID: &str = "zcf8e78e6";
-pub const SCW_KUBE_TEST_CLUSTER_NAME: &str = "qovery-zb3a2b3b8";
-pub const SCW_KUBE_TEST_CLUSTER_ID: &str = "zb3a2b3b8";
+pub const SCW_KUBE_TEST_CLUSTER_NAME: &str = "qovery-z28c2bd8a";
+pub const SCW_KUBE_TEST_CLUSTER_ID: &str = "z28c2bd8a";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
 pub const SCW_KUBERNETES_VERSION: &str = "1.18";
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
