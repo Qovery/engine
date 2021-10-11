@@ -8,7 +8,7 @@ resource "digitalocean_kubernetes_node_pool" "app_node_pool_{{ loop.index }}" {
 
   name = "qovery-{{kubernetes_cluster_id}}-{{ loop.index }}"
   size = "{{ doks_worker_node.instance_type }}"
-  tags = [digitalocean_tag.cluster_tag.id]
+  tags =  local.tags_ks_list
   auto_scale = true
   min_nodes  = "{{ doks_worker_node.min_size }}"
   max_nodes  = "{{ doks_worker_node.max_size }}"

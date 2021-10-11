@@ -1,5 +1,6 @@
 extern crate base64;
 extern crate bstr;
+extern crate passwords;
 extern crate scaleway_api_rs;
 
 use bstr::ByteSlice;
@@ -11,6 +12,7 @@ use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
 
+use passwords::PasswordGenerator;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
@@ -20,6 +22,7 @@ use std::fs;
 use tracing::{error, info, warn};
 use tracing_subscriber;
 
+use crate::scaleway::SCW_KUBE_TEST_CLUSTER_ID;
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
@@ -32,7 +35,6 @@ use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
-use crate::scaleway::SCW_KUBE_TEST_CLUSTER_ID;
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::runtime::block_on;
 use time::Instant;
@@ -355,6 +357,23 @@ pub fn generate_id() -> String {
     uuid
 }
 
+pub fn generate_password(allow_using_symbols: bool) -> String {
+    let pg = PasswordGenerator::new()
+        .length(32)
+        .numbers(true)
+        .lowercase_letters(true)
+        .uppercase_letters(true)
+        .symbols(allow_using_symbols)
+        .spaces(false)
+        .exclude_similar_characters(true)
+        .strict(true);
+
+    pg.generate_one()
+        .expect("error while trying to generate a password")
+        .to_string()
+        .replace("\\", "$") // most tools do not allow \ char, hence replacing it by something else
+}
+
 pub fn check_all_connections(env: &Environment) -> Vec<bool> {
     let mut checking: Vec<bool> = Vec::with_capacity(env.routers.len());
 
@@ -549,7 +568,7 @@ where
 
 type KubernetesCredentials<'a> = Vec<(&'a str, &'a str)>;
 
-fn get_cloud_provider_credentials<'a>(provider_kind: Kind, secrets: &'a FuncTestsSecrets) -> KubernetesCredentials<'a> {
+fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecrets) -> KubernetesCredentials {
     match provider_kind {
         Kind::Aws => vec![
             (AWS_ACCESS_KEY_ID, secrets.AWS_ACCESS_KEY_ID.as_ref().unwrap().as_str()),

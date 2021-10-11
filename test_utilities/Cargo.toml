@@ -13,6 +13,7 @@ qovery-engine = { path = "../" }
 chrono = "0.4.11"
 dirs = "3.0.1"
 gethostname = "0.2.1"
+passwords = "3.1.7"
 rand = "0.7.3"
 serde = "1.0"
 serde_json = "1.0.57"
@@ -24,6 +25,7 @@ tracing-subscriber = "0.2"
 retry = "1.0.0"
 time = "0.2.23"
 hashicorp_vault = "2.0.1"
+maplit = "1.0.2"
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"

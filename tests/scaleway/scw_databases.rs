@@ -1,20 +1,21 @@
 use ::function_name::named;
-use tracing::{span, Level};
+use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::Kind as ProviderKind;
 use qovery_engine::models::{
-    Action, Application, Clone2, Context, Database, DatabaseKind, Environment, EnvironmentAction, EnvironmentVariable,
-    Kind,
+    Action, Application, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
-    context, engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
+    context, engine_run_test, generate_id, generate_password, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 
-use crate::scaleway::scw_environment::{delete_environment, deploy_environment, pause_environment};
+use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::working_minimal_environment;
 use test_utilities::scaleway::{
-    SCW_DATABASE_DISK_TYPE, SCW_DATABASE_INSTANCE_TYPE, SCW_KUBE_TEST_CLUSTER_ID, SCW_QOVERY_ORGANIZATION_ID,
+    clean_environments, delete_environment, deploy_environment, pause_environment, SCW_KUBE_TEST_CLUSTER_ID,
+    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_QOVERY_ORGANIZATION_ID,
+    SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
 };
 
 /**
@@ -42,11 +43,12 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
             &context,
             SCW_QOVERY_ORGANIZATION_ID,
             secrets
+                .clone()
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
-            SCW_DATABASE_INSTANCE_TYPE,
-            SCW_DATABASE_DISK_TYPE,
+            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
         let mut environment_delete = environment.clone();
@@ -54,17 +56,22 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_deletion, env_action_delete) {
+        match delete_environment(&context_for_deletion, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -92,8 +99,8 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
-            SCW_DATABASE_INSTANCE_TYPE,
-            SCW_DATABASE_DISK_TYPE,
+            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
         let mut environment_delete = environment.clone();
@@ -101,13 +108,13 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action.clone()) {
+        match deploy_environment(&context, env_action.clone(), SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match pause_environment(&context, env_action) {
+        match pause_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -125,11 +132,16 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
-        match delete_environment(&context_for_deletion, env_action_delete) {
+        match delete_environment(&context_for_deletion, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets.clone(), SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -155,12 +167,12 @@ fn postgresql_failover_dev_environment_with_all_options() {
             .DEFAULT_TEST_DOMAIN
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let mut environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
             SCW_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
-            SCW_DATABASE_INSTANCE_TYPE,
-            SCW_DATABASE_DISK_TYPE,
+            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
         let environment_check = environment.clone();
         let mut environment_never_up = environment.clone();
@@ -177,19 +189,17 @@ fn postgresql_failover_dev_environment_with_all_options() {
             &context_for_deletion,
             SCW_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
-            SCW_DATABASE_INSTANCE_TYPE,
-            SCW_DATABASE_DISK_TYPE,
+            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
-        environment.kind = Kind::Development;
-        environment_delete.kind = Kind::Development;
         environment_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
-        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete);
+        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -206,7 +216,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
         }
-        match deploy_environment(&context, env_action_fail_ok) {
+        match deploy_environment(&context, env_action_fail_ok, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(true),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -217,17 +227,22 @@ fn postgresql_failover_dev_environment_with_all_options() {
             SCW_KUBE_TEST_CLUSTER_ID,
             environment_check.clone(),
             database_name.as_str(),
-            secrets,
+            secrets.clone(),
         ) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
         }
 
-        match delete_environment(&context_for_deletion, env_action_for_deletion) {
+        match delete_environment(&context_for_deletion, env_action_for_deletion, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment, environment_delete], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -253,46 +268,47 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let mut environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
             SCW_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
-            SCW_DATABASE_INSTANCE_TYPE,
-            SCW_DATABASE_DISK_TYPE,
+            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
-        //let env_to_check = environment.clone();
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
             SCW_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
-            SCW_DATABASE_INSTANCE_TYPE,
-            SCW_DATABASE_DISK_TYPE,
+            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         );
 
-        environment.kind = Kind::Development;
-        environment_delete.kind = Kind::Development;
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment);
-        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete);
+        let env_action = EnvironmentAction::Environment(environment.clone());
+        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        // TODO: should be uncommented as soon as cert-manager is fixed
-        // for the moment this assert report a SSL issue on the second router, so it's works well
-        /*    let connections = test_utilities::utilities::check_all_connections(&env_to_check);
-        for con in connections {
-            assert_eq!(con, true);
-        }*/
 
-        match delete_environment(&context_for_deletion, env_action_for_deletion) {
+        match delete_environment(&context_for_deletion, env_action_for_deletion, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(
+            &context,
+            vec![environment, environment_delete],
+            secrets.clone(),
+            SCW_TEST_ZONE,
+        ) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -337,7 +353,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_port = 5432;
         let database_db_name = "postgresql".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
+        let database_password = generate_password(true);
+
+        let database_mode = CONTAINER;
+
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
@@ -352,8 +371,22 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: SCW_DATABASE_INSTANCE_TYPE.to_string(),
-            database_disk_type: SCW_DATABASE_DISK_TYPE.to_string(),
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -362,28 +395,13 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 app.branch = app_name.clone();
                 app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
                 app.private_port = Some(1234);
-                app.environment_variables = vec![
-                    EnvironmentVariable {
-                        key: "PG_HOST".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_DBNAME".to_string(),
-                        value: database_db_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                     "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
+                     "PG_HOST".to_string() => base64::encode(database_host.clone()),
+                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -395,15 +413,15 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        match deploy_environment(&context_for_redeploy, env_action_redeploy) {
+        match deploy_environment(&context_for_redeploy, env_action_redeploy, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -415,17 +433,22 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             SCW_KUBE_TEST_CLUSTER_ID,
             environment_check,
             database_name.as_str(),
-            secrets,
+            secrets.clone(),
         ) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
         }
 
-        match delete_environment(&context_for_delete, env_action_delete) {
+        match delete_environment(&context_for_delete, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -443,6 +466,7 @@ fn test_postgresql_configuration(
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
+    database_mode: DatabaseMode,
 ) {
     engine_run_test(|| {
         init();
@@ -452,16 +476,15 @@ fn test_postgresql_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = format!("postgresql-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "postgresql-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
-
-        let _is_rds = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
+        let database_password = generate_password(true);
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
@@ -474,11 +497,25 @@ fn test_postgresql_configuration(
             port: database_port.clone(),
             username: database_username.clone(),
             password: database_password.clone(),
-            total_cpus: "100m".to_string(),
+            total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "scw-sbv-ssd-0".to_string(),
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -488,28 +525,13 @@ fn test_postgresql_configuration(
                 app.commit_id = "ad65b24a0470e7e8aa0983e036fb9a05928fd973".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-                app.environment_variables = vec![
-                    EnvironmentVariable {
-                        key: "PG_HOST".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_DBNAME".to_string(),
-                        value: database_db_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "PG_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                     "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
+                     "PG_HOST".to_string() => base64::encode(database_host.clone()),
+                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -517,10 +539,10 @@ fn test_postgresql_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, ea) {
+        match deploy_environment(&context, ea, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -528,16 +550,22 @@ fn test_postgresql_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&context_for_delete, ea_delete) {
+        match delete_environment(&context_for_delete, ea_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
         return test_name.to_string();
     })
 }
 
-// Postgres environment environment
+// Postgres self hosted environment
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
@@ -553,7 +581,7 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!());
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -571,7 +599,7 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!());
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -589,10 +617,63 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!());
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER);
 }
 
 // Postgres production environment
+#[cfg(feature = "test-scw-managed-services")]
+#[named]
+#[test]
+fn postgresql_v10_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), MANAGED);
+}
+
+#[cfg(feature = "test-scw-managed-services")]
+#[named]
+#[test]
+fn postgresql_v11_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), MANAGED);
+}
+
+#[cfg(feature = "test-scw-managed-services")]
+#[named]
+#[test]
+fn postgresql_v12_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED);
+}
 
 /**
  **
@@ -606,6 +687,7 @@ fn test_mongodb_configuration(
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
+    database_mode: DatabaseMode,
 ) {
     engine_run_test(|| {
         init();
@@ -615,11 +697,15 @@ fn test_mongodb_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("mongodb-app-{}", generate_id());
-        let database_host = format!("mongodb-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "mongodb-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 27017;
         let database_db_name = "my-mongodb".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
+        let database_password = generate_password(false);
         let database_uri = format!(
             "mongodb://{}:{}@{}:{}/{}",
             database_username, database_password, database_host, database_port, database_db_name
@@ -639,8 +725,22 @@ fn test_mongodb_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "scw-sbv-ssd-0".to_string(),
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
 
         environment.applications = environment
@@ -651,32 +751,14 @@ fn test_mongodb_configuration(
                 app.commit_id = "3fdc7e784c1d98b80446be7ff25e35370306d9a8".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-                app.environment_variables = vec![
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string(),
-                        value: database_uri.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "MONGODB_DBNAME".to_string(),
-                        value: database_db_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host.clone()),
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port.to_string()),
+                    "MONGODB_DBNAME".to_string() => base64::encode(database_db_name.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<Application>>();
@@ -685,10 +767,10 @@ fn test_mongodb_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment);
+        let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -696,11 +778,16 @@ fn test_mongodb_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&context_for_delete, env_action_delete) {
+        match delete_environment(&context_for_delete, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -722,7 +809,7 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!());
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -740,7 +827,7 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!());
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -758,7 +845,7 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!());
+    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -776,7 +863,7 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!());
+    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER);
 }
 
 /**
@@ -791,6 +878,7 @@ fn test_mysql_configuration(
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
+    database_mode: DatabaseMode,
 ) {
     engine_run_test(|| {
         init();
@@ -801,17 +889,16 @@ fn test_mysql_configuration(
         let deletion_context = context.clone_not_same_execution_id();
 
         let app_name = format!("mysql-app-{}", generate_id());
-        let database_host = format!("mysql-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "mysql-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
 
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
-
-        let _is_rds = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
+        let database_password = generate_password(true);
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Mysql,
@@ -827,8 +914,22 @@ fn test_mysql_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "scw-sbv-ssd-0".to_string(),
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -838,36 +939,13 @@ fn test_mysql_configuration(
                 app.commit_id = "fc8a87b39cdee84bb789893fb823e3e62a1999c0".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-                app.environment_variables = vec![
-                    // EnvironmentVariable {
-                    //     key: "ENABLE_DEBUG".to_string(),
-                    //     value: "true".to_string(),
-                    // },
-                    // EnvironmentVariable {
-                    //     key: "DEBUG_PAUSE".to_string(),
-                    //     value: "true".to_string(),
-                    // },
-                    EnvironmentVariable {
-                        key: "MYSQL_HOST".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "MYSQL_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "MYSQL_DBNAME".to_string(),
-                        value: database_db_name.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "MYSQL_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "MYSQL_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                    "MYSQL_HOST".to_string() => base64::encode(database_host.clone()),
+                    "MYSQL_PORT".to_string() => base64::encode(database_port.to_string()),
+                    "MYSQL_DBNAME".to_string()   => base64::encode(database_db_name.clone()),
+                    "MYSQL_USERNAME".to_string() => base64::encode(database_username.clone()),
+                    "MYSQL_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -875,10 +953,10 @@ fn test_mysql_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, ea) {
+        match deploy_environment(&context, ea, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -886,11 +964,16 @@ fn test_mysql_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&deletion_context, ea_delete) {
+        match delete_environment(&deletion_context, ea_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -912,7 +995,7 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "5.7", function_name!());
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -930,10 +1013,27 @@ fn mysql_v8_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!());
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER);
 }
 
-// MySQL production environment
+// MySQL production environment (RDS)
+#[cfg(feature = "test-scw-managed-services")]
+#[named]
+#[test]
+fn mysql_v8_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), MANAGED);
+}
 
 /**
  **
@@ -947,6 +1047,7 @@ fn test_redis_configuration(
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
+    database_mode: DatabaseMode,
 ) {
     engine_run_test(|| {
         init();
@@ -957,16 +1058,15 @@ fn test_redis_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("redis-app-{}", generate_id());
-        let database_host = format!("redis-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "redis-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
-
-        let is_elasticache = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
+        let database_password = generate_password(true);
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Redis,
@@ -982,8 +1082,22 @@ fn test_redis_configuration(
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "not-used".to_string(),
-            database_disk_type: "scw-sbv-ssd-0".to_string(),
+            mode: database_mode.clone(),
+            database_instance_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_INSTANCE_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
+            }
+            .to_string(),
+            database_disk_type: if database_mode == MANAGED {
+                SCW_MANAGED_DATABASE_DISK_TYPE
+            } else {
+                SCW_SELF_HOSTED_DATABASE_DISK_TYPE
+            }
+            .to_string(),
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: false,
         }];
         environment.applications = environment
             .applications
@@ -994,36 +1108,13 @@ fn test_redis_configuration(
                 app.commit_id = "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-                app.environment_variables = vec![
-                    // EnvironmentVariable {
-                    //     key: "ENABLE_DEBUG".to_string(),
-                    //     value: "true".to_string(),
-                    // },
-                    // EnvironmentVariable {
-                    //     key: "DEBUG_PAUSE".to_string(),
-                    //     value: "true".to_string(),
-                    // },
-                    EnvironmentVariable {
-                        key: "IS_ELASTICCACHE".to_string(),
-                        value: is_elasticache.to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "REDIS_HOST".to_string(),
-                        value: database_host.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "REDIS_PORT".to_string(),
-                        value: database_port.clone().to_string(),
-                    },
-                    EnvironmentVariable {
-                        key: "REDIS_USERNAME".to_string(),
-                        value: database_username.clone(),
-                    },
-                    EnvironmentVariable {
-                        key: "REDIS_PASSWORD".to_string(),
-                        value: database_password.clone(),
-                    },
-                ];
+                app.environment_vars = btreemap! {
+                    "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
+                    "REDIS_HOST".to_string()      => base64::encode(database_host.clone()),
+                    "REDIS_PORT".to_string()      => base64::encode(database_port.clone().to_string()),
+                    "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),
+                    "REDIS_PASSWORD".to_string()  => base64::encode(database_password.clone()),
+                };
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -1031,10 +1122,10 @@ fn test_redis_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action = EnvironmentAction::Environment(environment.clone());
+        let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, ea) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -1042,11 +1133,16 @@ fn test_redis_configuration(
 
         // todo: check the database disk is here and with correct size
 
-        match delete_environment(&context_for_delete, ea_delete) {
+        match delete_environment(&context_for_delete, env_action_delete, SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
+
+        // delete images created during test from registries
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
 
         return test_name.to_string();
     })
@@ -1068,7 +1164,7 @@ fn redis_v5_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "5", function_name!());
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -1086,5 +1182,5 @@ fn redis_v6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "6", function_name!());
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER);
 }

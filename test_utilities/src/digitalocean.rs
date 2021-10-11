@@ -1,3 +1,4 @@
+use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
@@ -7,17 +8,24 @@ use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::Context;
+use qovery_engine::error::EngineError;
+use qovery_engine::models::{Context, Environment, EnvironmentAction};
+use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 
-pub const DO_QOVERY_ORGANIZATION_ID: &str = "a8nb94c7fwxzr2ja";
+pub const DO_QOVERY_ORGANIZATION_ID: &str = "z3bc003d2";
 pub const DO_KUBERNETES_VERSION: &str = "1.19";
 pub const DOCR_ID: &str = "gu9ep7t68htdu78l";
-pub const DOKS_KUBE_TEST_CLUSTER_ID: &str = "gqgyb7zy4ykwumak";
-pub const DOKS_KUBE_TEST_CLUSTER_NAME: &str = "QoveryDigitalOceanTest";
+pub const DO_KUBE_TEST_CLUSTER_ID: &str = "z2a1b27a3";
+pub const DO_KUBE_TEST_CLUSTER_NAME: &str = "qovery-z2a1b27a3";
+pub const DO_TEST_REGION: Region = Region::NewYorkCity3;
+pub const DO_MANAGED_DATABASE_INSTANCE_TYPE: &str = "not-used";
+pub const DO_MANAGED_DATABASE_DISK_TYPE: &str = "not-used";
+pub const DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "not-used";
+pub const DO_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "do-sbv-ssd-0";
 
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     let secrets = FuncTestsSecrets::new();
@@ -37,7 +45,7 @@ pub fn docker_cr_do_engine(context: &Context) -> Engine {
     // use Digital Ocean
     let cloud_provider = Box::new(cloud_provider_digitalocean(context));
 
-    let dns_provider = Box::new(dns_provider_cloudflare(context));
+    let dns_provider = Box::new(dns_provider_cloudflare(&context));
 
     Engine::new(
         context.clone(),
@@ -53,46 +61,40 @@ pub fn do_kubernetes_ks<'a>(
     cloud_provider: &'a DO,
     dns_provider: &'a dyn DnsProvider,
     nodes: Vec<Node>,
+    region: Region,
 ) -> DOKS<'a> {
     let secrets = FuncTestsSecrets::new();
     DOKS::<'a>::new(
         context.clone(),
-        DOKS_KUBE_TEST_CLUSTER_ID.to_string(),
-        DOKS_KUBE_TEST_CLUSTER_NAME.to_string(),
+        DO_KUBE_TEST_CLUSTER_ID.to_string(),
+        DO_KUBE_TEST_CLUSTER_NAME.to_string(),
         DO_KUBERNETES_VERSION.to_string(),
-        Region::Frankfurt,
+        region,
         cloud_provider,
         dns_provider,
         nodes,
-        do_kubernetes_cluster_options(secrets, DOKS_KUBE_TEST_CLUSTER_ID.to_string()),
+        do_kubernetes_cluster_options(secrets, DO_KUBE_TEST_CLUSTER_ID.to_string()),
     )
 }
 
 pub fn do_kubernetes_nodes() -> Vec<Node> {
-    vec![
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
-        Node::new_with_cpu_and_mem(4, 8),
-    ]
+    scw_kubernetes_custom_nodes(10, Node::new_with_cpu_and_mem(4, 8))
+}
+
+pub fn scw_kubernetes_custom_nodes(count: usize, node: Node) -> Vec<Node> {
+    vec![node.clone(); count]
 }
 
 pub fn cloud_provider_digitalocean(context: &Context) -> DO {
     let secrets = FuncTestsSecrets::new();
     DO::new(
         context.clone(),
-        DOKS_KUBE_TEST_CLUSTER_ID,
+        DO_KUBE_TEST_CLUSTER_ID,
         DO_QOVERY_ORGANIZATION_ID,
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
         secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().as_str(),
         secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().as_str(),
-        DOKS_KUBE_TEST_CLUSTER_NAME,
+        DO_KUBE_TEST_CLUSTER_NAME,
         TerraformStateCredentials {
             access_key_id: secrets.TERRAFORM_AWS_ACCESS_KEY_ID.unwrap(),
             secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
@@ -118,4 +120,96 @@ pub fn do_kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_name: St
         qovery_ssh_key: secrets.QOVERY_SSH_USER.unwrap(),
         tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
     }
+}
+
+pub fn deploy_environment(
+    context: &Context,
+    environment_action: EnvironmentAction,
+    region: Region,
+) -> TransactionResult {
+    let engine = docker_cr_do_engine(context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = cloud_provider_digitalocean(context);
+    let nodes = do_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(context);
+    let doks = do_kubernetes_ks(context, &cp, &dns_provider, nodes, region);
+
+    let _ = tx.deploy_environment_with_options(
+        &doks,
+        &environment_action,
+        DeploymentOption {
+            force_build: true,
+            force_push: true,
+        },
+    );
+
+    tx.commit()
+}
+
+pub fn delete_environment(
+    context: &Context,
+    environment_action: EnvironmentAction,
+    region: Region,
+) -> TransactionResult {
+    let engine = docker_cr_do_engine(context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = cloud_provider_digitalocean(context);
+    let nodes = do_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(&context);
+    let doks = do_kubernetes_ks(context, &cp, &dns_provider, nodes, region);
+
+    let _ = tx.delete_environment(&doks, &environment_action);
+
+    tx.commit()
+}
+
+pub fn pause_environment(
+    context: &Context,
+    environment_action: EnvironmentAction,
+    region: Region,
+) -> TransactionResult {
+    let engine = docker_cr_do_engine(context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = cloud_provider_digitalocean(context);
+    let nodes = do_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(&context);
+    let doks = do_kubernetes_ks(context, &cp, &dns_provider, nodes, region);
+
+    let _ = tx.pause_environment(&doks, &environment_action);
+
+    tx.commit()
+}
+
+pub fn clean_environments(
+    context: &Context,
+    environments: Vec<Environment>,
+    secrets: FuncTestsSecrets,
+    _region: Region,
+) -> Result<(), EngineError> {
+    let do_cr = DOCR::new(
+        context.clone(),
+        "test",
+        "test",
+        secrets
+            .DIGITAL_OCEAN_TOKEN
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TOKEN is not set in secrets"),
+    );
+
+    // delete images created in registry
+    for env in environments.iter() {
+        for image in env.applications.iter().map(|a| a.to_image()).collect::<Vec<Image>>() {
+            if let Err(e) = do_cr.delete_image(&image) {
+                return Err(e);
+            }
+        }
+    }
+
+    Ok(())
 }

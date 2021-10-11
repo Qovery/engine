@@ -152,6 +152,14 @@ impl DOCR {
         }
     }
 
+    pub fn get_image(&self, _image: &Image) -> Option<()> {
+        todo!()
+    }
+
+    pub fn delete_image(&self, _image: &Image) -> Result<(), EngineError> {
+        todo!()
+    }
+
     pub fn delete_repository(&self) -> Result<(), EngineError> {
         let headers = utilities::get_header_with_bearer(&self.api_key);
         let res = reqwest::blocking::Client::new()
@@ -249,6 +257,7 @@ impl ContainerRegistry for DOCR {
                         "While tyring to get all tags for image: {}, maybe this image not exist !",
                         &image.name
                     );
+
                     return false;
                 }
             },
@@ -257,6 +266,7 @@ impl ContainerRegistry for DOCR {
                     "While trying to communicate with DigitalOcean API to retrieve all tags for image {}",
                     &image.name
                 );
+
                 return false;
             }
         };
@@ -279,7 +289,8 @@ impl ContainerRegistry for DOCR {
                             "Unable to deserialize tags from DigitalOcean API for image {}",
                             &image.tag
                         );
-                        return false;
+
+                        false
                     }
                 }
             }
@@ -288,7 +299,8 @@ impl ContainerRegistry for DOCR {
                     "while retrieving tags for image {} Unable to get output from DigitalOcean API",
                     &image.name
                 );
-                return false;
+
+                false
             }
         }
     }
@@ -297,7 +309,7 @@ impl ContainerRegistry for DOCR {
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
         let registry_name = self.get_registry_name(image)?;
 
-        let _ = match self.create_repository(&image) {
+        match self.create_repository(&image) {
             Ok(_) => info!("DOCR {} has been created", registry_name.as_str()),
             Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
         };
@@ -369,7 +381,7 @@ impl ContainerRegistry for DOCR {
             self.context.execution_id(),
         ));
 
-        self.push_image(registry_name, dest, &image)
+        self.push_image(registry_name, dest, image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {

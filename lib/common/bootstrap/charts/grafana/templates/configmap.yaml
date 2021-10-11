@@ -5,6 +5,10 @@ metadata:
   namespace: {{ template "grafana.namespace" . }}
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
+{{- with .Values.annotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
 data:
 {{- if .Values.plugins }}
   plugins: {{ join "," .Values.plugins }}
@@ -13,7 +17,13 @@ data:
 {{- range $key, $value := index .Values "grafana.ini" }}
     [{{ $key }}]
     {{- range $elem, $elemVal := $value }}
+    {{- if kindIs "invalid" $elemVal }}
+    {{ $elem }} =
+    {{- else if kindIs "string" $elemVal }}
+    {{ $elem }} = {{ tpl $elemVal $ }}
+    {{- else }}
     {{ $elem }} = {{ $elemVal }}
+    {{- end }}
     {{- end }}
 {{- end }}
 
@@ -59,9 +69,12 @@ data:
     --max-time 60 \
       {{- if not $value.b64content }}
     -H "Accept: application/json" \
+        {{- if $value.token }}
+    -H "Authorization: token {{ $value.token }}" \
+        {{- end }}
     -H "Content-Type: application/json;charset=UTF-8" \
       {{ end }}
-    {{- if $value.url -}}"{{ $value.url }}"{{- else -}}"https://grafana.com/api/dashboards/{{ $value.gnetId }}/revisions/{{- if $value.revision -}}{{ $value.revision }}{{- else -}}1{{- end -}}/download"{{- end -}}{{ if $value.datasource }} | sed 's/"datasource":[^,]*/"datasource": "{{ $value.datasource }}"/g'{{ end }}{{- if $value.b64content -}} | base64 -d {{- end -}} \
+    {{- if $value.url -}}"{{ $value.url }}"{{- else -}}"https://grafana.com/api/dashboards/{{ $value.gnetId }}/revisions/{{- if $value.revision -}}{{ $value.revision }}{{- else -}}1{{- end -}}/download"{{- end -}}{{ if $value.datasource }} | sed '/-- .* --/! s/"datasource":.*,/"datasource": "{{ $value.datasource }}",/g'{{ end }}{{- if $value.b64content -}} | base64 -d {{- end -}} \
     > "/var/lib/grafana/dashboards/{{ $provider }}/{{ $key }}.json"
       {{- end -}}
     {{- end }}

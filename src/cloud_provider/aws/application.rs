@@ -125,8 +125,8 @@ impl Service for Application {
         sanitize_name("app", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.image.commit_id.as_str()
+    fn version(&self) -> String {
+        self.image.commit_id.clone()
     }
 
     fn action(&self) -> &Action {
@@ -158,12 +158,7 @@ impl Service for Application {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let mut context = default_tera_context(self, kubernetes, environment);
+        let mut context = default_tera_context(self, target.kubernetes, target.environment);
         let commit_id = self.image().commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);

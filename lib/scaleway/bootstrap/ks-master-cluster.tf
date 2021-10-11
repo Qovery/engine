@@ -1,4 +1,4 @@
-resource "scaleway_k8s_cluster" "kubernetes_cluster" {
+resource "scaleway_k8s_cluster" "kubernetes_cluster"  {
   name    = var.kubernetes_cluster_name
   version = var.scaleway_ks_version
   cni     = "cilium"

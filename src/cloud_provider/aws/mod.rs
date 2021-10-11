@@ -12,7 +12,6 @@ use crate::runtime::block_on;
 
 pub mod application;
 pub mod databases;
-pub mod external_service;
 pub mod kubernetes;
 pub mod router;
 

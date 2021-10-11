@@ -2067,6 +2067,7 @@ dependencies = [
  "rusoto_sts",
  "rust-crypto",
  "scaleway_api_rs",
+ "semver 1.0.4",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2720,7 +2721,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 dependencies = [
- "semver",
+ "semver 0.9.0",
 ]
 
 [[package]]
@@ -2740,9 +2741,9 @@ dependencies = [
 
 [[package]]
 name = "scaleway_api_rs"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ef902879597f20dc6319fe7203d05c98066a48301ec9d383f23b483c881f95"
+checksum = "d20620dd2a8b440dcd2b6777c75c845217115ce69f0c1a9575cb9f7af1e7b49d"
 dependencies = [
  "reqwest 0.11.3",
  "serde",
@@ -2804,6 +2805,12 @@ checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 dependencies = [
  "semver-parser",
 ]
+
+[[package]]
+name = "semver"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
 
 [[package]]
 name = "semver-parser"
@@ -3167,6 +3174,7 @@ dependencies = [
  "dirs",
  "gethostname",
  "hashicorp_vault",
+ "maplit",
  "qovery-engine",
  "rand 0.7.3",
  "reqwest 0.10.8",

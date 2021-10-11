@@ -1,6 +1,5 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_router, delete_stateless_service, send_progress_on_long_task, Action, Create, Delete,
@@ -68,8 +67,8 @@ impl Service for Router {
         sanitize_name("router", self.name())
     }
 
-    fn version(&self) -> &str {
-        "1.0"
+    fn version(&self) -> String {
+        "1.0".to_string()
     }
 
     fn action(&self) -> &Action {
@@ -101,11 +100,8 @@ impl Service for Router {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
         context.insert("doks_cluster_id", kubernetes.id());
 
@@ -167,18 +163,6 @@ impl Service for Router {
         context.insert("nginx_requests_memory", "128Mi");
         context.insert("nginx_limit_cpu", "200m");
         context.insert("nginx_limit_memory", "128Mi");
-        match environment.kind {
-            Kind::Production => {
-                context.insert("nginx_enable_horizontal_autoscaler", "true");
-                context.insert("nginx_minimum_replicas", "2");
-                context.insert("nginx_requests_cpu", "250m");
-                context.insert("nginx_requests_memory", "384Mi");
-                context.insert("nginx_limit_cpu", "1");
-                context.insert("nginx_limit_memory", "384Mi");
-            }
-            _ => {}
-        };
-
         let kubernetes_config_file_path = kubernetes.config_file_path();
 
         match kubernetes_config_file_path {
@@ -187,7 +171,7 @@ impl Service for Router {
                 let external_ingress_hostname_default = crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
                     kubernetes_config_file_path_string.as_str(),
                     "nginx-ingress",
-                    "app=nginx-ingress,component=controller",
+                    "nginx-ingress-ingress-nginx-controller",
                     kubernetes.cloud_provider().credentials_environment_variables(),
                 );
 
@@ -262,7 +246,7 @@ impl Helm for Router {
     }
 
     fn helm_chart_dir(&self) -> String {
-        format!("{}/common/charts/nginx-ingress", self.context().lib_root_dir())
+        format!("{}/common/charts/ingress-nginx", self.context().lib_root_dir())
     }
 
     fn helm_chart_values_dir(&self) -> String {
@@ -292,10 +276,8 @@ impl StatelessService for Router {}
 impl Create for Router {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("DigitalOcean.router.on_create() called for {}", self.name());
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (k, env),
-            DeploymentTarget::SelfHosted(k, env) => (k, env),
-        };
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
 
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();

@@ -113,7 +113,7 @@ impl<'a> Kapsule<'a> {
         id: String,
         name: String,
         version: String,
-        region: Zone,
+        zone: Zone,
         cloud_provider: &'a Scaleway,
         dns_provider: &'a dyn DnsProvider,
         nodes: Vec<Node>,
@@ -127,7 +127,7 @@ impl<'a> Kapsule<'a> {
             "default-s3".to_string(),
             cloud_provider.access_key.clone(),
             cloud_provider.secret_key.clone(),
-            region,
+            zone,
             BucketDeleteStrategy::Empty,
             false,
         );
@@ -137,7 +137,7 @@ impl<'a> Kapsule<'a> {
             id,
             name,
             version,
-            zone: region,
+            zone,
             cloud_provider,
             dns_provider,
             object_storage,
@@ -351,6 +351,10 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn region(&self) -> &str {
+        self.zone.region_str()
+    }
+
+    fn zone(&self) -> &str {
         self.zone.as_str()
     }
 
@@ -531,6 +535,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.is_test_cluster(),
             self.cloud_provider.access_key.to_string(),
             self.cloud_provider.secret_key.to_string(),
+            self.options.scaleway_project_id.to_string(),
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
             self.dns_provider.domain().to_string(),
@@ -764,6 +769,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
             vec![HelmChart {
                 name: "metrics-server".to_string(),
                 namespace: "kube-system".to_string(),
+                version: None,
             }],
             self.cloud_provider().credentials_environment_variables(),
         );
@@ -875,6 +881,28 @@ impl<'a> Kubernetes for Kapsule<'a> {
                 },
             );
 
+        match terraform_result {
+            Ok(_) => {
+                let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
+                info!("{}", &message);
+                send_to_customer(&message);
+            }
+            Err(Operation { error, .. }) => return Err(error),
+            Err(retry::Error::Internal(msg)) => {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    Some(format!(
+                        "Error while deleting cluster {} with id {}: {}",
+                        self.name(),
+                        self.id(),
+                        msg
+                    )),
+                ))
+            }
+        }
+
         // TODO(benjaminch): move this elsewhere
         // Delete object-storage buckets
         info!("Delete Qovery managed object storage buckets");
@@ -899,33 +927,11 @@ impl<'a> Kubernetes for Kapsule<'a> {
             ));
         }
 
-        match terraform_result {
-            Ok(_) => {
-                let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
-                info!("{}", &message);
-                send_to_customer(&message);
-            }
-            Err(Operation { error, .. }) => return Err(error),
-            Err(retry::Error::Internal(msg)) => {
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    self.engine_error_scope(),
-                    self.context().execution_id(),
-                    Some(format!(
-                        "Error while deleting cluster {} with id {}: {}",
-                        self.name(),
-                        self.id(),
-                        msg
-                    )),
-                ))
-            }
-        }
-
         Ok(())
     }
 
     fn on_delete_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_delete_error() called for {}", self.name());
+        warn!("SCW.on_delete_error() called for {}", self.name());
         // FIXME What should we do if something goes wrong while deleting the cluster?
         Ok(())
     }

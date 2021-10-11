@@ -1,3 +1,4 @@
+use semver::Version;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -261,11 +262,16 @@ pub struct Helm {
 pub struct HelmChart {
     pub name: String,
     pub namespace: String,
+    pub version: Option<Version>,
 }
 
 impl HelmChart {
-    pub fn new(name: String, namespace: String) -> HelmChart {
-        HelmChart { name, namespace }
+    pub fn new(name: String, namespace: String, version: Option<Version>) -> HelmChart {
+        HelmChart {
+            name,
+            namespace,
+            version,
+        }
     }
 }
 

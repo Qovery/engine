@@ -127,8 +127,8 @@ impl Service for Application {
         sanitize_name("app", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.image.commit_id.as_str()
+    fn version(&self) -> String {
+        self.image.commit_id.clone()
     }
 
     fn action(&self) -> &Action {
@@ -160,11 +160,8 @@ impl Service for Application {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
         let commit_id = self.image.commit_id.as_str();
 
@@ -212,14 +209,14 @@ impl Service for Application {
 
         context.insert("environment_variables", &environment_variables);
 
-        match self.image.registry_name.as_ref() {
-            Some(registry_name) => {
-                context.insert("is_registry_secret", &true);
-                context.insert("registry_secret", registry_name);
-            }
-            None => {
-                context.insert("is_registry_secret", &false);
-            }
+        if self.image.registry_name.is_some() {
+            context.insert("is_registry_secret", &true);
+            context.insert(
+                "registry_secret",
+                &"do-container-registry-secret-for-cluster".to_string(),
+            );
+        } else {
+            context.insert("is_registry_secret", &false);
         };
 
         let storage = self

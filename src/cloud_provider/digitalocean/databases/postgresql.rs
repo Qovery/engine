@@ -11,6 +11,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope};
+use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct PostgreSQL {
@@ -64,7 +65,11 @@ impl PostgreSQL {
     }
 }
 
-impl StatefulService for PostgreSQL {}
+impl StatefulService for PostgreSQL {
+    fn is_managed_service(&self) -> bool {
+        self.options.mode == MANAGED
+    }
+}
 
 impl Service for PostgreSQL {
     fn context(&self) -> &Context {
@@ -87,8 +92,8 @@ impl Service for PostgreSQL {
         sanitize_name("postgresql", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {
@@ -100,7 +105,7 @@ impl Service for PostgreSQL {
     }
 
     fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
+        Timeout::Value(600)
     }
 
     fn total_cpus(&self) -> String {
@@ -120,11 +125,8 @@ impl Service for PostgreSQL {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets

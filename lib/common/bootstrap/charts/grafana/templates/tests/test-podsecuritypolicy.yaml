@@ -3,7 +3,6 @@ apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
   name: {{ template "grafana.fullname" . }}-test
-  namespace: {{ template "grafana.namespace" . }}
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
 spec:
@@ -25,5 +24,6 @@ spec:
   - downwardAPI
   - emptyDir
   - projected
+  - csi
   - secret
 {{- end }}

@@ -5,6 +5,7 @@ use crate::cloud_provider::helm::{
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::error::{SimpleError, SimpleErrorKind};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
@@ -12,7 +13,11 @@ use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DigitalOceanQoveryTerraformConfig {
-    pub loki_storage_config_do_space: String,
+    pub loki_storage_config_do_space_access_id: String,
+    pub loki_storage_config_do_space_secret_key: String,
+    pub loki_storage_config_do_space_region: String,
+    pub loki_storage_config_do_space_host: String,
+    pub loki_storage_config_do_space_bucket_name: String,
 }
 
 pub struct ChartsConfigPrerequisites {
@@ -199,6 +204,7 @@ pub fn do_helm_charts(
     let promtail = CommonChart {
         chart_info: ChartInfo {
             name: "promtail".to_string(),
+            last_breaking_version_requiring_restart: Some(Version::new(0, 24, 0)),
             path: chart_path("common/charts/promtail"),
             // because of priorityClassName, we need to add it to kube-system
             namespace: HelmChartNamespaces::KubeSystem,
@@ -242,29 +248,37 @@ pub fn do_helm_charts(
             values_files: vec![chart_path("chart_values/loki.yaml")],
             values: vec![
                 ChartSetValue {
-                    key: "config.storage_config.aws.s3".to_string(),
-                    value: qovery_terraform_config.loki_storage_config_do_space,
+                    key: "config.storage_config.aws.s3forcepathstyle".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
+                    key: "config.storage_config.aws.bucketnames".to_string(),
+                    value: qovery_terraform_config.loki_storage_config_do_space_bucket_name,
                 },
                 ChartSetValue {
                     key: "config.storage_config.aws.endpoint".to_string(),
-                    value: format!("{}.digitaloceanspaces.com", chart_config_prerequisites.region.clone()),
+                    value: qovery_terraform_config.loki_storage_config_do_space_host,
                 },
                 ChartSetValue {
                     key: "config.storage_config.aws.region".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
+                    value: qovery_terraform_config.loki_storage_config_do_space_region,
                 },
                 ChartSetValue {
-                    key: "aws_iam_loki_storage_key".to_string(),
-                    value: chart_config_prerequisites.do_space_access_id.clone(),
+                    key: "config.storage_config.aws.access_key_id".to_string(),
+                    value: qovery_terraform_config.loki_storage_config_do_space_access_id,
                 },
                 ChartSetValue {
-                    key: "aws_iam_loki_storage_secret".to_string(),
-                    value: chart_config_prerequisites.do_space_secret_key.clone(),
+                    key: "config.storage_config.aws.secret_access_key".to_string(),
+                    value: qovery_terraform_config.loki_storage_config_do_space_secret_key,
                 },
                 // DigitalOcean do not support encryption yet
                 // https://docs.digitalocean.com/reference/api/spaces-api/
                 ChartSetValue {
                     key: "config.storage_config.aws.sse_encryption".to_string(),
+                    value: "false".to_string(),
+                },
+                ChartSetValue {
+                    key: "config.storage_config.aws.insecure".to_string(),
                     value: "false".to_string(),
                 },
                 // resources limits
@@ -488,14 +502,14 @@ datasources:
         type: loki
         url: \"http://{}.{}.svc:3100\"
       ",
-        prometheus_internal_url.clone(),
+        prometheus_internal_url,
         &loki.chart_info.name,
         get_chart_namespace(loki_namespace),
         &loki.chart_info.name,
         get_chart_namespace(loki_namespace),
     );
 
-    let _grafana = CommonChart {
+    let grafana = CommonChart {
         chart_info: ChartInfo {
             name: "grafana".to_string(),
             path: chart_path("common/charts/grafana"),
@@ -633,7 +647,7 @@ datasources:
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
             name: "nginx-ingress".to_string(),
-            path: chart_path("common/charts/nginx-ingress"),
+            path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
             timeout: "300".to_string(),
@@ -820,7 +834,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),
-                    value: chart_config_prerequisites.cloud_provider.clone(),
+                    value: "do".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.KUBERNETES_ID".to_string(),
@@ -847,6 +861,7 @@ datasources:
             ..Default::default()
         },
     };
+
     if chart_config_prerequisites.ff_log_history_enabled {
         qovery_agent.chart_info.values.push(ChartSetValue {
             key: "environmentVariables.FEATURES".to_string(),
@@ -881,10 +896,9 @@ datasources:
                     key: "image.tag".to_string(),
                     value: qovery_engine_version.version,
                 },
-                // need kubernetes 1.18, should be well tested before activating it
                 ChartSetValue {
-                    key: "autoscaler.enabled".to_string(),
-                    value: "false".to_string(),
+                    key: "autoscaler.min_replicas".to_string(),
+                    value: "2".to_string(),
                 },
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
@@ -915,7 +929,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),
-                    value: chart_config_prerequisites.cloud_provider.clone(),
+                    value: "do".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.REGION".to_string(),
@@ -968,6 +982,49 @@ datasources:
         },
     };
 
+    let container_registry_secret = CommonChart {
+        chart_info: ChartInfo {
+            name: "container-registry-secret".to_string(),
+            path: chart_path("charts/container-registry-secret"),
+            namespace: HelmChartNamespaces::KubeSystem,
+            values_files: vec![chart_path("chart_values/container-registry-secret.yaml")],
+            values: vec![
+                ChartSetValue {
+                    key: "do_container_registry_docker_json_config".to_string(),
+                    // https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/
+                    value: base64::encode(
+                        format!(
+                            r#"{{"auths":{{"registry.digitalocean.com":{{"auth":"{}"}}}}}}"#,
+                            base64::encode(
+                                format!(
+                                    "{}:{}",
+                                    chart_config_prerequisites.do_token.clone(),
+                                    chart_config_prerequisites.do_token.clone()
+                                )
+                                .as_bytes()
+                            )
+                        )
+                        .as_bytes(),
+                    )
+                    .to_string(),
+                },
+                ChartSetValue {
+                    key: "do_container_registry_secret_identifier".to_string(),
+                    value: "do-container-registry-secret-for-cluster".to_string(),
+                },
+                ChartSetValue {
+                    key: "do_container_registry_secret_name".to_string(),
+                    value: "do-container-registry-secret-for-cluster".to_string(),
+                },
+                ChartSetValue {
+                    key: "do_container_registry_secret_namespace".to_string(),
+                    value: get_chart_namespace(HelmChartNamespaces::KubeSystem),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
     // chart deployment order matters!!!
     let level_1: Vec<Box<dyn HelmChart>> = vec![
         Box::new(q_storage_class),
@@ -975,7 +1032,7 @@ datasources:
         Box::new(old_prometheus_operator),
     ];
 
-    let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
+    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(container_registry_secret)];
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
 
@@ -983,7 +1040,7 @@ datasources:
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager)];
 
-    let level_6: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(qovery_agent),
         Box::new(qovery_engine),
@@ -1002,9 +1059,9 @@ datasources:
         level_4.push(Box::new(loki));
     }
 
-    // if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
-    //     level_6.push(Box::new(grafana))
-    // };
+    if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
+        level_6.push(Box::new(grafana))
+    };
 
     // pleco
     if !chart_config_prerequisites.disable_pleco {

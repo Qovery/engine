@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::databases::utilities::{get_parameter_group_from_version, rds_name_sanitizer};
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
@@ -17,6 +16,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
+use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, DatabaseKind, Listen, Listener, Listeners};
 
 pub struct MySQL {
@@ -70,7 +70,11 @@ impl MySQL {
     }
 }
 
-impl StatefulService for MySQL {}
+impl StatefulService for MySQL {
+    fn is_managed_service(&self) -> bool {
+        self.options.mode == MANAGED
+    }
+}
 
 impl Service for MySQL {
     fn context(&self) -> &Context {
@@ -96,8 +100,8 @@ impl Service for MySQL {
         rds_name_sanitizer(max_size, prefix, self.name())
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {
@@ -129,17 +133,9 @@ impl Service for MySQL {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
-
-        let is_managed_services = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
 
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kube_config_file_path = kubernetes.config_file_path()?;
@@ -153,10 +149,10 @@ impl Service for MySQL {
 
         context.insert("namespace", environment.namespace());
 
-        let version = &self.matching_correct_version(is_managed_services)?;
+        let version = &self.matching_correct_version(self.is_managed_service())?;
         context.insert("version", &version);
 
-        if is_managed_services {
+        if self.is_managed_service() {
             let parameter_group_family = match get_parameter_group_from_version(&version, DatabaseKind::Mysql) {
                 Ok(v) => v,
                 Err(e) => {
@@ -386,7 +382,7 @@ impl Listen for MySQL {
     }
 }
 
-fn get_mysql_version(requested_version: &str, is_managed_service: bool) -> Result<String, StringError> {
+fn get_mysql_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
     if is_managed_service {
         get_managed_mysql_version(requested_version)
     } else {
@@ -394,7 +390,7 @@ fn get_mysql_version(requested_version: &str, is_managed_service: bool) -> Resul
     }
 }
 
-fn get_managed_mysql_version(requested_version: &str) -> Result<String, StringError> {
+fn get_managed_mysql_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_mysql_versions = HashMap::new();
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
 
@@ -420,24 +416,24 @@ fn get_managed_mysql_version(requested_version: &str) -> Result<String, StringEr
 mod tests_mysql {
     use crate::cloud_provider::aws::databases::mysql::{get_mysql_version, MySQL};
     use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
-    use crate::models::Context;
+    use crate::models::{Context, DatabaseMode};
 
     #[test]
     fn check_mysql_version() {
         // managed version
-        assert_eq!(get_mysql_version("8", true).unwrap(), "8.0.21");
-        assert_eq!(get_mysql_version("8.0", true).unwrap(), "8.0.21");
-        assert_eq!(get_mysql_version("8.0.16", true).unwrap(), "8.0.16");
+        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.21");
+        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.21");
+        assert_eq!(get_mysql_version("8.0.16".to_string(), true).unwrap(), "8.0.16");
         assert_eq!(
-            get_mysql_version("8.0.18", true).unwrap_err().as_str(),
+            get_mysql_version("8.0.18".to_string(), true).unwrap_err().as_str(),
             "RDS MySQL 8.0.18 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_mysql_version("5", false).unwrap(), "5.7.33");
-        assert_eq!(get_mysql_version("5.7", false).unwrap(), "5.7.33");
-        assert_eq!(get_mysql_version("5.7.31", false).unwrap(), "5.7.31");
+        assert_eq!(get_mysql_version("5".to_string(), false).unwrap(), "5.7.33");
+        assert_eq!(get_mysql_version("5.7".to_string(), false).unwrap(), "5.7.33");
+        assert_eq!(get_mysql_version("5.7.31".to_string(), false).unwrap(), "5.7.31");
         assert_eq!(
-            get_mysql_version("1.0", false).unwrap_err().as_str(),
+            get_mysql_version("1.0".to_string(), false).unwrap_err().as_str(),
             "MySQL 1.0 version is not supported"
         );
     }
@@ -471,8 +467,12 @@ mod tests_mysql {
                 password: "".to_string(),
                 host: "".to_string(),
                 port: 3306,
+                mode: DatabaseMode::MANAGED,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
             vec![],
         );

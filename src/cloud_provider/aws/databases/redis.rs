@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
@@ -14,6 +13,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
+use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Redis {
@@ -67,7 +67,11 @@ impl Redis {
     }
 }
 
-impl StatefulService for Redis {}
+impl StatefulService for Redis {
+    fn is_managed_service(&self) -> bool {
+        self.options.mode == MANAGED
+    }
+}
 
 impl Service for Redis {
     fn context(&self) -> &Context {
@@ -99,8 +103,8 @@ impl Service for Redis {
         format!("{}{}", prefix, new_name)
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> String {
+        self.version.clone()
     }
 
     fn action(&self) -> &Action {
@@ -132,16 +136,8 @@ impl Service for Redis {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
-        let is_managed_services = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
-
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
@@ -154,7 +150,7 @@ impl Service for Redis {
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
 
-        let version = self.matching_correct_version(is_managed_services)?;
+        let version = self.matching_correct_version(self.is_managed_service())?;
 
         let parameter_group_name = if version.starts_with("5.") {
             "default.redis5.0"
@@ -385,7 +381,7 @@ impl Listen for Redis {
     }
 }
 
-fn get_redis_version(requested_version: &str, is_managed_service: bool) -> Result<String, StringError> {
+fn get_redis_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
     if is_managed_service {
         get_managed_redis_version(requested_version)
     } else {
@@ -393,7 +389,7 @@ fn get_redis_version(requested_version: &str, is_managed_service: bool) -> Resul
     }
 }
 
-fn get_managed_redis_version(requested_version: &str) -> Result<String, StringError> {
+fn get_managed_redis_version(requested_version: String) -> Result<String, StringError> {
     let mut supported_redis_versions = HashMap::with_capacity(2);
     // https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/supported-engine-versions.html
 
@@ -407,23 +403,23 @@ fn get_managed_redis_version(requested_version: &str) -> Result<String, StringEr
 mod tests {
     use crate::cloud_provider::aws::databases::redis::{get_redis_version, Redis};
     use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
-    use crate::models::Context;
+    use crate::models::{Context, DatabaseMode};
 
     #[test]
     fn check_redis_version() {
         // managed version
-        assert_eq!(get_redis_version("6", true).unwrap(), "6.x");
-        assert_eq!(get_redis_version("5", true).unwrap(), "5.0.6");
+        assert_eq!(get_redis_version("6".to_string(), true).unwrap(), "6.x");
+        assert_eq!(get_redis_version("5".to_string(), true).unwrap(), "5.0.6");
         assert_eq!(
-            get_redis_version("1.0", true).unwrap_err().as_str(),
+            get_redis_version("1.0".to_string(), true).unwrap_err().as_str(),
             "Elasticache 1.0 version is not supported"
         );
 
         // self-hosted version
-        assert_eq!(get_redis_version("6", false).unwrap(), "6.0.9");
-        assert_eq!(get_redis_version("6.0", false).unwrap(), "6.0.9");
+        assert_eq!(get_redis_version("6".to_string(), false).unwrap(), "6.0.9");
+        assert_eq!(get_redis_version("6.0".to_string(), false).unwrap(), "6.0.9");
         assert_eq!(
-            get_redis_version("1.0", false).unwrap_err().as_str(),
+            get_redis_version("1.0".to_string(), false).unwrap_err().as_str(),
             "Redis 1.0 version is not supported"
         );
     }
@@ -457,8 +453,12 @@ mod tests {
                 password: "".to_string(),
                 host: "".to_string(),
                 port: 5432,
+                mode: DatabaseMode::MANAGED,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: false,
             },
             vec![],
         );

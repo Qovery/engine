@@ -20,7 +20,7 @@ pub fn get_used_cidr_on_region(token: &str) {
         "doctl",
         vec!["vpcs", "list", "--output", "json", "-t", token],
         |r_out| match r_out {
-            Ok(s) => output_from_cli.push_str(&s.to_owned()),
+            Ok(s) => output_from_cli.push_str(&s),
             Err(e) => error!("DOCTL CLI does not respond correctly {}", e),
         },
         |r_err| match r_err {

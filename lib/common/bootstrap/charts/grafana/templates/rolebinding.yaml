@@ -1,5 +1,5 @@
 {{- if .Values.rbac.create -}}
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: {{ template "grafana.rbac.apiVersion" . }}
 kind: RoleBinding
 metadata:
   name: {{ template "grafana.fullname" . }}
@@ -13,7 +13,11 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
+{{- if (not .Values.rbac.useExistingRole) }}
   name: {{ template "grafana.fullname" . }}
+{{- else }}
+  name: {{ .Values.rbac.useExistingRole }}
+{{- end }}
 subjects:
 - kind: ServiceAccount
   name: {{ template "grafana.serviceAccountName" . }}

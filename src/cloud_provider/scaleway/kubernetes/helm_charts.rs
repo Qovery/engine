@@ -3,9 +3,10 @@ use crate::cloud_provider::helm::{
     HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::cloud_provider::scaleway::application::Zone;
+use crate::cloud_provider::scaleway::application::{Region, Zone};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
@@ -20,11 +21,13 @@ pub struct ChartsConfigPrerequisites {
     pub organization_id: String,
     pub cluster_id: String,
     pub zone: Zone,
+    pub region: Region,
     pub cluster_name: String,
     pub cloud_provider: String,
     pub test_cluster: bool,
     pub scw_access_key: String,
     pub scw_secret_key: String,
+    pub scw_project_id: String,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
@@ -50,6 +53,7 @@ impl ChartsConfigPrerequisites {
         test_cluster: bool,
         scw_access_key: String,
         scw_secret_key: String,
+        scw_project_id: String,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
         managed_dns_name: String,
@@ -67,11 +71,13 @@ impl ChartsConfigPrerequisites {
             organization_id,
             cluster_id,
             zone,
+            region: zone.region(),
             cluster_name,
             cloud_provider,
             test_cluster,
             scw_access_key,
             scw_secret_key,
+            scw_project_id,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
             managed_dns_name,
@@ -191,6 +197,7 @@ pub fn scw_helm_charts(
     let promtail = CommonChart {
         chart_info: ChartInfo {
             name: "promtail".to_string(),
+            last_breaking_version_requiring_restart: Some(Version::new(0, 24, 0)),
             path: chart_path("common/charts/promtail"),
             // because of priorityClassName, we need to add it to kube-system
             namespace: HelmChartNamespaces::KubeSystem,
@@ -580,7 +587,7 @@ datasources:
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
             name: "nginx-ingress".to_string(),
-            path: chart_path("common/charts/nginx-ingress"),
+            path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
             timeout: "300".to_string(),
@@ -632,16 +639,16 @@ datasources:
             values_files: vec![chart_path("chart_values/pleco.yaml")],
             values: vec![
                 ChartSetValue {
-                    key: "environmentVariables.SCALEWAY_ACCESS_KEY_ID".to_string(),
+                    key: "environmentVariables.SCW_ACCESS_KEY".to_string(),
                     value: chart_config_prerequisites.scw_access_key.clone(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.SCALEWAY_SECRET_ACCESS_KEY".to_string(),
+                    key: "environmentVariables.SCW_SECRET_KEY".to_string(),
                     value: chart_config_prerequisites.scw_secret_key.clone(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.PLECO_IDENTIFIER".to_string(),
-                    value: chart_config_prerequisites.cluster_id.clone(),
+                    key: "environmentVariables.SCW_VOLUME_TIMEOUT".to_string(),
+                    value: 24.to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.LOG_LEVEL".to_string(),
@@ -768,10 +775,9 @@ datasources:
                     key: "image.tag".to_string(),
                     value: qovery_engine_version.version,
                 },
-                // need kubernetes 1.18, should be well tested before activating it
                 ChartSetValue {
-                    key: "autoscaler.enabled".to_string(),
-                    value: "false".to_string(),
+                    key: "autoscaler.min_replicas".to_string(),
+                    value: "2".to_string(),
                 },
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),

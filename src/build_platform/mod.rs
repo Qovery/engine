@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::git::Credentials;
 use crate::models::{Context, Listen};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 pub mod local_docker;
 
@@ -51,6 +52,7 @@ pub struct GitRepository {
     pub commit_id: String,
     pub dockerfile_path: Option<String>,
     pub root_path: String,
+    pub buildpack_language: Option<String>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -87,6 +89,16 @@ impl Default for Image {
             registry_secret: None,
             registry_url: None,
         }
+    }
+}
+
+impl Display for Image {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(
+            f,
+            "Image (name={}, tag={}, commit_id={}, application_id={}, registry_name={:?}, registry_url={:?})",
+            self.name, self.tag, self.commit_id, self.application_id, self.registry_name, self.registry_url
+        )
     }
 }
 

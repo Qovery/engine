@@ -128,8 +128,8 @@ impl Service for Application {
         sanitize_name("app", self.name())
     }
 
-    fn version(&self) -> &str {
-        self.image.commit_id.as_str()
+    fn version(&self) -> String {
+        self.image.commit_id.clone()
     }
 
     fn action(&self) -> &Action {
@@ -161,11 +161,8 @@ impl Service for Application {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
-
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
         let commit_id = self.image().commit_id.as_str();
 
@@ -435,6 +432,16 @@ impl Zone {
             Zone::Paris2 => Region::Paris,
             Zone::Amsterdam1 => Region::Amsterdam,
             Zone::Warsaw1 => Region::Warsaw,
+        }
+    }
+
+    // TODO(benjaminch): improve / refactor this!
+    pub fn region_str(&self) -> &str {
+        match self {
+            Zone::Paris1 => "fr-par",
+            Zone::Paris2 => "fr-par",
+            Zone::Amsterdam1 => "nl-ams",
+            Zone::Warsaw1 => "pl-waw",
         }
     }
 }

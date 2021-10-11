@@ -43,7 +43,6 @@ pub enum EngineErrorScope {
     Database(Id, Type, Name),
     Application(Id, Name),
     Router(Id, Name),
-    ExternalService(Id, Name),
 }
 
 #[derive(Debug)]

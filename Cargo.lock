@@ -1858,6 +1858,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "passwords"
+version = "3.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03258d8822ae1e392ba9385d4f66c1eed50129fd679c13faa2ce6f62bae5b511"
+dependencies = [
+ "random-pick",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2051,6 +2060,7 @@ dependencies = [
  "git2",
  "itertools",
  "lazy_static",
+ "maplit",
  "rand 0.8.4",
  "reqwest 0.11.4",
  "retry",
@@ -2064,6 +2074,7 @@ dependencies = [
  "rusoto_sts",
  "rust-crypto",
  "scaleway_api_rs",
+ "semver 1.0.4",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2315,6 +2326,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbf7e9e623549b0e21f6e97cf8ecf247c1a8fd2e8a992ae265314300b2455d5c"
 dependencies = [
  "rand_core 0.3.1",
+]
+
+[[package]]
+name = "random-number"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b6c791ad2f753537ebdc0300173be0fc4821eaa628feb2c404f8acaba612d57"
+dependencies = [
+ "proc-macro-hack",
+ "rand 0.8.4",
+ "random-number-macro-impl",
+]
+
+[[package]]
+name = "random-number-macro-impl"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc6653af545be5b0b1a2b4c19ef0f0cb288b2e5c024016a8eb0fe2efa8d9f8de"
+dependencies = [
+ "proc-macro-hack",
+ "quote 1.0.9",
+ "syn 1.0.74",
+]
+
+[[package]]
+name = "random-pick"
+version = "1.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "420e471026e6ab33d59869853453cdbfacee6bd941710ed3bd6007a9c67e4efa"
+dependencies = [
+ "random-number",
 ]
 
 [[package]]
@@ -2719,7 +2761,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 dependencies = [
- "semver",
+ "semver 0.9.0",
 ]
 
 [[package]]
@@ -2797,6 +2839,12 @@ checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 dependencies = [
  "semver-parser",
 ]
+
+[[package]]
+name = "semver"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
 
 [[package]]
 name = "semver-parser"
@@ -3169,6 +3217,8 @@ dependencies = [
  "dirs",
  "gethostname",
  "hashicorp_vault",
+ "maplit",
+ "passwords",
  "qovery-engine",
  "rand 0.7.3",
  "reqwest 0.10.10",

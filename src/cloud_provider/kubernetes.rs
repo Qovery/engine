@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::CheckAction;
-use crate::cloud_provider::utilities::{get_version_number, VersionsNumber};
+use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
@@ -26,6 +26,7 @@ use crate::error::{
 use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath};
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
+use std::str::FromStr;
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;
@@ -40,6 +41,7 @@ pub trait Kubernetes: Listen {
     }
     fn version(&self) -> &str;
     fn region(&self) -> &str;
+    fn zone(&self) -> &str;
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn config_file_store(&self) -> &dyn ObjectStorage;
@@ -168,18 +170,18 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
     let stateful_deployment_target = match kubernetes.kind() {
-        Kind::Eks => match environment.kind {
-            crate::cloud_provider::environment::Kind::Production => {
-                DeploymentTarget::ManagedServices(kubernetes, environment)
-            }
-            crate::cloud_provider::environment::Kind::Development => {
-                DeploymentTarget::SelfHosted(kubernetes, environment)
-            }
+        Kind::Eks => DeploymentTarget {
+            kubernetes,
+            environment,
         },
-        // FIXME: We don't have any managed service on DO for now
-        Kind::Doks => DeploymentTarget::SelfHosted(kubernetes, environment),
-        // TODO(benjaminch): We don't have any managed service on Scaleway for now
-        Kind::ScwKapsule => DeploymentTarget::SelfHosted(kubernetes, environment),
+        Kind::Doks => DeploymentTarget {
+            kubernetes,
+            environment,
+        },
+        Kind::ScwKapsule => DeploymentTarget {
+            kubernetes,
+            environment,
+        },
     };
 
     // do not deploy if there is not enough resources
@@ -214,7 +216,10 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
     thread::sleep(std::time::Duration::from_millis(100));
 
     // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-    let stateless_deployment_target = DeploymentTarget::SelfHosted(kubernetes, environment);
+    let stateless_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
+    };
 
     // create all stateless services (router, application...)
     for service in &environment.stateless_services {
@@ -276,11 +281,9 @@ pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Envir
         kubernetes.context().execution_id(),
     ));
 
-    let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Production => {
-            DeploymentTarget::ManagedServices(kubernetes, environment)
-        }
-        crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
+    let stateful_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
     };
 
     // clean up all stateful services (database)
@@ -300,7 +303,10 @@ pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Envir
     thread::sleep(std::time::Duration::from_millis(100));
 
     // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-    let stateless_deployment_target = DeploymentTarget::SelfHosted(kubernetes, environment);
+    let stateless_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
+    };
 
     // clean up all stateless services (router, application...)
     for service in &environment.stateless_services {
@@ -322,15 +328,16 @@ pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Envir
 pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
-    let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Production => {
-            DeploymentTarget::ManagedServices(kubernetes, environment)
-        }
-        crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
+    let stateful_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
     };
 
     // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-    let stateless_deployment_target = DeploymentTarget::SelfHosted(kubernetes, environment);
+    let stateless_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
+    };
 
     // create all stateless services (router, application...)
     for service in &environment.stateless_services {
@@ -399,15 +406,16 @@ pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment)
 pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
-    let stateful_deployment_target = match environment.kind {
-        crate::cloud_provider::environment::Kind::Production => {
-            DeploymentTarget::ManagedServices(kubernetes, environment)
-        }
-        crate::cloud_provider::environment::Kind::Development => DeploymentTarget::SelfHosted(kubernetes, environment),
+    let stateful_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
     };
 
     // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-    let stateless_deployment_target = DeploymentTarget::SelfHosted(kubernetes, environment);
+    let stateless_deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
+    };
 
     // delete all stateless services (router, application...)
     for service in &environment.stateless_services {
@@ -618,7 +626,7 @@ where
     // check master versions
     let v = kubectl_exec_version(&kubernetes_config, envs.clone())?;
     let masters_version =
-        match get_version_number(format!("{}.{}", v.server_version.major, v.server_version.minor).as_str()) {
+        match VersionsNumber::from_str(format!("{}.{}", v.server_version.major, v.server_version.minor).as_str()) {
             Ok(vn) => Ok(vn),
             Err(e) => Err(SimpleError {
                 kind: SimpleErrorKind::Other,
@@ -644,7 +652,7 @@ where
 
     for node in nodes.items {
         // check kubelet version
-        match get_version_number(node.status.node_info.kubelet_version.as_str()) {
+        match VersionsNumber::from_str(node.status.node_info.kubelet_version.as_str()) {
             Ok(vn) => deployed_workers_version.push(vn),
             Err(e) => {
                 return Err(SimpleError {
@@ -657,7 +665,7 @@ where
             }
         }
         // check kube-proxy version
-        match get_version_number(node.status.node_info.kube_proxy_version.as_str()) {
+        match VersionsNumber::from_str(node.status.node_info.kube_proxy_version.as_str()) {
             Ok(vn) => deployed_workers_version.push(vn),
             Err(e) => {
                 return Err(SimpleError {
@@ -709,7 +717,7 @@ fn check_kubernetes_upgrade_status(
     let mut older_masters_version_detected = false;
     let mut older_workers_version_detected = false;
 
-    let wished_version = match get_version_number(requested_version) {
+    let wished_version = match VersionsNumber::from_str(requested_version) {
         Ok(v) => v,
         Err(e) => {
             let msg = format!(
@@ -872,21 +880,14 @@ mod tests {
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, KubernetesNodesType,
     };
-    use crate::cloud_provider::utilities::{get_version_number, VersionsNumber};
+    use crate::cloud_provider::utilities::VersionsNumber;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
+    use std::str::FromStr;
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {
-        let version_1_16 = VersionsNumber {
-            major: "1".to_string(),
-            minor: Some("16".to_string()),
-            patch: None,
-        };
-        let version_1_17 = VersionsNumber {
-            major: "1".to_string(),
-            minor: Some("17".to_string()),
-            patch: None,
-        };
+        let version_1_16 = VersionsNumber::new("1".to_string(), Some("16".to_string()), None, None);
+        let version_1_17 = VersionsNumber::new("1".to_string(), Some("17".to_string()), None, None);
 
         // test full cluster upgrade (masters + workers)
         let result = check_kubernetes_upgrade_status("1.17", version_1_16.clone(), vec![version_1_16.clone()]).unwrap();
@@ -1003,32 +1004,25 @@ mod tests {
         let validate_providers = vec![
             KubernetesVersionToCheck {
                 json: kubectl_version_aws,
-                wished_version: VersionsNumber {
-                    major: "1".to_string(),
-                    minor: Some("16".to_string()),
-                    patch: None,
-                },
+                wished_version: VersionsNumber::new("1".to_string(), Some("16".to_string()), None, None),
             },
             KubernetesVersionToCheck {
                 json: kubectl_version_do,
-                wished_version: VersionsNumber {
-                    major: "1".to_string(),
-                    minor: Some("18".to_string()),
-                    patch: None,
-                },
+                wished_version: VersionsNumber::new("1".to_string(), Some("18".to_string()), None, None),
             },
         ];
 
         for mut provider in validate_providers {
             let provider_server_version: KubernetesVersion = serde_json::from_str(provider.json).unwrap();
-            let provider_version = get_version_number(
+            let provider_version = VersionsNumber::from_str(
                 format!(
                     "{}",
-                    VersionsNumber {
-                        major: provider_server_version.server_version.major,
-                        minor: Some(provider_server_version.server_version.minor),
-                        patch: None
-                    }
+                    VersionsNumber::new(
+                        provider_server_version.server_version.major,
+                        Some(provider_server_version.server_version.minor),
+                        None,
+                        None,
+                    ),
                 )
                 .as_str(),
             )
@@ -1372,19 +1366,11 @@ mod tests {
         let validate_providers = vec![
             KubernetesVersionToCheck {
                 json: kubectl_version_aws,
-                wished_version: VersionsNumber {
-                    major: "1".to_string(),
-                    minor: Some("16".to_string()),
-                    patch: None,
-                },
+                wished_version: VersionsNumber::new("1".to_string(), Some("16".to_string()), None, None),
             },
             KubernetesVersionToCheck {
                 json: kubectl_version_do,
-                wished_version: VersionsNumber {
-                    major: "1".to_string(),
-                    minor: Some("18".to_string()),
-                    patch: None,
-                },
+                wished_version: VersionsNumber::new("1".to_string(), Some("18".to_string()), None, None),
             },
         ];
 
@@ -1392,8 +1378,8 @@ mod tests {
             let provider_server_version: KubernetesList<KubernetesNode> =
                 serde_json::from_str(provider.json).expect("Can't read workers json from {} provider");
             for node in provider_server_version.items {
-                let kubelet = get_version_number(&node.status.node_info.kubelet_version).unwrap();
-                let kube_proxy = get_version_number(&node.status.node_info.kube_proxy_version).unwrap();
+                let kubelet = VersionsNumber::from_str(&node.status.node_info.kubelet_version).unwrap();
+                let kube_proxy = VersionsNumber::from_str(&node.status.node_info.kube_proxy_version).unwrap();
 
                 // upgrade is not required
                 //print_kubernetes_version(&provider_version, &provider.wished_version);

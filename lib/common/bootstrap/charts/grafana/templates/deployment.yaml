@@ -14,7 +14,10 @@ metadata:
 {{ toYaml . | indent 4 }}
 {{- end }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicas }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "grafana.selectorLabels" . | nindent 6 }}
@@ -33,8 +36,11 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/dashboards-json-config: {{ include (print $.Template.BasePath "/dashboards-json-configmap.yaml") . | sha256sum }}
         checksum/sc-dashboard-provider-config: {{ include (print $.Template.BasePath "/configmap-dashboard-provider.yaml") . | sha256sum }}
-{{- if and (not .Values.admin.existingSecret) (not .Values.env.GF_SECURITY_ADMIN_PASSWORD__FILE) (not .Values.env.GF_SECURITY_ADMIN_PASSWORD) }}
+{{- if and (or (and (not .Values.admin.existingSecret) (not .Values.env.GF_SECURITY_ADMIN_PASSWORD__FILE) (not .Values.env.GF_SECURITY_ADMIN_PASSWORD)) (and .Values.ldap.enabled (not .Values.ldap.existingSecret))) (not .Values.env.GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION) }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+{{- end }}
+{{- if .Values.envRenderSecret }}
+        checksum/secret-env: {{ include (print $.Template.BasePath "/secret-env.yaml") . | sha256sum }}
 {{- end }}
 {{- with .Values.podAnnotations }}
 {{ toYaml . | indent 8 }}
