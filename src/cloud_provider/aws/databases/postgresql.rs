@@ -411,7 +411,7 @@ mod tests_postgres {
     #[test]
     fn check_postgres_version() {
         // managed version
-        assert_eq!(get_postgres_version("12".to_string(), true).unwrap(), "12.5");
+        assert_eq!(get_postgres_version("12".to_string(), true).unwrap(), "12.8");
         assert_eq!(get_postgres_version("12.3".to_string(), true).unwrap(), "12.3");
         assert_eq!(
             get_postgres_version("12.3.0".to_string(), true).unwrap_err().as_str(),
@@ -422,8 +422,8 @@ mod tests_postgres {
             "Postgresql 11.3 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_postgres_version("12".to_string(), false).unwrap(), "12.6.0");
-        assert_eq!(get_postgres_version("12.3".to_string(), false).unwrap(), "12.3.0");
+        assert_eq!(get_postgres_version("12".to_string(), false).unwrap(), "12.8.0");
+        assert_eq!(get_postgres_version("12.8".to_string(), false).unwrap(), "12.8.0");
         assert_eq!(get_postgres_version("12.3.0".to_string(), false).unwrap(), "12.3.0");
         assert_eq!(
             get_postgres_version("1.0".to_string(), false).unwrap_err().as_str(),

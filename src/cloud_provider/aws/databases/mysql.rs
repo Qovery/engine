@@ -424,16 +424,16 @@ mod tests_mysql {
     #[test]
     fn check_mysql_version() {
         // managed version
-        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.21");
-        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.21");
+        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.25");
+        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.25");
         assert_eq!(get_mysql_version("8.0.16".to_string(), true).unwrap(), "8.0.16");
         assert_eq!(
             get_mysql_version("8.0.18".to_string(), true).unwrap_err().as_str(),
             "RDS MySQL 8.0.18 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_mysql_version("5".to_string(), false).unwrap(), "5.7.33");
-        assert_eq!(get_mysql_version("5.7".to_string(), false).unwrap(), "5.7.33");
+        assert_eq!(get_mysql_version("5".to_string(), false).unwrap(), "5.7.34");
+        assert_eq!(get_mysql_version("5.7".to_string(), false).unwrap(), "5.7.34");
         assert_eq!(get_mysql_version("5.7.31".to_string(), false).unwrap(), "5.7.31");
         assert_eq!(
             get_mysql_version("1.0".to_string(), false).unwrap_err().as_str(),
