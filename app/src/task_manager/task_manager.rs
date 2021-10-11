@@ -367,7 +367,7 @@ impl ActionContext {
     }
 
     pub fn execution_id_short(&self) -> String {
-        let max_execution_id_chars: usize = 7;
+        let max_execution_id_chars: usize = 8;
         match self.execution_id.char_indices().nth(max_execution_id_chars) {
             None => self.execution_id.to_string(),
             Some((idx, _)) => self.execution_id[..idx].to_string(),
@@ -618,7 +618,7 @@ mod tests {
     }
 
     #[test]
-    fn test_auction_context_execution_id_short() {
+    fn test_action_context_execution_id_short() {
         // setup:
         struct TestCase<'a> {
             execution_id: &'a str,
@@ -639,7 +639,7 @@ mod tests {
             },
             TestCase {
                 execution_id: "azertyuiopmlkjhgfdsqwxcvbn",
-                expected_execution_id_short: "azertyu",
+                expected_execution_id_short: "azertyui",
                 description: "execution_id with more chars count than short version",
             },
             TestCase {
@@ -656,7 +656,7 @@ mod tests {
 
         for tc in test_cases {
             // execute:
-            let auction_context = ActionContext::new(
+            let action_context = ActionContext::new(
                 ProgressScope::Infrastructure {
                     execution_id: tc.execution_id.to_string(),
                 },
@@ -664,11 +664,11 @@ mod tests {
                 tc.execution_id.to_string(),
                 Utc::now(),
             );
-            let result = auction_context.execution_id_short();
+            let result = action_context.execution_id_short();
 
             // verify:
             assert_eq!(
-                cmp::min(7usize, tc.execution_id.len()),
+                cmp::min(8usize, tc.execution_id.len()),
                 result.len(),
                 "case: {}, execution_id: {:?}",
                 tc.description,
