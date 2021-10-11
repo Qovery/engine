@@ -15,6 +15,7 @@ use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::qovery::EngineLocation;
 
 pub const DO_QOVERY_ORGANIZATION_ID: &str = "z3bc003d2";
 pub const DO_KUBERNETES_VERSION: &str = "1.19";
@@ -109,6 +110,7 @@ pub fn do_kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_name: St
         vpc_cidr_set: VpcInitKind::Autodetect,
         vpc_name: cluster_name,
         qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
+        qovery_engine_location: Some(EngineLocation::ClientSide),
         engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
         agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
         grafana_admin_user: "admin".to_string(),

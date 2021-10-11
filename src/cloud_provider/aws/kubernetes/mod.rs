@@ -20,6 +20,7 @@ use crate::cloud_provider::kubernetes::{
     KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
+use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::{
@@ -89,6 +90,7 @@ pub struct Options {
     pub elasticsearch_cidr_subnet: String,
     // Qovery
     pub qovery_api_url: String,
+    pub qovery_engine_location: Option<EngineLocation>,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
     pub grafana_admin_user: String,
@@ -153,6 +155,13 @@ impl<'a> EKS<'a> {
             nodes,
             template_directory,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
+        }
+    }
+
+    fn get_engine_location(&self) -> EngineLocation {
+        match self.options.qovery_engine_location.clone() {
+            None => EngineLocation::QoverySide,
+            Some(x) => x,
         }
     }
 
@@ -910,6 +919,7 @@ impl<'a> Kubernetes for EKS<'a> {
             aws_access_key_id: self.cloud_provider.access_key_id.to_string(),
             aws_secret_access_key: self.cloud_provider.secret_access_key.to_string(),
             vpc_qovery_network_mode: self.options.vpc_qovery_network_mode.clone(),
+            qovery_engine_location: self.get_engine_location(),
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
             ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
             managed_dns_name: self.dns_provider.domain().to_string(),

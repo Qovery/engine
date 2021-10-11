@@ -16,6 +16,12 @@ pub struct QoveryEngine {
     pub object_type: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum EngineLocation {
+    ClientSide,
+    QoverySide,
+}
+
 pub enum QoveryApp {
     QoveryAgent,
     QoveryEngine,

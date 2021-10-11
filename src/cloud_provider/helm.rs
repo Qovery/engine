@@ -1,5 +1,6 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
+use crate::cloud_provider::qovery::EngineLocation;
 use crate::cmd::helm::{
     helm_destroy_chart_if_breaking_changes_version_detected, helm_exec_uninstall_with_chart_info,
     helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info, is_chart_deployed,
@@ -688,6 +689,13 @@ pub fn get_latest_successful_deployment(helm_history_list: &[HelmHistoryRow]) ->
             helm_history_reversed[0].chart
         )),
     })
+}
+
+pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAction {
+    match location {
+        EngineLocation::ClientSide => HelmAction::Deploy,
+        EngineLocation::QoverySide => HelmAction::Destroy,
+    }
 }
 
 #[cfg(test)]
