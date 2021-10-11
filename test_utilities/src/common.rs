@@ -5,12 +5,13 @@ use chrono::Utc;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::models::{
-    Action, Application, Context, Database, DatabaseKind, Environment, GitCredentials, Kind, Route, Router, Storage,
+    Action, Application, Context, Database, DatabaseKind, Environment, GitCredentials, Route, Router, Storage,
     StorageType,
 };
 
 use crate::utilities::{generate_id, generate_password};
 use base64;
+use qovery_engine::models::DatabaseMode::CONTAINER;
 use std::collections::BTreeMap;
 
 pub fn execution_id() -> String {
@@ -65,7 +66,6 @@ pub fn environment_3_apps_3_routers_3_databases(
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
-        kind: Kind::Development,
         owner_id: generate_id(),
         project_id: generate_id(),
         organization_id: organization_id.to_string(),
@@ -243,6 +243,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
+                mode: CONTAINER,
             },
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -263,6 +264,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
+                mode: CONTAINER,
             },
             Database {
                 kind: DatabaseKind::Mongodb,
@@ -283,6 +285,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
+                mode: CONTAINER,
             },
         ],
         clone_from_environment_id: None,
@@ -294,7 +297,6 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
-        kind: Kind::Development,
         owner_id: generate_id(),
         project_id: generate_id(),
         organization_id: organization_id.to_string(),
@@ -362,7 +364,6 @@ pub fn environnement_2_app_2_routers_1_psql(
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
-        kind: Kind::Development,
         owner_id: generate_id(),
         project_id: generate_id(),
         organization_id: organization_id.to_string(),
@@ -386,6 +387,7 @@ pub fn environnement_2_app_2_routers_1_psql(
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,
+            mode: CONTAINER,
         }],
         applications: vec![
             Application {
@@ -517,7 +519,6 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
-        kind: Kind::Development,
         owner_id: generate_id(),
         project_id: generate_id(),
         organization_id: organization_id.to_string(),
@@ -571,7 +572,6 @@ pub fn environment_only_http_server(context: &Context, organization_id: &str) ->
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
-        kind: Kind::Development,
         owner_id: generate_id(),
         project_id: generate_id(),
         organization_id: organization_id.to_string(),
@@ -612,7 +612,6 @@ pub fn environment_only_http_server_router(context: &Context, organization_id: &
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
-        kind: Kind::Development,
         owner_id: generate_id(),
         project_id: generate_id(),
         organization_id: organization_id.to_string(),

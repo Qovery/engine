@@ -111,6 +111,10 @@ pub fn aws_helm_charts(
                     value: chart_config_prerequisites.region.clone(),
                 },
                 ChartSetValue {
+                    key: "init.image.region".to_string(),
+                    value: chart_config_prerequisites.region.clone(),
+                },
+                ChartSetValue {
                     key: "image.pullPolicy".to_string(),
                     value: "IfNotPresent".to_string(),
                 },
@@ -1067,10 +1071,9 @@ datasources:
                     key: "image.tag".to_string(),
                     value: qovery_engine_version.version,
                 },
-                // need kubernetes 1.18, should be well tested before activating it
                 ChartSetValue {
-                    key: "autoscaler.enabled".to_string(),
-                    value: "false".to_string(),
+                    key: "autoscaler.min_replicas".to_string(),
+                    value: "2".to_string(),
                 },
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
