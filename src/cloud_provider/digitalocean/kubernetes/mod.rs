@@ -12,17 +12,19 @@ use crate::cloud_provider::digitalocean::kubernetes::doks_api::{
 use crate::cloud_provider::digitalocean::kubernetes::helm_charts::{do_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::digitalocean::kubernetes::node::Node;
 use crate::cloud_provider::digitalocean::models::doks::KubernetesCluster;
+use crate::cloud_provider::digitalocean::network::load_balancer::do_get_load_balancer_ip;
 use crate::cloud_provider::digitalocean::network::vpc::{
     get_do_random_available_subnet_from_api, get_do_vpc_name_available_from_api, VpcInitKind,
 };
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::helm::deploy_charts_levels;
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
 use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes, KubernetesNode};
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
-use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
+use crate::cmd::helm::{helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info};
+use crate::cmd::kubectl::{do_kubectl_exec_get_loadbalancer_id, kubectl_exec_get_all_namespaces};
 use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
@@ -111,8 +113,8 @@ impl<'a> DOKS<'a> {
         DOKS {
             context,
             id,
-            name: name.to_string(),
-            version: version.to_string(),
+            name,
+            version,
             region,
             cloud_provider,
             dns_provider,
@@ -204,6 +206,7 @@ impl<'a> DOKS<'a> {
         let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
 
         context.insert("managed_dns", &managed_dns_list);
+        context.insert("do_loadbalancer_hostname", &self.do_loadbalancer_hostname());
         context.insert("managed_dns_domain", self.dns_provider.domain());
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
         context.insert(
@@ -398,6 +401,14 @@ impl<'a> DOKS<'a> {
         terraform_list_format(managed_dns_resolvers)
     }
 
+    fn do_loadbalancer_hostname(&self) -> String {
+        format!(
+            "qovery-nginx-{}.{}",
+            self.cloud_provider.id,
+            self.dns_provider().domain()
+        )
+    }
+
     fn lets_encrypt_url(&self) -> String {
         match &self.context.is_test_cluster() {
             true => "https://acme-staging-v02.api.letsencrypt.org/directory",
@@ -499,7 +510,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         )?;
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/digitialocean/bootstrap/*.tf files
+        // this is due to the required dependencies of lib/digitalocean/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -622,29 +633,29 @@ impl<'a> Kubernetes for DOKS<'a> {
             .map(|x| (x.0.to_string(), x.1.to_string()))
             .collect();
 
-        let doks_id = match self.get_doks_info_from_name_api() {
-            Ok(info) => match info {
-                None => {
+        let doks_id =
+            match self.get_doks_info_from_name_api() {
+                Ok(info) => match info {
+                    None => return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: Some(
+                            "DigitalOcean API reported no cluster id, while it has been deployed, please retry later"
+                                .to_string(),
+                        ),
+                    }),
+                    Some(cluster) => cluster.id,
+                },
+                Err(e) => {
                     return Err(EngineError {
                         cause: EngineErrorCause::Internal,
                         scope: EngineErrorScope::Engine,
                         execution_id: self.context.execution_id().to_string(),
-                        message: Some(format!(
-                            "DigitalOcean API reported no cluster id, while it has been deployed, please retry later"
-                        )),
+                        message: e.message,
                     })
                 }
-                Some(cluster) => cluster.id,
-            },
-            Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: e.message,
-                })
-            }
-        };
+            };
 
         let charts_prerequisites = ChartsConfigPrerequisites {
             organization_id: self.cloud_provider.organization_id().to_string(),
@@ -673,6 +684,7 @@ impl<'a> Kubernetes for DOKS<'a> {
             cloudflare_api_token: self.dns_provider.token().to_string(),
             disable_pleco: self.context.disable_pleco(),
         };
+        let chart_prefix_path = &temp_dir;
 
         let helm_charts_to_deploy = cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -680,7 +692,7 @@ impl<'a> Kubernetes for DOKS<'a> {
             do_helm_charts(
                 format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
                 &charts_prerequisites,
-                Some(&temp_dir),
+                Some(chart_prefix_path),
                 &kubeconfig,
                 &credentials_environment_variables,
             ),
@@ -695,7 +707,97 @@ impl<'a> Kubernetes for DOKS<'a> {
                 helm_charts_to_deploy,
                 self.context.is_dry_run_deploy(),
             ),
-        )
+        )?;
+
+        // https://github.com/digitalocean/digitalocean-cloud-controller-manager/blob/master/docs/controllers/services/annotations.md#servicebetakubernetesiodo-loadbalancer-hostname
+        // it can't be done earlier as nginx ingress is not yet deployed
+        // required as load balancer do not have hostname (only IP) and are blocker to get a TLS certificate
+        let nginx_ingress_loadbalancer_id = match do_kubectl_exec_get_loadbalancer_id(
+            &kubeconfig,
+            "nginx-ingress",
+            "nginx-ingress-ingress-nginx-controller",
+            self.cloud_provider.credentials_environment_variables(),
+        ) {
+            Ok(x) => match x {
+                None => return Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: Some("No associated Load balancer UUID was found on DigitalOcean API and it's required for TLS setup.".to_string())
+                }),
+                Some(uuid) => uuid,
+            },
+            Err(e) => {
+                return Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: Some(format!(
+                        "Load balancer IP wasn't able to be retrieved and it's required for TLS setup. {:?}",
+                        e.message
+                    )),
+                })
+            }
+        };
+        let nginx_ingress_loadbalancer_ip = match do_get_load_balancer_ip(&self.cloud_provider.token, nginx_ingress_loadbalancer_id.as_str()) {
+            Ok(x) => x.to_string(),
+            Err(e) => {
+                return Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: Some(format!(
+                        "Load balancer IP wasn't able to be retrieved from UUID on DigitalOcean API and it's required for TLS setup. {:?}",
+                        e.message
+                    )),
+                })
+            }
+        };
+
+        let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix_path, x) };
+        let load_balancer_dns_hostname = ChartInfo {
+            name: "nginx-ingress-dns".to_string(),
+            path: chart_path("common/charts/external-name-svc"),
+            namespace: HelmChartNamespaces::NginxIngress,
+            values: vec![
+                ChartSetValue {
+                    key: "serviceName".to_string(),
+                    value: "nginx-ingress-dns".to_string(),
+                },
+                ChartSetValue {
+                    key: "source".to_string(),
+                    value: self.do_loadbalancer_hostname(),
+                },
+                ChartSetValue {
+                    key: "destination".to_string(),
+                    value: nginx_ingress_loadbalancer_ip,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let _ = helm_upgrade_diff_with_chart_info(
+            &kubeconfig,
+            &credentials_environment_variables,
+            &load_balancer_dns_hostname,
+        );
+
+        match helm_exec_upgrade_with_chart_info(
+            &kubeconfig,
+            &self.cloud_provider.credentials_environment_variables(),
+            &load_balancer_dns_hostname,
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(EngineError {
+                cause: EngineErrorCause::Internal,
+                scope: EngineErrorScope::Engine,
+                execution_id: self.context.execution_id().to_string(),
+                message: Some(format!(
+                    "Error while deploying chart {}. {:?}",
+                    load_balancer_dns_hostname.name, e.message
+                )),
+            }),
+        }
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {

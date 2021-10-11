@@ -33,7 +33,6 @@ pub type FailoverEnvironment = Environment;
 pub struct Environment {
     pub execution_id: String,
     pub id: String,
-    pub kind: Kind,
     pub owner_id: String,
     pub project_id: String,
     pub organization_id: String,
@@ -91,10 +90,6 @@ impl Environment {
         let stateful_services = databases;
 
         crate::cloud_provider::environment::Environment::new(
-            match self.kind {
-                Kind::Production => crate::cloud_provider::environment::Kind::Production,
-                Kind::Development => crate::cloud_provider::environment::Kind::Development,
-            },
             self.id.as_str(),
             self.project_id.as_str(),
             self.owner_id.as_str(),
@@ -103,13 +98,6 @@ impl Environment {
             stateful_services,
         )
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Kind {
-    Production,
-    Development,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -532,6 +520,12 @@ pub struct Route {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub enum DatabaseMode {
+    MANAGED,
+    CONTAINER,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Database {
     pub kind: DatabaseKind,
     pub action: Action,
@@ -548,9 +542,13 @@ pub struct Database {
     pub disk_size_in_gib: u32,
     pub database_instance_type: String,
     pub database_disk_type: String,
+    #[serde(default)] // => false if not present in input
     pub activate_high_availability: bool,
+    #[serde(default)] // => false if not present in input
     pub activate_backups: bool,
+    #[serde(default)] // => false if not present in input
     pub publicly_accessible: bool,
+    pub mode: DatabaseMode,
 }
 
 impl Database {
@@ -560,6 +558,7 @@ impl Database {
         cloud_provider: &dyn CloudProvider,
     ) -> Option<Box<dyn StatefulService>> {
         let database_options = DatabaseOptions {
+            mode: self.mode.clone(),
             login: self.username.clone(),
             password: self.password.clone(),
             host: self.fqdn.clone(),

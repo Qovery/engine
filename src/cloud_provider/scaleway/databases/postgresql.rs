@@ -1,6 +1,5 @@
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::environment::Kind;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
@@ -14,6 +13,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
+use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -105,7 +105,11 @@ impl PostgreSQL {
     }
 }
 
-impl StatefulService for PostgreSQL {}
+impl StatefulService for PostgreSQL {
+    fn is_managed_service(&self) -> bool {
+        self.options.mode == MANAGED
+    }
+}
 
 impl Service for PostgreSQL {
     fn context(&self) -> &Context {
@@ -141,7 +145,7 @@ impl Service for PostgreSQL {
     }
 
     fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
+        Timeout::Value(600)
     }
 
     fn total_cpus(&self) -> String {
@@ -161,17 +165,10 @@ impl Service for PostgreSQL {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let (kubernetes, environment) = match target {
-            DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-            DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        };
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
 
         let mut context = default_tera_context(self, kubernetes, environment);
-
-        let is_managed_services = match environment.kind {
-            Kind::Production => true,
-            Kind::Development => false,
-        };
 
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kube_config_file_path = kubernetes.config_file_path()?;
@@ -185,7 +182,7 @@ impl Service for PostgreSQL {
 
         context.insert("namespace", environment.namespace());
 
-        let version = &self.matching_correct_version(is_managed_services)?;
+        let version = &self.matching_correct_version(self.is_managed_service())?;
         context.insert("version_major", &version.to_major_version_string());
         context.insert("version", &version.to_string()); // Scaleway needs to have major version only
 
