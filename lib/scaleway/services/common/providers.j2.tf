@@ -25,7 +25,7 @@ provider "scaleway" {
 }
 
 data "scaleway_k8s_cluster" "kubernetes_cluster" {
-  name = "{{kubernetes_cluster_name}}"
+  name = "qovery-{{kubernetes_cluster_id}}"
 }
 
 provider "helm" {
