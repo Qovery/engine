@@ -46,6 +46,7 @@ pub fn get_qovery_app_version<T: DeserializeOwned>(
         api_fqdn, app_type, cluster_id
     );
 
+    info!("try getting info qovery info: {} - {}", &app_type, &url);
     match reqwest::blocking::Client::new().get(&url).headers(headers).send() {
         Ok(x) => match x.json::<T>() {
             Ok(qa) => Ok(qa),
