@@ -10,60 +10,77 @@ use rand::Rng;
 use retry::Error::Operation;
 use std::{env, fs, thread, time};
 
+fn manage_common_issues(terraform_provider_lock: &String, err: &SimpleError) -> bool {
+    // Error: Failed to install provider from shared cache
+    // in order to avoid lock errors on parallel run, let's sleep a bit
+    // https://github.com/hashicorp/terraform/issues/28041
+    let mut found_managed_issue = false;
+    debug!("{:?}", err);
+
+    match &err.message {
+        None => warn!("no know method to fix this Terraform issue"),
+        Some(message) => {
+            if message.contains("Failed to install provider from shared cache")
+                || message.contains("Failed to install provider")
+            {
+                found_managed_issue = true;
+                let sleep_time_int = rand::thread_rng().gen_range(20..45);
+                let sleep_time = time::Duration::from_secs(sleep_time_int);
+
+                warn!(
+                    "failed to install provider from shared cache, cleaning and sleeping {} before retrying...",
+                    sleep_time_int
+                );
+                thread::sleep(sleep_time);
+
+                match fs::remove_file(&terraform_provider_lock) {
+                    Ok(_) => info!("terraform lock file {} has been removed", &terraform_provider_lock),
+                    Err(e) => error!(
+                        "wasn't able to delete terraform lock file {}: {}",
+                        &terraform_provider_lock, e
+                    ),
+                }
+            }
+
+            if message.contains("Plugin reinitialization required") {
+                warn!("terraform init is required");
+                found_managed_issue = true;
+            }
+        }
+    };
+
+    found_managed_issue
+}
+
 fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
 
-    // terraform init
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+        // terraform init
         match terraform_exec(root_dir, vec!["init"]) {
-            Ok(out) => OperationResult::Ok(out),
+            Ok(_) => OperationResult::Ok(()),
             Err(err) => {
-                // Error: Failed to install provider from shared cache
-                // in order to avoid lock errors on parallel run, let's sleep a bit
-                // https://github.com/hashicorp/terraform/issues/28041
-                debug!("{:?}", err);
-                if err.message.is_some() {
-                    let message = err.message.clone().unwrap();
-                    if message.contains("Failed to install provider from shared cache")
-                        || message.contains("Failed to install provider")
-                        || message.contains("Plugin reinitialization required")
-                    {
-                        let sleep_time_int = rand::thread_rng().gen_range(20..45);
-                        let sleep_time = time::Duration::from_secs(sleep_time_int);
-                        warn!(
-                            "failed to install provider from shared cache, cleaning and sleeping {} before retrying...",
-                            sleep_time_int
-                        );
-                        thread::sleep(sleep_time);
-
-                        match fs::remove_file(&terraform_provider_lock) {
-                            Ok(_) => info!("terraform lock file {} has been removed", &terraform_provider_lock),
-                            Err(e) => error!(
-                                "wasn't able to delete terraform lock file {}: {}",
-                                &terraform_provider_lock, e
-                            ),
-                        }
-                    }
-                };
+                manage_common_issues(&terraform_provider_lock, &err);
                 error!("error while trying to run terraform init, retrying...");
+                OperationResult::Retry(err)
+            }
+        };
+
+        // validate config
+        match terraform_exec(root_dir, vec!["validate"]) {
+            Ok(_) => OperationResult::Ok(()),
+            Err(err) => {
+                manage_common_issues(&terraform_provider_lock, &err);
+                error!("error while trying to Terraform validate on the rendered templates");
                 OperationResult::Retry(err)
             }
         }
     });
 
     match result {
-        Ok(_) => {}
+        Ok(_) => Ok(()),
         Err(Operation { error, .. }) => return Err(error),
         Err(retry::Error::Internal(e)) => return Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
-    }
-
-    // validate config
-    match terraform_exec(root_dir, vec!["validate"]) {
-        Err(e) => {
-            error!("error while trying to Terraform validate the rendered templates");
-            Err(e)
-        }
-        Ok(_) => Ok(()),
     }
 }
 
@@ -222,10 +239,43 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Si
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::terraform::terraform_init_validate;
+    use crate::cmd::terraform::{manage_common_issues, terraform_init_validate};
+    use crate::error::{SimpleError, SimpleErrorKind};
     use std::fs;
     use tracing::{span, Level};
     use tracing_test::traced_test;
+
+    #[test]
+    fn test_terraform_managed_errors() {
+        let could_not_load_plugin = r#"
+Error:    Could not load plugin
+
+   
+Plugin reinitialization required. Please run "terraform init".
+
+Plugins are external binaries that Terraform uses to access and manipulate
+resources. The configuration provided requires plugins which can't be located,
+don't satisfy the version constraints, or are otherwise incompatible.
+
+Terraform automatically discovers provider requirements from your
+configuration, including providers used in child modules. To see the
+requirements and constraints, run "terraform providers".
+
+Failed to instantiate provider "registry.terraform.io/hashicorp/time" to
+obtain schema: the cached package for registry.terraform.io/hashicorp/time
+0.7.2 (in .terraform/providers) does not match any of the checksums recorded
+in the dependency lock file
+        "#;
+
+        let could_not_load_plugin_error = SimpleError {
+            kind: SimpleErrorKind::Other,
+            message: Some(could_not_load_plugin.to_string()),
+        };
+        assert!(manage_common_issues(
+            &"/tmp/do_not_exists".to_string(),
+            &could_not_load_plugin_error
+        ));
+    }
 
     #[test]
     #[traced_test]
