@@ -168,6 +168,7 @@ pub fn main() -> io::Result<()> {
     let engine_id = env::var("ID").unwrap_or_else(|_| generate_id().to_string());
     let organization = env::var("ORGANIZATION");
     let cloud_provider = env::var("CLOUD_PROVIDER");
+    let deployment_type = env::var("DEPLOYMENT_TYPE");
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let region = env::var("REGION");
     let nats_server = env::var("QOVERY_NATS_URL").expect("QOVERY_NATS_URL is mandatory");
@@ -253,6 +254,17 @@ pub fn main() -> io::Result<()> {
         Mode::Local
     };
 
+    let task_selector = match mode {
+        Mode::Local => {
+            if deployment_type.map_or(false, |deployment_type| deployment_type == "ENVIRONMENT") {
+                TaskSelector::Environment("environment")
+            } else {
+                TaskSelector::Infrastructure("infrastructure")
+            }
+        }
+        Mode::Cloud(_, _, _) => TaskSelector::Environment("environment"),
+    };
+
     match env::var("DEPLOY_FROM_FILE") {
         Ok(deploy_from_file) => match env::var("DEPLOY_FROM_FILE_KIND") {
             Ok(value) => match value.as_str() {
@@ -289,6 +301,7 @@ pub fn main() -> io::Result<()> {
             lib_root_dir,
             docker_host,
             mode,
+            task_selector,
         ),
     }
 }
@@ -357,6 +370,7 @@ fn using_nats_server(
     lib_root_dir: String,
     docker_host: Option<String>,
     mode: Mode,
+    task_selector: TaskSelector,
 ) -> Result<(), Error> {
     info!("NATS server: {}", nats_server.as_str());
 
@@ -436,7 +450,7 @@ fn using_nats_server(
         spawn_task_poller(
             task_manager.clone(),
             nc.clone(),
-            TaskSelector::Environment("environment"),
+            task_selector,
             mode.clone(),
             workspace_root_dir.clone(),
             docker_host.clone(),
@@ -451,7 +465,7 @@ fn using_nats_server(
         spawn_task_poller(
             task_manager.clone(),
             nc.clone(),
-            TaskSelector::Infrastructure("infrastructure"),
+            task_selector,
             mode.clone(),
             workspace_root_dir.clone(),
             docker_host.clone(),
