@@ -60,6 +60,10 @@ spec:
                   name: {{ $kubefullname }}
                   key: {{ $key }}
             {{ end }}
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: {{ .Values.metrics.port }}
           resources:
             {{- toYaml .Values.engineResources | nindent 12 }}
 {{ if .Values.buildContainer.enable }}

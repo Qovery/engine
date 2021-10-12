@@ -251,7 +251,17 @@ where
     P: AsRef<Path>,
 {
     kubectl_exec::<P, KubernetesList<Item>>(
-        vec!["get", "secrets", "-o", "json", "-n", namespace, "-l", selector],
+        vec![
+            "get",
+            "secrets",
+            "-o",
+            "json",
+            "-n",
+            namespace,
+            "-l",
+            selector,
+            "--sort-by=.metadata.creationTimestamp",
+        ],
         kubernetes_config,
         envs,
     )
