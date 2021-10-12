@@ -374,12 +374,6 @@ function downgrade_on_dev() {
 function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
   set -e
 
-  cat .env | while read item ; do
-    key=$(echo $item | $awk -F'=' '{ print $1}')
-    value=$(echo $item | $sed -r "s,^\w+='(.+)'$,\1,g" | $sed 's,/,\\\/,g')
-    echo "Updating $key value"
-    find ${ENGINE_DIR}/test* -type f -exec $sed -ri "s/CHANGE-ME\\/$key/$value/g" {} +
-  done
   print_title "Generating Vault Token"
   export VAULT_TOKEN=$(vault write -format=json auth/approle/login role_id=$VAULT_ROLE_ID secret_id=$VAULT_SECRET_ID | jq -r ".auth.client_token")
 }
