@@ -732,6 +732,22 @@ datasources:
             values_files: vec![chart_path("chart_values/pleco.yaml")],
             values: vec![
                 ChartSetValue {
+                    key: "environmentVariables.DO_API_TOKEN".to_string(),
+                    value: chart_config_prerequisites.do_token.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DO_SPACES_KEY".to_string(),
+                    value: chart_config_prerequisites.do_space_access_id.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DO_SPACES_SECRET".to_string(),
+                    value: chart_config_prerequisites.do_space_secret_key.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DO_VOLUME_TIMEOUT".to_string(),
+                    value: 168.to_string(),
+                },
+                ChartSetValue {
                     key: "environmentVariables.PLECO_IDENTIFIER".to_string(),
                     value: chart_config_prerequisites.cluster_id.clone(),
                 },
