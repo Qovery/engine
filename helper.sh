@@ -330,7 +330,7 @@ function deploy_engines_envs() { ## Release GA to prod
   prepare_engine
   tag=$(generate_image_tag)
   KUBECONFIG="$KUBECONFIG_ENGINES_SCALEWAY"
-  helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --create-namespace --history-max 50 --wait --namespace qovery-env qovery-engine \
+  helm upgrade --kubeconfig="$KUBECONFIG" --install --create-namespace --history-max 50 --wait --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
 environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
@@ -339,9 +339,7 @@ environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
-environmentVariables.CLOUD_PROVIDER="scw",\
-environmentVariables.ORGANIZATION="z0f2bf10c",\
-environmentVariables.REGION="fr-par-2",\
+environmentVariables.DEPLOYMENT_TYPE="ENVIRONMENT",\
 environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
 environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
 environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
