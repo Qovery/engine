@@ -322,7 +322,7 @@ pub fn do_helm_charts(
             namespace: prometheus_namespace,
             // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
             // to upgrade because of the CRD and the number of elements it has to deploy
-            timeout: "480".to_string(),
+            timeout_in_seconds: 480,
             values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
             values: vec![
                 ChartSetValue {
@@ -653,7 +653,7 @@ datasources:
             path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
-            timeout: "300".to_string(),
+            timeout_in_seconds: 300,
             values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
             values: vec![
                 // Controller resources limits
@@ -894,7 +894,7 @@ datasources:
             action: get_engine_helm_action_from_location(&chart_config_prerequisites.qovery_engine_location),
             path: chart_path("common/charts/qovery-engine"),
             namespace: HelmChartNamespaces::Qovery,
-            timeout: "900".to_string(),
+            timeout_in_seconds: 900,
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),
