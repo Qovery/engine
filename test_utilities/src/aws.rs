@@ -14,6 +14,7 @@ use qovery_engine::models::Context;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 
 pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "eu-west-3";
@@ -151,6 +152,7 @@ pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
         elasticache_cidr_subnet: "23".to_string(),
         elasticsearch_cidr_subnet: "23".to_string(),
         qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
+        qovery_engine_location: Some(ClientSide),
         engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
         agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
         grafana_admin_user: "admin".to_string(),
