@@ -1,6 +1,5 @@
 extern crate serde;
 extern crate serde_derive;
-
 use tracing::error;
 
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode, EKS};
