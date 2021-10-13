@@ -314,22 +314,29 @@ impl ContainerRegistry for DOCR {
             Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
         };
 
-        match cmd::utilities::exec(
-            "doctl",
-            vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
-            &vec![],
-        ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "Your DOCR account seems to be no longer valid (bad Credentials). \
+        // TODO(benjaminch): Remove this monstro
+        // Note: DO CR presents a bug in our infra preventing to push images.
+        // Support team told to fire two logins command, and it indeed fix the issue ...
+        // We are waiting for a proper fix / solution to solve this problem which should be addressed ASAP
+        const LOGIN_ATTEMPTS: u8 = 2;
+        for _ in 0..LOGIN_ATTEMPTS {
+            match cmd::utilities::exec(
+                "doctl",
+                vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
+                &vec![],
+            ) {
+                Err(_) => {
+                    return Err(self.engine_error(
+                        EngineErrorCause::User(
+                            "Your DOCR account seems to be no longer valid (bad Credentials). \
                     Please contact your Organization administrator to fix or change the Credentials.",
-                    ),
-                    format!("failed to login to DOCR {}", self.name_with_id()),
-                ));
+                        ),
+                        format!("failed to login to DOCR {}", self.name_with_id()),
+                    ));
+                }
+                _ => {}
             }
-            _ => {}
-        };
+        }
 
         let dest = format!(
             "registry.digitalocean.com/{}/{}",
