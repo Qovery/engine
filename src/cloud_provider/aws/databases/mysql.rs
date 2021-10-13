@@ -194,6 +194,7 @@ impl Service for MySQL {
         context.insert("skip_final_snapshot", &false);
         context.insert("final_snapshot_name", &aws_final_snapshot_name(self.id()));
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
+        context.insert("publicly_accessible", &self.options.publicly_accessible);
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
                 "resource_expiration_in_seconds",

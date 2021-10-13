@@ -166,6 +166,7 @@ impl Service for MySQL {
         context.insert("database_id", &self.id());
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
         context.insert("tfstate_name", &get_tfstate_name(self));
+        context.insert("publicly_accessible", &self.options.publicly_accessible);
 
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
