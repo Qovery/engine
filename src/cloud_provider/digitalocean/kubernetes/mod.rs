@@ -60,7 +60,7 @@ pub struct DoksOptions {
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
     pub qovery_cluster_secret_token: String,
-    pub qovery_engine_location: Option<EngineLocation>,
+    pub qovery_engine_location: EngineLocation,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
     pub grafana_admin_user: String,
@@ -143,13 +143,6 @@ impl<'a> DOKS<'a> {
             template_directory,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
         })
-    }
-
-    fn get_engine_location(&self) -> EngineLocation {
-        match self.options.qovery_engine_location.clone() {
-            None => EngineLocation::QoverySide,
-            Some(x) => x,
-        }
     }
 
     fn kubeconfig_bucket_name(&self) -> String {
@@ -678,7 +671,7 @@ impl<'a> Kubernetes for DOKS<'a> {
             do_space_secret_key: self.cloud_provider.spaces_secret_key.to_string(),
             do_space_bucket_kubeconfig: self.kubeconfig_bucket_name(),
             do_space_kubeconfig_filename: self.kubeconfig_file_name(),
-            qovery_engine_location: self.get_engine_location(),
+            qovery_engine_location: self.options.qovery_engine_location.clone(),
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
             ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
             managed_dns_name: self.dns_provider.domain().to_string(),

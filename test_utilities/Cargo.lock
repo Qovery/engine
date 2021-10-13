@@ -1868,15 +1868,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "passwords"
-version = "3.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3911e67d9a111aea69d3457a13de9a03d9fd920bc30cff110526eb5259ded58f"
-dependencies = [
- "random-pick",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2325,37 +2316,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbf7e9e623549b0e21f6e97cf8ecf247c1a8fd2e8a992ae265314300b2455d5c"
 dependencies = [
  "rand_core 0.3.1",
-]
-
-[[package]]
-name = "random-number"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b6c791ad2f753537ebdc0300173be0fc4821eaa628feb2c404f8acaba612d57"
-dependencies = [
- "proc-macro-hack",
- "rand 0.8.3",
- "random-number-macro-impl",
-]
-
-[[package]]
-name = "random-number-macro-impl"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc6653af545be5b0b1a2b4c19ef0f0cb288b2e5c024016a8eb0fe2efa8d9f8de"
-dependencies = [
- "proc-macro-hack",
- "quote 1.0.8",
- "syn 1.0.73",
-]
-
-[[package]]
-name = "random-pick"
-version = "1.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "420e471026e6ab33d59869853453cdbfacee6bd941710ed3bd6007a9c67e4efa"
-dependencies = [
- "random-number",
 ]
 
 [[package]]
@@ -3216,7 +3176,6 @@ dependencies = [
  "gethostname",
  "hashicorp_vault",
  "maplit",
- "passwords",
  "qovery-engine",
  "rand 0.7.3",
  "reqwest 0.10.8",

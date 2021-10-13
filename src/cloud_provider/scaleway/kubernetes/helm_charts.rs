@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{
-    get_chart_namespace, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated,
-    CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
+    get_chart_namespace, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmAction,
+    HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cloud_provider::scaleway::application::{Region, Zone};

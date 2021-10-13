@@ -50,7 +50,7 @@ pub struct KapsuleOptions {
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
     pub agent_version_controller_token: String,
-    pub qovery_engine_location: Option<EngineLocation>,
+    pub qovery_engine_location: EngineLocation,
     pub engine_version_controller_token: String,
 
     // Scaleway
@@ -74,7 +74,7 @@ impl KapsuleOptions {
         grafana_admin_user: String,
         grafana_admin_password: String,
         agent_version_controller_token: String,
-        qovery_engine_location: Option<EngineLocation>,
+        qovery_engine_location: EngineLocation,
         engine_version_controller_token: String,
         scaleway_project_id: String,
         scaleway_access_key: String,
@@ -173,13 +173,6 @@ impl<'a> Kapsule<'a> {
             options,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
         })
-    }
-
-    fn get_engine_location(&self) -> EngineLocation {
-        match self.options.qovery_engine_location.clone() {
-            None => EngineLocation::QoverySide,
-            Some(x) => x,
-        }
     }
 
     fn kubeconfig_bucket_name(&self) -> String {
@@ -559,7 +552,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.cloud_provider.access_key.to_string(),
             self.cloud_provider.secret_key.to_string(),
             self.options.scaleway_project_id.to_string(),
-            self.get_engine_location(),
+            self.options.qovery_engine_location.clone(),
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
             self.dns_provider.domain().to_string(),

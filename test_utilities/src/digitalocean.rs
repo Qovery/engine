@@ -114,7 +114,7 @@ pub fn do_kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_name: St
         qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
         qovery_grpc_url: secrets.QOVERY_GRPC_URL.unwrap(),
         qovery_cluster_secret_token: secrets.QOVERY_CLUSTER_SECRET_TOKEN.unwrap(),
-        qovery_engine_location: Some(EngineLocation::ClientSide),
+        qovery_engine_location: EngineLocation::ClientSide,
         engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
         agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
         grafana_admin_user: "admin".to_string(),
