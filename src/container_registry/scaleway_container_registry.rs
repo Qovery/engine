@@ -3,8 +3,9 @@ extern crate scaleway_api_rs;
 use crate::cloud_provider::scaleway::application::Zone;
 
 use crate::build_platform::Image;
-use crate::cmd;
-use crate::container_registry::utilities::docker_tag_and_push_image;
+use crate::container_registry::docker::{
+    docker_delete_image, docker_login, docker_manifest_inspect, docker_tag_and_push_image,
+};
 use crate::container_registry::{ContainerRegistry, Kind, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
@@ -14,12 +15,14 @@ use crate::runtime::block_on;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
+use rusoto_core::param::ToParam;
 
 pub struct ScalewayCR {
     context: Context,
     id: String,
     name: String,
     default_project_id: String,
+    login: String,
     secret_token: String,
     zone: Zone,
     listeners: Listeners,
@@ -39,6 +42,7 @@ impl ScalewayCR {
             id: id.to_string(),
             name: name.to_string(),
             default_project_id: default_project_id.to_string(),
+            login: "nologin".to_string(),
             secret_token: secret_token.to_string(),
             zone,
             listeners: Vec::new(),
@@ -133,27 +137,24 @@ impl ScalewayCR {
         None
     }
 
-    pub fn delete_image(&self, image: &Image) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Image, EngineError> {
-        // https://developers.scaleway.com/en/products/registry/api/#delete-67dbf7
-        let image_to_delete = self.get_image(image);
-        if image_to_delete.is_none() {
-            let message = format!("While tyring to delete image {}, image doesn't exist", &image.name,);
-            error!("{}", message);
+    pub fn delete_image(&self, image: &Image) -> Result<(), EngineError> {
+        let registry_url = image
+            .registry_url
+            .as_ref()
+            .unwrap_or(&"undefined".to_string())
+            .to_param();
 
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
-
-        let image_to_delete = image_to_delete.unwrap();
-
-        match block_on(scaleway_api_rs::apis::images_api::delete_image(
-            &self.get_configuration(),
-            self.zone.region().to_string().as_str(),
-            image_to_delete.id.unwrap().as_str(),
-        )) {
-            Ok(res) => Ok(res),
+        match docker_delete_image(
+            Kind::ScalewayCr,
+            self.get_docker_envs(),
+            image.name.clone(),
+            image.tag.clone(),
+            registry_url,
+        ) {
+            Ok(_) => Ok(()),
             Err(e) => {
                 let message = format!(
-                    "Error while interacting with Scaleway API (delete_image), error: {}, image: {}",
+                    "Error while trying to delete image, error: {:?}, image: {}",
                     e, &image.name
                 );
 
@@ -333,7 +334,30 @@ impl ContainerRegistry for ScalewayCR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        self.get_image(image).is_some()
+        let registry_url = image
+            .registry_url
+            .as_ref()
+            .unwrap_or(&"undefined".to_string())
+            .to_param();
+
+        if let Err(_) = docker_login(
+            Kind::ScalewayCr,
+            self.get_docker_envs(),
+            self.login.clone(),
+            self.secret_token.clone(),
+            registry_url.clone(),
+        ) {
+            return false;
+        }
+
+        docker_manifest_inspect(
+            Kind::ScalewayCr,
+            self.get_docker_envs(),
+            image.name.clone(),
+            image.tag.clone(),
+            registry_url,
+        )
+        .is_some()
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
@@ -364,19 +388,12 @@ impl ContainerRegistry for ScalewayCR {
             }
         }
 
-        let envs = self.get_docker_envs();
-
-        if cmd::utilities::exec(
-            "docker",
-            vec![
-                "login",
-                registry_url.as_str(),
-                "-u",
-                "nologin",
-                "-p",
-                self.secret_token.as_str(),
-            ],
-            &envs,
+        if docker_login(
+            Kind::ScalewayCr,
+            self.get_docker_envs(),
+            self.login.clone(),
+            self.secret_token.clone(),
+            registry_url.clone(),
         )
         .is_err()
         {
