@@ -4,7 +4,9 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
-use crate::container_registry::docker::docker_tag_and_push_image;
+use crate::container_registry::docker::{
+    docker_delete_image, docker_login, docker_manifest_inspect, docker_tag_and_push_image,
+};
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::models::{
@@ -14,6 +16,7 @@ use crate::{cmd, utilities};
 use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::OperationResult;
+use rusoto_core::param::ToParam;
 
 const CR_API_PATH: &str = "https://api.digitalocean.com/v2/registry";
 const CR_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/registry";
@@ -37,6 +40,13 @@ impl DOCR {
             api_key: api_key.into(),
             id: id.into(),
             listeners: vec![],
+        }
+    }
+
+    fn get_docker_envs(&self) -> Vec<(&str, &str)> {
+        match self.context.docker_tcp_socket() {
+            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
+            None => vec![],
         }
     }
 
@@ -156,8 +166,31 @@ impl DOCR {
         todo!()
     }
 
-    pub fn delete_image(&self, _image: &Image) -> Result<(), EngineError> {
-        todo!()
+    pub fn delete_image(&self, image: &Image) -> Result<(), EngineError> {
+        let registry_url = image
+            .registry_url
+            .as_ref()
+            .unwrap_or(&"undefined".to_string())
+            .to_param();
+
+        match docker_delete_image(
+            Kind::Docr,
+            self.get_docker_envs(),
+            image.name.clone(),
+            image.tag.clone(),
+            registry_url,
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let message = format!(
+                    "Error while trying to delete image, error: {:?}, image: {}",
+                    e, &image.name
+                );
+
+                error!("{}", message);
+                Err(self.engine_error(EngineErrorCause::Internal, message))
+            }
+        }
     }
 
     pub fn delete_repository(&self) -> Result<(), EngineError> {
@@ -229,80 +262,30 @@ impl ContainerRegistry for DOCR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        let registry_name = match self.get_registry_name(image) {
-            Ok(registry_name) => registry_name,
-            Err(err) => {
-                warn!("{:?}", err);
-                return false;
-            }
-        };
+        let registry_url = image
+            .registry_url
+            .as_ref()
+            .unwrap_or(&"undefined".to_string())
+            .to_param();
 
-        let headers = utilities::get_header_with_bearer(self.api_key.as_str());
-        let url = format!(
-            "https://api.digitalocean.com/v2/registry/{}/repositories/{}/tags",
-            registry_name,
-            image.name.as_str()
-        );
-
-        let res = reqwest::blocking::Client::new()
-            .get(url.as_str())
-            .headers(headers)
-            .send();
-
-        let body = match res {
-            Ok(output) => match output.status() {
-                StatusCode::OK => output.text(),
-                _ => {
-                    error!(
-                        "While tyring to get all tags for image: {}, maybe this image not exist !",
-                        &image.name
-                    );
-
-                    return false;
-                }
-            },
-            Err(_) => {
-                error!(
-                    "While trying to communicate with DigitalOcean API to retrieve all tags for image {}",
-                    &image.name
-                );
-
-                return false;
-            }
-        };
-
-        match body {
-            Ok(out) => {
-                let body_de = serde_json::from_str::<DescribeTagsForImage>(&out);
-                match body_de {
-                    Ok(tags_list) => {
-                        for tag_element in tags_list.tags {
-                            if tag_element.tag.eq(&image.tag) {
-                                return true;
-                            }
-                        }
-
-                        false
-                    }
-                    Err(_) => {
-                        error!(
-                            "Unable to deserialize tags from DigitalOcean API for image {}",
-                            &image.tag
-                        );
-
-                        false
-                    }
-                }
-            }
-            _ => {
-                error!(
-                    "while retrieving tags for image {} Unable to get output from DigitalOcean API",
-                    &image.name
-                );
-
-                false
-            }
+        if let Err(_) = docker_login(
+            Kind::Docr,
+            self.get_docker_envs(),
+            self.api_key.clone(),
+            self.api_key.clone(),
+            registry_url.clone(),
+        ) {
+            return false;
         }
+
+        docker_manifest_inspect(
+            Kind::Docr,
+            self.get_docker_envs(),
+            image.name.clone(),
+            image.tag.clone(),
+            registry_url,
+        )
+        .is_some()
     }
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
@@ -331,11 +314,7 @@ impl ContainerRegistry for DOCR {
             _ => {}
         };
 
-        let dest = format!(
-            "registry.digitalocean.com/{}/{}",
-            registry_name.as_str(),
-            image.name_with_tag()
-        );
+        let registry_url = format!("registry.digitalocean.com/{}", registry_name.as_str(),);
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -362,7 +341,7 @@ impl ContainerRegistry for DOCR {
             image.registry_name = Some(registry_name.clone());
             // on DOCR registry secret is the same as registry name
             image.registry_secret = Some(registry_name);
-            image.registry_url = Some(dest);
+            image.registry_url = Some(registry_url);
 
             return Ok(PushResult { image });
         }
@@ -381,7 +360,7 @@ impl ContainerRegistry for DOCR {
             self.context.execution_id(),
         ));
 
-        self.push_image(registry_name, dest, image)
+        self.push_image(registry_name, registry_url, image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
