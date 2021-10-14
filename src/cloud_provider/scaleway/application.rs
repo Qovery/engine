@@ -168,11 +168,8 @@ impl Service for Application {
 
         context.insert("helm_app_version", &commit_id[..7]);
 
-        match &self.image().registry_url {
-            Some(registry_url) => context.insert(
-                "image_name_with_tag",
-                format!("{}/{}", registry_url.as_str(), self.image().name_with_tag()).as_str(),
-            ),
+        match &self.image.url() {
+            Some(url) => context.insert("image_name_with_tag", url.as_str()),
             None => {
                 let image_name_with_tag = self.image().name_with_tag();
                 warn!(

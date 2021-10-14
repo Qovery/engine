@@ -6,8 +6,8 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
-    scale_down_application, send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Service, ServiceType,
-    StatelessService,
+    scale_down_application, send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm,
+    Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_and_burstable};
 use crate::cloud_provider::DeploymentTarget;
@@ -167,8 +167,8 @@ impl Service for Application {
 
         context.insert("helm_app_version", &commit_id[..7]);
 
-        match &self.image.registry_url {
-            Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
+        match &self.image.url() {
+            Some(url) => context.insert("image_name_with_tag", url.as_str()),
             None => {
                 let image_name_with_tag = self.image.name_with_tag();
                 warn!(

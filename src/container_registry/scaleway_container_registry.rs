@@ -164,14 +164,14 @@ impl ScalewayCR {
         }
     }
 
-    fn push_image(&self, image_url: String, image: &Image) -> Result<PushResult, EngineError> {
+    fn push_image(&self, image: &Image) -> Result<PushResult, EngineError> {
         // https://www.scaleway.com/en/docs/deploy-an-image-from-registry-to-kubernetes-kapsule/
         match docker_tag_and_push_image(
             self.kind(),
             self.get_docker_envs(),
             image.name.clone(),
             image.tag.clone(),
-            image_url,
+            image.url().expect("image URL is not defined"),
         ) {
             Ok(_) => {}
             Err(e) => {
@@ -406,8 +406,6 @@ impl ContainerRegistry for ScalewayCR {
             ));
         };
 
-        let image_url = format!("{}/{}", registry_url, image.name_with_tag());
-
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         if !force_push && self.does_image_exists(&image) {
@@ -448,7 +446,7 @@ impl ContainerRegistry for ScalewayCR {
             self.context.execution_id(),
         ));
 
-        self.push_image(image_url, &image)
+        self.push_image(&image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {

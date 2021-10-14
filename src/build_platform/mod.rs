@@ -75,6 +75,13 @@ impl Image {
     pub fn name_with_tag(&self) -> String {
         format!("{}:{}", self.name, self.tag)
     }
+
+    pub fn url(&self) -> Option<String> {
+        match &self.registry_url {
+            Some(registry_url) => Some(format!("{}/{}", registry_url, &self.name_with_tag())),
+            None => None,
+        }
+    }
 }
 
 impl Default for Image {

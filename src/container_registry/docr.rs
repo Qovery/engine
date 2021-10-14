@@ -131,13 +131,13 @@ impl DOCR {
         }
     }
 
-    fn push_image(&self, image_url: String, image: &Image) -> Result<PushResult, EngineError> {
+    fn push_image(&self, image: &Image) -> Result<PushResult, EngineError> {
         match docker_tag_and_push_image(
             self.kind(),
             vec![],
             image.name.clone(),
             image.tag.clone(),
-            image_url.clone(),
+            image.url().expect("image URL is not defined"),
         ) {
             Ok(_) => {}
             Err(e) => {
@@ -337,7 +337,6 @@ impl ContainerRegistry for DOCR {
         };
 
         let registry_url = format!("registry.digitalocean.com/{}", self.name.clone().as_str(),);
-        let image_url = format!("{}/{}", registry_url, image.name_with_tag());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -384,7 +383,7 @@ impl ContainerRegistry for DOCR {
             self.context.execution_id(),
         ));
 
-        self.push_image(image_url, &image)
+        self.push_image(&image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
