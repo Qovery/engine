@@ -6,8 +6,8 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
-    scale_down_application, send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm,
-    Pause, Service, ServiceType, StatelessService,
+    scale_down_application, send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Service, ServiceType,
+    StatelessService,
 };
 use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_and_burstable};
 use crate::cloud_provider::DeploymentTarget;
