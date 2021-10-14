@@ -376,7 +376,7 @@ impl ContainerRegistry for ScalewayCR {
                 image.registry_secret = Some(self.secret_token.clone());
                 image.registry_docker_json_config = Some(self.get_docker_json_config_raw());
                 registry_url = registry.endpoint.unwrap_or_else(|| "undefined".to_string());
-                registry_name = registry.name.unwrap();
+                registry_name = registry.name.unwrap_or_else(|| "undefined".to_string());
             }
             Err(e) => {
                 error!(

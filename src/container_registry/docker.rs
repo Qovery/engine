@@ -69,7 +69,7 @@ pub fn docker_manifest_inspect(
                 Ok(extracted_manifest) => Some(extracted_manifest),
                 Err(e) => {
                     error!(
-                        "error while trying to deserialize manifest image manifest for image {} in {} ({}): {:?}",
+                        "error while trying to deserialize image manifest for image {} in {} ({}): {:?}",
                         image_with_tag, registry_provider, registry_url, e,
                     );
                     None

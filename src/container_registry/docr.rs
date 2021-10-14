@@ -64,7 +64,7 @@ impl DOCR {
         Ok(registry_name)
     }
 
-    fn create_repository(&self, image: &Image) -> Result<(), EngineError> {
+    fn create_repository(&self, image: &Image) -> Result<Registry, EngineError> {
         let registry_name = match image.registry_name.as_ref() {
             // DOCR does not support upper cases
             Some(registry_name) => registry_name.to_lowercase().clone(),
@@ -89,8 +89,19 @@ impl DOCR {
 
                 match res {
                     Ok(output) => match output.status() {
-                        StatusCode::OK => Ok(()),
-                        StatusCode::CREATED => Ok(()),
+                        StatusCode::OK | StatusCode::CREATED => match output.json() {
+                            Ok(registry) => Ok(registry),
+                            Err(e) => {
+                                let message = format!(
+                                    "error while trying to deserialize registry data for registry {}: {:?}",
+                                    registry_name, e,
+                                );
+
+                                warn!("{}", message);
+
+                                return Err(self.engine_error(EngineErrorCause::Internal, message));
+                            }
+                        },
                         status => {
                             warn!("status from DO registry API {}", status);
                             return Err(self.engine_error(
@@ -120,24 +131,23 @@ impl DOCR {
         }
     }
 
-    fn push_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PushResult, EngineError> {
-        let _ =
-            match docker_tag_and_push_image(self.kind(), vec![], image.name.clone(), image.tag.clone(), dest.clone()) {
-                Ok(_) => {}
-                Err(e) => {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        e.message
-                            .unwrap_or("unknown error occurring during docker push".to_string()),
-                    ))
-                }
-            };
-
-        let mut image = image.clone();
-        image.registry_name = Some(registry_name.clone());
-        // on DOCR registry secret is the same as registry name
-        image.registry_secret = Some(registry_name);
-        image.registry_url = Some(dest);
+    fn push_image(&self, image_url: String, image: &Image) -> Result<PushResult, EngineError> {
+        match docker_tag_and_push_image(
+            self.kind(),
+            vec![],
+            image.name.clone(),
+            image.tag.clone(),
+            image_url.clone(),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    e.message
+                        .unwrap_or("unknown error occurring during docker push".to_string()),
+                ))
+            }
+        };
 
         let result = retry::retry(Fixed::from_millis(10000).take(12), || {
             match self.does_image_exists(&image) {
@@ -156,7 +166,7 @@ impl DOCR {
             ),
         ));
         match result {
-            Ok(_) => Ok(PushResult { image }),
+            Ok(_) => Ok(PushResult { image: image.clone() }),
             Err(Operation { .. }) => image_not_reachable,
             Err(retry::Error::Internal(_)) => image_not_reachable,
         }
@@ -290,11 +300,23 @@ impl ContainerRegistry for DOCR {
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
-        let registry_name = self.get_registry_name(image)?;
+        let sanitized_name = self.get_registry_name(&image)?;
+        let mut image = image.clone();
+        image.registry_url = Some(format!("registry.digitalocean.com/{}", sanitized_name.clone()));
+        image.registry_name = Some(sanitized_name.clone());
 
         match self.create_repository(&image) {
-            Ok(_) => info!("DOCR {} has been created", registry_name.as_str()),
-            Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
+            Ok(registry) => {
+                info!("DOCR {} has been created", registry.name.clone());
+                image.registry_name = Some(registry.name.clone());
+            }
+            Err(e) => {
+                warn!(
+                    "DOCR {} already exists: {:?}",
+                    image.registry_name.as_ref().unwrap_or(&"undefined".to_string()),
+                    e
+                );
+            }
         };
 
         match cmd::utilities::exec(
@@ -314,16 +336,17 @@ impl ContainerRegistry for DOCR {
             _ => {}
         };
 
-        let registry_url = format!("registry.digitalocean.com/{}", registry_name.as_str(),);
+        let registry_url = format!("registry.digitalocean.com/{}", self.name.clone().as_str(),);
+        let image_url = format!("{}/{}", registry_url, image.name_with_tag());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        if !force_push && self.does_image_exists(image) {
+        if !force_push && self.does_image_exists(&image) {
             // check if image does exist - if yes, do not upload it again
             let info_message = format!(
                 "image {:?} found on DOCR {} repository, container build is not required",
                 image,
-                registry_name.as_str()
+                self.name.clone().as_str()
             );
 
             info!("{}", info_message.as_str());
@@ -338,9 +361,9 @@ impl ContainerRegistry for DOCR {
             ));
 
             let mut image = image.clone();
-            image.registry_name = Some(registry_name.clone());
+            image.registry_name = Some(self.name.clone());
             // on DOCR registry secret is the same as registry name
-            image.registry_secret = Some(registry_name);
+            image.registry_secret = Some(self.name.clone());
             image.registry_url = Some(registry_url);
 
             return Ok(PushResult { image });
@@ -348,7 +371,8 @@ impl ContainerRegistry for DOCR {
 
         let info_message = format!(
             "image {:?} does not exist on DOCR {} repository, starting image upload",
-            image, registry_name
+            image,
+            image.registry_name.as_ref().unwrap_or(&"undefined".to_string())
         );
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
@@ -360,7 +384,7 @@ impl ContainerRegistry for DOCR {
             self.context.execution_id(),
         ));
 
-        self.push_image(registry_name, registry_url, image)
+        self.push_image(image_url, &image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
