@@ -4,7 +4,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
-use crate::container_registry::utilities::docker_tag_and_push_image;
+use crate::container_registry::docker::docker_tag_and_push_image;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::models::{
@@ -314,29 +314,22 @@ impl ContainerRegistry for DOCR {
             Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
         };
 
-        // TODO(benjaminch): Remove this monstro
-        // Note: DO CR presents a bug in our infra preventing to push images.
-        // Support team told to fire two logins command, and it indeed fix the issue ...
-        // We are waiting for a proper fix / solution to solve this problem which should be addressed ASAP
-        const LOGIN_ATTEMPTS: u8 = 2;
-        for _ in 0..LOGIN_ATTEMPTS {
-            match cmd::utilities::exec(
-                "doctl",
-                vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
-                &vec![],
-            ) {
-                Err(_) => {
-                    return Err(self.engine_error(
-                        EngineErrorCause::User(
-                            "Your DOCR account seems to be no longer valid (bad Credentials). \
+        match cmd::utilities::exec(
+            "doctl",
+            vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
+            &vec![],
+        ) {
+            Err(_) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::User(
+                        "Your DOCR account seems to be no longer valid (bad Credentials). \
                     Please contact your Organization administrator to fix or change the Credentials.",
-                        ),
-                        format!("failed to login to DOCR {}", self.name_with_id()),
-                    ));
-                }
-                _ => {}
+                    ),
+                    format!("failed to login to DOCR {}", self.name_with_id()),
+                ));
             }
-        }
+            _ => {}
+        };
 
         let dest = format!(
             "registry.digitalocean.com/{}/{}",
