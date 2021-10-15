@@ -5,6 +5,9 @@ metadata:
   namespace: kube-system
   labels:
     k8s-app: coredns
+    app.kubernetes.io/managed-by: Helm
+    meta.helm.sh/release-name: coredns
+    meta.helm.sh/release-namespace: kube-system
 data:
   Corefile: |
     .:53 {
