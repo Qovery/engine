@@ -8,6 +8,9 @@ metadata:
     k8s.scw.cloud/object: ConfigMap
     k8s.scw.cloud/system: coredns
     k8s-app: kube-dns
+    app.kubernetes.io/managed-by: Helm
+    meta.helm.sh/release-name: coredns
+    meta.helm.sh/release-namespace: kube-system
 data:
   empty: |
     # empty to skip coredns warnings
