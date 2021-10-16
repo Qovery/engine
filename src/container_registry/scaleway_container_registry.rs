@@ -3,9 +3,7 @@ extern crate scaleway_api_rs;
 use crate::cloud_provider::scaleway::application::Zone;
 
 use crate::build_platform::Image;
-use crate::container_registry::docker::{
-    docker_delete_image, docker_login, docker_manifest_inspect, docker_tag_and_push_image,
-};
+use crate::container_registry::docker::{docker_login, docker_manifest_inspect, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, Kind, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
@@ -137,24 +135,27 @@ impl ScalewayCR {
         None
     }
 
-    pub fn delete_image(&self, image: &Image) -> Result<(), EngineError> {
-        let registry_url = image
-            .registry_url
-            .as_ref()
-            .unwrap_or(&"undefined".to_string())
-            .to_param();
+    pub fn delete_image(&self, image: &Image) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Image, EngineError> {
+        // https://developers.scaleway.com/en/products/registry/api/#delete-67dbf7
+        let image_to_delete = self.get_image(image);
+        if image_to_delete.is_none() {
+            let message = format!("While tyring to delete image {}, image doesn't exist", &image.name,);
+            error!("{}", message);
 
-        match docker_delete_image(
-            Kind::ScalewayCr,
-            self.get_docker_envs(),
-            image.name.clone(),
-            image.tag.clone(),
-            registry_url,
-        ) {
-            Ok(_) => Ok(()),
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
+        }
+
+        let image_to_delete = image_to_delete.unwrap();
+
+        match block_on(scaleway_api_rs::apis::images_api::delete_image(
+            &self.get_configuration(),
+            self.zone.region().to_string().as_str(),
+            image_to_delete.id.unwrap().as_str(),
+        )) {
+            Ok(res) => Ok(res),
             Err(e) => {
                 let message = format!(
-                    "Error while trying to delete image, error: {:?}, image: {}",
+                    "Error while interacting with Scaleway API (delete_image), error: {}, image: {}",
                     e, &image.name
                 );
 
