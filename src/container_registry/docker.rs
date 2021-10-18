@@ -131,44 +131,6 @@ pub fn docker_login(
     }
 }
 
-pub fn docker_delete_image(
-    container_registry_kind: Kind,
-    docker_envs: Vec<(&str, &str)>,
-    image_name: String,
-    image_tag: String,
-    registry_url: String,
-) -> Result<(), SimpleError> {
-    let registry_provider = match container_registry_kind {
-        Kind::DockerHub => "DockerHub",
-        Kind::Ecr => "AWS ECR",
-        Kind::Docr => "DigitalOcean Registry",
-        Kind::ScalewayCr => "Scaleway Registry",
-    };
-
-    let binary = "docker";
-    let image_with_tag = format!("{}:{}", image_name, image_tag);
-    let image_full_url = format!("{}/{}", registry_url.as_str(), image_with_tag);
-    let args = vec!["image", "rm", &image_full_url];
-
-    match cmd::utilities::exec(binary, args.clone(), &docker_envs.clone()) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            let error_message = format!(
-                "error while trying to delete image {} from {} registry {}, command `{}`: {:?}",
-                image_with_tag,
-                registry_provider,
-                registry_url,
-                cmd::utilities::command_to_string(binary, &args, &docker_envs),
-                e,
-            );
-
-            error!("{}", error_message);
-
-            Err(SimpleError::new(SimpleErrorKind::Other, Some(error_message)))
-        }
-    }
-}
-
 pub fn docker_tag_and_push_image(
     container_registry_kind: Kind,
     docker_envs: Vec<(&str, &str)>,
