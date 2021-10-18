@@ -128,7 +128,7 @@ impl<'a> DOKS<'a> {
 
     fn get_engine_location(&self) -> EngineLocation {
         match self.options.qovery_engine_location.clone() {
-            None => EngineLocation::QoverySide,
+            None => EngineLocation::ClientSide,
             Some(x) => x,
         }
     }
