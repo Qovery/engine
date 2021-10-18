@@ -1,8 +1,8 @@
 use crate::cloud_provider::helm::{
-    get_chart_namespace, ChartInfo, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmAction,
-    HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
+    get_chart_namespace, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated,
+    CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
-use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
+use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cloud_provider::scaleway::application::{Region, Zone};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -28,6 +28,7 @@ pub struct ChartsConfigPrerequisites {
     pub scw_access_key: String,
     pub scw_secret_key: String,
     pub scw_project_id: String,
+    pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
@@ -54,6 +55,7 @@ impl ChartsConfigPrerequisites {
         scw_access_key: String,
         scw_secret_key: String,
         scw_project_id: String,
+        qovery_engine_location: EngineLocation,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
         managed_dns_name: String,
@@ -78,6 +80,7 @@ impl ChartsConfigPrerequisites {
             scw_access_key,
             scw_secret_key,
             scw_project_id,
+            qovery_engine_location,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
             managed_dns_name,
@@ -291,7 +294,7 @@ pub fn scw_helm_charts(
             namespace: prometheus_namespace,
             // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
             // to upgrade because of the CRD and the number of elements it has to deploy
-            timeout: "480".to_string(),
+            timeout_in_seconds: 480,
             values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
             values: vec![
                 ChartSetValue {
@@ -590,7 +593,7 @@ datasources:
             path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
-            timeout: "300".to_string(),
+            timeout_in_seconds: 300,
             values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
             values: vec![
                 // Controller resources limits
@@ -767,9 +770,10 @@ datasources:
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-engine".to_string(),
+            action: get_engine_helm_action_from_location(&chart_config_prerequisites.qovery_engine_location),
             path: chart_path("common/charts/qovery-engine"),
             namespace: HelmChartNamespaces::Qovery,
-            timeout: "900".to_string(),
+            timeout_in_seconds: 900,
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),

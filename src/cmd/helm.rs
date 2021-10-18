@@ -108,6 +108,7 @@ where
     P: AsRef<Path>,
 {
     let debug = false;
+    let timeout_string = format!("{}s", &chart.timeout_in_seconds);
 
     let mut args_string: Vec<String> = vec![
         "upgrade",
@@ -115,6 +116,8 @@ where
         kubernetes_config.as_ref().to_str().unwrap(),
         "--create-namespace",
         "--install",
+        "--timeout",
+        timeout_string.as_str(),
         "--history-max",
         "50",
         "--namespace",
@@ -210,6 +213,20 @@ where
                         error_message = format!("deployment {} has been uninstalled due to failure", chart.name);
                         helm_error_during_deployment.message = Some(error_message.clone());
                         warn!("{}. {}", &error_message, &line);
+                    } else if line.contains("another operation (install/upgrade/rollback) is in progress") {
+                        error_message = format!("helm lock detected for {}, looking for cleaning lock", chart.name);
+                        helm_error_during_deployment.message = Some(error_message.clone());
+                        warn!("{}. {}", &error_message, &line);
+                        match clean_helm_lock(
+                            &kubernetes_config,
+                            get_chart_namespace(chart.namespace).as_str(),
+                            &chart.name,
+                            chart.timeout_in_seconds,
+                            envs.clone(),
+                        ) {
+                            Ok(_) => info!("Helm lock detected and cleaned"),
+                            Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
+                        }
                     // special fix for prometheus operator
                     } else if line.contains("info: skipping unknown hook: \"crd-install\"") {
                         debug!("chart {}: {}", chart.name, line);
@@ -295,28 +312,22 @@ where
                 Err(err) => error!("{}", err),
             },
         ) {
-            Ok(_) => {
+            Ok(_) => OperationResult::Ok(()),
+            Err(e) => {
                 if clean_lock {
-                    return match clean_helm_lock(
+                    match clean_helm_lock(
                         &kubernetes_config,
                         &namespace,
                         &release_name,
                         timeout_i64.clone(),
                         envs.clone(),
                     ) {
-                        Ok(_) => {
-                            let e = SimpleError {
-                                kind: SimpleErrorKind::Other,
-                                message: Some("Helm lock detected and cleaned".to_string()),
-                            };
-                            OperationResult::Retry(e)
-                        }
-                        Err(e) => OperationResult::Err(e),
+                        Ok(_) => info!("Helm lock detected and cleaned"),
+                        Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
                     };
                 };
-                OperationResult::Ok(())
+                OperationResult::Retry(e)
             }
-            Err(e) => OperationResult::Retry(e),
         }
     });
 

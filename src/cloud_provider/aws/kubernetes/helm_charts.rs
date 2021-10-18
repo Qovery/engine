@@ -1,9 +1,10 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_namespace, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart, CoreDNSConfigChart,
-    HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
+    get_chart_namespace, get_engine_helm_action_from_location, ChartInfo, ChartPayload, ChartSetValue,
+    ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces,
+    PrometheusOperatorConfigChart,
 };
-use crate::cloud_provider::qovery::{get_qovery_app_version, QoveryAgent, QoveryAppName, QoveryEngine};
+use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
 use crate::error::{SimpleError, SimpleErrorKind};
 use semver::Version;
@@ -37,6 +38,7 @@ pub struct ChartsConfigPrerequisites {
     pub aws_access_key_id: String,
     pub aws_secret_access_key: String,
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
+    pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
@@ -471,7 +473,7 @@ pub fn aws_helm_charts(
             namespace: prometheus_namespace,
             // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
             // to upgrade because of the CRD and the number of elements it has to deploy
-            timeout: "480".to_string(),
+            timeout_in_seconds: 480,
             values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
             values: vec![
                 ChartSetValue {
@@ -805,7 +807,7 @@ datasources:
             path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
-            timeout: "300".to_string(),
+            timeout_in_seconds: 300,
             values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
             values: vec![
                 // Controller resources limits
@@ -1063,9 +1065,10 @@ datasources:
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-engine".to_string(),
+            action: get_engine_helm_action_from_location(&chart_config_prerequisites.qovery_engine_location),
             path: chart_path("common/charts/qovery-engine"),
             namespace: HelmChartNamespaces::Qovery,
-            timeout: "900".to_string(),
+            timeout_in_seconds: 900,
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),

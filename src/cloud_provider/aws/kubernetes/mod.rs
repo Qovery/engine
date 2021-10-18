@@ -20,10 +20,12 @@ use crate::cloud_provider::kubernetes::{
     KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::WorkerNodeDataTemplate;
+use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::{
-    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_scale_replicas, ScalingKind,
+    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
+    kubectl_exec_scale_replicas, ScalingKind,
 };
 use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
@@ -89,6 +91,7 @@ pub struct Options {
     pub elasticsearch_cidr_subnet: String,
     // Qovery
     pub qovery_api_url: String,
+    pub qovery_engine_location: Option<EngineLocation>,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
     pub grafana_admin_user: String,
@@ -153,6 +156,13 @@ impl<'a> EKS<'a> {
             nodes,
             template_directory,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
+        }
+    }
+
+    fn get_engine_location(&self) -> EngineLocation {
+        match self.options.qovery_engine_location.clone() {
+            None => EngineLocation::ClientSide,
+            Some(x) => x,
         }
     }
 
@@ -910,6 +920,7 @@ impl<'a> Kubernetes for EKS<'a> {
             aws_access_key_id: self.cloud_provider.access_key_id.to_string(),
             aws_secret_access_key: self.cloud_provider.secret_access_key.to_string(),
             vpc_qovery_network_mode: self.options.vpc_qovery_network_mode.clone(),
+            qovery_engine_location: self.get_engine_location(),
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
             ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
             managed_dns_name: self.dns_provider.domain().to_string(),
@@ -948,7 +959,20 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {
+        let kubeconfig_file = match self.config_file() {
+            Ok(x) => x.0,
+            Err(e) => {
+                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
+                return Err(e);
+            }
+        };
+        let kubeconfig = PathBuf::from(&kubeconfig_file);
+        let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
         warn!("EKS.on_create_error() called for {}", self.name());
+        match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
+            Ok(_x) => (),
+            Err(_e) => (),
+        };
         Err(self.engine_error(
             EngineErrorCause::Internal,
             format!("{} Kubernetes cluster failed on deployment", self.name()),
