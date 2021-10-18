@@ -362,7 +362,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn region(&self) -> &str {
-        self.zone.as_str()
+        self.zone.region_str()
     }
 
     fn zone(&self) -> &str {
