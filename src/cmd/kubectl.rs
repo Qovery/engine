@@ -842,7 +842,7 @@ where
 
 pub fn kubectl_exec_get_events<P>(
     kubernetes_config: P,
-    namespace: &str,
+    namespace: Option<&str>,
     envs: Vec<(&str, &str)>,
 ) -> Result<(), SimpleError>
 where
@@ -851,7 +851,11 @@ where
     let mut environment_variables = envs;
     environment_variables.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
 
-    let args = vec!["get", "event", "-n", namespace, "--sort-by='.lastTimestamp'"];
+    let mut args = vec!["get", "event", "-A", "--sort-by='.lastTimestamp'"];
+    if !namespace.unwrap().is_empty() {
+        args = vec!["get", "event", "-n", namespace.unwrap(), "--sort-by='.lastTimestamp'"];
+    }
+
     kubectl_exec_with_output(
         args,
         environment_variables,
