@@ -699,6 +699,7 @@ fn postgresql_v12_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn postgresql_v13_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
