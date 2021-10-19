@@ -118,6 +118,10 @@ where
         "--install",
         "--timeout",
         timeout_string.as_str(),
+        // wait: if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of
+        // a Deployment, StatefulSet, or ReplicaSet are in a ready state before marking the release
+        // as successful. It will wait for as long as --timeout
+        "--wait",
         "--history-max",
         "50",
         "--namespace",
