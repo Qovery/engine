@@ -161,7 +161,7 @@ impl<'a> EKS<'a> {
 
     fn get_engine_location(&self) -> EngineLocation {
         match self.options.qovery_engine_location.clone() {
-            None => EngineLocation::ClientSide,
+            None => EngineLocation::QoverySide,
             Some(x) => x,
         }
     }
