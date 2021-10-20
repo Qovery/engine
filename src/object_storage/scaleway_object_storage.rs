@@ -135,8 +135,10 @@ impl ScalewayOS {
                 }),
             ) {
                 let message = format!(
-                    "While trying to empty object-storage bucket `{}`, cannot delete content: {}",
-                    bucket_name, e
+                    "While trying to empty object-storage bucket `{}` region `{}`, cannot delete content: {}",
+                    bucket_name,
+                    self.zone.region_str(),
+                    e
                 );
                 error!("{}", message);
                 return Err(self.engine_error(EngineErrorCause::Internal, message));
@@ -206,8 +208,10 @@ impl ObjectStorage for ScalewayOS {
             ..Default::default()
         })) {
             let message = format!(
-                "While trying to create object-storage bucket, name `{}`: {}",
-                bucket_name, e
+                "While trying to create object-storage bucket, name `{}` region `{}`: {}",
+                bucket_name,
+                self.zone.region_str(),
+                e
             );
             error!("{}", message);
             return Err(self.engine_error(EngineErrorCause::Internal, message));
@@ -221,8 +225,10 @@ impl ObjectStorage for ScalewayOS {
                 Ok(_) => Ok(()),
                 Err(e) => {
                     let message = format!(
-                        "While trying to activate versioning on object-storage bucket, name `{}`: {}",
-                        bucket_name, e
+                        "While trying to activate versioning on object-storage bucket, name `{}` region `{}`: {}",
+                        bucket_name,
+                        self.zone.region_str(),
+                        e
                     );
                     error!("{}", message);
                     // TODO(benjaminch): to be investigated, versioning seems to fail
@@ -263,8 +269,10 @@ impl ObjectStorage for ScalewayOS {
                 Ok(_) => Ok(()),
                 Err(e) => {
                     let message = format!(
-                        "While trying to delete object-storage bucket, name `{}`: {}",
-                        bucket_name, e
+                        "While trying to delete object-storage bucket, name `{}` region `{}`: {}",
+                        bucket_name,
+                        self.zone.region_str(),
+                        e
                     );
                     error!("{}", message);
                     return Err(self.engine_error(EngineErrorCause::Internal, message));
@@ -323,7 +331,13 @@ impl ObjectStorage for ScalewayOS {
                 let _ = block_on(tokio::fs::create_dir_all(parent_dir));
 
                 // create file
-                match block_on(tokio::fs::File::create(path)) {
+                match block_on(
+                    tokio::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(path),
+                ) {
                     Ok(mut created_file) => match block_on(io::copy(&mut body, &mut created_file)) {
                         Ok(_) => {
                             let file = File::open(path).unwrap();
@@ -344,8 +358,11 @@ impl ObjectStorage for ScalewayOS {
             }
             Err(e) => {
                 let message = format!(
-                    "While trying to get object `{}` from bucket `{}`, error: {}",
-                    object_key, bucket_name, e
+                    "While trying to get object `{}` from bucket `{}` region `{}`, error: {}",
+                    object_key,
+                    bucket_name,
+                    self.zone.region_str(),
+                    e
                 );
                 error!("{}", message);
                 Err(self.engine_error(EngineErrorCause::Internal, message))
@@ -387,8 +404,11 @@ impl ObjectStorage for ScalewayOS {
             Ok(_) => Ok(()),
             Err(e) => {
                 let message = format!(
-                    "While trying to put object `{}` from bucket `{}`, error: {}",
-                    object_key, bucket_name, e
+                    "While trying to put object `{}` from bucket `{}` region `{}`, error: {}",
+                    object_key,
+                    bucket_name,
+                    self.zone.region_str(),
+                    e
                 );
                 error!("{}", message);
                 Err(self.engine_error(EngineErrorCause::Internal, message))
