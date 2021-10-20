@@ -334,7 +334,7 @@ function deploy_engines_envs() { ## Release GA to prod
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
 environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
-environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_USER",\
+environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_EXTERNAL_USER",\
 environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_EXTERNAL_PASSWORD",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
