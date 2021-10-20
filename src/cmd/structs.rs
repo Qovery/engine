@@ -347,11 +347,9 @@ pub struct SVCItem {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SVCSpec {
-    pub cluster_IP: String,
     #[serde(rename = "type")]
-    pub SVC_type: String,
+    pub svc_type: String,
 }
 
 #[cfg(test)]

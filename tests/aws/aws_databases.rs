@@ -473,7 +473,7 @@ fn test_postgresql_configuration(
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,
-            mode: database_mode,
+            mode: database_mode.clone(),
         }];
         environment.applications = environment
             .applications
@@ -506,28 +506,32 @@ fn test_postgresql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            ProviderKind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
-            Ok(pvc) => assert_eq!(
-                pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                format!("{}Gi", storage_size)
-            ),
-            Err(_) => assert!(false),
-        };
+        if database_mode.clone() == CONTAINER {
+            match get_pvc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(pvc) => {
+                    assert_eq!(
+                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                        format!("{}Gi", storage_size)
+                    )
+                }
+                Err(_) => assert!(false),
+            };
 
-        match get_svc(
-            ProviderKind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
-            Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.SVC_type, "ClusterIP"),
-            Err(_) => assert!(false),
-        };
+            match get_svc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.svc_type, "ClusterIP"),
+                Err(_) => assert!(false),
+            };
+        }
 
         match delete_environment(&context_for_delete, &ea_delete) {
             TransactionResult::Ok => assert!(true),
@@ -740,28 +744,32 @@ fn test_mongodb_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            ProviderKind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
-            Ok(pvc) => assert_eq!(
-                pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                format!("{}Gi", storage_size)
-            ),
-            Err(_) => assert!(false),
-        };
+        if database_mode.clone() == CONTAINER {
+            match get_pvc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(pvc) => {
+                    assert_eq!(
+                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                        format!("{}Gi", storage_size)
+                    )
+                }
+                Err(_) => assert!(false),
+            };
 
-        match get_svc(
-            ProviderKind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
-            Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.SVC_type, "ClusterIP"),
-            Err(_) => assert!(false),
-        };
+            match get_svc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.svc_type, "ClusterIP"),
+                Err(_) => assert!(false),
+            };
+        }
 
         match delete_environment(&context_for_delete, &ea_delete) {
             TransactionResult::Ok => assert!(true),
@@ -937,7 +945,7 @@ fn test_mysql_configuration(
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,
-            mode: database_mode,
+            mode: database_mode.clone(),
         }];
         environment.applications = environment
             .applications
@@ -970,28 +978,32 @@ fn test_mysql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            ProviderKind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
-            Ok(pvc) => assert_eq!(
-                pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                format!("{}Gi", storage_size)
-            ),
-            Err(_) => assert!(false),
-        };
+        if database_mode.clone() == CONTAINER {
+            match get_pvc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(pvc) => {
+                    assert_eq!(
+                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                        format!("{}Gi", storage_size)
+                    )
+                }
+                Err(_) => assert!(false),
+            };
 
-        match get_svc(
-            ProviderKind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
-            Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.SVC_type, "ClusterIP"),
-            Err(_) => assert!(false),
-        };
+            match get_svc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.svc_type, "ClusterIP"),
+                Err(_) => assert!(false),
+            };
+        }
 
         match delete_environment(&deletion_context, &ea_delete) {
             TransactionResult::Ok => assert!(true),
@@ -1164,28 +1176,32 @@ fn test_redis_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            ProviderKind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
-            Ok(pvc) => assert_eq!(
-                pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                format!("{}Gi", storage_size)
-            ),
-            Err(_) => assert!(false),
-        };
+        if database_mode.clone() == CONTAINER {
+            match get_pvc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(pvc) => {
+                    assert_eq!(
+                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                        format!("{}Gi", storage_size)
+                    )
+                }
+                Err(_) => assert!(false),
+            };
 
-        match get_svc(
-            ProviderKind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
-            Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.SVC_type, "ClusterIP"),
-            Err(_) => assert!(false),
-        };
+            match get_svc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.svc_type, "ClusterIP"),
+                Err(_) => assert!(false),
+            };
+        }
 
         match delete_environment(&context_for_delete, &ea_delete) {
             TransactionResult::Ok => assert!(true),
