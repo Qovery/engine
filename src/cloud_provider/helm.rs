@@ -214,7 +214,7 @@ pub trait HelmChart: Send {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         kubectl_exec_get_events(
             kubernetes_config,
-            get_chart_namespace(self.get_chart_info().namespace).as_str(),
+            Some(get_chart_namespace(self.get_chart_info().namespace).as_str()),
             environment_variables,
         )?;
         Ok(payload)
