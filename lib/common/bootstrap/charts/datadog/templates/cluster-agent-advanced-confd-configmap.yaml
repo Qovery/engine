@@ -1,0 +1,21 @@
+{{- if .Values.clusterAgent.advancedConfd }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "datadog.fullname" . }}-cluster-agent-advanced-confd
+  labels:
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+    app.kubernetes.io/name: "{{ template "datadog.fullname" . }}"
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+  annotations:
+    checksum/confd-config: {{ tpl (toYaml .Values.clusterAgent.advancedConfd) . | sha256sum }}
+data:
+{{- range $integration, $configs := $.Values.clusterAgent.advancedConfd }}
+{{- range $name, $config := $configs }}
+  {{ printf "%s--%s: |" $integration $name }}
+    {{ $config | indent 4 | trim }}
+{{- end }}
+{{- end }}
+{{- end -}}
