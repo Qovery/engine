@@ -8,7 +8,7 @@ use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -37,7 +37,9 @@ use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
 use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
+use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::object_storage::spaces::Spaces;
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
@@ -831,5 +833,63 @@ pub fn generate_cluster_id(region: &str) -> String {
             format!("{}-{}", final_name.to_lowercase(), region.to_lowercase())
         }
         _ => generate_id(),
+    }
+}
+
+pub fn get_pvc(
+    provider_kind: Kind,
+    kube_cluster_id: &str,
+    environment_check: Environment,
+    secrets: FuncTestsSecrets,
+) -> Result<PVC, SimpleError> {
+    let namespace_name = format!(
+        "{}-{}",
+        &environment_check.project_id.clone(),
+        &environment_check.id.clone(),
+    );
+
+    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+
+    match kubernetes_config {
+        Ok(path) => {
+            match kubectl_get_pvc(
+                path.as_str(),
+                namespace_name.clone().as_str(),
+                get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+            ) {
+                Ok(pvc) => Ok(pvc),
+                Err(e) => Err(e),
+            }
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub fn get_svc(
+    provider_kind: Kind,
+    kube_cluster_id: &str,
+    environment_check: Environment,
+    secrets: FuncTestsSecrets,
+) -> Result<SVC, SimpleError> {
+    let namespace_name = format!(
+        "{}-{}",
+        &environment_check.project_id.clone(),
+        &environment_check.id.clone(),
+    );
+
+    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+
+    match kubernetes_config {
+        Ok(path) => {
+            match kubectl_get_svc(
+                path.as_str(),
+                namespace_name.clone().as_str(),
+                get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+            ) {
+                Ok(pvc) => Ok(pvc),
+                Err(e) => Err(e),
+            }
+        }
+        Err(e) => Err(e),
     }
 }

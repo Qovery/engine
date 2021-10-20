@@ -2,6 +2,9 @@ extern crate test_utilities;
 
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind as ProviderKind;
+use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
+use qovery_engine::cmd::structs::PVC;
+use qovery_engine::error::SimpleError;
 use qovery_engine::models::{
     Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
 };
@@ -14,7 +17,9 @@ use crate::aws::aws_environment::{ctx_pause_environment, delete_environment, dep
 use self::test_utilities::aws::{
     AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID,
 };
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, get_pods, is_pod_restarted_env};
+use self::test_utilities::utilities::{
+    context, engine_run_test, generate_id, get_pods, get_pvc, get_svc, is_pod_restarted_env,
+};
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 
 /**
@@ -438,11 +443,16 @@ fn test_postgresql_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = format!("postgresql-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "postgresql-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
+        let storage_size = 10;
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
@@ -457,7 +467,7 @@ fn test_postgresql_configuration(
             password: database_password.clone(),
             total_cpus: "100m".to_string(),
             total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
+            disk_size_in_gib: storage_size.clone(),
             database_instance_type: "db.t2.micro".to_string(),
             database_disk_type: "gp2".to_string(),
             activate_high_availability: false,
@@ -487,7 +497,7 @@ fn test_postgresql_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
@@ -496,7 +506,28 @@ fn test_postgresql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check the database disk is here and with correct size
+        match get_pvc(
+            ProviderKind::Aws,
+            AWS_KUBE_TEST_CLUSTER_ID,
+            environment.clone(),
+            secrets.clone(),
+        ) {
+            Ok(pvc) => assert_eq!(
+                pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                format!("{}Gi", storage_size)
+            ),
+            Err(_) => assert!(false),
+        };
+
+        match get_svc(
+            ProviderKind::Aws,
+            AWS_KUBE_TEST_CLUSTER_ID,
+            environment.clone(),
+            secrets.clone(),
+        ) {
+            Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.SVC_type, "ClusterIP"),
+            Err(_) => assert!(false),
+        };
 
         match delete_environment(&context_for_delete, &ea_delete) {
             TransactionResult::Ok => assert!(true),
@@ -640,7 +671,11 @@ fn test_mongodb_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("mongodb-app-{}", generate_id());
-        let database_host = format!("mongodb-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "mongodb-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 27017;
         let database_db_name = "my-mongodb".to_string();
         let database_username = "superuser".to_string();
@@ -649,6 +684,7 @@ fn test_mongodb_configuration(
             "mongodb://{}:{}@{}:{}/{}",
             database_username, database_password, database_host, database_port, database_db_name
         );
+        let storage_size = 10;
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Mongodb,
@@ -663,7 +699,7 @@ fn test_mongodb_configuration(
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
+            disk_size_in_gib: storage_size.clone(),
             database_instance_type: "db.t3.medium".to_string(),
             database_disk_type: "gp2".to_string(),
             activate_high_availability: false,
@@ -695,7 +731,7 @@ fn test_mongodb_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
@@ -704,7 +740,28 @@ fn test_mongodb_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check the database disk is here and with correct size
+        match get_pvc(
+            ProviderKind::Aws,
+            AWS_KUBE_TEST_CLUSTER_ID,
+            environment.clone(),
+            secrets.clone(),
+        ) {
+            Ok(pvc) => assert_eq!(
+                pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                format!("{}Gi", storage_size)
+            ),
+            Err(_) => assert!(false),
+        };
+
+        match get_svc(
+            ProviderKind::Aws,
+            AWS_KUBE_TEST_CLUSTER_ID,
+            environment.clone(),
+            secrets.clone(),
+        ) {
+            Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.SVC_type, "ClusterIP"),
+            Err(_) => assert!(false),
+        };
 
         match delete_environment(&context_for_delete, &ea_delete) {
             TransactionResult::Ok => assert!(true),
@@ -849,12 +906,17 @@ fn test_mysql_configuration(
         let deletion_context = context.clone_not_same_execution_id();
 
         let app_name = format!("mysql-app-{}", generate_id());
-        let database_host = format!("mysql-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "mysql-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
 
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
+        let storage_size = 10;
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Mysql,
@@ -869,7 +931,7 @@ fn test_mysql_configuration(
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
+            disk_size_in_gib: storage_size.clone(),
             database_instance_type: "db.t2.micro".to_string(),
             database_disk_type: "gp2".to_string(),
             activate_high_availability: false,
@@ -899,7 +961,7 @@ fn test_mysql_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
@@ -908,7 +970,28 @@ fn test_mysql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check the database disk is here and with correct size
+        match get_pvc(
+            ProviderKind::Aws,
+            AWS_KUBE_TEST_CLUSTER_ID,
+            environment.clone(),
+            secrets.clone(),
+        ) {
+            Ok(pvc) => assert_eq!(
+                pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                format!("{}Gi", storage_size)
+            ),
+            Err(_) => assert!(false),
+        };
+
+        match get_svc(
+            ProviderKind::Aws,
+            AWS_KUBE_TEST_CLUSTER_ID,
+            environment.clone(),
+            secrets.clone(),
+        ) {
+            Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.SVC_type, "ClusterIP"),
+            Err(_) => assert!(false),
+        };
 
         match delete_environment(&deletion_context, &ea_delete) {
             TransactionResult::Ok => assert!(true),
@@ -1017,11 +1100,16 @@ fn test_redis_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("redis-app-{}", generate_id());
-        let database_host = format!("redis-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "redis-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
+        let storage_size = 10;
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Redis,
@@ -1036,7 +1124,7 @@ fn test_redis_configuration(
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
+            disk_size_in_gib: storage_size,
             database_instance_type: "cache.t3.micro".to_string(),
             database_disk_type: "gp2".to_string(),
             activate_high_availability: false,
@@ -1067,7 +1155,7 @@ fn test_redis_configuration(
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
+        let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
@@ -1076,7 +1164,28 @@ fn test_redis_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check the database disk is here and with correct size
+        match get_pvc(
+            ProviderKind::Aws,
+            AWS_KUBE_TEST_CLUSTER_ID,
+            environment.clone(),
+            secrets.clone(),
+        ) {
+            Ok(pvc) => assert_eq!(
+                pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                format!("{}Gi", storage_size)
+            ),
+            Err(_) => assert!(false),
+        };
+
+        match get_svc(
+            ProviderKind::Aws,
+            AWS_KUBE_TEST_CLUSTER_ID,
+            environment.clone(),
+            secrets.clone(),
+        ) {
+            Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.SVC_type, "ClusterIP"),
+            Err(_) => assert!(false),
+        };
 
         match delete_environment(&context_for_delete, &ea_delete) {
             TransactionResult::Ok => assert!(true),
