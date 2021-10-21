@@ -62,6 +62,7 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
         context.clone(),
         SCW_KUBE_TEST_CLUSTER_ID,
         SCW_QOVERY_ORGANIZATION_ID,
+        uuid::Uuid::new_v4(),
         SCW_KUBE_TEST_CLUSTER_NAME,
         secrets
             .SCALEWAY_ACCESS_KEY
@@ -90,6 +91,10 @@ pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
 pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
     KapsuleOptions::new(
         secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
+        secrets.QOVERY_GRPC_URL.expect("QOVERY_GRPC_URL is not set in secrets"),
+        secrets
+            .QOVERY_CLUSTER_SECRET_TOKEN
+            .expect("QOVERY_CLUSTER_SECRET_TOKEN is not set in secrets"),
         secrets.QOVERY_NATS_URL.expect("QOVERY_NATS_URL is not set in secrets"),
         secrets
             .QOVERY_NATS_USERNAME
@@ -183,6 +188,7 @@ pub fn scw_kubernetes_kapsule<'a>(
     Kapsule::<'a>::new(
         context.clone(),
         SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+        uuid::Uuid::new_v4(),
         SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
         SCW_KUBERNETES_VERSION.to_string(),
         zone,
