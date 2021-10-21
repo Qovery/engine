@@ -58,7 +58,7 @@ dependencies = [
  "tokio 1.10.0",
  "tracing",
  "tracing-subscriber",
- "uuid 0.8.1",
+ "uuid 0.8.2",
  "warp",
 ]
 
@@ -2625,7 +2625,7 @@ dependencies = [
  "tracing-subscriber",
  "tracing-test",
  "trust-dns-resolver",
- "uuid 0.8.1",
+ "uuid 0.8.2",
  "walkdir",
 ]
 
@@ -3889,6 +3889,7 @@ dependencies = [
  "time 0.2.24",
  "tracing",
  "tracing-subscriber",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -4630,11 +4631,12 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fde2f6a4bea1d6e007c4ad38c6839fa71cbb63b6dbf5b595aa38dc9b1093c11"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 dependencies = [
- "rand 0.7.3",
+ "getrandom 0.2.2",
+ "serde",
 ]
 
 [[package]]

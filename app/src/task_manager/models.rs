@@ -24,6 +24,7 @@ use std::str::FromStr;
 pub struct Request {
     pub id: String,
     pub organization_id: String,
+    pub organization_long_id: uuid::Uuid,
     pub created_at: DateTime<Utc>,
     pub action: Action,
     pub features: Vec<Features>,
@@ -55,7 +56,11 @@ impl Request {
 
         let mut cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(context.clone(), self.organization_id.as_str())
+            .to_engine_cloud_provider(
+                context.clone(),
+                self.organization_id.as_str(),
+                self.organization_long_id,
+            )
             .ok_or_else(|| {
                 RequestError::CloudProvider(format!("Invalid cloud provider info: {:?}", self.cloud_provider))
             })?;
@@ -141,6 +146,7 @@ impl CloudProvider {
         &self,
         context: Context,
         organization_id: &str,
+        organization_long_id: uuid::Uuid,
     ) -> Option<Box<dyn qovery_engine::cloud_provider::CloudProvider>> {
         let terraform_state_credentials = qovery_engine::cloud_provider::TerraformStateCredentials {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
@@ -153,6 +159,7 @@ impl CloudProvider {
                 context,
                 self.id.as_str(),
                 organization_id,
+                organization_long_id,
                 self.name.as_str(),
                 self.options.access_key_id.as_ref()?.as_str(),
                 self.options.secret_access_key.as_ref()?.as_str(),
@@ -162,6 +169,7 @@ impl CloudProvider {
                 context,
                 self.id.as_str(),
                 organization_id,
+                organization_long_id,
                 self.options.token.as_ref()?.as_str(),
                 self.options.spaces_access_id.as_ref()?.as_str(),
                 self.options.spaces_secret_key.as_ref()?.as_str(),
@@ -172,6 +180,7 @@ impl CloudProvider {
                 context,
                 self.id.as_str(),
                 organization_id,
+                organization_long_id,
                 self.name.as_str(),
                 self.options.scaleway_access_key.as_ref()?.as_str(),
                 self.options.scaleway_secret_key.as_ref()?.as_str(),
@@ -193,6 +202,7 @@ pub struct TerraformStateCredentials {
 pub struct Kubernetes {
     pub kind: qovery_engine::cloud_provider::kubernetes::Kind,
     pub id: String,
+    pub long_id: uuid::Uuid,
     pub name: String,
     pub version: String,
     pub region: String,
@@ -212,6 +222,7 @@ impl Kubernetes {
             qovery_engine::cloud_provider::kubernetes::Kind::Eks => Box::new(EKS::new(
                 context.clone(),
                 self.id.as_str(),
+                self.long_id,
                 self.name.as_str(),
                 self.version.as_str(),
                 self.region.as_str(),
@@ -227,6 +238,7 @@ impl Kubernetes {
             qovery_engine::cloud_provider::kubernetes::Kind::Doks => Box::new(DOKS::new(
                 context.clone(),
                 self.id.clone(),
+                self.long_id,
                 self.name.clone(),
                 self.version.clone(),
                 qovery_engine::cloud_provider::digitalocean::application::Region::from_str(self.region.as_str())
@@ -247,6 +259,7 @@ impl Kubernetes {
             qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => Box::new(Kapsule::new(
                 context.clone(),
                 self.id.clone(),
+                self.long_id,
                 self.name.clone(),
                 self.version.clone(),
                 qovery_engine::cloud_provider::scaleway::application::Zone::from_str(self.region.as_str()).expect(
