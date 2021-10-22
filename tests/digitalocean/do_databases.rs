@@ -484,6 +484,7 @@ fn test_postgresql_configuration(
         let _enter = span.enter();
         let context_for_delete = context.clone_not_same_execution_id();
 
+        let app_id = generate_id();
         let app_name = format!("postgresql-app-{}", generate_id());
         let database_host = match is_public {
             true => format!(
@@ -507,7 +508,7 @@ fn test_postgresql_configuration(
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
-            id: generate_id(),
+            id: app_id.clone(),
             name: database_db_name.clone(),
             version: version.to_string(),
             fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
@@ -612,8 +613,10 @@ fn test_postgresql_configuration(
                     svc.items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(|svc| svc.metadata.name.contains("postgresqlpostgres")
-                            && svc.spec.svc_type == "ExternalName")
+                        .filter(
+                            |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                && svc.spec.svc_type == "ExternalName"
+                        )
                         .collect::<Vec<SVCItem>>()
                         .len(),
                     1
@@ -771,6 +774,7 @@ fn test_mongodb_configuration(
         let _enter = span.enter();
         let context_for_delete = context.clone_not_same_execution_id();
 
+        let app_id = generate_id();
         let app_name = format!("mongodb-app-{}", generate_id());
         let database_host = match is_public {
             true => format!(
@@ -798,7 +802,7 @@ fn test_mongodb_configuration(
         environment.databases = vec![Database {
             kind: DatabaseKind::Mongodb,
             action: Action::Create,
-            id: generate_id(),
+            id: app_id.clone(),
             name: database_db_name.clone(),
             version: version.to_string(),
             fqdn_id: "mongodb-".to_string() + generate_id().as_str(),
@@ -910,7 +914,8 @@ fn test_mongodb_configuration(
                         .expect("No items in svc")
                         .into_iter()
                         .filter(
-                            |svc| svc.metadata.name.contains("mongodbmymongodb") && svc.spec.svc_type == "ExternalName"
+                            |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                && svc.spec.svc_type == "ExternalName"
                         )
                         .collect::<Vec<SVCItem>>()
                         .len(),
@@ -951,7 +956,7 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, flase);
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
@@ -1107,6 +1112,7 @@ fn test_mysql_configuration(
 
         let deletion_context = context.clone_not_same_execution_id();
 
+        let app_id = generate_id();
         let app_name = format!("mysql-app-{}", generate_id());
         let database_host = match is_public {
             true => format!(
@@ -1131,7 +1137,7 @@ fn test_mysql_configuration(
         environment.databases = vec![Database {
             kind: DatabaseKind::Mysql,
             action: Action::Create,
-            id: generate_id(),
+            id: app_id.clone(),
             name: database_db_name.clone(),
             version: version.to_string(),
             fqdn_id: "mysql-".to_string() + generate_id().as_str(),
@@ -1238,8 +1244,10 @@ fn test_mysql_configuration(
                     svc.items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(|svc| svc.metadata.name.contains("mysqlmysqldatabase")
-                            && svc.spec.svc_type == "ExternalName")
+                        .filter(
+                            |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                && svc.spec.svc_type == "ExternalName"
+                        )
                         .collect::<Vec<SVCItem>>()
                         .len(),
                     1
@@ -1363,6 +1371,7 @@ fn test_redis_configuration(
 
         let context_for_delete = context.clone_not_same_execution_id();
 
+        let app_id = generate_id();
         let app_name = format!("redis-app-{}", generate_id());
         let database_host = match is_public {
             true => format!(
@@ -1386,7 +1395,7 @@ fn test_redis_configuration(
         environment.databases = vec![Database {
             kind: DatabaseKind::Redis,
             action: Action::Create,
-            id: generate_id(),
+            id: app_id.clone(),
             name: database_db_name.clone(),
             version: version.to_string(),
             fqdn_id: "redis-".to_string() + generate_id().as_str(),
@@ -1492,7 +1501,10 @@ fn test_redis_configuration(
                     svc.items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(|svc| svc.metadata.name.contains("redismyredis") && svc.spec.svc_type == "ExternalName")
+                        .filter(
+                            |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                && svc.spec.svc_type == "ExternalName"
+                        )
                         .collect::<Vec<SVCItem>>()
                         .len(),
                     1
