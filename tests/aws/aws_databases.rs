@@ -1,9 +1,10 @@
 extern crate test_utilities;
 
 use ::function_name::named;
+use digitalocean::api::HasValue;
 use qovery_engine::cloud_provider::Kind as ProviderKind;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
-use qovery_engine::cmd::structs::PVC;
+use qovery_engine::cmd::structs::{SVCItem, PVC};
 use qovery_engine::error::SimpleError;
 use qovery_engine::models::{
     Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
@@ -434,6 +435,7 @@ fn test_postgresql_configuration(
     version: &str,
     test_name: &str,
     database_mode: DatabaseMode,
+    is_public: bool,
 ) {
     engine_run_test(|| {
         init();
@@ -443,11 +445,19 @@ fn test_postgresql_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = format!(
-            "postgresql-{}.{}",
-            generate_id(),
-            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-        );
+        let database_host = match is_public {
+            true => format!(
+                "postgresql-{}.{}",
+                generate_id(),
+                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+            ),
+            false => {
+                format!(
+                    "postgresqlpostgres.{}-{}.svc.cluster.local",
+                    environment.project_id, environment.id
+                )
+            }
+        };
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
@@ -472,7 +482,7 @@ fn test_postgresql_configuration(
             database_disk_type: "gp2".to_string(),
             activate_high_availability: false,
             activate_backups: false,
-            publicly_accessible: false,
+            publicly_accessible: is_public.clone(),
             mode: database_mode.clone(),
         }];
         environment.applications = environment
@@ -513,12 +523,10 @@ fn test_postgresql_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(pvc) => {
-                    assert_eq!(
-                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                        format!("{}Gi", storage_size)
-                    )
-                }
+                Ok(pvc) => assert_eq!(
+                    pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                    format!("{}Gi", storage_size)
+                ),
                 Err(_) => assert!(false),
             };
 
@@ -528,7 +536,33 @@ fn test_postgresql_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.svc_type, "ClusterIP"),
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("postgresqlpostgres")
+                            && svc.spec.svc_type == "LoadBalancer")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        } else {
+            match get_svc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => {
+                    for item in svc.items.expect("No items in svc") {
+                        assert_eq!(item.spec.svc_type, "ExternalName")
+                    }
+                }
                 Err(_) => assert!(false),
             };
         }
@@ -546,7 +580,7 @@ fn test_postgresql_configuration(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn postgresql_v10_deploy_a_working_dev_environment() {
+fn private_postgresql_v10_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -558,13 +592,31 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER);
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn postgresql_v11_deploy_a_working_dev_environment() {
+fn pub_postgresql_v10_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v11_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -577,13 +629,32 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER);
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn postgresql_v12_deploy_a_working_dev_environment() {
+fn pub_postgresql_v11_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .clone()
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -595,14 +666,32 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER);
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn pub_postgresql_v12_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER, true);
 }
 
 // Postgres production environment
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-fn postgresql_v10_deploy_a_working_prod_environment() {
+fn private_postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -614,13 +703,13 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), MANAGED);
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), MANAGED, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-fn postgresql_v11_deploy_a_working_prod_environment() {
+fn pub_postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -632,13 +721,13 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), MANAGED);
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), MANAGED, true);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-fn postgresql_v12_deploy_a_working_prod_environment() {
+fn private_postgresql_v11_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -650,7 +739,61 @@ fn postgresql_v12_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED);
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), MANAGED, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn pub_postgresql_v11_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), MANAGED, true);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_postgresql_v12_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn pub_postgresql_v12_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED, true);
 }
 
 /**
@@ -666,6 +809,7 @@ fn test_mongodb_configuration(
     version: &str,
     test_name: &str,
     database_mode: DatabaseMode,
+    is_public: bool,
 ) {
     engine_run_test(|| {
         init();
@@ -675,11 +819,16 @@ fn test_mongodb_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("mongodb-app-{}", generate_id());
-        let database_host = format!(
-            "mongodb-{}.{}",
-            generate_id(),
-            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-        );
+        let database_host = match is_public {
+            true => format!(
+                "mongodb-{}.{}",
+                generate_id(),
+                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+            ),
+            false => {
+                format!("???.{}-{}.svc.cluster.local", environment.project_id, environment.id)
+            }
+        };
         let database_port = 27017;
         let database_db_name = "my-mongodb".to_string();
         let database_username = "superuser".to_string();
@@ -708,7 +857,7 @@ fn test_mongodb_configuration(
             database_disk_type: "gp2".to_string(),
             activate_high_availability: false,
             activate_backups: false,
-            publicly_accessible: false,
+            publicly_accessible: is_public.clone(),
             mode: database_mode.clone(),
         }];
         environment.applications = environment
@@ -785,7 +934,7 @@ fn test_mongodb_configuration(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn mongodb_v3_6_deploy_a_working_dev_environment() {
+fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -797,13 +946,28 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, false);
+}
+
+fn pub_mongodb_v3_6_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn mongodb_v4_0_deploy_a_working_dev_environment() {
+fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -815,13 +979,13 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn mongodb_v4_2_deploy_a_working_dev_environment() {
+fn pub_mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -833,13 +997,13 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn mongodb_v4_4_deploy_a_working_dev_environment() {
+fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -851,14 +1015,68 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn pub_mongodb_v4_2_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn pub_mongodb_v4_4_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER, true);
 }
 
 // MongoDB production environment (DocumentDB)
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-fn mongodb_v3_6_deploy_a_working_prod_environment() {
+fn private_mongodb_v3_6_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -870,13 +1088,13 @@ fn mongodb_v3_6_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), MANAGED);
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), MANAGED, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-fn mongodb_v4_0_deploy_a_working_prod_environment() {
+fn pub_mongodb_v3_6_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -888,7 +1106,43 @@ fn mongodb_v4_0_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), MANAGED);
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), MANAGED, true);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_mongodb_v4_0_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), MANAGED, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn pub_mongodb_v4_0_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), MANAGED, true);
 }
 
 /**
@@ -904,6 +1158,7 @@ fn test_mysql_configuration(
     version: &str,
     test_name: &str,
     database_mode: DatabaseMode,
+    is_public: bool,
 ) {
     engine_run_test(|| {
         init();
@@ -914,11 +1169,16 @@ fn test_mysql_configuration(
         let deletion_context = context.clone_not_same_execution_id();
 
         let app_name = format!("mysql-app-{}", generate_id());
-        let database_host = format!(
-            "mysql-{}.{}",
-            generate_id(),
-            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-        );
+        let database_host = match is_public {
+            true => format!(
+                "mysql-{}.{}",
+                generate_id(),
+                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+            ),
+            false => {
+                format!("???.{}-{}.svc.cluster.local", environment.project_id, environment.id)
+            }
+        };
 
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
@@ -944,7 +1204,7 @@ fn test_mysql_configuration(
             database_disk_type: "gp2".to_string(),
             activate_high_availability: false,
             activate_backups: false,
-            publicly_accessible: false,
+            publicly_accessible: is_public.clone(),
             mode: database_mode.clone(),
         }];
         environment.applications = environment
@@ -1019,7 +1279,7 @@ fn test_mysql_configuration(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn mysql_v5_7_deploy_a_working_dev_environment() {
+fn private_mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -1031,13 +1291,13 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER);
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn mysql_v8_deploy_a_working_dev_environment() {
+fn pub_mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -1049,14 +1309,50 @@ fn mysql_v8_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER);
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_mysql_v8_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn pub_mysql_v8_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER, true);
 }
 
 // MySQL production environment (RDS)
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-fn mysql_v5_7_deploy_a_working_prod_environment() {
+fn private_mysql_v5_7_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -1068,13 +1364,13 @@ fn mysql_v5_7_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), MANAGED);
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), MANAGED, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-fn mysql_v8_0_deploy_a_working_prod_environment() {
+fn pub_mysql_v5_7_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -1086,7 +1382,43 @@ fn mysql_v8_0_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), MANAGED);
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), MANAGED, true);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_mysql_v8_0_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), MANAGED, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn pub_mysql_v8_0_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), MANAGED, true);
 }
 
 /**
@@ -1102,6 +1434,7 @@ fn test_redis_configuration(
     version: &str,
     test_name: &str,
     database_mode: DatabaseMode,
+    is_public: bool,
 ) {
     engine_run_test(|| {
         init();
@@ -1112,11 +1445,16 @@ fn test_redis_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("redis-app-{}", generate_id());
-        let database_host = format!(
-            "redis-{}.{}",
-            generate_id(),
-            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-        );
+        let database_host = match is_public {
+            true => format!(
+                "redis-{}.{}",
+                generate_id(),
+                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+            ),
+            false => {
+                format!("???.{}-{}.svc.cluster.local", environment.project_id, environment.id)
+            }
+        };
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();
@@ -1141,7 +1479,7 @@ fn test_redis_configuration(
             database_disk_type: "gp2".to_string(),
             activate_high_availability: false,
             activate_backups: false,
-            publicly_accessible: false,
+            publicly_accessible: is_public.clone(),
             mode: database_mode.clone(),
         }];
         environment.applications = environment
@@ -1217,7 +1555,7 @@ fn test_redis_configuration(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn redis_v5_deploy_a_working_dev_environment() {
+fn private_redis_v5_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -1229,13 +1567,13 @@ fn redis_v5_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER);
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn redis_v6_deploy_a_working_dev_environment() {
+fn pub_redis_v5_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -1247,14 +1585,50 @@ fn redis_v6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER);
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_redis_v6_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn pub_redis_v6_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER, true);
 }
 
 // Redis production environment (Elasticache)
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-fn redis_v5_deploy_a_working_prod_environment() {
+fn private_redis_v5_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -1266,13 +1640,13 @@ fn redis_v5_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "5", function_name!(), MANAGED);
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), MANAGED, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-fn redis_v6_deploy_a_working_prod_environment() {
+fn pub_redis_v5_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -1284,5 +1658,41 @@ fn redis_v6_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "6", function_name!(), MANAGED);
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), MANAGED, true);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_redis_v6_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), MANAGED, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn pub_redis_v6_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), MANAGED, true);
 }

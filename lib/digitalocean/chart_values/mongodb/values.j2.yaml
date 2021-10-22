@@ -138,6 +138,7 @@ service:
   # name: svc-mongo
   ## Provide any additional annotations which may be required.
   ## The value is evaluated as a template, so, for example, the value can depend on .Release or .Chart
+  {% if publicly_accessible -%}
   annotations:
     service.beta.kubernetes.io/do-loadbalancer-name: "{{ id }}"
     service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
@@ -145,8 +146,9 @@ service:
     service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
+  {% endif %}
 
-  type: LoadBalancer
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
   port: {{ private_port }}
 

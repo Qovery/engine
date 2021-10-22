@@ -86,7 +86,7 @@ service:
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
   {% endif %}
-  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIp {% endif %}
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
   port: {{ private_port }}
 

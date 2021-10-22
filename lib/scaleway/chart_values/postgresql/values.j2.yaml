@@ -120,7 +120,7 @@ initdbPassword: {{ database_password }}
 service:
   ## PosgresSQL service type
 
-  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIp {% endif %}
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
   port: 5432
 

@@ -248,7 +248,7 @@ ldap:
 ## PostgreSQL service configuration
 service:
   ## PosgresSQL service type
-  type: LoadBalancer
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
   port: 5432
 
@@ -259,6 +259,7 @@ service:
 
   ## Provide any additional annotations which may be required. Evaluated as a template.
   ##
+  {% if publicly_accessible -%}
   annotations:
     service.beta.kubernetes.io/do-loadbalancer-name: "{{ id }}"
     service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
@@ -266,7 +267,7 @@ service:
     service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
-
+  {% endif %}
   ## Set the LoadBalancer service type to internal only.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
   ##

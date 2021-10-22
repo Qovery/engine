@@ -478,7 +478,7 @@ slave:
 service:
   ## MySQL Service type
   ##
-  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIp {% endif %}
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
 
   ## MySQL Service port
   ##

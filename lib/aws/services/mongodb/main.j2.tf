@@ -110,6 +110,7 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
   # Network
   db_subnet_group_name = data.aws_subnet_ids.k8s_subnet_ids.id
   vpc_security_group_ids = data.aws_security_group.selected.*.id
+  publicly_accessible = var.publicly_accessible
 
   # Maintenance and upgrades
   apply_immediately = var.apply_changes_now

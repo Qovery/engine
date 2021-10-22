@@ -175,7 +175,13 @@ impl Service for MySQL {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn.as_str());
+        match &self.options.publicly_accessible {
+            true => context.insert("fqdn", self.fqdn.as_str()),
+            false => context.insert(
+                "fqdn",
+                format!("???.{}.svc.cluster.local", environment.namespace()).as_str(),
+            ),
+        }
 
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
