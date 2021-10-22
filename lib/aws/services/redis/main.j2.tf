@@ -50,6 +50,11 @@ resource "helm_release" "elasticache_instance_external_name" {
     value = "{{database_id}}"
   }
 
+  set {
+    name= "publicly_accessible"
+    value= {{ publicly_accessible }}
+  }
+
   depends_on = [
     aws_elasticache_cluster.elasticache_cluster
   ]
@@ -95,7 +100,6 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
   # Network
   # WARNING: this value cna't get fetch from data sources and is linked to the bootstrap phase
   subnet_group_name = "elasticache-${data.aws_vpc.selected.id}"
-  publicly_accessible = var.publicly_accessible
 
   # Security
   security_group_ids = data.aws_security_group.selected.*.id

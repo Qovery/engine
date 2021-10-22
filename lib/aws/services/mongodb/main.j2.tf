@@ -67,6 +67,9 @@ resource "aws_docdb_cluster_instance" "documentdb_cluster_instances" {
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
   preferred_maintenance_window = var.preferred_maintenance_window
 
+  # Network
+  publicly_accessible = var.publicly_accessible
+
   tags = {
     cluster_name = var.cluster_name
     region = var.region
@@ -110,7 +113,6 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
   # Network
   db_subnet_group_name = data.aws_subnet_ids.k8s_subnet_ids.id
   vpc_security_group_ids = data.aws_security_group.selected.*.id
-  publicly_accessible = var.publicly_accessible
 
   # Maintenance and upgrades
   apply_immediately = var.apply_changes_now

@@ -1516,12 +1516,18 @@ fn test_redis_configuration(
                 generate_id(),
                 secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
             ),
-            false => {
-                format!(
-                    "redismyredis.{}-{}.svc.cluster.local",
+            false => match database_mode {
+                CONTAINER => format!(
+                    "redismyredis-master.{}-{}.svc.cluster.local",
                     environment.project_id, environment.id
-                )
-            }
+                ),
+                MANAGED => format!(
+                    "{}-dns.{}-{}.svc.cluster.local",
+                    app_id.clone(),
+                    environment.project_id,
+                    environment.id
+                ),
+            },
         };
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
@@ -1617,7 +1623,8 @@ fn test_redis_configuration(
                     svc.items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(|svc| svc.metadata.name.contains("redismyredis") && svc.spec.svc_type == "LoadBalancer")
+                        .filter(|svc| svc.metadata.name.contains("redismyredis-master")
+                            && svc.spec.svc_type == "LoadBalancer")
                         .collect::<Vec<SVCItem>>()
                         .len(),
                     match is_public {
@@ -1644,7 +1651,10 @@ fn test_redis_configuration(
                         )
                         .collect::<Vec<SVCItem>>()
                         .len(),
-                    1
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
                 ),
                 Err(_) => assert!(false),
             };
