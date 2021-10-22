@@ -1,90 +1,92 @@
-use std::any::Any;
+use crate::cloud_provider::kubernetes::InstanceType;
+use core::fmt;
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
-use crate::cloud_provider::kubernetes::KubernetesNode;
-
-#[derive(Clone)]
-pub struct Node {
-    instance_type: String,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum AwsInstancesType {
+    T2Large,    // 2 cores 8Gb RAM
+    T2Xlarge,   // 4 cores 16Gb RAM
+    T3Large,    // 2 cores 8Gb RAM
+    T3Xlarge,   // 4 cores 16Gb RAM
+    T3aLarge,   // 2 cores 8Gb RAM
+    T3a2xlarge, // 8 cores 32Gb RAM
 }
 
-impl Node {
-    /// Number of CPUs and total memory wanted - the right AWS EC2 instance type is found algorithmically
-    /// Eg. total_cpu = 1 and total_memory_in_gib = 2 means `t2.small` instance type
-    /// BUT total_cpu = 1 and total_memory_in_gib = 3 does not have an existing instance - so we will pick the upper closest,
-    /// which is `t2.medium` with 2 cpu and 4 GiB
-    /// ```
-    /// use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
-    /// use qovery_engine::cloud_provider::kubernetes::KubernetesNode;
-    ///
-    /// let node = Node::new_with_cpu_and_mem(2, 4);
-    /// assert_eq!(node.instance_type(), "t2.medium")
-    /// ```
-    pub fn new_with_cpu_and_mem(total_cpu: u8, total_memory_in_gib: u16) -> Self {
-        let instance_types_table = [
-            (1, 1, "t2.micro"),
-            (1, 2, "t2.small"),
-            (2, 4, "t2.medium"),
-            (2, 8, "t2.large"),
-            (4, 16, "t2.xlarge"),
-            (8, 32, "t2.2xlarge"),
-            // TODO add other instance types
-        ];
-
-        if total_cpu == 0 || total_memory_in_gib == 0 {
-            let (_, _, instance_type) = instance_types_table.first().unwrap();
-            return Node::new(*instance_type);
+impl InstanceType for AwsInstancesType {
+    fn to_cloud_provider_format(&self) -> String {
+        match self {
+            AwsInstancesType::T2Large => "t2.large",
+            AwsInstancesType::T2Xlarge => "t2x.large",
+            AwsInstancesType::T3Large => "t3.large",
+            AwsInstancesType::T3Xlarge => "t3x.large",
+            AwsInstancesType::T3aLarge => "t3a.large",
+            AwsInstancesType::T3a2xlarge => "t3a.2xlarge",
         }
-
-        for (_cpu, mem, instance_type) in instance_types_table.iter() {
-            if total_memory_in_gib <= *mem {
-                return Node::new(*instance_type);
-            }
-        }
-
-        let (_, _, instance_type) = instance_types_table.last().unwrap();
-        Node::new(*instance_type)
+        .to_string()
     }
+}
 
-    pub fn new<T: Into<String>>(instance_type: T) -> Self {
-        Node {
-            instance_type: instance_type.into(),
+impl AwsInstancesType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            AwsInstancesType::T2Large => "t2.large",
+            AwsInstancesType::T2Xlarge => "t2x.large",
+            AwsInstancesType::T3Large => "t3.large",
+            AwsInstancesType::T3Xlarge => "t3x.large",
+            AwsInstancesType::T3aLarge => "t3a.large",
+            AwsInstancesType::T3a2xlarge => "t3a.2xlarge",
         }
     }
 }
 
-impl KubernetesNode for Node {
-    fn instance_type(&self) -> &str {
-        self.instance_type.as_str()
+impl fmt::Display for AwsInstancesType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AwsInstancesType::T2Large => write!(f, "t2.large"),
+            AwsInstancesType::T2Xlarge => write!(f, "t2x.large"),
+            AwsInstancesType::T3Large => write!(f, "t3.large"),
+            AwsInstancesType::T3Xlarge => write!(f, "t3x.large"),
+            AwsInstancesType::T3aLarge => write!(f, "t3a.large"),
+            AwsInstancesType::T3a2xlarge => write!(f, "t3a.2xlarge"),
+        }
     }
+}
 
-    fn as_any(&self) -> &dyn Any {
-        self
+impl FromStr for AwsInstancesType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<AwsInstancesType, ()> {
+        match s {
+            "t2.large" => Ok(AwsInstancesType::T2Large),
+            "t2x.large" => Ok(AwsInstancesType::T2Xlarge),
+            "t3.large" => Ok(AwsInstancesType::T3Large),
+            "t3x.large" => Ok(AwsInstancesType::T3Xlarge),
+            "t3a.large" => Ok(AwsInstancesType::T3aLarge),
+            "t3a.2xlarge" => Ok(AwsInstancesType::T3a2xlarge),
+            _ => Err(()),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::node::Node;
-    use crate::cloud_provider::kubernetes::KubernetesNode;
+    use crate::cloud_provider::models::NodeGroups;
 
     #[test]
-    fn test_instance_types() {
-        assert_eq!(Node::new_with_cpu_and_mem(0, 0).instance_type(), "t2.micro");
-        assert_eq!(Node::new_with_cpu_and_mem(1, 0).instance_type(), "t2.micro");
-        assert_eq!(Node::new_with_cpu_and_mem(0, 1).instance_type(), "t2.micro");
-        assert_eq!(Node::new_with_cpu_and_mem(1, 1).instance_type(), "t2.micro");
-        assert_eq!(Node::new_with_cpu_and_mem(1, 2).instance_type(), "t2.small");
-        assert_eq!(Node::new_with_cpu_and_mem(2, 4).instance_type(), "t2.medium");
-        assert_eq!(Node::new_with_cpu_and_mem(2, 5).instance_type(), "t2.large");
-        assert_eq!(Node::new_with_cpu_and_mem(1, 6).instance_type(), "t2.large");
-        assert_eq!(Node::new_with_cpu_and_mem(1, 7).instance_type(), "t2.large");
-        assert_eq!(Node::new_with_cpu_and_mem(2, 8).instance_type(), "t2.large");
-        assert_eq!(Node::new_with_cpu_and_mem(3, 8).instance_type(), "t2.large");
-        assert_eq!(Node::new_with_cpu_and_mem(3, 10).instance_type(), "t2.xlarge");
-        assert_eq!(Node::new_with_cpu_and_mem(3, 12).instance_type(), "t2.xlarge");
-        assert_eq!(Node::new_with_cpu_and_mem(4, 16).instance_type(), "t2.xlarge");
-        assert_eq!(Node::new_with_cpu_and_mem(4, 17).instance_type(), "t2.2xlarge");
-        assert_eq!(Node::new_with_cpu_and_mem(8, 32).instance_type(), "t2.2xlarge");
-        assert_eq!(Node::new_with_cpu_and_mem(16, 64).instance_type(), "t2.2xlarge");
+    fn test_groups_nodes() {
+        assert!(NodeGroups::new("".to_string(), 2, 1, "t2.large".to_string()).is_err());
+        assert!(NodeGroups::new("".to_string(), 2, 2, "t2.large".to_string()).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 3, "t2.large".to_string()).is_ok());
+
+        assert_eq!(
+            NodeGroups::new("".to_string(), 2, 2, "t2.large".to_string()).unwrap(),
+            NodeGroups {
+                name: "".to_string(),
+                min_nodes: 2,
+                max_nodes: 2,
+                instance_type: "t2.large".to_string()
+            }
+        );
     }
 }

@@ -48,7 +48,8 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
                 secrets,
                 test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
             ),
-        );
+        )
+        .unwrap();
 
         // Deploy
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
@@ -104,7 +105,8 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
                 secrets,
                 test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
             ),
-        );
+        )
+        .unwrap();
 
         // Destroy
         if let Err(err) = tx.delete_kubernetes(&kubernetes) {

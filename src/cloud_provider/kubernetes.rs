@@ -2,6 +2,7 @@ use std::any::Any;
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::str::FromStr;
 use std::thread;
 
 use retry::delay::Fibonacci;
@@ -10,6 +11,7 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
@@ -26,7 +28,6 @@ use crate::error::{
 use crate::models::{Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath};
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
-use std::str::FromStr;
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;
@@ -875,14 +876,40 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
     Ok(upgrade_required)
 }
 
+pub trait InstanceType {
+    fn to_cloud_provider_format(&self) -> String;
+}
+
+impl NodeGroups {
+    pub fn new(group_name: String, min_nodes: i32, max_nodes: i32, instance_type: String) -> Result<Self, SimpleError> {
+        if min_nodes > max_nodes {
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(format!(
+                    "The number of minimum nodes ({}) for group name {} is higher than maximum nodes ({})",
+                    &group_name, &min_nodes, &max_nodes
+                )),
+            });
+        }
+
+        Ok(NodeGroups {
+            name: group_name,
+            min_nodes,
+            max_nodes,
+            instance_type,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, KubernetesNodesType,
     };
     use crate::cloud_provider::utilities::VersionsNumber;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
-    use std::str::FromStr;
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {

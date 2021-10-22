@@ -45,7 +45,8 @@ fn create_upgrade_and_destroy_eks_cluster(
             &cloudflare,
             eks_options(secrets.clone()),
             nodes.clone(),
-        );
+        )
+        .unwrap();
 
         // Deploy
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
@@ -69,7 +70,8 @@ fn create_upgrade_and_destroy_eks_cluster(
             &cloudflare,
             eks_options(secrets),
             nodes,
-        );
+        )
+        .unwrap();
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
             panic!("{:?}", err)
         }
@@ -130,7 +132,8 @@ fn create_and_destroy_eks_cluster(
             &cloudflare,
             eks_options,
             nodes,
-        );
+        )
+        .unwrap();
 
         // Deploy
         if let Err(err) = tx.create_kubernetes(&kubernetes) {

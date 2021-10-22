@@ -1,7 +1,8 @@
+use core::fmt;
 use std::env;
+use std::path::PathBuf;
 use std::str::FromStr;
 
-use itertools::Itertools;
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
@@ -10,16 +11,16 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::kubernetes::helm_charts::{aws_helm_charts, ChartsConfigPrerequisites};
-use crate::cloud_provider::aws::kubernetes::node::Node;
+use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesNodesType,
+    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNodesType,
     KubernetesUpgradeStatus,
 };
-use crate::cloud_provider::models::WorkerNodeDataTemplate;
+use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
@@ -43,8 +44,6 @@ use crate::models::{
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
-use core::fmt;
-use std::path::PathBuf;
 
 pub mod helm_charts;
 pub mod node;
@@ -117,7 +116,7 @@ pub struct EKS<'a> {
     cloud_provider: &'a AWS,
     dns_provider: &'a dyn DnsProvider,
     s3: S3,
-    nodes: Vec<Node>,
+    nodes_groups: Vec<NodeGroups>,
     template_directory: String,
     options: Options,
     listeners: Listeners,
@@ -134,9 +133,23 @@ impl<'a> EKS<'a> {
         cloud_provider: &'a AWS,
         dns_provider: &'a dyn DnsProvider,
         options: Options,
-        nodes: Vec<Node>,
-    ) -> Self {
+        nodes_groups: Vec<NodeGroups>,
+    ) -> Result<Self, EngineError> {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
+
+        for node_group in &nodes_groups {
+            if AwsInstancesType::from_str(node_group.instance_type.as_str()).is_err() {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    EngineErrorScope::Engine,
+                    context.execution_id(),
+                    Some(format!(
+                        "Nodegroup instance type {} is not valid for {}",
+                        node_group.instance_type, cloud_provider.name
+                    )),
+                ));
+            }
+        }
 
         // TODO export this
         let s3 = S3::new(
@@ -147,7 +160,7 @@ impl<'a> EKS<'a> {
             cloud_provider.secret_access_key.clone(),
         );
 
-        EKS {
+        Ok(EKS {
             context,
             id: id.to_string(),
             long_id,
@@ -158,10 +171,10 @@ impl<'a> EKS<'a> {
             dns_provider,
             s3,
             options,
-            nodes,
+            nodes_groups,
             template_directory,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
-        }
+        })
     }
 
     fn get_engine_location(&self) -> EngineLocation {
@@ -269,20 +282,6 @@ impl<'a> EKS<'a> {
         let eks_cidr_subnet = self.options.eks_cidr_subnet.clone();
 
         let eks_access_cidr_blocks = format_ips(&self.options.eks_access_cidr_blocks);
-
-        let worker_nodes = self
-            .nodes
-            .iter()
-            .group_by(|e| e.instance_type())
-            .into_iter()
-            .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
-            .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
-                instance_type: instance_type.to_string(),
-                desired_size: "3".to_string(),
-                max_size: nodes.len().to_string(),
-                min_size: "3".to_string(),
-            })
-            .collect::<Vec<WorkerNodeDataTemplate>>();
 
         let qovery_api_url = self.options.qovery_api_url.clone();
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
@@ -417,7 +416,7 @@ impl<'a> EKS<'a> {
         context.insert("kubernetes_cluster_name", &self.name());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
-        context.insert("eks_worker_nodes", &worker_nodes);
+        context.insert("eks_worker_nodes", &self.nodes_groups);
         context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
         context.insert("eks_zone_b_subnet_blocks_private", &eks_zone_b_subnet_blocks_private);
         context.insert("eks_zone_c_subnet_blocks_private", &eks_zone_c_subnet_blocks_private);
@@ -1058,7 +1057,7 @@ impl<'a> Kubernetes for EKS<'a> {
         let mut context = self.tera_context()?;
 
         // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
-        let worker_nodes: Vec<WorkerNodeDataTemplate> = Vec::new();
+        let worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
         context.insert("eks_worker_nodes", &worker_nodes);
 
         let _ = cast_simple_error_to_engine_error(

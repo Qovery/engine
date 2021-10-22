@@ -1,110 +1,110 @@
-use crate::cloud_provider::kubernetes::KubernetesNode;
-use std::any::Any;
+use crate::cloud_provider::kubernetes::InstanceType;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Clone)]
-pub enum NodeType {
-    Gp1Xs,   // 4 cores 16 Go RAM
-    Gp1S,    // 8 cores 32 Go RAM
-    Gp1M,    // 16 cores 64 Go RAM
-    Gp1L,    // 32 cores 128 Go RAM
-    Gp1Xl,   // 64 cores 256 Go RAM
-    Dev1M,   // 3 cores 4 Go RAM
-    Dev1L,   // 4 cores 8 Go RAM
-    Dev1Xl,  // 4 cores 12 Go RAM
-    RenderS, // 10 cores 45 Go RAM 1 GPU 1 Go VRAM
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ScwInstancesType {
+    Gp1Xs,   // 4 cores 16 Gb RAM
+    Gp1S,    // 8 cores 32 Gb RAM
+    Gp1M,    // 16 cores 64 Gb RAM
+    Gp1L,    // 32 cores 128 Gb RAM
+    Gp1Xl,   // 64 cores 256 Gb RAM
+    Dev1M,   // 3 cores 4 Gb RAM
+    Dev1L,   // 4 cores 8 Gb RAM
+    Dev1Xl,  // 4 cores 12 Gb RAM
+    RenderS, // 10 cores 45 Gb RAM 1 GPU 1 Gb VRAM
 }
 
-impl NodeType {
+impl InstanceType for ScwInstancesType {
+    fn to_cloud_provider_format(&self) -> String {
+        match self {
+            ScwInstancesType::Gp1Xs => "gp1-xs",
+            ScwInstancesType::Gp1S => "gp1-s",
+            ScwInstancesType::Gp1M => "gp1-m",
+            ScwInstancesType::Gp1L => "gp1-l",
+            ScwInstancesType::Gp1Xl => "gp1-xl",
+            ScwInstancesType::Dev1M => "dev1-m",
+            ScwInstancesType::Dev1L => "dev1-l",
+            ScwInstancesType::Dev1Xl => "dev1-xl",
+            ScwInstancesType::RenderS => "render-s",
+        }
+        .to_string()
+    }
+}
+
+impl ScwInstancesType {
     pub fn as_str(&self) -> &str {
         match self {
-            NodeType::Gp1Xs => "gp1-xs",
-            NodeType::Gp1S => "gp1-s",
-            NodeType::Gp1M => "gp1-m",
-            NodeType::Gp1L => "gp1-l",
-            NodeType::Gp1Xl => "gp1-xl",
-            NodeType::Dev1M => "dev1-m",
-            NodeType::Dev1L => "dev1-l",
-            NodeType::Dev1Xl => "dev1-xl",
-            NodeType::RenderS => "render-s",
+            ScwInstancesType::Gp1Xs => "gp1-xs",
+            ScwInstancesType::Gp1S => "gp1-s",
+            ScwInstancesType::Gp1M => "gp1-m",
+            ScwInstancesType::Gp1L => "gp1-l",
+            ScwInstancesType::Gp1Xl => "gp1-xl",
+            ScwInstancesType::Dev1M => "dev1-m",
+            ScwInstancesType::Dev1L => "dev1-l",
+            ScwInstancesType::Dev1Xl => "dev1-xl",
+            ScwInstancesType::RenderS => "render-s",
         }
     }
 }
 
-impl fmt::Display for NodeType {
+impl fmt::Display for ScwInstancesType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            NodeType::Gp1Xs => write!(f, "gp1-xs"),
-            NodeType::Gp1S => write!(f, "gp1-s"),
-            NodeType::Gp1M => write!(f, "gp1-m"),
-            NodeType::Gp1L => write!(f, "gp1-l"),
-            NodeType::Gp1Xl => write!(f, "gp1-xl"),
-            NodeType::Dev1M => write!(f, "dev1-m"),
-            NodeType::Dev1L => write!(f, "dev1-l"),
-            NodeType::Dev1Xl => write!(f, "dev1-xl"),
-            NodeType::RenderS => write!(f, "render-s"),
+            ScwInstancesType::Gp1Xs => write!(f, "gp1-xs"),
+            ScwInstancesType::Gp1S => write!(f, "gp1-s"),
+            ScwInstancesType::Gp1M => write!(f, "gp1-m"),
+            ScwInstancesType::Gp1L => write!(f, "gp1-l"),
+            ScwInstancesType::Gp1Xl => write!(f, "gp1-xl"),
+            ScwInstancesType::Dev1M => write!(f, "dev1-m"),
+            ScwInstancesType::Dev1L => write!(f, "dev1-l"),
+            ScwInstancesType::Dev1Xl => write!(f, "dev1-xl"),
+            ScwInstancesType::RenderS => write!(f, "render-s"),
         }
     }
 }
 
-impl FromStr for NodeType {
+impl FromStr for ScwInstancesType {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<NodeType, ()> {
+    fn from_str(s: &str) -> Result<ScwInstancesType, ()> {
         match s {
-            "gp1-xs" => Ok(NodeType::Gp1Xs),
-            "gp1-s" => Ok(NodeType::Gp1S),
-            "gp1-m" => Ok(NodeType::Gp1M),
-            "gp1-l" => Ok(NodeType::Gp1L),
-            "gp1-xl" => Ok(NodeType::Gp1Xl),
-            "dev1-m" => Ok(NodeType::Dev1M),
-            "dev1-l" => Ok(NodeType::Dev1L),
-            "dev1-xl" => Ok(NodeType::Dev1Xl),
-            "render-s" => Ok(NodeType::RenderS),
+            "gp1-xs" => Ok(ScwInstancesType::Gp1Xs),
+            "gp1-s" => Ok(ScwInstancesType::Gp1S),
+            "gp1-m" => Ok(ScwInstancesType::Gp1M),
+            "gp1-l" => Ok(ScwInstancesType::Gp1L),
+            "gp1-xl" => Ok(ScwInstancesType::Gp1Xl),
+            "dev1-m" => Ok(ScwInstancesType::Dev1M),
+            "dev1-l" => Ok(ScwInstancesType::Dev1L),
+            "dev1-xl" => Ok(ScwInstancesType::Dev1Xl),
+            "render-s" => Ok(ScwInstancesType::RenderS),
             _ => Err(()),
         }
     }
 }
 
-#[derive(Clone)]
-pub struct Node {
-    node_type: NodeType,
-}
-
-impl Node {
-    pub fn new(node_type: NodeType) -> Node {
-        Node {
-            node_type: node_type.clone(),
-        }
-    }
-}
-
-impl KubernetesNode for Node {
-    fn instance_type(&self) -> &str {
-        self.node_type.as_str()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::kubernetes::KubernetesNode;
-    use crate::cloud_provider::scaleway::kubernetes::node::{Node, NodeType};
+    #[cfg(test)]
+    mod tests {
+        use crate::cloud_provider::models::NodeGroups;
 
-    #[test]
-    fn test_node_types() {
-        assert_eq!(Node::new(NodeType::Dev1M).instance_type(), "dev1-m");
-        assert_eq!(Node::new(NodeType::Dev1L).instance_type(), "dev1-l");
-        assert_eq!(Node::new(NodeType::Dev1Xl).instance_type(), "dev1-xl");
-        assert_eq!(Node::new(NodeType::Gp1Xs).instance_type(), "gp1-xs");
-        assert_eq!(Node::new(NodeType::Gp1S).instance_type(), "gp1-s");
-        assert_eq!(Node::new(NodeType::Gp1M).instance_type(), "gp1-m");
-        assert_eq!(Node::new(NodeType::Gp1L).instance_type(), "gp1-l");
-        assert_eq!(Node::new(NodeType::Gp1Xl).instance_type(), "gp1-xl");
-        assert_eq!(Node::new(NodeType::RenderS).instance_type(), "render-s");
+        #[test]
+        fn test_groups_nodes() {
+            assert!(NodeGroups::new("".to_string(), 2, 1, "dev1-l".to_string()).is_err());
+            assert!(NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string()).is_ok());
+            assert!(NodeGroups::new("".to_string(), 2, 3, "dev1-l".to_string()).is_ok());
+
+            assert_eq!(
+                NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string()).unwrap(),
+                NodeGroups {
+                    name: "".to_string(),
+                    min_nodes: 2,
+                    max_nodes: 2,
+                    instance_type: "dev1-l".to_string()
+                }
+            );
+        }
     }
 }

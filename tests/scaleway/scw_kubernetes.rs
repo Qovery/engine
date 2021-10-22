@@ -47,7 +47,8 @@ fn create_upgrade_and_destroy_kapsule_cluster(
             &cloudflare,
             nodes,
             test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
-        );
+        )
+        .unwrap();
 
         // Deploy
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
@@ -115,7 +116,8 @@ fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, tes
             &cloudflare,
             nodes,
             test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
-        );
+        )
+        .unwrap();
 
         // Deploy
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
