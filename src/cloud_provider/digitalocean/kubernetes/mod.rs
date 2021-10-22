@@ -1,6 +1,5 @@
 use std::env;
 
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
@@ -10,7 +9,7 @@ use crate::cloud_provider::digitalocean::kubernetes::doks_api::{
     get_do_latest_doks_slug_from_api, get_doks_info_from_name,
 };
 use crate::cloud_provider::digitalocean::kubernetes::helm_charts::{do_helm_charts, ChartsConfigPrerequisites};
-use crate::cloud_provider::digitalocean::kubernetes::node::Node;
+use crate::cloud_provider::digitalocean::kubernetes::node::DoInstancesType;
 use crate::cloud_provider::digitalocean::models::doks::KubernetesCluster;
 use crate::cloud_provider::digitalocean::network::load_balancer::do_get_load_balancer_ip;
 use crate::cloud_provider::digitalocean::network::vpc::{
@@ -19,8 +18,8 @@ use crate::cloud_provider::digitalocean::network::vpc::{
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
-use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes, KubernetesNode};
-use crate::cloud_provider::models::WorkerNodeDataTemplate;
+use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes};
+use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::helm::{helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info};
@@ -43,6 +42,7 @@ use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 pub mod cidr;
 pub mod doks_api;
@@ -82,7 +82,7 @@ pub struct DOKS<'a> {
     version: String,
     region: Region,
     cloud_provider: &'a DO,
-    nodes: Vec<Node>,
+    nodes_groups: Vec<NodeGroups>,
     dns_provider: &'a dyn DnsProvider,
     spaces: Spaces,
     template_directory: String,
@@ -100,10 +100,24 @@ impl<'a> DOKS<'a> {
         region: Region,
         cloud_provider: &'a DO,
         dns_provider: &'a dyn DnsProvider,
-        nodes: Vec<Node>,
+        nodes_groups: Vec<NodeGroups>,
         options: DoksOptions,
-    ) -> Self {
+    ) -> Result<Self, EngineError> {
         let template_directory = format!("{}/digitalocean/bootstrap", context.lib_root_dir());
+
+        for node_group in &nodes_groups {
+            if DoInstancesType::from_str(node_group.instance_type.as_str()).is_err() {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    EngineErrorScope::Engine,
+                    context.execution_id(),
+                    Some(format!(
+                        "Nodegroup instance type {} is not valid for {}",
+                        node_group.instance_type, cloud_provider.name
+                    )),
+                ));
+            }
+        }
 
         let spaces = Spaces::new(
             context.clone(),
@@ -114,7 +128,7 @@ impl<'a> DOKS<'a> {
             region,
         );
 
-        DOKS {
+        Ok(DOKS {
             context,
             id,
             long_id,
@@ -125,10 +139,10 @@ impl<'a> DOKS<'a> {
             dns_provider,
             spaces,
             options,
-            nodes,
+            nodes_groups,
             template_directory,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
-        }
+        })
     }
 
     fn get_engine_location(&self) -> EngineLocation {
@@ -376,21 +390,7 @@ impl<'a> DOKS<'a> {
         };
 
         // kubernetes workers
-        let worker_nodes = self
-            .nodes
-            .iter()
-            .group_by(|e| e.instance_type())
-            .into_iter()
-            .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
-            .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
-                instance_type: instance_type.to_string(),
-                desired_size: "3".to_string(),
-                max_size: nodes.len().to_string(),
-                min_size: "3".to_string(),
-            })
-            .collect::<Vec<WorkerNodeDataTemplate>>();
-
-        context.insert("doks_worker_nodes", &worker_nodes);
+        context.insert("doks_worker_nodes", &self.nodes_groups);
 
         Ok(context)
     }

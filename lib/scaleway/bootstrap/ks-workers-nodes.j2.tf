@@ -10,14 +10,14 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   # use Scaleway built-in cluster autoscaler
   autoscaling   = {{ scw_ks_pool_autoscale }}
   autohealing   = true
-  size          = "{{ scw_ks_worker_node.min_size }}"
-  min_size      = "{{ scw_ks_worker_node.min_size }}"
-  max_size      = "{{ scw_ks_worker_node.max_size }}"
+  size          = "{{ scw_ks_worker_node.min_nodes }}"
+  min_size      = "{{ scw_ks_worker_node.min_nodes }}"
+  max_size      = "{{ scw_ks_worker_node.max_nodes }}"
 
   depends_on    = [
     scaleway_k8s_cluster.kubernetes_cluster,
   ]
 
-  tags          =  local.tags_ks_list
+  tags          =  concat(local.tags_ks_list, ["QoveryNodeGroupName:{{ scw_ks_worker_node.name }}", "QoveryNodeGroupId:${var.kubernetes_cluster_id}-{{ loop.index }}"])
 }
 {% endfor %}

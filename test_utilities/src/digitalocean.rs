@@ -1,9 +1,9 @@
 use qovery_engine::build_platform::Image;
-use qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::network::vpc::VpcInitKind;
 use qovery_engine::cloud_provider::digitalocean::DO;
+use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::dns_provider::DnsProvider;
@@ -61,7 +61,7 @@ pub fn do_kubernetes_ks<'a>(
     context: &Context,
     cloud_provider: &'a DO,
     dns_provider: &'a dyn DnsProvider,
-    nodes: Vec<Node>,
+    nodes_groups: Vec<NodeGroups>,
     region: Region,
 ) -> DOKS<'a> {
     let secrets = FuncTestsSecrets::new();
@@ -74,17 +74,17 @@ pub fn do_kubernetes_ks<'a>(
         region,
         cloud_provider,
         dns_provider,
-        nodes,
+        nodes_groups,
         do_kubernetes_cluster_options(secrets, DO_KUBE_TEST_CLUSTER_ID.to_string()),
     )
+    .unwrap()
 }
 
-pub fn do_kubernetes_nodes() -> Vec<Node> {
-    scw_kubernetes_custom_nodes(10, Node::new_with_cpu_and_mem(4, 8))
-}
-
-pub fn scw_kubernetes_custom_nodes(count: usize, node: Node) -> Vec<Node> {
-    vec![node.clone(); count]
+pub fn do_kubernetes_nodes() -> Vec<NodeGroups> {
+    vec![
+        NodeGroups::new("groupdoks0".to_string(), 5, 10, "s-4vcpu-8gb".to_string())
+            .expect("Problem while setup DOKS nodes"),
+    ]
 }
 
 pub fn cloud_provider_digitalocean(context: &Context) -> DO {

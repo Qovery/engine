@@ -4,13 +4,13 @@ pub mod node;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNode, KubernetesUpgradeStatus,
+    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesUpgradeStatus,
 };
-use crate::cloud_provider::models::WorkerNodeDataTemplate;
+use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
-use crate::cloud_provider::scaleway::kubernetes::node::Node;
+use crate::cloud_provider::scaleway::kubernetes::node::ScwInstancesType;
 use crate::cloud_provider::scaleway::Scaleway;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
@@ -28,13 +28,13 @@ use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, Scale
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
 use crate::{cmd, dns_provider};
-use itertools::Itertools;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
+use std::str::FromStr;
 use tera::Context as TeraContext;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -112,7 +112,7 @@ pub struct Kapsule<'a> {
     cloud_provider: &'a Scaleway,
     dns_provider: &'a dyn DnsProvider,
     object_storage: ScalewayOS,
-    nodes: Vec<Node>,
+    nodes_groups: Vec<NodeGroups>,
     template_directory: String,
     options: KapsuleOptions,
     listeners: Listeners,
@@ -128,10 +128,24 @@ impl<'a> Kapsule<'a> {
         zone: Zone,
         cloud_provider: &'a Scaleway,
         dns_provider: &'a dyn DnsProvider,
-        nodes: Vec<Node>,
+        nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
-    ) -> Kapsule<'a> {
+    ) -> Result<Kapsule<'a>, EngineError> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
+
+        for node_group in &nodes_groups {
+            if ScwInstancesType::from_str(node_group.instance_type.as_str()).is_err() {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    EngineErrorScope::Engine,
+                    context.execution_id(),
+                    Some(format!(
+                        "Nodegroup instance type {} is not valid for {}",
+                        node_group.instance_type, cloud_provider.name
+                    )),
+                ));
+            }
+        }
 
         let object_storage = ScalewayOS::new(
             context.clone(),
@@ -144,7 +158,7 @@ impl<'a> Kapsule<'a> {
             false,
         );
 
-        Kapsule {
+        Ok(Kapsule {
             context,
             id,
             long_id,
@@ -154,11 +168,11 @@ impl<'a> Kapsule<'a> {
             cloud_provider,
             dns_provider,
             object_storage,
-            nodes,
+            nodes_groups,
             template_directory,
             options,
             listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
-        }
+        })
     }
 
     fn get_engine_location(&self) -> EngineLocation {
@@ -310,20 +324,7 @@ impl<'a> Kapsule<'a> {
         context.insert("grafana_admin_password", self.options.grafana_admin_password.as_str());
 
         // Kubernetes workers
-        let worker_nodes = self
-            .nodes
-            .iter()
-            .group_by(|e| e.instance_type())
-            .into_iter()
-            .map(|(instance_type, group)| (instance_type, group.collect::<Vec<_>>()))
-            .map(|(instance_type, nodes)| WorkerNodeDataTemplate {
-                instance_type: instance_type.to_string().to_uppercase(),
-                desired_size: "3".to_string(),
-                max_size: nodes.len().to_string(),
-                min_size: "3".to_string(),
-            })
-            .collect::<Vec<WorkerNodeDataTemplate>>();
-        context.insert("scw_ks_worker_nodes", &worker_nodes);
+        context.insert("scw_ks_worker_nodes", &self.nodes_groups);
         context.insert("scw_ks_pool_autoscale", &true);
 
         Ok(context)

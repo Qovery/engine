@@ -12,13 +12,14 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   local.tags_eks,
   {
     "QoveryNodeGroupId" = "${var.kubernetes_cluster_id}-{{ loop.index }}"
+    "QoveryNodeGroupName" = "{{ eks_worker_node.name }}"
   }
   )
 
   scaling_config {
-    desired_size = "{{ eks_worker_node.desired_size }}"
-    max_size     = "{{ eks_worker_node.max_size }}"
-    min_size     = "{{ eks_worker_node.min_size }}"
+    desired_size = "{{ eks_worker_node.min_nodes }}"
+    max_size     = "{{ eks_worker_node.max_nodes }}"
+    min_size     = "{{ eks_worker_node.min_nodes }}"
   }
 
   lifecycle {

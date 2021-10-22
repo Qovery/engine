@@ -1,10 +1,12 @@
 extern crate serde;
 extern crate serde_derive;
+
 use tracing::error;
 
-use qovery_engine::cloud_provider::aws::kubernetes::node::Node;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode, EKS};
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::models::NodeGroups;
+use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
@@ -14,7 +16,6 @@ use qovery_engine::models::Context;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
-use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 
 pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "eu-west-3";
@@ -53,19 +54,9 @@ pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
     )
 }
 
-pub fn aws_kubernetes_nodes() -> Vec<Node> {
-    vec![
-        Node::new_with_cpu_and_mem(2, 8),
-        Node::new_with_cpu_and_mem(2, 8),
-        Node::new_with_cpu_and_mem(2, 8),
-        Node::new_with_cpu_and_mem(2, 8),
-        Node::new_with_cpu_and_mem(2, 8),
-        Node::new_with_cpu_and_mem(2, 8),
-        Node::new_with_cpu_and_mem(2, 8),
-        Node::new_with_cpu_and_mem(2, 8),
-        Node::new_with_cpu_and_mem(2, 8),
-        Node::new_with_cpu_and_mem(2, 8),
-    ]
+pub fn aws_kubernetes_nodes() -> Vec<NodeGroups> {
+    vec![NodeGroups::new("groupeks0".to_string(), 5, 10, "t3a.large".to_string())
+        .expect("Problem while setup EKS nodes")]
 }
 
 pub fn cloud_provider_aws(context: &Context) -> AWS {
@@ -173,7 +164,7 @@ pub fn aws_kubernetes_eks<'a>(
     context: &Context,
     cloud_provider: &'a AWS,
     dns_provider: &'a dyn DnsProvider,
-    nodes: Vec<Node>,
+    nodes_groups: Vec<NodeGroups>,
 ) -> EKS<'a> {
     let secrets = FuncTestsSecrets::new();
     EKS::<'a>::new(
@@ -186,8 +177,9 @@ pub fn aws_kubernetes_eks<'a>(
         cloud_provider,
         dns_provider,
         eks_options(secrets),
-        nodes,
+        nodes_groups,
     )
+    .unwrap()
 }
 
 pub fn docker_ecr_aws_engine(context: &Context) -> Engine {

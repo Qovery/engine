@@ -1,13 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
-pub struct WorkerNodeDataTemplate {
-    pub instance_type: String,
-    pub desired_size: String,
-    pub max_size: String,
-    pub min_size: String,
-}
-
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
     pub key: String,
@@ -68,4 +60,20 @@ pub struct RouteDataTemplate {
 pub struct CpuLimits {
     pub cpu_request: String,
     pub cpu_limit: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct NodeGroups {
+    pub name: String,
+    pub min_nodes: i32,
+    pub max_nodes: i32,
+    pub instance_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct NodeGroupsFormat {
+    pub name: String,
+    pub min_nodes: String,
+    pub max_nodes: String,
+    pub instance_type: String,
 }

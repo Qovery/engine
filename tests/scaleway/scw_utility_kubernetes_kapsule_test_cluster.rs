@@ -5,7 +5,6 @@ use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsS
 use ::function_name::named;
 use tracing::{span, Level};
 
-use qovery_engine::cloud_provider::scaleway::kubernetes::node::NodeType;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::transaction::TransactionResult;
 
@@ -32,7 +31,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let mut tx = session.transaction();
 
         let scw_cluster = test_utilities::scaleway::cloud_provider_scaleway(&context);
-        let nodes = test_utilities::scaleway::scw_kubernetes_custom_nodes(10, NodeType::Gp1S);
+        let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
@@ -46,7 +45,8 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
             &cloudflare,
             nodes,
             test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
-        );
+        )
+        .unwrap();
 
         // Deploy
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
@@ -99,7 +99,8 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
             &cloudflare,
             nodes,
             test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
-        );
+        )
+        .unwrap();
 
         // Destroy
         if let Err(err) = tx.delete_kubernetes(&kubernetes) {

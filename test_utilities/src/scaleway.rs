@@ -1,6 +1,5 @@
 use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
-use qovery_engine::cloud_provider::scaleway::kubernetes::node::{Node, NodeType};
 use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOptions};
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
@@ -15,6 +14,7 @@ use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
+use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use tracing::error;
 
@@ -147,13 +147,9 @@ pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
     )
 }
 
-pub fn scw_kubernetes_nodes() -> Vec<Node> {
+pub fn scw_kubernetes_nodes() -> Vec<NodeGroups> {
     // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-    scw_kubernetes_custom_nodes(10, NodeType::Dev1L)
-}
-
-pub fn scw_kubernetes_custom_nodes(count: usize, node_type: NodeType) -> Vec<Node> {
-    vec![Node::new(node_type); count]
+    vec![NodeGroups::new("groupscw0".to_string(), 5, 10, "dev1-l".to_string()).expect("Problem while setup SCW nodes")]
 }
 
 pub fn docker_scw_cr_engine(context: &Context) -> Engine {
@@ -181,7 +177,7 @@ pub fn scw_kubernetes_kapsule<'a>(
     context: &Context,
     cloud_provider: &'a Scaleway,
     dns_provider: &'a dyn DnsProvider,
-    nodes: Vec<Node>,
+    nodes_groups: Vec<NodeGroups>,
     zone: Zone,
 ) -> Kapsule<'a> {
     let secrets = FuncTestsSecrets::new();
@@ -194,9 +190,10 @@ pub fn scw_kubernetes_kapsule<'a>(
         zone,
         cloud_provider,
         dns_provider,
-        nodes,
+        nodes_groups,
         scw_kubernetes_cluster_options(secrets),
     )
+    .unwrap()
 }
 
 pub fn deploy_environment(context: &Context, environment_action: EnvironmentAction, zone: Zone) -> TransactionResult {

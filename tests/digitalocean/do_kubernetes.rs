@@ -47,7 +47,8 @@ fn create_upgrade_and_destroy_doks_cluster(
             &cloudflare,
             nodes,
             test_utilities::digitalocean::do_kubernetes_cluster_options(secrets, cluster_id),
-        );
+        )
+        .unwrap();
 
         // Deploy
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
@@ -115,7 +116,8 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
             &cloudflare,
             nodes,
             test_utilities::digitalocean::do_kubernetes_cluster_options(secrets, cluster_id),
-        );
+        )
+        .unwrap();
 
         // Deploy
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
