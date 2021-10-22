@@ -7,9 +7,11 @@ use qovery_engine::models::{
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
-    context, engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
+    context, engine_run_test, generate_id, get_pods, get_pvc, get_svc, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 
+use qovery_engine::cloud_provider::digitalocean::DO;
+use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::working_minimal_environment;
 use test_utilities::digitalocean::{
@@ -473,6 +475,7 @@ fn test_postgresql_configuration(
     version: &str,
     test_name: &str,
     database_mode: DatabaseMode,
+    is_public: bool,
 ) {
     engine_run_test(|| {
         init();
@@ -482,15 +485,24 @@ fn test_postgresql_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = format!(
-            "postgresql-{}.{}",
-            generate_id(),
-            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-        );
+        let database_host = match is_public {
+            true => format!(
+                "postgresql-{}.{}",
+                generate_id(),
+                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+            ),
+            false => {
+                format!(
+                    "postgresqlpostgres.{}-{}.svc.cluster.local",
+                    environment.project_id, environment.id
+                )
+            }
+        };
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
+        let storage_size = 10;
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
@@ -505,7 +517,7 @@ fn test_postgresql_configuration(
             password: database_password.clone(),
             total_cpus: "100m".to_string(),
             total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
+            disk_size_in_gib: storage_size.clone(),
             mode: database_mode.clone(),
             database_instance_type: if database_mode == MANAGED {
                 DO_MANAGED_DATABASE_INSTANCE_TYPE
@@ -521,7 +533,7 @@ fn test_postgresql_configuration(
             .to_string(),
             activate_high_availability: false,
             activate_backups: false,
-            publicly_accessible: false,
+            publicly_accessible: is_public.clone(),
         }];
         environment.applications = environment
             .applications
@@ -554,7 +566,61 @@ fn test_postgresql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check the database disk is here and with correct size
+        if database_mode.clone() == CONTAINER {
+            match get_pvc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(pvc) => assert_eq!(
+                    pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                    format!("{}Gi", storage_size)
+                ),
+                Err(_) => assert!(false),
+            };
+
+            match get_svc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("postgresqlpostgres")
+                            && svc.spec.svc_type == "LoadBalancer")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        } else {
+            match get_svc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("postgresqlpostgres")
+                            && svc.spec.svc_type == "ExternalName")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    1
+                ),
+                Err(_) => assert!(false),
+            };
+        }
 
         match delete_environment(&context_for_delete, ea_delete, DO_TEST_REGION) {
             TransactionResult::Ok => assert!(true),
@@ -575,7 +641,7 @@ fn test_postgresql_configuration(
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn postgresql_v10_deploy_a_working_dev_environment() {
+fn private_postgresql_v10_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -587,13 +653,70 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER);
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn pub_postgresql_v10_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn private_postgresql_v11_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn pub_postgresql_v11_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn postgresql_v11_deploy_a_working_dev_environment() {
+fn private_postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -605,13 +728,13 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER);
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn postgresql_v12_deploy_a_working_dev_environment() {
+fn pub_postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -623,7 +746,7 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER);
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER, true);
 }
 
 /**
@@ -639,6 +762,7 @@ fn test_mongodb_configuration(
     version: &str,
     test_name: &str,
     database_mode: DatabaseMode,
+    is_public: bool,
 ) {
     engine_run_test(|| {
         init();
@@ -648,11 +772,19 @@ fn test_mongodb_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("mongodb-app-{}", generate_id());
-        let database_host = format!(
-            "mongodb-{}.{}",
-            generate_id(),
-            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-        );
+        let database_host = match is_public {
+            true => format!(
+                "mongodb-{}.{}",
+                generate_id(),
+                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+            ),
+            false => {
+                format!(
+                    "mongodbmymongodb.{}-{}.svc.cluster.local",
+                    environment.project_id, environment.id
+                )
+            }
+        };
         let database_port = 27017;
         let database_db_name = "my-mongodb".to_string();
         let database_username = "superuser".to_string();
@@ -661,6 +793,7 @@ fn test_mongodb_configuration(
             "mongodb://{}:{}@{}:{}/{}",
             database_username, database_password, database_host, database_port, database_db_name
         );
+        let storage_size = 10;
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Mongodb,
@@ -675,7 +808,7 @@ fn test_mongodb_configuration(
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
+            disk_size_in_gib: storage_size.clone(),
             mode: database_mode.clone(),
             database_instance_type: if database_mode == MANAGED {
                 DO_MANAGED_DATABASE_INSTANCE_TYPE
@@ -691,7 +824,7 @@ fn test_mongodb_configuration(
             .to_string(),
             activate_high_availability: false,
             activate_backups: false,
-            publicly_accessible: false,
+            publicly_accessible: is_public.clone(),
         }];
 
         environment.applications = environment
@@ -727,7 +860,65 @@ fn test_mongodb_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check the database disk is here and with correct size
+        if database_mode.clone() == CONTAINER {
+            match get_pvc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(pvc) => {
+                    assert_eq!(
+                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                        format!("{}Gi", storage_size)
+                    )
+                }
+                Err(_) => assert!(false),
+            };
+
+            match get_svc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(
+                            |svc| svc.metadata.name.contains("mongodbmymongodb") && svc.spec.svc_type == "LoadBalancer"
+                        )
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        } else {
+            match get_svc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(
+                            |svc| svc.metadata.name.contains("mongodbmymongodb") && svc.spec.svc_type == "ExternalName"
+                        )
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    1
+                ),
+                Err(_) => assert!(false),
+            };
+        }
 
         match delete_environment(&context_for_delete, env_action_delete, DO_TEST_REGION) {
             TransactionResult::Ok => assert!(true),
@@ -748,7 +939,7 @@ fn test_mongodb_configuration(
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn mongodb_v3_6_deploy_a_working_dev_environment() {
+fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -760,13 +951,89 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, flase);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn pub_mongodb_v3_6_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn pub_mongodb_v4_0_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn mongodb_v4_0_deploy_a_working_dev_environment() {
+fn pub_mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -778,13 +1045,13 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn mongodb_v4_2_deploy_a_working_dev_environment() {
+fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -796,13 +1063,13 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn mongodb_v4_4_deploy_a_working_dev_environment() {
+fn pub_mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -814,7 +1081,7 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER, true);
 }
 
 /**
@@ -830,6 +1097,7 @@ fn test_mysql_configuration(
     version: &str,
     test_name: &str,
     database_mode: DatabaseMode,
+    is_public: bool,
 ) {
     engine_run_test(|| {
         init();
@@ -840,16 +1108,25 @@ fn test_mysql_configuration(
         let deletion_context = context.clone_not_same_execution_id();
 
         let app_name = format!("mysql-app-{}", generate_id());
-        let database_host = format!(
-            "mysql-{}.{}",
-            generate_id(),
-            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-        );
+        let database_host = match is_public {
+            true => format!(
+                "mysql-{}.{}",
+                generate_id(),
+                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+            ),
+            false => {
+                format!(
+                    "mysqlmysqldatabase.{}-{}.svc.cluster.local",
+                    environment.project_id, environment.id
+                )
+            }
+        };
 
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
+        let storage_size = 10;
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Mysql,
@@ -864,7 +1141,7 @@ fn test_mysql_configuration(
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
+            disk_size_in_gib: storage_size.clone(),
             mode: database_mode.clone(),
             database_instance_type: if database_mode == MANAGED {
                 DO_MANAGED_DATABASE_INSTANCE_TYPE
@@ -880,7 +1157,7 @@ fn test_mysql_configuration(
             .to_string(),
             activate_high_availability: false,
             activate_backups: false,
-            publicly_accessible: false,
+            publicly_accessible: is_public.clone(),
         }];
         environment.applications = environment
             .applications
@@ -913,7 +1190,63 @@ fn test_mysql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check the database disk is here and with correct size
+        if database_mode.clone() == CONTAINER {
+            match get_pvc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(pvc) => {
+                    assert_eq!(
+                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                        format!("{}Gi", storage_size)
+                    )
+                }
+                Err(_) => assert!(false),
+            };
+
+            match get_svc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("mysqlmysqldatabase")
+                            && svc.spec.svc_type == "LoadBalancer")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        } else {
+            match get_svc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("mysqlmysqldatabase")
+                            && svc.spec.svc_type == "ExternalName")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    1
+                ),
+                Err(_) => assert!(false),
+            };
+        }
 
         match delete_environment(&deletion_context, ea_delete, DO_TEST_REGION) {
             TransactionResult::Ok => assert!(true),
@@ -934,7 +1267,7 @@ fn test_mysql_configuration(
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn mysql_v5_7_deploy_a_working_dev_environment() {
+fn private_mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -946,13 +1279,51 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER);
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn pub_mysql_v5_7_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn private_mysql_v8_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn mysql_v8_deploy_a_working_dev_environment() {
+fn pub_mysql_v8_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -964,7 +1335,7 @@ fn mysql_v8_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER);
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER, true);
 }
 
 // MySQL production environment
@@ -982,6 +1353,7 @@ fn test_redis_configuration(
     version: &str,
     test_name: &str,
     database_mode: DatabaseMode,
+    is_public: bool,
 ) {
     engine_run_test(|| {
         init();
@@ -992,15 +1364,24 @@ fn test_redis_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("redis-app-{}", generate_id());
-        let database_host = format!(
-            "redis-{}.{}",
-            generate_id(),
-            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-        );
+        let database_host = match is_public {
+            true => format!(
+                "redis-{}.{}",
+                generate_id(),
+                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+            ),
+            false => {
+                format!(
+                    "redismyredis.{}-{}.svc.cluster.local",
+                    environment.project_id, environment.id
+                )
+            }
+        };
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
+        let storage_size = 10;
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Redis,
@@ -1015,7 +1396,7 @@ fn test_redis_configuration(
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
+            disk_size_in_gib: storage_size.clone(),
             mode: database_mode.clone(),
             database_instance_type: if database_mode == MANAGED {
                 DO_MANAGED_DATABASE_INSTANCE_TYPE
@@ -1031,7 +1412,7 @@ fn test_redis_configuration(
             .to_string(),
             activate_high_availability: false,
             activate_backups: false,
-            publicly_accessible: false,
+            publicly_accessible: is_public.clone(),
         }];
         environment.applications = environment
             .applications
@@ -1064,7 +1445,61 @@ fn test_redis_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // todo: check the database disk is here and with correct size
+        if database_mode.clone() == CONTAINER {
+            match get_pvc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(pvc) => {
+                    assert_eq!(
+                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                        format!("{}Gi", storage_size)
+                    )
+                }
+                Err(_) => assert!(false),
+            };
+
+            match get_svc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("redismyredis") && svc.spec.svc_type == "LoadBalancer")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        } else {
+            match get_svc(
+                ProviderKind::Aws,
+                DO_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("redismyredis") && svc.spec.svc_type == "ExternalName")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    1
+                ),
+                Err(_) => assert!(false),
+            };
+        }
 
         match delete_environment(&context_for_delete, ea_delete, DO_TEST_REGION) {
             TransactionResult::Ok => assert!(true),
@@ -1085,7 +1520,7 @@ fn test_redis_configuration(
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn redis_v5_deploy_a_working_dev_environment() {
+fn private_redis_v5_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -1097,13 +1532,51 @@ fn redis_v5_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER);
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn pub_redis_v5_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn private_redis_v6_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
-fn redis_v6_deploy_a_working_dev_environment() {
+fn pub_redis_v6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -1115,5 +1588,5 @@ fn redis_v6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER);
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER, true);
 }

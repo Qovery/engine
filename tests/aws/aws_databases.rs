@@ -558,11 +558,16 @@ fn test_postgresql_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => {
-                    for item in svc.items.expect("No items in svc") {
-                        assert_eq!(item.spec.svc_type, "ExternalName")
-                    }
-                }
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("postgresqlpostgres")
+                            && svc.spec.svc_type == "ExternalName")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    1
+                ),
                 Err(_) => assert!(false),
             };
         }
@@ -918,7 +923,40 @@ fn test_mongodb_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.svc_type, "ClusterIP"),
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(
+                            |svc| svc.metadata.name.contains("mongodbmymongodb") && svc.spec.svc_type == "LoadBalancer"
+                        )
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        } else {
+            match get_svc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(
+                            |svc| svc.metadata.name.contains("mongodbmymongodb") && svc.spec.svc_type == "ExternalName"
+                        )
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    1
+                ),
                 Err(_) => assert!(false),
             };
         }
@@ -1269,7 +1307,38 @@ fn test_mysql_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.svc_type, "ClusterIP"),
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("mysqlmysqldatabase")
+                            && svc.spec.svc_type == "LoadBalancer")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        } else {
+            match get_svc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("mysqlmysqldatabase")
+                            && svc.spec.svc_type == "ExternalName")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    1
+                ),
                 Err(_) => assert!(false),
             };
         }
@@ -1548,7 +1617,36 @@ fn test_redis_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => assert_eq!(svc.items.expect("No items in svc")[0].spec.svc_type, "ClusterIP"),
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("redismyredis") && svc.spec.svc_type == "LoadBalancer")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        } else {
+            match get_svc(
+                ProviderKind::Aws,
+                AWS_KUBE_TEST_CLUSTER_ID,
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name.contains("redismyredis") && svc.spec.svc_type == "ExternalName")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    1
+                ),
                 Err(_) => assert!(false),
             };
         }
