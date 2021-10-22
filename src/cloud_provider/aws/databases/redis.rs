@@ -181,7 +181,7 @@ impl Service for Redis {
             true => context.insert("fqdn", self.fqdn.as_str()),
             false => context.insert(
                 "fqdn",
-                format!("???.{}.svc.cluster.local", environment.namespace()).as_str(),
+                format!("redismyredis.{}.svc.cluster.local", environment.namespace()).as_str(),
             ),
         }
 

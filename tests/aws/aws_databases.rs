@@ -826,7 +826,10 @@ fn test_mongodb_configuration(
                 secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
             ),
             false => {
-                format!("???.{}-{}.svc.cluster.local", environment.project_id, environment.id)
+                format!(
+                    "mongodbmymongodb.{}-{}.svc.cluster.local",
+                    environment.project_id, environment.id
+                )
             }
         };
         let database_port = 27017;
@@ -949,6 +952,9 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, false);
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
 fn pub_mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
@@ -1176,7 +1182,10 @@ fn test_mysql_configuration(
                 secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
             ),
             false => {
-                format!("???.{}-{}.svc.cluster.local", environment.project_id, environment.id)
+                format!(
+                    "mysqlmysqldatabase.{}-{}.svc.cluster.local",
+                    environment.project_id, environment.id
+                )
             }
         };
 
@@ -1452,7 +1461,10 @@ fn test_redis_configuration(
                 secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
             ),
             false => {
-                format!("???.{}-{}.svc.cluster.local", environment.project_id, environment.id)
+                format!(
+                    "redismyredis.{}-{}.svc.cluster.local",
+                    environment.project_id, environment.id
+                )
             }
         };
         let database_port = 6379;
