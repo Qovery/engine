@@ -985,7 +985,7 @@ mod tests {
                     "status": "superseded",
                     "version": "1"
                 },
-                "annotations": {}
+                "annotations": {},
                 "name": "sh.helm.release.v1.coredns.v1",
                 "namespace": "kube-system",
                 "resourceVersion": "562542",
