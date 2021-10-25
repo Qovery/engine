@@ -32,12 +32,12 @@ image:
 ## String to partially override mysql.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: {{ sanitized_name }}
+nameOverride: '{{ sanitized_name }}'
 
 ## String to fully override mysql.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: {{ sanitized_name }}
+fullnameOverride: '{{ sanitized_name }}'
 
 ## Cluster domain
 ##
@@ -47,7 +47,7 @@ commonLabels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: {{ sanitized_name }}
+  databaseName: '{{ sanitized_name }}'
 
 ## Init containers parameters:
 ## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
@@ -90,7 +90,7 @@ root:
   ## MySQL admin password
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#setting-the-root-password-on-first-run
   ##
-  password: "{{ database_password }}"
+  password: '{{ database_password }}'
   ## Option to force users to specify a password. That is required for 'helm upgrade' to work properly.
   ## If it is not force, a random password will be generated.
   ##
@@ -106,12 +106,12 @@ db:
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#creating-a-database-user-on-first-run
   ## Note that this user should be different from the MySQL replication user (replication.user)
   ##
-  user: {{ database_login }}
-  password: "{{ database_password }}"
+  user: '{{ database_login }}'
+  password: '{{ database_password }}'
   ## Database to create
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#creating-a-database-on-first-run
   ##
-  name: {{ sanitized_name }}
+  name: '{{ sanitized_name }}'
   ## Option to force users to specify a password. That is required for 'helm upgrade' to work properly.
   ## If it is not force, a random password will be generated.
   ##
@@ -311,14 +311,14 @@ master:
     ##   GKE, AWS & OpenStack)
     ##
     # storageClass: "-"
-    storageClass: scw-sbv-ssd-0
+    storageClass: {{ database_disk_type }}
     ## PVC annotations
     ##
     annotations:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       databaseId: {{ id }}
-      databaseName: {{ sanitized_name }}
+      databaseName: '{{ sanitized_name }}'
 
     ## Persistent Volume Access Mode
     ##
