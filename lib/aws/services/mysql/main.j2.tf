@@ -1,17 +1,3 @@
-locals {
-  tags_mysql = {
-    cluster_name = var.cluster_name
-    cluster_id = var.kubernetes_cluster_id
-    region = var.region
-    q_client_id = var.q_customer_id
-    q_environment_id = var.q_environment_id
-    q_project_id = var.q_project_id
-    database_identifier = var.mysql_identifier
-    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
-    {% if snapshot is defined and snapshot["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
-  }
-}
-
 data "aws_vpc" "selected" {
   filter {
     name = "tag:ClusterId"
@@ -75,7 +61,7 @@ resource "aws_db_parameter_group" "mysql_parameter_group" {
   name   = "qovery-${var.mysql_identifier}"
   family = var.parameter_group_family
 
-  tags = local.tags_mysql
+  tags = local.mysql_database_tags
 
   # Set superuser permission to the default 'username' account
   parameter {
@@ -88,7 +74,7 @@ resource "aws_db_parameter_group" "mysql_parameter_group" {
 resource "aws_db_instance" "mysql_instance" {
   identifier = var.mysql_identifier
 
-  tags = local.tags_mysql
+  tags = local.mysql_database_tags
 
   # MySQL instance basics
   instance_class = var.instance_class

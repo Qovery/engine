@@ -1,47 +1,3 @@
-# Qovery
-
-variable "cluster_name" {
-  description = "Kubernetes cluster name"
-  default     = "{{ cluster_name }}"
-  type        = string
-}
-
-variable "region" {
-  description = "AWS region to store terraform state and lock"
-  default     = "{{ region }}"
-  type        = string
-}
-
-variable "kubernetes_cluster_id" {
-  description = "Kubernetes cluster name with region"
-  default     = "{{ kubernetes_cluster_id }}"
-  type        = string
-}
-
-variable "region_cluster_name" {
-  description = "AWS region to store terraform state and lock"
-  default     = "{{ region }}-{{ cluster_name }}"
-  type        = string
-}
-
-variable "q_project_id" {
-  description = "Qovery project ID"
-  default     = "{{ project_id }}"
-  type        = string
-}
-
-variable "q_customer_id" {
-  description = "Qovery customer ID"
-  default     = "{{ owner_id }}"
-  type        = string
-}
-
-variable "q_environment_id" {
-  description = "Qovery client environment"
-  default     = "{{ environment_id }}"
-  type        = string
-}
-
 # PostgreSQL instance basics
 
 variable "postgresql_identifier" {
@@ -179,17 +135,9 @@ variable "final_snapshot_name" {
 }
 
 # Snapshots
-#variable "snapshot_identifier" {
-#  description = "Snapshot ID to restore"
-#  default = "{ service_info['snapshot']['snapshot_id'] }"
-#  type = string
-#}
-
-{%- if resource_expiration_in_seconds is defined %}
-# Pleco ttl
-variable "resource_expiration_in_seconds" {
-  description = "Resource expiration in seconds"
-  default = {{ resource_expiration_in_seconds }}
-  type = number
+variable "snapshot_identifier" {
+description = "Snapshot ID to restore"
+default = "{{ snapshot['snapshot_id']}}"
+type = string
 }
 {% endif %}
