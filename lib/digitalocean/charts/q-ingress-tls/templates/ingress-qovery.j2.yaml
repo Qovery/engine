@@ -14,7 +14,6 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/hostname: {{ router_default_domain }}
     external-dns.alpha.kubernetes.io/ttl: "300"
-    external-dns.alpha.kubernetes.io/target: "{{ external_ingress_hostname_default }}"
     kubernetes.io/tls-acme: "true"
     {%- if custom_domains|length > 0 %}
     cert-manager.io/issuer: {{ id }}
