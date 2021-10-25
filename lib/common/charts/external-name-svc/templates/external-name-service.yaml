@@ -6,10 +6,10 @@ metadata:
   name: {{.Values.app_id}}-dns
   labels:
     appId: {{.Values.app_id}}
-  {{ if .Values.publicly_accessible }}
   annotations:
+    {{ if .Values.publicly_accessible }}
     external-dns.alpha.kubernetes.io/hostname: {{ .Values.source_fqdn }}
-  {{ end }}
+    {{ end }}
 spec:
   type: ExternalName
   externalName: {{ .Values.target_hostname }}
