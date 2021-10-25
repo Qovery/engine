@@ -232,7 +232,7 @@ impl Create for MongoDB {
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        Ok(())
+        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
     }
 
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {

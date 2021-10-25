@@ -88,13 +88,13 @@ usePassword: true
 ## MongoDB admin password
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#setting-the-root-password-on-first-run
 ##
-mongodbRootPassword: {{ database_password }}
+mongodbRootPassword: '{{ database_password }}'
 
 ## MongoDB custom user and database
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#creating-a-user-and-database-on-first-run
 ##
-mongodbUsername: {{ database_login }}
-mongodbPassword: {{ database_password }}
+mongodbUsername: '{{ database_login }}'
+mongodbPassword: '{{ database_password }}'
 mongodbDatabase: {{ database_db_name }}
 
 ## Whether enable/disable IPv6 on MongoDB

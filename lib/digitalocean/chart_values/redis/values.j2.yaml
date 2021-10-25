@@ -33,11 +33,11 @@ image:
 
 ## String to partially override redis.fullname template (will maintain the release name)
 ##
-nameOverride: {{ sanitized_name }}
+nameOverride: '{{ sanitized_name }}'
 
 ## String to fully override redis.fullname template
 ##
-fullnameOverride: {{ sanitized_name }}
+fullnameOverride: '{{ sanitized_name }}'
 
 ## Cluster settings
 cluster:
@@ -206,7 +206,7 @@ usePassword: true
 ## Defaults to a random 10-character alphanumeric string if not set and usePassword is true
 ## ref: https://github.com/bitnami/bitnami-docker-redis#setting-the-server-password-on-first-run
 ##
-password: "{{ database_password }}"
+password: ''{{ database_password }}''
 ## Use existing secret (ignores previous password)
 # existingSecret:
 ## Password key to be retrieved from Redis secret
@@ -291,7 +291,7 @@ master:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: {{ sanitized_name }}
+    databaseName: '{{ sanitized_name }}'
   podAnnotations: {}
 
   ## Redis Master resource requests and limits

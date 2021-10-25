@@ -131,10 +131,10 @@ pub fn environment_3_apps_3_routers_3_databases(
                     snapshot_retention_in_days: 0,
                 }],
                 environment_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
-                     "PG_HOST".to_string() => base64::encode(fqdn.clone()),
+                     "PG_DBNAME".to_string() => base64::encode(database_name_2.clone()),
+                     "PG_HOST".to_string() => base64::encode(fqdn_2.clone()),
                      "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username_2.clone()),
                      "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
                 },
                 branch: "master".to_string(),

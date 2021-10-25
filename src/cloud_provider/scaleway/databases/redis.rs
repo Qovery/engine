@@ -225,16 +225,13 @@ impl Create for Redis {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.Redis.on_create() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Create,
-            Box::new(|| deploy_stateful_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
+            deploy_stateful_service(target, self)
+        })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        //FIXME : perform an actual check
-        Ok(())
+        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
     }
 
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -266,11 +263,9 @@ impl Delete for Redis {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("SCW.Redis.on_delete() called for {}", self.name());
 
-        send_progress_on_long_task(
-            self,
-            crate::cloud_provider::service::Action::Pause,
-            Box::new(|| delete_stateful_service(target, self)),
-        )
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
+            delete_stateful_service(target, self)
+        })
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {

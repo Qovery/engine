@@ -14,11 +14,20 @@ locals {
 }
 
 {%- if publicly_accessible != false %}
-# DB - ACL
-# The initial setup of an instance allows full network access from anywhere (0.0.0.0/0).
 resource "scaleway_rdb_acl" "main" {
-  instance_id = scaleway_rdb_instance.mysql_instance.id
+  instance_id = scaleway_rdb_instance.postgresql_instance.id
   # TODO(benjaminch): Allow only Scaleway's private traffic
+  acl_rules {
+    ip = "0.0.0.0/0"
+    description = "accessible from any host"
+  }
+  depends_on = [
+    scaleway_rdb_instance.postgresql_instance
+  ]
+}
+{% else %}
+resource "scaleway_rdb_acl" "main" {
+  instance_id = scaleway_rdb_instance.postgresql_instance.id
   acl_rules {
     ip = "0.0.0.0/0"
     description = "accessible from any host"

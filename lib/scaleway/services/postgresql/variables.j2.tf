@@ -94,13 +94,13 @@ variable "instance_class" {
 
 variable "username" {
   description = "Admin username for the master DB user"
-  default = "{{ database_login }}"
+  default = '{{ database_login }}'
   type = string
 }
 
 variable "password" {
   description = "Admin password for the master DB user"
-  default = "{{ database_password }}"
+  default = '{{ database_password }}'
   type = string
 }
 
