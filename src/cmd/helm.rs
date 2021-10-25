@@ -1009,6 +1009,7 @@ mod tests {
                     "status": "deployed",
                     "version": "2"
                 },
+                "annotations": {},
                 "name": "sh.helm.release.v1.coredns.v2",
                 "namespace": "kube-system",
                 "resourceVersion": "603757",
