@@ -482,7 +482,7 @@ fn test_postgresql_configuration(
             secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
         );
         let database_port = 5432;
-        let database_db_name = "postgres".to_string();
+        let database_db_name = "postgresql".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_password(true);
 
@@ -1070,7 +1070,7 @@ fn test_redis_configuration(
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password(true);
+        let database_password = generate_password(false);
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Redis,
@@ -1113,7 +1113,6 @@ fn test_redis_configuration(
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
-                    "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                     "REDIS_HOST".to_string()      => base64::encode(database_host.clone()),
                     "REDIS_PORT".to_string()      => base64::encode(database_port.clone().to_string()),
                     "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),

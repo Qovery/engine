@@ -35,11 +35,11 @@ image:
 
 ## String to partially override postgresql.fullname template (will maintain the release name)
 ##
-nameOverride: {{ sanitized_name }}
+nameOverride: '{{ sanitized_name }}'
 
 ## String to fully override postgresql.fullname template
 ##
-fullnameOverride: {{ sanitized_name }}
+fullnameOverride: '{{ sanitized_name }}'
 
 ##
 ## Init containers parameters:
@@ -121,16 +121,16 @@ replication:
 
 ## PostgreSQL admin password (used when `postgresqlUsername` is not `postgres`)
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-user-on-first-run (see note!)
-postgresqlPostgresPassword: {{ database_password }}
+postgresqlPostgresPassword: '{{ database_password }}'
 
 ## PostgreSQL user (has superuser privileges if username is `postgres`)
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#setting-the-root-password-on-first-run
-postgresqlUsername: {{ database_login }}
+postgresqlUsername: '{{ database_login }}'
 
 ## PostgreSQL password
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#setting-the-root-password-on-first-run
 ##
-postgresqlPassword: {{ database_password }}
+postgresqlPassword: '{{ database_password }}'
 
 ## PostgreSQL password using existing secret
 ## existingSecret: secret
@@ -141,7 +141,7 @@ postgresqlPassword: {{ database_password }}
 ## Create a database
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-on-first-run
 ##
-postgresqlDatabase: {{ database_db_name }}
+postgresqlDatabase: '{{ database_db_name }}'
 
 ## PostgreSQL data dir
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md
@@ -221,7 +221,7 @@ extraEnv: []
 
 ## Specify the PostgreSQL username and password to execute the initdb scripts
 initdbUser: postgres
-initdbPassword: {{ database_password }}
+initdbPassword: '{{ database_password }}'
 
 ## Optional duration in seconds the pod needs to terminate gracefully.
 ## ref: https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods
@@ -329,7 +329,7 @@ persistence:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: {{ sanitized_name }}
+    databaseName: '{{ sanitized_name }}'
 
 ## updateStrategy for PostgreSQL StatefulSet and its slaves StatefulSets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies

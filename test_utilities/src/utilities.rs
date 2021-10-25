@@ -367,6 +367,11 @@ pub fn generate_id() -> String {
 }
 
 pub fn generate_password(allow_using_symbols: bool) -> String {
+    // core special chars set: !#$%&*+-=?_
+    // we will keep only those and exclude others
+    let forbidden_chars = vec![
+        '"', '\'', '(', ')', ',', '.', '/', ':', ';', '<', '>', '@', '[', '\\', ']', '^', '`', '{', '|', '}', '~',
+    ];
     let pg = PasswordGenerator::new()
         .length(32)
         .numbers(true)
@@ -377,10 +382,18 @@ pub fn generate_password(allow_using_symbols: bool) -> String {
         .exclude_similar_characters(true)
         .strict(true);
 
-    pg.generate_one()
+    let mut password = pg
+        .generate_one()
         .expect("error while trying to generate a password")
-        .to_string()
-        .replace("\\", "$") // most tools do not allow \ char, hence replacing it by something else
+        .to_string();
+
+    if allow_using_symbols {
+        for forbidden_char in forbidden_chars {
+            password = password.replace(forbidden_char, "%");
+        }
+    }
+
+    password
 }
 
 pub fn check_all_connections(env: &Environment) -> Vec<bool> {
