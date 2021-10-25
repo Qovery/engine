@@ -558,18 +558,26 @@ fn test_postgresql_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => assert_eq!(
-                    svc.items
+                Ok(svc) => {
+                    let service = svc
+                        .items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(
-                            |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                        .filter(|svc| {
+                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
                                 && svc.spec.svc_type == "ExternalName"
-                        )
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
-                    1
-                ),
+                        })
+                        .collect::<Vec<SVCItem>>();
+                    let annotations = &service[0].metadata.annotations;
+                    assert_eq!(service.len(), 1);
+                    match is_public {
+                        true => {
+                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                        }
+                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                    }
+                }
                 Err(_) => assert!(false),
             };
         }
@@ -949,18 +957,26 @@ fn test_mongodb_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => assert_eq!(
-                    svc.items
+                Ok(svc) => {
+                    let service = svc
+                        .items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(
-                            |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                        .filter(|svc| {
+                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
                                 && svc.spec.svc_type == "ExternalName"
-                        )
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
-                    1
-                ),
+                        })
+                        .collect::<Vec<SVCItem>>();
+                    let annotations = &service[0].metadata.annotations;
+                    assert_eq!(service.len(), 1);
+                    match is_public {
+                        true => {
+                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                        }
+                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                    }
+                }
                 Err(_) => assert!(false),
             };
         }
@@ -1334,18 +1350,26 @@ fn test_mysql_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => assert_eq!(
-                    svc.items
+                Ok(svc) => {
+                    let service = svc
+                        .items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(
-                            |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                        .filter(|svc| {
+                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
                                 && svc.spec.svc_type == "ExternalName"
-                        )
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
-                    1
-                ),
+                        })
+                        .collect::<Vec<SVCItem>>();
+                    let annotations = &service[0].metadata.annotations;
+                    assert_eq!(service.len(), 1);
+                    match is_public {
+                        true => {
+                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                        }
+                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                    }
+                }
                 Err(_) => assert!(false),
             };
         }
@@ -1653,21 +1677,26 @@ fn test_redis_configuration(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => assert_eq!(
-                    svc.items
+                Ok(svc) => {
+                    let service = svc
+                        .items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(
-                            |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                        .filter(|svc| {
+                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
                                 && svc.spec.svc_type == "ExternalName"
-                        )
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
+                        })
+                        .collect::<Vec<SVCItem>>();
+                    let annotations = &service[0].metadata.annotations;
+                    assert_eq!(service.len(), 1);
                     match is_public {
-                        true => 1,
-                        false => 0,
+                        true => {
+                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                        }
+                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
-                ),
+                }
                 Err(_) => assert!(false),
             };
         }

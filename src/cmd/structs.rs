@@ -1,5 +1,6 @@
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +42,7 @@ pub struct Metadata {
     pub resource_version: String,
     pub self_link: String,
     pub uid: String,
+    pub annotations: HashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize)]

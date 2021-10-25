@@ -1,3 +1,4 @@
 target_hostname: ""
 source_fqdn: ""
 app_id: ""
+publicly_accessible: false
