@@ -30,7 +30,9 @@ pub struct AwsQoveryTerraformConfig {
 
 pub struct ChartsConfigPrerequisites {
     pub organization_id: String,
+    pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
+    pub cluster_long_id: uuid::Uuid,
     pub region: String,
     pub cluster_name: String,
     pub cloud_provider: String,
@@ -988,6 +990,26 @@ datasources:
                     value: "1".to_string(),
                 },
                 ChartSetValue {
+                    key: "environmentVariables.GRPC_SERVER".to_string(),
+                    value: chart_config_prerequisites.infra_options.qovery_grpc_url.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_TOKEN".to_string(),
+                    value: chart_config_prerequisites
+                        .infra_options
+                        .qovery_cluster_secret_token
+                        .to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_ID".to_string(),
+                    value: chart_config_prerequisites.cluster_long_id.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
+                    value: chart_config_prerequisites.organization_long_id.to_string(),
+                },
+                // TODO: Remove those values after the migration
+                ChartSetValue {
                     key: "environmentVariables.NATS_HOST_URL".to_string(),
                     value: chart_config_prerequisites.infra_options.qovery_nats_url.to_string(),
                 },
@@ -1003,10 +1025,6 @@ datasources:
                         .to_string(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.LOKI_URL".to_string(),
-                    value: format!("http://{}.cluster.local:3100", loki_kube_dns_prefix),
-                },
-                ChartSetValue {
                     key: "environmentVariables.CLOUD_REGION".to_string(),
                     value: chart_config_prerequisites.region.clone(),
                 },
@@ -1017,6 +1035,11 @@ datasources:
                 ChartSetValue {
                     key: "environmentVariables.KUBERNETES_ID".to_string(),
                     value: chart_config_prerequisites.cluster_id.clone(),
+                },
+                // TODO: End of the todo
+                ChartSetValue {
+                    key: "environmentVariables.LOKI_URL".to_string(),
+                    value: format!("http://{}.cluster.local:3100", loki_kube_dns_prefix),
                 },
                 // resources limits
                 ChartSetValue {

@@ -39,6 +39,7 @@ fn create_upgrade_and_destroy_kapsule_cluster(
         let kubernetes = Kapsule::new(
             context,
             cluster_id.clone(),
+            uuid::Uuid::new_v4(),
             cluster_id,
             boot_version.to_string(),
             zone,
@@ -106,6 +107,7 @@ fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, tes
         let kubernetes = Kapsule::new(
             context,
             cluster_id.clone(),
+            uuid::Uuid::new_v4(),
             cluster_id,
             SCW_KUBERNETES_VERSION.to_string(),
             zone,
