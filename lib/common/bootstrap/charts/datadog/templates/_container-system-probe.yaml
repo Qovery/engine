@@ -1,0 +1,74 @@
+{{- define "container-system-probe" -}}
+- name: system-probe
+  image: "{{ include "image-path" (dict "root" .Values "image" .Values.agents.image) }}"
+  imagePullPolicy: {{ .Values.agents.image.pullPolicy }}
+  securityContext:
+{{ toYaml .Values.agents.containers.systemProbe.securityContext | indent 4 }}
+  command: ["/opt/datadog-agent/embedded/bin/system-probe", "--config=/etc/datadog-agent/system-probe.yaml"]
+{{- if .Values.agents.containers.systemProbe.ports }}
+  ports:
+{{ toYaml .Values.agents.containers.systemProbe.ports | indent 2 }}
+{{- end }}
+{{- if or .Values.datadog.envFrom .Values.agents.containers.systemProbe.envFrom }}
+  envFrom:
+{{ concat .Values.datadog.envFrom .Values.agents.containers.systemProbe.envFrom | toYaml  | indent 4 }}
+{{- end }}
+  env:
+    {{- include "containers-common-env" . | nindent 4 }}
+    - name: DD_LOG_LEVEL
+      value: {{ .Values.agents.containers.systemProbe.logLevel | default .Values.datadog.logLevel | quote }}
+{{- if .Values.agents.containers.systemProbe.env }}
+{{ toYaml .Values.agents.containers.systemProbe.env | indent 4 }}
+{{- end }}
+  resources:
+{{ toYaml .Values.agents.containers.systemProbe.resources | indent 4 }}
+  volumeMounts:
+    - name: logdatadog
+      mountPath: /var/log/datadog
+    - name: tmpdir
+      mountPath: /tmp
+      readOnly: false
+    - name: debugfs
+      mountPath: /sys/kernel/debug
+      mountPropagation: {{ .Values.datadog.hostVolumeMountPropagation }}
+    - name: config
+      mountPath: {{ template "datadog.confPath" . }}
+    {{- if .Values.agents.useConfigMap }}
+    - name: {{ template "datadog.fullname" . }}-datadog-yaml
+      mountPath: {{ template "datadog.confPath" . }}/datadog.yaml
+      subPath: datadog.yaml
+    {{- end }}
+    - name: sysprobe-config
+      mountPath: /etc/datadog-agent/system-probe.yaml
+      subPath: system-probe.yaml
+    - name: sysprobe-socket-dir
+      mountPath: /var/run/sysprobe
+    - name: procdir
+      mountPath: /host/proc
+      mountPropagation: {{ .Values.datadog.hostVolumeMountPropagation }}
+      readOnly: true
+{{- if or .Values.datadog.systemProbe.enableTCPQueueLength .Values.datadog.systemProbe.enableOOMKill }}
+    - name: modules
+      mountPath: /lib/modules
+      mountPropagation: {{ .Values.datadog.hostVolumeMountPropagation }}
+      readOnly: true
+    - name: src
+      mountPath: /usr/src
+      mountPropagation: {{ .Values.datadog.hostVolumeMountPropagation }}
+      readOnly: true
+{{- end }}
+{{- if .Values.datadog.securityAgent.runtime.enabled }}
+    - name: os-release
+      mountPath: /host/etc/os-release
+      mountPropagation: {{ .Values.datadog.hostVolumeMountPropagation }}
+      readOnly: true
+{{- if .Values.datadog.securityAgent.runtime.policies.configMap }}
+    - name: runtimepoliciesdir
+      mountPath: /etc/datadog-agent/runtime-security.d
+      readOnly: true
+{{- end }}
+{{- end }}
+{{- if .Values.agents.volumeMounts }}
+{{ toYaml .Values.agents.volumeMounts | indent 4 }}
+{{- end }}
+{{- end -}}

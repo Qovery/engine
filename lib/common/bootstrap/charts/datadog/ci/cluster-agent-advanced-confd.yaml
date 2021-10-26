@@ -1,0 +1,24 @@
+datadog:
+  apiKey: "00000000000000000000000000000000"
+  appKey: "0000000000000000000000000000000000000000"
+  orchestratorExplorer:
+    enabled: true
+
+clusterAgent:
+  enabled: true
+  advancedConfd:
+    orchestrator.d:
+      1.yaml: |-
+        cluster_check: true
+        init_config:
+        instances:
+          - collectors:
+            - nodes
+            skip_leader_election: true
+      2.yaml:  |-
+        cluster_check: true
+        init_config:
+        instances:
+          - collectors:
+            - deployments
+            skip_leader_election: true

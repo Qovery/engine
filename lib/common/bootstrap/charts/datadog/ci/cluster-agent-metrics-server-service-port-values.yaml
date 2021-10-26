@@ -1,0 +1,13 @@
+datadog:
+  apiKey: "00000000000000000000000000000000"
+  appKey: "0000000000000000000000000000000000000000"
+  kubeStateMetricsEnabled: false
+
+clusterAgent:
+  enabled: true
+
+  metricsProvider:
+    enabled: true
+
+    service:
+      port: 4443
