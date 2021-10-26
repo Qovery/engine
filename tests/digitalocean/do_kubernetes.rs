@@ -39,6 +39,7 @@ fn create_upgrade_and_destroy_doks_cluster(
         let kubernetes = DOKS::new(
             context,
             cluster_id.clone(),
+            uuid::Uuid::new_v4(),
             cluster_id.clone(),
             boot_version.to_string(),
             region,
@@ -106,6 +107,7 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
         let kubernetes = DOKS::new(
             context,
             cluster_id.clone(),
+            uuid::Uuid::new_v4(),
             cluster_id.clone(),
             DO_KUBERNETES_VERSION.to_string(),
             region,

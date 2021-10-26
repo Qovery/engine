@@ -3230,6 +3230,7 @@ dependencies = [
  "time 0.2.27",
  "tracing",
  "tracing-subscriber",
+ "uuid 0.8.2",
 ]
 
 [[package]]

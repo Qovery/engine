@@ -499,6 +499,15 @@ pub fn sanitize_name(prefix: &str, name: &str) -> String {
     format!("{}-{}", prefix, name).replace("_", "-")
 }
 
+pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
+    let max_size = max_size - prefix.len();
+    let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
+    if new_name.chars().count() > max_size {
+        new_name = new_name[..max_size].to_string();
+    }
+    new_name
+}
+
 pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, ParseFloatError> {
     if value.ends_with('m') {
         let mut value_number_string = value;

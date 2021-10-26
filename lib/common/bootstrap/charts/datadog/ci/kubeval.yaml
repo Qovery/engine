@@ -1,0 +1,61 @@
+datadog:
+  apiKey: "00000000000000000000000000000000"
+  appKey: "0000000000000000000000000000000000000000"
+  kubelet:
+    hostCAPath: /foo/bar/cert.ca
+    agentCAPath: /bar/foo/cert.ca
+  env:
+  - name: "DD_KUBELET_TLS_VERIFY"
+    value: "false"
+  logs:
+    enabled: true
+    containerCollectAll: true
+  apm:
+    enabled: true
+  processAgent:
+    enabled: true
+    processCollection: true
+  networkMonitoring:
+    enabled: true
+  systemProbe:
+    enableConntrack: true
+    enableTCPQueueLength: true
+    enableOOMKill: true
+    collectDNSStats: true
+  orchestratorExplorer:
+    enabled: true
+  clusterChecks:
+    enabled: true
+  kubeStateMetricsEnabled: true
+  securityAgent:
+    compliance:
+      enabled: true
+    runtime:
+      enabled: true
+clusterAgent:
+  enabled: true
+  createPodDisruptionBudget: true
+  nodeSelector:
+    kubernetes.io/os: linux
+  metricsProvider:
+    enabled: false
+  admissionController:
+    enabled: true
+    mutateUnlabelled: true
+clusterChecksRunner:
+  enabled: true
+  createPodDisruptionBudget: true
+  nodeSelector:
+    kubernetes.io/os: linux
+agents:
+  nodeSelector:
+    kubernetes.io/os: linux
+  podSecurity:
+    podSecurityPolicy:
+      create: true
+  containers:
+    agent:
+      ports:
+      - containerPort: 6666
+        name: testport
+        protocol: UDP

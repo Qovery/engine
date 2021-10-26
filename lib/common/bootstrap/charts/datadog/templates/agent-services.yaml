@@ -1,0 +1,92 @@
+{{- if eq (include "should-deploy-cluster-agent" .) "true" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "datadog.fullname" . }}-cluster-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ template "datadog.fullname" . }}-cluster-agent
+  ports:
+  - port: 5005
+    name: agentport
+    protocol: TCP
+{{ end }}
+
+{{- if and (eq (include "should-deploy-cluster-agent" .) "true") .Values.clusterAgent.metricsProvider.enabled -}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "datadog.fullname" . }}-cluster-agent-metrics-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: "{{ template "datadog.fullname" . }}"
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+    release: {{ .Release.Name | quote }}
+    heritage: {{ .Release.Service | quote }}
+{{ include "datadog.labels" . | indent 4 }}
+spec:
+  type: {{ .Values.clusterAgent.metricsProvider.service.type }}
+  selector:
+    app: {{ template "datadog.fullname" . }}-cluster-agent
+  ports:
+  - port: {{ template "clusterAgent.metricsProvider.port" . }}
+    name: metricsapi
+    protocol: TCP
+{{ end }}
+
+{{- if and (eq (include "should-deploy-cluster-agent" .) "true") .Values.clusterAgent.admissionController.enabled -}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "datadog.fullname" . }}-cluster-agent-admission-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: "{{ template "datadog.fullname" . }}"
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+    release: {{ .Release.Name | quote }}
+    heritage: {{ .Release.Service | quote }}
+{{ include "datadog.labels" . | indent 4 }}
+spec:
+  selector:
+    app: {{ template "datadog.fullname" . }}-cluster-agent
+  ports:
+  - port: 443
+    targetPort: 8000
+{{ end }}
+
+{{- if eq (include "enable-service-internal-traffic-policy" .) "true" }}
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: {{ template "datadog.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: "{{ template "datadog.fullname" . }}"
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+    release: {{ .Release.Name | quote }}
+    heritage: {{ .Release.Service | quote }}
+{{ include "datadog.labels" . | indent 4 }}
+spec:
+  selector:
+    app: {{ template "datadog.fullname" . }}
+  ports:
+    - protocol: UDP
+      port: {{ .Values.datadog.dogstatsd.port }}
+      targetPort: {{ .Values.datadog.dogstatsd.port }}
+      name: dogstatsd
+{{- if eq  (include "trace-agent-use-tcp-port" .) "true" }}
+    - protocol: TCP
+      port: {{ .Values.datadog.apm.port }}
+      targetPort: {{ .Values.datadog.apm.port }}
+      name: apm
+{{- end }}
+  internalTrafficPolicy: Local
+{{ end }}

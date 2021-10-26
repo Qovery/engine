@@ -1,0 +1,409 @@
+# Datadog
+
+{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+
+[Datadog](https://www.datadoghq.com/) is a hosted infrastructure monitoring platform. This chart adds the Datadog Agent to all nodes in your cluster via a DaemonSet. It also optionally depends on the [kube-state-metrics chart](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-state-metrics). For more information about monitoring Kubernetes with Datadog, please refer to the [Datadog documentation website](https://docs.datadoghq.com/agent/basic_agent_usage/kubernetes/).
+
+Datadog [offers two variants](https://hub.docker.com/r/datadog/agent/tags/), switch to a `-jmx` tag if you need to run JMX/java integrations. The chart also supports running [the standalone dogstatsd image](https://hub.docker.com/r/datadog/dogstatsd/tags/).
+
+See the [Datadog JMX integration](https://docs.datadoghq.com/integrations/java/) to learn more.
+
+## How to use Datadog Helm repository
+
+You need to add this repository to your Helm repositories:
+
+```
+helm repo add datadog https://helm.datadoghq.com
+helm repo update
+```
+
+## Prerequisites
+
+Kubernetes 1.10+ or OpenShift 3.10+, note that:
+
+- the Datadog Agent supports Kubernetes 1.4+
+- The Datadog chart's defaults are tailored to Kubernetes 1.10+, see [Datadog Agent legacy Kubernetes versions documentation](https://github.com/DataDog/datadog-agent/tree/main/Dockerfiles/agent#legacy-kubernetes-versions) for adjustments you might need to make for older versions
+
+{{ template "chart.requirementsSection" . }}
+
+## Quick start
+
+By default, the Datadog Agent runs in a DaemonSet. It can alternatively run inside a Deployment for special use cases.
+
+**Note:** simultaneous DaemonSet + Deployment installation within a single release will be deprecated in a future version, requiring two releases to achieve this.
+
+### Installing the Datadog Chart
+
+To install the chart with the release name `<RELEASE_NAME>`, retrieve your Datadog API key from your [Agent Installation Instructions](https://app.datadoghq.com/account/settings#agent/kubernetes) and run:
+
+```bash
+helm install --name <RELEASE_NAME> \
+  --set datadog.apiKey=<DATADOG_API_KEY> datadog/datadog
+```
+
+By default, this Chart creates a Secret and puts an API key in that Secret.
+However, you can use manually created secret by setting the `datadog.apiKeyExistingSecret` value. After a few minutes, you should see hosts and metrics being reported in Datadog.
+
+**Note:** You can set your [Datadog site](https://docs.datadoghq.com/getting_started/site) using the `datadog.site` field.
+
+```bash
+helm install --name <RELEASE_NAME> \
+    --set datadog.appKey=<DATADOG_APP_KEY> \
+    --set datadog.site=<DATADOG_SITE> \
+    datadog/datadog
+```
+
+#### Create and provide a secret that contains your Datadog API Key
+
+To create a secret that contains your Datadog API key, replace the <DATADOG_API_KEY> below with the API key for your organization. This secret is used in the manifest to deploy the Datadog Agent.
+
+```bash
+DATADOG_SECRET_NAME=datadog-secret
+kubectl create secret generic $DATADOG_SECRET_NAME --from-literal api-key="<DATADOG_API_KEY>" --namespace="default"
+```
+
+**Note**: This creates a secret in the default namespace. If you are in a custom namespace, update the namespace parameter of the command before running it.
+
+Now, the installation command contains the reference to the secret.
+
+```bash
+helm install --name <RELEASE_NAME> \
+  --set datadog.apiKeyExistingSecret=$DATADOG_SECRET_NAME datadog/datadog
+```
+
+**Note**: Provide a secret for the application key (AppKey) using the `datadog.appKeyExistingSecret` chart variable.
+
+### Enabling the Datadog Cluster Agent
+
+Read about the Datadog Cluster Agent in the [official documentation](https://docs.datadoghq.com/agent/kubernetes/cluster/).
+
+Run the following if you want to deploy the chart with the Datadog Cluster Agent:
+
+```bash
+helm install --name datadog-monitoring \
+    --set datadog.apiKey=<DATADOG_API_KEY> \
+    --set datadog.appKey=<DATADOG_APP_KEY> \
+    --set clusterAgent.enabled=true \
+    --set clusterAgent.metricsProvider.enabled=true \
+    datadog/datadog
+```
+
+**Note**: Specifying `clusterAgent.metricsProvider.enabled=true` enables the External Metrics Server.
+If you want to learn to use this feature, you can check out this [Datadog Cluster Agent walkthrough](https://github.com/DataDog/datadog-agent/blob/main/docs/cluster-agent/CUSTOM_METRICS_SERVER.md).
+
+The Leader Election is enabled by default in the chart for the Cluster Agent. Only the Cluster Agent(s) participate in the election, in case you have several replicas configured (using `clusterAgent.replicas`.
+
+#### Cluster Agent Token
+
+You can specify the Datadog Cluster Agent token used to secure the communication between the Cluster Agent(s) and the Agents with `clusterAgent.token`.
+
+### Upgrading
+
+#### From 1.x to 2.x
+
+⚠️ Migrating from 1.x to 2.x requires a manual action.
+
+The `datadog` chart has been refactored to regroup the `values.yaml` parameters in a more logical way.
+Please follow the [migration guide](https://github.com/DataDog/helm-charts/blob/main/charts/datadog/docs/Migration_1.x_to_2.x.md) to update your `values.yaml` file.
+
+#### From 1.19.0 onwards
+
+Version `1.19.0` introduces the use of release name as full name if it contains the chart name(`datadog` in this case).
+E.g. with a release name of `datadog`, this renames the `DaemonSet` from `datadog-datadog` to `datadog`.
+The suggested approach is to delete the release and reinstall it.
+
+#### From 1.0.0 onwards
+
+Starting with version 1.0.0, this chart does not support deploying Agent 5.x anymore. If you cannot upgrade to Agent 6.x or later, you can use a previous version of the chart by calling helm install with `--version 0.18.0`.
+
+See [0.18.1's README](https://github.com/helm/charts/blob/847f737479bb78d89f8fb650db25627558fbe1f0/datadog/datadog/README.md) to see which options were supported at the time.
+
+### Uninstalling the Chart
+
+To uninstall/delete the `<RELEASE_NAME>` deployment:
+
+```bash
+helm delete <RELEASE_NAME> --purge
+```
+
+The command removes all the Kubernetes components associated with the chart and deletes the release.
+
+## Configuration
+
+As a best practice, a YAML file that specifies the values for the chart parameters should be used to configure the chart. Any parameters not specified in this file will default to those set in [values.yaml](values.yaml).
+
+1. Create an empty `datadog-values.yaml` file.
+2. Create a Kubernetes `secret` to store your [Datadog API key](https://app.datadoghq.com/organization-settings/api-keys) and [App key](https://app.datadoghq.com/organization-settings/application-keys)
+
+```bash
+kubectl create secret generic datadog-secret --from-literal api-key=$DD_API_KEY --from-literal app-key=$DD_APP_KEY
+```
+
+3. Set the following parameters in your `datadog-values.yaml` file to reference the secret:
+
+```yaml
+datadog:
+  apiKeyExistingSecret: datadog-secret
+  appKeyExistingSecret: datadog-secret
+```
+
+3. Install or upgrade the Datadog Helm chart with the new `datadog-values.yaml` file:
+
+```bash
+helm install -f datadog-values.yaml <RELEASE_NAME> datadog/datadog
+```
+
+OR
+
+```bash
+helm upgrade -f datadog-values.yaml <RELEASE_NAME> datadog/datadog
+```
+
+See the [All configuration options](#all-configuration-options) section to discover all configuration possibilities in the Datadog chart.
+
+### Configuring Dogstatsd in the agent
+<a name="dsd-config"></a>
+The agent will start a server running Dogstatsd in order to process custom metrics sent from your applications. Check out the [official documentation on Dogstatsd](https://docs.datadoghq.com/developers/dogstatsd/?tab=hostagent) for more details. 
+
+By default the agent will create a unix domain socket to process the datagrams (not supported on Windows, see [below](#windows-config)).
+
+To disable the socket in favor of the hostPort, use the following configuration:
+
+```yaml
+datadog:
+  #(...)
+  dogstatsd:
+    useSocketVolume: false
+    useHostPort: true
+```
+
+### Enabling APM and Tracing
+
+APM is enabled by default using a socket for communication in the out-of-the-box [values.yaml](values.yaml) file; more details about application configuration are available on the [official documentation](https://docs.datadoghq.com/agent/kubernetes/apm/?tab=helm).
+Update your `datadog-values.yaml` file with the following configration to enable TCP communication using a `hostPort`:
+
+```yaml
+datadog:
+  # (...)
+  apm:
+    portEnabled: true
+```
+
+To disable APM, set `socketEnabled` to `false` in your `datadog-values.yaml` file (`portEnabled` is `false` by default):
+
+```yaml
+datadog:
+  # (...)
+  apm:
+    socketEnabled: false
+```
+
+### Enabling Log Collection
+
+Update your `datadog-values.yaml` file with the following log collection configuration:
+
+```yaml
+datadog:
+  # (...)
+  logs:
+    enabled: true
+    containerCollectAll: true
+```
+
+then upgrade your Datadog Helm chart:
+
+```bash
+helm upgrade -f datadog-values.yaml <RELEASE_NAME> datadog/datadog
+```
+
+### Enabling Process Collection
+
+Update your `datadog-values.yaml` file with the process collection configuration:
+
+```yaml
+datadog:
+  # (...)
+  processAgent:
+    enabled: true
+    processCollection: true
+```
+
+then upgrade your Datadog Helm chart:
+
+```bash
+helm upgrade -f datadog-values.yaml <RELEASE_NAME> datadog/datadog
+```
+
+### Enabling System Probe Collection
+
+The system-probe agent only runs in dedicated container environment. Update your `datadog-values.yaml` file with the system-probe collection configuration:
+
+```yaml
+datadog:
+  # (...)
+  systemProbe:
+    # (...)
+    enabled: true
+
+# (...)
+```
+
+then upgrade your Datadog Helm chart:
+
+```bash
+helm upgrade -f datadog-values.yaml <RELEASE_NAME> datadog/datadog
+```
+
+### Kubernetes event collection
+
+Use the [Datadog Cluster Agent](#enabling-the-datadog-cluster-agent) to collect Kubernetes events. Please read [the official documentation](https://docs.datadoghq.com/agent/kubernetes/event_collection/) for more context.
+
+Alternatively set the `datadog.leaderElection`, `datadog.collectEvents` and `rbac.create` options to `true` in order to enable Kubernetes event collection.
+
+### conf.d and checks.d
+
+The Datadog [entrypoint](https://github.com/DataDog/datadog-agent/blob/main/Dockerfiles/agent/entrypoint/89-copy-customfiles.sh) copies files with a `.yaml` extension found in `/conf.d` and files with `.py` extension in `/checks.d` to `/etc/datadog-agent/conf.d` and `/etc/datadog-agent/checks.d` respectively.
+
+The keys for `datadog.confd` and `datadog.checksd` should mirror the content found in their respective ConfigMaps. Update your `datadog-values.yaml` file with the check configurations:
+
+```yaml
+datadog:
+  confd:
+    redisdb.yaml: |-
+      ad_identifiers:
+        - redis
+        - bitnami/redis
+      init_config:
+      instances:
+        - host: "%%host%%"
+          port: "%%port%%"
+    jmx.yaml: |-
+      ad_identifiers:
+        - openjdk
+      instance_config:
+      instances:
+        - host: "%%host%%"
+          port: "%%port_0%%"
+    redisdb.yaml: |-
+      init_config:
+      instances:
+        - host: "outside-k8s.example.com"
+          port: 6379
+```
+
+then upgrade your Datadog Helm chart:
+
+```bash
+helm upgrade -f datadog-values.yaml <RELEASE_NAME> datadog/datadog
+```
+
+For more details, please refer to [the documentation](https://docs.datadoghq.com/agent/kubernetes/integrations/).
+
+### Kubernetes Labels and Annotations
+
+To map Kubernetes node labels and pod labels and annotations to Datadog tags, provide a dictionary with kubernetes labels/annotations as keys and Datadog tags key as values in your `datadog-values.yaml` file:
+
+```yaml
+nodeLabelsAsTags:
+  beta.kubernetes.io/instance-type: aws_instance_type
+  kubernetes.io/role: kube_role
+```
+
+```yaml
+podAnnotationsAsTags:
+  iam.amazonaws.com/role: kube_iamrole
+```
+
+```yaml
+podLabelsAsTags:
+  app: kube_app
+  release: helm_release
+```
+
+then upgrade your Datadog Helm chart:
+
+```bash
+helm upgrade -f datadog-values.yaml <RELEASE_NAME> datadog/datadog
+```
+
+### CRI integration
+
+As of the version 6.6.0, the Datadog Agent supports collecting metrics from any container runtime interface used in your cluster. Configure the location path of the socket with `datadog.criSocketPath`; default is the Docker container runtime socket. To deactivate this support, you just need to unset the `datadog.criSocketPath` setting.
+Standard paths are:
+
+- Docker socket: `/var/run/docker.sock`
+- Containerd socket: `/var/run/containerd/containerd.sock`
+- Cri-o socket: `/var/run/crio/crio.sock`
+
+### Configuration required for Amazon Linux 2 based nodes
+
+Amazon Linux 2 does not support apparmor profile enforcement.
+Amazon Linux 2 is the default operating system for AWS Elastic Kubernetes Service (EKS) based clusters.
+Update your `datadog-values.yaml` file to disable apparmor enforcement:
+
+```yaml
+agents:
+  # (...)
+  podSecurity:
+    # (...)
+    apparmor:
+      # (...)
+      enabled: false
+
+# (...)
+```
+
+## All configuration options
+
+The following table lists the configurable parameters of the Datadog chart and their default values. Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`. For example,
+
+```bash
+helm install --name <RELEASE_NAME> \
+  --set datadog.apiKey=<DATADOG_API_KEY>,datadog.logLevel=DEBUG \
+  datadog/datadog
+```
+
+{{ template "chart.valuesSection" . }}
+
+## Configuration options for Windows deployments
+<a name="windows-config"></a>
+Some options above are not working/not available on Windows, here is the list of **unsupported** options:
+
+| Parameter                                | Reason                                           |
+|------------------------------------------|--------------------------------------------------|
+| `datadog.dogstatsd.useHostPID`           | Host PID not supported by Windows Containers     |
+| `datadog.dogstatsd.useSocketVolume`      | Unix sockets not supported on Windows            |
+| `datadog.dogstatsd.socketPath`           | Unix sockets not supported on Windows            |
+| `datadog.processAgent.processCollection` | Unable to access host/other containers processes |
+| `datadog.systemProbe.seccomp`            | System probe is not available for Windows        |
+| `datadog.systemProbe.seccompRoot`        | System probe is not available for Windows        |
+| `datadog.systemProbe.debugPort`          | System probe is not available for Windows        |
+| `datadog.systemProbe.enableConntrack`    | System probe is not available for Windows        |
+| `datadog.systemProbe.bpfDebug`           | System probe is not available for Windows        |
+| `datadog.systemProbe.apparmor`           | System probe is not available for Windows        |
+| `agents.useHostNetwork`                  | Host network not supported by Windows Containers |
+
+### How to join a Cluster Agent from another helm chart deployment (Linux)
+
+Because the Cluster Agent can only be deployed on Linux Node, the communication between
+the Agents deployed on the Windows nodes with the a Cluster Agent need to be configured.
+
+The following `datadog-values.yaml` file contains all the parameters needed to configure this communication.
+
+```yaml
+targetSystem: windows
+
+existingClusterAgent:
+  join: true
+  serviceName: "<EXISTING_DCA_SECRET_NAME>" # from the other datadog helm chart release
+  tokenSecretName: "<EXISTING_DCA_SERVICE_NAME>" # from the other datadog helm chart release
+
+# Disabled datadogMetrics deployment since it should have been already deployed with the other chart release.
+datadog-crds:
+  crds:
+    datadogMetrics: false
+
+# Disable kube-state-metrics deployment
+datadog:
+  kubeStateMetricsEnabled: false
+```

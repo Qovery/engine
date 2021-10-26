@@ -1,0 +1,44 @@
+{{- if eq (include "need-cluster-agent-confd" .) "true" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "datadog.fullname" . }}-cluster-agent-confd
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+  annotations:
+    checksum/confd-config: {{ tpl (toYaml .Values.clusterAgent.confd) . | sha256sum }}
+data:
+{{- if .Values.clusterAgent.confd }}
+{{ tpl (toYaml .Values.clusterAgent.confd) . | indent 2 }}
+{{- end }}
+{{- if .Values.datadog.kubeStateMetricsCore.enabled }}
+  kubernetes_state_core.yaml.default: |-
+    init_config:
+    instances:
+      - collectors:
+{{- if .Values.datadog.kubeStateMetricsCore.collectSecretMetrics }}
+        - secrets
+{{- end }}
+        - nodes
+        - pods
+        - services
+        - resourcequotas
+        - replicationcontrollers
+        - limitranges
+        - persistentvolumeclaims
+        - persistentvolumes
+        - namespaces
+        - endpoints
+        - daemonsets
+        - deployments
+        - replicasets
+        - statefulsets
+        - cronjobs
+        - jobs
+        - horizontalpodautoscalers
+        - poddisruptionbudgets
+        - storageclasses
+        - volumeattachments
+{{- end }}
+{{- end -}}
