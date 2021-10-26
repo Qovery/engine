@@ -306,7 +306,7 @@ function deploy_engines_infra() { ## Release GA to prod
   --set image.tag="$tag",\
 environmentVariables.QOVERY_NATS_URL="tls://nats-internal.qovery.io:4222",\
 environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_USER",\
-environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_PASSWORD",\
+environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_ENGINE_NATS_INTERNAL_PASSWORD_ENGINE",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
