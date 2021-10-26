@@ -1,0 +1,11 @@
+dependencies:
+  - name: datadog-crds
+    version: "=0.3.2"
+    repository: https://helm.datadoghq.com
+    condition: clusterAgent.metricsProvider.useDatadogMetrics
+    tags:
+    - install-crds
+  - name: kube-state-metrics
+    version: "=2.13.2"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: datadog.kubeStateMetricsEnabled

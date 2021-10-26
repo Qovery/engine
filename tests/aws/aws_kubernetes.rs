@@ -37,6 +37,7 @@ fn create_upgrade_and_destroy_eks_cluster(
         let kubernetes = EKS::new(
             context.clone(),
             generate_cluster_id(region).as_str(),
+            uuid::Uuid::new_v4(),
             generate_cluster_id(region).as_str(),
             boot_version,
             region,
@@ -60,6 +61,7 @@ fn create_upgrade_and_destroy_eks_cluster(
         let kubernetes = EKS::new(
             context,
             generate_cluster_id(region).as_str(),
+            uuid::Uuid::new_v4(),
             generate_cluster_id(region).as_str(),
             upgrade_to_version,
             region,
@@ -120,6 +122,7 @@ fn create_and_destroy_eks_cluster(
         let kubernetes = EKS::new(
             context,
             generate_cluster_id(region).as_str(),
+            uuid::Uuid::new_v4(),
             generate_cluster_id(region).as_str(),
             test_utilities::aws::AWS_KUBERNETES_VERSION,
             region,

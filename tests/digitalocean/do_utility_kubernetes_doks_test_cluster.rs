@@ -37,6 +37,7 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
         let kubernetes = DOKS::new(
             context.clone(),
             test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_ID.to_string(),
+            uuid::Uuid::new_v4(),
             test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
             test_utilities::digitalocean::DO_KUBERNETES_VERSION.to_string(),
             test_utilities::digitalocean::DO_TEST_REGION,
@@ -92,6 +93,7 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
         let kubernetes = DOKS::new(
             context.clone(),
             test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_ID.to_string(),
+            uuid::Uuid::new_v4(),
             test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
             test_utilities::digitalocean::DO_KUBERNETES_VERSION.to_string(),
             test_utilities::digitalocean::DO_TEST_REGION,
