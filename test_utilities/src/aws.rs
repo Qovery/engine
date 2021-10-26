@@ -74,6 +74,7 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
         context.clone(),
         "u8nb94c7fwxzr2jt",
         AWS_QOVERY_ORGANIZATION_ID,
+        uuid::Uuid::new_v4(),
         "QoveryTest",
         secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
         secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
@@ -163,6 +164,8 @@ pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
         qovery_nats_user: secrets.QOVERY_NATS_USERNAME.unwrap(),
         qovery_nats_password: secrets.QOVERY_NATS_PASSWORD.unwrap(),
         tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
+        qovery_grpc_url: secrets.QOVERY_GRPC_URL.unwrap(),
+        qovery_cluster_secret_token: secrets.QOVERY_CLUSTER_SECRET_TOKEN.unwrap(),
     }
 }
 
@@ -176,6 +179,7 @@ pub fn aws_kubernetes_eks<'a>(
     EKS::<'a>::new(
         context.clone(),
         AWS_KUBE_TEST_CLUSTER_ID,
+        uuid::Uuid::new_v4(),
         AWS_KUBE_TEST_CLUSTER_ID,
         AWS_KUBERNETES_VERSION,
         secrets.clone().AWS_DEFAULT_REGION.unwrap().as_str(),
