@@ -34,6 +34,10 @@ pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<Str
     let v12 = generate_supported_version(12, 2, 6, Some(0), Some(0), None);
     supported_postgres_versions.extend(v12);
 
+    // v13
+    let v13 = generate_supported_version(13, 1, 4, Some(0), Some(0), None);
+    supported_postgres_versions.extend(v13);
+
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
 
