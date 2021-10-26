@@ -31,7 +31,7 @@ pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<Str
     supported_postgres_versions.extend(v11);
 
     // v12
-    let v12 = generate_supported_version(12, 2, 6, Some(0), Some(0), None);
+    let v12 = generate_supported_version(12, 2, 8, Some(0), Some(0), None);
     supported_postgres_versions.extend(v12);
 
     // v13
@@ -46,11 +46,11 @@ pub fn get_self_hosted_mysql_version(requested_version: String) -> Result<String
     // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
 
     // v5.7
-    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(33), None);
+    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(34), None);
     supported_mysql_versions.extend(v57);
 
     // v8
-    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(23), None);
+    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(24), None);
     supported_mysql_versions.extend(v8);
 
     get_supported_version_to_use("MySQL", supported_mysql_versions, requested_version)
