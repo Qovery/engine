@@ -395,7 +395,8 @@ fn get_managed_mysql_version(requested_version: String) -> Result<String, String
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
 
     // v5.7
-    let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(31), None);
+    let mut v57 = generate_supported_version(5, 7, 7, Some(16), Some(34), None);
+    v57.remove("5.7.32");
     v57.remove("5.7.29");
     v57.remove("5.7.27");
     v57.remove("5.7.20");
@@ -403,7 +404,9 @@ fn get_managed_mysql_version(requested_version: String) -> Result<String, String
     supported_mysql_versions.extend(v57);
 
     // v8
-    let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(21), None);
+    let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(25), None);
+    v8.remove("8.0.24");
+    v8.remove("8.0.22");
     v8.remove("8.0.18");
     v8.remove("8.0.14");
     v8.remove("8.0.12");
@@ -421,16 +424,16 @@ mod tests_mysql {
     #[test]
     fn check_mysql_version() {
         // managed version
-        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.21");
-        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.21");
+        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.25");
+        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.25");
         assert_eq!(get_mysql_version("8.0.16".to_string(), true).unwrap(), "8.0.16");
         assert_eq!(
             get_mysql_version("8.0.18".to_string(), true).unwrap_err().as_str(),
             "RDS MySQL 8.0.18 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_mysql_version("5".to_string(), false).unwrap(), "5.7.33");
-        assert_eq!(get_mysql_version("5.7".to_string(), false).unwrap(), "5.7.33");
+        assert_eq!(get_mysql_version("5".to_string(), false).unwrap(), "5.7.34");
+        assert_eq!(get_mysql_version("5.7".to_string(), false).unwrap(), "5.7.34");
         assert_eq!(get_mysql_version("5.7.31".to_string(), false).unwrap(), "5.7.31");
         assert_eq!(
             get_mysql_version("1.0".to_string(), false).unwrap_err().as_str(),
