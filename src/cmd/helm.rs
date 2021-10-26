@@ -108,6 +108,7 @@ where
     P: AsRef<Path>,
 {
     let debug = false;
+    let timeout_string = format!("{}s", &chart.timeout_in_seconds);
 
     let mut args_string: Vec<String> = vec![
         "upgrade",
@@ -115,6 +116,8 @@ where
         kubernetes_config.as_ref().to_str().unwrap(),
         "--create-namespace",
         "--install",
+        "--timeout",
+        timeout_string.as_str(),
         "--history-max",
         "50",
         "--namespace",
@@ -210,6 +213,20 @@ where
                         error_message = format!("deployment {} has been uninstalled due to failure", chart.name);
                         helm_error_during_deployment.message = Some(error_message.clone());
                         warn!("{}. {}", &error_message, &line);
+                    } else if line.contains("another operation (install/upgrade/rollback) is in progress") {
+                        error_message = format!("helm lock detected for {}, looking for cleaning lock", chart.name);
+                        helm_error_during_deployment.message = Some(error_message.clone());
+                        warn!("{}. {}", &error_message, &line);
+                        match clean_helm_lock(
+                            &kubernetes_config,
+                            get_chart_namespace(chart.namespace).as_str(),
+                            &chart.name,
+                            chart.timeout_in_seconds,
+                            envs.clone(),
+                        ) {
+                            Ok(_) => info!("Helm lock detected and cleaned"),
+                            Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
+                        }
                     // special fix for prometheus operator
                     } else if line.contains("info: skipping unknown hook: \"crd-install\"") {
                         debug!("chart {}: {}", chart.name, line);

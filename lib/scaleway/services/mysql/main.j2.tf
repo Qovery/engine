@@ -13,25 +13,30 @@ locals {
   tags_mysql_list = [for i, v in local.tags_mysql : "${i}=${v}"] # NOTE: Scaleway doesn't support KV style tags
 }
 
+{%- if publicly_accessible != false %}
 resource "scaleway_rdb_acl" "main" {
   instance_id = scaleway_rdb_instance.mysql_instance.id
-{%- if publicly_accessible %}
-  # By default, all IPs are authorized => 0.0.0.0/0
-  acl_rules {
-    ip = "0.0.0.0/0"
-    description = "accessible from any host"
-  }
-{%- else %}
   # TODO(benjaminch): Allow only Scaleway's private traffic
   acl_rules {
     ip = "0.0.0.0/0"
     description = "accessible from any host"
   }
-{% endif %}
   depends_on = [
     scaleway_rdb_instance.mysql_instance
   ]
 }
+{% else %}
+  resource "scaleway_rdb_acl" "main" {
+  instance_id = scaleway_rdb_instance.mysql_instance.id
+  acl_rules {
+    ip = "0.0.0.0/0"
+    description = "accessible from any host"
+  }
+  depends_on = [
+    scaleway_rdb_instance.mysql_instance
+  ]
+}
+{% endif %}
 
 resource "scaleway_rdb_instance" "mysql_instance" {
   name              = var.database_name

@@ -1,0 +1,30 @@
+{{- define "daemonset-volumes-windows" -}}
+{{- if .Values.datadog.kubelet.hostCAPath }}
+- hostPath:
+    path: {{ dir .Values.datadog.kubelet.hostCAPath }}
+    type: Directory
+  name: kubelet-ca
+{{- end }}
+{{- if or .Values.datadog.logs.enabled .Values.datadog.logsEnabled }}
+- hostPath:
+    path: C:/var/log
+  name: pointerdir
+- hostPath:
+    path: C:/var/log/pods
+  name: logpodpath
+- hostPath:
+    path: C:/ProgramData
+  name: logdockercontainerpath
+{{- end }}
+- hostPath:
+    path: {{ template "datadog.dockerOrCriSocketPath" . }}
+  name: runtimesocket
+{{- if not .Values.datadog.criSocketPath }}
+# if the CRI or is not provived we should try to mount the default containerd pipe.
+# by default "datadog.dockerOrCriSocketPath" mount the docker pipe.
+# so with this additional hostPath, by default both are mounted.
+- hostPath:
+    path: \\.\pipe\containerd-containerd
+  name: containerdsocket
+{{- end }}
+{{- end -}}

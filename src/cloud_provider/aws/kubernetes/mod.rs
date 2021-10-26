@@ -24,7 +24,8 @@ use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::{
-    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_scale_replicas, ScalingKind,
+    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
+    kubectl_exec_scale_replicas, ScalingKind,
 };
 use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
@@ -90,6 +91,8 @@ pub struct Options {
     pub elasticsearch_cidr_subnet: String,
     // Qovery
     pub qovery_api_url: String,
+    pub qovery_grpc_url: String,
+    pub qovery_cluster_secret_token: String,
     pub qovery_engine_location: Option<EngineLocation>,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
@@ -107,6 +110,7 @@ pub struct Options {
 pub struct EKS<'a> {
     context: Context,
     id: String,
+    long_id: uuid::Uuid,
     name: String,
     version: String,
     region: Region,
@@ -123,6 +127,7 @@ impl<'a> EKS<'a> {
     pub fn new(
         context: Context,
         id: &str,
+        long_id: uuid::Uuid,
         name: &str,
         version: &str,
         region: &str,
@@ -145,6 +150,7 @@ impl<'a> EKS<'a> {
         EKS {
             context,
             id: id.to_string(),
+            long_id,
             name: name.to_string(),
             version: version.to_string(),
             region: Region::from_str(region).unwrap(),
@@ -160,7 +166,7 @@ impl<'a> EKS<'a> {
 
     fn get_engine_location(&self) -> EngineLocation {
         match self.options.qovery_engine_location.clone() {
-            None => EngineLocation::ClientSide,
+            None => EngineLocation::QoverySide,
             Some(x) => x,
         }
     }
@@ -910,8 +916,10 @@ impl<'a> Kubernetes for EKS<'a> {
             .collect();
         let charts_prerequisites = ChartsConfigPrerequisites {
             organization_id: self.cloud_provider.organization_id().to_string(),
+            organization_long_id: self.cloud_provider.organization_long_id,
             infra_options: self.options.clone(),
             cluster_id: self.id.clone(),
+            cluster_long_id: self.long_id,
             region: self.region().to_string(),
             cluster_name: self.cluster_name().to_string(),
             cloud_provider: "aws".to_string(),
@@ -958,7 +966,20 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {
+        let kubeconfig_file = match self.config_file() {
+            Ok(x) => x.0,
+            Err(e) => {
+                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
+                return Err(e);
+            }
+        };
+        let kubeconfig = PathBuf::from(&kubeconfig_file);
+        let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
         warn!("EKS.on_create_error() called for {}", self.name());
+        match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
+            Ok(_x) => (),
+            Err(_e) => (),
+        };
         Err(self.engine_error(
             EngineErrorCause::Internal,
             format!("{} Kubernetes cluster failed on deployment", self.name()),

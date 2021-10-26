@@ -34,6 +34,10 @@ pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<Str
     let v12 = generate_supported_version(12, 2, 6, Some(0), Some(0), None);
     supported_postgres_versions.extend(v12);
 
+    // v13
+    let v13 = generate_supported_version(13, 1, 4, Some(0), Some(0), None);
+    supported_postgres_versions.extend(v13);
+
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
 
@@ -493,6 +497,15 @@ pub fn check_domain_for(
 
 pub fn sanitize_name(prefix: &str, name: &str) -> String {
     format!("{}-{}", prefix, name).replace("_", "-")
+}
+
+pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
+    let max_size = max_size - prefix.len();
+    let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
+    if new_name.chars().count() > max_size {
+        new_name = new_name[..max_size].to_string();
+    }
+    new_name
 }
 
 pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, ParseFloatError> {

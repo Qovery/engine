@@ -40,12 +40,12 @@ image:
 ## String to partially override mongodb.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: {{ sanitized_name }}
+nameOverride: '{{ sanitized_name }}'
 
 ## String to fully override mongodb.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: {{ sanitized_name }}
+fullnameOverride: '{{ sanitized_name }}'
 
 serviceAccount:
   # Specifies whether a ServiceAccount should be created
@@ -88,14 +88,14 @@ usePassword: true
 ## MongoDB admin password
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#setting-the-root-password-on-first-run
 ##
-mongodbRootPassword: {{ database_password }}
+mongodbRootPassword: '{{ database_password }}'
 
 ## MongoDB custom user and database
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#creating-a-user-and-database-on-first-run
 ##
-mongodbUsername: {{ database_login }}
-mongodbPassword: {{ database_password }}
-mongodbDatabase: {{ database_db_name }}
+mongodbUsername: '{{ database_login }}'
+mongodbPassword: '{{ database_password }}'
+mongodbDatabase: '{{ database_db_name }}'
 
 ## Whether enable/disable IPv6 on MongoDB
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#enabling/disabling-ipv6
@@ -212,7 +212,7 @@ labels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: {{ sanitized_name }}
+  databaseName: '{{ sanitized_name }}'
 
 # Annotations to be added to MongoDB pods
 podAnnotations: {}
@@ -350,7 +350,7 @@ persistence:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: {{ sanitized_name }}
+    databaseName: '{{ sanitized_name }}'
     # volume.beta.kubernetes.io/storage-class=scw-sbv-ssd-0:
 
 ## Configure the ingress resource that allows you to access the

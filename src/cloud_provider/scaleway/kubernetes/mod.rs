@@ -41,6 +41,8 @@ use tera::Context as TeraContext;
 pub struct KapsuleOptions {
     // Qovery
     pub qovery_api_url: String,
+    pub qovery_grpc_url: String,
+    pub qovery_cluster_secret_token: String,
     pub qovery_nats_url: String,
     pub qovery_nats_user: String,
     pub qovery_nats_password: String,
@@ -63,6 +65,8 @@ pub struct KapsuleOptions {
 impl KapsuleOptions {
     pub fn new(
         qovery_api_url: String,
+        qovery_grpc_url: String,
+        qovery_cluster_secret_token: String,
         qovery_nats_url: String,
         qovery_nats_user: String,
         qovery_nats_password: String,
@@ -79,6 +83,8 @@ impl KapsuleOptions {
     ) -> KapsuleOptions {
         KapsuleOptions {
             qovery_api_url,
+            qovery_grpc_url,
+            qovery_cluster_secret_token,
             qovery_nats_url,
             qovery_nats_user,
             qovery_nats_password,
@@ -99,6 +105,7 @@ impl KapsuleOptions {
 pub struct Kapsule<'a> {
     context: Context,
     id: String,
+    long_id: uuid::Uuid,
     name: String,
     version: String,
     zone: Zone,
@@ -115,6 +122,7 @@ impl<'a> Kapsule<'a> {
     pub fn new(
         context: Context,
         id: String,
+        long_id: uuid::Uuid,
         name: String,
         version: String,
         zone: Zone,
@@ -139,6 +147,7 @@ impl<'a> Kapsule<'a> {
         Kapsule {
             context,
             id,
+            long_id,
             name,
             version,
             zone,
@@ -362,7 +371,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn region(&self) -> &str {
-        self.zone.as_str()
+        self.zone.region_str()
     }
 
     fn zone(&self) -> &str {
@@ -539,7 +548,9 @@ impl<'a> Kubernetes for Kapsule<'a> {
 
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
+            self.cloud_provider.organization_long_id,
             self.id().to_string(),
+            self.long_id,
             self.zone,
             self.cluster_name(),
             "scw".to_string(),

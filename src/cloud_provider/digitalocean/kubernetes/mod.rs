@@ -58,6 +58,8 @@ pub struct DoksOptions {
     pub vpc_cidr_set: VpcInitKind,
     // Qovery
     pub qovery_api_url: String,
+    pub qovery_grpc_url: String,
+    pub qovery_cluster_secret_token: String,
     pub qovery_engine_location: Option<EngineLocation>,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
@@ -75,6 +77,7 @@ pub struct DoksOptions {
 pub struct DOKS<'a> {
     context: Context,
     id: String,
+    long_id: uuid::Uuid,
     name: String,
     version: String,
     region: Region,
@@ -91,6 +94,7 @@ impl<'a> DOKS<'a> {
     pub fn new(
         context: Context,
         id: String,
+        long_id: uuid::Uuid,
         name: String,
         version: String,
         region: Region,
@@ -113,6 +117,7 @@ impl<'a> DOKS<'a> {
         DOKS {
             context,
             id,
+            long_id,
             name,
             version,
             region,
@@ -659,8 +664,10 @@ impl<'a> Kubernetes for DOKS<'a> {
 
         let charts_prerequisites = ChartsConfigPrerequisites {
             organization_id: self.cloud_provider.organization_id().to_string(),
+            organization_long_id: self.cloud_provider.organization_long_id,
             infra_options: self.options.clone(),
             cluster_id: self.id.clone(),
+            cluster_long_id: self.long_id,
             do_cluster_id: doks_id,
             region: self.region().to_string(),
             cluster_name: self.cluster_name().to_string(),

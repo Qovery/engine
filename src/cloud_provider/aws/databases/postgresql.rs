@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::databases::utilities::rds_name_sanitizer;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
@@ -11,6 +10,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use,
+    managed_db_name_sanitizer,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -97,7 +97,7 @@ impl Service for PostgreSQL {
         // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
         let prefix = "postgresql";
         let max_size = 63 - 3; // max RDS - k8s statefulset chars
-        rds_name_sanitizer(max_size, prefix, self.name())
+        managed_db_name_sanitizer(max_size, prefix, self.name())
     }
 
     fn version(&self) -> String {
@@ -398,6 +398,10 @@ fn get_managed_postgres_version(requested_version: String) -> Result<String, Str
     // v12
     let v12 = generate_supported_version(12, 2, 8, None, None, None);
     supported_postgres_versions.extend(v12);
+
+    // v13
+    let v13 = generate_supported_version(13, 1, 4, None, None, None);
+    supported_postgres_versions.extend(v13);
 
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }

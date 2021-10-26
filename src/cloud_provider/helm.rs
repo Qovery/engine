@@ -57,7 +57,7 @@ pub struct ChartInfo {
     pub atomic: bool,
     pub force_upgrade: bool,
     pub last_breaking_version_requiring_restart: Option<Version>,
-    pub timeout: String,
+    pub timeout_in_seconds: i64,
     pub dry_run: bool,
     pub wait: bool,
     pub values: Vec<ChartSetValue>,
@@ -75,7 +75,7 @@ impl Default for ChartInfo {
             atomic: true,
             force_upgrade: false,
             last_breaking_version_requiring_restart: None,
-            timeout: "180s".to_string(),
+            timeout_in_seconds: 180,
             dry_run: false,
             wait: true,
             values: Vec::new(),
@@ -214,7 +214,7 @@ pub trait HelmChart: Send {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         kubectl_exec_get_events(
             kubernetes_config,
-            get_chart_namespace(self.get_chart_info().namespace).as_str(),
+            Some(get_chart_namespace(self.get_chart_info().namespace).as_str()),
             environment_variables,
         )?;
         Ok(payload)

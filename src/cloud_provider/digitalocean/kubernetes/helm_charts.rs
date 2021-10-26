@@ -22,7 +22,9 @@ pub struct DigitalOceanQoveryTerraformConfig {
 
 pub struct ChartsConfigPrerequisites {
     pub organization_id: String,
+    pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
+    pub cluster_long_id: uuid::Uuid,
     pub do_cluster_id: String,
     pub region: String,
     pub cluster_name: String,
@@ -52,7 +54,9 @@ pub struct ChartsConfigPrerequisites {
 impl ChartsConfigPrerequisites {
     pub fn new(
         organization_id: String,
+        organization_long_id: uuid::Uuid,
         cluster_id: String,
+        cluster_long_id: uuid::Uuid,
         do_cluster_id: String,
         region: String,
         cluster_name: String,
@@ -79,7 +83,9 @@ impl ChartsConfigPrerequisites {
     ) -> Self {
         ChartsConfigPrerequisites {
             organization_id,
+            organization_long_id,
             cluster_id,
+            cluster_long_id,
             do_cluster_id,
             region,
             cluster_name,
@@ -322,7 +328,7 @@ pub fn do_helm_charts(
             namespace: prometheus_namespace,
             // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
             // to upgrade because of the CRD and the number of elements it has to deploy
-            timeout: "480".to_string(),
+            timeout_in_seconds: 480,
             values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
             values: vec![
                 ChartSetValue {
@@ -653,7 +659,7 @@ datasources:
             path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
-            timeout: "300".to_string(),
+            timeout_in_seconds: 300,
             values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
             values: vec![
                 // Controller resources limits
@@ -731,6 +737,22 @@ datasources:
             path: chart_path("common/charts/pleco"),
             values_files: vec![chart_path("chart_values/pleco.yaml")],
             values: vec![
+                ChartSetValue {
+                    key: "environmentVariables.DO_API_TOKEN".to_string(),
+                    value: chart_config_prerequisites.do_token.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DO_SPACES_KEY".to_string(),
+                    value: chart_config_prerequisites.do_space_access_id.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DO_SPACES_SECRET".to_string(),
+                    value: chart_config_prerequisites.do_space_secret_key.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DO_VOLUME_TIMEOUT".to_string(),
+                    value: 168.to_string(),
+                },
                 ChartSetValue {
                     key: "environmentVariables.PLECO_IDENTIFIER".to_string(),
                     value: chart_config_prerequisites.cluster_id.clone(),
@@ -813,6 +835,26 @@ datasources:
                     value: "1".to_string(),
                 },
                 ChartSetValue {
+                    key: "environmentVariables.GRPC_SERVER".to_string(),
+                    value: chart_config_prerequisites.infra_options.qovery_grpc_url.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_TOKEN".to_string(),
+                    value: chart_config_prerequisites
+                        .infra_options
+                        .qovery_cluster_secret_token
+                        .to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_ID".to_string(),
+                    value: chart_config_prerequisites.cluster_long_id.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
+                    value: chart_config_prerequisites.organization_long_id.to_string(),
+                },
+                // TODO: Remove those values after the migration
+                ChartSetValue {
                     key: "environmentVariables.NATS_HOST_URL".to_string(),
                     value: chart_config_prerequisites.infra_options.qovery_nats_url.to_string(),
                 },
@@ -828,20 +870,13 @@ datasources:
                         .to_string(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.LOKI_URL".to_string(),
-                    value: format!("http://{}.cluster.local:3100", loki_kube_dns_prefix),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLOUD_REGION".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLOUD_PROVIDER".to_string(),
-                    value: "do".to_string(),
-                },
-                ChartSetValue {
                     key: "environmentVariables.KUBERNETES_ID".to_string(),
                     value: chart_config_prerequisites.cluster_id.clone(),
+                },
+                // TODO: End of the todo
+                ChartSetValue {
+                    key: "environmentVariables.LOKI_URL".to_string(),
+                    value: format!("http://{}.cluster.local:3100", loki_kube_dns_prefix),
                 },
                 // resources limits
                 ChartSetValue {
@@ -894,7 +929,7 @@ datasources:
             action: get_engine_helm_action_from_location(&chart_config_prerequisites.qovery_engine_location),
             path: chart_path("common/charts/qovery-engine"),
             namespace: HelmChartNamespaces::Qovery,
-            timeout: "900".to_string(),
+            timeout_in_seconds: 900,
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),

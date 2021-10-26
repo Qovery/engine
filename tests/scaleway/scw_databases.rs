@@ -482,7 +482,7 @@ fn test_postgresql_configuration(
             secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
         );
         let database_port = 5432;
-        let database_db_name = "postgres".to_string();
+        let database_db_name = "postgresql".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_password(true);
 
@@ -620,10 +620,29 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
     test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER);
 }
 
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn postgresql_v13_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), CONTAINER);
+}
+
 // Postgres production environment
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
@@ -642,6 +661,7 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn postgresql_v11_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
@@ -660,6 +680,7 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn postgresql_v12_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
@@ -673,6 +694,25 @@ fn postgresql_v12_deploy_a_working_prod_environment() {
             .as_str(),
     );
     test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED);
+}
+
+#[cfg(feature = "test-scw-managed-services")]
+#[named]
+#[test]
+#[ignore]
+fn postgresql_v13_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = working_minimal_environment(
+        &context,
+        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), MANAGED);
 }
 
 /**
@@ -1020,6 +1060,7 @@ fn mysql_v8_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn mysql_v8_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
@@ -1066,7 +1107,7 @@ fn test_redis_configuration(
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password(true);
+        let database_password = generate_password(false);
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Redis,
@@ -1109,7 +1150,6 @@ fn test_redis_configuration(
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
-                    "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                     "REDIS_HOST".to_string()      => base64::encode(database_host.clone()),
                     "REDIS_PORT".to_string()      => base64::encode(database_port.clone().to_string()),
                     "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),
