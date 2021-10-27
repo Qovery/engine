@@ -173,6 +173,7 @@ fn create_and_destroy_doks_cluster_ams_3() {
     create_and_destroy_doks_cluster(region, secrets, false, function_name!());
 }
 
+#[cfg(feature = "test-do-infra")]
 #[test]
 #[ignore]
 #[allow(dead_code)]
@@ -182,4 +183,16 @@ fn create_upgrade_and_destroy_doks_cluster_in_nyc_3() {
     let region = Region::NewYorkCity3;
     let secrets = FuncTestsSecrets::new();
     create_upgrade_and_destroy_doks_cluster(region, secrets, "1.19", "1.20", function_name!());
+}
+
+#[cfg(feature = "test-do-infra")]
+#[test]
+#[ignore]
+#[allow(dead_code)]
+#[allow(unused_attributes)]
+#[named]
+fn create_pause_and_destroy_kapsule_cluster_ams_3() {
+    let zone = Region::Amsterdam3;
+    let secrets = FuncTestsSecrets::new();
+    create_and_destroy_doks_cluster(zone, secrets, true, function_name!());
 }

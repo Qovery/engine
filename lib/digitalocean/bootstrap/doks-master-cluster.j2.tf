@@ -10,6 +10,7 @@ resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
 
   tags = local.tags_ks_list
 
+{%- if doks_worker_nodes|length > 0 %}
   node_pool {
     tags = local.tags_ks_list
     name = var.kubernetes_cluster_id
@@ -19,4 +20,5 @@ resource "digitalocean_kubernetes_cluster" "kubernetes_cluster" {
     min_nodes  = "{{ doks_worker_nodes[0].min_size }}"
     max_nodes  = "{{ doks_worker_nodes[0].max_size }}"
   }
+{%- endif %}
 }
