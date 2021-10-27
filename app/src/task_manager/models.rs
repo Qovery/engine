@@ -7,7 +7,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::EKS;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::cloud_provider::scaleway::kubernetes::node::NodeType;
+use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::container_registry::docker_hub::DockerHub;
@@ -16,6 +16,7 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
+use qovery_engine::error::EngineError;
 use qovery_engine::models::{Context, Environment, EnvironmentAction, Features, Listener, Metadata};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -207,7 +208,7 @@ pub struct Kubernetes {
     pub version: String,
     pub region: String,
     pub options: Value,
-    pub nodes: Vec<Node>,
+    pub nodes_groups: Vec<NodeGroups>,
 }
 
 impl Kubernetes {
@@ -216,10 +217,9 @@ impl Kubernetes {
         context: &Context,
         cloud_provider: &'a dyn qovery_engine::cloud_provider::CloudProvider,
         dns_provider: &'a dyn qovery_engine::dns_provider::DnsProvider,
-        nodes: &[Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>],
-    ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a> {
+    ) -> Result<Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a>, EngineError> {
         match self.kind {
-            qovery_engine::cloud_provider::kubernetes::Kind::Eks => Box::new(EKS::new(
+            qovery_engine::cloud_provider::kubernetes::Kind::Eks => match EKS::new(
                 context.clone(),
                 self.id.as_str(),
                 self.long_id,
@@ -230,12 +230,12 @@ impl Kubernetes {
                 dns_provider,
                 serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
-                nodes
-                    .iter()
-                    .map(|x| qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(x.instance_type()))
-                    .collect::<Vec<_>>(),
-            )),
-            qovery_engine::cloud_provider::kubernetes::Kind::Doks => Box::new(DOKS::new(
+                self.nodes_groups.clone(),
+            ) {
+                Ok(res) => Ok(Box::new(res)),
+                Err(e) => Err(e),
+            },
+            qovery_engine::cloud_provider::kubernetes::Kind::Doks => match DOKS::new(
                 context.clone(),
                 self.id.clone(),
                 self.long_id,
@@ -245,18 +245,16 @@ impl Kubernetes {
                     .unwrap(),
                 cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
                 dns_provider,
-                nodes
-                    .iter()
-                    .map(|x| {
-                        qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(x.instance_type())
-                    })
-                    .collect::<Vec<_>>(),
+                self.nodes_groups.clone(),
                 serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions>(
                     self.options.clone(),
                 )
                 .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
-            )),
-            qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => Box::new(Kapsule::new(
+            ) {
+                Ok(res) => Ok(Box::new(res)),
+                Err(e) => Err(e),
+            },
+            qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => match Kapsule::new(
                 context.clone(),
                 self.id.clone(),
                 self.long_id,
@@ -271,60 +269,15 @@ impl Kubernetes {
                 ),
                 cloud_provider.as_any().downcast_ref::<Scaleway>().unwrap(),
                 dns_provider,
-                nodes
-                    .iter()
-                    .map(|x| {
-                        qovery_engine::cloud_provider::scaleway::kubernetes::node::Node::new(
-                            NodeType::from_str(x.instance_type()).unwrap(),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
+                self.nodes_groups.clone(),
                 serde_json::from_value::<qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions>(
                     self.options.clone(),
                 )
                 .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
-            )),
-        }
-    }
-
-    pub fn to_engine_kubernetes_nodes(
-        &self,
-    ) -> Vec<Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode>> {
-        self.nodes
-            .iter()
-            .map(|n| n.to_engine_kubernetes_node(self))
-            .collect::<Vec<_>>()
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Node {
-    pub instance_type: String,
-}
-
-impl Node {
-    pub fn to_engine_kubernetes_node(
-        &self,
-        kubernetes: &Kubernetes,
-    ) -> Box<dyn qovery_engine::cloud_provider::kubernetes::KubernetesNode> {
-        match kubernetes.kind {
-            qovery_engine::cloud_provider::kubernetes::Kind::Eks => Box::new(
-                qovery_engine::cloud_provider::aws::kubernetes::node::Node::new(&self.instance_type),
-            ),
-            qovery_engine::cloud_provider::kubernetes::Kind::Doks => {
-                Box::new(qovery_engine::cloud_provider::digitalocean::kubernetes::node::Node::new(&self.instance_type))
-            }
-            qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => {
-                Box::new(qovery_engine::cloud_provider::scaleway::kubernetes::node::Node::new(
-                    NodeType::from_str(&self.instance_type).expect(
-                        format!(
-                            "cannot parse `{}`, it doesn't seem to be a valid SCW node type",
-                            &self.instance_type
-                        )
-                        .as_str(),
-                    ),
-                ))
-            }
+            ) {
+                Ok(res) => Ok(Box::new(res)),
+                Err(e) => Err(e),
+            },
         }
     }
 }

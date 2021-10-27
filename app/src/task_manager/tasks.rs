@@ -139,13 +139,17 @@ impl Task for InfrastructureTask {
         };
 
         let mut tx = session.transaction();
-        let nodes = self.request.cloud_provider.kubernetes.to_engine_kubernetes_nodes();
-        let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
+        let kubernetes = match self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             engine.context(),
             engine.cloud_provider(),
             engine.dns_provider(),
-            nodes.borrow(),
-        );
+        ) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("{:?}", e.message);
+                panic!("Can't deploy infrastructure, please check json")
+            }
+        };
 
         let _ = match self.request.action {
             Action::Create => tx.create_kubernetes(kubernetes.borrow()),
@@ -315,14 +319,17 @@ impl Task for EnvironmentTask {
 
         let mut tx = session.transaction();
 
-        let nodes = self.request.cloud_provider.kubernetes.to_engine_kubernetes_nodes();
-
-        let kubernetes = self.request.cloud_provider.kubernetes.to_engine_kubernetes(
+        let kubernetes = match self.request.cloud_provider.kubernetes.to_engine_kubernetes(
             engine.context(),
             engine.cloud_provider(),
             engine.dns_provider(),
-            nodes.borrow(),
-        );
+        ) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("{:?}", e.message);
+                panic!("Can't deploy kubernetes environment, please check the request")
+            }
+        };
 
         let environment_action = match self.request.environment_action() {
             None => {
