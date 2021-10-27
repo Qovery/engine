@@ -547,10 +547,8 @@ fn test_postgresql_configuration(
                         svc.items
                             .expect("No items in svc")
                             .into_iter()
-                            .filter(
-                                |svc| svc.metadata.name.contains("postgresqlpostgres") & &svc.spec.svc_type
-                                    == "LoadBalancer"
-                            )
+                            .filter(|svc| svc.metadata.name.contains("postgresqlpostgres")
+                                && &svc.spec.svc_type == "LoadBalancer")
                             .collect::<Vec<SVCItem>>()
                             .len(),
                         match is_public {
@@ -956,10 +954,8 @@ fn test_mongodb_configuration(
                         svc.items
                             .expect("No items in svc")
                             .into_iter()
-                            .filter(
-                                |svc| svc.metadata.name.contains("mongodbmymongodb") & &svc.spec.svc_type
-                                    == "LoadBalancer"
-                            )
+                            .filter(|svc| svc.metadata.name.contains("mongodbmymongodb")
+                                && &svc.spec.svc_type == "LoadBalancer")
                             .collect::<Vec<SVCItem>>()
                             .len(),
                         match is_public {
@@ -1688,10 +1684,8 @@ fn test_redis_configuration(
                         svc.items
                             .expect("No items in svc")
                             .into_iter()
-                            .filter(
-                                |svc| svc.metadata.name.contains("redismyredis-master") & &svc.spec.svc_type
-                                    == "LoadBalancer"
-                            )
+                            .filter(|svc| svc.metadata.name.contains("redismyredis-master")
+                                && &svc.spec.svc_type == "LoadBalancer")
                             .collect::<Vec<SVCItem>>()
                             .len(),
                         match is_public {

@@ -1022,10 +1022,8 @@ fn test_mongodb_configuration(
                         svc.items
                             .expect("No items in svc")
                             .into_iter()
-                            .filter(
-                                |svc| svc.metadata.name.contains("mongodbmymongodb") & &svc.spec.svc_type
-                                    == "LoadBalancer"
-                            )
+                            .filter(|svc| svc.metadata.name.contains("mongodbmymongodb")
+                                && &svc.spec.svc_type == "LoadBalancer")
                             .collect::<Vec<SVCItem>>()
                             .len(),
                         match is_public {
@@ -1368,10 +1366,8 @@ fn test_mysql_configuration(
                         svc.items
                             .expect("No items in svc")
                             .into_iter()
-                            .filter(
-                                |svc| svc.metadata.name.contains("mysqlmysqldatabase") & &svc.spec.svc_type
-                                    == "LoadBalancer"
-                            )
+                            .filter(|svc| svc.metadata.name.contains("mysqlmysqldatabase")
+                                && &svc.spec.svc_type == "LoadBalancer")
                             .collect::<Vec<SVCItem>>()
                             .len(),
                         match is_public {
@@ -1683,8 +1679,7 @@ fn test_redis_configuration(
                             .into_iter()
                             .filter(|svc| {
                                 svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
-                                    & &svc.spec.svc_type
-                                    == "ExternalName"
+                                    && &svc.spec.svc_type == "ExternalName"
                             })
                             .collect::<Vec<SVCItem>>();
                         let annotations = &service[0].metadata.annotations;
