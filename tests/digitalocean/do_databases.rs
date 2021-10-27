@@ -492,12 +492,18 @@ fn test_postgresql_configuration(
                 generate_id(),
                 secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
             ),
-            false => {
-                format!(
+            false => match database_mode {
+                CONTAINER => format!(
                     "postgresqlpostgres.{}-{}.svc.cluster.local",
                     environment.project_id, environment.id
-                )
-            }
+                ),
+                MANAGED => format!(
+                    "{}-dns.{}-{}.svc.cluster.local",
+                    app_id.clone(),
+                    environment.project_id,
+                    environment.id
+                ),
+            },
         };
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
@@ -790,12 +796,18 @@ fn test_mongodb_configuration(
                 generate_id(),
                 secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
             ),
-            false => {
-                format!(
+            false => match database_mode {
+                CONTAINER => format!(
                     "mongodbmymongodb.{}-{}.svc.cluster.local",
                     environment.project_id, environment.id
-                )
-            }
+                ),
+                MANAGED => format!(
+                    "{}-dns.{}-{}.svc.cluster.local",
+                    app_id.clone(),
+                    environment.project_id,
+                    environment.id
+                ),
+            },
         };
         let database_port = 27017;
         let database_db_name = "my-mongodb".to_string();
@@ -1136,12 +1148,18 @@ fn test_mysql_configuration(
                 generate_id(),
                 secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
             ),
-            false => {
-                format!(
+            false => match database_mode {
+                CONTAINER => format!(
                     "mysqlmysqldatabase.{}-{}.svc.cluster.local",
                     environment.project_id, environment.id
-                )
-            }
+                ),
+                MANAGED => format!(
+                    "{}-dns.{}-{}.svc.cluster.local",
+                    app_id.clone(),
+                    environment.project_id,
+                    environment.id
+                ),
+            },
         };
 
         let database_port = 3306;
