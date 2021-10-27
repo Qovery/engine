@@ -853,27 +853,6 @@ datasources:
                     key: "environmentVariables.ORGANIZATION_ID".to_string(),
                     value: chart_config_prerequisites.organization_long_id.to_string(),
                 },
-                // TODO: Remove those values after the migration
-                ChartSetValue {
-                    key: "environmentVariables.NATS_HOST_URL".to_string(),
-                    value: chart_config_prerequisites.infra_options.qovery_nats_url.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.NATS_USERNAME".to_string(),
-                    value: chart_config_prerequisites.infra_options.qovery_nats_user.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.NATS_PASSWORD".to_string(),
-                    value: chart_config_prerequisites
-                        .infra_options
-                        .qovery_nats_password
-                        .to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.KUBERNETES_ID".to_string(),
-                    value: chart_config_prerequisites.cluster_id.clone(),
-                },
-                // TODO: End of the todo
                 ChartSetValue {
                     key: "environmentVariables.LOKI_URL".to_string(),
                     value: format!("http://{}.cluster.local:3100", loki_kube_dns_prefix),
