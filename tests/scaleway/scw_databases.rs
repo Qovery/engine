@@ -567,70 +567,75 @@ fn test_postgresql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        if database_mode.clone() == CONTAINER {
-            match get_pvc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(pvc) => assert_eq!(
-                    pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                    format!("{}Gi", storage_size)
-                ),
-                Err(_) => assert!(false),
-            };
+        match database_mode.clone() {
+            CONTAINER => {
+                match get_pvc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(pvc) => assert_eq!(
+                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                        format!("{}Gi", storage_size)
+                    ),
+                    Err(_) => assert!(false),
+                };
 
-            match get_svc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(svc) => assert_eq!(
-                    svc.items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(|svc| svc.metadata.name.contains("postgresqlpostgres")
-                            && svc.spec.svc_type == "LoadBalancer")
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
-                    match is_public {
-                        true => 1,
-                        false => 0,
-                    }
-                ),
-                Err(_) => assert!(false),
-            };
-        } else {
-            match get_svc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(svc) => {
-                    let service = svc
-                        .items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(|svc| {
-                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
-                                && svc.spec.svc_type == "ExternalName"
-                        })
-                        .collect::<Vec<SVCItem>>();
-                    let annotations = &service[0].metadata.annotations;
-                    assert_eq!(service.len(), 1);
-                    match is_public {
-                        true => {
-                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
-                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                match get_svc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(svc) => assert_eq!(
+                        svc.items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(
+                                |svc| svc.metadata.name.contains("postgresqlpostgres") & &svc.spec.svc_type
+                                    == "LoadBalancer"
+                            )
+                            .collect::<Vec<SVCItem>>()
+                            .len(),
+                        match is_public {
+                            true => 1,
+                            false => 0,
                         }
-                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                    ),
+                    Err(_) => assert!(false),
+                };
+            }
+            MANAGED => {
+                match get_svc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(svc) => {
+                        let service = svc
+                            .items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(|svc| {
+                                svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                    && svc.spec.svc_type == "ExternalName"
+                            })
+                            .collect::<Vec<SVCItem>>();
+                        let annotations = &service[0].metadata.annotations;
+                        assert_eq!(service.len(), 1);
+                        match is_public {
+                            true => {
+                                assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                                assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                            }
+                            false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                        }
                     }
-                }
-                Err(_) => assert!(false),
-            };
+                    Err(_) => assert!(false),
+                };
+            }
         }
 
         match delete_environment(&context_for_delete, ea_delete, SCW_TEST_ZONE) {
@@ -670,7 +675,7 @@ fn private_postgresql_v10_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_postgresql_v10_deploy_a_working_dev_environment() {
+fn public_postgresql_v10_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -706,7 +711,7 @@ fn private_postgresql_v11_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_postgresql_v11_deploy_a_working_dev_environment() {
+fn public_postgresql_v11_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -742,7 +747,7 @@ fn private_postgresql_v12_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_postgresql_v12_deploy_a_working_dev_environment() {
+fn public_postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -781,7 +786,7 @@ fn private_postgresql_v10_deploy_a_working_prod_environment() {
 #[named]
 #[test]
 #[ignore]
-fn pub_postgresql_v10_deploy_a_working_prod_environment() {
+fn public_postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -819,7 +824,7 @@ fn private_postgresql_v11_deploy_a_working_prod_environment() {
 #[named]
 #[test]
 #[ignore]
-fn pub_postgresql_v11_deploy_a_working_prod_environment() {
+fn public_postgresql_v11_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -857,7 +862,7 @@ fn private_postgresql_v12_deploy_a_working_prod_environment() {
 #[named]
 #[test]
 #[ignore]
-fn pub_postgresql_v12_deploy_a_working_prod_environment() {
+fn public_postgresql_v12_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -990,73 +995,77 @@ fn test_mongodb_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        if database_mode.clone() == CONTAINER {
-            match get_pvc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(pvc) => {
-                    assert_eq!(
-                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                        format!("{}Gi", storage_size)
-                    )
-                }
-                Err(_) => assert!(false),
-            };
-
-            match get_svc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(svc) => assert_eq!(
-                    svc.items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(
-                            |svc| svc.metadata.name.contains("mongodbmymongodb") && svc.spec.svc_type == "LoadBalancer"
+        match database_mode.clone() {
+            CONTAINER => {
+                match get_pvc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(pvc) => {
+                        assert_eq!(
+                            pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                            format!("{}Gi", storage_size)
                         )
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
-                    match is_public {
-                        true => 1,
-                        false => 0,
                     }
-                ),
-                Err(_) => assert!(false),
-            };
-        } else {
-            match get_svc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(svc) => {
-                    let service = svc
-                        .items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(|svc| {
-                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
-                                && svc.spec.svc_type == "ExternalName"
-                        })
-                        .collect::<Vec<SVCItem>>();
-                    let annotations = &service[0].metadata.annotations;
-                    assert_eq!(service.len(), 1);
-                    match is_public {
-                        true => {
-                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
-                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                    Err(_) => assert!(false),
+                };
+
+                match get_svc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(svc) => assert_eq!(
+                        svc.items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(
+                                |svc| svc.metadata.name.contains("mongodbmymongodb") & &svc.spec.svc_type
+                                    == "LoadBalancer"
+                            )
+                            .collect::<Vec<SVCItem>>()
+                            .len(),
+                        match is_public {
+                            true => 1,
+                            false => 0,
                         }
-                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                    ),
+                    Err(_) => assert!(false),
+                };
+            }
+            MANAGED => {
+                match get_svc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(svc) => {
+                        let service = svc
+                            .items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(|svc| {
+                                svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                    && svc.spec.svc_type == "ExternalName"
+                            })
+                            .collect::<Vec<SVCItem>>();
+                        let annotations = &service[0].metadata.annotations;
+                        assert_eq!(service.len(), 1);
+                        match is_public {
+                            true => {
+                                assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                                assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                            }
+                            false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                        }
                     }
-                }
-                Err(_) => assert!(false),
-            };
+                    Err(_) => assert!(false),
+                };
+            }
         }
 
         match delete_environment(&context_for_delete, env_action_delete, SCW_TEST_ZONE) {
@@ -1096,7 +1105,7 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_mongodb_v3_6_deploy_a_working_dev_environment() {
+fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -1132,7 +1141,7 @@ fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_mongodb_v4_0_deploy_a_working_dev_environment() {
+fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -1168,7 +1177,7 @@ fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_mongodb_v4_2_deploy_a_working_dev_environment() {
+fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -1204,7 +1213,7 @@ fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_mongodb_v4_4_deploy_a_working_dev_environment() {
+fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -1332,72 +1341,77 @@ fn test_mysql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        if database_mode.clone() == CONTAINER {
-            match get_pvc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(pvc) => {
-                    assert_eq!(
-                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                        format!("{}Gi", storage_size)
-                    )
-                }
-                Err(_) => assert!(false),
-            };
+        match database_mode.clone() {
+            CONTAINER => {
+                match get_pvc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(pvc) => {
+                        assert_eq!(
+                            pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                            format!("{}Gi", storage_size)
+                        )
+                    }
+                    Err(_) => assert!(false),
+                };
 
-            match get_svc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(svc) => assert_eq!(
-                    svc.items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(|svc| svc.metadata.name.contains("mysqlmysqldatabase")
-                            && svc.spec.svc_type == "LoadBalancer")
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
-                    match is_public {
-                        true => 1,
-                        false => 0,
-                    }
-                ),
-                Err(_) => assert!(false),
-            };
-        } else {
-            match get_svc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(svc) => {
-                    let service = svc
-                        .items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(|svc| {
-                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
-                                && svc.spec.svc_type == "ExternalName"
-                        })
-                        .collect::<Vec<SVCItem>>();
-                    let annotations = &service[0].metadata.annotations;
-                    assert_eq!(service.len(), 1);
-                    match is_public {
-                        true => {
-                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
-                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                match get_svc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(svc) => assert_eq!(
+                        svc.items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(
+                                |svc| svc.metadata.name.contains("mysqlmysqldatabase") & &svc.spec.svc_type
+                                    == "LoadBalancer"
+                            )
+                            .collect::<Vec<SVCItem>>()
+                            .len(),
+                        match is_public {
+                            true => 1,
+                            false => 0,
                         }
-                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                    ),
+                    Err(_) => assert!(false),
+                };
+            }
+            MANAGED => {
+                match get_svc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(svc) => {
+                        let service = svc
+                            .items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(|svc| {
+                                svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                    && svc.spec.svc_type == "ExternalName"
+                            })
+                            .collect::<Vec<SVCItem>>();
+                        let annotations = &service[0].metadata.annotations;
+                        assert_eq!(service.len(), 1);
+                        match is_public {
+                            true => {
+                                assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                                assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                            }
+                            false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                        }
                     }
-                }
-                Err(_) => assert!(false),
-            };
+                    Err(_) => assert!(false),
+                };
+            }
         }
 
         match delete_environment(&deletion_context, ea_delete, SCW_TEST_ZONE) {
@@ -1437,7 +1451,7 @@ fn private_mysql_v5_7_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_mysql_v5_7_deploy_a_working_dev_environment() {
+fn public_mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -1473,7 +1487,7 @@ fn private_mysql_v8_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_mysql_v8_deploy_a_working_dev_environment() {
+fn public_mysql_v8_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -1512,7 +1526,7 @@ fn private_mysql_v8_deploy_a_working_prod_environment() {
 #[named]
 #[test]
 #[ignore]
-fn pub_mysql_v8_deploy_a_working_prod_environment() {
+fn public_mysql_v8_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
@@ -1639,74 +1653,78 @@ fn test_redis_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        if database_mode.clone() == CONTAINER {
-            match get_pvc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(pvc) => {
-                    assert_eq!(
-                        pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                        format!("{}Gi", storage_size)
-                    )
-                }
-                Err(_) => assert!(false),
-            };
-
-            match get_svc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(svc) => {
-                    let service = svc
-                        .items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(|svc| {
-                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
-                                && svc.spec.svc_type == "ExternalName"
-                        })
-                        .collect::<Vec<SVCItem>>();
-                    let annotations = &service[0].metadata.annotations;
-                    assert_eq!(service.len(), 1);
-                    match is_public {
-                        true => {
-                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
-                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
-                        }
-                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
-                    }
-                }
-                Err(_) => assert!(false),
-            };
-        } else {
-            match get_svc(
-                ProviderKind::Aws,
-                SCW_KUBE_TEST_CLUSTER_ID,
-                environment.clone(),
-                secrets.clone(),
-            ) {
-                Ok(svc) => assert_eq!(
-                    svc.items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(
-                            |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
-                                && svc.spec.svc_type == "ExternalName"
+        match database_mode.clone() {
+            CONTAINER => {
+                match get_pvc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(pvc) => {
+                        assert_eq!(
+                            pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                            format!("{}Gi", storage_size)
                         )
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
-                    match is_public {
-                        true => 1,
-                        false => 0,
                     }
-                ),
-                Err(_) => assert!(false),
-            };
+                    Err(_) => assert!(false),
+                };
+
+                match get_svc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(svc) => {
+                        let service = svc
+                            .items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(|svc| {
+                                svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                    & &svc.spec.svc_type
+                                    == "ExternalName"
+                            })
+                            .collect::<Vec<SVCItem>>();
+                        let annotations = &service[0].metadata.annotations;
+                        assert_eq!(service.len(), 1);
+                        match is_public {
+                            true => {
+                                assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                                assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                            }
+                            false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                        }
+                    }
+                    Err(_) => assert!(false),
+                };
+            }
+            MANAGED => {
+                match get_svc(
+                    ProviderKind::Aws,
+                    SCW_KUBE_TEST_CLUSTER_ID,
+                    environment.clone(),
+                    secrets.clone(),
+                ) {
+                    Ok(svc) => assert_eq!(
+                        svc.items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(
+                                |svc| svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                    && svc.spec.svc_type == "ExternalName"
+                            )
+                            .collect::<Vec<SVCItem>>()
+                            .len(),
+                        match is_public {
+                            true => 1,
+                            false => 0,
+                        }
+                    ),
+                    Err(_) => assert!(false),
+                };
+            }
         }
 
         match delete_environment(&context_for_delete, env_action_delete, SCW_TEST_ZONE) {
@@ -1746,7 +1764,7 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_redis_v5_deploy_a_working_dev_environment() {
+fn public_redis_v5_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
@@ -1782,7 +1800,7 @@ fn private_redis_v6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn pub_redis_v6_deploy_a_working_dev_environment() {
+fn public_redis_v6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(

@@ -114,7 +114,7 @@ postgresqlDatabase: '{{ database_db_name }}'
 
 ## Specify the PostgreSQL username and password to execute the initdb scripts
 initdbUser: postgres
-initdbPassword: {{ database_password }}
+initdbPassword: '{{ database_password }}'
 
 ## PostgreSQL service configuration
 service:
