@@ -570,7 +570,7 @@ fn test_postgresql_configuration(
         match database_mode.clone() {
             CONTAINER => {
                 match get_pvc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -583,7 +583,7 @@ fn test_postgresql_configuration(
                 };
 
                 match get_svc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -606,7 +606,7 @@ fn test_postgresql_configuration(
             }
             MANAGED => {
                 match get_svc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -996,7 +996,7 @@ fn test_mongodb_configuration(
         match database_mode.clone() {
             CONTAINER => {
                 match get_pvc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -1011,7 +1011,7 @@ fn test_mongodb_configuration(
                 };
 
                 match get_svc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -1034,7 +1034,7 @@ fn test_mongodb_configuration(
             }
             MANAGED => {
                 match get_svc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -1340,7 +1340,7 @@ fn test_mysql_configuration(
         match database_mode.clone() {
             CONTAINER => {
                 match get_pvc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -1355,7 +1355,7 @@ fn test_mysql_configuration(
                 };
 
                 match get_svc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -1378,7 +1378,7 @@ fn test_mysql_configuration(
             }
             MANAGED => {
                 match get_svc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -1650,7 +1650,7 @@ fn test_redis_configuration(
         match database_mode.clone() {
             CONTAINER => {
                 match get_pvc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -1665,7 +1665,7 @@ fn test_redis_configuration(
                 };
 
                 match get_svc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),
@@ -1695,7 +1695,7 @@ fn test_redis_configuration(
             }
             MANAGED => {
                 match get_svc(
-                    ProviderKind::Aws,
+                    ProviderKind::Scw,
                     SCW_KUBE_TEST_CLUSTER_ID,
                     environment.clone(),
                     secrets.clone(),

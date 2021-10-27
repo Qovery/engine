@@ -67,9 +67,6 @@ resource "aws_docdb_cluster_instance" "documentdb_cluster_instances" {
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
   preferred_maintenance_window = var.preferred_maintenance_window
 
-  # Network
-  publicly_accessible = var.publicly_accessible
-
   tags = {
     cluster_name = var.cluster_name
     region = var.region
