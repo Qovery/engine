@@ -34,6 +34,7 @@ pub enum HelmChartNamespaces {
     CertManager,
     NginxIngress,
     Qovery,
+    Custom(&str),
 }
 
 #[derive(Clone)]
@@ -93,6 +94,7 @@ pub fn get_chart_namespace(namespace: HelmChartNamespaces) -> String {
         HelmChartNamespaces::CertManager => "cert-manager",
         HelmChartNamespaces::NginxIngress => "nginx-ingress",
         HelmChartNamespaces::Qovery => "qovery",
+        HelmChartNamespaces::Custom(x) => x,
     }
     .to_string()
 }

@@ -3,7 +3,9 @@ use std::path::Path;
 
 use tracing::{error, info, span, Level};
 
-use crate::cloud_provider::helm::{get_chart_namespace, ChartInfo};
+use crate::cloud_provider::helm::{
+    deploy_charts_levels, get_chart_namespace, ChartInfo, CommonChart, HelmAction, HelmChartNamespaces,
+};
 use crate::cmd::helm::HelmLockErrors::{IncorrectFormatDate, NotYetExpired, ParsingError};
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_get_secrets};
 use crate::cmd::structs::{Helm, HelmChart, HelmHistoryRow, Item, KubernetesList};
@@ -26,6 +28,15 @@ pub enum Timeout<T> {
     Value(T),
 }
 
+impl Timeout<u32> {
+    fn value(&self) -> u32 {
+        match *self {
+            Timeout::Default => HELM_DEFAULT_TIMEOUT_IN_SECONDS,
+            Timeout::Value(T) => T,
+        }
+    }
+}
+
 pub fn helm_exec_with_upgrade_history<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -40,18 +51,45 @@ where
     // do exec helm upgrade
     info!(
         "exec helm upgrade for namespace {} and chart {}",
-        namespace,
+        &namespace,
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let _ = helm_exec_upgrade(
+    // let _ = helm_exec_upgrade(
+    //     kubernetes_config.as_ref(),
+    //     namespace,
+    //     release_name,
+    //     chart_root_dir.as_ref(),
+    //     timeout,
+    //     envs.clone(),
+    // )?;
+
+    let path = match chart_root_dir.as_ref().to_str().is_some() {
+        true => chart_root_dir.as_ref().to_str().unwrap(),
+        false => "",
+    }
+    .to_string();
+
+    let current_chart = CommonChart {
+        chart_info: ChartInfo {
+            name: release_name.to_string(),
+            path,
+            timeout_in_seconds: timeout.value() as i64,
+            namespace: HelmChartNamespaces::Custom(namespace),
+            values_files: vec![],
+            ..Default::default()
+        },
+    };
+
+    let environment_variables: Vec<(String, String)> =
+        envs.iter().map(|x| (x.0.to_string(), x.1.to_string())).collect();
+
+    deploy_charts_levels(
         kubernetes_config.as_ref(),
-        namespace,
-        release_name,
-        chart_root_dir.as_ref(),
-        timeout,
-        envs.clone(),
-    )?;
+        &environment_variables,
+        vec![vec![Box::new(current_chart)]],
+        false,
+    );
 
     // list helm history
     info!(
