@@ -230,7 +230,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   set -e
 
   export DOCKER_BUILDKIT=1
-  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS -t qoveryrd/engine:${tag} .
+  docker build --network "host" --build-arg SCCACHE_REDIS=$CI_SCCACHE_REDIS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
@@ -246,7 +246,7 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
 
   cd docker/ci
   export DOCKER_BUILDKIT=1
-  docker build --network "host" --build-arg SCCACHE_REDIS=$SCCACHE_REDIS --no-cache -t public.ecr.aws/r3m4q3r9/qovery-ci:${tag} .
+  docker build --network "host" --build-arg SCCACHE_REDIS=$CI_SCCACHE_REDIS --no-cache -t public.ecr.aws/r3m4q3r9/qovery-ci:${tag} .
   cd -
 
   rm -f docker/ci/load.sh
@@ -287,12 +287,12 @@ function new_release() { ## Release a new engine version with commit ID as tag p
 function set_release_ga() { ## Release a new engine version and mark it as globally available
   prepare_engine
   tag=$(generate_image_tag)
-  curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}" || exit 1
+  curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}" || exit 1
 }
 
 function get_release_ga() { ## Get globally available release version
   echo -e "Last defined GA version: "
-  curl -s -H 'Content-Type: application/json' -H "X-Qovery-Signature: $ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"  || exit 1
+  curl -s -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"  || exit 1
 }
 
 function deploy_engines_infra() { ## Release GA to prod
@@ -305,15 +305,15 @@ function deploy_engines_infra() { ## Release GA to prod
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
 environmentVariables.QOVERY_NATS_URL="tls://nats-internal.qovery.io:4222",\
-environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_USER",\
-environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_ENGINE_NATS_INTERNAL_PASSWORD_ENGINE",\
+environmentVariables.QOVERY_NATS_USER="$CI_QOVERY_NATS_USER",\
+environmentVariables.QOVERY_NATS_PASSWORD="$CI_QOVERY_ENGINE_NATS_INTERNAL_PASSWORD_ENGINE",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
-environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
-environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
-environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
+environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
+environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
+environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 buildContainer.enable="false",\
 metrics.enable="true",\
@@ -329,20 +329,20 @@ engineResources.requests.memory="750Mi"
 function deploy_engines_envs() { ## Release GA to prod
   prepare_engine
   tag=$(generate_image_tag)
-  KUBECONFIG="$KUBECONFIG_ENGINES_SCALEWAY"
+  KUBECONFIG="$CI_KUBECONFIG_ENGINES_SCALEWAY"
   helm upgrade --kubeconfig="$KUBECONFIG" --install --create-namespace --history-max 50 --wait --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
 environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
-environmentVariables.QOVERY_NATS_USER="$QOVERY_NATS_EXTERNAL_USER",\
-environmentVariables.QOVERY_NATS_PASSWORD="$QOVERY_NATS_EXTERNAL_PASSWORD",\
+environmentVariables.QOVERY_NATS_USER="$CI_QOVERY_NATS_EXTERNAL_USER",\
+environmentVariables.QOVERY_NATS_PASSWORD="$CI_QOVERY_NATS_EXTERNAL_PASSWORD",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 environmentVariables.DEPLOYMENT_TYPE="ENVIRONMENT",\
-environmentVariables.VAULT_ADDR="https://vaultemort.qovery.com",\
-environmentVariables.VAULT_ROLE_ID="$VAULT_ENGINE_PROD_ROLE_ID",\
-environmentVariables.VAULT_SECRET_ID="$VAULT_ENGINE_PROD_SECRET_ID",\
+environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
+environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
+environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
 buildContainer.enable="true",\
 metrics.enable="true",\
 autoscaler.enabled="false",\
@@ -376,7 +376,7 @@ function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
   set -e
 
   print_title "Generating Vault Token"
-  export VAULT_TOKEN=$(vault write -format=json auth/approle/login role_id=$VAULT_ROLE_ID secret_id=$VAULT_SECRET_ID | jq -r ".auth.client_token")
+  export VAULT_TOKEN=$(vault write -format=json auth/approle/login role_id=$CI_VAULT_ROLE_ID secret_id=$CI_VAULT_SECRET_ID | jq -r ".auth.client_token")
 }
 
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
@@ -480,7 +480,7 @@ function await_docker() {
 }
 
 function deploy_all_clusters() {
-  token=$(curl -X POST -H 'Content-Type: application/json' --data-raw "{\"username\": \"qovery-admin\", \"password\": \"$ADMIN_PASSWORD\"}" https://api-admin.qovery.com/auth)
+  token=$(curl -X POST -H 'Content-Type: application/json' --data-raw "{\"username\": \"qovery-admin\", \"password\": \"$CI_ADMIN_PASSWORD\"}" https://api-admin.qovery.com/auth)
   curl -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $token" --data-raw '{ "metadata" : { "dry_run_deploy": false } }' https://api-admin.qovery.com/cluster/deploy
 }
 
