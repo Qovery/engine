@@ -491,7 +491,7 @@ fn test_postgresql_configuration(
             ),
             false => match database_mode {
                 CONTAINER => format!(
-                    "postgresqlpostgres.{}-{}.svc.cluster.local",
+                    "postgresql-postgresql.{}-{}.svc.cluster.local",
                     environment.project_id, environment.id
                 ),
                 MANAGED => format!(

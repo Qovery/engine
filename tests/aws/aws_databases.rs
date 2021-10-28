@@ -591,11 +591,11 @@ fn test_postgresql_configuration(
             }
         }
 
-        match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        // match delete_environment(&context_for_delete, &ea_delete) {
+        //     TransactionResult::Ok => assert!(true),
+        //     TransactionResult::Rollback(_) => assert!(false),
+        //     TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        // };
         return test_name.to_string();
     })
 }

@@ -34,7 +34,22 @@ pub enum HelmChartNamespaces {
     CertManager,
     NginxIngress,
     Qovery,
-    Custom(&str),
+    Custom,
+}
+
+impl HelmChartNamespaces {
+    pub fn to_string(&self) -> String {
+        match self {
+            HelmChartNamespaces::Custom => "custom",
+            HelmChartNamespaces::KubeSystem => "kube-system",
+            HelmChartNamespaces::Prometheus => "prometheus",
+            HelmChartNamespaces::Logging => "logging",
+            HelmChartNamespaces::CertManager => "cert-manager",
+            HelmChartNamespaces::NginxIngress => "nginx-ingress",
+            HelmChartNamespaces::Qovery => "qovery",
+        }
+        .to_string()
+    }
 }
 
 #[derive(Clone)]
@@ -54,6 +69,7 @@ pub struct ChartInfo {
     pub name: String,
     pub path: String,
     pub namespace: HelmChartNamespaces,
+    pub custom_namespace: Option<String>,
     pub action: HelmAction,
     pub atomic: bool,
     pub force_upgrade: bool,
@@ -66,12 +82,40 @@ pub struct ChartInfo {
     pub yaml_files_content: Vec<ChartValuesGenerated>,
 }
 
+impl ChartInfo {
+    pub fn new_from_custom_namespace(
+        name: String,
+        path: String,
+        custom_namespace: String,
+        timeout_in_seconds: i64,
+        values_files: Vec<String>,
+    ) -> Self {
+        ChartInfo {
+            name,
+            path,
+            namespace: HelmChartNamespaces::Custom,
+            custom_namespace: Some(custom_namespace),
+            timeout_in_seconds,
+            values_files,
+            ..Default::default()
+        }
+    }
+
+    pub fn get_namespace_string(&self) -> String {
+        match self.namespace {
+            HelmChartNamespaces::Custom => self.custom_namespace.clone().unwrap_or(self.namespace.to_string()),
+            _ => self.get_namespace_string(),
+        }
+    }
+}
+
 impl Default for ChartInfo {
     fn default() -> ChartInfo {
         ChartInfo {
             name: "undefined".to_string(),
             path: "undefined".to_string(),
             namespace: KubeSystem,
+            custom_namespace: None,
             action: Deploy,
             atomic: true,
             force_upgrade: false,
@@ -85,19 +129,19 @@ impl Default for ChartInfo {
         }
     }
 }
-
-pub fn get_chart_namespace(namespace: HelmChartNamespaces) -> String {
-    match namespace {
-        HelmChartNamespaces::KubeSystem => "kube-system",
-        HelmChartNamespaces::Prometheus => "prometheus",
-        HelmChartNamespaces::Logging => "logging",
-        HelmChartNamespaces::CertManager => "cert-manager",
-        HelmChartNamespaces::NginxIngress => "nginx-ingress",
-        HelmChartNamespaces::Qovery => "qovery",
-        HelmChartNamespaces::Custom(x) => x,
-    }
-    .to_string()
-}
+//
+// pub fn get_chart_namespace(namespace: HelmChartNamespaces) -> String {
+//     match namespace {
+//         HelmChartNamespaces::KubeSystem => "kube-system",
+//         HelmChartNamespaces::Prometheus => "prometheus",
+//         HelmChartNamespaces::Logging => "logging",
+//         HelmChartNamespaces::CertManager => "cert-manager",
+//         HelmChartNamespaces::NginxIngress => "nginx-ingress",
+//         HelmChartNamespaces::Qovery => "qovery",
+//         HelmChartNamespaces::Custom => "custom",
+//     }
+//     .to_string()
+// }
 
 pub trait HelmChart: Send {
     fn check_prerequisites(&self) -> Result<Option<ChartPayload>, SimpleError> {
@@ -122,7 +166,7 @@ pub trait HelmChart: Send {
     fn get_chart_info(&self) -> &ChartInfo;
 
     fn namespace(&self) -> String {
-        get_chart_namespace(self.get_chart_info().namespace)
+        self.get_chart_info().get_namespace_string()
     }
 
     fn pre_exec(
@@ -181,7 +225,7 @@ pub trait HelmChart: Send {
                 match is_chart_deployed(
                     kubernetes_config,
                     environment_variables.clone(),
-                    Some(get_chart_namespace(chart_info.namespace.clone()).as_str()),
+                    Some(chart_info.get_namespace_string().as_str()),
                     chart_info.name.clone(),
                 ) {
                     Ok(deployed) => {
@@ -216,7 +260,7 @@ pub trait HelmChart: Send {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         kubectl_exec_get_events(
             kubernetes_config,
-            Some(get_chart_namespace(self.get_chart_info().namespace).as_str()),
+            Some(self.get_chart_info().get_namespace_string().as_str()),
             environment_variables,
         )?;
         Ok(payload)
@@ -343,7 +387,7 @@ impl HelmChart for CoreDNSConfigChart {
         // calculate current configmap checksum
         let current_configmap_hash = match kubectl_exec_get_configmap(
             &kubernetes_config,
-            &get_chart_namespace(self.chart_info.namespace),
+            &self.chart_info.get_namespace_string(),
             &self.chart_info.name,
             environment_variables.clone(),
         ) {
@@ -476,7 +520,7 @@ impl HelmChart for CoreDNSConfigChart {
         };
         let current_configmap_checksum = match kubectl_exec_get_configmap(
             &kubernetes_config,
-            &get_chart_namespace(self.chart_info.namespace),
+            &self.chart_info.get_namespace_string(),
             &self.chart_info.name,
             environment_variables.clone(),
         ) {
@@ -548,7 +592,7 @@ impl HelmChart for PrometheusOperatorConfigChart {
                 match is_chart_deployed(
                     kubernetes_config,
                     environment_variables.clone(),
-                    Some(get_chart_namespace(chart_info.namespace.clone()).as_str()),
+                    Some(chart_info.get_namespace_string().as_str()),
                     chart_info.name.clone(),
                 ) {
                     Ok(deployed) => {

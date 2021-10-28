@@ -1,8 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_namespace, get_engine_helm_action_from_location, ChartInfo, ChartPayload, ChartSetValue,
-    ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces,
-    PrometheusOperatorConfigChart,
+    get_engine_helm_action_from_location, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated, CommonChart,
+    CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
@@ -89,12 +88,9 @@ pub fn aws_helm_charts(
     };
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
-    let prometheus_internal_url = format!(
-        "http://prometheus-operated.{}.svc",
-        get_chart_namespace(prometheus_namespace)
-    );
+    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace.to_string());
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_prefix = format!("loki.{}.svc", get_chart_namespace(loki_namespace));
+    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace.to_string());
 
     // Qovery storage class
     let q_storage_class = CommonChart {
@@ -299,7 +295,7 @@ pub fn aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "serviceMonitor.namespace".to_string(),
-                    value: get_chart_namespace(prometheus_namespace),
+                    value: prometheus_namespace.to_string(),
                 },
                 // resources limits
                 ChartSetValue {
@@ -660,9 +656,9 @@ datasources:
       ",
         prometheus_internal_url.clone(),
         &loki.chart_info.name,
-        get_chart_namespace(loki_namespace),
+        loki_namespace.to_string(),
         &loki.chart_info.name,
-        get_chart_namespace(loki_namespace),
+        loki_namespace.to_string(),
         chart_config_prerequisites.region.clone(),
         qovery_terraform_config.aws_iam_cloudwatch_key,
         qovery_terraform_config.aws_iam_cloudwatch_secret,
