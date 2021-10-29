@@ -184,7 +184,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
         environment_delete.action = Action::Delete;
 
         let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
+        let ea_fail_ok =
+            EnvironmentAction::EnvironmentWithFailover(environment_never_up, Box::new(environment.clone()));
         let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
@@ -421,7 +422,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 ** PostgreSQL tests
 **
 **/
-
+#[cfg(test)]
 fn test_postgresql_configuration(
     context: Context,
     mut environment: Environment,
@@ -452,7 +453,7 @@ fn test_postgresql_configuration(
             version: version.to_string(),
             fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "100m".to_string(),
@@ -483,7 +484,7 @@ fn test_postgresql_configuration(
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -503,7 +504,7 @@ fn test_postgresql_configuration(
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -624,6 +625,7 @@ fn postgresql_v12_deploy_a_working_prod_environment() {
 **
 **/
 
+#[cfg(test)]
 fn test_mongodb_configuration(
     context: Context,
     mut environment: Environment,
@@ -658,7 +660,7 @@ fn test_mongodb_configuration(
             version: version.to_string(),
             fqdn_id: "mongodb-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
@@ -691,7 +693,7 @@ fn test_mongodb_configuration(
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -712,7 +714,7 @@ fn test_mongodb_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -832,6 +834,7 @@ fn mongodb_v4_0_deploy_a_working_prod_environment() {
 **
 **/
 
+#[cfg(test)]
 fn test_mysql_configuration(
     context: Context,
     mut environment: Environment,
@@ -864,7 +867,7 @@ fn test_mysql_configuration(
             version: version.to_string(),
             fqdn_id: "mysql-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
@@ -895,7 +898,7 @@ fn test_mysql_configuration(
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -916,7 +919,7 @@ fn test_mysql_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -1000,6 +1003,7 @@ fn mysql_v8_0_deploy_a_working_prod_environment() {
 **
 **/
 
+#[cfg(test)]
 fn test_redis_configuration(
     context: Context,
     mut environment: Environment,
@@ -1017,7 +1021,14 @@ fn test_redis_configuration(
         let context_for_delete = context.clone_not_same_execution_id();
 
         let app_name = format!("redis-app-{}", generate_id());
-        let database_host = format!("redis-{}.{}", generate_id(), secrets.DEFAULT_TEST_DOMAIN.unwrap());
+        let database_host = format!(
+            "redis-{}.{}",
+            generate_id(),
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+        );
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();
@@ -1027,11 +1038,11 @@ fn test_redis_configuration(
             kind: DatabaseKind::Redis,
             action: Action::Create,
             id: generate_id(),
-            name: database_db_name.clone(),
+            name: database_db_name,
             version: version.to_string(),
             fqdn_id: "redis-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
@@ -1063,7 +1074,7 @@ fn test_redis_configuration(
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -1084,7 +1095,7 @@ fn test_redis_configuration(
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 

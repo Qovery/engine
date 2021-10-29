@@ -1023,8 +1023,7 @@ datasources:
                             )
                         )
                         .as_bytes(),
-                    )
-                    .to_string(),
+                    ),
                 },
                 ChartSetValue {
                     key: "do_container_registry_secret_identifier".to_string(),

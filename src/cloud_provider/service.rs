@@ -142,7 +142,7 @@ pub trait Router: StatelessService + Listen + Helm {
     fn has_custom_domains(&self) -> bool;
     fn check_domains(&self) -> Result<(), EngineError> {
         check_domain_for(
-            ListenersHelper::new(self.listeners()),
+            ListenersHelper::new(self.listeners().to_vec()),
             self.domains(),
             self.id(),
             self.context().execution_id(),
@@ -154,7 +154,7 @@ pub trait Router: StatelessService + Listen + Helm {
 pub trait Database: StatefulService {
     fn check_domains(&self, listeners: Listeners, domains: Vec<&str>) -> Result<(), EngineError> {
         check_domain_for(
-            ListenersHelper::new(&listeners),
+            ListenersHelper::new(listeners),
             domains,
             self.id(),
             self.context().execution_id(),
@@ -784,7 +784,7 @@ pub fn check_service_version<T>(result: Result<String, StringError>, service: &T
 where
     T: Service + Listen,
 {
-    let listeners_helper = ListenersHelper::new(service.listeners());
+    let listeners_helper = ListenersHelper::new(service.listeners().to_vec());
 
     match result {
         Ok(version) => {
@@ -868,7 +868,7 @@ pub enum CheckAction {
 pub fn check_kubernetes_service_error<T>(
     result: Result<(), EngineError>,
     kubernetes: &dyn Kubernetes,
-    service: &Box<T>,
+    service: &T,
     deployment_target: &DeploymentTarget,
     listeners_helper: &ListenersHelper,
     action_verb: &str,
@@ -947,7 +947,7 @@ where
                 CheckAction::Delete => listeners_helper.delete_error(progress_info),
             }
 
-            return Err(err);
+            Err(err)
         }
         _ => {
             let progress_info = ProgressInfo::new(
@@ -1225,7 +1225,7 @@ where
         .name("task-monitor".to_string())
         .spawn(move || {
             // stop the thread when the blocking task is done
-            let listeners_helper = ListenersHelper::new(&listeners);
+            let listeners_helper = ListenersHelper::new(listeners);
             let action = action;
             let progress_info = progress_info;
 

@@ -740,7 +740,8 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_working_failover() 
         delete_env.action = Action::Delete;
 
         let env_action_delete = EnvironmentAction::Environment(delete_env);
-        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
+        let env_action =
+            EnvironmentAction::EnvironmentWithFailover(environment.clone(), Box::new(failover_environment.clone()));
 
         match deploy_environment(&context, env_action, DO_TEST_REGION) {
             TransactionResult::Ok => assert!(false),
@@ -801,7 +802,8 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_non_working_failove
 
         // environment action initialize
         let env_action_delete = EnvironmentAction::Environment(delete_env);
-        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
+        let env_action =
+            EnvironmentAction::EnvironmentWithFailover(environment.clone(), Box::new(failover_environment.clone()));
 
         match deploy_environment(&context, env_action, DO_TEST_REGION) {
             TransactionResult::Ok => assert!(false),

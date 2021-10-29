@@ -30,5 +30,5 @@ pub fn get_used_cidr_on_region(token: &str) {
     );
 
     let buff = output_from_cli.borrow();
-    let _array: Vec<DoVpc> = serde_json::from_str(&buff).expect("JSON is not well-formatted");
+    let _array: Vec<DoVpc> = serde_json::from_str(buff).expect("JSON is not well-formatted");
 }

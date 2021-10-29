@@ -74,7 +74,7 @@ fn get_doks_versions_from_api_output(json_content: &str) -> Result<Vec<Kubernete
 
 // get DOKS slug version from available DOKS versions
 fn get_do_kubernetes_latest_slug_version(
-    doks_versions: &Vec<KubernetesVersion>,
+    doks_versions: &[KubernetesVersion],
     wished_version: &str,
 ) -> Result<Option<String>, StringError> {
     let wished_k8s_version = VersionsNumber::from_str(wished_version)?;

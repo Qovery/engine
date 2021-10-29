@@ -163,11 +163,7 @@ where
             }
 
             Ok(Some(
-                result
-                    .metadata
-                    .annotations
-                    .kubernetes_digitalocean_com_load_balancer_id
-                    .clone(),
+                result.metadata.annotations.kubernetes_digitalocean_com_load_balancer_id,
             ))
         }
         Err(e) => Err(e),
@@ -419,8 +415,8 @@ where
     }
 
     // additional labels
-    if labels.is_some() {
-        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap(), envs) {
+    if let Some(labels) = labels {
+        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels, envs) {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
@@ -486,7 +482,7 @@ where
 pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
     namespace: &str,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
 ) -> Result<bool, SimpleError>
 where
     P: AsRef<Path>,
@@ -553,7 +549,7 @@ pub fn kubectl_exec_delete_namespace<P>(
 where
     P: AsRef<Path>,
 {
-    match does_contain_terraform_tfstate(&kubernetes_config, &namespace, &envs) {
+    match does_contain_terraform_tfstate(&kubernetes_config, namespace, &envs) {
         Ok(exist) => match exist {
             true => {
                 return Err(SimpleError::new(
@@ -741,12 +737,12 @@ pub fn kubectl_exec_rollout_restart_deployment<P>(
     kubernetes_config: P,
     name: &str,
     namespace: &str,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
 ) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
-    let mut environment_variables: Vec<(&str, &str)> = envs.clone();
+    let mut environment_variables: Vec<(&str, &str)> = envs.to_owned();
     environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
@@ -818,7 +814,7 @@ where
     P: AsRef<Path>,
 {
     kubectl_exec::<P, Configmap>(
-        vec!["get", "configmap", "-o", "json", "-n", namespace, &name],
+        vec!["get", "configmap", "-o", "json", "-n", namespace, name],
         kubernetes_config,
         envs,
     )
@@ -1018,7 +1014,7 @@ where
             "scale",
             "--replicas",
             &replicas_count.to_string(),
-            &kind_formatted,
+            kind_formatted,
             "--selector",
             selector,
         ],

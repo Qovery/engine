@@ -23,7 +23,7 @@ use std::sync::Arc;
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
     Environment(TargetEnvironment),
-    EnvironmentWithFailover(TargetEnvironment, FailoverEnvironment),
+    EnvironmentWithFailover(TargetEnvironment, Box<FailoverEnvironment>),
 }
 
 pub type TargetEnvironment = Environment;
@@ -51,7 +51,7 @@ impl Environment {
     pub fn to_qe_environment(
         &self,
         context: &Context,
-        built_applications: &Vec<Box<dyn crate::cloud_provider::service::Application>>,
+        built_applications: &[Box<dyn crate::cloud_provider::service::Application>],
         cloud_provider: &dyn CloudProvider,
     ) -> crate::cloud_provider::environment::Environment {
         let applications = self
@@ -61,16 +61,14 @@ impl Environment {
                 Some(app) => x.to_stateless_service(context, app.image().clone(), cloud_provider),
                 _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
             })
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
+            .flatten()
             .collect::<Vec<_>>();
 
         let routers = self
             .routers
             .iter()
             .map(|x| x.to_stateless_service(context, cloud_provider))
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
+            .flatten()
             .collect::<Vec<_>>();
 
         // orders is important, first external services, then applications and then routers.
@@ -83,8 +81,7 @@ impl Environment {
             .databases
             .iter()
             .map(|x| x.to_stateful_service(context, cloud_provider))
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
+            .flatten()
             .collect::<Vec<_>>();
 
         let stateful_services = databases;
@@ -150,7 +147,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn to_application<'a>(
+    pub fn to_application(
         &self,
         context: &Context,
         image: &Image,
@@ -327,7 +324,7 @@ impl Application {
                     .iter()
                     .map(|(k, v)| crate::build_platform::EnvironmentVariable {
                         key: k.clone(),
-                        value: String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or(vec![])).into_owned(),
+                        value: String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or_default()).into_owned(),
                     })
                     .collect::<Vec<_>>(),
             },
@@ -900,12 +897,12 @@ pub trait Listen {
 pub type Listener = Arc<Box<dyn ProgressListener>>;
 pub type Listeners = Vec<Listener>;
 
-pub struct ListenersHelper<'a> {
-    listeners: &'a Listeners,
+pub struct ListenersHelper {
+    listeners: Listeners,
 }
 
-impl<'a> ListenersHelper<'a> {
-    pub fn new(listeners: &'a Listeners) -> Self {
+impl ListenersHelper {
+    pub fn new(listeners: Listeners) -> Self {
         ListenersHelper { listeners }
     }
 
@@ -1064,7 +1061,7 @@ impl Context {
 
     pub fn resource_expiration_in_seconds(&self) -> Option<u32> {
         match &self.metadata {
-            Some(meta) => meta.resource_expiration_in_seconds.map(|ttl| ttl),
+            Some(meta) => meta.resource_expiration_in_seconds,
             _ => None,
         }
     }

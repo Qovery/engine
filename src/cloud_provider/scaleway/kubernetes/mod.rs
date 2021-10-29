@@ -391,7 +391,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     fn on_create(&self) -> Result<(), EngineError> {
         info!("SCW.on_create() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.to_vec());
         let send_to_customer = |message: &str| {
             listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Infrastructure {
@@ -657,7 +657,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     fn on_delete(&self) -> Result<(), EngineError> {
         info!("SCW.on_delete() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.to_vec());
         let send_to_customer = |message: &str| {
             listeners_helper.delete_in_progress(ProgressInfo::new(
                 ProgressScope::Infrastructure {

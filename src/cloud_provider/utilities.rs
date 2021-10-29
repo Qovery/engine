@@ -239,22 +239,6 @@ impl VersionsNumber {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        let mut version = vec![self.major.to_string()];
-
-        if self.minor.is_some() {
-            version.push(self.minor.clone().unwrap())
-        }
-        if self.patch.is_some() {
-            version.push(self.patch.clone().unwrap())
-        }
-        if self.suffix.is_some() {
-            version.push(self.suffix.clone().unwrap())
-        }
-
-        version.join(".")
-    }
-
     pub fn to_major_version_string(&self) -> String {
         self.major.clone()
     }
@@ -267,6 +251,24 @@ impl VersionsNumber {
         );
 
         test
+    }
+}
+
+impl fmt::Display for VersionsNumber {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let mut version = vec![self.major.to_string()];
+
+        if self.minor.is_some() {
+            version.push(self.minor.clone().unwrap())
+        }
+        if self.patch.is_some() {
+            version.push(self.patch.clone().unwrap())
+        }
+        if self.suffix.is_some() {
+            version.push(self.suffix.clone().unwrap())
+        }
+
+        fmt.write_str(version.join(".").as_str())
     }
 }
 
@@ -309,19 +311,14 @@ impl FromStr for VersionsNumber {
     }
 }
 
-impl fmt::Display for VersionsNumber {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
-    }
-}
-
 fn cloudflare_dns_resolver() -> Resolver {
-    let mut resolver_options = ResolverOpts::default();
-
-    //  We want to avoid cache and using host file of the host, as some provider force caching
-    //  which lead to stale response
-    resolver_options.cache_size = 0;
-    resolver_options.use_hosts_file = false;
+    let resolver_options = ResolverOpts {
+        //  We want to avoid cache and using host file of the host, as some provider force caching
+        //  which lead to stale response
+        cache_size: 0,
+        use_hosts_file: false,
+        ..Default::default()
+    };
 
     Resolver::new(ResolverConfig::cloudflare(), resolver_options)
         .expect("Invalid cloudflare DNS resolver configuration")
@@ -344,7 +341,7 @@ fn get_cname_record_value(resolver: &Resolver, cname: &str) -> Option<String> {
 
 pub fn check_cname_for(
     scope: ProgressScope,
-    listeners: &Listeners,
+    listeners: Listeners,
     cname_to_check: &str,
     execution_id: &str,
 ) -> Result<String, String> {
@@ -575,14 +572,14 @@ mod tests {
         let milli_cpu = "250m".to_string();
         let int_cpu = "2".to_string();
 
-        assert_eq!(convert_k8s_cpu_value_to_f32(milli_cpu).unwrap(), 0.25 as f32);
-        assert_eq!(convert_k8s_cpu_value_to_f32(int_cpu).unwrap(), 2 as f32);
+        assert_eq!(convert_k8s_cpu_value_to_f32(milli_cpu).unwrap(), 0.25_f32);
+        assert_eq!(convert_k8s_cpu_value_to_f32(int_cpu).unwrap(), 2_f32);
     }
 
     #[test]
     pub fn test_cpu_set() {
         let v = vec![];
-        let listener_helper = ListenersHelper::new(&v);
+        let listener_helper = ListenersHelper::new(v);
         let execution_id = "execution_id";
         let context_id = "context_id";
 

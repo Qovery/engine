@@ -139,19 +139,15 @@ impl Service for Router {
                     .iter()
                     .find(|app| app.name() == r.application_name.as_str())
                 {
-                    Some(application) => match application.private_port() {
-                        Some(private_port) => Some(RouteDataTemplate {
-                            path: r.path.clone(),
-                            application_name: application.sanitized_name().to_string(),
-                            application_port: private_port,
-                        }),
-                        _ => None,
-                    },
+                    Some(application) => application.private_port().map(|private_port| RouteDataTemplate {
+                        path: r.path.clone(),
+                        application_name: application.sanitized_name(),
+                        application_port: private_port,
+                    }),
                     _ => None,
                 }
             })
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
+            .flatten()
             .collect::<Vec<_>>();
 
         // autoscaler
@@ -326,7 +322,7 @@ impl Create for Router {
         for domain_to_check in self.custom_domains.iter() {
             match check_cname_for(
                 self.progress_scope(),
-                self.listeners(),
+                self.listeners().to_vec(),
                 &domain_to_check.domain,
                 self.context.execution_id(),
             ) {

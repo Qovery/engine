@@ -146,7 +146,7 @@ pub fn docker_tag_and_push_image(
         Kind::ScalewayCr => "Scaleway Registry",
     };
 
-    match retry::retry(Fibonacci::from_millis(3000).take(5), || {
+    if let Err(Operation { error, .. }) = retry::retry(Fibonacci::from_millis(3000).take(5), || {
         match cmd::utilities::exec("docker", vec!["tag", &image_with_tag, dest.as_str()], &docker_envs) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
@@ -155,13 +155,10 @@ pub fn docker_tag_and_push_image(
             }
         }
     }) {
-        Err(Operation { error, .. }) => {
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(format!("failed to tag image {}: {:?}", image_with_tag, error.message)),
-            ))
-        }
-        _ => {}
+        return Err(SimpleError::new(
+            SimpleErrorKind::Other,
+            Some(format!("failed to tag image {}: {:?}", image_with_tag, error.message)),
+        ));
     }
 
     match retry::retry(

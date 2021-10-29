@@ -11,10 +11,10 @@ use qovery_engine::transaction::TransactionResult;
 // Warning: This test shouldn't be ran by CI
 // Note: this test creates the test cluster where all application tests will be ran
 // This is not really a test but a convenient way to create the test cluster if needed to be manually created at some point.
-#[allow(dead_code)]
 #[named]
 #[test]
 #[ignore]
+#[cfg(test)]
 fn create_scaleway_kubernetes_kapsule_test_cluster() {
     let secrets = FuncTestsSecrets::new();
     let test_name = function_name!();
@@ -35,7 +35,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
-            context.clone(),
+            context,
             test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_ID.to_string(),
             uuid::Uuid::new_v4(),
             test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
@@ -65,10 +65,10 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
 // Warning: This test shouldn't be ran by CI
 // Note: this test destroys the test cluster where all application tests will be ran
 // This is not really a test but a convenient way to create the test cluster if needed to be manually destroyed at some point.
-#[allow(dead_code)]
 #[named]
 #[test]
 #[ignore]
+#[cfg(test)]
 fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
     let secrets = FuncTestsSecrets::new();
     let test_name = function_name!();
@@ -89,7 +89,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
-            context.clone(),
+            context,
             test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_ID.to_string(),
             uuid::Uuid::new_v4(),
             test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_NAME.to_string(),

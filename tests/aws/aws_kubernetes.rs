@@ -10,7 +10,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithN
 use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
 use qovery_engine::transaction::TransactionResult;
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn create_upgrade_and_destroy_eks_cluster(
     region: &str,
     secrets: FuncTestsSecrets,
@@ -95,6 +95,7 @@ fn create_upgrade_and_destroy_eks_cluster(
     })
 }
 
+#[cfg(test)]
 fn create_and_destroy_eks_cluster(
     region: &str,
     secrets: FuncTestsSecrets,
@@ -214,11 +215,11 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-#[allow(dead_code)]
+#[ignore]
 #[named]
-//#[test]
+#[test]
 fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_upgrade_and_destroy_eks_cluster(&region, secrets, "1.18", "1.19", function_name!());
+    create_upgrade_and_destroy_eks_cluster(region, secrets, "1.18", "1.19", function_name!());
 }

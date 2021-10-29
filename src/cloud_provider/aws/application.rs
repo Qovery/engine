@@ -197,8 +197,8 @@ impl Service for Application {
         };
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(
-            &ListenersHelper::new(&self.listeners),
-            &self.context.execution_id(),
+            &ListenersHelper::new(self.listeners.to_vec()),
+            self.context.execution_id(),
             &self.id,
             self.total_cpus(),
             self.cpu_burst(),

@@ -142,7 +142,7 @@ impl Service for MySQL {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -153,7 +153,7 @@ impl Service for MySQL {
         context.insert("version", &version);
 
         if self.is_managed_service() {
-            let parameter_group_family = match get_parameter_group_from_version(&version, DatabaseKind::Mysql) {
+            let parameter_group_family = match get_parameter_group_from_version(version, DatabaseKind::Mysql) {
                 Ok(v) => v,
                 Err(e) => {
                     return Err(EngineError {

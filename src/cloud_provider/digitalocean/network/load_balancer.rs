@@ -145,7 +145,7 @@ mod tests_do_api_output {
   }
 }
         "#;
-        let ip_returned_from_api = get_ip_from_do_load_balancer_api_output(&json_content);
+        let ip_returned_from_api = get_ip_from_do_load_balancer_api_output(json_content);
 
         assert_eq!(ip_returned_from_api.unwrap().to_string(), "104.131.186.241");
     }

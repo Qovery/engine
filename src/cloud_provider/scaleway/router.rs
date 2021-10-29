@@ -140,8 +140,7 @@ impl Service for Router {
                     _ => None,
                 }
             })
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
+            .flatten()
             .collect::<Vec<_>>();
 
         let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
@@ -270,7 +269,7 @@ impl Create for Router {
         for domain_to_check in self.custom_domains.iter() {
             match check_cname_for(
                 self.progress_scope(),
-                self.listeners(),
+                self.listeners().to_vec(),
                 &domain_to_check.domain,
                 self.context.execution_id(),
             ) {

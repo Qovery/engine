@@ -10,7 +10,7 @@ use rand::Rng;
 use retry::Error::Operation;
 use std::{env, fs, thread, time};
 
-fn manage_common_issues(terraform_provider_lock: &String, err: &SimpleError) -> bool {
+fn manage_common_issues(terraform_provider_lock: &str, err: &SimpleError) -> bool {
     // Error: Failed to install provider from shared cache
     // in order to avoid lock errors on parallel run, let's sleep a bit
     // https://github.com/hashicorp/terraform/issues/28041
@@ -79,8 +79,8 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
 
     match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => return Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
     }
 }
 

@@ -168,7 +168,7 @@ pub struct Resources {
 /// common function to deploy a complete environment through Kubernetes and the different
 /// managed services.
 pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners().to_vec());
 
     let stateful_deployment_target = match kubernetes.kind() {
         Kind::Eks => DeploymentTarget {
@@ -193,7 +193,7 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
         let _ = service::check_kubernetes_service_error(
             service.exec_action(&stateful_deployment_target),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateful_deployment_target,
             &listeners_helper,
             "deployment",
@@ -204,7 +204,7 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
             let _ = service::check_kubernetes_service_error(
                 service.on_create_check(),
                 kubernetes,
-                service,
+                service.as_ref(),
                 &stateful_deployment_target,
                 &listeners_helper,
                 "check deployment",
@@ -227,7 +227,7 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
         let _ = service::check_kubernetes_service_error(
             service.exec_action(&stateless_deployment_target),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateless_deployment_target,
             &listeners_helper,
             "deployment",
@@ -243,7 +243,7 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
         let _ = service::check_kubernetes_service_error(
             service.on_create_check(),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateful_deployment_target,
             &listeners_helper,
             "check deployment",
@@ -258,7 +258,7 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
         let _ = service::check_kubernetes_service_error(
             service.on_create_check(),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateless_deployment_target,
             &listeners_helper,
             "check deployment",
@@ -271,7 +271,7 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
 
 /// common function to react to an error when a environment deployment goes wrong
 pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners().to_vec());
 
     listeners_helper.deployment_in_progress(ProgressInfo::new(
         ProgressScope::Environment {
@@ -292,7 +292,7 @@ pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Envir
         let _ = service::check_kubernetes_service_error(
             service.on_create_error(&stateful_deployment_target),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateful_deployment_target,
             &listeners_helper,
             "revert deployment",
@@ -314,7 +314,7 @@ pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Envir
         let _ = service::check_kubernetes_service_error(
             service.on_create_error(&stateless_deployment_target),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateless_deployment_target,
             &listeners_helper,
             "revert deployment",
@@ -327,7 +327,7 @@ pub fn deploy_environment_error(kubernetes: &dyn Kubernetes, environment: &Envir
 
 /// common kubernetes function to pause a complete environment
 pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners().to_vec());
 
     let stateful_deployment_target = DeploymentTarget {
         kubernetes,
@@ -345,7 +345,7 @@ pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment)
         let _ = service::check_kubernetes_service_error(
             service.on_pause(&stateless_deployment_target),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateless_deployment_target,
             &listeners_helper,
             "pause",
@@ -361,7 +361,7 @@ pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment)
         let _ = service::check_kubernetes_service_error(
             service.on_pause(&stateful_deployment_target),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateful_deployment_target,
             &listeners_helper,
             "pause",
@@ -376,7 +376,7 @@ pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment)
         let _ = service::check_kubernetes_service_error(
             service.on_pause_check(),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateless_deployment_target,
             &listeners_helper,
             "check pause",
@@ -392,7 +392,7 @@ pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment)
         let _ = service::check_kubernetes_service_error(
             service.on_pause_check(),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateful_deployment_target,
             &listeners_helper,
             "check pause",
@@ -405,7 +405,7 @@ pub fn pause_environment(kubernetes: &dyn Kubernetes, environment: &Environment)
 
 /// common kubernetes function to delete a complete environment
 pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners().to_vec());
 
     let stateful_deployment_target = DeploymentTarget {
         kubernetes,
@@ -423,7 +423,7 @@ pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment
         let _ = service::check_kubernetes_service_error(
             service.on_delete(&stateful_deployment_target),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateless_deployment_target,
             &listeners_helper,
             "delete",
@@ -439,7 +439,7 @@ pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment
         let _ = service::check_kubernetes_service_error(
             service.on_delete(&stateful_deployment_target),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateful_deployment_target,
             &listeners_helper,
             "delete",
@@ -454,7 +454,7 @@ pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment
         let _ = service::check_kubernetes_service_error(
             service.on_delete_check(),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateless_deployment_target,
             &listeners_helper,
             "delete check",
@@ -470,7 +470,7 @@ pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment
         let _ = service::check_kubernetes_service_error(
             service.on_delete_check(),
             kubernetes,
-            service,
+            service.as_ref(),
             &stateful_deployment_target,
             &listeners_helper,
             "delete check",
@@ -481,7 +481,7 @@ pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment
     // do not catch potential error - to confirm
     let _ = kubectl::kubectl_exec_delete_namespace(
         kubernetes.config_file_path()?,
-        &environment.namespace(),
+        environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
 
@@ -728,7 +728,7 @@ fn check_kubernetes_upgrade_status(
             error!("{}", &msg);
             return Err(SimpleError {
                 kind: SimpleErrorKind::Other,
-                message: Some(msg.to_string()),
+                message: Some(msg),
             });
         }
     };
@@ -853,12 +853,12 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
         messages.push("Older Kubernetes major version detected");
     }
 
-    if &wished_minor_version > &deployed_minor_version {
+    if wished_minor_version > deployed_minor_version {
         upgrade_required.upgraded_required = true;
         messages.push("Kubernetes minor version change detected");
     }
 
-    if &wished_minor_version < &deployed_minor_version {
+    if wished_minor_version < deployed_minor_version {
         upgrade_required.upgraded_required = false;
         upgrade_required.older_version_detected = true;
         messages.push("Older Kubernetes minor version detected");
@@ -962,7 +962,7 @@ mod tests {
             "Provider version: {} | Wished version: {} | Is upgrade required: {:?}",
             provider_version.clone(),
             provider.clone(),
-            compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider)
+            compare_kubernetes_cluster_versions_for_upgrade(provider_version, provider)
                 .unwrap()
                 .message
         )

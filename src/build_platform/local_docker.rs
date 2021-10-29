@@ -85,9 +85,8 @@ impl LocalDocker {
 
         docker_args.extend(vec!["-f", dockerfile_complete_path, "-t", name_with_tag.as_str()]);
 
-        let mut docker_args = if env_var_args.is_empty() {
-            docker_args
-        } else {
+        let mut docker_args = docker_args;
+        if !env_var_args.is_empty() {
             let mut build_args = vec![];
             env_var_args.iter().for_each(|x| {
                 build_args.push("--build-arg");
@@ -95,7 +94,6 @@ impl LocalDocker {
             });
 
             docker_args.extend(build_args);
-            docker_args
         };
 
         docker_args.push(into_dir_docker_style);
@@ -179,9 +177,8 @@ impl LocalDocker {
 
             buildpacks_args.extend(vec!["--path", into_dir_docker_style]);
 
-            let mut buildpacks_args = if env_var_args.is_empty() {
-                buildpacks_args
-            } else {
+            let mut buildpacks_args = buildpacks_args;
+            if !env_var_args.is_empty() {
                 let mut build_args = vec![];
 
                 env_var_args.iter().for_each(|x| {
@@ -190,7 +187,6 @@ impl LocalDocker {
                 });
 
                 buildpacks_args.extend(build_args);
-                buildpacks_args
             };
 
             buildpacks_args.push("-B");
@@ -303,7 +299,7 @@ impl BuildPlatform for LocalDocker {
     fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError> {
         info!("LocalDocker.build() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.to_vec());
 
         if !force_build && self.image_does_exist(&build.image)? {
             info!(
@@ -474,7 +470,7 @@ impl BuildPlatform for LocalDocker {
     fn build_error(&self, build: Build) -> Result<BuildResult, EngineError> {
         warn!("LocalDocker.build_error() called for {}", self.name());
 
-        let listener_helper = ListenersHelper::new(&self.listeners);
+        let listener_helper = ListenersHelper::new(self.listeners.to_vec());
 
         // FIXME
         let message = String::from("something goes wrong (not implemented)");

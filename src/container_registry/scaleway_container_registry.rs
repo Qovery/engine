@@ -276,7 +276,7 @@ impl ScalewayCR {
         image: &Image,
     ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
         // check if the repository already exists
-        let registry_namespace = self.get_registry_namespace(&image);
+        let registry_namespace = self.get_registry_namespace(image);
         if let Some(namespace) = registry_namespace {
             info!("Scaleway registry namespace {} already exists", image.name.as_str());
             return Ok(namespace);
@@ -341,13 +341,15 @@ impl ContainerRegistry for ScalewayCR {
             .unwrap_or(&"undefined".to_string())
             .to_param();
 
-        if let Err(_) = docker_login(
+        if docker_login(
             Kind::ScalewayCr,
             self.get_docker_envs(),
             self.login.clone(),
             self.secret_token.clone(),
             registry_url.clone(),
-        ) {
+        )
+        .is_err()
+        {
             return false;
         }
 
@@ -409,7 +411,7 @@ impl ContainerRegistry for ScalewayCR {
 
         let image_url = format!("{}/{}", registry_url, image.name_with_tag());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.clone());
 
         if !force_push && self.does_image_exists(&image) {
             // check if image does exist - if yes, do not upload it again
@@ -429,7 +431,7 @@ impl ContainerRegistry for ScalewayCR {
                 self.context.execution_id(),
             ));
 
-            return Ok(PushResult { image: image.clone() });
+            return Ok(PushResult { image });
         }
 
         let info_message = format!(

@@ -14,9 +14,9 @@ pub enum VpcInitKind {
 
 impl ToString for VpcInitKind {
     fn to_string(&self) -> String {
-        match self {
-            &VpcInitKind::Autodetect => "autodetect".to_string(),
-            &VpcInitKind::Manual => "manual".to_string(),
+        match *self {
+            VpcInitKind::Autodetect => "autodetect".to_string(),
+            VpcInitKind::Manual => "manual".to_string(),
         }
     }
 }
@@ -309,7 +309,7 @@ mod tests_do_vpcs {
         let json_content = do_get_vpc_json();
         let existing_vpcs = do_get_vpcs_from_api_output(&json_content).unwrap();
 
-        assert!(get_random_available_subnet(existing_vpcs.clone(), Region::Frankfurt).is_ok());
+        assert!(get_random_available_subnet(existing_vpcs, Region::Frankfurt).is_ok());
     }
 
     #[test]

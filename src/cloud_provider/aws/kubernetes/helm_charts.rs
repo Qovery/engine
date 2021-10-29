@@ -154,7 +154,7 @@ pub fn aws_helm_charts(
             ..Default::default()
         },
     };
-    let is_cni_old_installed_version = match aws_vpc_cni_chart.is_cni_old_installed_version(kubernetes_config, &envs) {
+    let is_cni_old_installed_version = match aws_vpc_cni_chart.is_cni_old_installed_version(kubernetes_config, envs) {
         Ok(x) => x,
         Err(e) => return Err(e),
     };
@@ -658,7 +658,7 @@ datasources:
           accessKey: '{}'
           secretKey: '{}'
       ",
-        prometheus_internal_url.clone(),
+        prometheus_internal_url,
         &loki.chart_info.name,
         get_chart_namespace(loki_namespace),
         &loki.chart_info.name,

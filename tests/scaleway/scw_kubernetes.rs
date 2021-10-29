@@ -11,7 +11,7 @@ use qovery_engine::transaction::TransactionResult;
 
 use test_utilities::scaleway::SCW_KUBERNETES_VERSION;
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn create_upgrade_and_destroy_kapsule_cluster(
     zone: Zone,
     secrets: FuncTestsSecrets,
@@ -86,7 +86,7 @@ fn create_upgrade_and_destroy_kapsule_cluster(
     });
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, test_infra_pause: bool, test_name: &str) {
     engine_run_test(|| {
         init();
@@ -178,7 +178,6 @@ fn create_and_destroy_kapsule_cluster_par_1() {
 #[named]
 #[test]
 #[ignore]
-#[allow(dead_code)]
 fn create_and_destroy_kapsule_cluster_par_2() {
     let zone = Zone::Paris2;
     let secrets = FuncTestsSecrets::new();
@@ -189,7 +188,6 @@ fn create_and_destroy_kapsule_cluster_par_2() {
 #[named]
 #[test]
 #[ignore]
-#[allow(dead_code)]
 fn create_and_destroy_kapsule_cluster_ams_1() {
     let zone = Zone::Amsterdam1;
     let secrets = FuncTestsSecrets::new();
@@ -208,8 +206,6 @@ fn create_and_destroy_kapsule_cluster_war_1() {
 // only enable this test manually when we want to perform and validate upgrade process
 #[test]
 #[ignore]
-#[allow(dead_code)]
-#[allow(unused_attributes)]
 #[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
     let zone = Zone::Paris1;
@@ -220,8 +216,6 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
 // only enable this test manually when we want to perform and validate upgrade process
 #[test]
 #[ignore]
-#[allow(unused_attributes)]
-#[allow(dead_code)]
 #[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
     let zone = Zone::Paris2;
@@ -232,8 +226,6 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
 // only enable this test manually when we want to perform and validate upgrade process
 #[test]
 #[ignore]
-#[allow(unused_attributes)]
-#[allow(dead_code)]
 #[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
     let zone = Zone::Amsterdam1;
@@ -244,8 +236,6 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
 // only enable this test manually when we want to perform and validate upgrade process
 #[test]
 #[ignore]
-#[allow(unused_attributes)]
-#[allow(dead_code)]
 #[named]
 fn create_upgrade_and_destroy_kapsule_cluster_in_war_1() {
     let zone = Zone::Warsaw1;

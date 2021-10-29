@@ -113,11 +113,13 @@ impl ContainerRegistry for DockerHub {
             None => vec![],
         };
 
-        if let Err(_) = cmd::utilities::exec(
+        if cmd::utilities::exec(
             "docker",
             vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
             &envs,
-        ) {
+        )
+        .is_err()
+        {
             return Err(self.engine_error(
                 EngineErrorCause::User(
                     "Your DockerHub account seems to be no longer valid (bad Credentials). \
@@ -128,7 +130,7 @@ impl ContainerRegistry for DockerHub {
         };
 
         let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.clone());
 
         if !force_push && self.does_image_exists(image) {
             // check if image does exist - if yes, do not upload it again

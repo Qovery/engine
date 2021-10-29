@@ -22,10 +22,7 @@ impl EngineError {
             cause,
             scope,
             execution_id: execution_id.into(),
-            message: match message {
-                Some(message) => Some(message.into()),
-                _ => None,
-            },
+            message: message.map(|message| message.into()),
         }
     }
 }
@@ -69,10 +66,7 @@ impl SimpleError {
     pub fn new<T: Into<String>>(kind: SimpleErrorKind, message: Option<T>) -> Self {
         SimpleError {
             kind,
-            message: match message {
-                Some(message) => Some(message.into()),
-                _ => None,
-            },
+            message: message.map(|message| message.into()),
         }
     }
 }
@@ -93,10 +87,10 @@ pub fn cast_simple_error_to_engine_error<X, T: Into<String>>(
             let message = match simple_error.kind {
                 SimpleErrorKind::Command(exit_status) => format!(
                     "{} ({})",
-                    simple_error.message.unwrap_or("<no message>".into()),
+                    simple_error.message.unwrap_or_else(|| "<no message>".into()),
                     exit_status
                 ),
-                SimpleErrorKind::Other => simple_error.message.unwrap_or("<no message>".into()),
+                SimpleErrorKind::Other => simple_error.message.unwrap_or_else(|| "<no message>".into()),
             };
 
             Err(EngineError::new(

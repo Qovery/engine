@@ -196,7 +196,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
         environment_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
+        let env_action_fail_ok =
+            EnvironmentAction::EnvironmentWithFailover(environment_never_up, Box::new(environment.clone()));
         let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
         match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
@@ -460,6 +461,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
  **
  **/
 
+#[cfg(test)]
 fn test_postgresql_configuration(
     context: Context,
     mut environment: Environment,
@@ -494,7 +496,7 @@ fn test_postgresql_configuration(
             version: version.to_string(),
             fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
@@ -535,7 +537,7 @@ fn test_postgresql_configuration(
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -561,7 +563,7 @@ fn test_postgresql_configuration(
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -684,6 +686,7 @@ fn postgresql_v12_deploy_a_working_prod_environment() {
  **
  **/
 
+#[cfg(test)]
 fn test_mongodb_configuration(
     context: Context,
     mut environment: Environment,
@@ -722,7 +725,7 @@ fn test_mongodb_configuration(
             version: version.to_string(),
             fqdn_id: "mongodb-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
@@ -766,7 +769,7 @@ fn test_mongodb_configuration(
             })
             .collect::<Vec<Application>>();
 
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -792,7 +795,7 @@ fn test_mongodb_configuration(
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -875,6 +878,7 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
  **
  **/
 
+#[cfg(test)]
 fn test_mysql_configuration(
     context: Context,
     mut environment: Environment,
@@ -911,7 +915,7 @@ fn test_mysql_configuration(
             version: version.to_string(),
             fqdn_id: "mysql-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
@@ -952,7 +956,7 @@ fn test_mysql_configuration(
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -978,7 +982,7 @@ fn test_mysql_configuration(
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -1045,6 +1049,7 @@ fn mysql_v8_deploy_a_working_prod_environment() {
  **
  **/
 
+#[cfg(test)]
 fn test_redis_configuration(
     context: Context,
     mut environment: Environment,
@@ -1076,11 +1081,11 @@ fn test_redis_configuration(
             kind: DatabaseKind::Redis,
             action: Action::Create,
             id: generate_id(),
-            name: database_db_name.clone(),
+            name: database_db_name,
             version: version.to_string(),
             fqdn_id: "redis-".to_string() + generate_id().as_str(),
             fqdn: database_host.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "500m".to_string(),
@@ -1121,7 +1126,7 @@ fn test_redis_configuration(
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        environment.routers[0].routes[0].application_name = app_name.clone();
+        environment.routers[0].routes[0].application_name = app_name;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -1147,7 +1152,7 @@ fn test_redis_configuration(
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 

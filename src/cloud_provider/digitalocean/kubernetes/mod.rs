@@ -472,7 +472,7 @@ impl<'a> Kubernetes for DOKS<'a> {
     fn on_create(&self) -> Result<(), EngineError> {
         info!("DOKS.on_create() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.to_vec());
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Infrastructure {
@@ -663,7 +663,7 @@ impl<'a> Kubernetes for DOKS<'a> {
             cluster_long_id: self.long_id,
             do_cluster_id: doks_id,
             region: self.region().to_string(),
-            cluster_name: self.cluster_name().to_string(),
+            cluster_name: self.cluster_name(),
             cloud_provider: "digitalocean".to_string(),
             test_cluster: self.context.is_test_cluster(),
             do_token: self.cloud_provider.token.to_string(),
@@ -831,7 +831,7 @@ impl<'a> Kubernetes for DOKS<'a> {
     fn on_delete(&self) -> Result<(), EngineError> {
         info!("DOKS.on_delete() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.to_vec());
         let send_to_customer = |message: &str| {
             listeners_helper.delete_in_progress(ProgressInfo::new(
                 ProgressScope::Infrastructure {

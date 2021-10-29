@@ -72,7 +72,7 @@ impl Application {
     }
 
     fn is_stateful(&self) -> bool {
-        self.storage.len() > 0
+        !self.storage.is_empty()
     }
 }
 
@@ -180,8 +180,8 @@ impl Service for Application {
         }
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(
-            &ListenersHelper::new(&self.listeners),
-            &self.context.execution_id(),
+            &ListenersHelper::new(self.listeners.to_vec()),
+            self.context.execution_id(),
             &self.id,
             self.total_cpus(),
             self.cpu_burst(),
@@ -235,7 +235,7 @@ impl Service for Application {
             })
             .collect::<Vec<_>>();
 
-        let is_storage = storage.len() > 0;
+        let is_storage = !storage.is_empty();
 
         context.insert("storage", &storage);
         context.insert("is_storage", &is_storage);

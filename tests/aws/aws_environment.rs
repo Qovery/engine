@@ -16,19 +16,20 @@ use tracing::{span, Level};
 //   - Tests that applications are always restarted when recieving a CREATE action
 //     see: https://github.com/Qovery/engine/pull/269
 
+#[cfg(test)]
 pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
-    let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+    let engine = test_utilities::aws::docker_ecr_aws_engine(context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::aws::cloud_provider_aws(&context);
+    let cp = test_utilities::aws::cloud_provider_aws(context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
     let dns_provider = dns_provider_cloudflare(context);
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
+    let k = test_utilities::aws::aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
 
     let _ = tx.deploy_environment_with_options(
         &k,
-        &environment_action,
+        environment_action,
         DeploymentOption {
             force_build: true,
             force_push: true,
@@ -38,32 +39,34 @@ pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAct
     tx.commit()
 }
 
+#[cfg(test)]
 pub fn ctx_pause_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
-    let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+    let engine = test_utilities::aws::docker_ecr_aws_engine(context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::aws::cloud_provider_aws(&context);
+    let cp = test_utilities::aws::cloud_provider_aws(context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
     let dns_provider = dns_provider_cloudflare(context);
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
+    let k = test_utilities::aws::aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
 
-    let _ = tx.pause_environment(&k, &environment_action);
+    let _ = tx.pause_environment(&k, environment_action);
 
     tx.commit()
 }
 
+#[cfg(test)]
 pub fn delete_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
-    let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+    let engine = test_utilities::aws::docker_ecr_aws_engine(context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::aws::cloud_provider_aws(&context);
+    let cp = test_utilities::aws::cloud_provider_aws(context);
     let nodes = test_utilities::aws::aws_kubernetes_nodes();
     let dns_provider = dns_provider_cloudflare(context);
-    let k = test_utilities::aws::aws_kubernetes_eks(&context, &cp, &dns_provider, nodes);
+    let k = test_utilities::aws::aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
 
-    let _ = tx.delete_environment(&k, &environment_action);
+    let _ = tx.delete_environment(&k, environment_action);
 
     tx.commit()
 }
@@ -741,8 +744,6 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
 #[test]
 #[ignore]
 #[named]
-#[allow(dead_code)] // todo: make it work and remove the next line
-#[allow(unused_attributes)]
 fn deploy_ok_fail_fail_ok_environment() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -909,7 +910,7 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
         );
         delete_env.action = Action::Delete;
         let ea_delete = EnvironmentAction::Environment(delete_env);
-        let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+        let ea = EnvironmentAction::EnvironmentWithFailover(environment, Box::new(failover_environment));
 
         match deploy_environment(&context, &ea) {
             TransactionResult::Ok => assert!(false),
@@ -988,8 +989,8 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
     let ea_delete = EnvironmentAction::Environment(delete_env);
 
     // first deployement
-    let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, failover_environment_1);
-    let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, failover_environment_2);
+    let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, Box::new(failover_environment_1));
+    let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, Box::new(failover_environment_2));
 
     match deploy_environment(&context_failover_1, &ea1) {
         TransactionResult::Ok => assert!(false),
@@ -1042,7 +1043,7 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
         delete_env.action = Action::Delete;
         // environment action initialize
         let ea_delete = EnvironmentAction::Environment(delete_env);
-        let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+        let ea = EnvironmentAction::EnvironmentWithFailover(environment, Box::new(failover_environment));
 
         match deploy_environment(&context, &ea) {
             TransactionResult::Ok => assert!(false),

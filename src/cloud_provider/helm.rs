@@ -135,19 +135,19 @@ pub trait HelmChart: Send {
     fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, SimpleError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         let payload = self.check_prerequisites()?;
-        let payload = self.pre_exec(&kubernetes_config, &envs, payload)?;
-        let payload = match self.exec(&kubernetes_config, &envs, payload.clone()) {
+        let payload = self.pre_exec(kubernetes_config, envs, payload)?;
+        let payload = match self.exec(kubernetes_config, envs, payload.clone()) {
             Ok(payload) => payload,
             Err(e) => {
                 error!(
                     "Error while deploying chart: {:?}",
                     e.message.clone().expect("no error message provided")
                 );
-                self.on_deploy_failure(&kubernetes_config, &envs, payload)?;
+                self.on_deploy_failure(kubernetes_config, envs, payload)?;
                 return Err(e);
             }
         };
-        let payload = self.post_exec(&kubernetes_config, &envs, payload)?;
+        let payload = self.post_exec(kubernetes_config, envs, payload)?;
         Ok(payload)
     }
 
@@ -179,7 +179,7 @@ pub trait HelmChart: Send {
                 match is_chart_deployed(
                     kubernetes_config,
                     environment_variables.clone(),
-                    Some(get_chart_namespace(chart_info.namespace.clone()).as_str()),
+                    Some(get_chart_namespace(chart_info.namespace).as_str()),
                     chart_info.name.clone(),
                 ) {
                     Ok(deployed) => {
@@ -261,7 +261,7 @@ fn deploy_parallel_charts(
 
 pub fn deploy_charts_levels(
     kubernetes_config: &Path,
-    envs: &Vec<(String, String)>,
+    envs: &[(String, String)],
     charts: Vec<Vec<Box<dyn HelmChart>>>,
     dry_run: bool,
 ) -> Result<(), SimpleError> {
@@ -269,12 +269,9 @@ pub fn deploy_charts_levels(
     for level in &charts {
         for chart in level {
             let chart_info = chart.get_chart_info();
-            match chart_info.action {
+            if let HelmAction::Deploy = chart_info.action {
                 // don't do diff on destroy or skip
-                HelmAction::Deploy => {
-                    let _ = helm_upgrade_diff_with_chart_info(&kubernetes_config, envs, chart.get_chart_info());
-                }
-                _ => {}
+                let _ = helm_upgrade_diff_with_chart_info(&kubernetes_config, envs, chart.get_chart_info());
             }
         }
     }
@@ -284,7 +281,7 @@ pub fn deploy_charts_levels(
         return Ok(());
     }
     for level in charts.into_iter() {
-        match deploy_parallel_charts(&kubernetes_config, &envs, level) {
+        match deploy_parallel_charts(kubernetes_config, envs, level) {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
@@ -369,7 +366,7 @@ impl HelmChart for CoreDNSConfigChart {
                     "kube-system",
                     "annotate",
                     "--overwrite",
-                    &kind,
+                    kind,
                     &self.chart_info.name,
                     format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
                 ],
@@ -383,7 +380,7 @@ impl HelmChart for CoreDNSConfigChart {
                     "kube-system",
                     "annotate",
                     "--overwrite",
-                    &kind,
+                    kind,
                     &self.chart_info.name,
                     "meta.helm.sh/release-namespace=kube-system",
                 ],
@@ -397,7 +394,7 @@ impl HelmChart for CoreDNSConfigChart {
                     "kube-system",
                     "label",
                     "--overwrite",
-                    &kind,
+                    kind,
                     &self.chart_info.name,
                     "app.kubernetes.io/managed-by=Helm",
                 ],
@@ -417,7 +414,7 @@ impl HelmChart for CoreDNSConfigChart {
     fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, SimpleError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
-        let payload = match self.pre_exec(&kubernetes_config, &envs, None) {
+        let payload = match self.pre_exec(kubernetes_config, envs, None) {
             Ok(p) => match p {
                 None => {
                     return Err(SimpleError {
@@ -431,15 +428,15 @@ impl HelmChart for CoreDNSConfigChart {
             },
             Err(e) => return Err(e),
         };
-        if let Err(e) = self.exec(&kubernetes_config, &envs, None) {
+        if let Err(e) = self.exec(kubernetes_config, envs, None) {
             error!(
                 "Error while deploying chart: {:?}",
                 e.message.clone().expect("no message provided")
             );
-            self.on_deploy_failure(&kubernetes_config, &envs, None)?;
+            self.on_deploy_failure(kubernetes_config, envs, None)?;
             return Err(e);
         };
-        self.post_exec(&kubernetes_config, &envs, Some(payload))?;
+        self.post_exec(kubernetes_config, envs, Some(payload))?;
         Ok(None)
     }
 
@@ -546,7 +543,7 @@ impl HelmChart for PrometheusOperatorConfigChart {
                 match is_chart_deployed(
                     kubernetes_config,
                     environment_variables.clone(),
-                    Some(get_chart_namespace(chart_info.namespace.clone()).as_str()),
+                    Some(get_chart_namespace(chart_info.namespace).as_str()),
                     chart_info.name.clone(),
                 ) {
                     Ok(deployed) => {

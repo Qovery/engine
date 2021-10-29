@@ -70,8 +70,10 @@ impl ECR {
     }
 
     fn get_repository(&self, image: &Image) -> Option<Repository> {
-        let mut drr = DescribeRepositoriesRequest::default();
-        drr.repository_names = Some(vec![image.name.to_string()]);
+        let drr = DescribeRepositoriesRequest {
+            repository_names: Some(vec![image.name.to_string()]),
+            ..Default::default()
+        };
 
         let r = block_on(self.ecr_client().describe_repositories(drr));
 
@@ -86,12 +88,16 @@ impl ECR {
     }
 
     fn get_image(&self, image: &Image) -> Option<ImageDetail> {
-        let mut dir = DescribeImagesRequest::default();
-        dir.repository_name = image.name.to_string();
+        let image_identifier = ImageIdentifier {
+            image_tag: Some(image.tag.to_string()),
+            ..Default::default()
+        };
 
-        let mut image_identifier = ImageIdentifier::default();
-        image_identifier.image_tag = Some(image.tag.to_string());
-        dir.image_ids = Some(vec![image_identifier]);
+        let dir = DescribeImagesRequest {
+            repository_name: image.name.to_string(),
+            image_ids: Some(vec![image_identifier]),
+            ..Default::default()
+        };
 
         let r = block_on(self.ecr_client().describe_images(dir));
 
@@ -256,9 +262,9 @@ impl ECR {
     fn get_or_create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
         // check if the repository already exists
         let repository = self.get_repository(image);
-        if repository.is_some() {
+        if let Some(repo) = repository {
             info!("ECR repository {} already exists", image.name.as_str());
-            return Ok(repository.unwrap());
+            return Ok(repo);
         }
 
         self.create_repository(image)
@@ -381,7 +387,7 @@ impl ContainerRegistry for ECR {
             }
         };
 
-        if let Err(_) = cmd::utilities::exec(
+        if cmd::utilities::exec(
             "docker",
             vec![
                 "login",
@@ -392,7 +398,9 @@ impl ContainerRegistry for ECR {
                 endpoint_url.as_str(),
             ],
             &self.docker_envs(),
-        ) {
+        )
+        .is_err()
+        {
             return Err(self.engine_error(
                 EngineErrorCause::User(
                     "Your ECR account seems to be no longer valid (bad Credentials). \
@@ -404,7 +412,7 @@ impl ContainerRegistry for ECR {
 
         let dest = format!("{}:{}", repository.repository_uri.unwrap(), image.tag.as_str());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.clone());
 
         if !force_push && self.does_image_exists(image) {
             // check if image does exist - if yes, do not upload it again

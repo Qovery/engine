@@ -63,14 +63,12 @@ where
     let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, &envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
-    Ok(helm_history_rows
-        .first()
-        .map(|helm_history_row| helm_history_row.clone()))
+    Ok(helm_history_rows.first().cloned())
 }
 
 pub fn helm_destroy_chart_if_breaking_changes_version_detected(
     kubernetes_config: &Path,
-    environment_variables: &Vec<(&str, &str)>,
+    environment_variables: &[(&str, &str)],
     chart_info: &ChartInfo,
 ) -> Result<(), SimpleError> {
     // If there is a breaking version set for the current helm chart,
@@ -78,7 +76,7 @@ pub fn helm_destroy_chart_if_breaking_changes_version_detected(
     // If current installed version is older than breaking change one, then we delete
     // the chart before applying it.
     if let Some(breaking_version) = &chart_info.last_breaking_version_requiring_restart {
-        let chart_namespace = get_chart_namespace(chart_info.namespace.clone());
+        let chart_namespace = get_chart_namespace(chart_info.namespace);
         if let Some(installed_version) = helm_get_chart_version(
             kubernetes_config,
             environment_variables.to_owned(),
@@ -101,7 +99,7 @@ pub fn helm_destroy_chart_if_breaking_changes_version_detected(
 
 pub fn helm_exec_upgrade_with_chart_info<P>(
     kubernetes_config: P,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
     chart: &ChartInfo,
 ) -> Result<(), SimpleError>
 where
@@ -191,7 +189,7 @@ where
         };
         match helm_exec_with_output(
             args,
-            envs.clone(),
+            envs.to_owned(),
             |out| match out {
                 Ok(line) => {
                     info!("{}", line);
@@ -222,7 +220,7 @@ where
                             get_chart_namespace(chart.namespace).as_str(),
                             &chart.name,
                             chart.timeout_in_seconds,
-                            envs.clone(),
+                            envs.to_owned(),
                         ) {
                             Ok(_) => info!("Helm lock detected and cleaned"),
                             Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
@@ -256,8 +254,8 @@ where
 
     match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => return Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
     }
 }
 
@@ -315,13 +313,7 @@ where
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
                 if clean_lock {
-                    match clean_helm_lock(
-                        &kubernetes_config,
-                        &namespace,
-                        &release_name,
-                        timeout_i64.clone(),
-                        envs.clone(),
-                    ) {
+                    match clean_helm_lock(&kubernetes_config, namespace, release_name, timeout_i64, envs.clone()) {
                         Ok(_) => info!("Helm lock detected and cleaned"),
                         Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
                     };
@@ -333,8 +325,8 @@ where
 
     match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => return Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
     }
 }
 
@@ -359,8 +351,8 @@ where
         };
 
         // get helm release name (secret) containing the lock and clean if possible
-        match helm_get_secret_lock_name(&result, timeout_i64.clone()) {
-            Ok(x) => return OperationResult::Ok(x),
+        match helm_get_secret_lock_name(&result, timeout_i64) {
+            Ok(x) => OperationResult::Ok(x),
             Err(e) => match e.kind {
                 ParsingError => OperationResult::Retry(SimpleError {
                     kind: SimpleErrorKind::Other,
@@ -393,7 +385,7 @@ where
                     }
 
                     // retrieve now the secret
-                    match helm_get_secret_lock_name(&result, timeout_i64.clone()) {
+                    match helm_get_secret_lock_name(&result, timeout_i64) {
                         Ok(x) => OperationResult::Ok(x),
                         Err(e) => OperationResult::Err(SimpleError {
                             kind: SimpleErrorKind::Other,
@@ -469,8 +461,8 @@ pub fn helm_get_secret_lock_name(secrets_items: &KubernetesList<Item>, timeout: 
             let max_timeout = creation_time.timestamp() + timeout;
 
             // not yet expired
-            if &now < &max_timeout {
-                let time_to_wait = &max_timeout - &now;
+            if now < max_timeout {
+                let time_to_wait = max_timeout - now;
                 return Err(HelmLockError {
                     kind: NotYetExpired,
                     message: format!(
@@ -489,7 +481,7 @@ pub fn helm_get_secret_lock_name(secrets_items: &KubernetesList<Item>, timeout: 
 
 pub fn helm_exec_uninstall_with_chart_info<P>(
     kubernetes_config: P,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
     chart: &ChartInfo,
 ) -> Result<(), SimpleError>
 where
@@ -504,7 +496,7 @@ where
             get_chart_namespace(chart.namespace).as_str(),
             &chart.name,
         ],
-        envs.clone(),
+        envs.to_owned(),
         |out| match out {
             Ok(line) => info!("{}", line.as_str()),
             Err(err) => error!("{}", err),
@@ -550,7 +542,7 @@ pub fn helm_exec_history<P>(
     kubernetes_config: P,
     namespace: &str,
     release_name: &str,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
 ) -> Result<Vec<HelmHistoryRow>, SimpleError>
 where
     P: AsRef<Path>,
@@ -568,7 +560,7 @@ where
             "json",
             release_name,
         ],
-        envs.clone(),
+        envs.to_owned(),
         |out| match out {
             Ok(line) => output_string = line,
             Err(err) => error!("{:?}", err),
@@ -725,9 +717,7 @@ where
     let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, &envs)?;
 
     // take the last deployment from helm history - or return none if there is no history
-    Ok(helm_history_rows
-        .first()
-        .map(|helm_history_row| helm_history_row.clone()))
+    Ok(helm_history_rows.first().cloned())
 }
 
 pub fn is_chart_deployed<P>(
@@ -842,13 +832,13 @@ where
 
 pub fn helm_upgrade_diff_with_chart_info<P>(
     kubernetes_config: P,
-    envs: &Vec<(String, String)>,
+    envs: &[(String, String)],
     chart: &ChartInfo,
 ) -> Result<(), SimpleError>
 where
     P: AsRef<Path>,
 {
-    let mut environment_variables = envs.clone();
+    let mut environment_variables = envs.to_owned();
     environment_variables.push(("HELM_NAMESPACE".to_string(), get_chart_namespace(chart.namespace)));
 
     let mut args_string: Vec<String> = vec![

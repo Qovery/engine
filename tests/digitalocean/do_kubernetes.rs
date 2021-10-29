@@ -11,7 +11,7 @@ use qovery_engine::transaction::TransactionResult;
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn create_upgrade_and_destroy_doks_cluster(
     region: Region,
     secrets: FuncTestsSecrets,
@@ -86,7 +86,7 @@ fn create_upgrade_and_destroy_doks_cluster(
     });
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, test_infra_pause: bool, test_name: &str) {
     engine_run_test(|| {
         init();
@@ -177,8 +177,6 @@ fn create_and_destroy_doks_cluster_ams_3() {
 
 #[test]
 #[ignore]
-#[allow(dead_code)]
-#[allow(unused_attributes)]
 #[named]
 fn create_upgrade_and_destroy_doks_cluster_in_nyc_3() {
     let region = Region::NewYorkCity3;

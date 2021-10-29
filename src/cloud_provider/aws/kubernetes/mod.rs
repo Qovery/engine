@@ -190,7 +190,7 @@ impl<'a> EKS<'a> {
             .dns_provider
             .resolvers()
             .iter()
-            .map(|x| format!("{}", x.clone().to_string()))
+            .map(|x| x.clone().to_string())
             .collect();
 
         terraform_list_format(managed_dns_resolvers)
@@ -205,7 +205,7 @@ impl<'a> EKS<'a> {
     }
 
     // divide by 2 the total number of subnet to get the exact same number as private and public
-    fn check_odd_subnets(&self, zone_name: &str, subnet_block: &Vec<String>) -> Result<usize, EngineError> {
+    fn check_odd_subnets(&self, zone_name: &str, subnet_block: &[String]) -> Result<usize, EngineError> {
         let is_odd = subnet_block.len() % 2;
 
         if is_odd == 1 {
@@ -287,7 +287,7 @@ impl<'a> EKS<'a> {
         let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
 
         let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![format!("{}", self.dns_provider.domain())];
+        let managed_dns_domains_helm_format = vec![self.dns_provider.domain().to_string()];
         let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
         let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
 
@@ -353,7 +353,7 @@ impl<'a> EKS<'a> {
         // Vault
         context.insert("vault_auth_method", "none");
 
-        if let Some(_) = env::var_os("VAULT_ADDR") {
+        if env::var_os("VAULT_ADDR").is_some() {
             // select the correct used method
             match env::var_os("VAULT_ROLE_ID") {
                 Some(role_id) => {
@@ -366,7 +366,7 @@ impl<'a> EKS<'a> {
                     }
                 }
                 None => {
-                    if let Some(_) = env::var_os("VAULT_TOKEN") {
+                    if env::var_os("VAULT_TOKEN").is_some() {
                         context.insert("vault_auth_method", "token")
                     }
                 }
@@ -409,7 +409,7 @@ impl<'a> EKS<'a> {
         context.insert("s3_kubeconfig_bucket", &self.kubeconfig_bucket_name());
 
         // AWS - EKS
-        context.insert("eks_cidr_subnet", &eks_cidr_subnet.clone());
+        context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("kubernetes_cluster_name", &self.name());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
@@ -471,7 +471,7 @@ impl<'a> EKS<'a> {
     }
 
     fn upgrade(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.to_vec());
         let send_to_customer = |message: &str| {
             listeners_helper.upgrade_in_progress(ProgressInfo::new(
                 ProgressScope::Infrastructure {
@@ -760,7 +760,7 @@ impl<'a> Kubernetes for EKS<'a> {
     fn on_create(&self) -> Result<(), EngineError> {
         info!("EKS.on_create() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.to_vec());
         let send_to_customer = |message: &str| {
             listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Infrastructure {
@@ -917,7 +917,7 @@ impl<'a> Kubernetes for EKS<'a> {
             cluster_id: self.id.clone(),
             cluster_long_id: self.long_id,
             region: self.region().to_string(),
-            cluster_name: self.cluster_name().to_string(),
+            cluster_name: self.cluster_name(),
             cloud_provider: "aws".to_string(),
             test_cluster: self.context.is_test_cluster(),
             aws_access_key_id: self.cloud_provider.access_key_id.to_string(),
@@ -1030,7 +1030,7 @@ impl<'a> Kubernetes for EKS<'a> {
     fn on_pause(&self) -> Result<(), EngineError> {
         info!("EKS.on_pause() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.to_vec());
         let send_to_customer = |message: &str| {
             listeners_helper.pause_in_progress(ProgressInfo::new(
                 ProgressScope::Infrastructure {
@@ -1213,7 +1213,7 @@ impl<'a> Kubernetes for EKS<'a> {
     fn on_delete(&self) -> Result<(), EngineError> {
         info!("EKS.on_delete() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let listeners_helper = ListenersHelper::new(self.listeners.to_vec());
         let send_to_customer = |message: &str| {
             listeners_helper.delete_in_progress(ProgressInfo::new(
                 ProgressScope::Infrastructure {

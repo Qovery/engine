@@ -18,6 +18,8 @@ pub struct Transaction<'a> {
     executed_steps: Vec<Step<'a>>,
 }
 
+type PushedApplications = Vec<(Box<dyn Application>, PushResult)>;
+
 impl<'a> Transaction<'a> {
     pub fn new(engine: &'a Engine) -> Self {
         Transaction::<'a> {
@@ -188,23 +190,20 @@ impl<'a> Transaction<'a> {
         &self,
         applications: Vec<Box<dyn Application>>,
         option: &DeploymentOption,
-    ) -> Result<Vec<(Box<dyn Application>, PushResult)>, EngineError> {
-        let application_and_push_results: Vec<_> = applications
-            .into_iter()
-            .map(|mut app| {
-                match self.engine.container_registry().push(app.image(), option.force_push) {
-                    Ok(push_result) => {
-                        // I am not a big fan of doing that but it's the most effective way
-                        app.set_image(push_result.image.clone());
-                        Ok((app, push_result))
-                    }
-                    Err(err) => Err(err),
+    ) -> Result<PushedApplications, EngineError> {
+        let application_and_push_results = applications.into_iter().map(|mut app| {
+            match self.engine.container_registry().push(app.image(), option.force_push) {
+                Ok(push_result) => {
+                    // I am not a big fan of doing that but it's the most effective way
+                    app.set_image(push_result.image.clone());
+                    Ok((app, push_result))
                 }
-            })
-            .collect();
+                Err(err) => Err(err),
+            }
+        });
 
         let mut results: Vec<(Box<dyn Application>, PushResult)> = vec![];
-        for result in application_and_push_results.into_iter() {
+        for result in application_and_push_results {
             match result {
                 Ok(tuple) => results.push(tuple),
                 Err(err) => {
@@ -527,7 +526,7 @@ impl<'a> Transaction<'a> {
         }
 
         let execution_id = self.engine.context().execution_id();
-        let lh = ListenersHelper::new(kubernetes.listeners());
+        let lh = ListenersHelper::new(kubernetes.listeners().clone());
 
         // 100 ms sleep to avoid race condition on last service status update
         // Otherwise, the last status sent to the CORE is (sometimes) not the right one.
@@ -597,13 +596,13 @@ impl<'a> Transaction<'a> {
         fn send_progress<T>(
             kubernetes: &dyn Kubernetes,
             action: &Action,
-            service: &Box<T>,
+            service: &T,
             execution_id: &str,
             is_error: bool,
         ) where
             T: Service + ?Sized,
         {
-            let lh = ListenersHelper::new(kubernetes.listeners());
+            let lh = ListenersHelper::new(kubernetes.listeners().clone());
             let progress_info = ProgressInfo::new(
                 service.progress_scope(),
                 ProgressLevel::Info,
@@ -647,11 +646,23 @@ impl<'a> Transaction<'a> {
                 // !!! don't change the order
                 // terminal update
                 for service in &qe_environment.stateful_services {
-                    send_progress(kubernetes, &target_environment.action, service, execution_id, true);
+                    send_progress(
+                        kubernetes,
+                        &target_environment.action,
+                        service.as_ref(),
+                        execution_id,
+                        true,
+                    );
                 }
 
                 for service in &qe_environment.stateless_services {
-                    send_progress(kubernetes, &target_environment.action, service, execution_id, true);
+                    send_progress(
+                        kubernetes,
+                        &target_environment.action,
+                        service.as_ref(),
+                        execution_id,
+                        true,
+                    );
                 }
 
                 return rollback_result;
@@ -659,11 +670,23 @@ impl<'a> Transaction<'a> {
             _ => {
                 // terminal update
                 for service in &qe_environment.stateful_services {
-                    send_progress(kubernetes, &target_environment.action, service, execution_id, false);
+                    send_progress(
+                        kubernetes,
+                        &target_environment.action,
+                        service.as_ref(),
+                        execution_id,
+                        false,
+                    );
                 }
 
                 for service in &qe_environment.stateless_services {
-                    send_progress(kubernetes, &target_environment.action, service, execution_id, false);
+                    send_progress(
+                        kubernetes,
+                        &target_environment.action,
+                        service.as_ref(),
+                        execution_id,
+                        false,
+                    );
                 }
             }
         };

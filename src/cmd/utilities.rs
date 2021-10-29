@@ -4,7 +4,7 @@ use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
-use crate::cmd::utilities::CommandOutputType::{STDERR, STDOUT};
+use crate::cmd::utilities::CommandOutputType::{StdErr, StdOut};
 use crate::error::SimpleErrorKind::Other;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
@@ -13,8 +13,8 @@ use std::time::Instant;
 use timeout_readwrite::TimeoutReader;
 
 enum CommandOutputType {
-    STDOUT(Result<String, std::io::Error>),
-    STDERR(Result<String, std::io::Error>),
+    StdOut(Result<String, std::io::Error>),
+    StdErr(Result<String, std::io::Error>),
 }
 
 fn command<P>(binary: P, args: Vec<&str>, envs: &[(&str, &str)], use_output: bool) -> Command
@@ -60,7 +60,7 @@ pub fn exec<P>(binary: P, args: Vec<&str>, envs: &[(&str, &str)]) -> Result<(), 
 where
     P: AsRef<Path>,
 {
-    let command_string = command_to_string(binary.as_ref(), &args, &envs);
+    let command_string = command_to_string(binary.as_ref(), &args, envs);
 
     info!("command: {}", command_string.as_str());
 
@@ -163,26 +163,26 @@ where
     let reader_timeout = std::time::Duration::from_secs(10.min(timeout.num_seconds() as u64));
     let stdout_reader = BufReader::new(TimeoutReader::new(child_process.stdout.take().unwrap(), reader_timeout))
         .lines()
-        .map(STDOUT);
+        .map(StdOut);
 
     let stderr_reader = BufReader::new(TimeoutReader::new(
         child_process.stderr.take().unwrap(),
         std::time::Duration::from_secs(0), // don't block on stderr
     ))
     .lines()
-    .map(STDERR);
+    .map(StdErr);
     let mut command_output = Vec::new();
 
     for line in stdout_reader.interleave(stderr_reader) {
         match line {
-            STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {}
-            STDOUT(line) => {
+            StdOut(Err(ref err)) | StdErr(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {}
+            StdOut(line) => {
                 if let Ok(x) = &line {
                     command_output.push(x.to_string())
                 }
                 stdout_output(line)
             }
-            STDERR(line) => {
+            StdErr(line) => {
                 if let Ok(x) = &line {
                     command_output.push(x.to_string())
                 }
