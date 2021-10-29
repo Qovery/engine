@@ -376,6 +376,14 @@ function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
   set -e
 
   print_title "Generating Vault Token"
+  if [ ! -z $CI_VAULT_ADDR ] ; then
+    export VAULT_ADDR=$CI_VAULT_ADDR
+  else
+    if [ -z $VAULT_ADDR ] ; then
+      echo "VAULT_ADDR or CI_VAULT_ADDR were not found, can't continue"
+      exit 1
+    fi
+  fi
   export VAULT_TOKEN=$(vault write -format=json auth/approle/login role_id=$CI_VAULT_ROLE_ID secret_id=$CI_VAULT_SECRET_ID | jq -r ".auth.client_token")
 }
 
