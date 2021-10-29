@@ -67,12 +67,16 @@ digitalocean = "0.1.1"
 scaleway_api_rs = "=0.1.2"
 
 [dev-dependencies]
-test-utilities = { path = "test_utilities" }
 tempdir = "0.3"
 tempfile = "3.2.0"
 uuid = { version = "0.8", features = ["v4"] }
 function_name = "0.2.0"
 maplit = "1.0.2"
+bstr = "0.2.17"
+passwords = "3.1.8"
+time = "0.3.4"
+curl = "0.4.39"
+hashicorp_vault = "2.1.0"
 
 [features]
 default = []

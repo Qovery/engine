@@ -1,12 +1,14 @@
-extern crate test_utilities;
+pub use ::function_name::named;
+pub use tracing::{span, Level};
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
-use ::function_name::named;
-use tracing::{span, Level};
-
-use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
-use qovery_engine::transaction::TransactionResult;
+pub use crate::helpers::cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::scaleway::{
+    cloud_provider_scaleway, docker_scw_cr_engine, scw_kubernetes_cluster_options, scw_kubernetes_nodes,
+    SCW_KUBERNETES_VERSION, SCW_KUBE_TEST_CLUSTER_ID, SCW_KUBE_TEST_CLUSTER_NAME, SCW_TEST_ZONE,
+};
+pub use crate::helpers::utilities::{context, engine_run_test, init, FuncTestsSecrets};
+pub use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
+pub use qovery_engine::transaction::TransactionResult;
 
 // Warning: This test shouldn't be ran by CI
 // Note: this test creates the test cluster where all application tests will be ran
@@ -26,25 +28,25 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::scaleway::docker_scw_cr_engine(&context);
+        let engine = docker_scw_cr_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let scw_cluster = test_utilities::scaleway::cloud_provider_scaleway(&context);
-        let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
+        let scw_cluster = cloud_provider_scaleway(&context);
+        let nodes = scw_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
             context,
-            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+            SCW_KUBE_TEST_CLUSTER_ID.to_string(),
             uuid::Uuid::new_v4(),
-            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
-            test_utilities::scaleway::SCW_KUBERNETES_VERSION.to_string(),
-            test_utilities::scaleway::SCW_TEST_ZONE,
+            SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
+            SCW_KUBERNETES_VERSION.to_string(),
+            SCW_TEST_ZONE,
             &scw_cluster,
             &cloudflare,
             nodes,
-            test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
+            scw_kubernetes_cluster_options(secrets),
         )
         .unwrap();
 
@@ -53,9 +55,9 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()
@@ -80,25 +82,25 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::scaleway::docker_scw_cr_engine(&context);
+        let engine = docker_scw_cr_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let scw_cluster = test_utilities::scaleway::cloud_provider_scaleway(&context);
-        let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
+        let scw_cluster = cloud_provider_scaleway(&context);
+        let nodes = scw_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = Kapsule::new(
             context,
-            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+            SCW_KUBE_TEST_CLUSTER_ID.to_string(),
             uuid::Uuid::new_v4(),
-            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
-            test_utilities::scaleway::SCW_KUBERNETES_VERSION.to_string(),
-            test_utilities::scaleway::SCW_TEST_ZONE,
+            SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
+            SCW_KUBERNETES_VERSION.to_string(),
+            SCW_TEST_ZONE,
             &scw_cluster,
             &cloudflare,
             nodes,
-            test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
+            scw_kubernetes_cluster_options(secrets),
         )
         .unwrap();
 
@@ -107,9 +109,9 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
             panic!("{:?}", err)
         }
         match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()

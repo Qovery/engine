@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate maplit;
-
 pub mod aws;
 pub mod cloudflare;
 pub mod common;

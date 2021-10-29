@@ -1,16 +1,19 @@
-extern crate test_utilities;
+pub use qovery_engine::cloud_provider::Kind;
+pub use std::collections::BTreeMap;
 
-use self::test_utilities::aws::{AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID};
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{engine_run_test, generate_id, get_pods, is_pod_restarted_env, FuncTestsSecrets};
-use ::function_name::named;
-use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
-use qovery_engine::transaction::{DeploymentOption, TransactionResult};
-use std::collections::BTreeMap;
-use test_utilities::utilities::context;
-use test_utilities::utilities::init;
-use tracing::{span, Level};
+pub use crate::helpers::aws::{
+    aws_kubernetes_eks, aws_kubernetes_nodes, cloud_provider_aws, docker_ecr_aws_engine, AWS_KUBE_TEST_CLUSTER_ID,
+    AWS_QOVERY_ORGANIZATION_ID,
+};
+pub use crate::helpers::cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::common::{echo_app_environment, non_working_environment, working_minimal_environment};
+pub use crate::helpers::utilities::{
+    context, engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
+};
+pub use function_name::named;
+pub use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
+pub use qovery_engine::transaction::{DeploymentOption, TransactionResult};
+pub use tracing::{span, Level};
 
 // TODO:
 //   - Tests that applications are always restarted when recieving a CREATE action
@@ -18,14 +21,14 @@ use tracing::{span, Level};
 
 #[cfg(test)]
 pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
-    let engine = test_utilities::aws::docker_ecr_aws_engine(context);
+    let engine = docker_ecr_aws_engine(context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::aws::cloud_provider_aws(context);
-    let nodes = test_utilities::aws::aws_kubernetes_nodes();
+    let cp = cloud_provider_aws(context);
+    let nodes = aws_kubernetes_nodes();
     let dns_provider = dns_provider_cloudflare(context);
-    let k = test_utilities::aws::aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
+    let k = aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
 
     let _ = tx.deploy_environment_with_options(
         &k,
@@ -41,14 +44,14 @@ pub fn deploy_environment(context: &Context, environment_action: &EnvironmentAct
 
 #[cfg(test)]
 pub fn ctx_pause_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
-    let engine = test_utilities::aws::docker_ecr_aws_engine(context);
+    let engine = docker_ecr_aws_engine(context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::aws::cloud_provider_aws(context);
-    let nodes = test_utilities::aws::aws_kubernetes_nodes();
+    let cp = cloud_provider_aws(context);
+    let nodes = aws_kubernetes_nodes();
     let dns_provider = dns_provider_cloudflare(context);
-    let k = test_utilities::aws::aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
+    let k = aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
 
     let _ = tx.pause_environment(&k, environment_action);
 
@@ -57,14 +60,14 @@ pub fn ctx_pause_environment(context: &Context, environment_action: &Environment
 
 #[cfg(test)]
 pub fn delete_environment(context: &Context, environment_action: &EnvironmentAction) -> TransactionResult {
-    let engine = test_utilities::aws::docker_ecr_aws_engine(context);
+    let engine = docker_ecr_aws_engine(context);
     let session = engine.session().unwrap();
     let mut tx = session.transaction();
 
-    let cp = test_utilities::aws::cloud_provider_aws(context);
-    let nodes = test_utilities::aws::aws_kubernetes_nodes();
+    let cp = cloud_provider_aws(context);
+    let nodes = aws_kubernetes_nodes();
     let dns_provider = dns_provider_cloudflare(context);
-    let k = test_utilities::aws::aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
+    let k = aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
 
     let _ = tx.delete_environment(&k, environment_action);
 
@@ -84,7 +87,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let context = context();
         let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
+        let mut environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -102,15 +105,15 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ea_delete = EnvironmentAction::Environment(environment_for_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -130,7 +133,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let context = context();
         let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
+        let environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -142,15 +145,15 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         let ea = EnvironmentAction::Environment(environment.clone());
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         match ctx_pause_environment(&context_for_delete, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // Check that we have actually 0 pods running for this app
@@ -168,16 +171,16 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
         match deploy_environment(&ctx_resume, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // Cleanup
         match delete_environment(&context_for_delete, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
         return test_name.to_string();
     })
@@ -197,7 +200,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
 
-        let mut environment = test_utilities::common::non_working_environment(
+        let mut environment = non_working_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -214,15 +217,15 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => panic!(),
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
 
         match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
 
         return test_name.to_string();
@@ -243,7 +246,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
+        let mut environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -270,15 +273,15 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         match delete_environment(&context_for_deletion, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -299,7 +302,7 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
+        let mut environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -326,15 +329,15 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         match delete_environment(&context_for_deletion, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -355,7 +358,7 @@ fn deploy_a_working_environment_with_domain() {
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
+        let environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -371,15 +374,15 @@ fn deploy_a_working_environment_with_domain() {
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         match delete_environment(&context_for_deletion, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -400,7 +403,7 @@ fn deploy_a_working_environment_with_domain() {
 //         let context_for_delete = context.clone_not_same_execution_id();
 //         let secrets = FuncTestsSecrets::new();
 //
-//         let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
+//         let mut environment = working_minimal_environment(&context, secrets.clone());
 //         // Todo: fix domains
 //         environment.routers = environment
 //             .routers
@@ -423,17 +426,17 @@ fn deploy_a_working_environment_with_domain() {
 //         let ea_delete = EnvironmentAction::Environment(environment_delete);
 //
 //         match deploy_environment(&context, &ea) {
-//             TransactionResult::Ok => assert!(true),
-//             TransactionResult::Rollback(_) => assert!(false),
-//             TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//             TransactionResult::Ok => {},
+//             TransactionResult::Rollback(_) => panic!(),
+//             TransactionResult::UnrecoverableError(_, _) => panic!(),
 //         };
 //
 //         // todo: check TLS
 //
 //         match delete_environment(&context_for_delete, &ea_delete) {
-//             TransactionResult::Ok => assert!(true),
-//             TransactionResult::Rollback(_) => assert!(false),
-//             TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//             TransactionResult::Ok => {},
+//             TransactionResult::Rollback(_) => panic!(),
+//             TransactionResult::UnrecoverableError(_, _) => panic!(),
 //         };
 //         return "deploy_a_working_environment_with_custom_domain".to_string();
 //     })
@@ -454,7 +457,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
 
-        let mut environment = test_utilities::common::working_minimal_environment(
+        let mut environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -487,17 +490,17 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // todo: check the disk is here and with correct size
 
         match delete_environment(&context_for_deletion, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -521,7 +524,7 @@ fn redeploy_same_app_with_ebs() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
 
-        let mut environment = test_utilities::common::working_minimal_environment(
+        let mut environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -558,9 +561,9 @@ fn redeploy_same_app_with_ebs() {
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
         let (_, number) = is_pod_restarted_env(
@@ -572,9 +575,9 @@ fn redeploy_same_app_with_ebs() {
         );
 
         match deploy_environment(&context_bis, &ea2) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         let (_, number2) = is_pod_restarted_env(
@@ -587,9 +590,9 @@ fn redeploy_same_app_with_ebs() {
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
         match delete_environment(&context_for_deletion, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
         return test_name.to_string();
     })
@@ -602,7 +605,7 @@ fn redeploy_same_app_with_ebs() {
 //     let context = context();
 //     let deletion_context = context.clone_not_same_execution_id();
 //
-//     let mut environment = test_utilities::aws::working_minimal_environment(&context);
+//     let mut environment = working_minimal_environment(&context);
 //
 //     // no apps
 //     environment.applications = vec![];
@@ -634,15 +637,15 @@ fn redeploy_same_app_with_ebs() {
 //     let ea_delete = EnvironmentAction::Environment(environment_delete);
 //
 //     match deploy_environment(&context, &ea) {
-//         TransactionResult::Ok => assert!(true),
-//         TransactionResult::Rollback(_) => assert!(false),
-//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//         TransactionResult::Ok => {},
+//         TransactionResult::Rollback(_) => panic!(),
+//         TransactionResult::UnrecoverableError(_, _) => panic!(),
 //     };
 //
 //     match delete_environment(&deletion_context, &ea_delete) {
-//         TransactionResult::Ok => assert!(true),
-//         TransactionResult::Rollback(_) => assert!(false),
-//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
+//         TransactionResult::Ok => {},
+//         TransactionResult::Rollback(_) => panic!(),
+//         TransactionResult::UnrecoverableError(_, _) => panic!(),
 //     };
 //
 //     // TODO: remove the namespace (or project)
@@ -655,21 +658,21 @@ fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
 
     let context = context();
 
-    let mut environment = test_utilities::aws::working_environment(&context);
+    let mut environment = working_environment(&context);
     environment.kind = Kind::Production;
     let environment_delete = environment.clone_not_same_execution_id();
     let ea = EnvironmentAction::Environment(environment);
 
     match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {},
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
     let ea_delete = EnvironmentAction::Environment(environment_delete);
     match delete_environment(&context, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {},
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
 }*/
 
@@ -684,14 +687,14 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        // let mut contex_envs = generate_contexts_and_environments(3, test_utilities::aws::working_minimal_environment);
+        // let mut contex_envs = generate_contexts_and_environments(3, working_minimal_environment);
         let context = context();
         let context_for_not_working = context.clone_not_same_execution_id();
         let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
 
         // env part generation
-        let environment = test_utilities::common::working_minimal_environment(
+        let environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -721,19 +724,19 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let ea_delete = EnvironmentAction::Environment(environment_for_delete);
 
         match deploy_environment(&context_for_not_working, &ea_not_working) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => panic!(),
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
         match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -755,7 +758,7 @@ fn deploy_ok_fail_fail_ok_environment() {
         // working env
         let context = context();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
+        let environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -795,36 +798,36 @@ fn deploy_ok_fail_fail_ok_environment() {
 
         // OK
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // FAIL and rollback
         match deploy_environment(&context_for_not_working_1, &ea_not_working_1) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => panic!(),
+            TransactionResult::Rollback(_) => {}
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
 
         // FAIL and Rollback again
         match deploy_environment(&context_for_not_working_2, &ea_not_working_2) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => panic!(),
+            TransactionResult::Rollback(_) => {}
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
 
         // Should be working
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -844,7 +847,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 
         let context = context();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::non_working_environment(
+        let environment = non_working_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -861,14 +864,14 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         let ea_delete = EnvironmentAction::Environment(delete_env);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => panic!(),
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
         match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -894,33 +897,26 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment =
-            test_utilities::common::non_working_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
-        let failover_environment = test_utilities::common::working_minimal_environment(
-            &context,
-            AWS_QOVERY_ORGANIZATION_ID,
-            test_domain.as_str(),
-        );
+        let environment = non_working_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
+        let failover_environment =
+            working_minimal_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
         // context for deletion
         let context_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::common::working_minimal_environment(
-            &context_deletion,
-            AWS_QOVERY_ORGANIZATION_ID,
-            test_domain.as_str(),
-        );
+        let mut delete_env =
+            working_minimal_environment(&context_deletion, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
         delete_env.action = Action::Delete;
         let ea_delete = EnvironmentAction::Environment(delete_env);
         let ea = EnvironmentAction::EnvironmentWithFailover(environment, Box::new(failover_environment));
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => panic!(),
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
         match delete_environment(&context_deletion, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -946,22 +942,16 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
         .as_ref()
         .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-    let failover_environment_1 = test_utilities::common::echo_app_environment(
-        &context_failover_1,
-        AWS_QOVERY_ORGANIZATION_ID,
-        test_domain.as_str(),
-    );
-    let fail_app_1 = test_utilities::common::non_working_environment(
+    let failover_environment_1 =
+        echo_app_environment(&context_failover_1, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
+    let fail_app_1 = non_working_environment(
         &context_first_fail_deployement_1,
         AWS_QOVERY_ORGANIZATION_ID,
         test_domain.as_str(),
     );
-    let mut failover_environment_2 = test_utilities::common::echo_app_environment(
-        &context_failover_2,
-        AWS_QOVERY_ORGANIZATION_ID,
-        test_domain.as_str(),
-    );
-    let fail_app_2 = test_utilities::common::non_working_environment(
+    let mut failover_environment_2 =
+        echo_app_environment(&context_failover_2, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
+    let fail_app_2 = non_working_environment(
         &context_second_fail_deployement_2,
         AWS_QOVERY_ORGANIZATION_ID,
         test_domain.as_str(),
@@ -980,11 +970,7 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
 
     // context for deletion
     let context_deletion = context_failover_1.clone_not_same_execution_id();
-    let mut delete_env = test_utilities::common::echo_app_environment(
-        &context_deletion,
-        AWS_QOVERY_ORGANIZATION_ID,
-        test_domain.as_str(),
-    );
+    let mut delete_env = echo_app_environment(&context_deletion, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
     delete_env.action = Action::Delete;
     let ea_delete = EnvironmentAction::Environment(delete_env);
 
@@ -993,21 +979,21 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
     let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, Box::new(failover_environment_2));
 
     match deploy_environment(&context_failover_1, &ea1) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        TransactionResult::Ok => panic!(),
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => {}
     };
 
     match deploy_environment(&context_failover_2, &ea2) {
-        TransactionResult::Ok => assert!(false),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(true),
+        TransactionResult::Ok => panic!(),
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => {}
     };
 
     match delete_environment(&context_deletion, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {}
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
 }
 
@@ -1029,31 +1015,26 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment =
-            test_utilities::common::non_working_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
-        let failover_environment =
-            test_utilities::common::non_working_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
+        let environment = non_working_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
+        let failover_environment = non_working_environment(&context, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
 
         let context_for_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::common::non_working_environment(
-            &context_for_deletion,
-            AWS_QOVERY_ORGANIZATION_ID,
-            test_domain.as_str(),
-        );
+        let mut delete_env =
+            non_working_environment(&context_for_deletion, AWS_QOVERY_ORGANIZATION_ID, test_domain.as_str());
         delete_env.action = Action::Delete;
         // environment action initialize
         let ea_delete = EnvironmentAction::Environment(delete_env);
         let ea = EnvironmentAction::EnvironmentWithFailover(environment, Box::new(failover_environment));
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => panic!(),
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
         match delete_environment(&context_for_deletion, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
 
         return test_name.to_string();
@@ -1079,17 +1060,17 @@ fn deploy_but_fail_to_push_image_on_container_registry() {
 fn pause_a_working_development_environment_on_aws_eks() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = context();
 
-    let mut environment = test_utilities::aws::working_environment(&context);
+    let mut environment = working_environment(&context);
     environment.kind = Kind::Development;
 
     let ea = EnvironmentAction::Environment(environment);
 
     match pause_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {},
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
 }
 
@@ -1098,17 +1079,17 @@ fn pause_a_working_development_environment_on_aws_eks() {
 fn pause_a_working_production_environment_on_aws_eks() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = context();
 
-    let mut environment = test_utilities::aws::working_environment(&context);
+    let mut environment = working_environment(&context);
     environment.kind = Kind::Production;
 
     let ea = EnvironmentAction::Environment(environment);
 
     match pause_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {},
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
 }
 
@@ -1117,16 +1098,16 @@ fn pause_a_working_production_environment_on_aws_eks() {
 fn pause_a_non_working_environment_on_aws_eks() {
     init();
 
-    let context = test_utilities::aws::context();
+    let context = context();
 
-    let mut environment = test_utilities::aws::non_working_environment(&context);
+    let mut environment = non_working_environment(&context);
 
     let ea = EnvironmentAction::Environment(environment);
 
     match pause_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {},
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
 }
 
@@ -1136,51 +1117,51 @@ fn start_and_pause_and_start_and_delete_a_working_environment_on_aws_eks() {
     init();
 
     // START
-    let context = test_utilities::aws::context();
+    let context = context();
 
-    let mut environment = test_utilities::aws::working_environment(&context);
+    let mut environment = working_environment(&context);
     let ea = EnvironmentAction::Environment(environment);
 
     match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {},
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
 
     // PAUSE
-    let context = test_utilities::aws::context();
+    let context = context();
 
-    let mut environment = test_utilities::aws::working_environment(&context);
+    let mut environment = working_environment(&context);
     let ea = EnvironmentAction::Environment(environment);
 
     match pause_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {},
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
 
     // START
-    let context = test_utilities::aws::context();
+    let context = context();
 
-    let mut environment = test_utilities::aws::working_environment(&context);
+    let mut environment = working_environment(&context);
     let ea = EnvironmentAction::Environment(environment);
 
     match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {},
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
 
     // DELETE
-    let context = test_utilities::aws::context();
+    let context = context();
 
-    let mut environment = test_utilities::aws::working_environment(&context);
+    let mut environment = working_environment(&context);
     let ea = EnvironmentAction::Environment(environment);
 
     match delete_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        TransactionResult::Ok => {},
+        TransactionResult::Rollback(_) => panic!(),
+        TransactionResult::UnrecoverableError(_, _) => panic!(),
     };
 }
 */

@@ -1,11 +1,11 @@
 extern crate base64;
 extern crate bstr;
+extern crate hashicorp_vault;
 extern crate passwords;
 extern crate scaleway_api_rs;
 
 use bstr::ByteSlice;
 use chrono::Utc;
-use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
 use std::io::{Error, ErrorKind, Write};
@@ -22,8 +22,6 @@ use std::fs;
 use tracing::{error, info, warn};
 use tracing_subscriber;
 
-use crate::scaleway::SCW_KUBE_TEST_CLUSTER_ID;
-use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::Kind;
@@ -35,6 +33,7 @@ use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
+use crate::helpers::scaleway::SCW_KUBE_TEST_CLUSTER_ID;
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::runtime::block_on;
 use time::Instant;
@@ -341,7 +340,7 @@ pub fn teardown(start_time: Instant, test_name: String) {
     info!("{} seconds for test {}", elapsed.as_seconds_f64(), test_name);
 }
 
-pub fn engine_run_test<T>(test: T) -> ()
+pub fn engine_run_test<T>(test: T)
 where
     T: FnOnce() -> String,
 {
@@ -357,7 +356,11 @@ pub fn generate_id() -> String {
     let uuid;
 
     loop {
-        let rand_string: String = thread_rng().sample_iter(Alphanumeric).take(15).collect();
+        let rand_string: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(15)
+            .map(char::from)
+            .collect();
         if rand_string.chars().next().unwrap().is_alphabetic() {
             uuid = rand_string.to_lowercase();
             break;
@@ -394,34 +397,6 @@ pub fn generate_password(allow_using_symbols: bool) -> String {
     }
 
     password
-}
-
-pub fn check_all_connections(env: &Environment) -> Vec<bool> {
-    let mut checking: Vec<bool> = Vec::with_capacity(env.routers.len());
-
-    for router_to_test in &env.routers {
-        let path_to_test = format!(
-            "https://{}{}",
-            &router_to_test.default_domain, &router_to_test.routes[0].path
-        );
-
-        checking.push(curl_path(path_to_test.as_str()));
-    }
-    return checking;
-}
-
-fn curl_path(path: &str) -> bool {
-    let mut easy = Easy::new();
-    easy.url(path).unwrap();
-    let res = easy.perform();
-    match res {
-        Ok(_) => return true,
-
-        Err(e) => {
-            println!("TEST Error : while trying to call {}", e);
-            return false;
-        }
-    }
 }
 
 fn kubernetes_config_path(
@@ -697,7 +672,7 @@ pub fn get_pods(
         kubernetes_config.unwrap().as_str(),
         namespace_name.clone().as_str(),
         pod_to_check,
-        get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+        get_cloud_provider_credentials(provider_kind, &secrets),
     )
 }
 
@@ -734,11 +709,11 @@ pub fn generate_cluster_id(region: &str) -> String {
             if current_name.chars().count() < shrink_size {
                 shrink_size = current_name.chars().count()
             }
-            let mut final_name = format!("{}", &current_name[..shrink_size]);
+            let mut final_name = current_name[..shrink_size].to_string();
             // do not end with a non alphanumeric char
             while !final_name.chars().last().unwrap().is_alphanumeric() {
                 shrink_size -= 1;
-                final_name = format!("{}", &current_name[..shrink_size]);
+                final_name = current_name[..shrink_size].to_string();
             }
             // note ensure you use only lowercase  (uppercase are not allowed in lot of AWS resources)
             format!("{}-{}", final_name.to_lowercase(), region.to_lowercase())

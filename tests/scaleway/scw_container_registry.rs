@@ -1,11 +1,9 @@
-extern crate test_utilities;
-
-use self::test_utilities::utilities::{context, FuncTestsSecrets};
-use qovery_engine::build_platform::Image;
-use qovery_engine::cloud_provider::scaleway::application::Zone;
-use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use tracing::debug;
-use uuid::Uuid;
+pub use crate::helpers::utilities::{context, FuncTestsSecrets};
+pub use qovery_engine::build_platform::Image;
+pub use qovery_engine::cloud_provider::scaleway::application::Zone;
+pub use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
+pub use tracing::debug;
+pub use uuid::Uuid;
 
 fn zones_to_test() -> Vec<Zone> {
     vec![Zone::Paris1, Zone::Paris2, Zone::Amsterdam1, Zone::Warsaw1]
@@ -67,10 +65,10 @@ fn test_get_registry_namespace() {
         let result = container_registry.get_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_some());
+        assert!(result.is_some());
 
         let result = result.unwrap();
-        assert_eq!(true, result.status.is_some());
+        assert!(result.status.is_some());
 
         let status = result.status.unwrap();
         assert_eq!(
@@ -121,13 +119,13 @@ fn test_create_registry_namespace() {
         let result = container_registry.create_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
-        assert_eq!(true, added_registry_result.is_some());
+        assert!(added_registry_result.is_some());
 
         let added_registry_result = added_registry_result.unwrap();
-        assert_eq!(true, added_registry_result.status.is_some());
+        assert!(added_registry_result.status.is_some());
 
         // clean-up:
         container_registry.delete_registry_namespace(&image).unwrap();
@@ -176,7 +174,7 @@ fn test_delete_registry_namespace() {
         let result = container_registry.delete_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
     }
 }
 
@@ -224,10 +222,10 @@ fn test_get_or_create_registry_namespace() {
         let result = container_registry.get_or_create_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
 
         let result = result.unwrap();
-        assert_eq!(true, result.status.is_some());
+        assert!(result.status.is_some());
 
         let status = result.status.unwrap();
         assert_eq!(
@@ -236,19 +234,19 @@ fn test_get_or_create_registry_namespace() {
         );
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
-        assert_eq!(true, added_registry_result.is_some());
+        assert!(added_registry_result.is_some());
 
         let added_registry_result = added_registry_result.unwrap();
-        assert_eq!(true, added_registry_result.status.is_some());
+        assert!(added_registry_result.status.is_some());
 
         // second try: repository already created, so should be a get only
         let result = container_registry.get_or_create_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
 
         let result = result.unwrap();
-        assert_eq!(true, result.status.is_some());
+        assert!(result.status.is_some());
 
         let status = result.status.unwrap();
         assert_eq!(
@@ -257,10 +255,10 @@ fn test_get_or_create_registry_namespace() {
         );
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
-        assert_eq!(true, added_registry_result.is_some());
+        assert!(added_registry_result.is_some());
 
         let added_registry_result = added_registry_result.unwrap();
-        assert_eq!(true, added_registry_result.status.is_some());
+        assert!(added_registry_result.status.is_some());
 
         // clean-up:
         container_registry.delete_registry_namespace(&image).unwrap();

@@ -39,12 +39,12 @@ jobs:
           sccache --show-stats
           echo "########## LINTER ##########"
           cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
-          RUSTC_WRAPPER="" RUSTC_WORKSPACE_WRAPPER=$GITHUB_WORKSPACE/bin/sccache cargo clippy --workspace -- -D warnings || (echo "Solve your warnings to continue"; exit 1)
+          RUSTC_WRAPPER="" RUSTC_WORKSPACE_WRAPPER=$GITHUB_WORKSPACE/bin/sccache cargo clippy --tests -- -D warnings || (echo "Solve your warnings to continue"; exit 1)
           echo "########## START BUILD ##########"
           cargo build --all-features
           sccache --show-stats
           echo "########## START UNIT TESTS ##########"
-          cargo test
+          cargo test --lib
   selected-functionnal-tests:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false

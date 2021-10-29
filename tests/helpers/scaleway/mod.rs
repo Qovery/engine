@@ -8,11 +8,10 @@ use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::EngineError;
 use qovery_engine::models::{Context, Environment, EnvironmentAction};
-use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 
-use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
+use crate::helpers::cloudflare::dns_provider_cloudflare;
+use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
@@ -124,26 +123,6 @@ pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptio
         secrets
             .LETS_ENCRYPT_EMAIL_REPORT
             .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
-    )
-}
-
-pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
-    let secrets = FuncTestsSecrets::new();
-    let random_id = generate_id();
-
-    ScalewayOS::new(
-        context,
-        format!("qovery-test-object-storage-{}", random_id.clone()),
-        format!("Qovery Test Object-Storage {}", random_id),
-        secrets
-            .SCALEWAY_ACCESS_KEY
-            .expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
-        secrets
-            .SCALEWAY_SECRET_KEY
-            .expect("SCALEWAY_SECRET_KEY is not set in secrets"),
-        region,
-        BucketDeleteStrategy::Empty, // do not delete bucket due to deletion 24h delay
-        false,
     )
 }
 

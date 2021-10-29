@@ -1,12 +1,14 @@
-extern crate test_utilities;
+pub use ::function_name::named;
+pub use tracing::{span, Level};
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
-use ::function_name::named;
-use tracing::{span, Level};
-
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::transaction::TransactionResult;
+pub use crate::helpers::cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::digitalocean::{
+    cloud_provider_digitalocean, do_kubernetes_cluster_options, do_kubernetes_nodes, docker_cr_do_engine,
+    DO_KUBERNETES_VERSION, DO_KUBE_TEST_CLUSTER_ID, DO_KUBE_TEST_CLUSTER_NAME, DO_TEST_REGION,
+};
+pub use crate::helpers::utilities::{context, engine_run_test, init, FuncTestsSecrets};
+pub use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+pub use qovery_engine::transaction::TransactionResult;
 
 // Warning: This test shouldn't be ran by CI
 // Note: this test creates the test cluster where all application tests will be ran
@@ -25,28 +27,25 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
+        let engine = docker_cr_do_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let do_cluster = test_utilities::digitalocean::cloud_provider_digitalocean(&context);
-        let nodes = test_utilities::digitalocean::do_kubernetes_nodes();
+        let do_cluster = cloud_provider_digitalocean(&context);
+        let nodes = do_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = DOKS::new(
             context,
-            test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_ID.to_string(),
+            DO_KUBE_TEST_CLUSTER_ID.to_string(),
             uuid::Uuid::new_v4(),
-            test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
-            test_utilities::digitalocean::DO_KUBERNETES_VERSION.to_string(),
-            test_utilities::digitalocean::DO_TEST_REGION,
+            DO_KUBE_TEST_CLUSTER_NAME.to_string(),
+            DO_KUBERNETES_VERSION.to_string(),
+            DO_TEST_REGION,
             &do_cluster,
             &cloudflare,
             nodes,
-            test_utilities::digitalocean::do_kubernetes_cluster_options(
-                secrets,
-                test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
-            ),
+            do_kubernetes_cluster_options(secrets, DO_KUBE_TEST_CLUSTER_NAME.to_string()),
         )
         .unwrap();
 
@@ -55,9 +54,9 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()
@@ -81,28 +80,25 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
+        let engine = docker_cr_do_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let do_cluster = test_utilities::digitalocean::cloud_provider_digitalocean(&context);
-        let nodes = test_utilities::digitalocean::do_kubernetes_nodes();
+        let do_cluster = cloud_provider_digitalocean(&context);
+        let nodes = do_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
         let kubernetes = DOKS::new(
             context,
-            test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_ID.to_string(),
+            DO_KUBE_TEST_CLUSTER_ID.to_string(),
             uuid::Uuid::new_v4(),
-            test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
-            test_utilities::digitalocean::DO_KUBERNETES_VERSION.to_string(),
-            test_utilities::digitalocean::DO_TEST_REGION,
+            DO_KUBE_TEST_CLUSTER_NAME.to_string(),
+            DO_KUBERNETES_VERSION.to_string(),
+            DO_TEST_REGION,
             &do_cluster,
             &cloudflare,
             nodes,
-            test_utilities::digitalocean::do_kubernetes_cluster_options(
-                secrets,
-                test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
-            ),
+            do_kubernetes_cluster_options(secrets, DO_KUBE_TEST_CLUSTER_NAME.to_string()),
         )
         .unwrap();
 
@@ -111,9 +107,9 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
             panic!("{:?}", err)
         }
         match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()

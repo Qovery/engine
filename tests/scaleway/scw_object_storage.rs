@@ -1,12 +1,8 @@
-extern crate test_utilities;
-
-use self::test_utilities::utilities::{context, generate_id, FuncTestsSecrets};
-
-use qovery_engine::cloud_provider::scaleway::application::Zone;
-
-use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
-use qovery_engine::object_storage::ObjectStorage;
-use tempfile::NamedTempFile;
+pub use crate::helpers::utilities::{context, generate_id, FuncTestsSecrets};
+pub use qovery_engine::cloud_provider::scaleway::application::Zone;
+pub use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
+pub use qovery_engine::object_storage::ObjectStorage;
+pub use tempfile::NamedTempFile;
 
 const TEST_ZONE: Zone = Zone::Paris1;
 
@@ -18,6 +14,8 @@ fn test_delete_bucket_hard_delete_strategy() {
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+
+    let test = "";
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -40,7 +38,7 @@ fn test_delete_bucket_hard_delete_strategy() {
     let result = scaleway_os.delete_bucket(bucket_name.as_str());
 
     // validate:
-    assert_eq!(true, result.is_ok());
+    assert!(result.is_ok());
     assert_eq!(false, scaleway_os.bucket_exists(bucket_name.as_str()))
 }
 
@@ -74,8 +72,8 @@ fn test_delete_bucket_empty_strategy() {
     let result = scaleway_os.delete_bucket(bucket_name.as_str());
 
     // validate:
-    assert_eq!(true, result.is_ok());
-    assert_eq!(true, scaleway_os.bucket_exists(bucket_name.as_str()));
+    assert!(result.is_ok());
+    assert!(scaleway_os.bucket_exists(bucket_name.as_str()));
 
     // clean-up:
     scaleway_os
@@ -109,7 +107,7 @@ fn test_create_bucket() {
     let result = scaleway_os.create_bucket(bucket_name.as_str());
 
     // validate:
-    assert_eq!(true, result.is_ok());
+    assert!(result.is_ok());
 
     // clean-up:
     scaleway_os
@@ -154,7 +152,7 @@ fn test_put_file() {
     );
 
     // validate:
-    assert_eq!(true, result.is_ok());
+    assert!(result.is_ok());
     assert_eq!(
         true,
         scaleway_os
@@ -207,7 +205,7 @@ fn test_get_file() {
     let result = scaleway_os.get(bucket_name.as_str(), object_key.as_str(), false);
 
     // validate:
-    assert_eq!(true, result.is_ok());
+    assert!(result.is_ok());
     assert_eq!(
         true,
         scaleway_os

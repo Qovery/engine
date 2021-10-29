@@ -12,8 +12,8 @@ use qovery_engine::error::EngineError;
 use qovery_engine::models::{Context, Environment, EnvironmentAction};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 
-use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use crate::helpers::cloudflare::dns_provider_cloudflare;
+use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 

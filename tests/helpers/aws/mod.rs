@@ -7,14 +7,13 @@ use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
-use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 
-use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use crate::helpers::cloudflare::dns_provider_cloudflare;
+use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "eu-west-3";
@@ -43,16 +42,6 @@ pub fn container_registry_ecr(context: &Context) -> ECR {
     )
 }
 
-pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
-    DockerHub::new(
-        context.clone(),
-        "my-docker-hub-id-123",
-        "my-default-docker-hub",
-        "qoveryrd",
-        "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24",
-    )
-}
-
 pub fn aws_kubernetes_nodes() -> Vec<NodeGroups> {
     vec![NodeGroups::new("groupeks0".to_string(), 5, 10, "t3a.large".to_string())
         .expect("Problem while setup EKS nodes")]
@@ -71,7 +60,7 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
         TerraformStateCredentials {
             access_key_id: secrets.TERRAFORM_AWS_ACCESS_KEY_ID.unwrap(),
             secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
-            region: "eu-west-3".to_string(),
+            region: AWS_REGION_FOR_S3.to_string(),
         },
     )
 }

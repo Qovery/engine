@@ -1,21 +1,23 @@
-extern crate test_utilities;
-
-use ::function_name::named;
-use qovery_engine::cloud_provider::Kind as ProviderKind;
-use qovery_engine::models::{
+pub use qovery_engine::cloud_provider::Kind as ProviderKind;
+pub use qovery_engine::models::{
     Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
 };
-use qovery_engine::transaction::TransactionResult;
-use test_utilities::utilities::{init, FuncTestsSecrets};
-use tracing::{span, Level};
+pub use qovery_engine::transaction::TransactionResult;
+pub use tracing::{span, Level};
 
-use crate::aws::aws_environment::{ctx_pause_environment, delete_environment, deploy_environment};
+pub use crate::aws::aws_environment::{ctx_pause_environment, delete_environment, deploy_environment};
 
-use self::test_utilities::aws::{
+pub use crate::helpers::aws::{
     AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID,
 };
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, get_pods, is_pod_restarted_env};
-use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+pub use crate::helpers::common::{
+    environment_3_apps_3_routers_3_databases, environnement_2_app_2_routers_1_psql, working_minimal_environment,
+};
+pub use crate::helpers::utilities::{
+    context, engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
+};
+pub use function_name::named;
+pub use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 
 /**
 **
@@ -38,7 +40,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::environment_3_apps_3_routers_3_databases(
+        let environment = environment_3_apps_3_routers_3_databases(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -55,15 +57,15 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         match delete_environment(&context_for_deletion, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -84,7 +86,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let context = context();
         let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = environnement_2_app_2_routers_1_psql(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -102,15 +104,15 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         match ctx_pause_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // Check that we have actually 0 pods running for this db
@@ -126,9 +128,9 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
         match delete_environment(&context_for_deletion, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -155,7 +157,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             .DEFAULT_TEST_DOMAIN
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = environnement_2_app_2_routers_1_psql(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
@@ -173,7 +175,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
-        let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let mut environment_delete = environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
             AWS_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
@@ -189,9 +191,9 @@ fn postgresql_failover_dev_environment_with_all_options() {
         let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
@@ -202,13 +204,13 @@ fn postgresql_failover_dev_environment_with_all_options() {
             database_name.as_str(),
             secrets.clone(),
         ) {
-            (true, _) => assert!(true),
-            (false, _) => assert!(false),
+            (true, _) => {}
+            (false, _) => panic!(),
         }
         match deploy_environment(&context, &ea_fail_ok) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => panic!(),
+            TransactionResult::Rollback(_) => {}
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY EVEN IF FAIL
         match is_pod_restarted_env(
@@ -218,14 +220,14 @@ fn postgresql_failover_dev_environment_with_all_options() {
             database_name.as_str(),
             secrets,
         ) {
-            (true, _) => assert!(true),
-            (false, _) => assert!(false),
+            (true, _) => {}
+            (false, _) => panic!(),
         }
 
         match delete_environment(&context_for_deletion, &ea_for_deletion) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -252,7 +254,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = environnement_2_app_2_routers_1_psql(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
@@ -260,7 +262,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             AWS_DATABASE_DISK_TYPE,
         );
         //let env_to_check = environment.clone();
-        let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let mut environment_delete = environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
             AWS_QOVERY_ORGANIZATION_ID,
             test_domain.as_str(),
@@ -274,9 +276,9 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
         // TODO: should be uncommented as soon as cert-manager is fixed
         // for the moment this assert report a SSL issue on the second router, so it's works well
@@ -286,9 +288,9 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         }*/
 
         match delete_environment(&context_for_deletion, &ea_for_deletion) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         return test_name.to_string();
@@ -312,7 +314,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let context_for_redeploy = context.clone_not_same_execution_id();
         let context_for_delete = context.clone_not_same_execution_id();
 
-        let mut environment = test_utilities::common::working_minimal_environment(
+        let mut environment = working_minimal_environment(
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
@@ -385,14 +387,14 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
         match deploy_environment(&context_for_redeploy, &ea_redeploy) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
@@ -403,14 +405,14 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             database_name.as_str(),
             secrets,
         ) {
-            (true, _) => assert!(true),
-            (false, _) => assert!(false),
+            (true, _) => {}
+            (false, _) => panic!(),
         }
 
         match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
 
         return test_name.to_string();
@@ -492,17 +494,17 @@ fn test_postgresql_configuration(
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // todo: check the database disk is here and with correct size
 
         match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
         test_name.to_string()
     })
@@ -515,7 +517,7 @@ fn test_postgresql_configuration(
 fn postgresql_v10_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -533,7 +535,7 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
 fn postgresql_v11_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -552,7 +554,7 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
 fn postgresql_v12_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -571,7 +573,7 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
 fn postgresql_v10_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -589,7 +591,7 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
 fn postgresql_v11_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -607,7 +609,7 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
 fn postgresql_v12_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -701,17 +703,17 @@ fn test_mongodb_configuration(
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // todo: check the database disk is here and with correct size
 
         match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
 
         test_name.to_string()
@@ -725,7 +727,7 @@ fn test_mongodb_configuration(
 fn mongodb_v3_6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -743,7 +745,7 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
 fn mongodb_v4_0_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -761,7 +763,7 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
 fn mongodb_v4_2_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -779,7 +781,7 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
 fn mongodb_v4_4_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -798,7 +800,7 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
 fn mongodb_v3_6_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -816,7 +818,7 @@ fn mongodb_v3_6_deploy_a_working_prod_environment() {
 fn mongodb_v4_0_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -906,17 +908,17 @@ fn test_mysql_configuration(
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // todo: check the database disk is here and with correct size
 
         match delete_environment(&deletion_context, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()
@@ -930,7 +932,7 @@ fn test_mysql_configuration(
 fn mysql_v5_7_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -948,7 +950,7 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
 fn mysql_v8_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -967,7 +969,7 @@ fn mysql_v8_deploy_a_working_dev_environment() {
 fn mysql_v5_7_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -985,7 +987,7 @@ fn mysql_v5_7_deploy_a_working_prod_environment() {
 fn mysql_v8_0_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -1082,17 +1084,17 @@ fn test_redis_configuration(
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // todo: check the database disk is here and with correct size
 
         match delete_environment(&context_for_delete, &ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => {}
         };
 
         test_name.to_string()
@@ -1106,7 +1108,7 @@ fn test_redis_configuration(
 fn redis_v5_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -1124,7 +1126,7 @@ fn redis_v5_deploy_a_working_dev_environment() {
 fn redis_v6_deploy_a_working_dev_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -1143,7 +1145,7 @@ fn redis_v6_deploy_a_working_dev_environment() {
 fn redis_v5_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
@@ -1161,7 +1163,7 @@ fn redis_v5_deploy_a_working_prod_environment() {
 fn redis_v6_deploy_a_working_prod_environment() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = test_utilities::common::working_minimal_environment(
+    let environment = working_minimal_environment(
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets

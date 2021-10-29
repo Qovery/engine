@@ -921,26 +921,26 @@ mod tests {
         assert_eq!(result.required_upgrade_on.unwrap(), KubernetesNodesType::Masters); // master should be performed first
         assert_eq!(result.deployed_masters_version, version_1_16);
         assert_eq!(result.deployed_workers_version, version_1_16);
-        assert_eq!(result.older_masters_version_detected, false);
-        assert_eq!(result.older_workers_version_detected, false);
+        assert!(!result.older_masters_version_detected);
+        assert!(!result.older_workers_version_detected);
         let result = check_kubernetes_upgrade_status("1.17", version_1_17.clone(), vec![version_1_16.clone()]).unwrap();
         assert_eq!(result.required_upgrade_on.unwrap(), KubernetesNodesType::Workers); // then workers
         assert_eq!(result.deployed_masters_version, version_1_17);
         assert_eq!(result.deployed_workers_version, version_1_16);
-        assert_eq!(result.older_masters_version_detected, false);
-        assert_eq!(result.older_workers_version_detected, false);
+        assert!(!result.older_masters_version_detected);
+        assert!(!result.older_workers_version_detected);
 
         // everything is up to date, no upgrade required
         let result = check_kubernetes_upgrade_status("1.17", version_1_17.clone(), vec![version_1_17.clone()]).unwrap();
         assert!(result.required_upgrade_on.is_none());
-        assert_eq!(result.older_masters_version_detected, false);
-        assert_eq!(result.older_workers_version_detected, false);
+        assert!(!result.older_masters_version_detected);
+        assert!(!result.older_workers_version_detected);
 
         // downgrade should be detected
         let result = check_kubernetes_upgrade_status("1.16", version_1_17.clone(), vec![version_1_17.clone()]).unwrap();
         assert!(result.required_upgrade_on.is_none());
-        assert_eq!(result.older_masters_version_detected, true);
-        assert_eq!(result.older_workers_version_detected, true);
+        assert!(result.older_masters_version_detected);
+        assert!(result.older_workers_version_detected);
 
         // mixed workers version
         let result = check_kubernetes_upgrade_status(
@@ -952,8 +952,8 @@ mod tests {
         assert_eq!(result.required_upgrade_on.unwrap(), KubernetesNodesType::Workers);
         assert_eq!(result.deployed_masters_version, version_1_17);
         assert_eq!(result.deployed_workers_version, version_1_16);
-        assert_eq!(result.older_masters_version_detected, false); // not true because we're in an upgrade process
-        assert_eq!(result.older_workers_version_detected, false); // not true because we're in an upgrade process
+        assert!(!result.older_masters_version_detected); // not true because we're in an upgrade process
+        assert!(!result.older_workers_version_detected); // not true because we're in an upgrade process
     }
 
     #[allow(dead_code)]
@@ -1057,11 +1057,10 @@ mod tests {
 
             // upgrade is not required
             //print_kubernetes_version(&provider_version, &provider.wished_version);
-            assert_eq!(
-                compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider.wished_version)
+            assert!(
+                !compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider.wished_version)
                     .unwrap()
-                    .upgraded_required,
-                false
+                    .upgraded_required
             );
 
             // upgrade is required
@@ -1410,17 +1409,15 @@ mod tests {
 
                 // upgrade is not required
                 //print_kubernetes_version(&provider_version, &provider.wished_version);
-                assert_eq!(
-                    compare_kubernetes_cluster_versions_for_upgrade(&kubelet, &provider.wished_version)
+                assert!(
+                    !compare_kubernetes_cluster_versions_for_upgrade(&kubelet, &provider.wished_version)
                         .unwrap()
-                        .upgraded_required,
-                    false
+                        .upgraded_required
                 );
-                assert_eq!(
-                    compare_kubernetes_cluster_versions_for_upgrade(&kube_proxy, &provider.wished_version)
+                assert!(
+                    !compare_kubernetes_cluster_versions_for_upgrade(&kube_proxy, &provider.wished_version)
                         .unwrap()
-                        .upgraded_required,
-                    false
+                        .upgraded_required
                 );
 
                 // upgrade is required

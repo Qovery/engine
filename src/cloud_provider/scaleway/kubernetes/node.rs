@@ -85,7 +85,7 @@ impl FromStr for ScwInstancesType {
 }
 
 #[cfg(test)]
-mod tests {
+mod node_tests {
     #[cfg(test)]
     mod tests {
         use crate::cloud_provider::models::NodeGroups;

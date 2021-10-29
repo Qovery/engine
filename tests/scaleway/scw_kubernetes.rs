@@ -1,15 +1,16 @@
-extern crate test_utilities;
+pub use ::function_name::named;
+pub use tracing::{span, Level};
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
-use ::function_name::named;
-use tracing::{span, Level};
+pub use qovery_engine::cloud_provider::scaleway::application::Zone;
+pub use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
+pub use qovery_engine::transaction::TransactionResult;
 
-use qovery_engine::cloud_provider::scaleway::application::Zone;
-use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
-use qovery_engine::transaction::TransactionResult;
-
-use test_utilities::scaleway::SCW_KUBERNETES_VERSION;
+pub use crate::helpers::cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::scaleway::{
+    cloud_provider_scaleway, docker_scw_cr_engine, scw_kubernetes_cluster_options, scw_kubernetes_nodes,
+    SCW_KUBERNETES_VERSION,
+};
+pub use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
 
 #[cfg(test)]
 fn create_upgrade_and_destroy_kapsule_cluster(
@@ -26,12 +27,12 @@ fn create_upgrade_and_destroy_kapsule_cluster(
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::scaleway::docker_scw_cr_engine(&context);
+        let engine = docker_scw_cr_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let scw_cluster = test_utilities::scaleway::cloud_provider_scaleway(&context);
-        let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
+        let scw_cluster = cloud_provider_scaleway(&context);
+        let nodes = scw_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
         let cluster_id = generate_cluster_id(zone.as_str());
@@ -46,7 +47,7 @@ fn create_upgrade_and_destroy_kapsule_cluster(
             &scw_cluster,
             &cloudflare,
             nodes,
-            test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
+            scw_kubernetes_cluster_options(secrets),
         )
         .unwrap();
 
@@ -55,9 +56,9 @@ fn create_upgrade_and_destroy_kapsule_cluster(
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // Upgrade
@@ -67,9 +68,9 @@ fn create_upgrade_and_destroy_kapsule_cluster(
         //     panic!("{:?}", err)
         // }
         // let _ = match tx.commit() {
-        //     TransactionResult::Ok => assert!(true),
-        //     TransactionResult::Rollback(_) => assert!(false),
-        //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        //     TransactionResult::Ok => {},
+        //     TransactionResult::Rollback(_) => panic!(),
+        //     TransactionResult::UnrecoverableError(_, _) => panic!(),
         // };
 
         // Destroy
@@ -77,9 +78,9 @@ fn create_upgrade_and_destroy_kapsule_cluster(
             panic!("{:?}", err)
         }
         match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()
@@ -95,12 +96,12 @@ fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, tes
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::scaleway::docker_scw_cr_engine(&context);
+        let engine = docker_scw_cr_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let scw_cluster = test_utilities::scaleway::cloud_provider_scaleway(&context);
-        let nodes = test_utilities::scaleway::scw_kubernetes_nodes();
+        let scw_cluster = cloud_provider_scaleway(&context);
+        let nodes = scw_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
         let cluster_id = generate_cluster_id(zone.as_str());
@@ -115,7 +116,7 @@ fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, tes
             &scw_cluster,
             &cloudflare,
             nodes,
-            test_utilities::scaleway::scw_kubernetes_cluster_options(secrets),
+            scw_kubernetes_cluster_options(secrets),
         )
         .unwrap();
 
@@ -124,9 +125,9 @@ fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, tes
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         if test_infra_pause {
@@ -135,9 +136,9 @@ fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, tes
                 panic!("{:?}", err)
             }
             match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+                TransactionResult::Ok => {}
+                TransactionResult::Rollback(_) => panic!(),
+                TransactionResult::UnrecoverableError(_, _) => panic!(),
             };
 
             // Resume
@@ -145,9 +146,9 @@ fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, tes
                 panic!("{:?}", err)
             }
             let _ = match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+                TransactionResult::Ok => {}
+                TransactionResult::Rollback(_) => panic!(),
+                TransactionResult::UnrecoverableError(_, _) => panic!(),
             };
         }
 
@@ -156,9 +157,9 @@ fn create_and_destroy_kapsule_cluster(zone: Zone, secrets: FuncTestsSecrets, tes
             panic!("{:?}", err)
         }
         match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()

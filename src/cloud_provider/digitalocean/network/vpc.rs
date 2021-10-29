@@ -248,7 +248,7 @@ mod tests_do_vpcs {
     #[test]
     fn check_reserved_subnets() {
         // if not reserved
-        assert_eq!(is_do_reserved_vpc_subnets(Region::Frankfurt, "192.168.0.0/24"), false);
+        assert!(!is_do_reserved_vpc_subnets(Region::Frankfurt, "192.168.0.0/24"));
         // if region reserved
         assert!(is_do_reserved_vpc_subnets(Region::Frankfurt, "10.19.0.0/16"));
         // if world wide reserved

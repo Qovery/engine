@@ -1,4 +1,4 @@
-use crate::utilities::FuncTestsSecrets;
+use crate::helpers::utilities::FuncTestsSecrets;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::models::Context;
 

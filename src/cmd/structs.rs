@@ -301,7 +301,7 @@ mod tests {
         "#;
 
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
-        assert_eq!(pod_status.is_ok(), true);
+        assert!(pod_status.is_ok());
         assert_eq!(pod_status.unwrap().items[0].status.conditions[0].status, "False");
 
         let payload = r#"
@@ -576,6 +576,6 @@ mod tests {
         "#;
 
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
-        assert_eq!(pod_status.is_ok(), true);
+        assert!(pod_status.is_ok());
     }
 }

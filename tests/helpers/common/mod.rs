@@ -3,24 +3,16 @@ extern crate serde_derive;
 
 use chrono::Utc;
 
+use crate::helpers::utilities::{generate_id, generate_password};
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::models::{
     Action, Application, Context, Database, DatabaseKind, Environment, GitCredentials, Route, Router, Storage,
     StorageType,
 };
 
-use crate::utilities::{generate_id, generate_password};
 use base64;
 use qovery_engine::models::DatabaseMode::CONTAINER;
 use std::collections::BTreeMap;
-
-pub fn execution_id() -> String {
-    Utc::now()
-        .to_rfc3339()
-        .replace(":", "-")
-        .replace(".", "-")
-        .replace("+", "-")
-}
 
 pub fn environment_3_apps_3_routers_3_databases(
     context: &Context,
@@ -560,97 +552,6 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
             routes: vec![Route {
                 path: "/".to_string(),
                 application_name: format!("{}-{}", "echo-app".to_string(), &suffix),
-            }],
-        }],
-        databases: vec![],
-        clone_from_environment_id: None,
-    }
-}
-
-pub fn environment_only_http_server(context: &Context, organization_id: &str) -> Environment {
-    let suffix = generate_id();
-    Environment {
-        execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: organization_id.to_string(),
-        action: Action::Create,
-        applications: vec![Application {
-            id: generate_id(),
-            name: format!("{}-{}", "mini-http".to_string(), &suffix),
-            /*name: "simple-app".to_string(),*/
-            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
-            dockerfile_path: Some("Dockerfile".to_string()),
-            buildpack_language: None,
-            root_path: String::from("/"),
-            action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
-            storage: vec![],
-            environment_vars: BTreeMap::default(),
-            branch: "mini-http".to_string(),
-            private_port: Some(3000),
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
-            total_instances: 2,
-            cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
-        }],
-        routers: vec![],
-        databases: vec![],
-        clone_from_environment_id: None,
-    }
-}
-
-pub fn environment_only_http_server_router(context: &Context, organization_id: &str, test_domain: &str) -> Environment {
-    let suffix = generate_id();
-    Environment {
-        execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: organization_id.to_string(),
-        action: Action::Create,
-        applications: vec![Application {
-            id: generate_id(),
-            name: format!("{}-{}", "mini-http".to_string(), &suffix),
-            /*name: "simple-app".to_string(),*/
-            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
-            dockerfile_path: Some("Dockerfile".to_string()),
-            buildpack_language: None,
-            root_path: String::from("/"),
-            action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
-            storage: vec![],
-            environment_vars: BTreeMap::default(),
-            branch: "mini-http".to_string(),
-            private_port: Some(3000),
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
-            total_instances: 2,
-            cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
-        }],
-        routers: vec![Router {
-            id: generate_id(),
-            name: "main".to_string(),
-            action: Action::Create,
-            default_domain: format!("{}.{}", generate_id(), test_domain),
-            public_port: 443,
-            custom_domains: vec![],
-            routes: vec![Route {
-                path: "/".to_string(),
-                application_name: format!("{}-{}", "mini-http".to_string(), &suffix),
             }],
         }],
         databases: vec![],

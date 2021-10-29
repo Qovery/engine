@@ -1,14 +1,14 @@
-extern crate test_utilities;
+pub use ::function_name::named;
+pub use tracing::{span, Level};
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
-use ::function_name::named;
-use tracing::{span, Level};
-
-use self::test_utilities::aws::eks_options;
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
-use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
-use qovery_engine::transaction::TransactionResult;
+pub use crate::helpers::aws::{
+    aws_kubernetes_nodes, cloud_provider_aws, docker_ecr_aws_engine, eks_options, AWS_KUBERNETES_VERSION,
+};
+pub use crate::helpers::cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
+pub use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
+pub use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
+pub use qovery_engine::transaction::TransactionResult;
 
 #[cfg(test)]
 fn create_upgrade_and_destroy_eks_cluster(
@@ -25,12 +25,12 @@ fn create_upgrade_and_destroy_eks_cluster(
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+        let engine = docker_ecr_aws_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let aws = test_utilities::aws::cloud_provider_aws(&context);
-        let nodes = test_utilities::aws::aws_kubernetes_nodes();
+        let aws = cloud_provider_aws(&context);
+        let nodes = aws_kubernetes_nodes();
 
         let cloudflare = dns_provider_cloudflare(&context);
 
@@ -53,9 +53,9 @@ fn create_upgrade_and_destroy_eks_cluster(
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // Upgrade
@@ -76,9 +76,9 @@ fn create_upgrade_and_destroy_eks_cluster(
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // Destroy
@@ -86,9 +86,9 @@ fn create_upgrade_and_destroy_eks_cluster(
             panic!("{:?}", err)
         }
         match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()
@@ -111,12 +111,12 @@ fn create_and_destroy_eks_cluster(
 
         let context = context();
 
-        let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
+        let engine = docker_ecr_aws_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let aws = test_utilities::aws::cloud_provider_aws(&context);
-        let nodes = test_utilities::aws::aws_kubernetes_nodes();
+        let aws = cloud_provider_aws(&context);
+        let nodes = aws_kubernetes_nodes();
         let mut eks_options = eks_options(secrets);
         eks_options.vpc_qovery_network_mode = vpc_network_mode;
 
@@ -127,7 +127,7 @@ fn create_and_destroy_eks_cluster(
             generate_cluster_id(region).as_str(),
             uuid::Uuid::new_v4(),
             generate_cluster_id(region).as_str(),
-            test_utilities::aws::AWS_KUBERNETES_VERSION,
+            AWS_KUBERNETES_VERSION,
             region,
             &aws,
             &cloudflare,
@@ -141,9 +141,9 @@ fn create_and_destroy_eks_cluster(
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         if test_infra_pause {
@@ -152,9 +152,9 @@ fn create_and_destroy_eks_cluster(
                 panic!("{:?}", err)
             }
             match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+                TransactionResult::Ok => {}
+                TransactionResult::Rollback(_) => panic!(),
+                TransactionResult::UnrecoverableError(_, _) => panic!(),
             };
 
             // Resume
@@ -162,9 +162,9 @@ fn create_and_destroy_eks_cluster(
                 panic!("{:?}", err)
             }
             let _ = match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+                TransactionResult::Ok => {}
+                TransactionResult::Rollback(_) => panic!(),
+                TransactionResult::UnrecoverableError(_, _) => panic!(),
             };
         }
 
@@ -173,9 +173,9 @@ fn create_and_destroy_eks_cluster(
             panic!("{:?}", err)
         }
         match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()

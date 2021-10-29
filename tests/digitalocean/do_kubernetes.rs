@@ -1,15 +1,16 @@
-extern crate test_utilities;
+pub use ::function_name::named;
+pub use tracing::{span, Level};
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
-use ::function_name::named;
-use tracing::{span, Level};
+pub use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+pub use qovery_engine::transaction::TransactionResult;
 
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::transaction::TransactionResult;
-
-use qovery_engine::cloud_provider::digitalocean::application::Region;
-use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
+pub use crate::helpers::cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::digitalocean::{
+    cloud_provider_digitalocean, do_kubernetes_cluster_options, do_kubernetes_nodes, docker_cr_do_engine,
+    DO_KUBERNETES_VERSION,
+};
+pub use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
+pub use qovery_engine::cloud_provider::digitalocean::application::Region;
 
 #[cfg(test)]
 fn create_upgrade_and_destroy_doks_cluster(
@@ -26,12 +27,12 @@ fn create_upgrade_and_destroy_doks_cluster(
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
+        let engine = docker_cr_do_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let do_cluster = test_utilities::digitalocean::cloud_provider_digitalocean(&context);
-        let nodes = test_utilities::digitalocean::do_kubernetes_nodes();
+        let do_cluster = cloud_provider_digitalocean(&context);
+        let nodes = do_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
         let cluster_id = generate_cluster_id(region.as_str());
@@ -46,7 +47,7 @@ fn create_upgrade_and_destroy_doks_cluster(
             &do_cluster,
             &cloudflare,
             nodes,
-            test_utilities::digitalocean::do_kubernetes_cluster_options(secrets, cluster_id),
+            do_kubernetes_cluster_options(secrets, cluster_id),
         )
         .unwrap();
 
@@ -55,9 +56,9 @@ fn create_upgrade_and_destroy_doks_cluster(
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         // Upgrade
@@ -67,9 +68,9 @@ fn create_upgrade_and_destroy_doks_cluster(
         //     panic!("{:?}", err)
         // }
         // let _ = match tx.commit() {
-        //     TransactionResult::Ok => assert!(true),
-        //     TransactionResult::Rollback(_) => assert!(false),
-        //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        //     TransactionResult::Ok => {},
+        //     TransactionResult::Rollback(_) => panic!(),
+        //     TransactionResult::UnrecoverableError(_, _) => panic!(),
         // };
 
         // Destroy
@@ -77,9 +78,9 @@ fn create_upgrade_and_destroy_doks_cluster(
             panic!("{:?}", err)
         }
         match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()
@@ -95,12 +96,12 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
         let _enter = span.enter();
 
         let context = context();
-        let engine = test_utilities::digitalocean::docker_cr_do_engine(&context);
+        let engine = docker_cr_do_engine(&context);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let do_cluster = test_utilities::digitalocean::cloud_provider_digitalocean(&context);
-        let nodes = test_utilities::digitalocean::do_kubernetes_nodes();
+        let do_cluster = cloud_provider_digitalocean(&context);
+        let nodes = do_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
         let cluster_id = generate_cluster_id(region.as_str());
@@ -115,7 +116,7 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
             &do_cluster,
             &cloudflare,
             nodes,
-            test_utilities::digitalocean::do_kubernetes_cluster_options(secrets, cluster_id),
+            do_kubernetes_cluster_options(secrets, cluster_id),
         )
         .unwrap();
 
@@ -124,9 +125,9 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         if test_infra_pause {
@@ -135,9 +136,9 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
                 panic!("{:?}", err)
             }
             match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+                TransactionResult::Ok => {}
+                TransactionResult::Rollback(_) => panic!(),
+                TransactionResult::UnrecoverableError(_, _) => panic!(),
             };
 
             // Resume
@@ -145,9 +146,9 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
                 panic!("{:?}", err)
             }
             let _ = match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+                TransactionResult::Ok => {}
+                TransactionResult::Rollback(_) => panic!(),
+                TransactionResult::UnrecoverableError(_, _) => panic!(),
             };
         }
 
@@ -156,9 +157,9 @@ fn create_and_destroy_doks_cluster(region: Region, secrets: FuncTestsSecrets, te
             panic!("{:?}", err)
         }
         match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            TransactionResult::Ok => {}
+            TransactionResult::Rollback(_) => panic!(),
+            TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
         test_name.to_string()

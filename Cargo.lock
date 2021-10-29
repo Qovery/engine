@@ -138,9 +138,9 @@ dependencies = [
 
 [[package]]
 name = "bstr"
-version = "0.2.16"
+version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90682c8d613ad3373e66de8c6411e0ae2ab2571e879d2efbf73558cc66f21279"
+checksum = "ba3569f383e8f1598449f1a423e72e99569137b47740b1da11ef19af3d5c3223"
 dependencies = [
  "lazy_static",
  "memchr",
@@ -439,9 +439,9 @@ dependencies = [
 
 [[package]]
 name = "curl"
-version = "0.4.38"
+version = "0.4.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "003cb79c1c6d1c93344c7e1201bb51c2148f24ec2bd9c253709d6b2efb796515"
+checksum = "aaa3b8db7f3341ddef15786d250106334d4a6c4b0ae4a46cd77082777d9849b9"
 dependencies = [
  "curl-sys",
  "libc",
@@ -454,9 +454,9 @@ dependencies = [
 
 [[package]]
 name = "curl-sys"
-version = "0.4.45+curl-7.78.0"
+version = "0.4.49+curl-7.79.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de9e5a72b1c744eb5dd20b2be4d7eb84625070bb5c4ab9b347b70464ab1e62eb"
+checksum = "e0f44960aea24a786a46907b8824ebc0e66ca06bf4e4978408c7499620343483"
 dependencies = [
  "cc",
  "libc",
@@ -1859,9 +1859,9 @@ dependencies = [
 
 [[package]]
 name = "passwords"
-version = "3.1.7"
+version = "3.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03258d8822ae1e392ba9385d4f66c1eed50129fd679c13faa2ce6f62bae5b511"
+checksum = "3911e67d9a111aea69d3457a13de9a03d9fd920bc30cff110526eb5259ded58f"
 dependencies = [
  "random-pick",
 ]
@@ -2049,8 +2049,10 @@ name = "qovery-engine"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
+ "bstr",
  "chrono",
  "cmd_lib",
+ "curl",
  "digitalocean",
  "dirs",
  "flate2",
@@ -2058,9 +2060,11 @@ dependencies = [
  "futures 0.3.16",
  "gethostname",
  "git2",
+ "hashicorp_vault",
  "itertools",
  "lazy_static",
  "maplit",
+ "passwords",
  "rand 0.8.4",
  "reqwest 0.11.4",
  "retry",
@@ -2083,7 +2087,7 @@ dependencies = [
  "tempdir",
  "tempfile",
  "tera",
- "test-utilities",
+ "time 0.3.4",
  "timeout-readwrite",
  "tokio 1.10.0",
  "tracing",
@@ -3206,34 +3210,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-utilities"
-version = "0.1.0"
-dependencies = [
- "base64 0.13.0",
- "bstr",
- "chrono",
- "curl",
- "digitalocean",
- "dirs",
- "gethostname",
- "hashicorp_vault",
- "maplit",
- "passwords",
- "qovery-engine",
- "rand 0.7.3",
- "reqwest 0.10.10",
- "retry",
- "scaleway_api_rs",
- "serde",
- "serde_derive",
- "serde_json",
- "time 0.2.27",
- "tracing",
- "tracing-subscriber",
- "uuid 0.8.2",
-]
-
-[[package]]
 name = "thiserror"
 version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3286,6 +3262,15 @@ dependencies = [
  "time-macros",
  "version_check",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "time"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99beeb0daeac2bd1e86ac2c21caddecb244b39a093594da1a661ec2060c7aedd"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

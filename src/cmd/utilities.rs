@@ -295,14 +295,14 @@ mod tests {
     #[test]
     fn test_command_with_timeout() {
         let ret = exec_with_envs_and_output("sleep", vec!["120"], vec![], |_| {}, |_| {}, Duration::seconds(2));
-        assert_eq!(ret.is_err(), true);
-        assert_eq!(ret.err().unwrap().message.unwrap().contains("timeout"), true);
+        assert!(ret.is_err());
+        assert!(ret.err().unwrap().message.unwrap().contains("timeout"));
 
         let ret = exec_with_envs_and_output("yes", vec![""], vec![], |_| {}, |_| {}, Duration::seconds(2));
-        assert_eq!(ret.is_err(), true);
+        assert!(ret.is_err());
 
         let ret2 = exec_with_envs_and_output("sleep", vec!["1"], vec![], |_| {}, |_| {}, Duration::seconds(5));
 
-        assert_eq!(ret2.is_ok(), true);
+        assert!(ret2.is_ok());
     }
 }
