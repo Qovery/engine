@@ -10,7 +10,7 @@ use qovery_engine::error::EngineError;
 use qovery_engine::models::{Context, Environment, EnvironmentAction};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 
-use crate::helpers::cloudflare::dns_provider_cloudflare;
+use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
 use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 use qovery_engine::cloud_provider::models::NodeGroups;
@@ -46,8 +46,8 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 
     ScalewayCR::new(
         context.clone(),
-        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
-        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
+        format!("default-registry-qovery-test-{}", random_id).as_str(),
+        format!("default-registry-qovery-test-{}", random_id).as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         SCW_TEST_ZONE,

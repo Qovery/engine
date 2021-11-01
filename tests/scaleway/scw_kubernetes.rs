@@ -5,8 +5,8 @@ pub use qovery_engine::cloud_provider::scaleway::application::Zone;
 pub use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 pub use qovery_engine::transaction::TransactionResult;
 
-pub use crate::helpers::cloudflare::dns_provider_cloudflare;
-pub use crate::helpers::scaleway::{
+pub use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::helpers_scaleway::{
     cloud_provider_scaleway, docker_scw_cr_engine, scw_kubernetes_cluster_options, scw_kubernetes_nodes,
     SCW_KUBERNETES_VERSION,
 };

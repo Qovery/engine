@@ -4,7 +4,7 @@ pub use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStr
 pub use qovery_engine::object_storage::ObjectStorage;
 pub use tempfile::NamedTempFile;
 
-const TEST_ZONE: Zone = Zone::Paris1;
+pub const TEST_ZONE: Zone = Zone::Paris1;
 
 #[cfg(feature = "test-scw-infra")]
 #[test]
@@ -12,10 +12,10 @@ fn test_delete_bucket_hard_delete_strategy() {
     // setup:
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
-    let test = "";
+    let _test = "";
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -39,7 +39,7 @@ fn test_delete_bucket_hard_delete_strategy() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(false, scaleway_os.bucket_exists(bucket_name.as_str()))
+    assert!(!scaleway_os.bucket_exists(bucket_name.as_str()))
 }
 
 #[cfg(feature = "test-scw-infra")]
@@ -48,8 +48,8 @@ fn test_delete_bucket_empty_strategy() {
     // setup:
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -87,8 +87,8 @@ fn test_create_bucket() {
     // setup:
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -121,8 +121,8 @@ fn test_put_file() {
     // setup:
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -153,12 +153,9 @@ fn test_put_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        scaleway_os
-            .get(bucket_name.as_str(), object_key.as_str(), false)
-            .is_ok()
-    );
+    assert!(scaleway_os
+        .get(bucket_name.as_str(), object_key.as_str(), false)
+        .is_ok());
 
     // clean-up:
     scaleway_os
@@ -172,8 +169,8 @@ fn test_get_file() {
     // setup:
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -206,12 +203,9 @@ fn test_get_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        scaleway_os
-            .get(bucket_name.as_str(), object_key.as_str(), false)
-            .is_ok()
-    );
+    assert!(scaleway_os
+        .get(bucket_name.as_str(), object_key.as_str(), false)
+        .is_ok());
 
     // clean-up:
     scaleway_os

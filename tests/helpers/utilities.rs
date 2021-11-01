@@ -33,23 +33,19 @@ use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
-use crate::helpers::scaleway::SCW_KUBE_TEST_CLUSTER_ID;
+use crate::helpers::helpers_scaleway::SCW_KUBE_TEST_CLUSTER_ID;
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::runtime::block_on;
 use time::Instant;
 
 pub fn context() -> Context {
     let execution_id = execution_id();
-    let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
+    let home_dir =
+        std::env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
 
     let metadata = Metadata {
-        dry_run_deploy: Option::from({
-            match env::var_os("dry_run_deploy") {
-                Some(_) => true,
-                None => false,
-            }
-        }),
+        dry_run_deploy: Option::from(env::var_os("dry_run_deploy").is_some()),
         resource_expiration_in_seconds: {
             // set a custom ttl as environment variable for manual tests
             match env::var_os("ttl") {
@@ -61,14 +57,11 @@ pub fn context() -> Context {
             }
         },
         docker_build_options: Some("--network host".to_string()),
-        forced_upgrade: Option::from({
-            match env::var_os("forced_upgrade") {
-                Some(_) => true,
-                None => false,
-            }
-        }),
+        forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
         disable_pleco: Some(true),
     };
+
+    let _test = "";
 
     let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
 
@@ -140,7 +133,7 @@ impl FuncTestsSecrets {
             None => {
                 return Err(Error::new(
                     ErrorKind::NotFound,
-                    format!("VAULT_ADDR environment variable is missing"),
+                    "VAULT_ADDR environment variable is missing".to_string(),
                 ))
             }
         };
@@ -150,7 +143,7 @@ impl FuncTestsSecrets {
             None => {
                 return Err(Error::new(
                     ErrorKind::NotFound,
-                    format!("VAULT_TOKEN environment variable is missing"),
+                    "VAULT_TOKEN environment variable is missing".to_string(),
                 ))
             }
         };
@@ -385,10 +378,7 @@ pub fn generate_password(allow_using_symbols: bool) -> String {
         .exclude_similar_characters(true)
         .strict(true);
 
-    let mut password = pg
-        .generate_one()
-        .expect("error while trying to generate a password")
-        .to_string();
+    let mut password = pg.generate_one().expect("error while trying to generate a password");
 
     if allow_using_symbols {
         for forbidden_char in forbidden_chars {
@@ -414,7 +404,7 @@ fn kubernetes_config_path(
         kubernetes_config_bucket_name,
         kubernetes_config_object_key,
         kubernetes_config_file_path.clone(),
-        secrets.clone(),
+        secrets,
     )?;
 
     Ok(kubernetes_config_file_path)
@@ -431,10 +421,9 @@ where
     P: AsRef<Path>,
 {
     // return the file if it already exists and should use cache
-    let _ = match fs::File::open(file_path.as_ref()) {
-        Ok(f) => return Ok(f),
-        Err(_) => {}
-    };
+    if let Ok(f) = fs::File::open(file_path.as_ref()) {
+        return Ok(f);
+    }
 
     let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
         let file_content = match provider_kind {
@@ -458,7 +447,7 @@ where
 
                 let configuration = scaleway_api_rs::apis::configuration::Configuration {
                     api_key: Some(scaleway_api_rs::apis::configuration::ApiKey {
-                        key: secret_access_key.to_string(),
+                        key: secret_access_key,
                         prefix: None,
                     }),
                     ..scaleway_api_rs::apis::configuration::Configuration::default()
@@ -607,7 +596,7 @@ fn aws_s3_get_object(
     qovery_engine::cmd::utilities::exec(
         "aws",
         vec!["s3", "cp", &s3_url, &local_path],
-        &vec![
+        &[
             (AWS_ACCESS_KEY_ID, access_key_id),
             (AWS_SECRET_ACCESS_KEY, secret_access_key),
         ],
@@ -625,11 +614,7 @@ pub fn is_pod_restarted_env(
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
 
     let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
 
@@ -637,19 +622,19 @@ pub fn is_pod_restarted_env(
         Ok(path) => {
             let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
                 path.as_str(),
-                namespace_name.clone().as_str(),
+                namespace_name.as_str(),
                 pod_to_check,
-                get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+                get_cloud_provider_credentials(provider_kind, &secrets),
             );
             match restarted_database {
                 Ok(count) => match count.trim().eq("0") {
-                    true => return (true, "0".to_string()),
-                    false => return (true, count.to_string()),
+                    true => (true, "0".to_string()),
+                    false => (true, count.to_string()),
                 },
-                _ => return (false, "".to_string()),
+                _ => (false, "".to_string()),
             }
         }
-        Err(_e) => return (false, "".to_string()),
+        Err(_e) => (false, "".to_string()),
     }
 }
 
@@ -660,17 +645,13 @@ pub fn get_pods(
     kube_cluster_id: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, SimpleError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
 
     let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
 
     cmd::kubectl::kubectl_exec_get_pod(
         kubernetes_config.unwrap().as_str(),
-        namespace_name.clone().as_str(),
+        namespace_name.as_str(),
         pod_to_check,
         get_cloud_provider_credentials(provider_kind, &secrets),
     )

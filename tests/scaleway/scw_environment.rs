@@ -1,8 +1,8 @@
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
 // This cluster should be live in order to have those tests passing properly.
 
-pub use crate::helpers::common::{non_working_environment, working_minimal_environment};
-pub use crate::helpers::scaleway::{
+pub use crate::helpers::helpers_common::{non_working_environment, working_minimal_environment};
+pub use crate::helpers::helpers_scaleway::{
     clean_environments, delete_environment, deploy_environment, pause_environment, SCW_KUBE_TEST_CLUSTER_ID,
     SCW_QOVERY_ORGANIZATION_ID, SCW_TEST_ZONE,
 };
@@ -60,7 +60,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -112,7 +112,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
             TransactionResult::UnrecoverableError(_, _) => {}
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -163,12 +163,12 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let ret = get_pods(
             Kind::Scw,
             environment.clone(),
-            app_name.clone().as_str(),
+            app_name.as_str(),
             SCW_KUBE_TEST_CLUSTER_ID,
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), true);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().items.is_empty());
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
@@ -179,13 +179,13 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         };
 
         // Cleanup
-        match delete_environment(&context_for_delete, env_action.clone(), SCW_TEST_ZONE) {
+        match delete_environment(&context_for_delete, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => {}
             TransactionResult::Rollback(_) => panic!(),
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -246,7 +246,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -296,7 +296,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -366,7 +366,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -438,7 +438,7 @@ fn scaleway_kapsule_redeploy_same_app() {
             Kind::Scw,
             SCW_KUBE_TEST_CLUSTER_ID,
             environment_check1,
-            app_name.clone().as_str(),
+            app_name.as_str(),
             secrets.clone(),
         );
 
@@ -465,7 +465,7 @@ fn scaleway_kapsule_redeploy_same_app() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -537,7 +537,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -621,7 +621,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         };
 
         // Should be working
-        match deploy_environment(&context, env_action.clone(), SCW_TEST_ZONE) {
+        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
             TransactionResult::Ok => {}
             TransactionResult::Rollback(_) => panic!(),
             TransactionResult::UnrecoverableError(_, _) => panic!(),
@@ -633,7 +633,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -683,7 +683,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -738,7 +738,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
 
         if let Err(e) = clean_environments(
             &context,
-            vec![environment.clone(), failover_environment.clone()],
+            vec![environment, failover_environment],
             secrets.clone(),
             SCW_TEST_ZONE,
         ) {
@@ -794,7 +794,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover
 
         if let Err(e) = clean_environments(
             &context,
-            vec![environment.clone(), failover_environment.clone()],
+            vec![environment, failover_environment],
             secrets.clone(),
             SCW_TEST_ZONE,
         ) {

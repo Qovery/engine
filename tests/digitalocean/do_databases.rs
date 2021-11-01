@@ -8,10 +8,10 @@ pub use qovery_engine::transaction::TransactionResult;
 
 pub use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 
-pub use crate::helpers::common::{
+pub use crate::helpers::helpers_common::{
     environment_3_apps_3_routers_3_databases, environnement_2_app_2_routers_1_psql, working_minimal_environment,
 };
-pub use crate::helpers::digitalocean::{
+pub use crate::helpers::helpers_digitalocean::{
     clean_environments, delete_environment, deploy_environment, pause_environment, DO_KUBE_TEST_CLUSTER_ID,
     DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_QOVERY_ORGANIZATION_ID,
     DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
@@ -77,7 +77,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -130,12 +130,12 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let ret = get_pods(
             ProviderKind::Do,
             environment.clone(),
-            app_name.clone().as_str(),
+            app_name.as_str(),
             DO_KUBE_TEST_CLUSTER_ID,
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), true);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().items.is_empty());
 
         match delete_environment(&context_for_deletion, env_action_delete, DO_TEST_REGION) {
             TransactionResult::Ok => {}
@@ -144,11 +144,11 @@ fn deploy_an_environment_with_db_and_pause_it() {
         };
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -232,7 +232,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         match is_pod_restarted_env(
             ProviderKind::Do,
             DO_KUBE_TEST_CLUSTER_ID,
-            environment_check.clone(),
+            environment_check,
             database_name.as_str(),
             secrets.clone(),
         ) {
@@ -251,7 +251,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -325,7 +325,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -465,7 +465,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 

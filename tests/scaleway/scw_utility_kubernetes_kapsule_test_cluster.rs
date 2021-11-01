@@ -1,8 +1,8 @@
 pub use ::function_name::named;
 pub use tracing::{span, Level};
 
-pub use crate::helpers::cloudflare::dns_provider_cloudflare;
-pub use crate::helpers::scaleway::{
+pub use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::helpers_scaleway::{
     cloud_provider_scaleway, docker_scw_cr_engine, scw_kubernetes_cluster_options, scw_kubernetes_nodes,
     SCW_KUBERNETES_VERSION, SCW_KUBE_TEST_CLUSTER_ID, SCW_KUBE_TEST_CLUSTER_NAME, SCW_TEST_ZONE,
 };

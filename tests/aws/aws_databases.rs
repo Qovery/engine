@@ -7,10 +7,10 @@ pub use tracing::{span, Level};
 
 pub use crate::aws::aws_environment::{ctx_pause_environment, delete_environment, deploy_environment};
 
-pub use crate::helpers::aws::{
+pub use crate::helpers::helpers_aws::{
     AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID,
 };
-pub use crate::helpers::common::{
+pub use crate::helpers::helpers_common::{
     environment_3_apps_3_routers_3_databases, environnement_2_app_2_routers_1_psql, working_minimal_environment,
 };
 pub use crate::helpers::utilities::{
@@ -53,7 +53,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea = EnvironmentAction::Environment(environment);
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
@@ -68,7 +68,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -119,13 +119,13 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
         let ret = get_pods(
             ProviderKind::Aws,
-            environment.clone(),
-            app_name.clone().as_str(),
+            environment,
+            app_name.as_str(),
             AWS_KUBE_TEST_CLUSTER_ID,
-            secrets.clone(),
+            secrets,
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), true);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().items.is_empty());
 
         match delete_environment(&context_for_deletion, &ea_delete) {
             TransactionResult::Ok => {}
@@ -133,7 +133,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -186,8 +186,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         environment_delete.action = Action::Delete;
 
         let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_fail_ok =
-            EnvironmentAction::EnvironmentWithFailover(environment_never_up, Box::new(environment.clone()));
+        let ea_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, Box::new(environment));
         let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
 
         match deploy_environment(&context, &ea) {
@@ -216,7 +215,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         match is_pod_restarted_env(
             ProviderKind::Aws,
             AWS_KUBE_TEST_CLUSTER_ID,
-            environment_check.clone(),
+            environment_check,
             database_name.as_str(),
             secrets,
         ) {
@@ -230,7 +229,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -293,7 +292,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -415,7 +414,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             TransactionResult::UnrecoverableError(_, _) => {}
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -539,7 +538,6 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
         &context,
         AWS_QOVERY_ORGANIZATION_ID,
         secrets
-            .clone()
             .DEFAULT_TEST_DOMAIN
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")

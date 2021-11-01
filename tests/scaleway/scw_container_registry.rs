@@ -29,8 +29,10 @@ fn test_get_registry_namespace() {
     // setup:
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
-    let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_default_project_id = secrets
+        .SCALEWAY_DEFAULT_PROJECT_ID
+        .unwrap_or_else(|| "undefined".to_string());
 
     // testing it in all regions
     for region in zones_to_test().into_iter() {
@@ -87,8 +89,10 @@ fn test_create_registry_namespace() {
     // setup:
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
-    let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_default_project_id = secrets
+        .SCALEWAY_DEFAULT_PROJECT_ID
+        .unwrap_or_else(|| "undefined".to_string());
 
     // testing it in all regions
     for region in zones_to_test().into_iter() {
@@ -138,8 +142,10 @@ fn test_delete_registry_namespace() {
     // setup:
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
-    let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_default_project_id = secrets
+        .SCALEWAY_DEFAULT_PROJECT_ID
+        .unwrap_or_else(|| "undefined".to_string());
 
     // testing it in all regions
     for region in zones_to_test().into_iter() {
@@ -184,8 +190,10 @@ fn test_get_or_create_registry_namespace() {
     // setup:
     let context = context();
     let secrets = FuncTestsSecrets::new();
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
-    let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_default_project_id = secrets
+        .SCALEWAY_DEFAULT_PROJECT_ID
+        .unwrap_or_else(|| "undefined".to_string());
 
     // testing it in all regions
     for region in zones_to_test().into_iter() {

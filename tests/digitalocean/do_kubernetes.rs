@@ -4,8 +4,8 @@ pub use tracing::{span, Level};
 pub use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 pub use qovery_engine::transaction::TransactionResult;
 
-pub use crate::helpers::cloudflare::dns_provider_cloudflare;
-pub use crate::helpers::digitalocean::{
+pub use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::helpers_digitalocean::{
     cloud_provider_digitalocean, do_kubernetes_cluster_options, do_kubernetes_nodes, docker_cr_do_engine,
     DO_KUBERNETES_VERSION,
 };

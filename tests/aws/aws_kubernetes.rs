@@ -1,10 +1,10 @@
 pub use ::function_name::named;
 pub use tracing::{span, Level};
 
-pub use crate::helpers::aws::{
+pub use crate::helpers::helpers_aws::{
     aws_kubernetes_nodes, cloud_provider_aws, docker_ecr_aws_engine, eks_options, AWS_KUBERNETES_VERSION,
 };
-pub use crate::helpers::cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
 pub use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
 pub use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 pub use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
@@ -193,7 +193,7 @@ fn create_and_destroy_eks_cluster(
 fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(&region, secrets, false, WithoutNatGateways, function_name!());
+    create_and_destroy_eks_cluster(region, secrets, false, WithoutNatGateways, function_name!());
 }
 
 #[cfg(feature = "test-aws-infra")]
@@ -202,7 +202,7 @@ fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
 fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(&region, secrets, false, WithNatGateways, function_name!());
+    create_and_destroy_eks_cluster(region, secrets, false, WithNatGateways, function_name!());
 }
 
 #[cfg(feature = "test-aws-infra")]
@@ -211,7 +211,7 @@ fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
 fn create_and_destroy_eks_cluster_in_us_east_2() {
     let region = "us-east-2";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(&region, secrets, true, WithoutNatGateways, function_name!());
+    create_and_destroy_eks_cluster(region, secrets, true, WithoutNatGateways, function_name!());
 }
 
 // only enable this test manually when we want to perform and validate upgrade process

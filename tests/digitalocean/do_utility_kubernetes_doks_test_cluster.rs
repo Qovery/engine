@@ -1,8 +1,8 @@
 pub use ::function_name::named;
 pub use tracing::{span, Level};
 
-pub use crate::helpers::cloudflare::dns_provider_cloudflare;
-pub use crate::helpers::digitalocean::{
+pub use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::helpers_digitalocean::{
     cloud_provider_digitalocean, do_kubernetes_cluster_options, do_kubernetes_nodes, docker_cr_do_engine,
     DO_KUBERNETES_VERSION, DO_KUBE_TEST_CLUSTER_ID, DO_KUBE_TEST_CLUSTER_NAME, DO_TEST_REGION,
 };

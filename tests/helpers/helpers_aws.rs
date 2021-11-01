@@ -12,7 +12,7 @@ use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 
-use crate::helpers::cloudflare::dns_provider_cloudflare;
+use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
@@ -124,7 +124,7 @@ pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
             .replace("\"", "")
             .replace("[", "")
             .replace("]", "")
-            .split(",")
+            .split(',')
             .map(|c| c.to_string())
             .collect(),
         rds_cidr_subnet: "23".to_string(),

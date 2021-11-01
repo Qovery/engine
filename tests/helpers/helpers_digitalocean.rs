@@ -12,7 +12,7 @@ use qovery_engine::error::EngineError;
 use qovery_engine::models::{Context, Environment, EnvironmentAction};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 
-use crate::helpers::cloudflare::dns_provider_cloudflare;
+use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
@@ -46,7 +46,7 @@ pub fn docker_cr_do_engine(context: &Context) -> Engine {
     // use Digital Ocean
     let cloud_provider = Box::new(cloud_provider_digitalocean(context));
 
-    let dns_provider = Box::new(dns_provider_cloudflare(&context));
+    let dns_provider = Box::new(dns_provider_cloudflare(context));
 
     Engine::new(
         context.clone(),
@@ -165,7 +165,7 @@ pub fn delete_environment(
 
     let cp = cloud_provider_digitalocean(context);
     let nodes = do_kubernetes_nodes();
-    let dns_provider = dns_provider_cloudflare(&context);
+    let dns_provider = dns_provider_cloudflare(context);
     let doks = do_kubernetes_ks(context, &cp, &dns_provider, nodes, region);
 
     let _ = tx.delete_environment(&doks, &environment_action);
@@ -184,7 +184,7 @@ pub fn pause_environment(
 
     let cp = cloud_provider_digitalocean(context);
     let nodes = do_kubernetes_nodes();
-    let dns_provider = dns_provider_cloudflare(&context);
+    let dns_provider = dns_provider_cloudflare(context);
     let doks = do_kubernetes_ks(context, &cp, &dns_provider, nodes, region);
 
     let _ = tx.pause_environment(&doks, &environment_action);

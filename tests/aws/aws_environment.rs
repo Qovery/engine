@@ -1,12 +1,12 @@
 pub use qovery_engine::cloud_provider::Kind;
 pub use std::collections::BTreeMap;
 
-pub use crate::helpers::aws::{
+pub use crate::helpers::helpers_aws::{
     aws_kubernetes_eks, aws_kubernetes_nodes, cloud_provider_aws, docker_ecr_aws_engine, AWS_KUBE_TEST_CLUSTER_ID,
     AWS_QOVERY_ORGANIZATION_ID,
 };
-pub use crate::helpers::cloudflare::dns_provider_cloudflare;
-pub use crate::helpers::common::{echo_app_environment, non_working_environment, working_minimal_environment};
+pub use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
+pub use crate::helpers::helpers_common::{echo_app_environment, non_working_environment, working_minimal_environment};
 pub use crate::helpers::utilities::{
     context, engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
@@ -116,7 +116,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -160,13 +160,13 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let app_name = format!("{}-0", environment.applications[0].name);
         let ret = get_pods(
             Kind::Aws,
-            environment.clone(),
-            app_name.clone().as_str(),
+            environment,
+            app_name.as_str(),
             AWS_KUBE_TEST_CLUSTER_ID,
-            secrets.clone(),
+            secrets,
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), true);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().items.is_empty());
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
@@ -182,7 +182,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
             TransactionResult::Rollback(_) => panic!(),
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -228,7 +228,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => {}
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -284,7 +284,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -340,7 +340,7 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -385,7 +385,7 @@ fn deploy_a_working_environment_with_domain() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -503,7 +503,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -570,7 +570,7 @@ fn redeploy_same_app_with_ebs() {
             Kind::Aws,
             AWS_KUBE_TEST_CLUSTER_ID,
             environment_check1,
-            app_name.clone().as_str(),
+            app_name.as_str(),
             secrets.clone(),
         );
 
@@ -594,7 +594,7 @@ fn redeploy_same_app_with_ebs() {
             TransactionResult::Rollback(_) => panic!(),
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -739,7 +739,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -830,7 +830,7 @@ fn deploy_ok_fail_fail_ok_environment() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -874,7 +874,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -919,7 +919,7 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => panic!(),
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -1037,7 +1037,7 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => {}
         };
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
