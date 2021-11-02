@@ -13,7 +13,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
-use crate::models::DatabaseMode::MANAGED;
+use crate::models::DatabaseMode::Managed;
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct Redis {
@@ -69,7 +69,7 @@ impl Redis {
 
 impl StatefulService for Redis {
     fn is_managed_service(&self) -> bool {
-        self.options.mode == MANAGED
+        self.options.mode == Managed
     }
 }
 
@@ -453,7 +453,7 @@ mod tests {
                 password: "".to_string(),
                 host: "".to_string(),
                 port: 5432,
-                mode: DatabaseMode::MANAGED,
+                mode: DatabaseMode::Managed,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
                 activate_high_availability: false,

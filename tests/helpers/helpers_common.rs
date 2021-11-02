@@ -11,7 +11,7 @@ use qovery_engine::models::{
 };
 
 use base64;
-use qovery_engine::models::DatabaseMode::CONTAINER;
+use qovery_engine::models::DatabaseMode::Container;
 use std::collections::BTreeMap;
 
 pub fn environment_3_apps_3_routers_3_databases(
@@ -235,7 +235,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
-                mode: CONTAINER,
+                mode: Container,
             },
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -256,7 +256,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
-                mode: CONTAINER,
+                mode: Container,
             },
             Database {
                 kind: DatabaseKind::Mongodb,
@@ -277,7 +277,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
-                mode: CONTAINER,
+                mode: Container,
             },
         ],
         clone_from_environment_id: None,
@@ -379,7 +379,7 @@ pub fn environnement_2_app_2_routers_1_psql(
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,
-            mode: CONTAINER,
+            mode: Container,
         }],
         applications: vec![
             Application {

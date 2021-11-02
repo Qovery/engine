@@ -15,7 +15,7 @@ pub mod databases;
 pub mod kubernetes;
 pub mod router;
 
-pub struct AWS {
+pub struct Aws {
     context: Context,
     id: String,
     organization_id: String,
@@ -27,7 +27,7 @@ pub struct AWS {
     listeners: Listeners,
 }
 
-impl AWS {
+impl Aws {
     pub fn new(
         context: Context,
         id: &str,
@@ -38,7 +38,7 @@ impl AWS {
         secret_access_key: &str,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Self {
-        AWS {
+        Aws {
             context,
             id: id.to_string(),
             organization_id: organization_id.to_string(),
@@ -65,7 +65,7 @@ impl AWS {
     }
 }
 
-impl CloudProvider for AWS {
+impl CloudProvider for Aws {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -127,7 +127,7 @@ impl CloudProvider for AWS {
     }
 }
 
-impl Listen for AWS {
+impl Listen for Aws {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

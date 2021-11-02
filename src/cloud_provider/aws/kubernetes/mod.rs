@@ -13,7 +13,7 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::aws::kubernetes::helm_charts::{aws_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
-use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::aws::Aws;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
@@ -106,14 +106,14 @@ pub struct Options {
     pub tls_email_report: String,
 }
 
-pub struct EKS<'a> {
+pub struct Eks<'a> {
     context: Context,
     id: String,
     long_id: uuid::Uuid,
     name: String,
     version: String,
     region: Region,
-    cloud_provider: &'a AWS,
+    cloud_provider: &'a Aws,
     dns_provider: &'a dyn DnsProvider,
     s3: S3,
     nodes_groups: Vec<NodeGroups>,
@@ -122,7 +122,7 @@ pub struct EKS<'a> {
     listeners: Listeners,
 }
 
-impl<'a> EKS<'a> {
+impl<'a> Eks<'a> {
     pub fn new(
         context: Context,
         id: &str,
@@ -130,7 +130,7 @@ impl<'a> EKS<'a> {
         name: &str,
         version: &str,
         region: &str,
-        cloud_provider: &'a AWS,
+        cloud_provider: &'a Aws,
         dns_provider: &'a dyn DnsProvider,
         options: Options,
         nodes_groups: Vec<NodeGroups>,
@@ -160,7 +160,7 @@ impl<'a> EKS<'a> {
             cloud_provider.secret_access_key.clone(),
         );
 
-        Ok(EKS {
+        Ok(Eks {
             context,
             id: id.to_string(),
             long_id,
@@ -712,7 +712,7 @@ impl<'a> EKS<'a> {
     }
 }
 
-impl<'a> Kubernetes for EKS<'a> {
+impl<'a> Kubernetes for Eks<'a> {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -1518,7 +1518,7 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 }
 
-impl<'a> Listen for EKS<'a> {
+impl<'a> Listen for Eks<'a> {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

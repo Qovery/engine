@@ -17,7 +17,7 @@ pub use crate::helpers::utilities::{
     context, engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 pub use function_name::named;
-pub use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+pub use qovery_engine::models::DatabaseMode::{Container, Managed};
 
 /**
 **
@@ -355,7 +355,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,
-            mode: CONTAINER,
+            mode: Container,
         }];
         environment.applications = environment
             .applications
@@ -525,7 +525,7 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER);
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), Container);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -543,7 +543,7 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER);
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), Container);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -561,7 +561,7 @@ fn postgresql_v12_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER);
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), Container);
 }
 
 // Postgres production environment
@@ -580,7 +580,7 @@ fn postgresql_v10_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), MANAGED);
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), Managed);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -598,7 +598,7 @@ fn postgresql_v11_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), MANAGED);
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), Managed);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -616,7 +616,7 @@ fn postgresql_v12_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED);
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), Managed);
 }
 
 /**
@@ -682,7 +682,7 @@ fn test_mongodb_configuration(
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
-                    "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == MANAGED).to_string()),
+                    "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == Managed).to_string()),
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host.clone()),
                     "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port.to_string()),
@@ -734,7 +734,7 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), Container);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -752,7 +752,7 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), Container);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -770,7 +770,7 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), Container);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -788,7 +788,7 @@ fn mongodb_v4_4_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER);
+    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), Container);
 }
 
 // MongoDB production environment (DocumentDB)
@@ -807,7 +807,7 @@ fn mongodb_v3_6_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), MANAGED);
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), Managed);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -825,7 +825,7 @@ fn mongodb_v4_0_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), MANAGED);
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), Managed);
 }
 
 /**
@@ -939,7 +939,7 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER);
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), Container);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -957,7 +957,7 @@ fn mysql_v8_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER);
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), Container);
 }
 
 // MySQL production environment (RDS)
@@ -976,7 +976,7 @@ fn mysql_v5_7_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), MANAGED);
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), Managed);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -994,7 +994,7 @@ fn mysql_v8_0_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), MANAGED);
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), Managed);
 }
 
 /**
@@ -1065,7 +1065,7 @@ fn test_redis_configuration(
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
-                    "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
+                    "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == Managed).to_string()),
                     "REDIS_HOST".to_string()      => base64::encode(database_host.clone()),
                     "REDIS_PORT".to_string()      => base64::encode(database_port.clone().to_string()),
                     "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),
@@ -1115,7 +1115,7 @@ fn redis_v5_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER);
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), Container);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -1133,7 +1133,7 @@ fn redis_v6_deploy_a_working_dev_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER);
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), Container);
 }
 
 // Redis production environment (Elasticache)
@@ -1152,7 +1152,7 @@ fn redis_v5_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "5", function_name!(), MANAGED);
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), Managed);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -1170,5 +1170,5 @@ fn redis_v6_deploy_a_working_prod_environment() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str(),
     );
-    test_redis_configuration(context, environment, secrets, "6", function_name!(), MANAGED);
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), Managed);
 }

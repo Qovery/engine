@@ -7,7 +7,7 @@ pub use crate::helpers::helpers_aws::{
 pub use crate::helpers::helpers_cloudflare::dns_provider_cloudflare;
 pub use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
 pub use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
-pub use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
+pub use qovery_engine::cloud_provider::aws::kubernetes::{Eks, VpcQoveryNetworkMode};
 pub use qovery_engine::transaction::TransactionResult;
 
 #[cfg(test)]
@@ -34,7 +34,7 @@ fn create_upgrade_and_destroy_eks_cluster(
 
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let kubernetes = EKS::new(
+        let kubernetes = Eks::new(
             context.clone(),
             generate_cluster_id(region).as_str(),
             uuid::Uuid::new_v4(),
@@ -59,7 +59,7 @@ fn create_upgrade_and_destroy_eks_cluster(
         };
 
         // Upgrade
-        let kubernetes = EKS::new(
+        let kubernetes = Eks::new(
             context,
             generate_cluster_id(region).as_str(),
             uuid::Uuid::new_v4(),
@@ -122,7 +122,7 @@ fn create_and_destroy_eks_cluster(
 
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let kubernetes = EKS::new(
+        let kubernetes = Eks::new(
             context,
             generate_cluster_id(region).as_str(),
             uuid::Uuid::new_v4(),

@@ -7,7 +7,7 @@ pub use crate::helpers::helpers_digitalocean::{
     DO_KUBERNETES_VERSION, DO_KUBE_TEST_CLUSTER_ID, DO_KUBE_TEST_CLUSTER_NAME, DO_TEST_REGION,
 };
 pub use crate::helpers::utilities::{context, engine_run_test, init, FuncTestsSecrets};
-pub use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+pub use qovery_engine::cloud_provider::digitalocean::kubernetes::DoKs;
 pub use qovery_engine::transaction::TransactionResult;
 
 // Warning: This test shouldn't be ran by CI
@@ -35,7 +35,7 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
         let nodes = do_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let kubernetes = DOKS::new(
+        let kubernetes = DoKs::new(
             context,
             DO_KUBE_TEST_CLUSTER_ID.to_string(),
             uuid::Uuid::new_v4(),
@@ -88,7 +88,7 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
         let nodes = do_kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context);
 
-        let kubernetes = DOKS::new(
+        let kubernetes = DoKs::new(
             context,
             DO_KUBE_TEST_CLUSTER_ID.to_string(),
             uuid::Uuid::new_v4(),

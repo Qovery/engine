@@ -1,13 +1,13 @@
 extern crate serde;
 extern crate serde_derive;
+use qovery_engine::cloud_provider::aws::Aws;
 use tracing::error;
 
-use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode, EKS};
-use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::aws::kubernetes::{Eks, Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
-use qovery_engine::container_registry::ecr::ECR;
+use qovery_engine::container_registry::aws_ecr::AwsEcr;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
@@ -22,7 +22,7 @@ pub const AWS_KUBE_TEST_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t2.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 
-pub fn container_registry_ecr(context: &Context) -> ECR {
+pub fn container_registry_ecr(context: &Context) -> AwsEcr {
     let secrets = FuncTestsSecrets::new();
     if secrets.AWS_ACCESS_KEY_ID.is_none()
         || secrets.AWS_SECRET_ACCESS_KEY.is_none()
@@ -32,7 +32,7 @@ pub fn container_registry_ecr(context: &Context) -> ECR {
         std::process::exit(1)
     }
 
-    ECR::new(
+    AwsEcr::new(
         context.clone(),
         "default-ecr-registry-Qovery Test",
         "ea59qe62xaw3wjai",
@@ -47,9 +47,9 @@ pub fn aws_kubernetes_nodes() -> Vec<NodeGroups> {
         .expect("Problem while setup EKS nodes")]
 }
 
-pub fn cloud_provider_aws(context: &Context) -> AWS {
+pub fn cloud_provider_aws(context: &Context) -> Aws {
     let secrets = FuncTestsSecrets::new();
-    AWS::new(
+    Aws::new(
         context.clone(),
         "u8nb94c7fwxzr2jt",
         AWS_QOVERY_ORGANIZATION_ID,
@@ -150,12 +150,12 @@ pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
 
 pub fn aws_kubernetes_eks<'a>(
     context: &Context,
-    cloud_provider: &'a AWS,
+    cloud_provider: &'a Aws,
     dns_provider: &'a dyn DnsProvider,
     nodes_groups: Vec<NodeGroups>,
-) -> EKS<'a> {
+) -> Eks<'a> {
     let secrets = FuncTestsSecrets::new();
-    EKS::<'a>::new(
+    Eks::<'a>::new(
         context.clone(),
         AWS_KUBE_TEST_CLUSTER_ID,
         uuid::Uuid::new_v4(),

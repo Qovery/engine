@@ -13,7 +13,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
-use crate::models::DatabaseMode::MANAGED;
+use crate::models::DatabaseMode::Managed;
 use crate::models::{Context, Listen, Listener, Listeners};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -107,7 +107,7 @@ impl PostgreSQL {
 
 impl StatefulService for PostgreSQL {
     fn is_managed_service(&self) -> bool {
-        self.options.mode == MANAGED
+        self.options.mode == Managed
     }
 }
 

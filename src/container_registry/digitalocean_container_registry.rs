@@ -21,7 +21,7 @@ const CR_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/re
 // TODO : use --output json
 // see https://www.digitalocean.com/community/tutorials/how-to-use-doctl-the-official-digitalocean-command-line-client
 
-pub struct DOCR {
+pub struct DigitalOceanCr {
     pub context: Context,
     pub name: String,
     pub api_key: String,
@@ -29,9 +29,9 @@ pub struct DOCR {
     pub listeners: Listeners,
 }
 
-impl DOCR {
+impl DigitalOceanCr {
     pub fn new(context: Context, id: &str, name: &str, api_key: &str) -> Self {
-        DOCR {
+        DigitalOceanCr {
             context,
             name: name.into(),
             api_key: api_key.into(),
@@ -189,7 +189,7 @@ impl DOCR {
     }
 }
 
-impl ContainerRegistry for DOCR {
+impl ContainerRegistry for DigitalOceanCr {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -386,7 +386,7 @@ impl ContainerRegistry for DOCR {
     }
 }
 
-impl Listen for DOCR {
+impl Listen for DigitalOceanCr {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

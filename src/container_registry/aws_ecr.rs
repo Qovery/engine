@@ -22,7 +22,7 @@ use retry::Error::Operation;
 use retry::OperationResult;
 use serde_json::json;
 
-pub struct ECR {
+pub struct AwsEcr {
     context: Context,
     id: String,
     name: String,
@@ -32,7 +32,7 @@ pub struct ECR {
     listeners: Listeners,
 }
 
-impl ECR {
+impl AwsEcr {
     pub fn new(
         context: Context,
         id: &str,
@@ -41,7 +41,7 @@ impl ECR {
         secret_access_key: &str,
         region: &str,
     ) -> Self {
-        ECR {
+        AwsEcr {
             context,
             id: id.to_string(),
             name: name.to_string(),
@@ -271,7 +271,7 @@ impl ECR {
     }
 }
 
-impl ContainerRegistry for ECR {
+impl ContainerRegistry for AwsEcr {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -465,7 +465,7 @@ impl ContainerRegistry for ECR {
     }
 }
 
-impl Listen for ECR {
+impl Listen for AwsEcr {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

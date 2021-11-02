@@ -2,7 +2,7 @@ extern crate digitalocean;
 
 use std::any::Any;
 
-use digitalocean::DigitalOcean;
+use digitalocean::DigitalOcean as DigitalOceanClient;
 
 use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
@@ -17,7 +17,7 @@ pub mod models;
 pub mod network;
 pub mod router;
 
-pub struct DO {
+pub struct DigitalOcean {
     context: Context,
     id: String,
     organization_id: String,
@@ -30,7 +30,7 @@ pub struct DO {
     listeners: Listeners,
 }
 
-impl DO {
+impl DigitalOcean {
     pub fn new(
         context: Context,
         id: &str,
@@ -42,7 +42,7 @@ impl DO {
         name: &str,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Self {
-        DO {
+        DigitalOcean {
             context,
             id: id.to_string(),
             organization_id: organization_id.to_string(),
@@ -56,12 +56,12 @@ impl DO {
         }
     }
 
-    pub fn client(&self) -> DigitalOcean {
-        DigitalOcean::new(self.token.as_str()).unwrap()
+    pub fn client(&self) -> DigitalOceanClient {
+        DigitalOceanClient::new(self.token.as_str()).unwrap()
     }
 }
 
-impl CloudProvider for DO {
+impl CloudProvider for DigitalOcean {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -83,7 +83,7 @@ impl CloudProvider for DO {
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
-        let client = DigitalOcean::new(&self.token);
+        let client = DigitalOceanClient::new(&self.token);
         match client {
             Ok(_x) => Ok(()),
             Err(_) => {
@@ -115,7 +115,7 @@ impl CloudProvider for DO {
     }
 }
 
-impl Listen for DO {
+impl Listen for DigitalOcean {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

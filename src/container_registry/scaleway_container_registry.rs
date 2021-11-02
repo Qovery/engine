@@ -15,7 +15,7 @@ use retry::Error::Operation;
 use retry::OperationResult;
 use rusoto_core::param::ToParam;
 
-pub struct ScalewayCR {
+pub struct ScalewayCr {
     context: Context,
     id: String,
     name: String,
@@ -26,7 +26,7 @@ pub struct ScalewayCR {
     listeners: Listeners,
 }
 
-impl ScalewayCR {
+impl ScalewayCr {
     pub fn new(
         context: Context,
         id: &str,
@@ -34,8 +34,8 @@ impl ScalewayCR {
         secret_token: &str,
         default_project_id: &str,
         zone: Zone,
-    ) -> ScalewayCR {
-        ScalewayCR {
+    ) -> ScalewayCr {
+        ScalewayCr {
             context,
             id: id.to_string(),
             name: name.to_string(),
@@ -297,7 +297,7 @@ impl ScalewayCR {
     }
 }
 
-impl ContainerRegistry for ScalewayCR {
+impl ContainerRegistry for ScalewayCr {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -459,7 +459,7 @@ impl ContainerRegistry for ScalewayCR {
     }
 }
 
-impl Listen for ScalewayCR {
+impl Listen for ScalewayCr {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

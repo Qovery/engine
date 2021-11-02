@@ -1,7 +1,7 @@
 pub use crate::helpers::utilities::{context, FuncTestsSecrets};
 pub use qovery_engine::build_platform::Image;
 pub use qovery_engine::cloud_provider::scaleway::application::Zone;
-pub use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
+pub use qovery_engine::container_registry::scaleway_container_registry::ScalewayCr;
 pub use tracing::debug;
 pub use uuid::Uuid;
 
@@ -38,7 +38,7 @@ fn test_get_registry_namespace() {
     for region in zones_to_test().into_iter() {
         let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
 
-        let container_registry = ScalewayCR::new(
+        let container_registry = ScalewayCr::new(
             context.clone(),
             "",
             registry_name.as_str(),
@@ -98,7 +98,7 @@ fn test_create_registry_namespace() {
     for region in zones_to_test().into_iter() {
         let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
 
-        let container_registry = ScalewayCR::new(
+        let container_registry = ScalewayCr::new(
             context.clone(),
             "",
             registry_name.as_str(),
@@ -151,7 +151,7 @@ fn test_delete_registry_namespace() {
     for region in zones_to_test().into_iter() {
         let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
 
-        let container_registry = ScalewayCR::new(
+        let container_registry = ScalewayCr::new(
             context.clone(),
             "",
             registry_name.as_str(),
@@ -199,7 +199,7 @@ fn test_get_or_create_registry_namespace() {
     for region in zones_to_test().into_iter() {
         let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
 
-        let container_registry = ScalewayCR::new(
+        let container_registry = ScalewayCr::new(
             context.clone(),
             "",
             registry_name.as_str(),

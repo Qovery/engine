@@ -518,8 +518,8 @@ pub struct Route {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum DatabaseMode {
-    MANAGED,
-    CONTAINER,
+    Managed,
+    Container,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

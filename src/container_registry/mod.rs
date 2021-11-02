@@ -4,10 +4,10 @@ use crate::build_platform::Image;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listen};
 
+pub mod aws_ecr;
+pub mod digitalocean_container_registry;
 pub mod docker;
 pub mod docker_hub;
-pub mod docr;
-pub mod ecr;
 pub mod scaleway_container_registry;
 
 pub trait ContainerRegistry: Listen {

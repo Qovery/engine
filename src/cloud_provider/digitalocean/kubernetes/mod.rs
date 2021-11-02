@@ -15,7 +15,7 @@ use crate::cloud_provider::digitalocean::network::load_balancer::do_get_load_bal
 use crate::cloud_provider::digitalocean::network::vpc::{
     get_do_random_available_subnet_from_api, get_do_vpc_name_available_from_api, VpcInitKind,
 };
-use crate::cloud_provider::digitalocean::DO;
+use crate::cloud_provider::digitalocean::DigitalOcean;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
 use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes};
@@ -74,14 +74,14 @@ pub struct DoksOptions {
     pub tls_email_report: String,
 }
 
-pub struct DOKS<'a> {
+pub struct DoKs<'a> {
     context: Context,
     id: String,
     long_id: uuid::Uuid,
     name: String,
     version: String,
     region: Region,
-    cloud_provider: &'a DO,
+    cloud_provider: &'a DigitalOcean,
     nodes_groups: Vec<NodeGroups>,
     dns_provider: &'a dyn DnsProvider,
     spaces: Spaces,
@@ -90,7 +90,7 @@ pub struct DOKS<'a> {
     listeners: Listeners,
 }
 
-impl<'a> DOKS<'a> {
+impl<'a> DoKs<'a> {
     pub fn new(
         context: Context,
         id: String,
@@ -98,7 +98,7 @@ impl<'a> DOKS<'a> {
         name: String,
         version: String,
         region: Region,
-        cloud_provider: &'a DO,
+        cloud_provider: &'a DigitalOcean,
         dns_provider: &'a dyn DnsProvider,
         nodes_groups: Vec<NodeGroups>,
         options: DoksOptions,
@@ -128,7 +128,7 @@ impl<'a> DOKS<'a> {
             region,
         );
 
-        Ok(DOKS {
+        Ok(DoKs {
             context,
             id,
             long_id,
@@ -424,7 +424,7 @@ impl<'a> DOKS<'a> {
     }
 }
 
-impl<'a> Kubernetes for DOKS<'a> {
+impl<'a> Kubernetes for DoKs<'a> {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -1132,7 +1132,7 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 }
 
-impl<'a> Listen for DOKS<'a> {
+impl<'a> Listen for DoKs<'a> {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

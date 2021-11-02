@@ -1,11 +1,11 @@
 use qovery_engine::build_platform::Image;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::DoKs;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions;
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::network::vpc::VpcInitKind;
-use qovery_engine::cloud_provider::digitalocean::DO;
+use qovery_engine::cloud_provider::digitalocean::DigitalOcean;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
-use qovery_engine::container_registry::docr::DOCR;
+use qovery_engine::container_registry::digitalocean_container_registry::DigitalOceanCr;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::EngineError;
@@ -28,9 +28,9 @@ pub const DO_MANAGED_DATABASE_DISK_TYPE: &str = "not-used";
 pub const DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "not-used";
 pub const DO_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "do-sbv-ssd-0";
 
-pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
+pub fn container_registry_digital_ocean(context: &Context) -> DigitalOceanCr {
     let secrets = FuncTestsSecrets::new();
-    DOCR::new(
+    DigitalOceanCr::new(
         context.clone(),
         DOCR_ID,
         "default-docr-registry-qovery-do-test",
@@ -59,13 +59,13 @@ pub fn docker_cr_do_engine(context: &Context) -> Engine {
 
 pub fn do_kubernetes_ks<'a>(
     context: &Context,
-    cloud_provider: &'a DO,
+    cloud_provider: &'a DigitalOcean,
     dns_provider: &'a dyn DnsProvider,
     nodes_groups: Vec<NodeGroups>,
     region: Region,
-) -> DOKS<'a> {
+) -> DoKs<'a> {
     let secrets = FuncTestsSecrets::new();
-    DOKS::<'a>::new(
+    DoKs::<'a>::new(
         context.clone(),
         DO_KUBE_TEST_CLUSTER_ID.to_string(),
         uuid::Uuid::new_v4(),
@@ -87,9 +87,9 @@ pub fn do_kubernetes_nodes() -> Vec<NodeGroups> {
     ]
 }
 
-pub fn cloud_provider_digitalocean(context: &Context) -> DO {
+pub fn cloud_provider_digitalocean(context: &Context) -> DigitalOcean {
     let secrets = FuncTestsSecrets::new();
-    DO::new(
+    DigitalOcean::new(
         context.clone(),
         DO_KUBE_TEST_CLUSTER_ID,
         DO_QOVERY_ORGANIZATION_ID,
@@ -198,7 +198,7 @@ pub fn clean_environments(
     secrets: FuncTestsSecrets,
     _region: Region,
 ) -> Result<(), EngineError> {
-    let do_cr = DOCR::new(
+    let do_cr = DigitalOceanCr::new(
         context.clone(),
         "test",
         "test",

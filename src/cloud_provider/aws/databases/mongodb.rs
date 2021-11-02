@@ -15,7 +15,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope, StringError};
-use crate::models::DatabaseMode::MANAGED;
+use crate::models::DatabaseMode::Managed;
 use crate::models::{Context, Listen, Listener, Listeners};
 
 pub struct MongoDB {
@@ -71,7 +71,7 @@ impl MongoDB {
 
 impl StatefulService for MongoDB {
     fn is_managed_service(&self) -> bool {
-        self.options.mode == MANAGED
+        self.options.mode == Managed
     }
 }
 
@@ -445,7 +445,7 @@ mod tests_mongodb {
                 password: "".to_string(),
                 host: "".to_string(),
                 port: 5432,
-                mode: DatabaseMode::CONTAINER,
+                mode: DatabaseMode::Container,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
                 activate_high_availability: false,

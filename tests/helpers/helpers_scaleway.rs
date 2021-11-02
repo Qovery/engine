@@ -3,7 +3,7 @@ use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOptions};
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
-use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
+use qovery_engine::container_registry::scaleway_container_registry::ScalewayCr;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::EngineError;
@@ -27,7 +27,7 @@ pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
 pub const SCW_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "scw-sbv-ssd-0";
 
-pub fn container_registry_scw(context: &Context) -> ScalewayCR {
+pub fn container_registry_scw(context: &Context) -> ScalewayCr {
     let secrets = FuncTestsSecrets::new();
     if secrets.SCALEWAY_ACCESS_KEY.is_none()
         || secrets.SCALEWAY_SECRET_KEY.is_none()
@@ -44,7 +44,7 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         .SCALEWAY_DEFAULT_PROJECT_ID
         .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets");
 
-    ScalewayCR::new(
+    ScalewayCr::new(
         context.clone(),
         format!("default-registry-qovery-test-{}", random_id).as_str(),
         format!("default-registry-qovery-test-{}", random_id).as_str(),
@@ -236,7 +236,7 @@ pub fn clean_environments(
     let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
     let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
 
-    let container_registry_client = ScalewayCR::new(
+    let container_registry_client = ScalewayCr::new(
         context.clone(),
         "test",
         "test",
