@@ -572,8 +572,8 @@ mod tests {
         let milli_cpu = "250m".to_string();
         let int_cpu = "2".to_string();
 
-        assert_eq!(convert_k8s_cpu_value_to_f32(milli_cpu).unwrap(), 0.25_f32);
-        assert_eq!(convert_k8s_cpu_value_to_f32(int_cpu).unwrap(), 2_f32);
+        assert!((convert_k8s_cpu_value_to_f32(milli_cpu).unwrap() - 0.25_f32).abs() < f32::EPSILON);
+        assert!((convert_k8s_cpu_value_to_f32(int_cpu).unwrap() - 2_f32).abs() < f32::EPSILON);
     }
 
     #[test]

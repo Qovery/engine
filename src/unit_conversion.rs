@@ -72,15 +72,15 @@ mod tests {
 
     #[test]
     fn test_cpu_conversions() {
-        assert_eq!(cpu_string_to_float("250m"), 0.25);
-        assert_eq!(cpu_string_to_float("500m"), 0.5);
-        assert_eq!(cpu_string_to_float("1500m"), 1.5);
-        assert_eq!(cpu_string_to_float("1.5"), 1.5);
-        assert_eq!(cpu_string_to_float("0"), 0.0);
-        assert_eq!(cpu_string_to_float("0m"), 0.0);
-        assert_eq!(cpu_string_to_float("-250m"), 0.0);
-        assert_eq!(cpu_string_to_float("-10"), 0.0);
-        assert_eq!(cpu_string_to_float("1000"), 1000.0);
+        assert!((cpu_string_to_float("250m") - 0.25).abs() < f32::EPSILON);
+        assert!((cpu_string_to_float("500m") - 0.5).abs() < f32::EPSILON);
+        assert!((cpu_string_to_float("1500m") - 1.5).abs() < f32::EPSILON);
+        assert!((cpu_string_to_float("1.5") - 1.5).abs() < f32::EPSILON);
+        assert!((cpu_string_to_float("0") - 0.0).abs() < f32::EPSILON);
+        assert!((cpu_string_to_float("0m") - 0.0).abs() < f32::EPSILON);
+        assert!((cpu_string_to_float("-250m") - 0.0).abs() < f32::EPSILON);
+        assert!((cpu_string_to_float("-10") - 0.0).abs() < f32::EPSILON);
+        assert!((cpu_string_to_float("1000") - 1000.0).abs() < f32::EPSILON);
     }
 
     #[test]

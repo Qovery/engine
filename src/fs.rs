@@ -206,12 +206,14 @@ mod tests {
             ("dir-2/dir-1/file-2.txt", "content"),
         ];
 
-        let tmp_files = tmp_files_path_content.iter().map(|(p, c)| {
+        let mut tmp_files: Vec<File> = Vec::with_capacity(tmp_files_path_content.len());
+
+        for (p, c) in tmp_files_path_content.into_iter() {
             let mut file = File::create(root_dir_path.join(p)).expect("error creating file");
             file.write_all(c.as_bytes()).expect("error writing into file");
 
-            file
-        });
+            tmp_files.push(file);
+        }
 
         // execute:
         let result = archive_workspace_directory(

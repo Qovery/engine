@@ -39,7 +39,7 @@ jobs:
           sccache --show-stats
           echo "########## LINTER ##########"
           cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
-          RUSTC_WRAPPER="" RUSTC_WORKSPACE_WRAPPER=$GITHUB_WORKSPACE/bin/sccache cargo clippy --workspace --all-features --tests --examples --bins -- -D warnings || (echo "Solve your warnings to continue"; exit 1)
+          RUSTC_WRAPPER="" RUSTC_WORKSPACE_WRAPPER=$GITHUB_WORKSPACE/bin/sccache cargo clippy --workspace --all-features --tests --examples --bins --lib -- -D warnings || (echo "Solve your warnings to continue"; exit 1)
           echo "########## START BUILD ##########"
           cargo build --all-features
           sccache --show-stats
