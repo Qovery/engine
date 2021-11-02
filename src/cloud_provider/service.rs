@@ -53,6 +53,20 @@ pub trait Service {
     fn cpu_burst(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
     fn total_instances(&self) -> u16;
+    fn publicly_accessible(&self) -> bool;
+    fn fqdn<'a>(&self, target: &DeploymentTarget, fqdn: &'a String, is_managed: bool) -> String {
+        match &self.publicly_accessible() {
+            true => fqdn.to_string(),
+            false => match is_managed {
+                true => format!("{}-dns.{}.svc.cluster.local", self.id(), target.environment.namespace()),
+                false => format!(
+                    "{}.{}.svc.cluster.local",
+                    self.sanitized_name(),
+                    target.environment.namespace()
+                ),
+            },
+        }
+    }
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;
     // used to retrieve logs by using Kubernetes labels (selector)
     fn selector(&self) -> String;
@@ -408,6 +422,7 @@ where
             workspace_dir.as_str(),
             service.start_timeout(),
             kubernetes.cloud_provider().credentials_environment_variables(),
+            service.service_type(),
         ),
     )?;
 
@@ -669,6 +684,7 @@ where
                 workspace_dir.as_str(),
                 service.start_timeout(),
                 kubernetes.cloud_provider().credentials_environment_variables(),
+                service.service_type(),
             ),
         )?;
 

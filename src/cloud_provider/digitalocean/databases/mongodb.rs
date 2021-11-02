@@ -124,6 +124,10 @@ impl Service for MongoDB {
         1
     }
 
+    fn publicly_accessible(&self) -> bool {
+        self.options.publicly_accessible
+    }
+
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let kubernetes = target.kubernetes;
         let environment = target.environment;
@@ -152,14 +156,10 @@ impl Service for MongoDB {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        match &self.options.publicly_accessible {
-            true => context.insert("fqdn", self.fqdn.as_str()),
-            false => context.insert(
-                "fqdn",
-                format!("mongodbmymongodb.{}.svc.cluster.local", environment.namespace()).as_str(),
-            ),
-        }
-
+        context.insert(
+            "fqdn",
+            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
+        );
         context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());

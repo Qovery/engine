@@ -10,7 +10,6 @@ use test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_pvc, get_svc, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 
-use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::working_minimal_environment;
@@ -486,25 +485,11 @@ fn test_postgresql_configuration(
 
         let app_id = generate_id();
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = match is_public {
-            true => format!(
-                "postgresql-{}.{}",
-                generate_id(),
-                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-            ),
-            false => match database_mode {
-                CONTAINER => format!(
-                    "postgresqlpostgres.{}-{}.svc.cluster.local",
-                    environment.project_id, environment.id
-                ),
-                MANAGED => format!(
-                    "{}-dns.{}-{}.svc.cluster.local",
-                    app_id.clone(),
-                    environment.project_id,
-                    environment.id
-                ),
-            },
-        };
+        let database_host = format!(
+            "postgresql-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
@@ -793,25 +778,11 @@ fn test_mongodb_configuration(
 
         let app_id = generate_id();
         let app_name = format!("mongodb-app-{}", generate_id());
-        let database_host = match is_public {
-            true => format!(
-                "mongodb-{}.{}",
-                generate_id(),
-                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-            ),
-            false => match database_mode {
-                CONTAINER => format!(
-                    "mongodbmymongodb.{}-{}.svc.cluster.local",
-                    environment.project_id, environment.id
-                ),
-                MANAGED => format!(
-                    "{}-dns.{}-{}.svc.cluster.local",
-                    app_id.clone(),
-                    environment.project_id,
-                    environment.id
-                ),
-            },
-        };
+        let database_host = format!(
+            "mongodb-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 27017;
         let database_db_name = "my-mongodb".to_string();
         let database_username = "superuser".to_string();
@@ -1147,26 +1118,11 @@ fn test_mysql_configuration(
 
         let app_id = generate_id();
         let app_name = format!("mysql-app-{}", generate_id());
-        let database_host = match is_public {
-            true => format!(
-                "mysql-{}.{}",
-                generate_id(),
-                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-            ),
-            false => match database_mode {
-                CONTAINER => format!(
-                    "mysqlmysqldatabase.{}-{}.svc.cluster.local",
-                    environment.project_id, environment.id
-                ),
-                MANAGED => format!(
-                    "{}-dns.{}-{}.svc.cluster.local",
-                    app_id.clone(),
-                    environment.project_id,
-                    environment.id
-                ),
-            },
-        };
-
+        let database_host = format!(
+            "mysql-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 3306;
         let database_db_name = "mysqldatabase".to_string();
         let database_username = "superuser".to_string();
@@ -1423,25 +1379,11 @@ fn test_redis_configuration(
 
         let app_id = generate_id();
         let app_name = format!("redis-app-{}", generate_id());
-        let database_host = match is_public {
-            true => format!(
-                "redis-{}.{}",
-                generate_id(),
-                secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
-            ),
-            false => match database_mode {
-                CONTAINER => format!(
-                    "redismyredis-master.{}-{}.svc.cluster.local",
-                    environment.project_id, environment.id
-                ),
-                MANAGED => format!(
-                    "{}-dns.{}-{}.svc.cluster.local",
-                    app_id.clone(),
-                    environment.project_id,
-                    environment.id
-                ),
-            },
-        };
+        let database_host = format!(
+            "redis-{}.{}",
+            generate_id(),
+            secrets.DEFAULT_TEST_DOMAIN.as_ref().unwrap()
+        );
         let database_port = 6379;
         let database_db_name = "my-redis".to_string();
         let database_username = "superuser".to_string();

@@ -159,6 +159,10 @@ impl Service for Application {
         self.total_instances
     }
 
+    fn publicly_accessible(&self) -> bool {
+        self.private_port.is_some()
+    }
+
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let kubernetes = target.kubernetes;
         let environment = target.environment;

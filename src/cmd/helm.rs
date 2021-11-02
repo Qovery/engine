@@ -4,6 +4,7 @@ use std::path::Path;
 use tracing::{error, info, span, Level};
 
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, CommonChart};
+use crate::cloud_provider::service::ServiceType;
 use crate::cmd::helm::HelmLockErrors::{IncorrectFormatDate, NotYetExpired, ParsingError};
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_get_secrets};
 use crate::cmd::structs::{Helm, HelmChart, HelmHistoryRow, Item, KubernetesList};
@@ -42,6 +43,7 @@ pub fn helm_exec_with_upgrade_history<P>(
     chart_root_dir: P,
     timeout: Timeout<u32>,
     envs: Vec<(&str, &str)>,
+    service_type: ServiceType,
 ) -> Result<Option<HelmHistoryRow>, SimpleError>
 where
     P: AsRef<Path>,
@@ -74,7 +76,10 @@ where
             path.clone(),
             namespace.to_string(),
             timeout.value() as i64,
-            vec![format!("{}/q-values.yaml", path)],
+            match service_type {
+                ServiceType::Database(_) => vec![format!("{}/q-values.yaml", path)],
+                _ => vec![],
+            },
         ),
     };
 
