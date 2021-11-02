@@ -167,12 +167,14 @@ pub trait Router: StatelessService + Listen + Helm {
 
 pub trait Database: StatefulService {
     fn check_domains(&self, listeners: Listeners, domains: Vec<&str>) -> Result<(), EngineError> {
-        check_domain_for(
-            ListenersHelper::new(&listeners),
-            domains,
-            self.id(),
-            self.context().execution_id(),
-        )?;
+        if self.publicly_accessible() {
+            check_domain_for(
+                ListenersHelper::new(&listeners),
+                domains,
+                self.id(),
+                self.context().execution_id(),
+            )?;
+        }
         Ok(())
     }
 }

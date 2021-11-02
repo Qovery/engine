@@ -16,7 +16,7 @@ use self::test_utilities::aws::{
     AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID,
 };
 use self::test_utilities::utilities::{
-    context, engine_run_test, generate_id, get_pods, get_pvc, get_svc, is_pod_restarted_env,
+    context, db_fqnd, engine_run_test, generate_id, get_pods, get_pvc, get_svc, is_pod_restarted_env,
 };
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 
@@ -487,7 +487,7 @@ fn test_postgresql_configuration(
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
-                     "PG_HOST".to_string() => base64::encode(db.clone().fqdn),
+                     "PG_HOST".to_string() => base64::encode(db_fqnd(db.clone())),
                      "PG_PORT".to_string() => base64::encode(database_port.to_string()),
                      "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
                      "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
@@ -840,13 +840,9 @@ fn test_mongodb_configuration(
         let database_db_name = "my-mongodb".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_id();
-        let database_uri = format!(
-            "mongodb://{}:{}@{}:{}/{}",
-            database_username, database_password, database_host, database_port, database_db_name
-        );
         let storage_size = 10;
 
-        environment.databases = vec![Database {
+        let db = Database {
             kind: DatabaseKind::Mongodb,
             action: Action::Create,
             id: app_id.clone(),
@@ -866,7 +862,19 @@ fn test_mongodb_configuration(
             activate_backups: false,
             publicly_accessible: is_public.clone(),
             mode: database_mode.clone(),
-        }];
+        };
+
+        environment.databases = vec![db.clone()];
+
+        let database_uri = format!(
+            "mongodb://{}:{}@{}:{}/{}",
+            database_username,
+            database_password,
+            db_fqnd(db.clone()),
+            database_port,
+            database_db_name
+        );
+
         environment.applications = environment
             .applications
             .into_iter()
@@ -877,7 +885,7 @@ fn test_mongodb_configuration(
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == MANAGED).to_string()),
-                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(db_fqnd(db.clone())),
                     "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port.to_string()),
                     "MONGODB_DBNAME".to_string() => base64::encode(database_db_name.clone()),
@@ -1235,7 +1243,7 @@ fn test_mysql_configuration(
         let database_password = generate_id();
         let storage_size = 10;
 
-        environment.databases = vec![Database {
+        let db = Database {
             kind: DatabaseKind::Mysql,
             action: Action::Create,
             id: app_id.clone(),
@@ -1255,7 +1263,9 @@ fn test_mysql_configuration(
             activate_backups: false,
             publicly_accessible: is_public.clone(),
             mode: database_mode.clone(),
-        }];
+        };
+
+        environment.databases = vec![db.clone()];
         environment.applications = environment
             .applications
             .into_iter()
@@ -1265,7 +1275,7 @@ fn test_mysql_configuration(
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
-                    "MYSQL_HOST".to_string() => base64::encode(database_host.clone()),
+                    "MYSQL_HOST".to_string() => base64::encode(db_fqnd(db.clone())),
                     "MYSQL_PORT".to_string() => base64::encode(database_port.to_string()),
                     "MYSQL_DBNAME".to_string()   => base64::encode(database_db_name.clone()),
                     "MYSQL_USERNAME".to_string() => base64::encode(database_username.clone()),
@@ -1549,7 +1559,7 @@ fn test_redis_configuration(
         let database_password = generate_id();
         let storage_size = 10;
 
-        environment.databases = vec![Database {
+        let db = Database {
             kind: DatabaseKind::Redis,
             action: Action::Create,
             id: app_id.clone(),
@@ -1569,7 +1579,9 @@ fn test_redis_configuration(
             activate_backups: false,
             publicly_accessible: is_public.clone(),
             mode: database_mode.clone(),
-        }];
+        };
+
+        environment.databases = vec![db.clone()];
         environment.applications = environment
             .applications
             .into_iter()
@@ -1581,7 +1593,7 @@ fn test_redis_configuration(
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
                     "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
-                    "REDIS_HOST".to_string()      => base64::encode(database_host.clone()),
+                    "REDIS_HOST".to_string()      => base64::encode(db_fqnd(db.clone())),
                     "REDIS_PORT".to_string()      => base64::encode(database_port.clone().to_string()),
                     "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),
                     "REDIS_PASSWORD".to_string()  => base64::encode(database_password.clone()),

@@ -33,13 +33,14 @@ use qovery_engine::constants::{
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
-use qovery_engine::models::{Context, Environment, Features, Metadata};
+use qovery_engine::models::{Context, Database, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
+use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::object_storage::spaces::Spaces;
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
@@ -891,5 +892,21 @@ pub fn get_svc(
             }
         }
         Err(e) => Err(e),
+    }
+}
+
+pub fn db_fqnd(db: Database) -> String {
+    match db.publicly_accessible {
+        true => db.fqdn,
+        false => match db.mode == MANAGED {
+            true => format!("{}-dns", db.id),
+            false => match db.kind {
+                Postgresql => "postgresqlpostgres",
+                Mysql => "mysqlmysqldatabase",
+                Mongodb => "mongodbmymongodb",
+                Redis => "redismyredis",
+            }
+            .to_string(),
+        },
     }
 }
