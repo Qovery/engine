@@ -138,15 +138,12 @@ impl<'a> Eks<'a> {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
         for node_group in &nodes_groups {
-            if AwsInstancesType::from_str(node_group.instance_type.as_str()).is_err() {
+            if let Err(e) = AwsInstancesType::from_str(node_group.instance_type.as_str()) {
                 return Err(EngineError::new(
                     EngineErrorCause::Internal,
                     EngineErrorScope::Engine,
                     context.execution_id(),
-                    Some(format!(
-                        "Nodegroup instance type {} is not valid for {}",
-                        node_group.instance_type, cloud_provider.name
-                    )),
+                    e.message,
                 ));
             }
         }

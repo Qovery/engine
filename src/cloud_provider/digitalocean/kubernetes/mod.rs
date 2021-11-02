@@ -106,15 +106,12 @@ impl<'a> DoKs<'a> {
         let template_directory = format!("{}/digitalocean/bootstrap", context.lib_root_dir());
 
         for node_group in &nodes_groups {
-            if DoInstancesType::from_str(node_group.instance_type.as_str()).is_err() {
+            if let Err(e) = DoInstancesType::from_str(node_group.instance_type.as_str()) {
                 return Err(EngineError::new(
                     EngineErrorCause::Internal,
                     EngineErrorScope::Engine,
                     context.execution_id(),
-                    Some(format!(
-                        "Nodegroup instance type {} is not valid for {}",
-                        node_group.instance_type, cloud_provider.name
-                    )),
+                    e.message,
                 ));
             }
         }
@@ -420,7 +417,7 @@ impl<'a> DoKs<'a> {
         let api_url = format!("{}/clusters", DoApiType::Doks.api_url());
         let json_content = do_get_from_api(self.cloud_provider.token.as_str(), DoApiType::Doks, api_url)?;
         // TODO(benjaminch): `qovery-` to be added into Rust name directly everywhere
-        get_doks_info_from_name(json_content.as_str(), format!("qovery-{}", self.id().to_string()))
+        get_doks_info_from_name(json_content.as_str(), format!("qovery-{}", self.id()))
     }
 }
 

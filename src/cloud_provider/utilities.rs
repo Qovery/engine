@@ -166,10 +166,7 @@ pub fn generate_supported_version(
 
             if minor_min == minor_max {
                 // add short minor format targeting latest version
-                supported_versions.insert(
-                    format!("{}.{}", major.to_string(), minor_max.to_string()),
-                    latest_major_version.clone(),
-                );
+                supported_versions.insert(format!("{}.{}", major, minor_max), latest_major_version.clone());
                 if update_min.unwrap() == update_max.unwrap() {
                     let version = format!("{}.{}.{}", major, minor_min, update_min.unwrap());
                     supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
@@ -183,13 +180,8 @@ pub fn generate_supported_version(
                 for minor in minor_min..minor_max + 1 {
                     // add short minor format targeting latest version
                     supported_versions.insert(
-                        format!("{}.{}", major.to_string(), minor.to_string()),
-                        format!(
-                            "{}.{}.{}",
-                            major.to_string(),
-                            minor.to_string(),
-                            update_max.unwrap().to_string()
-                        ),
+                        format!("{}.{}", major, minor),
+                        format!("{}.{}.{}", major, minor, update_max.unwrap(),),
                     );
                     if update_min.unwrap() == update_max.unwrap() {
                         let version = format!("{}.{}.{}", major, minor, update_min.unwrap());

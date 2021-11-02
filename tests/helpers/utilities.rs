@@ -467,7 +467,7 @@ where
                 ));
 
                 if let Err(e) = clusters_res {
-                    let message = format!("error while trying to get clusters, error: {}", e.to_string());
+                    let message = format!("error while trying to get clusters, error: {}", e);
                     error!("{}", message);
 
                     return OperationResult::Retry(SimpleError::new(SimpleErrorKind::Other, Some(message.as_str())));
@@ -504,8 +504,7 @@ where
                                         );
                                     }
                                     Err(e) => {
-                                        let message =
-                                            format!("error while trying to get clusters, error: {}", e.to_string());
+                                        let message = format!("error while trying to get clusters, error: {}", e);
                                         error!("{}", message);
 
                                         return OperationResult::Retry(SimpleError::new(

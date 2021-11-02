@@ -1,4 +1,5 @@
 use crate::cloud_provider::kubernetes::InstanceType;
+use crate::error::{SimpleError, SimpleErrorKind};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -54,9 +55,9 @@ impl fmt::Display for AwsInstancesType {
 }
 
 impl FromStr for AwsInstancesType {
-    type Err = ();
+    type Err = SimpleError;
 
-    fn from_str(s: &str) -> Result<AwsInstancesType, ()> {
+    fn from_str(s: &str) -> Result<AwsInstancesType, SimpleError> {
         match s {
             "t2.large" => Ok(AwsInstancesType::T2Large),
             "t2x.large" => Ok(AwsInstancesType::T2Xlarge),
@@ -64,7 +65,10 @@ impl FromStr for AwsInstancesType {
             "t3x.large" => Ok(AwsInstancesType::T3Xlarge),
             "t3a.large" => Ok(AwsInstancesType::T3aLarge),
             "t3a.2xlarge" => Ok(AwsInstancesType::T3a2xlarge),
-            _ => Err(()),
+            _ => Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some(format!("Nodegroup instance type `{}` is not a valid for AWS", s)),
+            )),
         }
     }
 }

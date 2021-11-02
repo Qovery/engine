@@ -72,7 +72,7 @@ impl ScalewayOS {
     }
 
     fn get_endpoint_url_for_region(&self) -> String {
-        format!("https://s3.{}.scw.cloud", self.zone.region().to_string())
+        format!("https://s3.{}.scw.cloud", self.zone.region())
     }
 
     fn is_bucket_name_valid(bucket_name: &str) -> Result<(), Option<String>> {

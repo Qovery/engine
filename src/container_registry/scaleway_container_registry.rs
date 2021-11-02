@@ -391,21 +391,23 @@ impl ContainerRegistry for ScalewayCr {
             }
         }
 
-        if docker_login(
+        if let Err(e) = docker_login(
             Kind::ScalewayCr,
             self.get_docker_envs(),
             self.login.clone(),
             self.secret_token.clone(),
             registry_url.clone(),
-        )
-        .is_err()
-        {
+        ) {
             return Err(self.engine_error(
                 EngineErrorCause::User(
                     "Your Scaleway account seems to be no longer valid (bad Credentials). \
                 Please contact your Organization administrator to fix or change the Credentials.",
                 ),
-                format!("failed to login to Scaleway {}", self.name_with_id()),
+                format!(
+                    "failed to login to Scaleway {}, error: {}",
+                    self.name_with_id(),
+                    e.message.unwrap_or_else(|| "no error message".to_string())
+                ),
             ));
         };
 

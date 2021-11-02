@@ -21,9 +21,9 @@ pub fn environment_3_apps_3_routers_3_databases(
     database_instance_type: &str,
     database_disk_type: &str,
 ) -> Environment {
-    let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
-    let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
-    let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
+    let app_name_1 = format!("{}-{}", "simple-app-1", generate_id());
+    let app_name_2 = format!("{}-{}", "simple-app-2", generate_id());
+    let app_name_3 = format!("{}-{}", "simple-app-3", generate_id());
 
     // mongoDB management part
     let database_host_mongo = format!("mongodb-{}.{}", generate_id(), &test_domain);
@@ -295,7 +295,7 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: format!("{}-{}", "simple-app".to_string(), &suffix),
+            name: format!("{}-{}", "simple-app", &suffix),
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
@@ -326,7 +326,7 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
+                application_name: format!("{}-{}", "simple-app", &suffix),
             }],
         }],
         databases: vec![],
@@ -517,7 +517,7 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
-            name: format!("{}-{}", "echo-app".to_string(), &suffix),
+            name: format!("{}-{}", "echo-app", &suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
@@ -551,7 +551,7 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "echo-app".to_string(), &suffix),
+                application_name: format!("{}-{}", "echo-app", &suffix),
             }],
         }],
         databases: vec![],

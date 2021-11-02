@@ -312,19 +312,21 @@ impl ContainerRegistry for DigitalOceanCr {
             Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
         };
 
-        if cmd::utilities::exec(
+        if let Err(e) = cmd::utilities::exec(
             "doctl",
             vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
             &[],
-        )
-        .is_err()
-        {
+        ) {
             return Err(self.engine_error(
                 EngineErrorCause::User(
                     "Your DOCR account seems to be no longer valid (bad Credentials). \
                     Please contact your Organization administrator to fix or change the Credentials.",
                 ),
-                format!("failed to login to DOCR {}", self.name_with_id()),
+                format!(
+                    "failed to login to DOCR {}, error: {}",
+                    self.name_with_id(),
+                    e.message.unwrap_or_else(|| "no error message".to_string())
+                ),
             ));
         };
 

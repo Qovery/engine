@@ -113,19 +113,21 @@ impl ContainerRegistry for DockerHub {
             None => vec![],
         };
 
-        if cmd::utilities::exec(
+        if let Err(e) = cmd::utilities::exec(
             "docker",
             vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
             &envs,
-        )
-        .is_err()
-        {
+        ) {
             return Err(self.engine_error(
                 EngineErrorCause::User(
                     "Your DockerHub account seems to be no longer valid (bad Credentials). \
                 Please contact your Organization administrator to fix or change the Credentials.",
                 ),
-                format!("failed to login to DockerHub {}", self.name_with_id()),
+                format!(
+                    "failed to login to DockerHub {}, error: {}",
+                    self.name_with_id(),
+                    e.message.unwrap_or_else(|| "no error message".to_string())
+                ),
             ));
         };
 
