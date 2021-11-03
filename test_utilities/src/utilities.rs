@@ -33,7 +33,7 @@ use qovery_engine::constants::{
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
-use qovery_engine::models::{Context, Database, Environment, Features, Metadata};
+use qovery_engine::models::{Context, Database, DatabaseKind, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
 use qovery_engine::cloud_provider::digitalocean::application::Region;
@@ -901,10 +901,10 @@ pub fn db_fqnd(db: Database) -> String {
         false => match db.mode == MANAGED {
             true => format!("{}-dns", db.id),
             false => match db.kind {
-                Postgresql => "postgresqlpostgres",
-                Mysql => "mysqlmysqldatabase",
-                Mongodb => "mongodbmymongodb",
-                Redis => "redismyredis",
+                DatabaseKind::Postgresql => "postgresqlpostgres",
+                DatabaseKind::Mysql => "mysqlmysqldatabase",
+                DatabaseKind::Mongodb => "mongodbmymongodb",
+                DatabaseKind::Redis => "redismyredis",
             }
             .to_string(),
         },
