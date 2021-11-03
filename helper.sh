@@ -317,6 +317,7 @@ environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 buildContainer.enable="false",\
 metrics.enable="true",\
+terminationGracePeriodSeconds="14400",\
 autoscaler.enabled="true",\
 autoscaler.max_replicas="30",\
 autoscaler.min_replicas="1",\
