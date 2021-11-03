@@ -517,6 +517,7 @@ pub struct Route {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum DatabaseMode {
     Managed,
     Container,
