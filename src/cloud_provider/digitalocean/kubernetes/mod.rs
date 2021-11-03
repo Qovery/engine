@@ -18,7 +18,7 @@ use crate::cloud_provider::digitalocean::network::vpc::{
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
-use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::{send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes};
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
@@ -32,7 +32,7 @@ use crate::error::EngineErrorCause::Internal;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::object_storage::spaces::Spaces;
 use crate::object_storage::ObjectStorage;
@@ -472,167 +472,167 @@ impl<'a> Kubernetes for DOKS<'a> {
     fn on_create(&self) -> Result<(), EngineError> {
         info!("DOKS.on_create() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        send_progress_on_long_task(self, Action::Create, || {
+            let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        listeners_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Infrastructure {
-                execution_id: self.context.execution_id().to_string(),
-            },
-            ProgressLevel::Info,
-            Some(format!(
-                "start to create Digital Ocean Kubernetes cluster {} with id {}",
-                self.name(),
-                self.id()
-            )),
-            self.context.execution_id(),
-        ));
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Infrastructure {
+                    execution_id: self.context.execution_id().to_string(),
+                },
+                ProgressLevel::Info,
+                Some(format!(
+                    "start to create Digital Ocean Kubernetes cluster {} with id {}",
+                    self.name(),
+                    self.id()
+                )),
+                self.context.execution_id(),
+            ));
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("digitalocean/bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+            let temp_dir = workspace_directory(
+                self.context.workspace_root_dir(),
+                self.context.execution_id(),
+                format!("digitalocean/bootstrap/{}", self.id()),
+            )
+            .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
-        // generate terraform files and copy them into temp dir
-        let context = self.tera_context()?;
+            // generate terraform files and copy them into temp dir
+            let context = self.tera_context()?;
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                self.template_directory.as_str(),
-                temp_dir.as_str(),
-                &context,
-            ),
-        )?;
+            let _ = cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context.execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    self.template_directory.as_str(),
+                    temp_dir.as_str(),
+                    &context,
+                ),
+            )?;
 
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/digitalocean/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::copy_non_template_files(
-                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                common_charts_temp_dir.as_str(),
-            ),
-        )?;
+            // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+            // this is due to the required dependencies of lib/digitalocean/bootstrap/*.tf files
+            let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+            let _ = cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context.execution_id(),
+                crate::template::copy_non_template_files(
+                    format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                    common_charts_temp_dir.as_str(),
+                ),
+            )?;
 
-        // temporary: remove helm/kube management from terraform
-        match terraform_init_validate_state_list(temp_dir.as_str()) {
-            Ok(x) => {
-                let items_type = vec!["helm_release", "kubernetes_namespace"];
-                for item in items_type {
-                    for entry in x.clone() {
-                        if entry.starts_with(item) {
-                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
-                                Ok(_) => info!("successfully removed {}", &entry),
-                                Err(e) => {
-                                    return Err(EngineError {
-                                        cause: EngineErrorCause::Internal,
-                                        scope: EngineErrorScope::Engine,
-                                        execution_id: self.context.execution_id().to_string(),
-                                        message: Some(format!(
-                                            "error while trying to remove {} out of terraform state file.\n {:?}",
-                                            entry, e.message
-                                        )),
-                                    })
+            // temporary: remove helm/kube management from terraform
+            match terraform_init_validate_state_list(temp_dir.as_str()) {
+                Ok(x) => {
+                    let items_type = vec!["helm_release", "kubernetes_namespace"];
+                    for item in items_type {
+                        for entry in x.clone() {
+                            if entry.starts_with(item) {
+                                match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
+                                    Ok(_) => info!("successfully removed {}", &entry),
+                                    Err(e) => {
+                                        return Err(EngineError {
+                                            cause: EngineErrorCause::Internal,
+                                            scope: EngineErrorScope::Engine,
+                                            execution_id: self.context.execution_id().to_string(),
+                                            message: Some(format!(
+                                                "error while trying to remove {} out of terraform state file.\n {:?}",
+                                                entry, e.message
+                                            )),
+                                        })
+                                    }
                                 }
-                            }
-                        };
+                            };
+                        }
                     }
                 }
-            }
-            Err(e) => warn!(
-                "no state list exists yet, this is normal if it's a newly created cluster. {:?}",
-                e
-            ),
-        };
+                Err(e) => warn!(
+                    "no state list exists yet, this is normal if it's a newly created cluster. {:?}",
+                    e
+                ),
+            };
 
-        info!("Create Qovery managed object storage buckets");
-        // Kubeconfig bucket
-        if let Err(e) = self.spaces.create_bucket(self.kubeconfig_bucket_name().as_str()) {
-            let message = format!(
-                "cannot create object storage bucket {} for cluster {} with id {}",
-                self.kubeconfig_bucket_name(),
-                self.name(),
-                self.id()
-            );
-            error!("{}", message);
-            return Err(e);
-        }
-
-        // Logs bucket
-        if let Err(e) = self.spaces.create_bucket(self.logs_bucket_name().as_str()) {
-            let message = format!(
-                "cannot create object storage bucket {} for cluster {} with id {}",
-                self.logs_bucket_name(),
-                self.name(),
-                self.id()
-            );
-            error!("{}", message);
-            return Err(e);
-        }
-
-        // terraform deployment dedicated to cloud resources
-        match cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                format!(
-                    "Error while deploying cluster {} with Terraform with id {}.",
+            info!("Create Qovery managed object storage buckets");
+            // Kubeconfig bucket
+            if let Err(e) = self.spaces.create_bucket(self.kubeconfig_bucket_name().as_str()) {
+                let message = format!(
+                    "cannot create object storage bucket {} for cluster {} with id {}",
+                    self.kubeconfig_bucket_name(),
                     self.name(),
                     self.id()
                 );
+                error!("{}", message);
                 return Err(e);
             }
-        };
 
-        // push config file to object storage
-        let kubeconfig_name = format!("{}.yaml", self.id());
-        if let Err(e) = self.spaces.put(
-            self.kubeconfig_bucket_name().as_str(),
-            kubeconfig_name.as_str(),
-            format!(
-                "{}/{}/{}",
-                temp_dir.as_str(),
+            // Logs bucket
+            if let Err(e) = self.spaces.create_bucket(self.logs_bucket_name().as_str()) {
+                let message = format!(
+                    "cannot create object storage bucket {} for cluster {} with id {}",
+                    self.logs_bucket_name(),
+                    self.name(),
+                    self.id()
+                );
+                error!("{}", message);
+                return Err(e);
+            }
+
+            // terraform deployment dedicated to cloud resources
+            match cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context.execution_id(),
+                terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
+            ) {
+                Ok(_) => {}
+                Err(e) => {
+                    format!(
+                        "Error while deploying cluster {} with Terraform with id {}.",
+                        self.name(),
+                        self.id()
+                    );
+                    return Err(e);
+                }
+            };
+
+            // push config file to object storage
+            let kubeconfig_name = format!("{}.yaml", self.id());
+            if let Err(e) = self.spaces.put(
                 self.kubeconfig_bucket_name().as_str(),
-                kubeconfig_name.as_str()
-            )
-            .as_str(),
-        ) {
-            let message = format!(
-                "Cannot put kubeconfig into object storage bucket for cluster {} with id {}",
-                self.name(),
-                self.id()
-            );
-            error!("{}. {:?}", message, e);
-            return Err(e);
-        }
-
-        // kubernetes helm deployments on the cluster
-        // todo: instead of downloading kubeconfig file, use the one that has just been generated by terraform
-        let kubeconfig_file = match self.config_file() {
-            Ok(x) => x.0,
-            Err(e) => {
-                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
+                kubeconfig_name.as_str(),
+                format!(
+                    "{}/{}/{}",
+                    temp_dir.as_str(),
+                    self.kubeconfig_bucket_name().as_str(),
+                    kubeconfig_name.as_str()
+                )
+                .as_str(),
+            ) {
+                let message = format!(
+                    "Cannot put kubeconfig into object storage bucket for cluster {} with id {}",
+                    self.name(),
+                    self.id()
+                );
+                error!("{}. {:?}", message, e);
                 return Err(e);
             }
-        };
-        let kubeconfig = PathBuf::from(&kubeconfig_file);
-        let credentials_environment_variables: Vec<(String, String)> = self
-            .cloud_provider
-            .credentials_environment_variables()
-            .into_iter()
-            .map(|x| (x.0.to_string(), x.1.to_string()))
-            .collect();
 
-        let doks_id =
-            match self.get_doks_info_from_name_api() {
+            // kubernetes helm deployments on the cluster
+            // todo: instead of downloading kubeconfig file, use the one that has just been generated by terraform
+            let kubeconfig_file = match self.config_file() {
+                Ok(x) => x.0,
+                Err(e) => {
+                    error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
+                    return Err(e);
+                }
+            };
+            let kubeconfig = PathBuf::from(&kubeconfig_file);
+            let credentials_environment_variables: Vec<(String, String)> = self
+                .cloud_provider
+                .credentials_environment_variables()
+                .into_iter()
+                .map(|x| (x.0.to_string(), x.1.to_string()))
+                .collect();
+
+            let doks_id = match self.get_doks_info_from_name_api() {
                 Ok(info) => match info {
                     None => return Err(EngineError {
                         cause: EngineErrorCause::Internal,
@@ -655,149 +655,150 @@ impl<'a> Kubernetes for DOKS<'a> {
                 }
             };
 
-        let charts_prerequisites = ChartsConfigPrerequisites {
-            organization_id: self.cloud_provider.organization_id().to_string(),
-            organization_long_id: self.cloud_provider.organization_long_id,
-            infra_options: self.options.clone(),
-            cluster_id: self.id.clone(),
-            cluster_long_id: self.long_id,
-            do_cluster_id: doks_id,
-            region: self.region().to_string(),
-            cluster_name: self.cluster_name().to_string(),
-            cloud_provider: "digitalocean".to_string(),
-            test_cluster: self.context.is_test_cluster(),
-            do_token: self.cloud_provider.token.to_string(),
-            do_space_access_id: self.cloud_provider.spaces_access_id.to_string(),
-            do_space_secret_key: self.cloud_provider.spaces_secret_key.to_string(),
-            do_space_bucket_kubeconfig: self.kubeconfig_bucket_name(),
-            do_space_kubeconfig_filename: self.kubeconfig_file_name(),
-            qovery_engine_location: self.options.qovery_engine_location.clone(),
-            ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
-            ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
-            managed_dns_name: self.dns_provider.domain().to_string(),
-            managed_dns_helm_format: self.dns_provider.domain_helm_format(),
-            managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
-            external_dns_provider: self.dns_provider.provider_name().to_string(),
-            dns_email_report: self.options.tls_email_report.clone(),
-            acme_url: self.lets_encrypt_url(),
-            cloudflare_email: self.dns_provider.account().to_string(),
-            cloudflare_api_token: self.dns_provider.token().to_string(),
-            disable_pleco: self.context.disable_pleco(),
-        };
-        let chart_prefix_path = &temp_dir;
+            let charts_prerequisites = ChartsConfigPrerequisites {
+                organization_id: self.cloud_provider.organization_id().to_string(),
+                organization_long_id: self.cloud_provider.organization_long_id,
+                infra_options: self.options.clone(),
+                cluster_id: self.id.clone(),
+                cluster_long_id: self.long_id,
+                do_cluster_id: doks_id,
+                region: self.region().to_string(),
+                cluster_name: self.cluster_name().to_string(),
+                cloud_provider: "digitalocean".to_string(),
+                test_cluster: self.context.is_test_cluster(),
+                do_token: self.cloud_provider.token.to_string(),
+                do_space_access_id: self.cloud_provider.spaces_access_id.to_string(),
+                do_space_secret_key: self.cloud_provider.spaces_secret_key.to_string(),
+                do_space_bucket_kubeconfig: self.kubeconfig_bucket_name(),
+                do_space_kubeconfig_filename: self.kubeconfig_file_name(),
+                qovery_engine_location: self.options.qovery_engine_location.clone(),
+                ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
+                ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
+                managed_dns_name: self.dns_provider.domain().to_string(),
+                managed_dns_helm_format: self.dns_provider.domain_helm_format(),
+                managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
+                external_dns_provider: self.dns_provider.provider_name().to_string(),
+                dns_email_report: self.options.tls_email_report.clone(),
+                acme_url: self.lets_encrypt_url(),
+                cloudflare_email: self.dns_provider.account().to_string(),
+                cloudflare_api_token: self.dns_provider.token().to_string(),
+                disable_pleco: self.context.disable_pleco(),
+            };
+            let chart_prefix_path = &temp_dir;
 
-        let helm_charts_to_deploy = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            do_helm_charts(
-                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
-                &charts_prerequisites,
-                Some(chart_prefix_path),
+            let helm_charts_to_deploy = cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context.execution_id(),
+                do_helm_charts(
+                    format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+                    &charts_prerequisites,
+                    Some(chart_prefix_path),
+                    &kubeconfig,
+                    &credentials_environment_variables,
+                ),
+            )?;
+
+            cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context.execution_id(),
+                deploy_charts_levels(
+                    &kubeconfig,
+                    &credentials_environment_variables,
+                    helm_charts_to_deploy,
+                    self.context.is_dry_run_deploy(),
+                ),
+            )?;
+
+            // https://github.com/digitalocean/digitalocean-cloud-controller-manager/blob/master/docs/controllers/services/annotations.md#servicebetakubernetesiodo-loadbalancer-hostname
+            // it can't be done earlier as nginx ingress is not yet deployed
+            // required as load balancer do not have hostname (only IP) and are blocker to get a TLS certificate
+            let nginx_ingress_loadbalancer_id = match do_kubectl_exec_get_loadbalancer_id(
+                &kubeconfig,
+                "nginx-ingress",
+                "nginx-ingress-ingress-nginx-controller",
+                self.cloud_provider.credentials_environment_variables(),
+            ) {
+                Ok(x) => match x {
+                    None => return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: Some("No associated Load balancer UUID was found on DigitalOcean API and it's required for TLS setup.".to_string())
+                    }),
+                    Some(uuid) => uuid,
+                },
+                Err(e) => {
+                    return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: Some(format!(
+                            "Load balancer IP wasn't able to be retrieved and it's required for TLS setup. {:?}",
+                            e.message
+                        )),
+                    })
+                }
+            };
+            let nginx_ingress_loadbalancer_ip = match do_get_load_balancer_ip(&self.cloud_provider.token, nginx_ingress_loadbalancer_id.as_str()) {
+                Ok(x) => x.to_string(),
+                Err(e) => {
+                    return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: Some(format!(
+                            "Load balancer IP wasn't able to be retrieved from UUID on DigitalOcean API and it's required for TLS setup. {:?}",
+                            e.message
+                        )),
+                    })
+                }
+            };
+
+            let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix_path, x) };
+            let load_balancer_dns_hostname = ChartInfo {
+                name: "nginx-ingress-dns".to_string(),
+                path: chart_path("common/charts/external-name-svc"),
+                namespace: HelmChartNamespaces::NginxIngress,
+                values: vec![
+                    ChartSetValue {
+                        key: "serviceName".to_string(),
+                        value: "nginx-ingress-dns".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "source".to_string(),
+                        value: self.do_loadbalancer_hostname(),
+                    },
+                    ChartSetValue {
+                        key: "destination".to_string(),
+                        value: nginx_ingress_loadbalancer_ip,
+                    },
+                ],
+                ..Default::default()
+            };
+
+            let _ = helm_upgrade_diff_with_chart_info(
                 &kubeconfig,
                 &credentials_environment_variables,
-            ),
-        )?;
+                &load_balancer_dns_hostname,
+            );
 
-        cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            deploy_charts_levels(
+            match helm_exec_upgrade_with_chart_info(
                 &kubeconfig,
-                &credentials_environment_variables,
-                helm_charts_to_deploy,
-                self.context.is_dry_run_deploy(),
-            ),
-        )?;
-
-        // https://github.com/digitalocean/digitalocean-cloud-controller-manager/blob/master/docs/controllers/services/annotations.md#servicebetakubernetesiodo-loadbalancer-hostname
-        // it can't be done earlier as nginx ingress is not yet deployed
-        // required as load balancer do not have hostname (only IP) and are blocker to get a TLS certificate
-        let nginx_ingress_loadbalancer_id = match do_kubectl_exec_get_loadbalancer_id(
-            &kubeconfig,
-            "nginx-ingress",
-            "nginx-ingress-ingress-nginx-controller",
-            self.cloud_provider.credentials_environment_variables(),
-        ) {
-            Ok(x) => match x {
-                None => return Err(EngineError {
+                &self.cloud_provider.credentials_environment_variables(),
+                &load_balancer_dns_hostname,
+            ) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(EngineError {
                     cause: EngineErrorCause::Internal,
                     scope: EngineErrorScope::Engine,
                     execution_id: self.context.execution_id().to_string(),
-                    message: Some("No associated Load balancer UUID was found on DigitalOcean API and it's required for TLS setup.".to_string())
+                    message: Some(format!(
+                        "Error while deploying chart {}. {:?}",
+                        load_balancer_dns_hostname.name, e.message
+                    )),
                 }),
-                Some(uuid) => uuid,
-            },
-            Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some(format!(
-                        "Load balancer IP wasn't able to be retrieved and it's required for TLS setup. {:?}",
-                        e.message
-                    )),
-                })
             }
-        };
-        let nginx_ingress_loadbalancer_ip = match do_get_load_balancer_ip(&self.cloud_provider.token, nginx_ingress_loadbalancer_id.as_str()) {
-            Ok(x) => x.to_string(),
-            Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some(format!(
-                        "Load balancer IP wasn't able to be retrieved from UUID on DigitalOcean API and it's required for TLS setup. {:?}",
-                        e.message
-                    )),
-                })
-            }
-        };
-
-        let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix_path, x) };
-        let load_balancer_dns_hostname = ChartInfo {
-            name: "nginx-ingress-dns".to_string(),
-            path: chart_path("common/charts/external-name-svc"),
-            namespace: HelmChartNamespaces::NginxIngress,
-            values: vec![
-                ChartSetValue {
-                    key: "serviceName".to_string(),
-                    value: "nginx-ingress-dns".to_string(),
-                },
-                ChartSetValue {
-                    key: "source".to_string(),
-                    value: self.do_loadbalancer_hostname(),
-                },
-                ChartSetValue {
-                    key: "destination".to_string(),
-                    value: nginx_ingress_loadbalancer_ip,
-                },
-            ],
-            ..Default::default()
-        };
-
-        let _ = helm_upgrade_diff_with_chart_info(
-            &kubeconfig,
-            &credentials_environment_variables,
-            &load_balancer_dns_hostname,
-        );
-
-        match helm_exec_upgrade_with_chart_info(
-            &kubeconfig,
-            &self.cloud_provider.credentials_environment_variables(),
-            &load_balancer_dns_hostname,
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(EngineError {
-                cause: EngineErrorCause::Internal,
-                scope: EngineErrorScope::Engine,
-                execution_id: self.context.execution_id().to_string(),
-                message: Some(format!(
-                    "Error while deploying chart {}. {:?}",
-                    load_balancer_dns_hostname.name, e.message
-                )),
-            }),
-        }
+        })
     }
 
     fn on_create_error(&self) -> Result<(), EngineError> {
@@ -831,270 +832,274 @@ impl<'a> Kubernetes for DOKS<'a> {
     fn on_delete(&self) -> Result<(), EngineError> {
         info!("DOKS.on_delete() called for {}", self.name());
 
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-        let send_to_customer = |message: &str| {
-            listeners_helper.delete_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
+        send_progress_on_long_task(self, Action::Create, || {
+            let listeners_helper = ListenersHelper::new(&self.listeners);
+            let send_to_customer = |message: &str| {
+                listeners_helper.delete_in_progress(ProgressInfo::new(
+                    ProgressScope::Infrastructure {
+                        execution_id: self.context.execution_id().to_string(),
+                    },
+                    ProgressLevel::Info,
+                    Some(message),
+                    self.context.execution_id(),
+                ))
+            };
+            send_to_customer(
+                format!("Preparing to delete DOKS cluster {} with id {}", self.name(), self.id()).as_str(),
+            );
+
+            let temp_dir = workspace_directory(
+                self.context.workspace_root_dir(),
                 self.context.execution_id(),
-            ))
-        };
-        send_to_customer(format!("Preparing to delete DOKS cluster {} with id {}", self.name(), self.id()).as_str());
+                format!("bootstrap/{}", self.id()),
+            )
+            .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+            // generate terraform files and copy them into temp dir
+            let context = self.tera_context()?;
 
-        // generate terraform files and copy them into temp dir
-        let context = self.tera_context()?;
+            let _ = cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context.execution_id(),
+                crate::template::generate_and_copy_all_files_into_dir(
+                    self.template_directory.as_str(),
+                    temp_dir.as_str(),
+                    &context,
+                ),
+            )?;
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                self.template_directory.as_str(),
-                temp_dir.as_str(),
-                &context,
-            ),
-        )?;
+            // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/digitalocean/bootstrap/common/charts directory.
+            // this is due to the required dependencies of lib/digital/bootstrap/*.tf files
+            let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
 
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/digitalocean/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/digital/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+            let _ = cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context.execution_id(),
+                crate::template::copy_non_template_files(
+                    format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                    common_charts_temp_dir.as_str(),
+                ),
+            )?;
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::copy_non_template_files(
-                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                common_charts_temp_dir.as_str(),
-            ),
-        )?;
+            let kubernetes_config_file_path = self.config_file_path()?;
 
-        let kubernetes_config_file_path = self.config_file_path()?;
+            let all_namespaces = kubectl_exec_get_all_namespaces(
+                &kubernetes_config_file_path,
+                self.cloud_provider().credentials_environment_variables(),
+            );
 
-        let all_namespaces = kubectl_exec_get_all_namespaces(
-            &kubernetes_config_file_path,
-            self.cloud_provider().credentials_environment_variables(),
-        );
+            // should apply before destroy to be sure destroy will compute on all resources
+            // don't exit on failure, it can happen if we resume a destroy process
+            let message = format!(
+                "Ensuring everything is up to date before deleting cluster {}/{}",
+                self.name(),
+                self.id()
+            );
+            info!("{}", &message);
+            send_to_customer(&message);
 
-        // should apply before destroy to be sure destroy will compute on all resources
-        // don't exit on failure, it can happen if we resume a destroy process
-        let message = format!(
-            "Ensuring everything is up to date before deleting cluster {}/{}",
-            self.name(),
-            self.id()
-        );
-        info!("{}", &message);
-        send_to_customer(&message);
+            info!("Running Terraform apply before running a delete");
+            if let Err(e) = cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context.execution_id(),
+                cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false),
+            ) {
+                error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message);
+            };
 
-        info!("Running Terraform apply before running a delete");
-        if let Err(e) = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false),
-        ) {
-            error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message);
-        };
+            // should make the diff between all namespaces and qovery managed namespaces
+            let message = format!(
+                "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
+                self.name(),
+                self.id()
+            );
+            info!("{}", &message);
+            send_to_customer(&message);
 
-        // should make the diff between all namespaces and qovery managed namespaces
-        let message = format!(
-            "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
-            self.name(),
-            self.id()
-        );
-        info!("{}", &message);
-        send_to_customer(&message);
+            match all_namespaces {
+                Ok(namespace_vec) => {
+                    let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
+                    let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
 
-        match all_namespaces {
-            Ok(namespace_vec) => {
-                let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
-                let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
+                    info!("Deleting non Qovery namespaces");
+                    for namespace_to_delete in namespaces_to_delete.iter() {
+                        info!("Starting namespace {} deletion process", namespace_to_delete);
+                        let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+                            &kubernetes_config_file_path,
+                            namespace_to_delete,
+                            self.cloud_provider().credentials_environment_variables(),
+                        );
 
-                info!("Deleting non Qovery namespaces");
-                for namespace_to_delete in namespaces_to_delete.iter() {
-                    info!("Starting namespace {} deletion process", namespace_to_delete);
-                    let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
-                        &kubernetes_config_file_path,
-                        namespace_to_delete,
-                        self.cloud_provider().credentials_environment_variables(),
-                    );
-
-                    match deletion {
-                        Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
-                        Err(e) => {
-                            if e.message.is_some() && e.message.unwrap().contains("not found") {
-                                {}
-                            } else {
-                                error!("Can't delete the namespace {}", namespace_to_delete);
+                        match deletion {
+                            Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
+                            Err(e) => {
+                                if e.message.is_some() && e.message.unwrap().contains("not found") {
+                                    {}
+                                } else {
+                                    error!("Can't delete the namespace {}", namespace_to_delete);
+                                }
                             }
                         }
                     }
                 }
+
+                Err(e) => error!(
+                    "Error while getting all namespaces for Kubernetes cluster {}: error {:?}",
+                    self.name_with_id(),
+                    e.message
+                ),
             }
 
-            Err(e) => error!(
-                "Error while getting all namespaces for Kubernetes cluster {}: error {:?}",
-                self.name_with_id(),
-                e.message
-            ),
-        }
-
-        let message = format!(
-            "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
-            self.name(),
-            self.id()
-        );
-        info!("{}", &message);
-        send_to_customer(&message);
-
-        // delete custom metrics api to avoid stale namespaces on deletion
-        let _ = cmd::helm::helm_uninstall_list(
-            &kubernetes_config_file_path,
-            vec![HelmChart {
-                name: "metrics-server".to_string(),
-                namespace: "kube-system".to_string(),
-                version: None,
-            }],
-            self.cloud_provider().credentials_environment_variables(),
-        );
-
-        // required to avoid namespace stuck on deletion
-        if let Err(e) = uninstall_cert_manager(
-            &kubernetes_config_file_path,
-            self.cloud_provider().credentials_environment_variables(),
-        ) {
-            return Err(EngineError::new(
-                Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
-        }
-
-        info!("Deleting Qovery managed helm charts");
-        let qovery_namespaces = get_qovery_managed_namespaces();
-        for qovery_namespace in qovery_namespaces.iter() {
-            info!(
-                "Starting Qovery managed charts deletion process in {} namespace",
-                qovery_namespace
+            let message = format!(
+                "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
+                self.name(),
+                self.id()
             );
-            let charts_to_delete = cmd::helm::helm_list(
+            info!("{}", &message);
+            send_to_customer(&message);
+
+            // delete custom metrics api to avoid stale namespaces on deletion
+            let _ = cmd::helm::helm_uninstall_list(
+                &kubernetes_config_file_path,
+                vec![HelmChart {
+                    name: "metrics-server".to_string(),
+                    namespace: "kube-system".to_string(),
+                    version: None,
+                }],
+                self.cloud_provider().credentials_environment_variables(),
+            );
+
+            // required to avoid namespace stuck on deletion
+            if let Err(e) = uninstall_cert_manager(
                 &kubernetes_config_file_path,
                 self.cloud_provider().credentials_environment_variables(),
-                Some(qovery_namespace),
-            );
-            match charts_to_delete {
-                Ok(charts) => {
-                    for chart in charts {
-                        info!("Deleting chart {} in {} namespace", chart.name, chart.namespace);
-                        match cmd::helm::helm_exec_uninstall(
-                            &kubernetes_config_file_path,
-                            &chart.namespace,
-                            &chart.name,
-                            self.cloud_provider().credentials_environment_variables(),
-                        ) {
-                            Ok(_) => info!("chart {} deleted", chart.name),
-                            Err(e) => error!("{:?}", e),
+            ) {
+                return Err(EngineError::new(
+                    Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    e.message,
+                ));
+            }
+
+            info!("Deleting Qovery managed helm charts");
+            let qovery_namespaces = get_qovery_managed_namespaces();
+            for qovery_namespace in qovery_namespaces.iter() {
+                info!(
+                    "Starting Qovery managed charts deletion process in {} namespace",
+                    qovery_namespace
+                );
+                let charts_to_delete = cmd::helm::helm_list(
+                    &kubernetes_config_file_path,
+                    self.cloud_provider().credentials_environment_variables(),
+                    Some(qovery_namespace),
+                );
+                match charts_to_delete {
+                    Ok(charts) => {
+                        for chart in charts {
+                            info!("Deleting chart {} in {} namespace", chart.name, chart.namespace);
+                            match cmd::helm::helm_exec_uninstall(
+                                &kubernetes_config_file_path,
+                                &chart.namespace,
+                                &chart.name,
+                                self.cloud_provider().credentials_environment_variables(),
+                            ) {
+                                Ok(_) => info!("chart {} deleted", chart.name),
+                                Err(e) => error!("{:?}", e),
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        if e.message.is_some() && e.message.unwrap().contains("not found") {
+                            {}
+                        } else {
+                            error!("Can't delete the namespace {}", qovery_namespace);
                         }
                     }
                 }
-                Err(e) => {
-                    if e.message.is_some() && e.message.unwrap().contains("not found") {
-                        {}
-                    } else {
-                        error!("Can't delete the namespace {}", qovery_namespace);
+            }
+
+            info!("Deleting Qovery managed Namespaces");
+            for qovery_namespace in qovery_namespaces.iter() {
+                info!("Starting namespace {} deletion process", qovery_namespace);
+                let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+                    &kubernetes_config_file_path,
+                    qovery_namespace,
+                    self.cloud_provider().credentials_environment_variables(),
+                );
+                match deletion {
+                    Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
+                    Err(e) => {
+                        if e.message.is_some() && e.message.unwrap().contains("not found") {
+                            {}
+                        } else {
+                            error!("Can't delete the namespace {}", qovery_namespace);
+                        }
                     }
                 }
             }
-        }
 
-        info!("Deleting Qovery managed Namespaces");
-        for qovery_namespace in qovery_namespaces.iter() {
-            info!("Starting namespace {} deletion process", qovery_namespace);
-            let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+            info!("Delete all remaining deployed helm applications");
+            match cmd::helm::helm_list(
                 &kubernetes_config_file_path,
-                qovery_namespace,
                 self.cloud_provider().credentials_environment_variables(),
-            );
-            match deletion {
-                Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
-                Err(e) => {
-                    if e.message.is_some() && e.message.unwrap().contains("not found") {
-                        {}
-                    } else {
-                        error!("Can't delete the namespace {}", qovery_namespace);
+                None,
+            ) {
+                Ok(helm_charts) => {
+                    for chart in helm_charts {
+                        info!("Deleting chart {} in progress...", chart.name);
+                        let _ = cmd::helm::helm_uninstall_list(
+                            &kubernetes_config_file_path,
+                            vec![chart],
+                            self.cloud_provider().credentials_environment_variables(),
+                        );
                     }
                 }
+                Err(_) => error!("Unable to get helm list"),
             }
-        }
 
-        info!("Delete all remaining deployed helm applications");
-        match cmd::helm::helm_list(
-            &kubernetes_config_file_path,
-            self.cloud_provider().credentials_environment_variables(),
-            None,
-        ) {
-            Ok(helm_charts) => {
-                for chart in helm_charts {
-                    info!("Deleting chart {} in progress...", chart.name);
-                    let _ = cmd::helm::helm_uninstall_list(
-                        &kubernetes_config_file_path,
-                        vec![chart],
-                        self.cloud_provider().credentials_environment_variables(),
-                    );
+            let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
+            info!("{}", &message);
+            send_to_customer(&message);
+
+            info!("Running Terraform destroy");
+            let terraform_result =
+                retry::retry(
+                    Fibonacci::from_millis(60000).take(3),
+                    || match cast_simple_error_to_engine_error(
+                        self.engine_error_scope(),
+                        self.context.execution_id(),
+                        cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false),
+                    ) {
+                        Ok(_) => OperationResult::Ok(()),
+                        Err(e) => OperationResult::Retry(e),
+                    },
+                );
+
+            match terraform_result {
+                Ok(_) => {
+                    let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
+                    info!("{}", &message);
+                    send_to_customer(&message);
+                }
+                Err(Operation { error, .. }) => return Err(error),
+                Err(retry::Error::Internal(msg)) => {
+                    return Err(EngineError::new(
+                        EngineErrorCause::Internal,
+                        self.engine_error_scope(),
+                        self.context().execution_id(),
+                        Some(format!(
+                            "Error while deleting cluster {} with id {}: {}",
+                            self.name(),
+                            self.id(),
+                            msg
+                        )),
+                    ))
                 }
             }
-            Err(_) => error!("Unable to get helm list"),
-        }
 
-        let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
-        info!("{}", &message);
-        send_to_customer(&message);
-
-        info!("Running Terraform destroy");
-        let terraform_result =
-            retry::retry(
-                Fibonacci::from_millis(60000).take(3),
-                || match cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false),
-                ) {
-                    Ok(_) => OperationResult::Ok(()),
-                    Err(e) => OperationResult::Retry(e),
-                },
-            );
-
-        match terraform_result {
-            Ok(_) => {
-                let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
-                info!("{}", &message);
-                send_to_customer(&message);
-            }
-            Err(Operation { error, .. }) => return Err(error),
-            Err(retry::Error::Internal(msg)) => {
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    self.engine_error_scope(),
-                    self.context().execution_id(),
-                    Some(format!(
-                        "Error while deleting cluster {} with id {}: {}",
-                        self.name(),
-                        self.id(),
-                        msg
-                    )),
-                ))
-            }
-        }
-
-        Ok(())
+            Ok(())
+        })
     }
 
     fn on_delete_error(&self) -> Result<(), EngineError> {
