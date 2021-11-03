@@ -132,6 +132,10 @@ resource "aws_db_instance" "mysql_instance" {
   backup_retention_period = var.backup_retention_period
   backup_window = var.backup_window
   skip_final_snapshot = var.skip_final_snapshot
+  {%- if not skip_final_snapshot %}
+  final_snapshot_identifier = var.final_snapshot_name
+  {%- endif %}
+  copy_tags_to_snapshot = true
   delete_automated_backups = var.delete_automated_backups
 
 }

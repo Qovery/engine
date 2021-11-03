@@ -172,6 +172,12 @@ variable "skip_final_snapshot" {
   type = bool
 }
 
+variable "final_snapshot_name" {
+  description = "Name of the final snapshot before the database goes deleted"
+  default = "{{ final_snapshot_name }}"
+  type = string
+}
+
 # Snapshots
 #variable "snapshot_identifier" {
 #  description = "Snapshot ID to restore"

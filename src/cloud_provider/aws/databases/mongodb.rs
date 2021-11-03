@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::cloud_provider::aws::databases::utilities::aws_final_snapshot_name;
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::service::{
@@ -180,7 +181,8 @@ impl Service for MongoDB {
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
         context.insert("tfstate_name", &get_tfstate_name(self));
 
-        context.insert("skip_final_snapshot", &self.context().is_test_cluster());
+        context.insert("skip_final_snapshot", &false);
+        context.insert("final_snapshot_name", &aws_final_snapshot_name(self.id()));
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
                 "resource_expiration_in_seconds",

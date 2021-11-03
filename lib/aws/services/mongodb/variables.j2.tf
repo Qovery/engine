@@ -120,6 +120,12 @@ variable "skip_final_snapshot" {
   type = bool
 }
 
+variable "final_snapshot_name" {
+  description = "Name of the final snapshot before the database goes deleted"
+  default = "{{ final_snapshot_name }}"
+  type = string
+}
+
 {%- if snapshot is defined %}
 # Snapshots
 variable "snapshot_identifier" {

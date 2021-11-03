@@ -106,8 +106,8 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
   # Backups
   snapshot_window = var.preferred_backup_window
   snapshot_retention_limit = var.backup_retention_period
-  {%- if skip_final_snapshot %}
-  final_snapshot_identifier = "${var.elasticache_identifier}-final"
+  {%- if not skip_final_snapshot %}
+  final_snapshot_identifier = var.final_snapshot_name
   {%- endif %}
 
 }

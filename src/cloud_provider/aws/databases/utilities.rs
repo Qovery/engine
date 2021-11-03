@@ -27,6 +27,11 @@ pub fn get_parameter_group_from_version(version: &str, database_kind: DatabaseKi
     }
 }
 
+// name of the last snapshot before the database get deleted
+pub fn aws_final_snapshot_name(database_name: &str) -> String {
+    format!("qovery-{}-final-snap", database_name)
+}
+
 #[cfg(test)]
 mod tests_aws_databases_parameters {
     use crate::cloud_provider::aws::databases::utilities::get_parameter_group_from_version;
