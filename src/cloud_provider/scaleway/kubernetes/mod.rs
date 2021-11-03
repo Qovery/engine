@@ -4,7 +4,8 @@ pub mod node;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesUpgradeStatus,
+    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
+    KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
@@ -22,7 +23,7 @@ use crate::error::EngineErrorCause::Internal;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use crate::object_storage::ObjectStorage;
@@ -183,11 +184,6 @@ impl<'a> Kapsule<'a> {
         format!("qovery-logs-{}", self.id)
     }
 
-    fn upgrade(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
-        // TODO(benjaminch): to be implemented
-        Ok(())
-    }
-
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
         let mut context = TeraContext::new();
 
@@ -341,56 +337,8 @@ impl<'a> Kapsule<'a> {
         }
         .to_string()
     }
-}
 
-impl<'a> Kubernetes for Kapsule<'a> {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn kind(&self) -> Kind {
-        Kind::ScwKapsule
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        self.version.as_str()
-    }
-
-    fn region(&self) -> &str {
-        self.zone.region_str()
-    }
-
-    fn zone(&self) -> &str {
-        self.zone.as_str()
-    }
-
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.object_storage
-    }
-
-    fn is_valid(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    fn on_create(&self) -> Result<(), EngineError> {
-        info!("SCW.on_create() called for {}", self.name());
-
+    fn create(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let send_to_customer = |message: &str| {
             listeners_helper.deployment_in_progress(ProgressInfo::new(
@@ -414,7 +362,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
             ) {
                 Ok(x) => {
                     if x.required_upgrade_on.is_some() {
-                        return self.upgrade(x);
+                        return self.upgrade_with_status(x);
                     }
                     info!("Kubernetes cluster upgrade not required");
                 }
@@ -591,17 +539,14 @@ impl<'a> Kubernetes for Kapsule<'a> {
         )
     }
 
-    fn on_create_error(&self) -> Result<(), EngineError> {
-        warn!("SCW.on_create_error() called for {}", self.name());
+    fn create_error(&self) -> Result<(), EngineError> {
         Err(self.engine_error(
             EngineErrorCause::Internal,
             format!("{} Kubernetes cluster failed on deployment", self.name()),
         ))
     }
 
-    fn on_upgrade(&self) -> Result<(), EngineError> {
-        info!("SCW.on_upgrade() called for {}", self.name());
-
+    fn upgrade(&self) -> Result<(), EngineError> {
         let kubeconfig = match self.config_file() {
             Ok(f) => f.0,
             Err(e) => return Err(e),
@@ -612,7 +557,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
             &self.version,
             self.cloud_provider.credentials_environment_variables(),
         ) {
-            Ok(x) => self.upgrade(x),
+            Ok(x) => self.upgrade_with_status(x),
             Err(e) => {
                 let msg = format!(
                     "Error detected, upgrade won't occurs, but standard deployment. {:?}",
@@ -629,34 +574,32 @@ impl<'a> Kubernetes for Kapsule<'a> {
         }
     }
 
-    fn on_upgrade_error(&self) -> Result<(), EngineError> {
-        warn!("SCW.on_upgrade_error() called for {}", self.name());
+    fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+        // TODO(benjaminch): to be implemented
         Ok(())
     }
 
-    fn on_downgrade(&self) -> Result<(), EngineError> {
-        info!("SCW.on_downgrade() called for {}", self.name());
+    fn upgrade_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        warn!("SCW.on_downgrade_error() called for {}", self.name());
+    fn downgrade(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_pause(&self) -> Result<(), EngineError> {
-        info!("SCW.on_pause() called for {}", self.name());
+    fn downgrade_error(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn pause(&self) -> Result<(), EngineError> {
         todo!()
     }
 
-    fn on_pause_error(&self) -> Result<(), EngineError> {
-        warn!("SCW.on_pause_error() called for {}", self.name());
+    fn pause_error(&self) -> Result<(), EngineError> {
         todo!()
     }
 
-    fn on_delete(&self) -> Result<(), EngineError> {
-        info!("SCW.on_delete() called for {}", self.name());
-
+    fn delete(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let send_to_customer = |message: &str| {
             listeners_helper.delete_in_progress(ProgressInfo::new(
@@ -947,10 +890,105 @@ impl<'a> Kubernetes for Kapsule<'a> {
         Ok(())
     }
 
-    fn on_delete_error(&self) -> Result<(), EngineError> {
-        warn!("SCW.on_delete_error() called for {}", self.name());
+    fn delete_error(&self) -> Result<(), EngineError> {
         // FIXME What should we do if something goes wrong while deleting the cluster?
         Ok(())
+    }
+}
+
+impl<'a> Kubernetes for Kapsule<'a> {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn kind(&self) -> Kind {
+        Kind::ScwKapsule
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        self.version.as_str()
+    }
+
+    fn region(&self) -> &str {
+        self.zone.region_str()
+    }
+
+    fn zone(&self) -> &str {
+        self.zone.as_str()
+    }
+
+    fn cloud_provider(&self) -> &dyn CloudProvider {
+        self.cloud_provider
+    }
+
+    fn dns_provider(&self) -> &dyn DnsProvider {
+        self.dns_provider
+    }
+
+    fn config_file_store(&self) -> &dyn ObjectStorage {
+        &self.object_storage
+    }
+
+    fn is_valid(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_create(&self) -> Result<(), EngineError> {
+        info!("SCW.on_create() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.create())
+    }
+
+    fn on_create_error(&self) -> Result<(), EngineError> {
+        info!("SCW.on_create_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.create_error())
+    }
+
+    fn on_upgrade(&self) -> Result<(), EngineError> {
+        info!("SCW.on_upgrade() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.upgrade())
+    }
+
+    fn on_upgrade_error(&self) -> Result<(), EngineError> {
+        info!("SCW.on_upgrade() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
+    }
+
+    fn on_downgrade(&self) -> Result<(), EngineError> {
+        info!("SCW.on_downgrade() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.downgrade())
+    }
+
+    fn on_downgrade_error(&self) -> Result<(), EngineError> {
+        info!("SCW.on_downgrade_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
+    }
+
+    fn on_pause(&self) -> Result<(), EngineError> {
+        info!("SCW.on_pause() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Pause, || self.pause())
+    }
+
+    fn on_pause_error(&self) -> Result<(), EngineError> {
+        info!("SCW.on_pause_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Pause, || self.pause_error())
+    }
+
+    fn on_delete(&self) -> Result<(), EngineError> {
+        info!("SCW.on_delete() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Delete, || self.delete())
+    }
+
+    fn on_delete_error(&self) -> Result<(), EngineError> {
+        info!("SCW.on_delete_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {

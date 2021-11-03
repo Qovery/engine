@@ -18,7 +18,7 @@ use crate::cloud_provider::digitalocean::network::vpc::{
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
-use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::{send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes};
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
@@ -32,7 +32,7 @@ use crate::error::EngineErrorCause::Internal;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::object_storage::spaces::Spaces;
 use crate::object_storage::ObjectStorage;
@@ -422,56 +422,8 @@ impl<'a> DOKS<'a> {
         // TODO(benjaminch): `qovery-` to be added into Rust name directly everywhere
         get_doks_info_from_name(json_content.as_str(), format!("qovery-{}", self.id().to_string()))
     }
-}
 
-impl<'a> Kubernetes for DOKS<'a> {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn kind(&self) -> Kind {
-        Kind::Doks
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        self.version.as_str()
-    }
-
-    fn region(&self) -> &str {
-        self.region.as_str()
-    }
-
-    fn zone(&self) -> &str {
-        ""
-    }
-
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.spaces
-    }
-
-    fn is_valid(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    fn on_create(&self) -> Result<(), EngineError> {
-        info!("DOKS.on_create() called for {}", self.name());
-
+    fn create(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
@@ -713,46 +665,46 @@ impl<'a> Kubernetes for DOKS<'a> {
         // it can't be done earlier as nginx ingress is not yet deployed
         // required as load balancer do not have hostname (only IP) and are blocker to get a TLS certificate
         let nginx_ingress_loadbalancer_id = match do_kubectl_exec_get_loadbalancer_id(
-            &kubeconfig,
-            "nginx-ingress",
-            "nginx-ingress-ingress-nginx-controller",
-            self.cloud_provider.credentials_environment_variables(),
-        ) {
-            Ok(x) => match x {
-                None => return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some("No associated Load balancer UUID was found on DigitalOcean API and it's required for TLS setup.".to_string())
-                }),
-                Some(uuid) => uuid,
-            },
-            Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some(format!(
-                        "Load balancer IP wasn't able to be retrieved and it's required for TLS setup. {:?}",
-                        e.message
-                    )),
-                })
-            }
-        };
+                &kubeconfig,
+                "nginx-ingress",
+                "nginx-ingress-ingress-nginx-controller",
+                self.cloud_provider.credentials_environment_variables(),
+            ) {
+                Ok(x) => match x {
+                    None => return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: Some("No associated Load balancer UUID was found on DigitalOcean API and it's required for TLS setup.".to_string())
+                    }),
+                    Some(uuid) => uuid,
+                },
+                Err(e) => {
+                    return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: Some(format!(
+                            "Load balancer IP wasn't able to be retrieved and it's required for TLS setup. {:?}",
+                            e.message
+                        )),
+                    })
+                }
+            };
         let nginx_ingress_loadbalancer_ip = match do_get_load_balancer_ip(&self.cloud_provider.token, nginx_ingress_loadbalancer_id.as_str()) {
-            Ok(x) => x.to_string(),
-            Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some(format!(
-                        "Load balancer IP wasn't able to be retrieved from UUID on DigitalOcean API and it's required for TLS setup. {:?}",
-                        e.message
-                    )),
-                })
-            }
-        };
+                Ok(x) => x.to_string(),
+                Err(e) => {
+                    return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: Some(format!(
+                            "Load balancer IP wasn't able to be retrieved from UUID on DigitalOcean API and it's required for TLS setup. {:?}",
+                            e.message
+                        )),
+                    })
+                }
+            };
 
         let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix_path, x) };
         let load_balancer_dns_hostname = ChartInfo {
@@ -800,37 +752,35 @@ impl<'a> Kubernetes for DOKS<'a> {
         }
     }
 
-    fn on_create_error(&self) -> Result<(), EngineError> {
+    fn create_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_upgrade(&self) -> Result<(), EngineError> {
+    fn upgrade(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_upgrade_error(&self) -> Result<(), EngineError> {
+    fn upgrade_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_downgrade(&self) -> Result<(), EngineError> {
+    fn downgrade(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_downgrade_error(&self) -> Result<(), EngineError> {
+    fn downgrade_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_pause(&self) -> Result<(), EngineError> {
+    fn pause(&self) -> Result<(), EngineError> {
         todo!()
     }
 
-    fn on_pause_error(&self) -> Result<(), EngineError> {
+    fn pause_error(&self) -> Result<(), EngineError> {
         todo!()
     }
 
-    fn on_delete(&self) -> Result<(), EngineError> {
-        info!("DOKS.on_delete() called for {}", self.name());
-
+    fn delete(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let send_to_customer = |message: &str| {
             listeners_helper.delete_in_progress(ProgressInfo::new(
@@ -1097,8 +1047,104 @@ impl<'a> Kubernetes for DOKS<'a> {
         Ok(())
     }
 
-    fn on_delete_error(&self) -> Result<(), EngineError> {
+    fn delete_error(&self) -> Result<(), EngineError> {
         Ok(())
+    }
+}
+
+impl<'a> Kubernetes for DOKS<'a> {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn kind(&self) -> Kind {
+        Kind::Doks
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        self.version.as_str()
+    }
+
+    fn region(&self) -> &str {
+        self.region.as_str()
+    }
+
+    fn zone(&self) -> &str {
+        ""
+    }
+
+    fn cloud_provider(&self) -> &dyn CloudProvider {
+        self.cloud_provider
+    }
+
+    fn dns_provider(&self) -> &dyn DnsProvider {
+        self.dns_provider
+    }
+
+    fn config_file_store(&self) -> &dyn ObjectStorage {
+        &self.spaces
+    }
+
+    fn is_valid(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_create(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_create() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.create())
+    }
+
+    fn on_create_error(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_create_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.create_error())
+    }
+
+    fn on_upgrade(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_upgrade() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.upgrade())
+    }
+
+    fn on_upgrade_error(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_upgrade() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
+    }
+
+    fn on_downgrade(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_downgrade() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.downgrade())
+    }
+
+    fn on_downgrade_error(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_downgrade_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
+    }
+
+    fn on_pause(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_pause() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Pause, || self.pause())
+    }
+
+    fn on_pause_error(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_pause_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Pause, || self.pause_error())
+    }
+
+    fn on_delete(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_delete() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Delete, || self.delete())
+    }
+
+    fn on_delete_error(&self) -> Result<(), EngineError> {
+        info!("DOKS.on_delete_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
