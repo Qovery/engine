@@ -1,8 +1,18 @@
 [package]
 name = "qovery-engine"
+description = "Deploy your apps on any Cloud provider in just a few seconds"
 version = "0.1.0"
 authors = ["Romaric Philogene <romaric@qovery.com>"]
+license-file = "LICENSE"
+readme = "README.md"
+repository = "https://github.com/Qovery/engine"
+keywords = ["kubernetes", "rust", "aws", "digitalocean", "scaleway", "cloud", "terraform", "helm"]
+categories = ["cloud", "infrastructure"]
 edition = "2018"
+
+[[test]]
+name = "integration"
+path = "tests/lib.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
