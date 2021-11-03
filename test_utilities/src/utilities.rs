@@ -904,7 +904,7 @@ pub fn db_fqnd(db: Database) -> String {
                 DatabaseKind::Postgresql => "postgresqlpostgres",
                 DatabaseKind::Mysql => "mysqlmysqldatabase",
                 DatabaseKind::Mongodb => "mongodbmymongodb",
-                DatabaseKind::Redis => "redismyredis",
+                DatabaseKind::Redis => "redismyredis-master",
             }
             .to_string(),
         },

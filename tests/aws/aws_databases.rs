@@ -482,7 +482,7 @@ fn test_postgresql_configuration(
             .into_iter()
             .map(|mut app| {
                 app.branch = app_name.clone();
-                app.commit_id = "ad65b24a0470e7e8aa0983e036fb9a05928fd973".to_string();
+                app.commit_id = "c3eda167df49fa9757f281d6f3655ba46287c61d".to_string();
                 app.private_port = Some(1234);
                 app.dockerfile_path = Some(format!("Dockerfile-{}", version));
                 app.environment_vars = btreemap! {
