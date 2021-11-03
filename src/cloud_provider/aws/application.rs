@@ -138,7 +138,7 @@ impl Service for Application {
     }
 
     fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Value(self.start_timeout_in_seconds)
+        Timeout::Value((self.start_timeout_in_seconds + 10) * 4)
     }
 
     fn total_cpus(&self) -> String {
