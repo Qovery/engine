@@ -51,6 +51,7 @@ variable "database_tags" {
     "q_environment_id" = "{{ environment_id }}"
     "q_project_id" = "{{ project_id }}"
     {% if resource_expiration_in_seconds is defined %}"ttl" = "{{ resource_expiration_in_seconds }}" {% endif %}
+    {% if snapshot is defined and snapshot["snapshot_id"] %} meta_last_restored_from = {{ snapshot['snapshot_id']}} {% endif %}
   }
   type = map
 }
@@ -61,5 +62,14 @@ variable "resource_expiration_in_seconds" {
 description = "Resource expiration in seconds"
 default = {{ resource_expiration_in_seconds }}
 type = number
+}
+{% endif %}
+
+{%- if snapshot is defined %}
+# Snapshots
+variable "snapshot_identifier" {
+description = "Snapshot ID to restore"
+default = "{{ snapshot['snapshot_id']}}"
+type = string
 }
 {% endif %}
