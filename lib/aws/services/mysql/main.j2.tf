@@ -107,8 +107,8 @@ resource "aws_db_instance" "mysql_instance" {
 
   # Maintenance and upgrades
   apply_immediately = var.apply_changes_now
-  auto_minor_version_upgrade = var.upgrade_minor
-  maintenance_window = var.maintenance_window
+  auto_minor_version_upgrade = var.auto_minor_version_upgrade
+  maintenance_window = var.preferred_maintenance_window
 
   # Monitoring
   monitoring_interval = 10
@@ -116,7 +116,7 @@ resource "aws_db_instance" "mysql_instance" {
 
   # Backups
   backup_retention_period = var.backup_retention_period
-  backup_window = var.backup_window
+  backup_window = var.preferred_backup_window
   skip_final_snapshot = var.skip_final_snapshot
   {%- if not skip_final_snapshot %}
   final_snapshot_identifier = var.final_snapshot_name
