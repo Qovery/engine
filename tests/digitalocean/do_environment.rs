@@ -19,7 +19,6 @@ use tracing::{span, warn, Level};
 // This cluster should be live in order to have those tests passing properly.
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
@@ -72,7 +71,6 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
@@ -125,7 +123,6 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_and_pause() {
@@ -199,7 +196,6 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
@@ -261,7 +257,6 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_with_domain() {
@@ -312,7 +307,6 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_with_storage() {
@@ -383,7 +377,6 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_redeploy_same_app() {
@@ -483,7 +476,6 @@ fn digitalocean_doks_redeploy_same_app() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environment() {
@@ -652,7 +644,6 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
@@ -703,7 +694,6 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_non_working_environment_with_a_working_failover() {
@@ -768,7 +758,6 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_working_failover() 
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_non_working_environment_with_a_non_working_failover() {

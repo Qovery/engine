@@ -19,14 +19,14 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 
 pub const DO_QOVERY_ORGANIZATION_ID: &str = "z3bc003d2";
 pub const DO_KUBERNETES_VERSION: &str = "1.19";
-pub const DOCR_ID: &str = "gu9ep7t68htdu78l";
-pub const DO_KUBE_TEST_CLUSTER_ID: &str = "z2a1b27a3";
-pub const DO_KUBE_TEST_CLUSTER_NAME: &str = "qovery-z2a1b27a3";
-pub const DO_TEST_REGION: Region = Region::NewYorkCity3;
-pub const DO_MANAGED_DATABASE_INSTANCE_TYPE: &str = "not-used";
-pub const DO_MANAGED_DATABASE_DISK_TYPE: &str = "not-used";
-pub const DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "not-used";
-pub const DO_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "do-sbv-ssd-0";
+pub const DOCR_ID: &str = "registry-the-one-and-unique";
+pub const DO_KUBE_TEST_CLUSTER_ID: &str = "za80c56a0";
+pub const DO_KUBE_TEST_CLUSTER_NAME: &str = "qovery-za80c56a0";
+pub const DO_TEST_REGION: Region = Region::Amsterdam3;
+pub const DO_MANAGED_DATABASE_INSTANCE_TYPE: &str = "";
+pub const DO_MANAGED_DATABASE_DISK_TYPE: &str = "";
+pub const DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
+pub const DO_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "do-block-storage";
 
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     let secrets = FuncTestsSecrets::new();
