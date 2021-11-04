@@ -187,7 +187,6 @@ impl Service for MongoDB {
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
         context.insert("tfstate_name", &get_tfstate_name(self));
 
-        context.insert("skip_final_snapshot", &self.context().is_test_cluster());
         context.insert("publicly_accessible", &self.options.publicly_accessible);
         context.insert("skip_final_snapshot", &false);
         context.insert("final_snapshot_name", &aws_final_snapshot_name(self.id()));
