@@ -17,8 +17,8 @@ use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, KubernetesNodesType,
-    KubernetesUpgradeStatus,
+    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
+    KubernetesNodesType, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -39,7 +39,7 @@ use crate::error::{
 };
 use crate::fs::workspace_directory;
 use crate::models::{
-    Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -470,7 +470,258 @@ impl<'a> EKS<'a> {
         Ok(context)
     }
 
-    fn upgrade(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+    fn create(&self) -> Result<(), EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let send_to_customer = |message: &str| {
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Infrastructure {
+                    execution_id: self.context.execution_id().to_string(),
+                },
+                ProgressLevel::Info,
+                Some(message),
+                self.context.execution_id(),
+            ))
+        };
+
+        send_to_customer(format!("Preparing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
+
+        // upgrade cluster instead if required
+        match self.config_file() {
+            Ok(f) => match is_kubernetes_upgrade_required(
+                f.0,
+                &self.version,
+                self.cloud_provider.credentials_environment_variables(),
+            ) {
+                Ok(x) => {
+                    if x.required_upgrade_on.is_some() {
+                        return self.upgrade_with_status(x);
+                    }
+                    info!("Kubernetes cluster upgrade not required");
+                }
+                Err(e) => error!(
+                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
+                    e.message
+                ),
+            },
+            Err(_) => {
+                info!("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before");
+            }
+        };
+
+        // create AWS IAM roles
+        let already_created_roles = get_default_roles_to_create();
+        for role in already_created_roles {
+            match role.create_service_linked_role(
+                self.cloud_provider.access_key_id.as_str(),
+                self.cloud_provider.secret_access_key.as_str(),
+            ) {
+                Ok(_) => info!("Role {} is already present, no need to create", role.role_name),
+                Err(e) => error!(
+                    "Error while getting, or creating the role {} : causing by {:?}",
+                    role.role_name, e
+                ),
+            }
+        }
+
+        let temp_dir = workspace_directory(
+            self.context.workspace_root_dir(),
+            self.context.execution_id(),
+            format!("bootstrap/{}", self.id()),
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+
+        // generate terraform files and copy them into temp dir
+        let context = self.tera_context()?;
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        send_to_customer(format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
+
+        // temporary: remove helm/kube management from terraform
+        match terraform_init_validate_state_list(temp_dir.as_str()) {
+            Ok(x) => {
+                let items_type = vec!["helm_release", "kubernetes_namespace"];
+                for item in items_type {
+                    for entry in x.clone() {
+                        if entry.starts_with(item) {
+                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
+                                Ok(_) => info!("successfully removed {}", &entry),
+                                Err(e) => {
+                                    return Err(EngineError {
+                                        cause: EngineErrorCause::Internal,
+                                        scope: EngineErrorScope::Engine,
+                                        execution_id: self.context.execution_id().to_string(),
+                                        message: Some(format!(
+                                            "error while trying to remove {} out of terraform state file.\n {:?}",
+                                            entry, e.message
+                                        )),
+                                    })
+                                }
+                            }
+                        };
+                    }
+                }
+            }
+            Err(e) => warn!(
+                "no state list exists yet, this is normal if it's a newly created cluster. {:?}",
+                e
+            ),
+        };
+
+        // terraform deployment dedicated to cloud resources
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                format!(
+                    "Error while deploying cluster {} with Terraform with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(e);
+            }
+        };
+
+        // kubernetes helm deployments on the cluster
+        // todo: instead of downloading kubeconfig file, use the one that has just been generated by terraform
+        let kubeconfig_file = match self.config_file() {
+            Ok(x) => x.0,
+            Err(e) => {
+                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
+                return Err(e);
+            }
+        };
+        let kubeconfig = PathBuf::from(&kubeconfig_file);
+        let credentials_environment_variables: Vec<(String, String)> = self
+            .cloud_provider
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|x| (x.0.to_string(), x.1.to_string()))
+            .collect();
+        let charts_prerequisites = ChartsConfigPrerequisites {
+            organization_id: self.cloud_provider.organization_id().to_string(),
+            organization_long_id: self.cloud_provider.organization_long_id,
+            infra_options: self.options.clone(),
+            cluster_id: self.id.clone(),
+            cluster_long_id: self.long_id,
+            region: self.region().to_string(),
+            cluster_name: self.cluster_name().to_string(),
+            cloud_provider: "aws".to_string(),
+            test_cluster: self.context.is_test_cluster(),
+            aws_access_key_id: self.cloud_provider.access_key_id.to_string(),
+            aws_secret_access_key: self.cloud_provider.secret_access_key.to_string(),
+            vpc_qovery_network_mode: self.options.vpc_qovery_network_mode.clone(),
+            qovery_engine_location: self.get_engine_location(),
+            ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
+            ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
+            managed_dns_name: self.dns_provider.domain().to_string(),
+            managed_dns_helm_format: self.dns_provider.domain_helm_format(),
+            managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
+            external_dns_provider: self.dns_provider.provider_name().to_string(),
+            dns_email_report: self.options.tls_email_report.clone(),
+            acme_url: self.lets_encrypt_url(),
+            cloudflare_email: self.dns_provider.account().to_string(),
+            cloudflare_api_token: self.dns_provider.token().to_string(),
+            disable_pleco: self.context.disable_pleco(),
+        };
+
+        let helm_charts_to_deploy = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            aws_helm_charts(
+                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+                &charts_prerequisites,
+                Some(&temp_dir),
+                &kubeconfig,
+                &credentials_environment_variables,
+            ),
+        )?;
+
+        cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            deploy_charts_levels(
+                &kubeconfig,
+                &credentials_environment_variables,
+                helm_charts_to_deploy,
+                self.context.is_dry_run_deploy(),
+            ),
+        )
+    }
+
+    fn create_error(&self) -> Result<(), EngineError> {
+        let kubeconfig_file = match self.config_file() {
+            Ok(x) => x.0,
+            Err(e) => {
+                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
+                return Err(e);
+            }
+        };
+        let kubeconfig = PathBuf::from(&kubeconfig_file);
+        let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
+        warn!("EKS.create_error() called for {}", self.name());
+        match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
+            Ok(_x) => (),
+            Err(_e) => (),
+        };
+        Err(self.engine_error(
+            EngineErrorCause::Internal,
+            format!("{} Kubernetes cluster failed on deployment", self.name()),
+        ))
+    }
+
+    fn upgrade(&self) -> Result<(), EngineError> {
+        let kubeconfig = match self.config_file() {
+            Ok(f) => f.0,
+            Err(e) => return Err(e),
+        };
+
+        match is_kubernetes_upgrade_required(
+            kubeconfig,
+            &self.version,
+            self.cloud_provider.credentials_environment_variables(),
+        ) {
+            Ok(x) => self.upgrade_with_status(x),
+            Err(e) => {
+                let msg = format!(
+                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
+                    e.message
+                );
+                error!("{}", &msg);
+                Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: Some(msg),
+                })
+            }
+        }
+    }
+
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let send_to_customer = |message: &str| {
             listeners_helper.upgrade_in_progress(ProgressInfo::new(
@@ -710,326 +961,20 @@ impl<'a> EKS<'a> {
 
         Ok(())
     }
-}
 
-impl<'a> Kubernetes for EKS<'a> {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn kind(&self) -> Kind {
-        Kind::Eks
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        self.version.as_str()
-    }
-
-    fn region(&self) -> &str {
-        self.region.name()
-    }
-
-    fn zone(&self) -> &str {
-        ""
-    }
-
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.s3
-    }
-
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn upgrade_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_create(&self) -> Result<(), EngineError> {
-        info!("EKS.on_create() called for {}", self.name());
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-        let send_to_customer = |message: &str| {
-            listeners_helper.deployment_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
-
-        send_to_customer(format!("Preparing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
-
-        // upgrade cluster instead if required
-        match self.config_file() {
-            Ok(f) => match is_kubernetes_upgrade_required(
-                f.0,
-                &self.version,
-                self.cloud_provider.credentials_environment_variables(),
-            ) {
-                Ok(x) => {
-                    if x.required_upgrade_on.is_some() {
-                        return self.upgrade(x);
-                    }
-                    info!("Kubernetes cluster upgrade not required");
-                }
-                Err(e) => error!(
-                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
-                    e.message
-                ),
-            },
-            Err(_) => {
-                info!("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before");
-            }
-        };
-
-        // create AWS IAM roles
-        let already_created_roles = get_default_roles_to_create();
-        for role in already_created_roles {
-            match role.create_service_linked_role(
-                self.cloud_provider.access_key_id.as_str(),
-                self.cloud_provider.secret_access_key.as_str(),
-            ) {
-                Ok(_) => info!("Role {} is already present, no need to create", role.role_name),
-                Err(e) => error!(
-                    "Error while getting, or creating the role {} : causing by {:?}",
-                    role.role_name, e
-                ),
-            }
-        }
-
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
-
-        // generate terraform files and copy them into temp dir
-        let context = self.tera_context()?;
-
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                self.template_directory.as_str(),
-                temp_dir.as_str(),
-                &context,
-            ),
-        )?;
-
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::copy_non_template_files(
-                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                common_charts_temp_dir.as_str(),
-            ),
-        )?;
-
-        send_to_customer(format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
-
-        // temporary: remove helm/kube management from terraform
-        match terraform_init_validate_state_list(temp_dir.as_str()) {
-            Ok(x) => {
-                let items_type = vec!["helm_release", "kubernetes_namespace"];
-                for item in items_type {
-                    for entry in x.clone() {
-                        if entry.starts_with(item) {
-                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
-                                Ok(_) => info!("successfully removed {}", &entry),
-                                Err(e) => {
-                                    return Err(EngineError {
-                                        cause: EngineErrorCause::Internal,
-                                        scope: EngineErrorScope::Engine,
-                                        execution_id: self.context.execution_id().to_string(),
-                                        message: Some(format!(
-                                            "error while trying to remove {} out of terraform state file.\n {:?}",
-                                            entry, e.message
-                                        )),
-                                    })
-                                }
-                            }
-                        };
-                    }
-                }
-            }
-            Err(e) => warn!(
-                "no state list exists yet, this is normal if it's a newly created cluster. {:?}",
-                e
-            ),
-        };
-
-        // terraform deployment dedicated to cloud resources
-        match cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                format!(
-                    "Error while deploying cluster {} with Terraform with id {}.",
-                    self.name(),
-                    self.id()
-                );
-                return Err(e);
-            }
-        };
-
-        // kubernetes helm deployments on the cluster
-        // todo: instead of downloading kubeconfig file, use the one that has just been generated by terraform
-        let kubeconfig_file = match self.config_file() {
-            Ok(x) => x.0,
-            Err(e) => {
-                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
-                return Err(e);
-            }
-        };
-        let kubeconfig = PathBuf::from(&kubeconfig_file);
-        let credentials_environment_variables: Vec<(String, String)> = self
-            .cloud_provider
-            .credentials_environment_variables()
-            .into_iter()
-            .map(|x| (x.0.to_string(), x.1.to_string()))
-            .collect();
-        let charts_prerequisites = ChartsConfigPrerequisites {
-            organization_id: self.cloud_provider.organization_id().to_string(),
-            organization_long_id: self.cloud_provider.organization_long_id,
-            infra_options: self.options.clone(),
-            cluster_id: self.id.clone(),
-            cluster_long_id: self.long_id,
-            region: self.region().to_string(),
-            cluster_name: self.cluster_name().to_string(),
-            cloud_provider: "aws".to_string(),
-            test_cluster: self.context.is_test_cluster(),
-            aws_access_key_id: self.cloud_provider.access_key_id.to_string(),
-            aws_secret_access_key: self.cloud_provider.secret_access_key.to_string(),
-            vpc_qovery_network_mode: self.options.vpc_qovery_network_mode.clone(),
-            qovery_engine_location: self.get_engine_location(),
-            ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
-            ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
-            managed_dns_name: self.dns_provider.domain().to_string(),
-            managed_dns_helm_format: self.dns_provider.domain_helm_format(),
-            managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
-            external_dns_provider: self.dns_provider.provider_name().to_string(),
-            dns_email_report: self.options.tls_email_report.clone(),
-            acme_url: self.lets_encrypt_url(),
-            cloudflare_email: self.dns_provider.account().to_string(),
-            cloudflare_api_token: self.dns_provider.token().to_string(),
-            disable_pleco: self.context.disable_pleco(),
-        };
-
-        let helm_charts_to_deploy = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            aws_helm_charts(
-                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
-                &charts_prerequisites,
-                Some(&temp_dir),
-                &kubeconfig,
-                &credentials_environment_variables,
-            ),
-        )?;
-
-        cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            deploy_charts_levels(
-                &kubeconfig,
-                &credentials_environment_variables,
-                helm_charts_to_deploy,
-                self.context.is_dry_run_deploy(),
-            ),
-        )
-    }
-
-    fn on_create_error(&self) -> Result<(), EngineError> {
-        let kubeconfig_file = match self.config_file() {
-            Ok(x) => x.0,
-            Err(e) => {
-                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
-                return Err(e);
-            }
-        };
-        let kubeconfig = PathBuf::from(&kubeconfig_file);
-        let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
-        warn!("EKS.on_create_error() called for {}", self.name());
-        match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
-            Ok(_x) => (),
-            Err(_e) => (),
-        };
-        Err(self.engine_error(
-            EngineErrorCause::Internal,
-            format!("{} Kubernetes cluster failed on deployment", self.name()),
-        ))
-    }
-
-    fn on_upgrade(&self) -> Result<(), EngineError> {
-        info!("EKS.on_upgrade() called for {}", self.name());
-
-        let kubeconfig = match self.config_file() {
-            Ok(f) => f.0,
-            Err(e) => return Err(e),
-        };
-
-        match is_kubernetes_upgrade_required(
-            kubeconfig,
-            &self.version,
-            self.cloud_provider.credentials_environment_variables(),
-        ) {
-            Ok(x) => self.upgrade(x),
-            Err(e) => {
-                let msg = format!(
-                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
-                    e.message
-                );
-                error!("{}", &msg);
-                Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some(msg),
-                })
-            }
-        }
-    }
-
-    fn on_upgrade_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_upgrade_error() called for {}", self.name());
+    fn downgrade(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_downgrade(&self) -> Result<(), EngineError> {
-        info!("EKS.on_downgrade() called for {}", self.name());
+    fn downgrade_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
-    fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_downgrade_error() called for {}", self.name());
-        Ok(())
-    }
-
-    fn on_pause(&self) -> Result<(), EngineError> {
-        info!("EKS.on_pause() called for {}", self.name());
-
+    fn pause(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let send_to_customer = |message: &str| {
             listeners_helper.pause_in_progress(ProgressInfo::new(
@@ -1102,11 +1047,11 @@ impl<'a> Kubernetes for EKS<'a> {
         };
         if tf_workers_resources.is_empty() {
             return Err(EngineError {
-                cause: EngineErrorCause::Internal,
-                scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
-                execution_id: self.context.execution_id().to_string(),
-                message: Some("No worker nodes present, can't Pause the infrastructure. This can happen if there where a manual operations on the workers or the infrastructure is already pause.".to_string()),
-            });
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
+                    execution_id: self.context.execution_id().to_string(),
+                    message: Some("No worker nodes present, can't Pause the infrastructure. This can happen if there where a manual operations on the workers or the infrastructure is already pause.".to_string()),
+                });
         }
 
         let kubernetes_config_file_path = self.config_file_path()?;
@@ -1142,9 +1087,9 @@ impl<'a> Kubernetes for EKS<'a> {
                         OperationResult::Ok(())
                     } else {
                         OperationResult::Retry(SimpleError {
-                            kind: SimpleErrorKind::Other,
-                            message: Some("can't pause the infrastructure now, Engine jobs are currently running, retrying later...".to_string()),
-                        })
+                                kind: SimpleErrorKind::Other,
+                                message: Some("can't pause the infrastructure now, Engine jobs are currently running, retrying later...".to_string()),
+                            })
                     }
                 }
                 Err(e) => {
@@ -1202,17 +1147,14 @@ impl<'a> Kubernetes for EKS<'a> {
         }
     }
 
-    fn on_pause_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_pause_error() called for {}", self.name());
+    fn pause_error(&self) -> Result<(), EngineError> {
         Err(self.engine_error(
             EngineErrorCause::Internal,
             format!("{} Kubernetes cluster failed to pause", self.name()),
         ))
     }
 
-    fn on_delete(&self) -> Result<(), EngineError> {
-        info!("EKS.on_delete() called for {}", self.name());
-
+    fn delete(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let send_to_customer = |message: &str| {
             listeners_helper.delete_in_progress(ProgressInfo::new(
@@ -1479,12 +1421,105 @@ impl<'a> Kubernetes for EKS<'a> {
         }
     }
 
-    fn on_delete_error(&self) -> Result<(), EngineError> {
-        warn!("EKS.on_delete_error() called for {}", self.name());
-
+    fn delete_error(&self) -> Result<(), EngineError> {
         // FIXME What should we do if something goes wrong while deleting the cluster?
-
         Ok(())
+    }
+}
+
+impl<'a> Kubernetes for EKS<'a> {
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn kind(&self) -> Kind {
+        Kind::Eks
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn version(&self) -> &str {
+        self.version.as_str()
+    }
+
+    fn region(&self) -> &str {
+        self.region.name()
+    }
+
+    fn zone(&self) -> &str {
+        ""
+    }
+
+    fn cloud_provider(&self) -> &dyn CloudProvider {
+        self.cloud_provider
+    }
+
+    fn dns_provider(&self) -> &dyn DnsProvider {
+        self.dns_provider
+    }
+
+    fn config_file_store(&self) -> &dyn ObjectStorage {
+        &self.s3
+    }
+
+    fn is_valid(&self) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_create(&self) -> Result<(), EngineError> {
+        info!("EKS.on_create() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.create())
+    }
+
+    fn on_create_error(&self) -> Result<(), EngineError> {
+        info!("EKS.on_create_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.create_error())
+    }
+
+    fn on_upgrade(&self) -> Result<(), EngineError> {
+        info!("EKS.on_upgrade() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.upgrade())
+    }
+
+    fn on_upgrade_error(&self) -> Result<(), EngineError> {
+        info!("EKS.on_upgrade() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
+    }
+
+    fn on_downgrade(&self) -> Result<(), EngineError> {
+        info!("EKS.on_downgrade() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.downgrade())
+    }
+
+    fn on_downgrade_error(&self) -> Result<(), EngineError> {
+        info!("EKS.on_downgrade_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
+    }
+
+    fn on_pause(&self) -> Result<(), EngineError> {
+        info!("EKS.on_pause() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Pause, || self.pause())
+    }
+
+    fn on_pause_error(&self) -> Result<(), EngineError> {
+        info!("EKS.on_pause_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Pause, || self.pause_error())
+    }
+
+    fn on_delete(&self) -> Result<(), EngineError> {
+        info!("EKS.on_delete() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Delete, || self.delete())
+    }
+
+    fn on_delete_error(&self) -> Result<(), EngineError> {
+        info!("EKS.on_delete_error() called for {}", self.name());
+        send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
