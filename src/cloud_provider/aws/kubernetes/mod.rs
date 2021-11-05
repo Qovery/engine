@@ -684,8 +684,8 @@ impl<'a> EKS<'a> {
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
         warn!("EKS.create_error() called for {}", self.name());
         match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
-            Ok(_x) => (),
-            Err(_e) => (),
+            Ok(ok_line) => info!("{}", ok_line),
+            Err(err) => error!("{:?}", err),
         };
         Err(self.engine_error(
             EngineErrorCause::Internal,
