@@ -267,6 +267,90 @@ aws-self-hosted:
     expire_in: 2 week
   interruptible: true
 
+do-infra:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh do_infra
+  dependencies:
+    - linter
+    - build
+  when: always
+  tags:
+    - 2cpu-4gmem-0g
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-do-infra/
+      - $TESTS_TO_RUN =~ /test-do-all/
+      - $TESTS_TO_RUN =~ /test-all/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+do-managed-services:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh do_managed_services
+  dependencies:
+    - linter
+    - build
+  tags:
+    - 2cpu-12gmem-0g
+  when: always
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-do-managed-services/
+      - $TESTS_TO_RUN =~ /test-do-all/
+      - $TESTS_TO_RUN =~ /test-all/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+do-self-hosted:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh do_self_hosted
+  dependencies:
+    - linter
+    - build
+  tags:
+    - 2cpu-12gmem-0g
+  when: always
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-do-self-hosted/
+      - $TESTS_TO_RUN =~ /test-do-all/
+      - $TESTS_TO_RUN =~ /test-all/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
 scw-infra:
   stage: tests
   retry: 0
