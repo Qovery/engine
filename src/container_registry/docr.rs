@@ -43,7 +43,7 @@ impl DOCR {
     fn get_registry_name(&self, image: &Image) -> Result<String, EngineError> {
         let registry_name = match image.registry_name.as_ref() {
             // DOCR does not support upper cases
-            Some(registry_name) => registry_name.to_lowercase().clone(),
+            Some(registry_name) => registry_name.to_lowercase(),
             None => cast_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context().execution_id(),
@@ -57,7 +57,7 @@ impl DOCR {
     fn create_repository(&self, image: &Image) -> Result<(), EngineError> {
         let registry_name = match image.registry_name.as_ref() {
             // DOCR does not support upper cases
-            Some(registry_name) => registry_name.to_lowercase().clone(),
+            Some(registry_name) => registry_name.to_lowercase(),
             None => self.name.clone(),
         };
 
@@ -118,7 +118,7 @@ impl DOCR {
                     return Err(self.engine_error(
                         EngineErrorCause::Internal,
                         e.message
-                            .unwrap_or("unknown error occurring during docker push".to_string()),
+                            .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
                     ))
                 }
             };
@@ -141,9 +141,7 @@ impl DOCR {
 
         let image_not_reachable = Err(self.engine_error(
             EngineErrorCause::Internal,
-            format!(
-                "image has been pushed on Digital Ocean Registry but is not yet available after 2min. Please try to redeploy in a few minutes",
-            ),
+            "image has been pushed on Digital Ocean Registry but is not yet available after 2min. Please try to redeploy in a few minutes".to_string(),
         ));
         match result {
             Ok(_) => Ok(PushResult { image }),
@@ -157,7 +155,8 @@ impl DOCR {
     }
 
     pub fn delete_image(&self, _image: &Image) -> Result<(), EngineError> {
-        todo!()
+        // TODO(benjaminch): To be implemented later on, but note it must not slow down CI workflow
+        Ok(())
     }
 
     pub fn delete_repository(&self) -> Result<(), EngineError> {
@@ -309,26 +308,23 @@ impl ContainerRegistry for DOCR {
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
         let registry_name = self.get_registry_name(image)?;
 
-        match self.create_repository(&image) {
+        match self.create_repository(image) {
             Ok(_) => info!("DOCR {} has been created", registry_name.as_str()),
             Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
         };
 
-        match cmd::utilities::exec(
+        if let Err(_) = cmd::utilities::exec(
             "doctl",
             vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
             &vec![],
         ) {
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "Your DOCR account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials.",
-                    ),
-                    format!("failed to login to DOCR {}", self.name_with_id()),
-                ));
-            }
-            _ => {}
+            return Err(self.engine_error(
+                EngineErrorCause::User(
+                    "Your DOCR account seems to be no longer valid (bad Credentials). \
+                Please contact your Organization administrator to fix or change the Credentials.",
+                ),
+                format!("failed to login to DOCR {}", self.name_with_id()),
+            ));
         };
 
         let dest = format!(

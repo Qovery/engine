@@ -8,7 +8,7 @@ use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
-use std::io::{Error, ErrorKind, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -29,13 +29,17 @@ use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
-    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
+    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
+    DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Environment, Features, Metadata};
 use serde::{Deserialize, Serialize};
 extern crate time;
+use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
+use qovery_engine::object_storage::spaces::Spaces;
+use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
 use time::Instant;
 
@@ -474,7 +478,68 @@ where
                     kubernetes_config_object_key.as_str(),
                 )
             }
-            Kind::Do => todo!(),
+            Kind::Do => {
+                let region_raw = secrets
+                    .DIGITAL_OCEAN_DEFAULT_REGION
+                    .as_ref()
+                    .expect(&"DIGITAL_OCEAN_DEFAULT_REGION should be set".to_string())
+                    .to_string();
+
+                match Region::from_str(region_raw.as_str()) {
+                    Ok(region) => {
+                        let spaces = Spaces::new(
+                            context(),
+                            "fake".to_string(),
+                            "fake".to_string(),
+                            secrets
+                                .DIGITAL_OCEAN_SPACES_ACCESS_ID
+                                .as_ref()
+                                .expect(&"DIGITAL_OCEAN_SPACES_ACCESS_ID should be set".to_string())
+                                .to_string(),
+                            secrets
+                                .DIGITAL_OCEAN_SPACES_SECRET_ID
+                                .as_ref()
+                                .expect(&"DIGITAL_OCEAN_SPACES_SECRET_ID should be set".to_string())
+                                .to_string(),
+                            region,
+                        );
+
+                        match spaces.get(
+                            kubernetes_config_bucket_name.as_str(),
+                            kubernetes_config_object_key.as_str(),
+                            false,
+                        ) {
+                            Ok((_, mut file)) => {
+                                let mut content = String::new();
+                                match file.read_to_string(&mut content) {
+                                    Ok(_) => Ok(content),
+                                    Err(e) => {
+                                        let message = format!("error while trying to read file, error: {}", e);
+                                        error!("{}", message);
+
+                                        Err(SimpleError::new(SimpleErrorKind::Other, Some(message)))
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let message = format!(
+                                    "error while trying to get kubeconfig from spaces, error: {:?}",
+                                    e.message,
+                                );
+                                error!("{}", message);
+
+                                Err(SimpleError::new(SimpleErrorKind::Other, e.message))
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        let message = format!("`{}` is not a valid region", region_raw);
+                        error!("{}", message);
+
+                        Err(SimpleError::new(SimpleErrorKind::Other, Some(message)))
+                    }
+                }
+            }
             Kind::Scw => {
                 // TODO(benjaminch): refactor all of this properly
                 let zone = Zone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
@@ -599,7 +664,29 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
                 secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str(),
             ),
         ],
-        Kind::Do => todo!(),
+        Kind::Do => vec![
+            (
+                DIGITAL_OCEAN_TOKEN,
+                secrets
+                    .DIGITAL_OCEAN_TOKEN
+                    .as_ref()
+                    .expect("DIGITAL_OCEAN_TOKEN is not set"),
+            ),
+            (
+                DIGITAL_OCEAN_SPACES_ACCESS_ID,
+                secrets
+                    .DIGITAL_OCEAN_SPACES_ACCESS_ID
+                    .as_ref()
+                    .expect("DIGITAL_OCEAN_SPACES_ACCESS_ID is not set"),
+            ),
+            (
+                DIGITAL_OCEAN_SPACES_SECRET_ID,
+                secrets
+                    .DIGITAL_OCEAN_SPACES_SECRET_ID
+                    .as_ref()
+                    .expect("DIGITAL_OCEAN_SPACES_SECRET_ID is not set"),
+            ),
+        ],
         Kind::Scw => vec![
             (
                 SCALEWAY_ACCESS_KEY,

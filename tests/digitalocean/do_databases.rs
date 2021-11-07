@@ -26,7 +26,6 @@ use test_utilities::digitalocean::{
 
 // to check overload between several databases and apps
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn deploy_an_environment_with_3_databases_and_3_apps() {
@@ -79,7 +78,6 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn deploy_an_environment_with_db_and_pause_it() {
@@ -151,7 +149,6 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
 // this test ensure containers databases are never restarted, even in failover environment case
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn postgresql_failover_dev_environment_with_all_options() {
@@ -253,7 +250,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
 
 // Ensure a full environment can run correctly
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn postgresql_deploy_a_working_development_environment_with_all_options() {
@@ -327,7 +323,6 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
 // Ensure redeploy works as expected
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
@@ -578,7 +573,6 @@ fn test_postgresql_configuration(
 
 // Postgres environment environment
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn postgresql_v10_deploy_a_working_dev_environment() {
@@ -597,7 +591,6 @@ fn postgresql_v10_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn postgresql_v11_deploy_a_working_dev_environment() {
@@ -616,7 +609,6 @@ fn postgresql_v11_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn postgresql_v12_deploy_a_working_dev_environment() {
@@ -754,7 +746,6 @@ fn test_mongodb_configuration(
 
 // development environment
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn mongodb_v3_6_deploy_a_working_dev_environment() {
@@ -773,7 +764,6 @@ fn mongodb_v3_6_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn mongodb_v4_0_deploy_a_working_dev_environment() {
@@ -792,7 +782,6 @@ fn mongodb_v4_0_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn mongodb_v4_2_deploy_a_working_dev_environment() {
@@ -811,7 +800,6 @@ fn mongodb_v4_2_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn mongodb_v4_4_deploy_a_working_dev_environment() {
@@ -944,7 +932,6 @@ fn test_mysql_configuration(
 
 // MySQL self-hosted environment
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn mysql_v5_7_deploy_a_working_dev_environment() {
@@ -963,7 +950,6 @@ fn mysql_v5_7_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn mysql_v8_deploy_a_working_dev_environment() {
@@ -1097,7 +1083,6 @@ fn test_redis_configuration(
 
 // Redis self-hosted environment
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn redis_v5_deploy_a_working_dev_environment() {
@@ -1116,7 +1101,6 @@ fn redis_v5_deploy_a_working_dev_environment() {
 }
 
 #[cfg(feature = "test-do-self-hosted")]
-#[ignore]
 #[named]
 #[test]
 fn redis_v6_deploy_a_working_dev_environment() {
