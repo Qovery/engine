@@ -9,8 +9,9 @@ use qovery_engine::models::{
     StorageType,
 };
 
-use crate::utilities::{generate_id, generate_password};
+use crate::utilities::{generate_id, generate_password, get_svc_name};
 use base64;
+use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::DatabaseMode::CONTAINER;
 use std::collections::BTreeMap;
 
@@ -28,13 +29,14 @@ pub fn environment_3_apps_3_routers_3_databases(
     test_domain: &str,
     database_instance_type: &str,
     database_disk_type: &str,
+    provider_kind: Kind,
 ) -> Environment {
     let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
     let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
     let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
 
     // mongoDB management part
-    let database_host_mongo = format!("mongodb-{}.{}", generate_id(), &test_domain);
+    let database_host_mongo = get_svc_name(DatabaseKind::Mongodb, provider_kind.clone()).to_string();
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
@@ -51,7 +53,7 @@ pub fn environment_3_apps_3_routers_3_databases(
 
     // pSQL 1 management part
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = format!("{}.{}", fqdn_id, &test_domain);
+    let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_password(true);
@@ -59,7 +61,7 @@ pub fn environment_3_apps_3_routers_3_databases(
 
     // pSQL 2 management part
     let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
-    let fqdn_2 = format!("{}.{}", fqdn_id_2, &test_domain);
+    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()));
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgresql2".to_string();
 
@@ -348,9 +350,10 @@ pub fn environnement_2_app_2_routers_1_psql(
     test_domain: &str,
     database_instance_type: &str,
     database_disk_type: &str,
+    provider_kind: Kind,
 ) -> Environment {
     let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
-    let fqdn = format!("{}.{}", fqdn_id.clone(), test_domain);
+    let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
 
     let database_port = 5432;
     let database_username = "superuser".to_string();

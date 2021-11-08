@@ -1053,6 +1053,27 @@ fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mode: D
     .to_string()
 }
 
+pub fn get_svc_name(db_kind: DatabaseKind, provider_kind: Kind) -> &'static str {
+    match db_kind {
+        DatabaseKind::Postgresql => match provider_kind {
+            Kind::Aws => "postgresqlpostgres",
+            _ => "postgresql-postgres",
+        },
+        DatabaseKind::Mysql => match provider_kind {
+            Kind::Aws => "mysqlmysqldatabase",
+            _ => "mysql-mysqldatabase",
+        },
+        DatabaseKind::Mongodb => match provider_kind {
+            Kind::Aws => "mongodbmymongodb",
+            _ => "mongodb-my-mongodb",
+        },
+        DatabaseKind::Redis => match provider_kind {
+            Kind::Aws => "redismyredis-master",
+            _ => "redis-my-redis-master",
+        },
+    }
+}
+
 pub fn test_db(
     context: Context,
     mut environment: Environment,
@@ -1073,13 +1094,7 @@ pub fn test_db(
     let app_id = generate_id();
     let database_username = "superuser".to_string();
     let database_password = generate_id();
-    let db_kind_str = match db_kind {
-        DatabaseKind::Mongodb => "mongodb",
-        DatabaseKind::Mysql => "mysql",
-        DatabaseKind::Postgresql => "postgresql",
-        DatabaseKind::Redis => "redis",
-    }
-    .to_string();
+    let db_kind_str = db_kind.name().to_string();
     let database_host = format!(
         "{}-{}.{}",
         db_kind_str.clone(),
@@ -1090,27 +1105,10 @@ pub fn test_db(
         true => database_host.clone(),
         false => match database_mode.clone() {
             DatabaseMode::MANAGED => format!("{}-dns", app_id.clone()),
-            DatabaseMode::CONTAINER => match db_kind {
-                DatabaseKind::Postgresql => match provider_kind {
-                    Kind::Aws => "posgresqlpostgres",
-                    _ => "postgresql-postgres",
-                },
-                DatabaseKind::Mysql => match provider_kind {
-                    Kind::Aws => "mysqlmysqldatabase",
-                    _ => "mysql-mysqldatabase",
-                },
-                DatabaseKind::Mongodb => match provider_kind {
-                    Kind::Aws => "mongodbmymongodb",
-                    _ => "mongodb-my-mongodb",
-                },
-                DatabaseKind::Redis => match provider_kind {
-                    Kind::Aws => "redismyredis-master",
-                    _ => "redis-my-redis-master",
-                },
-            }
-            .to_string(),
+            DatabaseMode::CONTAINER => get_svc_name(db_kind.clone(), provider_kind.clone()).to_string(),
         },
     };
+
     let db_infos = db_infos(
         db_kind.clone(),
         database_mode.clone(),
@@ -1124,7 +1122,7 @@ pub fn test_db(
     let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
     let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
     let db = Database {
-        kind: db_kind,
+        kind: db_kind.clone(),
         action: Action::Create,
         id: app_id.clone(),
         name: database_db_name.clone(),
@@ -1216,7 +1214,10 @@ pub fn test_db(
                     svc.items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(|svc| svc.metadata.name.contains("postgresqlpostgres")
+                        .filter(|svc| svc
+                            .metadata
+                            .name
+                            .contains(get_svc_name(db_kind.clone(), provider_kind.clone()))
                             && &svc.spec.svc_type == "LoadBalancer")
                         .collect::<Vec<SVCItem>>()
                         .len(),

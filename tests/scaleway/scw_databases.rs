@@ -7,7 +7,7 @@ use qovery_engine::models::{
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
-    context, db_fqnd, engine_run_test, generate_id, generate_password, get_pods, get_pvc, get_svc, init,
+    context, db_fqnd, engine_run_test, generate_id, generate_password, get_pods, get_pvc, get_svc, get_svc_name, init,
     is_pod_restarted_env, test_db, FuncTestsSecrets,
 };
 
@@ -51,6 +51,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Scw,
         );
 
         let mut environment_delete = environment.clone();
@@ -103,6 +104,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Scw,
         );
 
         let mut environment_delete = environment.clone();
@@ -175,6 +177,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Scw,
         );
         let environment_check = environment.clone();
         let mut environment_never_up = environment.clone();
@@ -193,6 +196,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Scw,
         );
 
         environment_delete.action = Action::Delete;
@@ -276,6 +280,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Scw,
         );
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
@@ -283,6 +288,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Scw,
         );
 
         environment_delete.action = Action::Delete;
@@ -344,16 +350,9 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         );
 
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = format!(
-            "postgresql-{}.{}",
-            generate_id(),
-            secrets
-                .clone()
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-        );
+        let database_host = get_svc_name(DatabaseKind::Postgresql, Kind::Scw).to_string();
         let database_port = 5432;
-        let database_db_name = "postgresql".to_string();
+        let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_password(true);
 

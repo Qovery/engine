@@ -829,6 +829,17 @@ pub enum DatabaseKind {
     Redis,
 }
 
+impl DatabaseKind {
+    pub fn name(&self) -> &str {
+        match self {
+            DatabaseKind::Mongodb => "mongodb",
+            DatabaseKind::Mysql => "mysql",
+            DatabaseKind::Postgresql => "postgresql",
+            DatabaseKind::Redis => "redis",
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EnvironmentError {}
