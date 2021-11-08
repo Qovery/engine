@@ -9,7 +9,7 @@ use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
 use std::collections::BTreeMap;
-use std::io::{Error, ErrorKind, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -51,9 +51,7 @@ use crate::digitalocean::{
 };
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
-use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, SVCItem, PVC, SVC};
-use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::object_storage::spaces::Spaces;
 use qovery_engine::object_storage::ObjectStorage;
