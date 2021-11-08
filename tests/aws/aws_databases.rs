@@ -2,7 +2,6 @@ extern crate test_utilities;
 
 use ::function_name::named;
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
-use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::models::{
     Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
 };
@@ -16,8 +15,7 @@ use self::test_utilities::aws::{
     AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID,
 };
 use self::test_utilities::utilities::{
-    context, db_fqnd, engine_run_test, generate_id, get_pods, get_pvc, get_svc, get_svc_name, is_pod_restarted_env,
-    test_db,
+    context, engine_run_test, generate_id, get_pods, get_svc_name, is_pod_restarted_env, test_db,
 };
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 

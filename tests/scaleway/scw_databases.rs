@@ -3,15 +3,14 @@ use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::models::{
-    Action, Application, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
+    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
-    context, db_fqnd, engine_run_test, generate_id, generate_password, get_pods, get_pvc, get_svc, get_svc_name, init,
-    is_pod_restarted_env, test_db, FuncTestsSecrets,
+    context, engine_run_test, generate_id, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
+    test_db, FuncTestsSecrets,
 };
 
-use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::working_minimal_environment;
 use test_utilities::scaleway::{
