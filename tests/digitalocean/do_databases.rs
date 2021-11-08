@@ -466,10 +466,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
  ** PostgreSQL tests
  **
  **/
-
+#[allow(dead_code)]
 fn test_postgresql_configuration(
     context: Context,
-    mut environment: Environment,
+    environment: Environment,
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
@@ -608,10 +608,10 @@ fn public_postgresql_v12_deploy_a_working_dev_environment() {
  ** MongoDB tests
  **
  **/
-
+#[allow(dead_code)]
 fn test_mongodb_configuration(
     context: Context,
-    mut environment: Environment,
+    environment: Environment,
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
@@ -787,10 +787,10 @@ fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
  ** MySQL tests
  **
  **/
-
+#[allow(dead_code)]
 fn test_mysql_configuration(
     context: Context,
-    mut environment: Environment,
+    environment: Environment,
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
@@ -894,10 +894,10 @@ fn public_mysql_v8_deploy_a_working_dev_environment() {
  ** Redis tests
  **
  **/
-
+#[allow(dead_code)]
 fn test_redis_configuration(
     context: Context,
-    mut environment: Environment,
+    environment: Environment,
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,

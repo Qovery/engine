@@ -57,13 +57,13 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_password(true);
-    let database_name = "postgresql".to_string();
+    let database_name = "postgres".to_string();
 
     // pSQL 2 management part
     let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
     let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()));
     let database_username_2 = "superuser2".to_string();
-    let database_name_2 = "postgresql2".to_string();
+    let database_name_2 = "postgres2".to_string();
 
     Environment {
         execution_id: context.execution_id().to_string(),
@@ -358,7 +358,7 @@ pub fn environnement_2_app_2_routers_1_psql(
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_password(true);
-    let database_name = "postgresql".to_string();
+    let database_name = "postgres".to_string();
 
     let suffix = generate_id();
     let application_name1 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
