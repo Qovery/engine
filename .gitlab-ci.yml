@@ -193,7 +193,7 @@ aws-infra:
     - build
   when: always
   tags:
-    - 2cpu-4gmem-0g
+    - 4cpu-12gmem-0g
   only:
     refs:
       - dev
@@ -277,7 +277,7 @@ do-infra:
     - build
   when: always
   tags:
-    - 2cpu-4gmem-0g
+    - 4cpu-12gmem-0g
   only:
     refs:
       - dev
@@ -361,7 +361,7 @@ scw-infra:
     - build
   when: always
   tags:
-    - 2cpu-4gmem-0g
+    - 4cpu-12gmem-0g
   only:
     refs:
       - dev
