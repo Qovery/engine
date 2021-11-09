@@ -129,19 +129,6 @@ impl Default for ChartInfo {
         }
     }
 }
-//
-// pub fn get_chart_namespace(namespace: HelmChartNamespaces) -> String {
-//     match namespace {
-//         HelmChartNamespaces::KubeSystem => "kube-system",
-//         HelmChartNamespaces::Prometheus => "prometheus",
-//         HelmChartNamespaces::Logging => "logging",
-//         HelmChartNamespaces::CertManager => "cert-manager",
-//         HelmChartNamespaces::NginxIngress => "nginx-ingress",
-//         HelmChartNamespaces::Qovery => "qovery",
-//         HelmChartNamespaces::Custom => "custom",
-//     }
-//     .to_string()
-// }
 
 pub trait HelmChart: Send {
     fn check_prerequisites(&self) -> Result<Option<ChartPayload>, SimpleError> {
