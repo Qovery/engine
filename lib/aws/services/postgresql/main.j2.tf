@@ -105,7 +105,7 @@ resource "aws_db_instance" "postgresql_instance" {
 
   # Backups
   backup_retention_period = var.backup_retention_period
-  backup_window = var.backup_window
+  backup_window = var.preferred_backup_window
   skip_final_snapshot = var.skip_final_snapshot
   {%- if not skip_final_snapshot %}
   final_snapshot_identifier = var.final_snapshot_name
