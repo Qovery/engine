@@ -40,7 +40,7 @@ linter-mr:
     - ./helper.sh lint
   when: always
   tags:
-    - 2cpu-4gmem-0g
+    - vm-2cpu-4gmem-0g
   only:
     - merge_requests
   interruptible: true
@@ -52,7 +52,7 @@ build-mr:
     - ./helper.sh build
   when: always
   tags:
-    - 2cpu-4gmem-0g
+    - bm-2cpu-4gmem-0g
   only:
     - merge_requests
   interruptible: true
@@ -66,7 +66,7 @@ all-self-hosted-mr:
   - merge_requests
   when: always
   tags:
-    - 2cpu-4gmem-0g
+    - vm-2cpu-4gmem-0g
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -93,7 +93,7 @@ all-managed-services-mr:
     - merge_requests
   when: manual
   tags:
-    - 2cpu-4gmem-0g
+    - vm-2cpu-4gmem-0g
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -123,7 +123,7 @@ test-all-mr:
     - build-mr
   when: manual
   tags:
-    - qovery-2cpu-12gb
+    - bm-qovery-2cpu-12gb
   except:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -150,7 +150,7 @@ linter:
     - ./helper.sh lint
   when: always
   tags:
-    - 7cpu-4gmem-0g
+    - vm-3cpu-4gmem-0g
   only:
     refs:
       - dev
@@ -166,7 +166,7 @@ build:
 #    policy: pull-push
   when: always
   tags:
-    - 7cpu-4gmem-0g
+    - bm-7cpu-4gmem-0g
   only:
     refs:
       - dev
@@ -177,7 +177,7 @@ dev-release-image:
   script:
     - ./helper.sh new_release
   tags:
-    - 2cpu-4gmem-0g
+    - vm-2cpu-4gmem-0g
   when: manual
   only:
     refs:
@@ -193,7 +193,7 @@ aws-infra:
     - build
   when: always
   tags:
-    - 4cpu-12gmem-0g
+    - vm-2cpu-4gmem-0g
   only:
     refs:
       - dev
@@ -220,7 +220,7 @@ aws-managed-services:
     - linter
     - build
   tags:
-    - 2cpu-12gmem-0g
+    - vm-2cpu-4mem-0g
   when: always
   only:
     refs:
@@ -248,7 +248,7 @@ aws-self-hosted:
     - linter
     - build
   tags:
-    - 2cpu-12gmem-0g
+    - vm-2cpu-4gmem-0g
   when: always
   only:
     refs:
@@ -277,7 +277,7 @@ do-infra:
     - build
   when: always
   tags:
-    - 4cpu-12gmem-0g
+    - vm-2cpu-4mem-0g
   only:
     refs:
       - dev
@@ -304,7 +304,7 @@ do-managed-services:
     - linter
     - build
   tags:
-    - 2cpu-12gmem-0g
+    - vm-2cpu-4mem-0g
   when: always
   only:
     refs:
@@ -332,7 +332,7 @@ do-self-hosted:
     - linter
     - build
   tags:
-    - 2cpu-12gmem-0g
+    - vm-2cpu-4mem-0g
   when: always
   only:
     refs:
@@ -361,7 +361,7 @@ scw-infra:
     - build
   when: always
   tags:
-    - 4cpu-12gmem-0g
+    - vm-2cpu-4gmem-0g
   only:
     refs:
       - dev
@@ -388,7 +388,7 @@ scw-managed-services:
     - linter
     - build
   tags:
-    - 2cpu-12gmem-0g
+    - vm-2cpu-4mem-0g
   when: always
   only:
     refs:
@@ -416,7 +416,7 @@ scw-self-hosted:
     - linter
     - build
   tags:
-    - 2cpu-12gmem-0g
+    - vm-2cpu-4mem-0g
   when: always
   only:
     refs:
@@ -443,6 +443,8 @@ upgrade-engine-dev:
   script:
     - $ROLLBACK_IMAGE=$(kubectl -n qovery get statefulset qovery-engine -ojson | jq --raw-output .spec.template.spec.containers[0].image)
     - ./helper.sh upgrade_on_dev || ./helper.sh downgrade_on_dev $ROLLBACK_IMAGE
+  tags:
+    - vm-1cpu-1gmem-0g
   when: manual
   only:
     refs:
@@ -454,6 +456,8 @@ e2e-tests:
   allow_failure: true
   dependencies:
     - upgrade-engine-dev
+  tags:
+    - vm-2cpu-2gmem-0g
   before_script:
     - apk add bash
     - echo -e "machine gitlab.com\nlogin gitlab-ci-token\npassword ${CI_JOB_TOKEN}" > ~/.netrc
@@ -478,6 +482,8 @@ downgrade-engine-dev:
     - apk add bash
   script:
     - ./helper.sh downgrade_on_dev $ROLLBACK_IMAGE
+  tags:
+    - vm-1cpu-1gmem-0g
   when: manual
   only:
     refs:
@@ -493,7 +499,7 @@ release-image:
   script:
     - ./helper.sh new_release
   tags:
-    - 7cpu-12gmem-0g
+    - bm-7cpu-12gmem-0g
   only:
     refs:
       - main
@@ -504,7 +510,7 @@ release-image:
   script:
     - ./helper.sh set_release_ga
   tags:
-    - 250mcpu-1gmem-0g
+    - vm-250mcpu-1gmem-0g
   only:
     refs:
       - main
@@ -516,7 +522,7 @@ release-image:
   script:
     - ./helper.sh deploy_engines_infra
   tags:
-    - 250mcpu-1gmem-0g
+    - vm-250mcpu-1gmem-0g
   only:
     refs:
       - main
@@ -528,7 +534,7 @@ release-image:
   script:
     - ./helper.sh deploy_all_clusters
   tags:
-    - 250mcpu-1gmem-0g
+    - vm-250mcpu-1gmem-0g
   only:
     refs:
       - main
@@ -540,7 +546,7 @@ release-image:
   script:
     - ./helper.sh deploy_engines_envs
   tags:
-    - 250mcpu-1gmem-0g
+    - vm-250mcpu-1gmem-0g
   only:
     refs:
       - main
