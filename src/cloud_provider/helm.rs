@@ -104,7 +104,7 @@ impl ChartInfo {
     pub fn get_namespace_string(&self) -> String {
         match self.namespace {
             HelmChartNamespaces::Custom => self.custom_namespace.clone().unwrap_or(self.namespace.to_string()),
-            _ => self.get_namespace_string(),
+            _ => self.namespace.to_string(),
         }
     }
 }
