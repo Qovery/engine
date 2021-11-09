@@ -165,12 +165,3 @@ variable "snapshot_identifier" {
   type = string
 }
 {% endif %}
-
-{%- if resource_expiration_in_seconds is defined %}
-# Pleco ttl
-variable "resource_expiration_in_seconds" {
-  description = "Resource expiration in seconds"
-  default = {{ resource_expiration_in_seconds }}
-  type = number
-}
-{% endif %}
