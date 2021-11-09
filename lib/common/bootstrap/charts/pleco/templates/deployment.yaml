@@ -121,6 +121,26 @@ spec:
             - --enable-sg
             {{ end }}
             {{- end }}
+
+#            Digital Ocean features
+            {{ if eq .Values.cloudProvider "do" }}
+            {{ if .Values.doFeatures.doRegions }}
+            - --do-regions
+            - "{{ join "," .Values.doFeatures.doRegions }}"
+            {{ end }}
+            {{ if eq .Values.doFeatures.cluster true }}
+            - --enable-cluster
+            {{ end }}
+            {{ if eq .Values.doFeatures.lb true }}
+            - --enable-lb
+            {{ end }}
+            {{ if eq .Values.doFeatures.db true }}
+            - --enable-db
+            {{ end }}
+            {{ if eq .Values.doFeatures.volume true }}
+            - --enable-volume
+            {{ end }}
+            {{- end }}
           env:
             - name: "AWS_EXECUTION_ENV"
               value: "pleco_{{ .Values.image.plecoImageTag }}_{{ .Values.environmentVariables.PLECO_IDENTIFIER }}"
