@@ -43,14 +43,27 @@ use qovery_engine::models::{
 };
 use serde::{Deserialize, Serialize};
 extern crate time;
+use crate::aws::{
+    aws_kubernetes_nodes, cloud_provider_aws, docker_ecr_aws_engine, eks_options, AWS_KUBERNETES_VERSION,
+};
 use crate::aws::{delete_environment as aws_delete, deploy_environment as aws_deploy, AWS_KUBE_TEST_CLUSTER_ID};
+use crate::cloudflare::dns_provider_cloudflare;
+use crate::digitalocean::{
+    cloud_provider_digitalocean, do_kubernetes_cluster_options, do_kubernetes_nodes, docker_cr_do_engine,
+    DO_KUBERNETES_VERSION,
+};
 use crate::digitalocean::{
     delete_environment as do_delete, deploy_environment as do_deploy, DO_KUBE_TEST_CLUSTER_ID,
     DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
     DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
 };
+use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+use qovery_engine::cloud_provider::kubernetes::{Cluster, Kubernetes};
+use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
+use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, SVCItem, PVC, SVC};
 use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::object_storage::spaces::Spaces;
@@ -1278,4 +1291,161 @@ pub fn test_db(
     }
 
     return test_name.to_string();
+}
+
+pub fn cluster_test(
+    test_name: &str,
+    provider_kind: Kind,
+    localisation: &str,
+    secrets: FuncTestsSecrets,
+    test_infra_pause: bool,
+    test_infra_upgrade: bool,
+    major_boot_version: u8,
+    minor_boot_version: u8,
+    vpc_network_mode: Option<VpcQoveryNetworkMode>,
+) -> String {
+    init();
+
+    let span = span!(Level::INFO, "test", name = test_name);
+    let _enter = span.enter();
+
+    let context = context();
+
+    let (engine, cluster, nodes, mut options) = match provider_kind {
+        Kind::Aws => (
+            docker_ecr_aws_engine(&context),
+            cloud_provider_aws(&context),
+            aws_kubernetes_nodes(),
+            eks_options(secrets),
+        ),
+        Kind::Do => (
+            docker_cr_do_engine(&context),
+            cloud_provider_digitalocean(&context),
+            do_kubernetes_nodes(),
+            do_kubernetes_cluster_options(secrets, cluster_id),
+        ),
+        Kind::Scw => (
+            docker_scw_cr_engine(&context),
+            cloud_provider_scaleway(&context),
+            scw_kubernetes_nodes(),
+            scw_kubernetes_cluster_options(secrets),
+        ),
+    };
+    let boot_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
+    let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version.clone() + 1);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    if provider_kind == Kind::Aws {
+        options.vpc_qovery_network_mode = vpc_network_mode;
+    }
+    let cloudflare = dns_provider_cloudflare(&context);
+
+    let kubernetes: Kubernetes = match provider_kind {
+        Kind::Aws => EKS::new(
+            context.clone(),
+            generate_cluster_id(region).as_str(),
+            uuid::Uuid::new_v4(),
+            generate_cluster_id(region).as_str(),
+            boot_version.as_str(),
+            region,
+            &cluster,
+            &cloudflare,
+            options,
+            nodes.clone(),
+        ),
+        Kind::Do => DOKS::new(
+            context.clone(),
+            cluster_id.clone(),
+            uuid::Uuid::new_v4(),
+            cluster_id.clone(),
+            boot_version,
+            region,
+            &cluster,
+            &cloudflare,
+            nodes.clone(),
+            options,
+        ),
+        Kind::Scw => Kapsule::new(
+            context.clone(),
+            cluster_id.clone(),
+            uuid::Uuid::new_v4(),
+            cluster_id,
+            boot_version,
+            zone,
+            &cluster,
+            &cloudflare,
+            nodes.clone(),
+            options,
+        ),
+    }
+    .unwrap();
+
+    // Deploy
+    if let Err(err) = tx.create_kubernetes(&kubernetes) {
+        panic!("{:?}", err)
+    }
+    let _ = match tx.commit() {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    if test_infra_pause {
+        // Pause
+        if let Err(err) = tx.pause_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
+        }
+        match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // Resume
+        if let Err(err) = tx.create_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
+        }
+        let _ = match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+    }
+
+    if test_upgrade {
+        let kubernetes = EKS::new(
+            context,
+            generate_cluster_id(region).as_str(),
+            uuid::Uuid::new_v4(),
+            generate_cluster_id(region).as_str(),
+            upgrade_to_version.as_str(),
+            region,
+            &aws,
+            &cloudflare,
+            options,
+            nodes,
+        )
+        .unwrap();
+        if let Err(err) = tx.create_kubernetes(&kubernetes) {
+            panic!("{:?}", err)
+        }
+        let _ = match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+    }
+
+    // Destroy
+    if let Err(err) = tx.delete_kubernetes(&kubernetes) {
+        panic!("{:?}", err)
+    }
+    match tx.commit() {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
+
+    test_name.to_string()
 }

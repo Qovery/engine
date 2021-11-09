@@ -14,6 +14,7 @@ use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
+use qovery_engine::cloud_provider::kubernetes::Cluster;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use tracing::error;
@@ -22,7 +23,10 @@ pub const SCW_QOVERY_ORGANIZATION_ID: &str = "zcf8e78e6";
 pub const SCW_KUBE_TEST_CLUSTER_NAME: &str = "qovery-z093e29e2";
 pub const SCW_KUBE_TEST_CLUSTER_ID: &str = "z093e29e2";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
-pub const SCW_KUBERNETES_VERSION: &str = "1.18";
+pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
+pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 18;
+pub const SCW_KUBERNETES_VERSION: &str =
+    format!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION).as_str();
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
@@ -55,7 +59,7 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     )
 }
 
-pub fn cloud_provider_scaleway(context: &Context) -> Scaleway {
+pub fn cloud_provider_scaleway(context: &Context) -> Box<Cluster> {
     let secrets = FuncTestsSecrets::new();
 
     Scaleway::new(

@@ -1,183 +1,41 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets};
+use self::test_utilities::utilities::{
+    cluster_test, context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets,
+};
 use ::function_name::named;
 use tracing::{span, Level};
 
-use self::test_utilities::aws::eks_options;
+use self::test_utilities::aws::{eks_options, AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
+use qovery_engine::cloud_provider::Kind;
 use qovery_engine::transaction::TransactionResult;
 
 #[allow(dead_code)]
-fn create_upgrade_and_destroy_eks_cluster(
-    region: &str,
-    secrets: FuncTestsSecrets,
-    boot_version: &str,
-    upgrade_to_version: &str,
-    test_name: &str,
-) {
-    engine_run_test(|| {
-        init();
-
-        let span = span!(Level::INFO, "test", name = test_name);
-        let _enter = span.enter();
-
-        let context = context();
-        let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
-        let session = engine.session().unwrap();
-        let mut tx = session.transaction();
-
-        let aws = test_utilities::aws::cloud_provider_aws(&context);
-        let nodes = test_utilities::aws::aws_kubernetes_nodes();
-
-        let cloudflare = dns_provider_cloudflare(&context);
-
-        let kubernetes = EKS::new(
-            context.clone(),
-            generate_cluster_id(region).as_str(),
-            uuid::Uuid::new_v4(),
-            generate_cluster_id(region).as_str(),
-            boot_version,
-            region,
-            &aws,
-            &cloudflare,
-            eks_options(secrets.clone()),
-            nodes.clone(),
-        )
-        .unwrap();
-
-        // Deploy
-        if let Err(err) = tx.create_kubernetes(&kubernetes) {
-            panic!("{:?}", err)
-        }
-        let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        // Upgrade
-        let kubernetes = EKS::new(
-            context,
-            generate_cluster_id(region).as_str(),
-            uuid::Uuid::new_v4(),
-            generate_cluster_id(region).as_str(),
-            upgrade_to_version,
-            region,
-            &aws,
-            &cloudflare,
-            eks_options(secrets),
-            nodes,
-        )
-        .unwrap();
-        if let Err(err) = tx.create_kubernetes(&kubernetes) {
-            panic!("{:?}", err)
-        }
-        let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        // Destroy
-        if let Err(err) = tx.delete_kubernetes(&kubernetes) {
-            panic!("{:?}", err)
-        }
-        match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        test_name.to_string()
-    })
-}
-
 fn create_and_destroy_eks_cluster(
     region: &str,
     secrets: FuncTestsSecrets,
     test_infra_pause: bool,
+    test_infra_upgrade: bool,
+    major_boot_version: u8,
+    minor_boot_version: u8,
     vpc_network_mode: VpcQoveryNetworkMode,
     test_name: &str,
 ) {
     engine_run_test(|| {
-        init();
-
-        let span = span!(Level::INFO, "test", name = test_name);
-        let _enter = span.enter();
-
-        let context = context();
-
-        let engine = test_utilities::aws::docker_ecr_aws_engine(&context);
-        let session = engine.session().unwrap();
-        let mut tx = session.transaction();
-
-        let aws = test_utilities::aws::cloud_provider_aws(&context);
-        let nodes = test_utilities::aws::aws_kubernetes_nodes();
-        let mut eks_options = eks_options(secrets);
-        eks_options.vpc_qovery_network_mode = vpc_network_mode;
-
-        let cloudflare = dns_provider_cloudflare(&context);
-
-        let kubernetes = EKS::new(
-            context,
-            generate_cluster_id(region).as_str(),
-            uuid::Uuid::new_v4(),
-            generate_cluster_id(region).as_str(),
-            test_utilities::aws::AWS_KUBERNETES_VERSION,
+        cluster_test(
+            test_name,
+            Kind::Aws,
             region,
-            &aws,
-            &cloudflare,
-            eks_options,
-            nodes,
+            secrets,
+            test_infra_pause,
+            test_infra_upgrade,
+            major_boot_version,
+            minor_boot_version,
+            Option::from(vpc_network_mode),
         )
-        .unwrap();
-
-        // Deploy
-        if let Err(err) = tx.create_kubernetes(&kubernetes) {
-            panic!("{:?}", err)
-        }
-        let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        if test_infra_pause {
-            // Pause
-            if let Err(err) = tx.pause_kubernetes(&kubernetes) {
-                panic!("{:?}", err)
-            }
-            match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
-            };
-
-            // Resume
-            if let Err(err) = tx.create_kubernetes(&kubernetes) {
-                panic!("{:?}", err)
-            }
-            let _ = match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
-            };
-        }
-
-        // Destroy
-        if let Err(err) = tx.delete_kubernetes(&kubernetes) {
-            panic!("{:?}", err)
-        }
-        match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        test_name.to_string()
     })
 }
 
@@ -192,7 +50,16 @@ fn create_and_destroy_eks_cluster(
 fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(&region, secrets, false, WithoutNatGateways, function_name!());
+    create_and_destroy_eks_cluster(
+        &region,
+        secrets,
+        false,
+        false,
+        AWS_KUBERNETES_MAJOR_VERSION,
+        AWS_KUBERNETES_MINOR_VERSION,
+        WithoutNatGateways,
+        function_name!(),
+    );
 }
 
 #[cfg(feature = "test-aws-infra")]
@@ -201,7 +68,16 @@ fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
 fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(&region, secrets, false, WithNatGateways, function_name!());
+    create_and_destroy_eks_cluster(
+        &region,
+        secrets,
+        false,
+        false,
+        AWS_KUBERNETES_MAJOR_VERSION,
+        AWS_KUBERNETES_MINOR_VERSION,
+        WithNatGateways,
+        function_name!(),
+    );
 }
 
 #[cfg(feature = "test-aws-infra")]
@@ -210,7 +86,16 @@ fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
 fn create_and_destroy_eks_cluster_in_us_east_2() {
     let region = "us-east-2";
     let secrets = FuncTestsSecrets::new();
-    create_and_destroy_eks_cluster(&region, secrets, true, WithoutNatGateways, function_name!());
+    create_and_destroy_eks_cluster(
+        &region,
+        secrets,
+        false,
+        false,
+        AWS_KUBERNETES_MAJOR_VERSION,
+        AWS_KUBERNETES_MINOR_VERSION,
+        WithoutNatGateways,
+        function_name!(),
+    );
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
@@ -221,5 +106,15 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
 fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();
-    create_upgrade_and_destroy_eks_cluster(&region, secrets, "1.18", "1.19", function_name!());
+
+    create_and_destroy_eks_cluster(
+        &region,
+        secrets,
+        false,
+        true,
+        AWS_KUBERNETES_MAJOR_VERSION,
+        AWS_KUBERNETES_MINOR_VERSION,
+        WithoutNatGateways,
+        function_name!(),
+    );
 }

@@ -4,6 +4,7 @@ use tracing::error;
 
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode, EKS};
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::kubernetes::{Cluster, ProviderOptions};
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
@@ -19,7 +20,10 @@ use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "eu-west-3";
-pub const AWS_KUBERNETES_VERSION: &str = "1.18";
+pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
+pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 18;
+pub const AWS_KUBERNETES_VERSION: &str =
+    format!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION).as_str();
 pub const AWS_KUBE_TEST_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t2.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
@@ -59,7 +63,7 @@ pub fn aws_kubernetes_nodes() -> Vec<NodeGroups> {
         .expect("Problem while setup EKS nodes")]
 }
 
-pub fn cloud_provider_aws(context: &Context) -> AWS {
+pub fn cloud_provider_aws(context: &Context) -> Box<Cluster> {
     let secrets = FuncTestsSecrets::new();
     AWS::new(
         context.clone(),
@@ -77,8 +81,8 @@ pub fn cloud_provider_aws(context: &Context) -> AWS {
     )
 }
 
-pub fn eks_options(secrets: FuncTestsSecrets) -> Options {
-    Options {
+pub fn eks_options(secrets: FuncTestsSecrets) -> AwsOptions {
+    AwsOptions {
         eks_zone_a_subnet_blocks: vec!["10.0.0.0/20".to_string(), "10.0.16.0/20".to_string()],
         eks_zone_b_subnet_blocks: vec!["10.0.32.0/20".to_string(), "10.0.48.0/20".to_string()],
         eks_zone_c_subnet_blocks: vec!["10.0.64.0/20".to_string(), "10.0.80.0/20".to_string()],

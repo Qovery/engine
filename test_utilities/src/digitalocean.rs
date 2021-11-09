@@ -15,10 +15,14 @@ use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::kubernetes::Cluster;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 
 pub const DO_QOVERY_ORGANIZATION_ID: &str = "z3bc003d2";
-pub const DO_KUBERNETES_VERSION: &str = "1.19";
+pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
+pub const DO_KUBERNETES_MINOR_VERSION: u8 = 19;
+pub const DO_KUBERNETES_VERSION: &str =
+    format!("{}.{}", DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION).as_str();
 pub const DOCR_ID: &str = "registry-the-one-and-unique";
 pub const DO_KUBE_TEST_CLUSTER_ID: &str = "za80c56a0";
 pub const DO_KUBE_TEST_CLUSTER_NAME: &str = "qovery-za80c56a0";
@@ -87,7 +91,7 @@ pub fn do_kubernetes_nodes() -> Vec<NodeGroups> {
     ]
 }
 
-pub fn cloud_provider_digitalocean(context: &Context) -> DO {
+pub fn cloud_provider_digitalocean(context: &Context) -> Box<Cluster> {
     let secrets = FuncTestsSecrets::new();
     DO::new(
         context.clone(),
