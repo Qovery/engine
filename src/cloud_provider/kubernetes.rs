@@ -1486,8 +1486,8 @@ where
     let listeners = std::clone::Clone::clone(kubernetes.listeners());
 
     let progress_info = ProgressInfo::new(
-        ProgressScope::Environment {
-            id: kubernetes.context().execution_id().to_string(),
+        ProgressScope::Infrastructure {
+            execution_id: kubernetes.context().execution_id().to_string(),
         },
         Info,
         waiting_message.map(|message| message.into()),
