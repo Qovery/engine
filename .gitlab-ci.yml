@@ -516,7 +516,7 @@ release-image:
       - main
   when: manual
 
-2-deploy-engine-infra:
+2-qovery-infra-engine-deploy:
   stage: deploy
   retry: 0
   script:
@@ -528,7 +528,7 @@ release-image:
       - main
   when: manual
 
-3-deploy_all_customers_infra:
+3-client-infra-deploy:
   stage: deploy
   retry: 0
   script:
@@ -540,7 +540,7 @@ release-image:
       - main
   when: manual
 
-4-deploy_all_engines:
+4-qovery-env-engines:
   stage: deploy
   retry: 0
   script:

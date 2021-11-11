@@ -331,7 +331,7 @@ function deploy_engines_envs() { ## Release GA to prod
   prepare_engine
   tag=$(generate_image_tag)
   KUBECONFIG="$CI_KUBECONFIG_ENGINES_SCALEWAY"
-  helm upgrade --kubeconfig="$KUBECONFIG" --install --create-namespace --history-max 50 --wait --namespace qovery-env qovery-engine \
+  helm upgrade --kubeconfig="$KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
 environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
