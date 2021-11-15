@@ -8,10 +8,11 @@ use ::function_name::named;
 use tracing::{span, Level};
 
 use qovery_engine::cloud_provider::scaleway::application::Zone;
-use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
+use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOptions};
 use qovery_engine::transaction::TransactionResult;
 
 use self::test_utilities::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
+use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::Kind;
 use test_utilities::scaleway::SCW_KUBERNETES_VERSION;
 

@@ -5,7 +5,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
-    KubernetesUpgradeStatus,
+    KubernetesUpgradeStatus, ProviderOptions,
 };
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
@@ -64,6 +64,8 @@ pub struct KapsuleOptions {
     // Other
     pub tls_email_report: String,
 }
+
+impl ProviderOptions for KapsuleOptions {}
 
 impl KapsuleOptions {
     pub fn new(

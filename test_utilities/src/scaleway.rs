@@ -1,20 +1,19 @@
+use const_format::formatcp;
 use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
-use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOptions};
+use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::EngineError;
-use qovery_engine::models::{Context, Environment, EnvironmentAction};
+use qovery_engine::models::{Context, Environment};
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
-use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use qovery_engine::cloud_provider::kubernetes::Cluster;
+use crate::common::Cluster;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use tracing::error;
@@ -25,8 +24,8 @@ pub const SCW_KUBE_TEST_CLUSTER_ID: &str = "z093e29e2";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 18;
-pub const SCW_KUBERNETES_VERSION: &str =
-    format!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION).as_str();
+pub const SCW_KUBERNETES_VERSION: &'static str =
+    formatcp!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION);
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
@@ -59,76 +58,104 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     )
 }
 
-pub fn cloud_provider_scaleway(context: &Context) -> Box<Cluster> {
-    let secrets = FuncTestsSecrets::new();
+impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
+    fn docker_cr_engine(context: &Context) -> Engine {
+        // use Scaleway CR
+        let container_registry = Box::new(container_registry_scw(context));
 
-    Scaleway::new(
-        context.clone(),
-        SCW_KUBE_TEST_CLUSTER_ID,
-        SCW_QOVERY_ORGANIZATION_ID,
-        uuid::Uuid::new_v4(),
-        SCW_KUBE_TEST_CLUSTER_NAME,
-        secrets
-            .SCALEWAY_ACCESS_KEY
-            .expect("SCALEWAY_ACCESS_KEY is not set in secrets")
-            .as_str(),
-        secrets
-            .SCALEWAY_SECRET_KEY
-            .expect("SCALEWAY_SECRET_KEY is not set in secrets")
-            .as_str(),
-        secrets
-            .SCALEWAY_DEFAULT_PROJECT_ID
-            .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets")
-            .as_str(),
-        TerraformStateCredentials {
-            access_key_id: secrets
-                .TERRAFORM_AWS_ACCESS_KEY_ID
-                .expect("TERRAFORM_AWS_ACCESS_KEY_ID is not set in secrets"),
-            secret_access_key: secrets
-                .TERRAFORM_AWS_SECRET_ACCESS_KEY
-                .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set in secrets"),
-            region: "eu-west-3".to_string(),
-        },
-    )
-}
+        // use LocalDocker
+        let build_platform = Box::new(build_platform_local_docker(context));
 
-pub fn scw_kubernetes_cluster_options(secrets: FuncTestsSecrets) -> KapsuleOptions {
-    KapsuleOptions::new(
-        secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
-        secrets.QOVERY_GRPC_URL.expect("QOVERY_GRPC_URL is not set in secrets"),
-        secrets
-            .QOVERY_CLUSTER_SECRET_TOKEN
-            .expect("QOVERY_CLUSTER_SECRET_TOKEN is not set in secrets"),
-        secrets.QOVERY_NATS_URL.expect("QOVERY_NATS_URL is not set in secrets"),
-        secrets
-            .QOVERY_NATS_USERNAME
-            .expect("QOVERY_NATS_USERNAME is not set in secrets"),
-        secrets
-            .QOVERY_NATS_PASSWORD
-            .expect("QOVERY_NATS_PASSWORD is not set in secrets"),
-        secrets.QOVERY_SSH_USER.expect("QOVERY_SSH_USER is not set in secrets"),
-        "admin".to_string(),
-        "qovery".to_string(),
-        secrets
-            .QOVERY_AGENT_CONTROLLER_TOKEN
-            .expect("QOVERY_AGENT_CONTROLLER_TOKEN is not set in secrets"),
-        EngineLocation::ClientSide,
-        secrets
-            .QOVERY_ENGINE_CONTROLLER_TOKEN
-            .expect("QOVERY_ENGINE_CONTROLLER_TOKEN is not set in secrets"),
-        secrets
-            .SCALEWAY_DEFAULT_PROJECT_ID
-            .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
-        secrets
-            .SCALEWAY_ACCESS_KEY
-            .expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
-        secrets
-            .SCALEWAY_SECRET_KEY
-            .expect("SCALEWAY_SECRET_KEY is not set in secrets"),
-        secrets
-            .LETS_ENCRYPT_EMAIL_REPORT
-            .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
-    )
+        // use Scaleway
+        let cloud_provider = Box::new(Scaleway::cloud_provider(context));
+
+        let dns_provider = Box::new(dns_provider_cloudflare(context));
+
+        Engine::new(
+            context.clone(),
+            build_platform,
+            container_registry,
+            cloud_provider,
+            dns_provider,
+        )
+    }
+
+    fn cloud_provider(context: &Context) -> Scaleway {
+        let secrets = FuncTestsSecrets::new();
+        Scaleway::new(
+            context.clone(),
+            SCW_KUBE_TEST_CLUSTER_ID,
+            SCW_QOVERY_ORGANIZATION_ID,
+            uuid::Uuid::new_v4(),
+            SCW_KUBE_TEST_CLUSTER_NAME,
+            secrets
+                .SCALEWAY_ACCESS_KEY
+                .expect("SCALEWAY_ACCESS_KEY is not set in secrets")
+                .as_str(),
+            secrets
+                .SCALEWAY_SECRET_KEY
+                .expect("SCALEWAY_SECRET_KEY is not set in secrets")
+                .as_str(),
+            secrets
+                .SCALEWAY_DEFAULT_PROJECT_ID
+                .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets")
+                .as_str(),
+            TerraformStateCredentials {
+                access_key_id: secrets
+                    .TERRAFORM_AWS_ACCESS_KEY_ID
+                    .expect("TERRAFORM_AWS_ACCESS_KEY_ID is not set in secrets"),
+                secret_access_key: secrets
+                    .TERRAFORM_AWS_SECRET_ACCESS_KEY
+                    .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set in secrets"),
+                region: "eu-west-3".to_string(),
+            },
+        )
+    }
+
+    fn kubernetes_nodes() -> Vec<NodeGroups> {
+        // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
+        vec![NodeGroups::new("groupscw0".to_string(), 5, 10, "dev1-l".to_string())
+            .expect("Problem while setup SCW nodes")]
+    }
+
+    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> KapsuleOptions {
+        KapsuleOptions::new(
+            secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
+            secrets.QOVERY_GRPC_URL.expect("QOVERY_GRPC_URL is not set in secrets"),
+            secrets
+                .QOVERY_CLUSTER_SECRET_TOKEN
+                .expect("QOVERY_CLUSTER_SECRET_TOKEN is not set in secrets"),
+            secrets.QOVERY_NATS_URL.expect("QOVERY_NATS_URL is not set in secrets"),
+            secrets
+                .QOVERY_NATS_USERNAME
+                .expect("QOVERY_NATS_USERNAME is not set in secrets"),
+            secrets
+                .QOVERY_NATS_PASSWORD
+                .expect("QOVERY_NATS_PASSWORD is not set in secrets"),
+            secrets.QOVERY_SSH_USER.expect("QOVERY_SSH_USER is not set in secrets"),
+            "admin".to_string(),
+            "qovery".to_string(),
+            secrets
+                .QOVERY_AGENT_CONTROLLER_TOKEN
+                .expect("QOVERY_AGENT_CONTROLLER_TOKEN is not set in secrets"),
+            EngineLocation::ClientSide,
+            secrets
+                .QOVERY_ENGINE_CONTROLLER_TOKEN
+                .expect("QOVERY_ENGINE_CONTROLLER_TOKEN is not set in secrets"),
+            secrets
+                .SCALEWAY_DEFAULT_PROJECT_ID
+                .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
+            secrets
+                .SCALEWAY_ACCESS_KEY
+                .expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
+            secrets
+                .SCALEWAY_SECRET_KEY
+                .expect("SCALEWAY_SECRET_KEY is not set in secrets"),
+            secrets
+                .LETS_ENCRYPT_EMAIL_REPORT
+                .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
+        )
+    }
 }
 
 pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
@@ -149,107 +176,6 @@ pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
         BucketDeleteStrategy::Empty, // do not delete bucket due to deletion 24h delay
         false,
     )
-}
-
-pub fn scw_kubernetes_nodes() -> Vec<NodeGroups> {
-    // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-    vec![NodeGroups::new("groupscw0".to_string(), 5, 10, "dev1-l".to_string()).expect("Problem while setup SCW nodes")]
-}
-
-pub fn docker_scw_cr_engine(context: &Context) -> Engine {
-    // use Scaleway CR
-    let container_registry = Box::new(container_registry_scw(context));
-
-    // use LocalDocker
-    let build_platform = Box::new(build_platform_local_docker(context));
-
-    // use Scaleway
-    let cloud_provider = Box::new(cloud_provider_scaleway(context));
-
-    let dns_provider = Box::new(dns_provider_cloudflare(context));
-
-    Engine::new(
-        context.clone(),
-        build_platform,
-        container_registry,
-        cloud_provider,
-        dns_provider,
-    )
-}
-
-pub fn scw_kubernetes_kapsule<'a>(
-    context: &Context,
-    cloud_provider: &'a Scaleway,
-    dns_provider: &'a dyn DnsProvider,
-    nodes_groups: Vec<NodeGroups>,
-    zone: Zone,
-) -> Kapsule<'a> {
-    let secrets = FuncTestsSecrets::new();
-    Kapsule::<'a>::new(
-        context.clone(),
-        SCW_KUBE_TEST_CLUSTER_ID.to_string(),
-        uuid::Uuid::new_v4(),
-        SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
-        SCW_KUBERNETES_VERSION.to_string(),
-        zone,
-        cloud_provider,
-        dns_provider,
-        nodes_groups,
-        scw_kubernetes_cluster_options(secrets),
-    )
-    .unwrap()
-}
-
-pub fn deploy_environment(context: &Context, environment_action: EnvironmentAction, zone: Zone) -> TransactionResult {
-    let engine = docker_scw_cr_engine(context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = cloud_provider_scaleway(context);
-    let nodes = scw_kubernetes_nodes();
-    let dns_provider = dns_provider_cloudflare(context);
-    let kapsule = scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes, zone);
-
-    let _ = tx.deploy_environment_with_options(
-        &kapsule,
-        &environment_action,
-        DeploymentOption {
-            force_build: true,
-            force_push: true,
-        },
-    );
-
-    tx.commit()
-}
-
-pub fn delete_environment(context: &Context, environment_action: EnvironmentAction, zone: Zone) -> TransactionResult {
-    let engine = docker_scw_cr_engine(context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = cloud_provider_scaleway(context);
-    let nodes = scw_kubernetes_nodes();
-    let dns_provider = dns_provider_cloudflare(context);
-    let kapsule = scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes, zone);
-
-    let _ = tx.delete_environment(&kapsule, &environment_action);
-
-    tx.commit()
-}
-
-pub fn pause_environment(context: &Context, environment_action: EnvironmentAction, zone: Zone) -> TransactionResult {
-    let engine = docker_scw_cr_engine(context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = cloud_provider_scaleway(context);
-    let nodes = scw_kubernetes_nodes();
-    let dns_provider = dns_provider_cloudflare(context);
-    let kapsule = scw_kubernetes_kapsule(context, &cp, &dns_provider, nodes, zone);
-
-    let _ = tx.pause_environment(&kapsule, &environment_action);
-
-    tx.commit()
 }
 
 pub fn clean_environments(

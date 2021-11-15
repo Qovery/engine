@@ -18,7 +18,9 @@ use crate::cloud_provider::digitalocean::network::vpc::{
 use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
-use crate::cloud_provider::kubernetes::{send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::{
+    send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
+};
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::print_action;
@@ -77,6 +79,8 @@ pub struct DoksOptions {
     // Others
     pub tls_email_report: String,
 }
+
+impl ProviderOptions for DoksOptions {}
 
 pub struct DOKS<'a> {
     context: Context,

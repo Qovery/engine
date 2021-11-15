@@ -5,11 +5,12 @@ use self::test_utilities::utilities::{
     cluster_test, context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets,
 };
 use ::function_name::named;
+use qovery_engine::cloud_provider::aws::AWS;
 use tracing::{span, Level};
 
 use self::test_utilities::aws::{eks_options, AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
-use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
+use qovery_engine::cloud_provider::aws::kubernetes::{EKSOptions, VpcQoveryNetworkMode, EKS};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::transaction::TransactionResult;
 

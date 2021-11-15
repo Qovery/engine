@@ -18,7 +18,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
-    KubernetesNodesType, KubernetesUpgradeStatus,
+    KubernetesNodesType, KubernetesUpgradeStatus, ProviderOptions,
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -65,7 +65,7 @@ impl fmt::Display for VpcQoveryNetworkMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Options {
+pub struct EKSOptions {
     // AWS related
     pub eks_zone_a_subnet_blocks: Vec<String>,
     pub eks_zone_b_subnet_blocks: Vec<String>,
@@ -108,6 +108,8 @@ pub struct Options {
     pub tls_email_report: String,
 }
 
+impl ProviderOptions for EKSOptions {}
+
 pub struct EKS<'a> {
     context: Context,
     id: String,
@@ -120,7 +122,7 @@ pub struct EKS<'a> {
     s3: S3,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
-    options: Options,
+    options: EKSOptions,
     listeners: Listeners,
 }
 
@@ -134,7 +136,7 @@ impl<'a> EKS<'a> {
         region: &str,
         cloud_provider: &'a AWS,
         dns_provider: &'a dyn DnsProvider,
-        options: Options,
+        options: EKSOptions,
         nodes_groups: Vec<NodeGroups>,
     ) -> Result<Self, EngineError> {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());

@@ -7,11 +7,12 @@ use self::test_utilities::utilities::{
 use ::function_name::named;
 use tracing::{span, Level};
 
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::{DoksOptions, DOKS};
 use qovery_engine::transaction::TransactionResult;
 
 use self::test_utilities::digitalocean::{DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::Kind;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
 

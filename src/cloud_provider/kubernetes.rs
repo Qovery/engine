@@ -17,7 +17,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::utilities::VersionsNumber;
-use crate::cloud_provider::{service, CloudProvider, DeploymentTarget, TerraformStateCredentials};
+use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
@@ -33,18 +33,7 @@ use crate::models::{Action, Context, Listen, ListenersHelper, ProgressInfo, Prog
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 
-pub trait Cluster {
-    fn new(
-        &self,
-        context: Context,
-        id: &str,
-        organization_id: &str,
-        organization_long_id: uuid::Uuid,
-        name: &str,
-        provider_credentials: Vec<&str>,
-        terraform_state_credentials: TerraformStateCredentials,
-    ) -> Self;
-}
+pub trait ProviderOptions {}
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;

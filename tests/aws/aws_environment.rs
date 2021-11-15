@@ -2,8 +2,10 @@ extern crate test_utilities;
 
 use self::test_utilities::aws::{AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID};
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use self::test_utilities::common::Infrastructure;
 use self::test_utilities::utilities::{engine_run_test, generate_id, get_pods, is_pod_restarted_env, FuncTestsSecrets};
 use ::function_name::named;
+use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
@@ -98,13 +100,23 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ea = EnvironmentAction::Environment(environment);
         let ea_delete = EnvironmentAction::Environment(environment_for_delete);
 
-        match deploy_environment(&context, &ea) {
+        match Infrastructure::<AWS>::deploy_environment(
+            Kind::Aws,
+            &context,
+            &ea,
+            Option::from(secrets.AWS_DEFAULT_REGION.unwrap().as_str()),
+        ) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_delete, &ea_delete) {
+        match Infrastructure::<AWS>::delete_environment(
+            Kind::AWS,
+            &context_for_delete,
+            &ea_delete,
+            Option::from(secrets.AWS_DEFAULT_REGION.unwrap().as_str()),
+        ) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),

@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
+use tracing::{span, Level};
 
 use passwords::PasswordGenerator;
 use rand::distributions::Alphanumeric;
@@ -28,6 +29,7 @@ use crate::scaleway::{
     SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
     SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
 };
+use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_KUBE_TEST_CLUSTER_ID, SCW_KUBE_TEST_CLUSTER_NAME};
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
@@ -43,28 +45,28 @@ use qovery_engine::models::{
 };
 use serde::{Deserialize, Serialize};
 extern crate time;
-use crate::aws::{
-    aws_kubernetes_nodes, cloud_provider_aws, docker_ecr_aws_engine, eks_options, AWS_KUBERNETES_VERSION,
-};
 use crate::aws::{delete_environment as aws_delete, deploy_environment as aws_deploy, AWS_KUBE_TEST_CLUSTER_ID};
+use crate::aws::{AWS_KUBERNETES_VERSION, AWS_KUBE_TEST_CLUSTER_ID};
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::digitalocean::{
-    cloud_provider_digitalocean, do_kubernetes_cluster_options, do_kubernetes_nodes, docker_cr_do_engine,
-    DO_KUBERNETES_VERSION,
-};
+use crate::common::Cluster;
 use crate::digitalocean::{
     delete_environment as do_delete, deploy_environment as do_deploy, DO_KUBE_TEST_CLUSTER_ID,
     DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
     DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
 };
+use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_KUBE_TEST_CLUSTER_ID, DO_KUBE_TEST_CLUSTER_NAME};
 use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
+use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::cloud_provider::kubernetes::{Cluster, Kubernetes};
+use qovery_engine::cloud_provider::digitalocean::DO;
+use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
+use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, SVCItem, PVC, SVC};
+use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::object_storage::spaces::Spaces;
 use qovery_engine::object_storage::ObjectStorage;
@@ -1293,6 +1295,133 @@ pub fn test_db(
     return test_name.to_string();
 }
 
+pub fn get_environment_test_kubernetes<'a>(
+    provider_kind: Kind,
+    context: &Context,
+    localisation: &str,
+    dns_provider: &'a dyn DnsProvider,
+) -> Box<dyn Kubernetes + 'a> {
+    let secrets = FuncTestsSecrets::new();
+    let k: Box<dyn Kubernetes>;
+    match provider_kind {
+        Kind::Aws => {
+            k = Box::new(
+                EKS::new(
+                    context.clone(),
+                    AWS_KUBE_TEST_CLUSTER_ID,
+                    uuid::Uuid::new_v4(),
+                    AWS_KUBE_TEST_CLUSTER_ID,
+                    AWS_KUBERNETES_VERSION,
+                    localisation,
+                    &AWS::cloud_provider(context),
+                    dns_provider,
+                    AWS::kubernetes_cluster_options(secrets, None),
+                    AWS::kubernetes_nodes(),
+                )
+                .unwrap(),
+            );
+        }
+        Kind::Do => {
+            k = Box::new(
+                DOKS::new(
+                    context.clone(),
+                    DO_KUBE_TEST_CLUSTER_ID.to_string(),
+                    uuid::Uuid::new_v4(),
+                    DO_KUBE_TEST_CLUSTER_NAME.to_string(),
+                    DO_KUBERNETES_VERSION.to_string(),
+                    Region::from_str(localisation).unwrap(),
+                    &DO::cloud_provider(context),
+                    dns_provider,
+                    DO::kubernetes_nodes(),
+                    DO::kubernetes_cluster_options(secrets, Option::from(DO_KUBE_TEST_CLUSTER_ID.to_string())),
+                )
+                .unwrap(),
+            );
+        }
+        Kind::Scw => {
+            k = Box::new(
+                Kapsule::new(
+                    context.clone(),
+                    SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+                    uuid::Uuid::new_v4(),
+                    SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
+                    SCW_KUBERNETES_VERSION.to_string(),
+                    Zone::from_str(localisation).unwrap(),
+                    &Scaleway::cloud_provider(context),
+                    dns_provider,
+                    Scaleway::kubernetes_nodes(),
+                    Scaleway::kubernetes_cluster_options(secrets, None),
+                )
+                .unwrap(),
+            );
+        }
+    }
+}
+
+pub fn get_cluster_test_kubernetes<'a>(
+    provider_kind: Kind,
+    secrets: FuncTestsSecrets,
+    context: &Context,
+    cluster_id: String,
+    cluster_name: String,
+    boot_version: String,
+    localisation: &str,
+    dns_provider: &'a dyn DnsProvider,
+    vpc_network_mode: Option<VpcQoveryNetworkMode>,
+) -> Box<dyn Kubernetes + 'a> {
+    match provider_kind {
+        Kind::Aws => {
+            let mut options = AWS::kubernetes_cluster_options(secrets, None);
+            options.vpc_qovery_network_mode = vpc_network_mode.unwrap();
+            Box::new(
+                EKS::new(
+                    context.clone(),
+                    cluster_id.as_str(),
+                    uuid::Uuid::new_v4(),
+                    cluster_name.as_str(),
+                    boot_version.as_str(),
+                    localisation.clone(),
+                    &AWS::cloud_provider(context),
+                    dns_provider,
+                    options,
+                    AWS::kubernetes_nodes(),
+                )
+                .unwrap(),
+            )
+        }
+        Kind::Do => Box::new(
+            DOKS::new(
+                context.clone(),
+                cluster_id.clone(),
+                uuid::Uuid::new_v4(),
+                cluster_name.clone(),
+                boot_version,
+                Region::from_str(localisation.clone()).expect("Unknown region set for DOKS"),
+                &DO::cloud_provider(context),
+                dns_provider,
+                DO::kubernetes_nodes(),
+                DO::kubernetes_cluster_options(secrets, Option::from(cluster_name)),
+            )
+            .unwrap(),
+        ),
+        Kind::Scw => Box::new(
+            Kapsule::new(
+                context.clone(),
+                cluster_id.clone(),
+                uuid::Uuid::new_v4(),
+                cluster_name.clone(),
+                boot_version,
+                Zone::from_str(localisation.clone()).expect("Unknown zone set for Kapsule"),
+                &Scaleway::cloud_provider(context),
+                dns_provider,
+                Scaleway::kubernetes_nodes(),
+                Scaleway::kubernetes_cluster_options(secrets, None),
+            )
+            .unwrap(),
+        ),
+    }
+}
+
 pub fn cluster_test(
     test_name: &str,
     provider_kind: Kind,
@@ -1310,79 +1439,33 @@ pub fn cluster_test(
     let _enter = span.enter();
 
     let context = context();
-
-    let (engine, cluster, nodes, mut options) = match provider_kind {
-        Kind::Aws => (
-            docker_ecr_aws_engine(&context),
-            cloud_provider_aws(&context),
-            aws_kubernetes_nodes(),
-            eks_options(secrets),
-        ),
-        Kind::Do => (
-            docker_cr_do_engine(&context),
-            cloud_provider_digitalocean(&context),
-            do_kubernetes_nodes(),
-            do_kubernetes_cluster_options(secrets, cluster_id),
-        ),
-        Kind::Scw => (
-            docker_scw_cr_engine(&context),
-            cloud_provider_scaleway(&context),
-            scw_kubernetes_nodes(),
-            scw_kubernetes_cluster_options(secrets),
-        ),
-    };
+    let cluster_id = generate_cluster_id(localisation.clone());
+    let cluster_name = generate_cluster_id(localisation.clone());
     let boot_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
     let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version.clone() + 1);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
+    let engine;
+    match provider_kind {
+        Kind::Aws => engine = AWS::docker_cr_engine(&context),
+        Kind::Do => engine = DO::docker_cr_engine(&context),
+        Kind::Scw => engine = Scaleway::docker_cr_engine(&context),
+    };
+    let dns_provider = dns_provider_cloudflare(&context);
+    let mut tx = engine.session().unwrap().transaction();
 
-    if provider_kind == Kind::Aws {
-        options.vpc_qovery_network_mode = vpc_network_mode;
-    }
-    let cloudflare = dns_provider_cloudflare(&context);
-
-    let kubernetes: Kubernetes = match provider_kind {
-        Kind::Aws => EKS::new(
-            context.clone(),
-            generate_cluster_id(region).as_str(),
-            uuid::Uuid::new_v4(),
-            generate_cluster_id(region).as_str(),
-            boot_version.as_str(),
-            region,
-            &cluster,
-            &cloudflare,
-            options,
-            nodes.clone(),
-        ),
-        Kind::Do => DOKS::new(
-            context.clone(),
-            cluster_id.clone(),
-            uuid::Uuid::new_v4(),
-            cluster_id.clone(),
-            boot_version,
-            region,
-            &cluster,
-            &cloudflare,
-            nodes.clone(),
-            options,
-        ),
-        Kind::Scw => Kapsule::new(
-            context.clone(),
-            cluster_id.clone(),
-            uuid::Uuid::new_v4(),
-            cluster_id,
-            boot_version,
-            zone,
-            &cluster,
-            &cloudflare,
-            nodes.clone(),
-            options,
-        ),
-    }
-    .unwrap();
+    let kubernetes = get_cluster_test_kubernetes(
+        provider_kind.clone(),
+        secrets.clone(),
+        &context,
+        cluster_id.clone(),
+        cluster_name.clone(),
+        boot_version.clone(),
+        localisation.clone(),
+        &dns_provider,
+        vpc_network_mode.clone(),
+    );
 
     // Deploy
-    if let Err(err) = tx.create_kubernetes(&kubernetes) {
+    if let Err(err) = tx.create_kubernetes(kubernetes.as_ref()) {
         panic!("{:?}", err)
     }
     let _ = match tx.commit() {
@@ -1393,7 +1476,7 @@ pub fn cluster_test(
 
     if test_infra_pause {
         // Pause
-        if let Err(err) = tx.pause_kubernetes(&kubernetes) {
+        if let Err(err) = tx.pause_kubernetes(kubernetes.as_ref()) {
             panic!("{:?}", err)
         }
         match tx.commit() {
@@ -1413,39 +1496,49 @@ pub fn cluster_test(
         };
     }
 
-    if test_upgrade {
-        let kubernetes = EKS::new(
-            context,
-            generate_cluster_id(region).as_str(),
-            uuid::Uuid::new_v4(),
-            generate_cluster_id(region).as_str(),
-            upgrade_to_version.as_str(),
-            region,
-            &aws,
-            &cloudflare,
-            options,
-            nodes,
-        )
-        .unwrap();
-        if let Err(err) = tx.create_kubernetes(&kubernetes) {
-            panic!("{:?}", err)
+    match test_infra_upgrade {
+        true => {
+            let upgraded_kubernetes = get_cluster_test_kubernetes(
+                provider_kind.clone(),
+                secrets.clone(),
+                &context,
+                cluster_id.clone(),
+                cluster_name.clone(),
+                upgrade_to_version.clone(),
+                localisation.clone(),
+                &dns_provider,
+                vpc_network_mode,
+            );
+            if let Err(err) = tx.create_kubernetes(upgraded_kubernetes.as_ref()) {
+                panic!("{:?}", err)
+            }
+            let _ = match tx.commit() {
+                TransactionResult::Ok => assert!(true),
+                TransactionResult::Rollback(_) => assert!(false),
+                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            };
+            // Destroy
+            if let Err(err) = tx.delete_kubernetes(upgraded_kubernetes.as_ref()) {
+                panic!("{:?}", err)
+            }
+            match tx.commit() {
+                TransactionResult::Ok => assert!(true),
+                TransactionResult::Rollback(_) => assert!(false),
+                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            };
         }
-        let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        false => {
+            // Destroy
+            if let Err(err) = tx.delete_kubernetes(kubernetes.as_ref()) {
+                panic!("{:?}", err)
+            }
+            match tx.commit() {
+                TransactionResult::Ok => assert!(true),
+                TransactionResult::Rollback(_) => assert!(false),
+                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            };
+        }
     }
-
-    // Destroy
-    if let Err(err) = tx.delete_kubernetes(&kubernetes) {
-        panic!("{:?}", err)
-    }
-    match tx.commit() {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
 
     test_name.to_string()
 }

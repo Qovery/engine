@@ -5,15 +5,115 @@ use chrono::Utc;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::models::{
-    Action, Application, Context, Database, DatabaseKind, Environment, GitCredentials, Route, Router, Storage,
-    StorageType,
+    Action, Application, Context, Database, DatabaseKind, Environment, EnvironmentAction, GitCredentials, Route,
+    Router, Storage, StorageType,
 };
 
+use crate::cloudflare::dns_provider_cloudflare;
+use crate::utilities::{generate_id, generate_password, get_environment_test_kubernetes, FuncTestsSecrets};
 use crate::utilities::{generate_id, generate_password, get_svc_name};
 use base64;
+use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::cloud_provider::Kind;
+use qovery_engine::engine::Engine;
 use qovery_engine::models::DatabaseMode::CONTAINER;
+use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use std::collections::BTreeMap;
+
+pub trait Cluster<T, U> {
+    fn docker_cr_engine(context: &Context) -> Engine;
+    fn cloud_provider(context: &Context) -> T;
+    fn kubernetes_nodes() -> Vec<NodeGroups>;
+    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_id: Option<String>) -> U;
+}
+
+pub trait Infrastructure<T: Cluster<U, V>, U, V> {
+    fn deploy_environment(
+        &self,
+        provider_kind: Kind,
+        context: &Context,
+        environment_action: &EnvironmentAction,
+        localisation: Option<&str>,
+    ) -> TransactionResult;
+    fn pause_environment(
+        &self,
+        provider_kind: Kind,
+        context: &Context,
+        environment_action: &EnvironmentAction,
+        localisation: Option<&str>,
+    ) -> TransactionResult;
+    fn delete_environment(
+        &self,
+        provider_kind: Kind,
+        context: &Context,
+        environment_action: &EnvironmentAction,
+        localisation: Option<&str>,
+    ) -> TransactionResult;
+}
+
+impl<T: Cluster<U, V>, U, V> dyn Infrastructure<T, U, V> {
+    fn deploy_environment(
+        provider_kind: Kind,
+        context: &Context,
+        environment_action: EnvironmentAction,
+        localisation: Option<&str>,
+    ) -> TransactionResult {
+        let engine = T::docker_cr_engine(context);
+        let session = engine.session().unwrap();
+        let mut tx = session.transaction();
+
+        let dns_provider = dns_provider_cloudflare(context);
+        let k = get_environment_test_kubernetes(provider_kind, context, localisation.unwrap(), &dns_provider).as_ref();
+
+        let _ = tx.deploy_environment_with_options(
+            k,
+            &environment_action,
+            DeploymentOption {
+                force_build: true,
+                force_push: true,
+            },
+        );
+
+        tx.commit()
+    }
+
+    fn pause_environment(
+        provider_kind: Kind,
+        context: &Context,
+        environment_action: EnvironmentAction,
+        localisation: Option<&str>,
+    ) -> TransactionResult {
+        let engine = T::docker_cr_engine(context);
+        let session = engine.session().unwrap();
+        let mut tx = session.transaction();
+
+        let dns_provider = dns_provider_cloudflare(context);
+        let k = get_environment_test_kubernetes(provider_kind, context, localisation.unwrap(), &dns_provider).as_ref();
+
+        let _ = tx.pause_environment(k, &environment_action);
+
+        tx.commit()
+    }
+
+    fn delete_environment(
+        provider_kind: Kind,
+        context: &Context,
+        environment_action: EnvironmentAction,
+        localisation: Option<&str>,
+    ) -> TransactionResult {
+        let engine = T::docker_cr_engine(context);
+        let session = engine.session().unwrap();
+        let mut tx = session.transaction();
+
+        let dns_provider = dns_provider_cloudflare(context);
+        let k = get_environment_test_kubernetes(provider_kind, context, localisation.unwrap(), &dns_provider).as_ref();
+
+        let _ = tx.delete_environment(k, &environment_action);
+
+        tx.commit()
+    }
+}
 
 pub fn execution_id() -> String {
     Utc::now()
