@@ -80,6 +80,14 @@ variable "instance_class" {
   type = string
 }
 
+# Network
+
+variable "publicly_accessible" {
+  description = "Instance publicly accessible"
+  default = {{ publicly_accessible }}
+  type = bool
+}
+
 # Upgrades
 
 variable "auto_minor_version_upgrade" {

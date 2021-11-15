@@ -32,12 +32,12 @@ image:
 ## String to partially override mysql.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: {{ sanitized_name }}
+nameOverride: '{{ sanitized_name }}'
 
 ## String to fully override mysql.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: {{ sanitized_name }}
+fullnameOverride: '{{ sanitized_name }}'
 
 ## Cluster domain
 ##
@@ -47,7 +47,7 @@ commonLabels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: {{ sanitized_name }}
+  databaseName: '{{ sanitized_name }}'
 
 ## Init containers parameters:
 ## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
@@ -111,7 +111,7 @@ db:
   ## Database to create
   ## ref: https://github.com/bitnami/bitnami-docker-mysql#creating-a-database-on-first-run
   ##
-  name: {{ sanitized_name }}
+  name: '{{ sanitized_name }}'
   ## Option to force users to specify a password. That is required for 'helm upgrade' to work properly.
   ## If it is not force, a random password will be generated.
   ##
@@ -311,14 +311,14 @@ master:
     ##   GKE, AWS & OpenStack)
     ##
     # storageClass: "-"
-    storageClass: "aws-ebs-gp2-0"
+    storageClass: {{ database_disk_type }}
     ## PVC annotations
     ##
     annotations:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       databaseId: {{ id }}
-      databaseName: {{ sanitized_name }}
+      databaseName: '{{ sanitized_name }}'
 
     ## Persistent Volume Access Mode
     ##
@@ -500,7 +500,7 @@ slave:
 service:
   ## MySQL Service type
   ##
-  type: LoadBalancer
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
 
   ## MySQL Service port
   ##
@@ -517,10 +517,15 @@ service:
   ## set the LoadBalancer service type to internal only.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
   ##
+  {% if publicly_accessible -%}
   annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/do-loadbalancer-name: "{{ id }}"
+    service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
+    service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
+    service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
+  {% endif %}
 
   ## loadBalancerIP for the PrestaShop Service (optional, cloud specific)
   ## ref: http://kubernetes.io/docs/user-guide/services/#type-loadbalancer

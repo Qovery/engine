@@ -108,7 +108,7 @@ variable "database_name" {
 
 variable "publicly_accessible" {
   description = "Instance publicly accessible"
-  default = true
+  default = {{ publicly_accessible }}
   type = bool
 }
 

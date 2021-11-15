@@ -11,7 +11,8 @@ use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::Context;
+use qovery_engine::models::{Context, EnvironmentAction};
+use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
@@ -200,4 +201,55 @@ pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
         cloud_provider,
         dns_provider,
     )
+}
+
+pub fn deploy_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
+    let engine = docker_ecr_aws_engine(context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = cloud_provider_aws(context);
+    let nodes = aws_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(context);
+    let eks = aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
+
+    let _ = tx.deploy_environment_with_options(
+        &eks,
+        &environment_action,
+        DeploymentOption {
+            force_build: true,
+            force_push: true,
+        },
+    );
+
+    tx.commit()
+}
+
+pub fn delete_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
+    let engine = docker_ecr_aws_engine(context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = cloud_provider_aws(context);
+    let nodes = aws_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(context);
+    let eks = aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
+
+    let _ = tx.delete_environment(&eks, &environment_action);
+
+    tx.commit()
+}
+
+pub fn pause_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
+    let engine = docker_ecr_aws_engine(context);
+    let session = engine.session().unwrap();
+    let mut tx = session.transaction();
+
+    let cp = cloud_provider_aws(context);
+    let nodes = aws_kubernetes_nodes();
+    let dns_provider = dns_provider_cloudflare(context);
+    let eks = aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
+    let _ = tx.pause_environment(&eks, &environment_action);
+
+    tx.commit()
 }

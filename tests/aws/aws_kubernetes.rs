@@ -216,7 +216,8 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
 // only enable this test manually when we want to perform and validate upgrade process
 #[allow(dead_code)]
 #[named]
-//#[test]
+#[test]
+#[ignore]
 fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3";
     let secrets = FuncTestsSecrets::new();

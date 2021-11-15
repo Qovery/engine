@@ -35,11 +35,11 @@ image:
 
 ## String to partially override postgresql.fullname template (will maintain the release name)
 ##
-nameOverride: {{ sanitized_name }}
+nameOverride: '{{ sanitized_name }}'
 
 ## String to fully override postgresql.fullname template
 ##
-fullnameOverride: {{ sanitized_name }}
+fullnameOverride: '{{ sanitized_name }}'
 
 ##
 ## Init containers parameters:
@@ -92,7 +92,7 @@ securityContext:
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
 serviceAccount:
   enabled: false
-  ## sanitized_name of an already existing service account. Setting this value disables the automatic service account creation.
+  ## Name of an already existing service account. Setting this value disables the automatic service account creation.
   # name:
 
 ## Pod Security Policy
@@ -141,7 +141,7 @@ postgresqlPassword: '{{ database_password }}'
 ## Create a database
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-on-first-run
 ##
-postgresqlDatabase: {{ database_db_name }}
+postgresqlDatabase: '{{ database_db_name }}'
 
 ## PostgreSQL data dir
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md
@@ -248,7 +248,7 @@ ldap:
 ## PostgreSQL service configuration
 service:
   ## PosgresSQL service type
-  type: LoadBalancer
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
   port: 5432
 
@@ -259,11 +259,15 @@ service:
 
   ## Provide any additional annotations which may be required. Evaluated as a template.
   ##
+  {% if publicly_accessible -%}
   annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/do-loadbalancer-name: "{{ id }}"
+    service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
+    service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
+    service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
-
+  {% endif %}
   ## Set the LoadBalancer service type to internal only.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
   ##
@@ -318,7 +322,7 @@ persistence:
   ##
   subPath: ""
 
-  storageClass: "aws-ebs-gp2-0"
+  storageClass: {{ database_disk_type }}
   accessModes:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
@@ -326,7 +330,7 @@ persistence:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: {{ sanitized_name }}
+    databaseName: '{{ sanitized_name }}'
 
 ## updateStrategy for PostgreSQL StatefulSet and its slaves StatefulSets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
@@ -441,7 +445,7 @@ slave:
 ##
 resources:
   requests:
-    memory: "{{ database_ram_size_in_mib }}Mi"
+    memory: "{{ database_ram_size_in_mib }}Mi" # TODO customizable?
     cpu: "{{ database_total_cpus }}"
 
 ## Add annotations to all the deployed resources

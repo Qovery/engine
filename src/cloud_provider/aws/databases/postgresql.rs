@@ -133,6 +133,10 @@ impl Service for PostgreSQL {
         1
     }
 
+    fn publicly_accessible(&self) -> bool {
+        self.options.publicly_accessible
+    }
+
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let kubernetes = target.kubernetes;
         let environment = target.environment;
@@ -161,8 +165,10 @@ impl Service for PostgreSQL {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn.as_str());
-
+        context.insert(
+            "fqdn",
+            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
+        );
         context.insert("database_name", self.sanitized_name().as_str());
         context.insert("database_db_name", self.name());
         context.insert("database_login", self.options.login.as_str());
@@ -182,6 +188,7 @@ impl Service for PostgreSQL {
         context.insert("final_snapshot_name", &aws_final_snapshot_name(self.id()));
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
 
+        context.insert("publicly_accessible", &self.options.publicly_accessible);
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert(
                 "resource_expiration_in_seconds",

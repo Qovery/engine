@@ -35,11 +35,11 @@ image:
 
 ## String to partially override postgresql.fullname template (will maintain the release name)
 ##
-nameOverride: '{{ sanitized_name }}'
+nameOverride: {{ sanitized_name }}
 
 ## String to fully override postgresql.fullname template
 ##
-fullnameOverride: '{{ sanitized_name }}'
+fullnameOverride: {{ sanitized_name }}
 
 ##
 ## Init containers parameters:
@@ -141,7 +141,7 @@ postgresqlPassword: '{{ database_password }}'
 ## Create a database
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-database-on-first-run
 ##
-postgresqlDatabase: '{{ database_db_name }}'
+postgresqlDatabase: {{ database_db_name }}
 
 ## PostgreSQL data dir
 ## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md
@@ -248,7 +248,7 @@ ldap:
 ## PostgreSQL service configuration
 service:
   ## PosgresSQL service type
-  type: LoadBalancer
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
   port: 5432
 
@@ -259,15 +259,12 @@ service:
 
   ## Provide any additional annotations which may be required. Evaluated as a template.
   ##
+  {% if publicly_accessible -%}
   annotations:
-    service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
-    service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
-    service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
+  {% endif %}
 
   ## Set the LoadBalancer service type to internal only.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
@@ -323,7 +320,7 @@ persistence:
   ##
   subPath: ""
 
-  storageClass: {{ database_disk_type }}
+  storageClass: "aws-ebs-gp2-0"
   accessModes:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
@@ -331,7 +328,7 @@ persistence:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: '{{ sanitized_name }}'
+    databaseName: {{ sanitized_name }}
 
 ## updateStrategy for PostgreSQL StatefulSet and its slaves StatefulSets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
@@ -446,7 +443,7 @@ slave:
 ##
 resources:
   requests:
-    memory: "{{ database_ram_size_in_mib }}Mi" # TODO customizable?
+    memory: "{{ database_ram_size_in_mib }}Mi"
     cpu: "{{ database_total_cpus }}"
 
 ## Add annotations to all the deployed resources

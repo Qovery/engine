@@ -10,7 +10,7 @@ use crate::cloud_provider::digitalocean::models::svc::DoLoadBalancer;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
-    KubernetesPod, KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent,
+    KubernetesPod, KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent, PVC, SVC,
 };
 use crate::cmd::utilities::exec_with_envs_and_output;
 use crate::constants::KUBECONFIG;
@@ -1033,6 +1033,28 @@ where
                 error!("{:?}", err)
             }
         },
+    )
+}
+
+pub fn kubectl_get_pvc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> Result<PVC, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, PVC>(
+        vec!["get", "pvc", "-o", "json", "-n", namespace],
+        kubernetes_config,
+        envs,
+    )
+}
+
+pub fn kubectl_get_svc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> Result<SVC, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, SVC>(
+        vec!["get", "svc", "-o", "json", "-n", namespace],
+        kubernetes_config,
+        envs,
     )
 }
 

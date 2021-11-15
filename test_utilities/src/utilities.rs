@@ -8,6 +8,7 @@ use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
+use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
@@ -19,10 +20,14 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
-use tracing::{error, info, warn};
+use tracing::{error, info, span, warn, Level};
 use tracing_subscriber;
 
-use crate::scaleway::SCW_KUBE_TEST_CLUSTER_ID;
+use crate::scaleway::{
+    delete_environment as scw_delete, deploy_environment as scw_deploy, SCW_KUBE_TEST_CLUSTER_ID,
+    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+    SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
+};
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
@@ -33,14 +38,25 @@ use qovery_engine::constants::{
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
-use qovery_engine::models::{Context, Environment, Features, Metadata};
+use qovery_engine::models::{
+    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Features, Metadata,
+};
 use serde::{Deserialize, Serialize};
 extern crate time;
+use crate::aws::{delete_environment as aws_delete, deploy_environment as aws_deploy, AWS_KUBE_TEST_CLUSTER_ID};
+use crate::digitalocean::{
+    delete_environment as do_delete, deploy_environment as do_deploy, DO_KUBE_TEST_CLUSTER_ID,
+    DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
+    DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
+};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
-use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
+use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
+use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, SVCItem, PVC, SVC};
+use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::object_storage::spaces::Spaces;
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
+use qovery_engine::transaction::TransactionResult;
 use time::Instant;
 
 pub fn context() -> Context {
@@ -832,4 +848,434 @@ pub fn generate_cluster_id(region: &str) -> String {
         }
         _ => generate_id(),
     }
+}
+
+pub fn get_pvc(
+    provider_kind: Kind,
+    kube_cluster_id: &str,
+    environment_check: Environment,
+    secrets: FuncTestsSecrets,
+) -> Result<PVC, SimpleError> {
+    let namespace_name = format!(
+        "{}-{}",
+        &environment_check.project_id.clone(),
+        &environment_check.id.clone(),
+    );
+
+    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+
+    match kubernetes_config {
+        Ok(path) => {
+            match kubectl_get_pvc(
+                path.as_str(),
+                namespace_name.clone().as_str(),
+                get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+            ) {
+                Ok(pvc) => Ok(pvc),
+                Err(e) => Err(e),
+            }
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub fn get_svc(
+    provider_kind: Kind,
+    kube_cluster_id: &str,
+    environment_check: Environment,
+    secrets: FuncTestsSecrets,
+) -> Result<SVC, SimpleError> {
+    let namespace_name = format!(
+        "{}-{}",
+        &environment_check.project_id.clone(),
+        &environment_check.id.clone(),
+    );
+
+    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+
+    match kubernetes_config {
+        Ok(path) => {
+            match kubectl_get_svc(
+                path.as_str(),
+                namespace_name.clone().as_str(),
+                get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+            ) {
+                Ok(pvc) => Ok(pvc),
+                Err(e) => Err(e),
+            }
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub fn db_fqnd(db: Database) -> String {
+    match db.publicly_accessible {
+        true => db.fqdn,
+        false => match db.mode == MANAGED {
+            true => format!("{}-dns", db.id),
+            false => match db.kind {
+                DatabaseKind::Postgresql => "postgresqlpostgres",
+                DatabaseKind::Mysql => "mysqlmysqldatabase",
+                DatabaseKind::Mongodb => "mongodbmymongodb",
+                DatabaseKind::Redis => "redismyredis-master",
+            }
+            .to_string(),
+        },
+    }
+}
+
+struct DBInfos {
+    db_port: u16,
+    db_name: String,
+    app_commit: String,
+    app_env_vars: BTreeMap<String, String>,
+}
+
+fn db_infos(
+    db_kind: DatabaseKind,
+    database_mode: DatabaseMode,
+    database_username: String,
+    database_password: String,
+    db_fqdn: String,
+) -> DBInfos {
+    match db_kind {
+        DatabaseKind::Mongodb => {
+            let database_port = 27017;
+            let database_db_name = "my-mongodb".to_string();
+            let database_uri = format!(
+                "mongodb://{}:{}@{}:{}/{}",
+                database_username,
+                database_password,
+                db_fqdn.clone(),
+                database_port,
+                database_db_name.clone()
+            );
+            DBInfos {
+                db_port: database_port.clone(),
+                db_name: database_db_name.to_string(),
+                app_commit: "3fdc7e784c1d98b80446be7ff25e35370306d9a8".to_string(),
+                app_env_vars: btreemap! {
+                    "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == MANAGED).to_string()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(db_fqdn.clone()),
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port.to_string()),
+                    "MONGODB_DBNAME".to_string() => base64::encode(database_db_name.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                },
+            }
+        }
+        DatabaseKind::Mysql => {
+            let database_port = 3306;
+            let database_db_name = "mysqldatabase".to_string();
+            DBInfos {
+                db_port: database_port.clone(),
+                db_name: database_db_name.to_string(),
+                app_commit: "fc8a87b39cdee84bb789893fb823e3e62a1999c0".to_string(),
+                app_env_vars: btreemap! {
+                    "MYSQL_HOST".to_string() => base64::encode(db_fqdn.clone()),
+                    "MYSQL_PORT".to_string() => base64::encode(database_port.to_string()),
+                    "MYSQL_DBNAME".to_string()   => base64::encode(database_db_name.clone()),
+                    "MYSQL_USERNAME".to_string() => base64::encode(database_username.clone()),
+                    "MYSQL_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                },
+            }
+        }
+        DatabaseKind::Postgresql => {
+            let database_port = 5432;
+            let database_db_name = "postgres".to_string();
+            DBInfos {
+                db_port: database_port.clone(),
+                db_name: database_db_name.to_string(),
+                app_commit: "c3eda167df49fa9757f281d6f3655ba46287c61d".to_string(),
+                app_env_vars: btreemap! {
+                     "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
+                     "PG_HOST".to_string() => base64::encode(db_fqdn.clone()),
+                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                },
+            }
+        }
+        DatabaseKind::Redis => {
+            let database_port = 6379;
+            let database_db_name = "my-redis".to_string();
+            DBInfos {
+                db_port: database_port.clone(),
+                db_name: database_db_name.to_string(),
+                app_commit: "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string(),
+                app_env_vars: btreemap! {
+                "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
+                "REDIS_HOST".to_string()      => base64::encode(db_fqdn.clone()),
+                "REDIS_PORT".to_string()      => base64::encode(database_port.to_string()),
+                "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),
+                "REDIS_PASSWORD".to_string()  => base64::encode(database_password.clone()),
+                },
+            }
+        }
+    }
+}
+
+fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String {
+    match provider_kind {
+        Kind::Aws => "gp2",
+        Kind::Do => match database_mode {
+            DatabaseMode::MANAGED => DO_MANAGED_DATABASE_DISK_TYPE,
+            DatabaseMode::CONTAINER => DO_SELF_HOSTED_DATABASE_DISK_TYPE,
+        },
+        Kind::Scw => match database_mode {
+            DatabaseMode::MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
+            DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+        },
+    }
+    .to_string()
+}
+
+fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mode: DatabaseMode) -> String {
+    match provider_kind {
+        Kind::Aws => match db_kind {
+            DatabaseKind::Mongodb => "db.t3.medium",
+            DatabaseKind::Mysql => "db.t2.micro",
+            DatabaseKind::Postgresql => "db.t2.micro",
+            DatabaseKind::Redis => "cache.t3.micro",
+        },
+        Kind::Do => match database_mode {
+            DatabaseMode::MANAGED => DO_MANAGED_DATABASE_INSTANCE_TYPE,
+            DatabaseMode::CONTAINER => DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+        },
+        Kind::Scw => match database_mode {
+            DatabaseMode::MANAGED => SCW_MANAGED_DATABASE_INSTANCE_TYPE,
+            DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+        },
+    }
+    .to_string()
+}
+
+pub fn get_svc_name(db_kind: DatabaseKind, provider_kind: Kind) -> &'static str {
+    match db_kind {
+        DatabaseKind::Postgresql => match provider_kind {
+            Kind::Aws => "postgresqlpostgres",
+            _ => "postgresql-postgres",
+        },
+        DatabaseKind::Mysql => match provider_kind {
+            Kind::Aws => "mysqlmysqldatabase",
+            _ => "mysql-mysqldatabase",
+        },
+        DatabaseKind::Mongodb => match provider_kind {
+            Kind::Aws => "mongodbmymongodb",
+            _ => "mongodb-my-mongodb",
+        },
+        DatabaseKind::Redis => match provider_kind {
+            Kind::Aws => "redismyredis-master",
+            _ => "redis-my-redis-master",
+        },
+    }
+}
+
+pub fn test_db(
+    context: Context,
+    mut environment: Environment,
+    secrets: FuncTestsSecrets,
+    version: &str,
+    test_name: &str,
+    db_kind: DatabaseKind,
+    provider_kind: Kind,
+    database_mode: DatabaseMode,
+    is_public: bool,
+) -> String {
+    init();
+
+    let span = span!(Level::INFO, "test", name = test_name);
+    let _enter = span.enter();
+    let context_for_delete = context.clone_not_same_execution_id();
+
+    let app_id = generate_id();
+    let database_username = "superuser".to_string();
+    let database_password = generate_id();
+    let db_kind_str = db_kind.name().to_string();
+    let database_host = format!(
+        "{}-{}.{}",
+        db_kind_str.clone(),
+        generate_id(),
+        secrets.clone().DEFAULT_TEST_DOMAIN.unwrap()
+    );
+    let dyn_db_fqdn = match is_public.clone() {
+        true => database_host.clone(),
+        false => match database_mode.clone() {
+            DatabaseMode::MANAGED => format!("{}-dns", app_id.clone()),
+            DatabaseMode::CONTAINER => get_svc_name(db_kind.clone(), provider_kind.clone()).to_string(),
+        },
+    };
+
+    let db_infos = db_infos(
+        db_kind.clone(),
+        database_mode.clone(),
+        database_username.clone(),
+        database_password.clone(),
+        dyn_db_fqdn.clone(),
+    );
+    let database_port = db_infos.db_port.clone();
+    let database_db_name = db_infos.db_name.clone();
+    let storage_size = 10;
+    let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
+    let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
+    let db = Database {
+        kind: db_kind.clone(),
+        action: Action::Create,
+        id: app_id.clone(),
+        name: database_db_name.clone(),
+        version: version.to_string(),
+        fqdn_id: format!("{}-{}", db_kind_str.clone(), generate_id()),
+        fqdn: database_host.clone(),
+        port: database_port.clone(),
+        username: database_username.clone(),
+        password: database_password.clone(),
+        total_cpus: "100m".to_string(),
+        total_ram_in_mib: 512,
+        disk_size_in_gib: storage_size.clone(),
+        database_instance_type: db_instance_type.to_string(),
+        database_disk_type: db_disk_type.to_string(),
+        activate_high_availability: false,
+        activate_backups: false,
+        publicly_accessible: is_public.clone(),
+        mode: database_mode.clone(),
+    };
+
+    environment.databases = vec![db.clone()];
+
+    let app_name = format!("{}-app-{}", db_kind_str.clone(), generate_id());
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.branch = app_name.clone();
+            app.commit_id = db_infos.app_commit.clone();
+            app.private_port = Some(1234);
+            app.dockerfile_path = Some(format!("Dockerfile-{}", version));
+            app.environment_vars = db_infos.app_env_vars.clone();
+            app
+        })
+        .collect::<Vec<qovery_engine::models::Application>>();
+    environment.routers[0].routes[0].application_name = app_name.clone();
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = EnvironmentAction::Environment(environment.clone());
+    let ea_delete = EnvironmentAction::Environment(environment_delete);
+
+    match provider_kind {
+        Kind::Aws => match aws_deploy(&context, ea) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        },
+        Kind::Do => match do_deploy(&context, ea, DO_TEST_REGION) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        },
+        Kind::Scw => match scw_deploy(&context, ea, SCW_TEST_ZONE) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        },
+    }
+
+    let kube_cluster_id = match provider_kind {
+        Kind::Aws => AWS_KUBE_TEST_CLUSTER_ID,
+        Kind::Do => DO_KUBE_TEST_CLUSTER_ID,
+        Kind::Scw => SCW_KUBE_TEST_CLUSTER_ID,
+    };
+
+    match database_mode.clone() {
+        DatabaseMode::CONTAINER => {
+            match get_pvc(
+                provider_kind.clone(),
+                kube_cluster_id.clone(),
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(pvc) => assert_eq!(
+                    pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                    format!("{}Gi", storage_size)
+                ),
+                Err(_) => assert!(false),
+            };
+
+            match get_svc(
+                provider_kind.clone(),
+                kube_cluster_id.clone(),
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc
+                            .metadata
+                            .name
+                            .contains(get_svc_name(db_kind.clone(), provider_kind.clone()))
+                            && &svc.spec.svc_type == "LoadBalancer")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        }
+        DatabaseMode::MANAGED => {
+            match get_svc(
+                provider_kind.clone(),
+                kube_cluster_id.clone(),
+                environment.clone(),
+                secrets.clone(),
+            ) {
+                Ok(svc) => {
+                    let service = svc
+                        .items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| {
+                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
+                                && svc.spec.svc_type == "ExternalName"
+                        })
+                        .collect::<Vec<SVCItem>>();
+                    let annotations = &service[0].metadata.annotations;
+                    assert_eq!(service.len(), 1);
+                    match is_public {
+                        true => {
+                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                        }
+                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                    }
+                }
+                Err(_) => assert!(false),
+            };
+        }
+    }
+
+    match provider_kind.clone() {
+        Kind::Aws => match aws_delete(&context_for_delete, ea_delete) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        },
+        Kind::Do => match do_delete(&context_for_delete, ea_delete, DO_TEST_REGION) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        },
+        Kind::Scw => match scw_delete(&context_for_delete, ea_delete, SCW_TEST_ZONE) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        },
+    }
+
+    return test_name.to_string();
 }

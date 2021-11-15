@@ -1,5 +1,6 @@
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +42,7 @@ pub struct Metadata {
     pub resource_version: String,
     pub self_link: String,
     pub uid: String,
+    pub annotations: HashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -288,6 +290,68 @@ impl HelmHistoryRow {
     pub fn is_successfully_deployed(&self) -> bool {
         self.status == "deployed"
     }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PVC {
+    pub api_version: String,
+    pub items: Option<Vec<PVCItem>>,
+    pub kind: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PVCItem {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: Metadata,
+    pub spec: PVCSpec,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PVCSpec {
+    pub access_modes: Option<Vec<String>>,
+    pub resources: PVCResources,
+    pub storage_class_name: String,
+    pub volume_mode: String,
+    pub volume_name: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PVCResources {
+    pub requests: PVCRequests,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PVCRequests {
+    pub storage: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SVC {
+    pub api_version: String,
+    pub items: Option<Vec<SVCItem>>,
+    pub kind: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SVCItem {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: Metadata,
+    pub spec: SVCSpec,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SVCSpec {
+    #[serde(rename = "type")]
+    pub svc_type: String,
 }
 
 #[cfg(test)]

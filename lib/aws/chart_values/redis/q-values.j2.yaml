@@ -33,11 +33,11 @@ image:
 
 ## String to partially override redis.fullname template (will maintain the release name)
 ##
-nameOverride: '{{ sanitized_name }}'
+nameOverride: {{ sanitized_name }}
 
 ## String to fully override redis.fullname template
 ##
-fullnameOverride: '{{ sanitized_name }}'
+fullnameOverride: {{ sanitized_name }}
 
 ## Cluster settings
 cluster:
@@ -294,7 +294,7 @@ master:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: '{{ sanitized_name }}'
+    databaseName: {{ sanitized_name }}
   podAnnotations: {}
 
   ## Redis Master resource requests and limits
@@ -368,7 +368,7 @@ master:
   ## Redis Master Service properties
   service:
     ##  Redis Master Service type
-    type: LoadBalancer
+    type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
     port: 6379
 
     ## Specify the nodePort value for the LoadBalancer and NodePort service types.
@@ -380,13 +380,12 @@ master:
     ## set the LoadBalancer service type to internal only.
     ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
     ##
+    {% if publicly_accessible -%}
     annotations:
-      service.beta.kubernetes.io/do-loadbalancer-name: "{{ id }}"
-      service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
-      service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
-      service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+    {% endif %}
     labels:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}
@@ -412,7 +411,7 @@ master:
     ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
     ##   GKE, AWS & OpenStack)
     ##
-    storageClass: {{ database_disk_type }}
+    storageClass: "aws-ebs-gp2-0"
     accessModes:
       - ReadWriteOnce
     size: {{ database_disk_size_in_gib }}Gi

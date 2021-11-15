@@ -80,10 +80,6 @@ volumePermissions:
       cpu: "{{ database_total_cpus }}"
       memory: "{{ database_ram_size_in_mib }}Mi"
 
-## Use existing secret (ignores root, db and replication passwords)
-##
-# existingSecret:
-
 ## Admin (root) credentials
 ##
 root:
@@ -144,24 +140,6 @@ replication:
   ## Mount replication user password as a file instead of using an environment variable
   ##
   injectSecretsAsVolume: false
-
-## initdb scripts
-## Specify dictionary of scripts to be run at first boot
-## Alternatively, you can put your scripts under the files/docker-entrypoint-initdb.d directory
-##
-# initdbScripts:
-#   my_init_script.sh: |
-#      #!/bin/sh
-#      echo "Do something."
-#
-## ConfigMap with scripts to be run at first boot
-## Note: This will override initdbScripts
-# initdbScriptsConfigMap:
-
-serviceAccount:
-  create: true
-  ## Specify the name of the service account created/used
-  # name:
 
 ## Master nodes parameters
 ##
@@ -500,7 +478,7 @@ slave:
 service:
   ## MySQL Service type
   ##
-  type: LoadBalancer
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
 
   ## MySQL Service port
   ##
@@ -517,6 +495,7 @@ service:
   ## set the LoadBalancer service type to internal only.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
   ##
+  {% if publicly_accessible %}
   annotations:
     service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
     service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
@@ -526,6 +505,7 @@ service:
     service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
+  {% endif %}
 
   ## loadBalancerIP for the PrestaShop Service (optional, cloud specific)
   ## ref: http://kubernetes.io/docs/user-guide/services/#type-loadbalancer
