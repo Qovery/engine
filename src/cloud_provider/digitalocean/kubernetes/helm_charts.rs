@@ -412,11 +412,11 @@ pub fn do_helm_charts(
                 },
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "384Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "384Mi".to_string(),
                 },
             ],
             ..Default::default()
