@@ -6,7 +6,6 @@ metadata:
   name: {{ sanitized_name }}
   namespace: {{ namespace }}
   labels:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
@@ -22,14 +21,12 @@ spec:
     {% endif %}
   selector:
     matchLabels:
-      ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       appId: {{ id }}
       app: {{ sanitized_name }}
   template:
     metadata:
       labels:
-        ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
         app: {{ sanitized_name }}
@@ -67,6 +64,7 @@ spec:
             {%- if private_port %}
           ports:
             - containerPort: {{ private_port }}
+              name: "p{{ private_port }}"
               protocol: TCP
           readinessProbe:
             tcpSocket:
