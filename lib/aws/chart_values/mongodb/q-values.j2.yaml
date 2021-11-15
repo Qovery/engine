@@ -40,12 +40,12 @@ image:
 ## String to partially override mongodb.fullname template (will maintain the release name)
 ##
 # nameOverride:
-nameOverride: '{{ sanitized_name }}'
+nameOverride: {{ sanitized_name }}
 
 ## String to fully override mongodb.fullname template
 ##
 # fullnameOverride:
-fullnameOverride: '{{ sanitized_name }}'
+fullnameOverride: {{ sanitized_name }}
 
 serviceAccount:
   # Specifies whether a ServiceAccount should be created
@@ -95,7 +95,7 @@ mongodbRootPassword: '{{ database_password }}'
 ##
 mongodbUsername: '{{ database_login }}'
 mongodbPassword: '{{ database_password }}'
-mongodbDatabase: '{{ database_db_name }}'
+mongodbDatabase: {{ database_db_name }}
 
 ## Whether enable/disable IPv6 on MongoDB
 ## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#enabling/disabling-ipv6
@@ -138,15 +138,14 @@ service:
   # name: svc-mongo
   ## Provide any additional annotations which may be required.
   ## The value is evaluated as a template, so, for example, the value can depend on .Release or .Chart
+  {% if publicly_accessible -%}
   annotations:
-    service.beta.kubernetes.io/do-loadbalancer-name: "{{ id }}"
-    service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
-    service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
-    service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
+  {% endif %}
 
-  type: LoadBalancer
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
   port: {{ private_port }}
 
@@ -210,7 +209,7 @@ labels:
   ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: '{{ sanitized_name }}'
+  databaseName: {{ sanitized_name }}
 
 # Annotations to be added to MongoDB pods
 podAnnotations: {}
@@ -340,7 +339,7 @@ persistence:
   ##
   # storageClass: "-"
   # storageClassSecondary: "-"
-  storageClass: {{ database_disk_type }}
+  storageClass: "aws-ebs-gp2-0"
   accessModes:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
@@ -348,7 +347,7 @@ persistence:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: '{{ sanitized_name }}'
+    databaseName: {{ sanitized_name }}
 
 ## Configure the ingress resource that allows you to access the
 ## MongoDB installation. Set up the URL

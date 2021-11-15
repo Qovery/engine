@@ -50,6 +50,11 @@ resource "helm_release" "elasticache_instance_external_name" {
     value = "{{database_id}}"
   }
 
+  set {
+    name= "publicly_accessible"
+    value= {{ publicly_accessible }}
+  }
+
   depends_on = [
     aws_elasticache_cluster.elasticache_cluster
   ]

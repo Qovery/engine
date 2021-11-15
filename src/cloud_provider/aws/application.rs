@@ -138,7 +138,7 @@ impl Service for Application {
     }
 
     fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Value(self.start_timeout_in_seconds)
+        Timeout::Value((self.start_timeout_in_seconds + 10) * 4)
     }
 
     fn total_cpus(&self) -> String {
@@ -155,6 +155,10 @@ impl Service for Application {
 
     fn total_instances(&self) -> u16 {
         self.total_instances
+    }
+
+    fn publicly_accessible(&self) -> bool {
+        self.private_port.is_some()
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {

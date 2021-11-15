@@ -3,7 +3,8 @@ use std::path::Path;
 
 use tracing::{error, info, span, Level};
 
-use crate::cloud_provider::helm::{get_chart_namespace, ChartInfo};
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, CommonChart};
+use crate::cloud_provider::service::ServiceType;
 use crate::cmd::helm::HelmLockErrors::{IncorrectFormatDate, NotYetExpired, ParsingError};
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_get_secrets};
 use crate::cmd::structs::{Helm, HelmChart, HelmHistoryRow, Item, KubernetesList};
@@ -26,6 +27,15 @@ pub enum Timeout<T> {
     Value(T),
 }
 
+impl Timeout<u32> {
+    fn value(&self) -> u32 {
+        match *self {
+            Timeout::Default => HELM_DEFAULT_TIMEOUT_IN_SECONDS,
+            Timeout::Value(t) => t,
+        }
+    }
+}
+
 pub fn helm_exec_with_upgrade_history<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -33,6 +43,7 @@ pub fn helm_exec_with_upgrade_history<P>(
     chart_root_dir: P,
     timeout: Timeout<u32>,
     envs: Vec<(&str, &str)>,
+    service_type: ServiceType,
 ) -> Result<Option<HelmHistoryRow>, SimpleError>
 where
     P: AsRef<Path>,
@@ -40,18 +51,47 @@ where
     // do exec helm upgrade
     info!(
         "exec helm upgrade for namespace {} and chart {}",
-        namespace,
+        &namespace,
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    let _ = helm_exec_upgrade(
+    // let _ = helm_exec_upgrade(
+    //     kubernetes_config.as_ref(),
+    //     namespace,
+    //     release_name,
+    //     chart_root_dir.as_ref(),
+    //     timeout,
+    //     envs.clone(),
+    // )?;
+
+    let path = match chart_root_dir.as_ref().to_str().is_some() {
+        true => chart_root_dir.as_ref().to_str().unwrap(),
+        false => "",
+    }
+    .to_string();
+
+    let current_chart = CommonChart {
+        chart_info: ChartInfo::new_from_custom_namespace(
+            release_name.to_string(),
+            path.clone(),
+            namespace.to_string(),
+            timeout.value() as i64,
+            match service_type {
+                ServiceType::Database(_) => vec![format!("{}/q-values.yaml", path)],
+                _ => vec![],
+            },
+        ),
+    };
+
+    let environment_variables: Vec<(String, String)> =
+        envs.iter().map(|x| (x.0.to_string(), x.1.to_string())).collect();
+
+    let _ = deploy_charts_levels(
         kubernetes_config.as_ref(),
-        namespace,
-        release_name,
-        chart_root_dir.as_ref(),
-        timeout,
-        envs.clone(),
-    )?;
+        &environment_variables,
+        vec![vec![Box::new(current_chart)]],
+        false,
+    );
 
     // list helm history
     info!(
@@ -78,7 +118,7 @@ pub fn helm_destroy_chart_if_breaking_changes_version_detected(
     // If current installed version is older than breaking change one, then we delete
     // the chart before applying it.
     if let Some(breaking_version) = &chart_info.last_breaking_version_requiring_restart {
-        let chart_namespace = get_chart_namespace(chart_info.namespace.clone());
+        let chart_namespace = chart_info.get_namespace_string();
         if let Some(installed_version) = helm_get_chart_version(
             kubernetes_config,
             environment_variables.to_owned(),
@@ -121,7 +161,7 @@ where
         "--history-max",
         "50",
         "--namespace",
-        get_chart_namespace(chart.namespace).as_str(),
+        chart.get_namespace_string().as_str(),
     ]
     .into_iter()
     .map(|x| x.to_string())
@@ -219,7 +259,7 @@ where
                         warn!("{}. {}", &error_message, &line);
                         match clean_helm_lock(
                             &kubernetes_config,
-                            get_chart_namespace(chart.namespace).as_str(),
+                            chart.get_namespace_string().as_str(),
                             &chart.name,
                             chart.timeout_in_seconds,
                             envs.clone(),
@@ -501,7 +541,7 @@ where
             "--kubeconfig",
             kubernetes_config.as_ref().to_str().unwrap(),
             "--namespace",
-            get_chart_namespace(chart.namespace).as_str(),
+            chart.get_namespace_string().as_str(),
             &chart.name,
         ],
         envs.clone(),
@@ -849,7 +889,7 @@ where
     P: AsRef<Path>,
 {
     let mut environment_variables = envs.clone();
-    environment_variables.push(("HELM_NAMESPACE".to_string(), get_chart_namespace(chart.namespace)));
+    environment_variables.push(("HELM_NAMESPACE".to_string(), chart.get_namespace_string()));
 
     let mut args_string: Vec<String> = vec![
         "diff",
@@ -985,6 +1025,7 @@ mod tests {
                     "status": "superseded",
                     "version": "1"
                 },
+                "annotations": {},
                 "name": "sh.helm.release.v1.coredns.v1",
                 "namespace": "kube-system",
                 "resourceVersion": "562542",
@@ -1008,6 +1049,7 @@ mod tests {
                     "status": "deployed",
                     "version": "2"
                 },
+                "annotations": {},
                 "name": "sh.helm.release.v1.coredns.v2",
                 "namespace": "kube-system",
                 "resourceVersion": "603757",

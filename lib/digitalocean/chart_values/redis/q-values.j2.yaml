@@ -368,7 +368,7 @@ master:
   ## Redis Master Service properties
   service:
     ##  Redis Master Service type
-    type: LoadBalancer
+    type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
     port: 6379
 
     ## Specify the nodePort value for the LoadBalancer and NodePort service types.
@@ -380,15 +380,15 @@ master:
     ## set the LoadBalancer service type to internal only.
     ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
     ##
+    {% if publicly_accessible -%}
     annotations:
-      service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
-      service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
-      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
-      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
-      service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
-      service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
+      service.beta.kubernetes.io/do-loadbalancer-name: "{{ id }}"
+      service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
+      service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
+      service.beta.kubernetes.io/do-loadbalancer-algorithm: "least_connections"
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+    {% endif %}
     labels:
       ownerId: {{ owner_id }}
       envId: {{ environment_id }}

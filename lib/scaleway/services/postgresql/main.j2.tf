@@ -56,7 +56,10 @@ resource "scaleway_rdb_instance" "postgresql_instance" {
 
   tags              = local.tags_postgresql_list
 
-  # TODO:(benjaminch): features to be added at some point but be discussed with Scaleway
+  publicly_accessible = var.publicly_accessible
+
+
+# TODO:(benjaminch): features to be added at some point but be discussed with Scaleway
   # - port
   # - instance create timeout
   # - instance update timeout

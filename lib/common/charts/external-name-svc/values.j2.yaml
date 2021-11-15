@@ -1,0 +1,4 @@
+target_hostname: ""
+source_fqdn: ""
+app_id: ""
+publicly_accessible: {{ publicly_accessible }}

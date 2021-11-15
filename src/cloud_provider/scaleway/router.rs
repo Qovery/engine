@@ -99,6 +99,10 @@ impl Service for Router {
         1
     }
 
+    fn publicly_accessible(&self) -> bool {
+        false
+    }
+
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let kubernetes = target.kubernetes;
         let environment = target.environment;
@@ -250,8 +254,9 @@ impl Create for Router {
                 environment.namespace(),
                 helm_release_name.as_str(),
                 workspace_dir.as_str(),
-                Timeout::Default,
+                self.start_timeout(),
                 kubernetes.cloud_provider().credentials_environment_variables(),
+                self.service_type(),
             ),
         )?;
 
