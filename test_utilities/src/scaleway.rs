@@ -67,7 +67,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use Scaleway
-        let cloud_provider = Box::new(Scaleway::cloud_provider(context));
+        let cloud_provider = Scaleway::cloud_provider(context);
 
         let dns_provider = Box::new(dns_provider_cloudflare(context));
 
@@ -80,9 +80,9 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         )
     }
 
-    fn cloud_provider(context: &Context) -> Scaleway {
+    fn cloud_provider(context: &Context) -> Box<Scaleway> {
         let secrets = FuncTestsSecrets::new();
-        Scaleway::new(
+        Box::new(Scaleway::new(
             context.clone(),
             SCW_KUBE_TEST_CLUSTER_ID,
             SCW_QOVERY_ORGANIZATION_ID,
@@ -109,7 +109,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
                     .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set in secrets"),
                 region: "eu-west-3".to_string(),
             },
-        )
+        ))
     }
 
     fn kubernetes_nodes() -> Vec<NodeGroups> {

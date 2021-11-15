@@ -9,7 +9,7 @@ use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{init, FuncTestsSecrets};
 use tracing::{span, Level};
 
-use crate::aws::aws_environment::{ctx_pause_environment, delete_environment, deploy_environment};
+use crate::aws::aws_environment::{delete_environment, deploy_environment};
 
 use self::test_utilities::aws::{
     AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID,
@@ -17,6 +17,8 @@ use self::test_utilities::aws::{
 use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, is_pod_restarted_env, test_db,
 };
+use self::test_utilities::utilities::{engine_run_test, generate_id};
+use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 
 /**

@@ -33,7 +33,7 @@ use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_KUBE_TEST_CLUSTER_ID, SCW_KUBE
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
-use qovery_engine::cloud_provider::Kind;
+use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::cmd;
 use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
@@ -1299,10 +1299,12 @@ pub fn get_environment_test_kubernetes<'a>(
     provider_kind: Kind,
     context: &Context,
     localisation: &str,
+    cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
 ) -> Box<dyn Kubernetes + 'a> {
     let secrets = FuncTestsSecrets::new();
     let k: Box<dyn Kubernetes>;
+
     match provider_kind {
         Kind::Aws => {
             k = Box::new(
@@ -1313,7 +1315,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     AWS_KUBE_TEST_CLUSTER_ID,
                     AWS_KUBERNETES_VERSION,
                     localisation,
-                    &AWS::cloud_provider(context),
+                    cloud_provider,
                     dns_provider,
                     AWS::kubernetes_cluster_options(secrets, None),
                     AWS::kubernetes_nodes(),
@@ -1330,7 +1332,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     DO_KUBE_TEST_CLUSTER_NAME.to_string(),
                     DO_KUBERNETES_VERSION.to_string(),
                     Region::from_str(localisation).unwrap(),
-                    &DO::cloud_provider(context),
+                    cloud_provider,
                     dns_provider,
                     DO::kubernetes_nodes(),
                     DO::kubernetes_cluster_options(secrets, Option::from(DO_KUBE_TEST_CLUSTER_ID.to_string())),
@@ -1347,7 +1349,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
                     SCW_KUBERNETES_VERSION.to_string(),
                     Zone::from_str(localisation).unwrap(),
-                    &Scaleway::cloud_provider(context),
+                    cloud_provider,
                     dns_provider,
                     Scaleway::kubernetes_nodes(),
                     Scaleway::kubernetes_cluster_options(secrets, None),
@@ -1356,6 +1358,8 @@ pub fn get_environment_test_kubernetes<'a>(
             );
         }
     }
+
+    return k;
 }
 
 pub fn get_cluster_test_kubernetes<'a>(
@@ -1366,14 +1370,17 @@ pub fn get_cluster_test_kubernetes<'a>(
     cluster_name: String,
     boot_version: String,
     localisation: &str,
+    cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
 ) -> Box<dyn Kubernetes + 'a> {
+    let k: Box<dyn Kubernetes>;
+
     match provider_kind {
         Kind::Aws => {
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
             options.vpc_qovery_network_mode = vpc_network_mode.unwrap();
-            Box::new(
+            k = Box::new(
                 EKS::new(
                     context.clone(),
                     cluster_id.as_str(),
@@ -1381,45 +1388,51 @@ pub fn get_cluster_test_kubernetes<'a>(
                     cluster_name.as_str(),
                     boot_version.as_str(),
                     localisation.clone(),
-                    &AWS::cloud_provider(context),
+                    cloud_provider,
                     dns_provider,
                     options,
                     AWS::kubernetes_nodes(),
                 )
                 .unwrap(),
-            )
+            );
         }
-        Kind::Do => Box::new(
-            DOKS::new(
-                context.clone(),
-                cluster_id.clone(),
-                uuid::Uuid::new_v4(),
-                cluster_name.clone(),
-                boot_version,
-                Region::from_str(localisation.clone()).expect("Unknown region set for DOKS"),
-                &DO::cloud_provider(context),
-                dns_provider,
-                DO::kubernetes_nodes(),
-                DO::kubernetes_cluster_options(secrets, Option::from(cluster_name)),
-            )
-            .unwrap(),
-        ),
-        Kind::Scw => Box::new(
-            Kapsule::new(
-                context.clone(),
-                cluster_id.clone(),
-                uuid::Uuid::new_v4(),
-                cluster_name.clone(),
-                boot_version,
-                Zone::from_str(localisation.clone()).expect("Unknown zone set for Kapsule"),
-                &Scaleway::cloud_provider(context),
-                dns_provider,
-                Scaleway::kubernetes_nodes(),
-                Scaleway::kubernetes_cluster_options(secrets, None),
-            )
-            .unwrap(),
-        ),
+        Kind::Do => {
+            k = Box::new(
+                DOKS::new(
+                    context.clone(),
+                    cluster_id.clone(),
+                    uuid::Uuid::new_v4(),
+                    cluster_name.clone(),
+                    boot_version,
+                    Region::from_str(localisation.clone()).expect("Unknown region set for DOKS"),
+                    cloud_provider,
+                    dns_provider,
+                    DO::kubernetes_nodes(),
+                    DO::kubernetes_cluster_options(secrets, Option::from(cluster_name)),
+                )
+                .unwrap(),
+            );
+        }
+        Kind::Scw => {
+            k = Box::new(
+                Kapsule::new(
+                    context.clone(),
+                    cluster_id.clone(),
+                    uuid::Uuid::new_v4(),
+                    cluster_name.clone(),
+                    boot_version,
+                    Zone::from_str(localisation.clone()).expect("Unknown zone set for Kapsule"),
+                    cloud_provider,
+                    dns_provider,
+                    Scaleway::kubernetes_nodes(),
+                    Scaleway::kubernetes_cluster_options(secrets, None),
+                )
+                .unwrap(),
+            );
+        }
     }
+
+    return k;
 }
 
 pub fn cluster_test(
@@ -1451,7 +1464,12 @@ pub fn cluster_test(
     };
     let dns_provider = dns_provider_cloudflare(&context);
     let mut tx = engine.session().unwrap().transaction();
-
+    let cp: Box<dyn CloudProvider>;
+    cp = match provider_kind {
+        Kind::Aws => AWS::cloud_provider(&context),
+        Kind::Do => DO::cloud_provider(&context),
+        Kind::Scw => Scaleway::cloud_provider(&context),
+    };
     let kubernetes = get_cluster_test_kubernetes(
         provider_kind.clone(),
         secrets.clone(),
@@ -1460,6 +1478,7 @@ pub fn cluster_test(
         cluster_name.clone(),
         boot_version.clone(),
         localisation.clone(),
+        cp.as_ref(),
         &dns_provider,
         vpc_network_mode.clone(),
     );
@@ -1506,6 +1525,7 @@ pub fn cluster_test(
                 cluster_name.clone(),
                 upgrade_to_version.clone(),
                 localisation.clone(),
+                cp.as_ref(),
                 &dns_provider,
                 vpc_network_mode,
             );

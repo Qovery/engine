@@ -1,8 +1,7 @@
 extern crate test_utilities;
 
 use self::test_utilities::scaleway::{
-    clean_environments, delete_environment, deploy_environment, pause_environment, SCW_KUBE_TEST_CLUSTER_ID,
-    SCW_QOVERY_ORGANIZATION_ID, SCW_TEST_ZONE,
+    clean_environments, SCW_KUBE_TEST_CLUSTER_ID, SCW_QOVERY_ORGANIZATION_ID, SCW_TEST_ZONE,
 };
 use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,

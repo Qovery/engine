@@ -114,7 +114,7 @@ pub struct Kapsule<'a> {
     name: String,
     version: String,
     zone: Zone,
-    cloud_provider: &'a Scaleway,
+    cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
     object_storage: ScalewayOS,
     nodes_groups: Vec<NodeGroups>,
@@ -131,7 +131,7 @@ impl<'a> Kapsule<'a> {
         name: String,
         version: String,
         zone: Zone,
-        cloud_provider: &'a Scaleway,
+        cloud_provider: &'a dyn CloudProvider,
         dns_provider: &'a dyn DnsProvider,
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
@@ -146,7 +146,8 @@ impl<'a> Kapsule<'a> {
                     context.execution_id(),
                     Some(format!(
                         "Nodegroup instance type {} is not valid for {}",
-                        node_group.instance_type, cloud_provider.name
+                        node_group.instance_type,
+                        cloud_provider.name()
                     )),
                 ));
             }
@@ -156,8 +157,8 @@ impl<'a> Kapsule<'a> {
             context.clone(),
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
-            cloud_provider.access_key.clone(),
-            cloud_provider.secret_key.clone(),
+            cloud_provider.access_key_id().clone(),
+            cloud_provider.secret_access_key().clone(),
             zone,
             BucketDeleteStrategy::Empty,
             false,
@@ -176,7 +177,7 @@ impl<'a> Kapsule<'a> {
             nodes_groups,
             template_directory,
             options,
-            listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
+            listeners: cloud_provider.listeners().clone(), // copy listeners from CloudProvider
         })
     }
 
@@ -494,15 +495,15 @@ impl<'a> Kapsule<'a> {
 
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
-            self.cloud_provider.organization_long_id,
+            self.cloud_provider.organization_long_id(),
             self.id().to_string(),
             self.long_id,
             self.zone,
             self.cluster_name(),
             "scw".to_string(),
             self.context.is_test_cluster(),
-            self.cloud_provider.access_key.to_string(),
-            self.cloud_provider.secret_key.to_string(),
+            self.cloud_provider.access_key_id().to_string(),
+            self.cloud_provider.secret_access_key().to_string(),
             self.options.scaleway_project_id.to_string(),
             self.options.qovery_engine_location.clone(),
             self.context.is_feature_enabled(&Features::LogsHistory),

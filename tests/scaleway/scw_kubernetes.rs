@@ -5,6 +5,7 @@ use self::test_utilities::utilities::{
     cluster_test, context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets,
 };
 use ::function_name::named;
+use semver::Op;
 use tracing::{span, Level};
 
 use qovery_engine::cloud_provider::scaleway::application::Zone;
@@ -12,6 +13,7 @@ use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOption
 use qovery_engine::transaction::TransactionResult;
 
 use self::test_utilities::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
+use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::Kind;
 use test_utilities::scaleway::SCW_KUBERNETES_VERSION;
@@ -25,6 +27,7 @@ fn create_and_destroy_kapsule_cluster(
     major_boot_version: u8,
     minor_boot_version: u8,
     test_name: &str,
+    vpc_network_mode: Option<VpcQoveryNetworkMode>,
 ) {
     engine_run_test(|| {
         cluster_test(
@@ -36,7 +39,7 @@ fn create_and_destroy_kapsule_cluster(
             test_infra_upgrade,
             major_boot_version,
             minor_boot_version,
-            Option::from(vpc_network_mode),
+            vpc_network_mode,
         )
     })
 }
@@ -126,6 +129,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
         function_name!(),
+        None,
     );
 }
 
@@ -144,6 +148,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
         function_name!(),
+        None,
     );
 }
 
@@ -162,6 +167,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
         function_name!(),
+        None,
     );
 }
 
@@ -180,5 +186,6 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_war_1() {
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
         function_name!(),
+        None,
     );
 }

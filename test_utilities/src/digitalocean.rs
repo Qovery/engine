@@ -47,7 +47,7 @@ impl Cluster<DO, DoksOptions> for DO {
         // use LocalDocker
         let build_platform = Box::new(build_platform_local_docker(context));
         // use Digital Ocean
-        let cloud_provider = Box::new(DO::cloud_provider(context));
+        let cloud_provider = DO::cloud_provider(context);
 
         let dns_provider = Box::new(dns_provider_cloudflare(&context));
 
@@ -60,9 +60,9 @@ impl Cluster<DO, DoksOptions> for DO {
         )
     }
 
-    fn cloud_provider(context: &Context) -> DO {
+    fn cloud_provider(context: &Context) -> Box<DO> {
         let secrets = FuncTestsSecrets::new();
-        DO::new(
+        Box::new(DO::new(
             context.clone(),
             DO_KUBE_TEST_CLUSTER_ID,
             DO_QOVERY_ORGANIZATION_ID,
@@ -76,7 +76,7 @@ impl Cluster<DO, DoksOptions> for DO {
                 secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
                 region: secrets.TERRAFORM_AWS_REGION.unwrap(),
             },
-        )
+        ))
     }
 
     fn kubernetes_nodes() -> Vec<NodeGroups> {

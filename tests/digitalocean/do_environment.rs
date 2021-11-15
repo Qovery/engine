@@ -1,8 +1,7 @@
 extern crate test_utilities;
 
 use self::test_utilities::digitalocean::{
-    clean_environments, delete_environment, deploy_environment, pause_environment, DO_KUBE_TEST_CLUSTER_ID,
-    DO_QOVERY_ORGANIZATION_ID, DO_TEST_REGION,
+    clean_environments, DO_KUBE_TEST_CLUSTER_ID, DO_QOVERY_ORGANIZATION_ID, DO_TEST_REGION,
 };
 use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, init, is_pod_restarted_env, FuncTestsSecrets,

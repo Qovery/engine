@@ -13,7 +13,6 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::aws::kubernetes::helm_charts::{aws_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
-use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
@@ -117,7 +116,7 @@ pub struct EKS<'a> {
     name: String,
     version: String,
     region: Region,
-    cloud_provider: &'a AWS,
+    cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
     s3: S3,
     nodes_groups: Vec<NodeGroups>,
@@ -134,7 +133,7 @@ impl<'a> EKS<'a> {
         name: &str,
         version: &str,
         region: &str,
-        cloud_provider: &'a AWS,
+        cloud_provider: &'a dyn CloudProvider,
         dns_provider: &'a dyn DnsProvider,
         options: EKSOptions,
         nodes_groups: Vec<NodeGroups>,
@@ -149,7 +148,8 @@ impl<'a> EKS<'a> {
                     context.execution_id(),
                     Some(format!(
                         "Nodegroup instance type {} is not valid for {}",
-                        node_group.instance_type, cloud_provider.name
+                        node_group.instance_type,
+                        cloud_provider.name()
                     )),
                 ));
             }
@@ -160,8 +160,8 @@ impl<'a> EKS<'a> {
             context.clone(),
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
-            cloud_provider.access_key_id.clone(),
-            cloud_provider.secret_access_key.clone(),
+            cloud_provider.access_key_id().clone(),
+            cloud_provider.secret_access_key().clone(),
         );
 
         Ok(EKS {
@@ -177,7 +177,7 @@ impl<'a> EKS<'a> {
             options,
             nodes_groups,
             template_directory,
-            listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
+            listeners: cloud_provider.listeners().clone(), // copy listeners from CloudProvider
         })
     }
 
@@ -382,8 +382,8 @@ impl<'a> EKS<'a> {
         context.insert("enable_cluster_autoscaler", &true);
 
         // AWS
-        context.insert("aws_access_key", &self.cloud_provider.access_key_id);
-        context.insert("aws_secret_key", &self.cloud_provider.secret_access_key);
+        context.insert("aws_access_key", &self.cloud_provider.access_key_id());
+        context.insert("aws_secret_key", &self.cloud_provider.secret_access_key());
 
         // AWS S3 tfstate storage
         context.insert(
@@ -516,8 +516,8 @@ impl<'a> EKS<'a> {
         let already_created_roles = get_default_roles_to_create();
         for role in already_created_roles {
             match role.create_service_linked_role(
-                self.cloud_provider.access_key_id.as_str(),
-                self.cloud_provider.secret_access_key.as_str(),
+                self.cloud_provider.access_key_id().as_str(),
+                self.cloud_provider.secret_access_key().as_str(),
             ) {
                 Ok(_) => info!("Role {} is already present, no need to create", role.role_name),
                 Err(e) => error!(
@@ -627,7 +627,7 @@ impl<'a> EKS<'a> {
             .collect();
         let charts_prerequisites = ChartsConfigPrerequisites {
             organization_id: self.cloud_provider.organization_id().to_string(),
-            organization_long_id: self.cloud_provider.organization_long_id,
+            organization_long_id: self.cloud_provider.organization_long_id(),
             infra_options: self.options.clone(),
             cluster_id: self.id.clone(),
             cluster_long_id: self.long_id,
@@ -635,8 +635,8 @@ impl<'a> EKS<'a> {
             cluster_name: self.cluster_name().to_string(),
             cloud_provider: "aws".to_string(),
             test_cluster: self.context.is_test_cluster(),
-            aws_access_key_id: self.cloud_provider.access_key_id.to_string(),
-            aws_secret_access_key: self.cloud_provider.secret_access_key.to_string(),
+            aws_access_key_id: self.cloud_provider.access_key_id().to_string(),
+            aws_secret_access_key: self.cloud_provider.secret_access_key().to_string(),
             vpc_qovery_network_mode: self.options.vpc_qovery_network_mode.clone(),
             qovery_engine_location: self.get_engine_location(),
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),

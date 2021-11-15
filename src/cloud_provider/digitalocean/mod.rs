@@ -3,6 +3,7 @@ extern crate digitalocean;
 use std::any::Any;
 
 use digitalocean::DigitalOcean;
+use uuid::Uuid;
 
 use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
@@ -78,8 +79,24 @@ impl CloudProvider for DO {
         self.organization_id.as_str()
     }
 
+    fn organization_long_id(&self) -> Uuid {
+        self.organization_long_id
+    }
+
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn access_key_id(&self) -> String {
+        self.spaces_access_id.to_string()
+    }
+
+    fn secret_access_key(&self) -> String {
+        self.spaces_secret_key.to_string()
+    }
+
+    fn token(&self) -> &str {
+        self.token.as_str()
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {

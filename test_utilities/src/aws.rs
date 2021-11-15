@@ -68,7 +68,7 @@ impl Cluster<AWS, EKSOptions> for AWS {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use AWS
-        let cloud_provider = Box::new(AWS::cloud_provider(context));
+        let cloud_provider = AWS::cloud_provider(context);
 
         let dns_provider = Box::new(dns_provider_cloudflare(context));
 
@@ -81,9 +81,9 @@ impl Cluster<AWS, EKSOptions> for AWS {
         )
     }
 
-    fn cloud_provider(context: &Context) -> AWS {
+    fn cloud_provider(context: &Context) -> Box<AWS> {
         let secrets = FuncTestsSecrets::new();
-        AWS::new(
+        Box::new(AWS::new(
             context.clone(),
             "u8nb94c7fwxzr2jt",
             AWS_QOVERY_ORGANIZATION_ID,
@@ -96,7 +96,7 @@ impl Cluster<AWS, EKSOptions> for AWS {
                 secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
                 region: "eu-west-3".to_string(),
             },
-        )
+        ))
     }
 
     fn kubernetes_nodes() -> Vec<NodeGroups> {
