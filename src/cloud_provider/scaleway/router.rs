@@ -17,10 +17,12 @@ pub struct Router {
     id: String,
     action: Action,
     name: String,
+    sub_domain_prefix: String,
     default_domain: String,
     custom_domains: Vec<CustomDomain>,
     routes: Vec<Route>,
     listeners: Listeners,
+    feature_flag_switch_to_new_domain_handling: bool,
 }
 
 impl Router {
@@ -29,20 +31,24 @@ impl Router {
         id: &str,
         name: &str,
         action: Action,
+        sub_domain_prefix: &str,
         default_domain: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
         listeners: Listeners,
+        feature_flag_switch_to_new_domain_handling: bool,
     ) -> Router {
         Router {
             context,
             id: id.to_string(),
             name: name.to_string(),
             action,
+            sub_domain_prefix: sub_domain_prefix.to_string(),
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,
             listeners,
+            feature_flag_switch_to_new_domain_handling,
         }
     }
 
@@ -159,8 +165,11 @@ impl Service for Router {
 
         let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
-        let tls_domain = format!("*.{}", kubernetes.dns_provider().domain());
-        let tls_cluster_subdomain = format!("*.{}", kubernetes.dns_provider().domain());
+        let tls_domain = kubernetes.dns_provider().domain_wildcarded();
+        let tls_cluster_subdomain = kubernetes
+            .dns_provider()
+            .domain_with_sub_domain_wildcarded(self.sub_domain_prefix.as_str());
+
         context.insert("router_tls_domain", tls_domain.as_str());
         context.insert("router_default_domain", self.default_domain.as_str());
         context.insert("router_default_domain_hash", router_default_domain_hash.as_str());
