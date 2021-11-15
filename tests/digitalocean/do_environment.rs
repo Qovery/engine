@@ -11,6 +11,7 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, Clone2, EnvironmentAction, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
+use test_utilities::common::Infrastructure;
 use test_utilities::utilities::context;
 use tracing::{span, warn, Level};
 
@@ -49,13 +50,13 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
 
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_delete, env_action_for_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -101,13 +102,13 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
 
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
-        match delete_environment(&context_for_delete, env_action_for_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
@@ -148,7 +149,7 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let selector = format!("app=app-{}", environment.applications[0].name);
 
-        match deploy_environment(&context, env_action.clone(), DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -164,7 +165,7 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
-        match pause_environment(&context_for_delete, env_action.clone(), DO_TEST_REGION) {
+        match Infrastructure::pause_environment(Kind::Do, &context_for_delete, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -183,7 +184,7 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        match deploy_environment(&ctx_resume, env_action.clone(), DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &ctx_resume, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -200,7 +201,7 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
         // Cleanup
-        match delete_environment(&context_for_delete, env_action.clone(), DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_delete, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -255,13 +256,13 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
 
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_delete, env_action_for_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -305,13 +306,13 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_delete, env_action_for_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -373,7 +374,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -381,7 +382,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
 
         // TODO(benjaminch): check the disk is here and with correct size, can use DigitalOcean API
 
-        match delete_environment(&context_for_deletion, env_action_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_deletion, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -448,7 +449,7 @@ fn digitalocean_doks_redeploy_same_app() {
         let env_action_redeploy = EnvironmentAction::Environment(environment_redeploy);
         let env_action_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -463,7 +464,7 @@ fn digitalocean_doks_redeploy_same_app() {
             secrets.clone(),
         );
 
-        match deploy_environment(&context_bis, env_action_redeploy, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context_bis, &env_action_redeploy) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -480,7 +481,7 @@ fn digitalocean_doks_redeploy_same_app() {
         // nothing changed in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
 
-        match delete_environment(&context_for_deletion, env_action_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_deletion, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -542,17 +543,17 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
         let env_action_not_working = EnvironmentAction::Environment(environment_for_not_working);
         let env_action_delete = EnvironmentAction::Environment(environment_for_delete);
 
-        match deploy_environment(&context_for_not_working, env_action_not_working, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context_for_not_working, &env_action_not_working) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        match delete_environment(&context_for_delete, env_action_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_delete, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -621,34 +622,34 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
         let env_action_delete = EnvironmentAction::Environment(delete_env);
 
         // OK
-        match deploy_environment(&context, env_action.clone(), DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
         // FAIL and rollback
-        match deploy_environment(&context_for_not_working_1, env_action_not_working_1, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context_for_not_working_1, &env_action_not_working_1) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(true),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
         // FAIL and Rollback again
-        match deploy_environment(&context_for_not_working_2, env_action_not_working_2, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context_for_not_working_2, &env_action_not_working_2) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(true),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
         // Should be working
-        match deploy_environment(&context, env_action.clone(), DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_delete, env_action_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_delete, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -692,13 +693,13 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(delete_env);
 
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
-        match delete_environment(&context_for_delete, env_action_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_delete, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -751,13 +752,13 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_working_failover() 
         let env_action_delete = EnvironmentAction::Environment(delete_env);
         let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
 
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
-        match delete_environment(&context_deletion, env_action_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_deletion, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -811,13 +812,13 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_non_working_failove
         let env_action_delete = EnvironmentAction::Environment(delete_env);
         let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
 
-        match deploy_environment(&context, env_action, DO_TEST_REGION) {
+        match Infrastructure::deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
         };
 
-        match delete_environment(&context_for_deletion, env_action_delete, DO_TEST_REGION) {
+        match Infrastructure::delete_environment(Kind::Do, &context_for_deletion, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),

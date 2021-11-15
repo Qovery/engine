@@ -12,7 +12,6 @@ use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
-use tracing::{span, Level};
 
 use passwords::PasswordGenerator;
 use rand::distributions::Alphanumeric;
@@ -25,11 +24,9 @@ use tracing::{error, info, span, warn, Level};
 use tracing_subscriber;
 
 use crate::scaleway::{
-    delete_environment as scw_delete, deploy_environment as scw_deploy, SCW_KUBE_TEST_CLUSTER_ID,
-    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-    SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
+    SCW_KUBERNETES_VERSION, SCW_KUBE_TEST_CLUSTER_ID, SCW_KUBE_TEST_CLUSTER_NAME, SCW_MANAGED_DATABASE_DISK_TYPE,
+    SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
-use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_KUBE_TEST_CLUSTER_ID, SCW_KUBE_TEST_CLUSTER_NAME};
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
@@ -45,16 +42,13 @@ use qovery_engine::models::{
 };
 use serde::{Deserialize, Serialize};
 extern crate time;
-use crate::aws::{delete_environment as aws_delete, deploy_environment as aws_deploy, AWS_KUBE_TEST_CLUSTER_ID};
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_KUBE_TEST_CLUSTER_ID};
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::common::Cluster;
+use crate::common::{Cluster, Infrastructure};
 use crate::digitalocean::{
-    delete_environment as do_delete, deploy_environment as do_deploy, DO_KUBE_TEST_CLUSTER_ID,
-    DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
-    DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
+    DO_KUBERNETES_VERSION, DO_KUBE_TEST_CLUSTER_ID, DO_KUBE_TEST_CLUSTER_NAME, DO_MANAGED_DATABASE_DISK_TYPE,
+    DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
-use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_KUBE_TEST_CLUSTER_ID, DO_KUBE_TEST_CLUSTER_NAME};
 use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::application::Region;
@@ -64,7 +58,6 @@ use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
-use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, SVCItem, PVC, SVC};
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::models::DatabaseMode::MANAGED;
@@ -1178,22 +1171,10 @@ pub fn test_db(
     let ea = EnvironmentAction::Environment(environment.clone());
     let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-    match provider_kind {
-        Kind::Aws => match aws_deploy(&context, ea) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        },
-        Kind::Do => match do_deploy(&context, ea, DO_TEST_REGION) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        },
-        Kind::Scw => match scw_deploy(&context, ea, SCW_TEST_ZONE) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        },
+    match Infrastructure::deploy_environment(provider_kind.clone(), &context, &ea) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
     }
 
     let kube_cluster_id = match provider_kind {
@@ -1274,22 +1255,10 @@ pub fn test_db(
         }
     }
 
-    match provider_kind.clone() {
-        Kind::Aws => match aws_delete(&context_for_delete, ea_delete) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        },
-        Kind::Do => match do_delete(&context_for_delete, ea_delete, DO_TEST_REGION) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        },
-        Kind::Scw => match scw_delete(&context_for_delete, ea_delete, SCW_TEST_ZONE) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        },
+    match Infrastructure::delete_environment(provider_kind.clone(), &context_for_delete, &ea_delete) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
     }
 
     return test_name.to_string();
@@ -1298,11 +1267,10 @@ pub fn test_db(
 pub fn get_environment_test_kubernetes<'a>(
     provider_kind: Kind,
     context: &Context,
-    localisation: &str,
     cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
 ) -> Box<dyn Kubernetes + 'a> {
-    let secrets = FuncTestsSecrets::new();
+    let secrets = FuncTestsSecrets::get_secrets_from_vault();
     let k: Box<dyn Kubernetes>;
 
     match provider_kind {
@@ -1314,7 +1282,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     AWS_KUBE_TEST_CLUSTER_ID,
                     AWS_KUBERNETES_VERSION,
-                    localisation,
+                    secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
                     cloud_provider,
                     dns_provider,
                     AWS::kubernetes_cluster_options(secrets, None),
@@ -1331,7 +1299,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     DO_KUBE_TEST_CLUSTER_NAME.to_string(),
                     DO_KUBERNETES_VERSION.to_string(),
-                    Region::from_str(localisation).unwrap(),
+                    Region::from_str(secrets.DIGITAL_OCEAN_DEFAULT_REGION.unwrap().as_str()).unwrap(),
                     cloud_provider,
                     dns_provider,
                     DO::kubernetes_nodes(),
@@ -1348,7 +1316,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
                     SCW_KUBERNETES_VERSION.to_string(),
-                    Zone::from_str(localisation).unwrap(),
+                    Zone::from_str(secrets.SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap(),
                     cloud_provider,
                     dns_provider,
                     Scaleway::kubernetes_nodes(),
@@ -1505,7 +1473,7 @@ pub fn cluster_test(
         };
 
         // Resume
-        if let Err(err) = tx.create_kubernetes(&kubernetes) {
+        if let Err(err) = tx.create_kubernetes(kubernetes.as_ref()) {
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {

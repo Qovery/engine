@@ -1,25 +1,23 @@
 extern crate test_utilities;
 
 use ::function_name::named;
-use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
+use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{
     Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
 };
 use qovery_engine::transaction::TransactionResult;
-use test_utilities::utilities::{init, FuncTestsSecrets};
 use tracing::{span, Level};
-
-use crate::aws::aws_environment::{delete_environment, deploy_environment};
 
 use self::test_utilities::aws::{
     AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID,
+    AWS_TEST_REGION,
 };
 use self::test_utilities::utilities::{
-    context, engine_run_test, generate_id, get_pods, get_svc_name, is_pod_restarted_env, test_db,
+    context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, test_db,
+    FuncTestsSecrets,
 };
-use self::test_utilities::utilities::{engine_run_test, generate_id};
-use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+use test_utilities::common::Infrastructure;
 
 /**
 **
@@ -59,13 +57,13 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, &ea) {
+        match Infrastructure::deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_deletion, &ea_delete) {
+        match Infrastructure::delete_environment(Kind::Aws, &context_for_deletion, &ea_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -107,13 +105,13 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, &ea) {
+        match Infrastructure::deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match ctx_pause_environment(&context, &ea) {
+        match Infrastructure::pause_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -131,7 +129,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
-        match delete_environment(&context_for_deletion, &ea_delete) {
+        match Infrastructure::delete_environment(Kind::Aws, &context_for_deletion, &ea_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -195,7 +193,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         let ea_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
         let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, &ea) {
+        match Infrastructure::deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -212,7 +210,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
         }
-        match deploy_environment(&context, &ea_fail_ok) {
+        match Infrastructure::deploy_environment(Kind::Aws, &context, &ea_fail_ok) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(true),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -229,7 +227,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             (false, _) => assert!(false),
         }
 
-        match delete_environment(&context_for_deletion, &ea_for_deletion) {
+        match Infrastructure::delete_environment(Kind::Aws, &context_for_deletion, &ea_for_deletion) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -282,7 +280,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let ea = EnvironmentAction::Environment(environment);
         let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, &ea) {
+        match Infrastructure::deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -294,7 +292,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             assert_eq!(con, true);
         }*/
 
-        match delete_environment(&context_for_deletion, &ea_for_deletion) {
+        match Infrastructure::delete_environment(Kind::Aws, &context_for_deletion, &ea_for_deletion) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -386,12 +384,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let ea = EnvironmentAction::Environment(environment);
         let ea_delete = EnvironmentAction::Environment(environment_delete);
 
-        match deploy_environment(&context, &ea) {
+        match Infrastructure::deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        match deploy_environment(&context_for_redeploy, &ea_redeploy) {
+        match Infrastructure::deploy_environment(Kind::Aws, &context_for_redeploy, &ea_redeploy) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -409,7 +407,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             (false, _) => assert!(false),
         }
 
-        match delete_environment(&context_for_delete, &ea_delete) {
+        match Infrastructure::delete_environment(Kind::Aws, &context_for_delete, &ea_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),

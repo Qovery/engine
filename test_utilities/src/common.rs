@@ -10,14 +10,14 @@ use qovery_engine::models::{
 };
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{generate_id, generate_password, get_environment_test_kubernetes, FuncTestsSecrets};
-use crate::utilities::{generate_id, generate_password, get_svc_name};
+use crate::utilities::{
+    generate_id, generate_password, get_environment_test_kubernetes, get_svc_name, FuncTestsSecrets,
+};
 use base64;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::engine::Engine;
 use qovery_engine::models::DatabaseMode::CONTAINER;
@@ -33,25 +33,19 @@ pub trait Cluster<T, U> {
 
 pub trait Infrastructure {
     fn deploy_environment(
-        &self,
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
-        localisation: Option<&str>,
     ) -> TransactionResult;
     fn pause_environment(
-        &self,
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
-        localisation: Option<&str>,
     ) -> TransactionResult;
     fn delete_environment(
-        &self,
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
-        localisation: Option<&str>,
     ) -> TransactionResult;
 }
 
@@ -60,7 +54,6 @@ impl dyn Infrastructure {
         provider_kind: Kind,
         context: &Context,
         environment_action: EnvironmentAction,
-        localisation: Option<&str>,
     ) -> TransactionResult {
         let engine: Engine = match provider_kind {
             Kind::Aws => AWS::docker_cr_engine(context),
@@ -78,13 +71,7 @@ impl dyn Infrastructure {
             Kind::Scw => Scaleway::cloud_provider(context),
         };
         let k;
-        k = get_environment_test_kubernetes(
-            provider_kind,
-            context,
-            localisation.unwrap(),
-            cp.as_ref(),
-            &dns_provider,
-        );
+        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider);
 
         let _ = tx.deploy_environment_with_options(
             k.as_ref(),
@@ -102,7 +89,6 @@ impl dyn Infrastructure {
         provider_kind: Kind,
         context: &Context,
         environment_action: EnvironmentAction,
-        localisation: Option<&str>,
     ) -> TransactionResult {
         let engine: Engine = match provider_kind {
             Kind::Aws => AWS::docker_cr_engine(context),
@@ -121,13 +107,7 @@ impl dyn Infrastructure {
             Kind::Scw => Scaleway::cloud_provider(context),
         };
         let k;
-        k = get_environment_test_kubernetes(
-            provider_kind,
-            context,
-            localisation.unwrap(),
-            cp.as_ref(),
-            &dns_provider,
-        );
+        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider);
 
         let _ = tx.pause_environment(k.as_ref(), &environment_action);
 
@@ -138,7 +118,6 @@ impl dyn Infrastructure {
         provider_kind: Kind,
         context: &Context,
         environment_action: EnvironmentAction,
-        localisation: Option<&str>,
     ) -> TransactionResult {
         let engine: Engine = match provider_kind {
             Kind::Aws => AWS::docker_cr_engine(context),
@@ -157,13 +136,7 @@ impl dyn Infrastructure {
             Kind::Scw => Scaleway::cloud_provider(context),
         };
         let k;
-        k = get_environment_test_kubernetes(
-            provider_kind,
-            context,
-            localisation.unwrap(),
-            cp.as_ref(),
-            &dns_provider,
-        );
+        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider);
 
         let _ = tx.delete_environment(k.as_ref(), &environment_action);
 

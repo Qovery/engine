@@ -59,6 +59,7 @@ fn create_and_destroy_kapsule_cluster_par_1() {
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
         function_name!(),
+        None,
     );
 }
 
@@ -76,6 +77,7 @@ fn create_and_destroy_kapsule_cluster_par_2() {
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
         function_name!(),
+        None,
     );
 }
 
@@ -94,6 +96,7 @@ fn create_and_destroy_kapsule_cluster_ams_1() {
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
         function_name!(),
+        None,
     );
 }
 
@@ -111,6 +114,7 @@ fn create_and_destroy_kapsule_cluster_war_1() {
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
         function_name!(),
+        None,
     );
 }
 

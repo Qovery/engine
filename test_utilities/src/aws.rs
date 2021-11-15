@@ -3,16 +3,13 @@ extern crate serde_derive;
 use const_format::formatcp;
 use qovery_engine::cloud_provider::aws::kubernetes::{EKSOptions, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::kubernetes::{Cluster, ProviderOptions};
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
-use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
-use qovery_engine::models::{Context, EnvironmentAction};
-use qovery_engine::transaction::{DeploymentOption, TransactionResult};
+use qovery_engine::models::Context;
 use tracing::error;
 
 use crate::cloudflare::dns_provider_cloudflare;
@@ -21,6 +18,7 @@ use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "eu-west-3";
+pub const AWS_TEST_REGION: &str = "us-east-2";
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 18;
 pub const AWS_KUBERNETES_VERSION: &'static str =
@@ -186,76 +184,4 @@ impl Cluster<AWS, EKSOptions> for AWS {
             qovery_cluster_secret_token: secrets.QOVERY_CLUSTER_SECRET_TOKEN.unwrap(),
         }
     }
-}
-
-pub fn docker_ecr_aws_engine(context: &Context) -> Engine {
-    // use ECR
-    let container_registry = Box::new(container_registry_ecr(context));
-
-    // use LocalDocker
-    let build_platform = Box::new(build_platform_local_docker(context));
-
-    // use AWS
-    let cloud_provider = Box::new(cloud_provider_aws(context));
-
-    let dns_provider = Box::new(dns_provider_cloudflare(context));
-
-    Engine::new(
-        context.clone(),
-        build_platform,
-        container_registry,
-        cloud_provider,
-        dns_provider,
-    )
-}
-
-pub fn deploy_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
-    let engine = docker_ecr_aws_engine(context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = cloud_provider_aws(context);
-    let nodes = aws_kubernetes_nodes();
-    let dns_provider = dns_provider_cloudflare(context);
-    let eks = aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
-
-    let _ = tx.deploy_environment_with_options(
-        &eks,
-        &environment_action,
-        DeploymentOption {
-            force_build: true,
-            force_push: true,
-        },
-    );
-
-    tx.commit()
-}
-
-pub fn delete_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
-    let engine = docker_ecr_aws_engine(context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = cloud_provider_aws(context);
-    let nodes = aws_kubernetes_nodes();
-    let dns_provider = dns_provider_cloudflare(context);
-    let eks = aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
-
-    let _ = tx.delete_environment(&eks, &environment_action);
-
-    tx.commit()
-}
-
-pub fn pause_environment(context: &Context, environment_action: EnvironmentAction) -> TransactionResult {
-    let engine = docker_ecr_aws_engine(context);
-    let session = engine.session().unwrap();
-    let mut tx = session.transaction();
-
-    let cp = cloud_provider_aws(context);
-    let nodes = aws_kubernetes_nodes();
-    let dns_provider = dns_provider_cloudflare(context);
-    let eks = aws_kubernetes_eks(context, &cp, &dns_provider, nodes);
-    let _ = tx.pause_environment(&eks, &environment_action);
-
-    tx.commit()
 }
