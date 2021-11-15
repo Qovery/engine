@@ -19,7 +19,7 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::T2Large => "t2.large",
             AwsInstancesType::T2Xlarge => "t2x.large",
             AwsInstancesType::T3Large => "t3.large",
-            AwsInstancesType::T3Xlarge => "t3x.large",
+            AwsInstancesType::T3Xlarge => "t3.xlarge",
             AwsInstancesType::T3aLarge => "t3a.large",
             AwsInstancesType::T3a2xlarge => "t3a.2xlarge",
         }
@@ -33,7 +33,7 @@ impl AwsInstancesType {
             AwsInstancesType::T2Large => "t2.large",
             AwsInstancesType::T2Xlarge => "t2x.large",
             AwsInstancesType::T3Large => "t3.large",
-            AwsInstancesType::T3Xlarge => "t3x.large",
+            AwsInstancesType::T3Xlarge => "t3.xlarge",
             AwsInstancesType::T3aLarge => "t3a.large",
             AwsInstancesType::T3a2xlarge => "t3a.2xlarge",
         }
@@ -46,7 +46,7 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::T2Large => write!(f, "t2.large"),
             AwsInstancesType::T2Xlarge => write!(f, "t2x.large"),
             AwsInstancesType::T3Large => write!(f, "t3.large"),
-            AwsInstancesType::T3Xlarge => write!(f, "t3x.large"),
+            AwsInstancesType::T3Xlarge => write!(f, "t3.xlarge"),
             AwsInstancesType::T3aLarge => write!(f, "t3a.large"),
             AwsInstancesType::T3a2xlarge => write!(f, "t3a.2xlarge"),
         }
@@ -61,7 +61,7 @@ impl FromStr for AwsInstancesType {
             "t2.large" => Ok(AwsInstancesType::T2Large),
             "t2x.large" => Ok(AwsInstancesType::T2Xlarge),
             "t3.large" => Ok(AwsInstancesType::T3Large),
-            "t3x.large" => Ok(AwsInstancesType::T3Xlarge),
+            "t3.xlarge" => Ok(AwsInstancesType::T3Xlarge),
             "t3a.large" => Ok(AwsInstancesType::T3aLarge),
             "t3a.2xlarge" => Ok(AwsInstancesType::T3a2xlarge),
             _ => Err(()),

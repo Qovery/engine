@@ -615,6 +615,7 @@ impl<'a> Kapsule<'a> {
 
     fn delete(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
+        let mut skip_kubernetes_step = false;
         let send_to_customer = |message: &str| {
             listeners_helper.delete_in_progress(ProgressInfo::new(
                 ProgressScope::Infrastructure {
@@ -660,12 +661,17 @@ impl<'a> Kapsule<'a> {
             ),
         )?;
 
-        let kubernetes_config_file_path = self.config_file_path()?;
-
-        let all_namespaces = kubectl_exec_get_all_namespaces(
-            &kubernetes_config_file_path,
-            self.cloud_provider().credentials_environment_variables(),
-        );
+        let kubernetes_config_file_path = match self.config_file_path() {
+            Ok(x) => x,
+            Err(e) => {
+                warn!(
+                    "skipping Kubernetes uninstall because it can't be reached. {:?}",
+                    e.message
+                );
+                skip_kubernetes_step = true;
+                "".to_string()
+            }
+        };
 
         // should apply before destroy to be sure destroy will compute on all resources
         // don't exit on failure, it can happen if we resume a destroy process
@@ -686,156 +692,163 @@ impl<'a> Kapsule<'a> {
             error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message);
         };
 
-        // should make the diff between all namespaces and qovery managed namespaces
-        let message = format!(
-            "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
-            self.name(),
-            self.id()
-        );
-        info!("{}", &message);
-        send_to_customer(&message);
+        if !skip_kubernetes_step {
+            // should make the diff between all namespaces and qovery managed namespaces
+            let message = format!(
+                "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
+                self.name(),
+                self.id()
+            );
+            info!("{}", &message);
+            send_to_customer(&message);
 
-        match all_namespaces {
-            Ok(namespace_vec) => {
-                let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
-                let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
+            let all_namespaces = kubectl_exec_get_all_namespaces(
+                &kubernetes_config_file_path,
+                self.cloud_provider().credentials_environment_variables(),
+            );
 
-                info!("Deleting non Qovery namespaces");
-                for namespace_to_delete in namespaces_to_delete.iter() {
-                    info!("Starting namespace {} deletion process", namespace_to_delete);
-                    let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
-                        &kubernetes_config_file_path,
-                        namespace_to_delete,
-                        self.cloud_provider().credentials_environment_variables(),
-                    );
+            match all_namespaces {
+                Ok(namespace_vec) => {
+                    let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
+                    let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
 
-                    match deletion {
-                        Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
-                        Err(e) => {
-                            if e.message.is_some() && e.message.unwrap().contains("not found") {
-                                {}
-                            } else {
-                                error!("Can't delete the namespace {}", namespace_to_delete);
+                    info!("Deleting non Qovery namespaces");
+                    for namespace_to_delete in namespaces_to_delete.iter() {
+                        info!("Starting namespace {} deletion process", namespace_to_delete);
+                        let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+                            &kubernetes_config_file_path,
+                            namespace_to_delete,
+                            self.cloud_provider().credentials_environment_variables(),
+                        );
+
+                        match deletion {
+                            Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
+                            Err(e) => {
+                                if e.message.is_some() && e.message.unwrap().contains("not found") {
+                                    {}
+                                } else {
+                                    error!("Can't delete the namespace {}", namespace_to_delete);
+                                }
                             }
                         }
                     }
                 }
+
+                Err(e) => error!(
+                    "Error while getting all namespaces for Kubernetes cluster {}: error {:?}",
+                    self.name_with_id(),
+                    e.message
+                ),
             }
 
-            Err(e) => error!(
-                "Error while getting all namespaces for Kubernetes cluster {}: error {:?}",
-                self.name_with_id(),
-                e.message
-            ),
-        }
-
-        let message = format!(
-            "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
-            self.name(),
-            self.id()
-        );
-        info!("{}", &message);
-        send_to_customer(&message);
-
-        // delete custom metrics api to avoid stale namespaces on deletion
-        let _ = cmd::helm::helm_uninstall_list(
-            &kubernetes_config_file_path,
-            vec![HelmChart {
-                name: "metrics-server".to_string(),
-                namespace: "kube-system".to_string(),
-                version: None,
-            }],
-            self.cloud_provider().credentials_environment_variables(),
-        );
-
-        // required to avoid namespace stuck on deletion
-        if let Err(e) = uninstall_cert_manager(
-            &kubernetes_config_file_path,
-            self.cloud_provider().credentials_environment_variables(),
-        ) {
-            return Err(EngineError::new(
-                Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
-        }
-
-        info!("Deleting Qovery managed helm charts");
-        let qovery_namespaces = get_qovery_managed_namespaces();
-        for qovery_namespace in qovery_namespaces.iter() {
-            info!(
-                "Starting Qovery managed charts deletion process in {} namespace",
-                qovery_namespace
+            let message = format!(
+                "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
+                self.name(),
+                self.id()
             );
-            let charts_to_delete = cmd::helm::helm_list(
+            info!("{}", &message);
+            send_to_customer(&message);
+
+            // delete custom metrics api to avoid stale namespaces on deletion
+            let _ = cmd::helm::helm_uninstall_list(
+                &kubernetes_config_file_path,
+                vec![HelmChart {
+                    name: "metrics-server".to_string(),
+                    namespace: "kube-system".to_string(),
+                    version: None,
+                }],
+                self.cloud_provider().credentials_environment_variables(),
+            );
+
+            // required to avoid namespace stuck on deletion
+            if let Err(e) = uninstall_cert_manager(
                 &kubernetes_config_file_path,
                 self.cloud_provider().credentials_environment_variables(),
-                Some(qovery_namespace),
-            );
-            match charts_to_delete {
-                Ok(charts) => {
-                    for chart in charts {
-                        info!("Deleting chart {} in {} namespace", chart.name, chart.namespace);
-                        match cmd::helm::helm_exec_uninstall(
-                            &kubernetes_config_file_path,
-                            &chart.namespace,
-                            &chart.name,
-                            self.cloud_provider().credentials_environment_variables(),
-                        ) {
-                            Ok(_) => info!("chart {} deleted", chart.name),
-                            Err(e) => error!("{:?}", e),
+            ) {
+                return Err(EngineError::new(
+                    Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    e.message,
+                ));
+            }
+
+            info!("Deleting Qovery managed helm charts");
+            let qovery_namespaces = get_qovery_managed_namespaces();
+            for qovery_namespace in qovery_namespaces.iter() {
+                info!(
+                    "Starting Qovery managed charts deletion process in {} namespace",
+                    qovery_namespace
+                );
+                let charts_to_delete = cmd::helm::helm_list(
+                    &kubernetes_config_file_path,
+                    self.cloud_provider().credentials_environment_variables(),
+                    Some(qovery_namespace),
+                );
+                match charts_to_delete {
+                    Ok(charts) => {
+                        for chart in charts {
+                            info!("Deleting chart {} in {} namespace", chart.name, chart.namespace);
+                            match cmd::helm::helm_exec_uninstall(
+                                &kubernetes_config_file_path,
+                                &chart.namespace,
+                                &chart.name,
+                                self.cloud_provider().credentials_environment_variables(),
+                            ) {
+                                Ok(_) => info!("chart {} deleted", chart.name),
+                                Err(e) => error!("{:?}", e),
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        if e.message.is_some() && e.message.unwrap().contains("not found") {
+                            {}
+                        } else {
+                            error!("Can't delete the namespace {}", qovery_namespace);
                         }
                     }
                 }
-                Err(e) => {
-                    if e.message.is_some() && e.message.unwrap().contains("not found") {
-                        {}
-                    } else {
-                        error!("Can't delete the namespace {}", qovery_namespace);
+            }
+
+            info!("Deleting Qovery managed Namespaces");
+            for qovery_namespace in qovery_namespaces.iter() {
+                info!("Starting namespace {} deletion process", qovery_namespace);
+                let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+                    &kubernetes_config_file_path,
+                    qovery_namespace,
+                    self.cloud_provider().credentials_environment_variables(),
+                );
+                match deletion {
+                    Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
+                    Err(e) => {
+                        if e.message.is_some() && e.message.unwrap().contains("not found") {
+                            {}
+                        } else {
+                            error!("Can't delete the namespace {}", qovery_namespace);
+                        }
                     }
                 }
             }
-        }
 
-        info!("Deleting Qovery managed Namespaces");
-        for qovery_namespace in qovery_namespaces.iter() {
-            info!("Starting namespace {} deletion process", qovery_namespace);
-            let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+            info!("Delete all remaining deployed helm applications");
+            match cmd::helm::helm_list(
                 &kubernetes_config_file_path,
-                qovery_namespace,
                 self.cloud_provider().credentials_environment_variables(),
-            );
-            match deletion {
-                Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
-                Err(e) => {
-                    if e.message.is_some() && e.message.unwrap().contains("not found") {
-                        {}
-                    } else {
-                        error!("Can't delete the namespace {}", qovery_namespace);
+                None,
+            ) {
+                Ok(helm_charts) => {
+                    for chart in helm_charts {
+                        info!("Deleting chart {} in progress...", chart.name);
+                        let _ = cmd::helm::helm_uninstall_list(
+                            &kubernetes_config_file_path,
+                            vec![chart],
+                            self.cloud_provider().credentials_environment_variables(),
+                        );
                     }
                 }
+                Err(_) => error!("Unable to get helm list"),
             }
-        }
-
-        info!("Delete all remaining deployed helm applications");
-        match cmd::helm::helm_list(
-            &kubernetes_config_file_path,
-            self.cloud_provider().credentials_environment_variables(),
-            None,
-        ) {
-            Ok(helm_charts) => {
-                for chart in helm_charts {
-                    info!("Deleting chart {} in progress...", chart.name);
-                    let _ = cmd::helm::helm_uninstall_list(
-                        &kubernetes_config_file_path,
-                        vec![chart],
-                        self.cloud_provider().credentials_environment_variables(),
-                    );
-                }
-            }
-            Err(_) => error!("Unable to get helm list"),
-        }
+        };
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
         info!("{}", &message);
