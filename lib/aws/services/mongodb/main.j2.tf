@@ -67,29 +67,13 @@ resource "aws_docdb_cluster_instance" "documentdb_cluster_instances" {
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
   preferred_maintenance_window = var.preferred_maintenance_window
 
-  tags = {
-    cluster_name = var.cluster_name
-    region = var.region
-    q_client_id = var.q_customer_id
-    q_environment_id = var.q_environment_id
-    q_project_id = var.q_project_id
-    database_identifier = var.documentdb_identifier
-  }
+  tags = local.mongodb_database_tags
 }
 
 resource "aws_docdb_cluster" "documentdb_cluster" {
   cluster_identifier = var.documentdb_identifier
 
-  tags = {
-    cluster_name = var.cluster_name
-    region = var.region
-    q_client_id = var.q_customer_id
-    q_environment_id = var.q_environment_id
-    q_project_id = var.q_project_id
-    database_identifier = var.documentdb_identifier
-    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
-    {% if snapshot is defined and snapshot["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
-  }
+  tags = local.mongodb_database_tags
 
   # DocumentDB instance basics
   port = var.port
