@@ -102,13 +102,13 @@ pub struct KubernetesServiceStatusLoadBalancerIngress {
     pub hostname: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPod {
     pub status: KubernetesPodStatus,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodStatus {
     pub container_statuses: Option<Vec<KubernetesPodContainerStatus>>,
@@ -118,7 +118,7 @@ pub struct KubernetesPodStatus {
     pub phase: KubernetesPodStatusPhase,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodCondition {
     pub status: String,
@@ -128,7 +128,7 @@ pub struct KubernetesPodCondition {
     pub reason: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum KubernetesPodStatusPhase {
     Pending,
     Running,
@@ -137,7 +137,7 @@ pub enum KubernetesPodStatusPhase {
     Unknown,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodContainerStatus {
     #[serde(rename = "last_state")]
@@ -145,21 +145,21 @@ pub struct KubernetesPodContainerStatus {
     pub ready: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodContainerStatusLastState {
     pub terminated: Option<ContainerStatusTerminated>,
     pub waiting: Option<ContainerStatusWaiting>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerStatusWaiting {
     pub message: Option<String>,
     pub reason: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerStatusTerminated {
     #[serde(rename = "exit_code")]

@@ -1014,9 +1014,9 @@ impl<'a> Kubernetes for Kapsule<'a> {
         kubernetes::deploy_environment_error(self, environment)
     }
 
-    fn pause_environment(&self, _environment: &Environment) -> Result<(), EngineError> {
-        warn!("SCW.pause_environment_error() called for {}", self.name());
-        Ok(())
+    fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+        warn!("SCW.pause_environment() called for {}", self.name());
+        kubernetes::pause_environment(self, environment)
     }
 
     fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
