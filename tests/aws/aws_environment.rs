@@ -381,7 +381,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
                 .as_str(),
         );
 
-        let storage_size: u8 = 10;
+        let storage_size: u16 = 10;
         environment.applications = environment
             .applications
             .into_iter()
@@ -390,7 +390,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
                     id: generate_id(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
-                    size_in_gib: storage_size as u16,
+                    size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }];
@@ -411,7 +411,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         };
 
         match get_pvc(
-            provider_kind.clone(),
+            Kind::Aws,
             AWS_KUBE_TEST_CLUSTER_ID,
             environment.clone(),
             secrets.clone(),
@@ -493,7 +493,7 @@ fn redeploy_same_app_with_ebs() {
         };
 
         match get_pvc(
-            provider_kind.clone(),
+            Kind::Aws,
             AWS_KUBE_TEST_CLUSTER_ID,
             environment.clone(),
             secrets.clone(),

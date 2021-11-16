@@ -351,7 +351,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
                 .as_str(),
         );
 
-        let storage_size: u8 = 10;
+        let storage_size: u16 = 10;
         environment.applications = environment
             .applications
             .into_iter()
@@ -381,7 +381,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         };
 
         match get_pvc(
-            provider_kind.clone(),
+            Kind::Scw,
             SCW_KUBE_TEST_CLUSTER_ID,
             environment.clone(),
             secrets.clone(),
@@ -433,7 +433,7 @@ fn scaleway_kapsule_redeploy_same_app() {
                 .as_str(),
         );
 
-        // Todo: make an image that check there is a mounted disk
+        let storage_size: u16 = 10;
         environment.applications = environment
             .applications
             .into_iter()
@@ -442,7 +442,7 @@ fn scaleway_kapsule_redeploy_same_app() {
                     id: generate_id(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
-                    size_in_gib: 10,
+                    size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }];
@@ -464,6 +464,19 @@ fn scaleway_kapsule_redeploy_same_app() {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        match get_pvc(
+            Kind::Scw,
+            SCW_KUBE_TEST_CLUSTER_ID,
+            environment.clone(),
+            secrets.clone(),
+        ) {
+            Ok(pvc) => assert_eq!(
+                pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                format!("{}Gi", storage_size)
+            ),
+            Err(_) => assert!(false),
         };
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);

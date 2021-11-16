@@ -351,7 +351,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
                 .as_str(),
         );
 
-        let storage_size: u8 = 10;
+        let storage_size: u16 = 10;
         environment.applications = environment
             .applications
             .into_iter()
@@ -360,7 +360,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
                     id: generate_id(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
-                    size_in_gib: storage_size as u16,
+                    size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }];
@@ -380,12 +380,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            provider_kind.clone(),
-            DO_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
+        match get_pvc(Kind::Do, DO_KUBE_TEST_CLUSTER_ID, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -433,7 +428,7 @@ fn digitalocean_doks_redeploy_same_app() {
                 .as_str(),
         );
 
-        let storage_size: u8 = 10;
+        let storage_size: u16 = 10;
         environment.applications = environment
             .applications
             .into_iter()
@@ -442,7 +437,7 @@ fn digitalocean_doks_redeploy_same_app() {
                     id: generate_id(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
-                    size_in_gib: storage_size as u16,
+                    size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }];
@@ -466,12 +461,7 @@ fn digitalocean_doks_redeploy_same_app() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            provider_kind.clone(),
-            DO_KUBE_TEST_CLUSTER_ID,
-            environment.clone(),
-            secrets.clone(),
-        ) {
+        match get_pvc(Kind::Do, DO_KUBE_TEST_CLUSTER_ID, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
