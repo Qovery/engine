@@ -1270,7 +1270,7 @@ pub fn get_environment_test_kubernetes<'a>(
     cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
 ) -> Box<dyn Kubernetes + 'a> {
-    let secrets = FuncTestsSecrets::get_secrets_from_vault();
+    let secrets = FuncTestsSecrets::new();
     let k: Box<dyn Kubernetes>;
 
     match provider_kind {
