@@ -6,7 +6,6 @@ metadata:
   name: {{ sanitized_name }}
   namespace: {{ namespace }}
   labels:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
@@ -17,14 +16,12 @@ spec:
   serviceName: {{ sanitized_name }}
   selector:
     matchLabels:
-      ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       appId: {{ id }}
       app: {{ sanitized_name }}
   template:
     metadata:
       labels:
-        ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
         app: {{ sanitized_name }}
@@ -62,6 +59,7 @@ spec:
             {%- if private_port %}
           ports:
             - containerPort: {{ private_port }}
+              name: "p{{ private_port }}"
               protocol: TCP
           readinessProbe:
             tcpSocket:
@@ -92,7 +90,6 @@ spec:
   - metadata:
       name: {{ s.id }}
       labels:
-        ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
         app: {{ sanitized_name }}
@@ -112,7 +109,6 @@ spec:
   - metadata:
       name: {{ s.id }}
       labels:
-        ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
         diskId: {{ s.id }}

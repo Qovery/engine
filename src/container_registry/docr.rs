@@ -445,29 +445,30 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
         .send();
 
     return match res {
-        Ok(output) => {
-            match output.status() {
-                StatusCode::OK => {
-                    let content = output.text().unwrap();
-                    let res_registry = serde_json::from_str::<DoApiGetContainerRegistry>(&content);
+        Ok(output) => match output.status() {
+            StatusCode::OK => {
+                let content = output.text().unwrap();
+                let res_registry = serde_json::from_str::<DoApiGetContainerRegistry>(&content);
 
-                    match res_registry {
-                        Ok(registry) => Ok(registry.registry.name),
-                        Err(err) => Err(SimpleError::new(
-                            SimpleErrorKind::Other,
-                            Some(format!(
-                                "An error occurred while deserializing JSON coming from Digital Ocean API: error: {:?}",
-                                err
-                            )),
+                match res_registry {
+                    Ok(registry) => Ok(registry.registry.name),
+                    Err(err) => Err(SimpleError::new(
+                        SimpleErrorKind::Other,
+                        Some(format!(
+                            "An error occurred while deserializing JSON coming from Digital Ocean API: error: {:?}",
+                            err
                         )),
-                    }
-                }
-                status => {
-                    warn!("status from Digital Ocean Registry API {}", status);
-                    Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
+                    )),
                 }
             }
-        }
+            status => {
+                warn!("status from Digital Ocean Registry API {}", status);
+                Err(SimpleError::new(
+                    SimpleErrorKind::Other,
+                    Some("Incorrect Status received from Digital Ocean when tyring to get container registry"),
+                ))
+            }
+        },
         Err(e) => {
             error!("{:?}", e);
             Err(SimpleError::new(
