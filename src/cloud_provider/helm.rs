@@ -245,11 +245,17 @@ pub trait HelmChart: Send {
     ) -> Result<Option<ChartPayload>, SimpleError> {
         // print events for future investigation
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-        kubectl_exec_get_events(
+        match kubectl_exec_get_events(
             kubernetes_config,
             Some(self.get_chart_info().get_namespace_string().as_str()),
             environment_variables,
-        )?;
+        ) {
+            Ok(ok_line) => info!("{}", ok_line),
+            Err(err) => {
+                error!("{:?}", err);
+                return Err(err);
+            }
+        };
         Ok(payload)
     }
 }

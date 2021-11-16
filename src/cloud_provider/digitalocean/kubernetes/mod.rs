@@ -23,7 +23,9 @@ use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::helm::{helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info};
-use crate::cmd::kubectl::{do_kubectl_exec_get_loadbalancer_id, kubectl_exec_get_all_namespaces};
+use crate::cmd::kubectl::{
+    do_kubectl_exec_get_loadbalancer_id, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
+};
 use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
@@ -753,7 +755,24 @@ impl<'a> DOKS<'a> {
     }
 
     fn create_error(&self) -> Result<(), EngineError> {
-        Ok(())
+        let kubeconfig_file = match self.config_file() {
+            Ok(x) => x.0,
+            Err(e) => {
+                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
+                return Err(e);
+            }
+        };
+        let kubeconfig = PathBuf::from(&kubeconfig_file);
+        let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
+        warn!("DOKS.create_error() called for {}", self.name());
+        match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
+            Ok(ok_line) => info!("{}", ok_line),
+            Err(err) => error!("{:?}", err),
+        };
+        Err(self.engine_error(
+            EngineErrorCause::Internal,
+            format!("{} Kubernetes cluster failed on deployment", self.name()),
+        ))
     }
 
     fn upgrade(&self) -> Result<(), EngineError> {
