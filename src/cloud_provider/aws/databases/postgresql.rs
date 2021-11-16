@@ -11,7 +11,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use,
-    managed_db_name_sanitizer,
+    managed_db_name_sanitizer, print_action,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -19,6 +19,7 @@ use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope, StringError};
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
+use ::function_name::named;
 
 pub struct PostgreSQL {
     context: Context,
@@ -68,6 +69,14 @@ impl PostgreSQL {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_postgres_version(self.version(), is_managed_services), self)
+    }
+
+    fn cloud_provider_name(&self) -> &str {
+        "aws"
+    }
+
+    fn struct_name(&self) -> &str {
+        "postgresql"
     }
 }
 
@@ -243,8 +252,14 @@ impl Terraform for PostgreSQL {
 }
 
 impl Create for PostgreSQL {
+    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.PostgreSQL.on_create() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_stateful_service(target, self)
@@ -255,16 +270,28 @@ impl Create for PostgreSQL {
         self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
     }
 
+    #[named]
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.PostgreSQL.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         Ok(())
     }
 }
 
 impl Pause for PostgreSQL {
+    #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.PostgreSQL.on_pause() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
             scale_down_database(target, self, 0)
@@ -275,16 +302,28 @@ impl Pause for PostgreSQL {
         Ok(())
     }
 
+    #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.PostgreSQL.on_pause_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         Ok(())
     }
 }
 
 impl Delete for PostgreSQL {
+    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.PostgreSQL.on_delete() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
             delete_stateful_service(target, self)
@@ -295,8 +334,14 @@ impl Delete for PostgreSQL {
         Ok(())
     }
 
+    #[named]
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.PostgreSQL.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         Ok(())
     }

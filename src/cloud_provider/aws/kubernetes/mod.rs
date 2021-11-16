@@ -22,6 +22,7 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::{
@@ -44,6 +45,7 @@ use crate::models::{
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
+use ::function_name::named;
 
 pub mod helm_charts;
 pub mod node;
@@ -1438,6 +1440,14 @@ impl<'a> EKS<'a> {
         // FIXME What should we do if something goes wrong while deleting the cluster?
         Ok(())
     }
+
+    fn cloud_provider_name(&self) -> &str {
+        "aws"
+    }
+
+    fn struct_name(&self) -> &str {
+        "kubernetes"
+    }
 }
 
 impl<'a> Kubernetes for EKS<'a> {
@@ -1485,83 +1495,179 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
+    #[named]
     fn on_create(&self) -> Result<(), EngineError> {
-        info!("EKS.on_create() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.create())
     }
 
+    #[named]
     fn on_create_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
     }
 
+    #[named]
     fn on_upgrade(&self) -> Result<(), EngineError> {
-        info!("EKS.on_upgrade() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.upgrade())
     }
 
+    #[named]
     fn on_upgrade_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_upgrade() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
     }
 
+    #[named]
     fn on_downgrade(&self) -> Result<(), EngineError> {
-        info!("EKS.on_downgrade() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.downgrade())
     }
 
+    #[named]
     fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_downgrade_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
     }
 
+    #[named]
     fn on_pause(&self) -> Result<(), EngineError> {
-        info!("EKS.on_pause() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Pause, || self.pause())
     }
 
+    #[named]
     fn on_pause_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_pause_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Pause, || self.pause_error())
     }
 
+    #[named]
     fn on_delete(&self) -> Result<(), EngineError> {
-        info!("EKS.on_delete() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Delete, || self.delete())
     }
 
+    #[named]
     fn on_delete_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_delete_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
+    #[named]
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("EKS.deploy_environment() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         kubernetes::deploy_environment(self, environment)
     }
 
+    #[named]
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
-        warn!("EKS.deploy_environment_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         kubernetes::deploy_environment_error(self, environment)
     }
 
+    #[named]
     fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("EKS.pause_environment() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         kubernetes::pause_environment(self, environment)
     }
 
+    #[named]
     fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        warn!("EKS.pause_environment_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 
+    #[named]
     fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("EKS.delete_environment() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         kubernetes::delete_environment(self, environment)
     }
 
+    #[named]
     fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        warn!("EKS.delete_environment_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 }
