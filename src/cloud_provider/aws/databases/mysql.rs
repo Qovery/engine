@@ -432,8 +432,8 @@ mod tests_mysql {
     #[test]
     fn check_mysql_version() {
         // managed version
-        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.25");
-        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.25");
+        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.26");
+        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.26");
         assert_eq!(get_mysql_version("8.0.16".to_string(), true).unwrap(), "8.0.16");
         assert_eq!(
             get_mysql_version("8.0.18".to_string(), true).unwrap_err().as_str(),
