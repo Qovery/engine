@@ -45,6 +45,17 @@ spec:
             serviceName: "{{ route.application_name }}"
             servicePort: {{ route.application_port }}
         {%- endfor %}
+    {%- if router_feature_flag_switch_to_new_domain_handling == false %}
+    - host: "{{ router_secondary_domain }}"
+        http:
+          paths:
+          { %- for route in routes % }
+          - path: "{{ route.path }}"
+            backend:
+              serviceName: "{{ route.application_name }}"
+              servicePort: { { route.application_port } }
+          { %- endfor % }
+    {%- endif %}
     {%- for domain in custom_domains %}
     - host: "{{ domain.domain }}"
       http:

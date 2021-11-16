@@ -17,7 +17,7 @@ pub struct Router {
     id: String,
     action: Action,
     name: String,
-    sub_domain_prefix: String,
+    sub_domain_prefix: Option<String>,
     default_domain: String,
     custom_domains: Vec<CustomDomain>,
     routes: Vec<Route>,
@@ -31,7 +31,7 @@ impl Router {
         id: &str,
         name: &str,
         action: Action,
-        sub_domain_prefix: &str,
+        sub_domain_prefix: Option<String>,
         default_domain: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
@@ -43,7 +43,7 @@ impl Router {
             id: id.to_string(),
             name: name.to_string(),
             action,
-            sub_domain_prefix: sub_domain_prefix.to_string(),
+            sub_domain_prefix,
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,
@@ -163,16 +163,47 @@ impl Service for Router {
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
-        let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
+        let tls_domain: String;
+        let router_main_domain: String;
+        let router_main_domain_hash: String;
+        let router_secondary_domain: String;
+        let router_secondary_domain_hash: String;
 
-        let tls_domain = kubernetes.dns_provider().domain_wildcarded();
-        let tls_cluster_subdomain = kubernetes
-            .dns_provider()
-            .domain_with_sub_domain_wildcarded(self.sub_domain_prefix.as_str());
+        let root_domain = &self.default_domain;
+        let sub_domain = match &self.sub_domain_prefix {
+            Some(sub_domain_prefix) => kubernetes
+                .dns_provider()
+                .domain_with_sub_domain(sub_domain_prefix.as_str()),
+            None => root_domain.to_string(),
+        };
 
+        // If router has feature_flag_switch_to_new_domain_handling activated:
+        // it means router is ok to fully switch to sub-domain
+        if self.feature_flag_switch_to_new_domain_handling && self.sub_domain_prefix.is_some() {
+            tls_domain = kubernetes
+                .dns_provider()
+                .domain_with_sub_domain_wildcarded(self.sub_domain_prefix.as_ref().unwrap().as_str());
+            router_main_domain = sub_domain.clone();
+            router_main_domain_hash = crate::crypto::to_sha1_truncate_16(sub_domain.as_str());
+            router_secondary_domain = root_domain.clone();
+            router_secondary_domain_hash = crate::crypto::to_sha1_truncate_16(root_domain.as_str());
+        } else {
+            tls_domain = kubernetes.dns_provider().domain_wildcarded();
+            router_main_domain = root_domain.clone();
+            router_main_domain_hash = crate::crypto::to_sha1_truncate_16(root_domain.as_str());
+            router_secondary_domain = sub_domain.clone();
+            router_secondary_domain_hash = crate::crypto::to_sha1_truncate_16(sub_domain.as_str());
+        }
+
+        context.insert(
+            "router_feature_flag_switch_to_new_domain_handling",
+            &self.feature_flag_switch_to_new_domain_handling,
+        );
         context.insert("router_tls_domain", tls_domain.as_str());
-        context.insert("router_default_domain", self.default_domain.as_str());
-        context.insert("router_default_domain_hash", router_default_domain_hash.as_str());
+        context.insert("router_default_domain", router_main_domain.as_str());
+        context.insert("router_default_domain_hash", router_main_domain_hash.as_str());
+        context.insert("router_secondary_domain", router_secondary_domain.as_str());
+        context.insert("router_secondary_domain_hash", router_secondary_domain_hash.as_str());
         context.insert("custom_domains", &custom_domain_data_templates);
         context.insert("routes", &route_data_templates);
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME

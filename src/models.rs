@@ -464,11 +464,12 @@ pub struct Router {
     pub id: String,
     pub name: String,
     pub action: Action,
-    pub sub_domain_prefix: String,
+    pub sub_domain_prefix: Option<String>,
     pub default_domain: String,
     pub public_port: u16,
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
+    pub feature_flag_switch_to_new_domain_handling: bool,
 }
 
 impl Router {
@@ -531,11 +532,12 @@ impl Router {
                     self.id.as_str(),
                     self.name.as_str(),
                     self.action.to_service_action(),
+                    self.sub_domain_prefix.clone(),
                     self.default_domain.as_str(),
-                    self.sub_domain_prefix.as_str(),
                     custom_domains,
                     routes,
                     listeners,
+                    self.feature_flag_switch_to_new_domain_handling,
                 ));
                 Some(router)
             }
