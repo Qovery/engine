@@ -61,6 +61,7 @@ fn create_and_destroy_doks_cluster_ams_3() {
 #[cfg(feature = "test-do-infra")]
 #[named]
 #[test]
+#[ignore]
 fn create_upgrade_and_destroy_doks_cluster_in_nyc_3() {
     let region = Region::NewYorkCity3;
     let secrets = FuncTestsSecrets::new();

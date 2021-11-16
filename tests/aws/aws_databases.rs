@@ -55,7 +55,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
         let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -103,7 +103,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
         let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -120,7 +120,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
         let ret = get_pods(
-            ProviderKind::Aws,
+            Kind::Aws,
             environment.clone(),
             app_name.clone().as_str(),
             AWS_KUBE_TEST_CLUSTER_ID,
@@ -190,8 +190,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
         environment_delete.action = Action::Delete;
 
         let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
-        let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
+        let ea_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up.clone(), environment.clone());
+        let ea_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -201,7 +201,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_env(
-            ProviderKind::Aws,
+            Kind::Aws,
             AWS_KUBE_TEST_CLUSTER_ID,
             environment_check.clone(),
             database_name.as_str(),
@@ -217,7 +217,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY EVEN IF FAIL
         match is_pod_restarted_env(
-            ProviderKind::Aws,
+            Kind::Aws,
             AWS_KUBE_TEST_CLUSTER_ID,
             environment_check.clone(),
             database_name.as_str(),
@@ -277,8 +277,8 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
         environment_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_for_deletion = EnvironmentAction::Environment(environment_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -377,12 +377,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
-        let ea_redeploy = EnvironmentAction::Environment(environment_to_redeploy);
+        let ea_redeploy = EnvironmentAction::Environment(environment_to_redeploy.clone());
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -397,7 +397,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_env(
-            ProviderKind::Aws,
+            Kind::Aws,
             AWS_KUBE_TEST_CLUSTER_ID,
             environment_check,
             database_name.as_str(),

@@ -57,7 +57,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
@@ -110,7 +110,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action.clone()) {
             TransactionResult::Ok => assert!(true),
@@ -202,7 +202,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
         environment_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
+        let env_action_fail_ok =
+            EnvironmentAction::EnvironmentWithFailover(environment_never_up.clone(), environment.clone());
         let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
@@ -416,12 +417,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
-        let env_action_redeploy = EnvironmentAction::Environment(environment_to_redeploy);
+        let env_action_redeploy = EnvironmentAction::Environment(environment_to_redeploy.clone());
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),

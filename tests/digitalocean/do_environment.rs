@@ -48,7 +48,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
         environment_for_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
+        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
@@ -100,7 +100,7 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
         environment_for_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
+        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(false),
@@ -254,7 +254,7 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
         environment_for_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete);
+        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
@@ -304,7 +304,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
         environment_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action_for_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
@@ -372,7 +372,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
         environment_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
@@ -452,8 +452,8 @@ fn digitalocean_doks_redeploy_same_app() {
         environment_delete.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_redeploy = EnvironmentAction::Environment(environment_redeploy);
-        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action_redeploy = EnvironmentAction::Environment(environment_redeploy.clone());
+        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
@@ -554,8 +554,8 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
 
         // environment actions
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_not_working = EnvironmentAction::Environment(environment_for_not_working);
-        let env_action_delete = EnvironmentAction::Environment(environment_for_delete);
+        let env_action_not_working = EnvironmentAction::Environment(environment_for_not_working.clone());
+        let env_action_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
         match environment_for_not_working.deploy_environment(
             Kind::Do,
@@ -635,9 +635,9 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
         delete_env.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_not_working_1 = EnvironmentAction::Environment(not_working_env_1);
-        let env_action_not_working_2 = EnvironmentAction::Environment(not_working_env_2);
-        let env_action_delete = EnvironmentAction::Environment(delete_env);
+        let env_action_not_working_1 = EnvironmentAction::Environment(not_working_env_1.clone());
+        let env_action_not_working_2 = EnvironmentAction::Environment(not_working_env_2.clone());
+        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
 
         // OK
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
@@ -709,7 +709,7 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
         delete_env.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(delete_env);
+        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
             TransactionResult::Ok => assert!(false),
@@ -767,7 +767,7 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_working_failover() 
         );
         delete_env.action = Action::Delete;
 
-        let env_action_delete = EnvironmentAction::Environment(delete_env);
+        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
         let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {
@@ -827,7 +827,7 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_non_working_failove
         delete_env.action = Action::Delete;
 
         // environment action initialize
-        let env_action_delete = EnvironmentAction::Environment(delete_env);
+        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
         let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
 
         match environment.deploy_environment(Kind::Do, &context, &env_action) {

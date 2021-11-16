@@ -47,8 +47,8 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         environment_for_delete.routers = vec![];
         environment_for_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(environment_for_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -56,7 +56,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match environment_for_delete.delete_environment(Kind::AWS, &context_for_delete, &ea_delete) {
+        match environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -181,8 +181,8 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(false),
@@ -237,8 +237,8 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -293,8 +293,8 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -338,8 +338,8 @@ fn deploy_a_working_environment_with_domain() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -376,6 +376,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
+                .clone()
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
@@ -401,8 +402,8 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -482,9 +483,9 @@ fn redeploy_same_app_with_ebs() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea2 = EnvironmentAction::Environment(environment_redeploy);
-        let ea_delete = EnvironmentAction::Environment(environment_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea2 = EnvironmentAction::Environment(environment_redeploy.clone());
+        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -581,9 +582,9 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         environment_for_delete.action = Action::Delete;
 
         // environment actions
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_not_working = EnvironmentAction::Environment(environment_for_not_working);
-        let ea_delete = EnvironmentAction::Environment(environment_for_delete);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_not_working = EnvironmentAction::Environment(environment_for_not_working.clone());
+        let ea_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
         match environment_for_not_working.deploy_environment(Kind::Aws, &context_for_not_working, &ea_not_working) {
             TransactionResult::Ok => assert!(false),
@@ -655,10 +656,10 @@ fn deploy_ok_fail_fail_ok_environment() {
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_not_working_1 = EnvironmentAction::Environment(not_working_env_1);
-        let ea_not_working_2 = EnvironmentAction::Environment(not_working_env_2);
-        let ea_delete = EnvironmentAction::Environment(delete_env);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_not_working_1 = EnvironmentAction::Environment(not_working_env_1.clone());
+        let ea_not_working_2 = EnvironmentAction::Environment(not_working_env_2.clone());
+        let ea_delete = EnvironmentAction::Environment(delete_env.clone());
 
         // OK
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
@@ -724,10 +725,10 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment);
-        let ea_delete = EnvironmentAction::Environment(delete_env);
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea_delete = EnvironmentAction::Environment(delete_env.clone());
 
-        match environment.deploy_environment(Kind::AWS, &context, &ea) {
+        match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),
@@ -776,8 +777,8 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
             test_domain.as_str(),
         );
         delete_env.action = Action::Delete;
-        let ea_delete = EnvironmentAction::Environment(delete_env);
-        let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+        let ea_delete = EnvironmentAction::Environment(delete_env.clone());
+        let ea = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(false),
@@ -853,11 +854,11 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
         test_domain.as_str(),
     );
     delete_env.action = Action::Delete;
-    let ea_delete = EnvironmentAction::Environment(delete_env);
+    let ea_delete = EnvironmentAction::Environment(delete_env.clone());
 
     // first deployement
-    let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, failover_environment_1);
-    let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, failover_environment_2);
+    let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, failover_environment_1.clone());
+    let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, failover_environment_2.clone());
 
     match failover_environment_1.deploy_environment(Kind::Aws, &context_failover_1, &ea1) {
         TransactionResult::Ok => assert!(false),
@@ -909,8 +910,8 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
         );
         delete_env.action = Action::Delete;
         // environment action initialize
-        let ea_delete = EnvironmentAction::Environment(delete_env);
-        let ea = EnvironmentAction::EnvironmentWithFailover(environment, failover_environment);
+        let ea_delete = EnvironmentAction::Environment(delete_env.clone());
+        let ea = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
 
         match environment.deploy_environment(Kind::Aws, &context, &ea) {
             TransactionResult::Ok => assert!(false),
