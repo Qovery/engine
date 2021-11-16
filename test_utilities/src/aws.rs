@@ -1,7 +1,7 @@
 extern crate serde;
 extern crate serde_derive;
 use const_format::formatcp;
-use qovery_engine::cloud_provider::aws::kubernetes::{EKSOptions, VpcQoveryNetworkMode};
+use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
@@ -57,7 +57,7 @@ pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
     )
 }
 
-impl Cluster<AWS, EKSOptions> for AWS {
+impl Cluster<AWS, Options> for AWS {
     fn docker_cr_engine(context: &Context) -> Engine {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context));
@@ -102,8 +102,8 @@ impl Cluster<AWS, EKSOptions> for AWS {
             .expect("Problem while setup EKS nodes")]
     }
 
-    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> EKSOptions {
-        EKSOptions {
+    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> Options {
+        Options {
             eks_zone_a_subnet_blocks: vec!["10.0.0.0/20".to_string(), "10.0.16.0/20".to_string()],
             eks_zone_b_subnet_blocks: vec!["10.0.32.0/20".to_string(), "10.0.48.0/20".to_string()],
             eks_zone_c_subnet_blocks: vec!["10.0.64.0/20".to_string(), "10.0.80.0/20".to_string()],

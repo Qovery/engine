@@ -10,7 +10,7 @@ use tracing::{span, Level};
 
 use self::test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
-use qovery_engine::cloud_provider::aws::kubernetes::{EKSOptions, VpcQoveryNetworkMode, EKS};
+use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode, EKS};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::transaction::TransactionResult;
 

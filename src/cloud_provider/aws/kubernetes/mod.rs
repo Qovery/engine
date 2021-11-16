@@ -64,7 +64,7 @@ impl fmt::Display for VpcQoveryNetworkMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EKSOptions {
+pub struct Options {
     // AWS related
     pub eks_zone_a_subnet_blocks: Vec<String>,
     pub eks_zone_b_subnet_blocks: Vec<String>,
@@ -107,7 +107,7 @@ pub struct EKSOptions {
     pub tls_email_report: String,
 }
 
-impl ProviderOptions for EKSOptions {}
+impl ProviderOptions for Options {}
 
 pub struct EKS<'a> {
     context: Context,
@@ -121,7 +121,7 @@ pub struct EKS<'a> {
     s3: S3,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
-    options: EKSOptions,
+    options: Options,
     listeners: Listeners,
 }
 
@@ -135,7 +135,7 @@ impl<'a> EKS<'a> {
         region: &str,
         cloud_provider: &'a dyn CloudProvider,
         dns_provider: &'a dyn DnsProvider,
-        options: EKSOptions,
+        options: Options,
         nodes_groups: Vec<NodeGroups>,
     ) -> Result<Self, EngineError> {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
