@@ -1,22 +1,13 @@
 extern crate test_utilities;
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use self::test_utilities::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
 use self::test_utilities::utilities::{
     cluster_test, context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets,
 };
 use ::function_name::named;
-use semver::Op;
-use tracing::{span, Level};
-
-use qovery_engine::cloud_provider::scaleway::application::Zone;
-use qovery_engine::cloud_provider::scaleway::kubernetes::{Kapsule, KapsuleOptions};
-use qovery_engine::transaction::TransactionResult;
-
-use self::test_utilities::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::scaleway::Scaleway;
+use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::Kind;
-use test_utilities::scaleway::SCW_KUBERNETES_VERSION;
 
 #[allow(dead_code)]
 fn create_and_destroy_kapsule_cluster(

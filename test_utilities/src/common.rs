@@ -33,27 +33,31 @@ pub trait Cluster<T, U> {
 
 pub trait Infrastructure {
     fn deploy_environment(
+        &self,
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
     ) -> TransactionResult;
     fn pause_environment(
+        &self,
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
     ) -> TransactionResult;
     fn delete_environment(
+        &self,
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
     ) -> TransactionResult;
 }
 
-impl dyn Infrastructure {
+impl Infrastructure for Environment {
     fn deploy_environment(
+        &self,
         provider_kind: Kind,
         context: &Context,
-        environment_action: EnvironmentAction,
+        environment_action: &EnvironmentAction,
     ) -> TransactionResult {
         let engine: Engine = match provider_kind {
             Kind::Aws => AWS::docker_cr_engine(context),
@@ -86,9 +90,10 @@ impl dyn Infrastructure {
     }
 
     fn pause_environment(
+        &self,
         provider_kind: Kind,
         context: &Context,
-        environment_action: EnvironmentAction,
+        environment_action: &EnvironmentAction,
     ) -> TransactionResult {
         let engine: Engine = match provider_kind {
             Kind::Aws => AWS::docker_cr_engine(context),
@@ -115,9 +120,10 @@ impl dyn Infrastructure {
     }
 
     fn delete_environment(
+        &self,
         provider_kind: Kind,
         context: &Context,
-        environment_action: EnvironmentAction,
+        environment_action: &EnvironmentAction,
     ) -> TransactionResult {
         let engine: Engine = match provider_kind {
             Kind::Aws => AWS::docker_cr_engine(context),

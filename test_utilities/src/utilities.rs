@@ -1169,9 +1169,9 @@ pub fn test_db(
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
     let ea = EnvironmentAction::Environment(environment.clone());
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
+    let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-    match Infrastructure::deploy_environment(provider_kind.clone(), &context, &ea) {
+    match environment.deploy_environment(provider_kind.clone(), &context, &ea) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -1255,7 +1255,7 @@ pub fn test_db(
         }
     }
 
-    match Infrastructure::delete_environment(provider_kind.clone(), &context_for_delete, &ea_delete) {
+    match environment_delete.delete_environment(provider_kind.clone(), &context_for_delete, &ea_delete) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -1282,7 +1282,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     AWS_KUBE_TEST_CLUSTER_ID,
                     AWS_KUBERNETES_VERSION,
-                    secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
+                    secrets.clone().AWS_DEFAULT_REGION.unwrap().as_str(),
                     cloud_provider,
                     dns_provider,
                     AWS::kubernetes_cluster_options(secrets, None),
@@ -1299,7 +1299,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     DO_KUBE_TEST_CLUSTER_NAME.to_string(),
                     DO_KUBERNETES_VERSION.to_string(),
-                    Region::from_str(secrets.DIGITAL_OCEAN_DEFAULT_REGION.unwrap().as_str()).unwrap(),
+                    Region::from_str(secrets.clone().DIGITAL_OCEAN_DEFAULT_REGION.unwrap().as_str()).unwrap(),
                     cloud_provider,
                     dns_provider,
                     DO::kubernetes_nodes(),
@@ -1316,7 +1316,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
                     SCW_KUBERNETES_VERSION.to_string(),
-                    Zone::from_str(secrets.SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap(),
+                    Zone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap(),
                     cloud_provider,
                     dns_provider,
                     Scaleway::kubernetes_nodes(),
