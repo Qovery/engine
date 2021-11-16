@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::Error;
 use std::path::Path;
 
@@ -19,6 +20,18 @@ use crate::error::{SimpleError, SimpleErrorKind};
 pub enum ScalingKind {
     Deployment,
     Statefulset,
+}
+
+pub enum PodCondition {
+    Ready,
+    Complete,
+    Delete,
+}
+
+impl fmt::Debug for PodCondition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 pub fn kubectl_exec_with_output<F, X>(
@@ -1014,7 +1027,7 @@ where
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
+    _envs.extend(envs.clone());
 
     kubectl_exec_with_output(
         vec![
@@ -1028,6 +1041,59 @@ where
             selector,
         ],
         _envs,
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
+        },
+        |out| {
+            if let Err(err) = out {
+                error!("{:?}", err)
+            }
+        },
+    )?;
+
+    let condition = match replicas_count {
+        0 => PodCondition::Delete,
+        _ => PodCondition::Ready,
+    };
+    info!("waiting for the pods to get the expected status: {:?}", &condition);
+    kubectl_exec_wait_for_pods_condition(kubernetes_config, envs, namespace, selector, condition)
+}
+
+pub fn kubectl_exec_wait_for_pods_condition<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: &str,
+    selector: &str,
+    condition: PodCondition,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let condition_format = format!(
+        "for={}",
+        match condition {
+            PodCondition::Delete => format!("{:?}", &condition).to_lowercase(),
+            _ => format!("condition={:?}", &condition).to_lowercase(),
+        }
+    );
+
+    let mut complete_envs = Vec::with_capacity(envs.len() + 1);
+    complete_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    complete_envs.extend(envs);
+
+    kubectl_exec_with_output(
+        vec![
+            "-n",
+            namespace,
+            "wait",
+            condition_format.as_str(),
+            "pod",
+            "--selector",
+            selector,
+        ],
+        complete_envs,
         |out| {
             if let Err(err) = out {
                 error!("{:?}", err)

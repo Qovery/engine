@@ -147,12 +147,23 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         );
 
         let env_action = EnvironmentAction::Environment(environment.clone());
+        let selector = format!("app=app-{}", environment.applications[0].name);
 
         match deploy_environment(&context, env_action.clone(), SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        let ret = get_pods(
+            Kind::Scw,
+            environment.clone(),
+            selector.as_str(),
+            SCW_KUBE_TEST_CLUSTER_ID,
+            secrets.clone(),
+        );
+        assert_eq!(ret.is_ok(), true);
+        assert_eq!(ret.unwrap().items.is_empty(), false);
 
         match pause_environment(&context_for_delete, env_action.clone(), SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
@@ -161,11 +172,11 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         };
 
         // Check that we have actually 0 pods running for this app
-        let app_name = format!("{}-0", environment.applications[0].name);
+        let selector = format!("app=app-{}", environment.applications[0].name);
         let ret = get_pods(
             Kind::Scw,
             environment.clone(),
-            app_name.clone().as_str(),
+            selector.as_str(),
             SCW_KUBE_TEST_CLUSTER_ID,
             secrets.clone(),
         );
@@ -179,6 +190,16 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        let ret = get_pods(
+            Kind::Scw,
+            environment.clone(),
+            selector.as_str(),
+            SCW_KUBE_TEST_CLUSTER_ID,
+            secrets.clone(),
+        );
+        assert_eq!(ret.is_ok(), true);
+        assert_eq!(ret.unwrap().items.is_empty(), false);
 
         // Cleanup
         match delete_environment(&context_for_delete, env_action.clone(), SCW_TEST_ZONE) {

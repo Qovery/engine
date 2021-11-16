@@ -138,11 +138,23 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         );
 
         let ea = EnvironmentAction::Environment(environment.clone());
+        let selector = format!("app=app-{}", environment.applications[0].name);
+
         match deploy_environment(&context, &ea) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        let ret = get_pods(
+            Kind::Aws,
+            environment.clone(),
+            selector.as_str(),
+            AWS_KUBE_TEST_CLUSTER_ID,
+            secrets.clone(),
+        );
+        assert_eq!(ret.is_ok(), true);
+        assert_eq!(ret.unwrap().items.is_empty(), false);
 
         match ctx_pause_environment(&context_for_delete, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -169,6 +181,16 @@ fn deploy_a_working_environment_and_pause_it_eks() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        let ret = get_pods(
+            Kind::Aws,
+            environment.clone(),
+            selector.as_str(),
+            AWS_KUBE_TEST_CLUSTER_ID,
+            secrets.clone(),
+        );
+        assert_eq!(ret.is_ok(), true);
+        assert_eq!(ret.unwrap().items.is_empty(), false);
 
         // Cleanup
         match delete_environment(&context_for_delete, &ea) {
@@ -383,59 +405,6 @@ fn deploy_a_working_environment_with_domain() {
     })
 }
 
-// todo: test it
-// fn deploy_a_working_environment_with_custom_domain() {
-//     engine_run_test(|| {
-//         let span = span!(
-//             Level::INFO,
-//             "test",
-//             name = "deploy_a_working_environment_with_custom_domain"
-//         );
-//         let _enter = span.enter();
-//
-//         let context = context();
-//         let context_for_delete = context.clone_not_same_execution_id();
-//         let secrets = FuncTestsSecrets::new();
-//
-//         let mut environment = test_utilities::aws::working_minimal_environment(&context, secrets.clone());
-//         // Todo: fix domains
-//         environment.routers = environment
-//             .routers
-//             .into_iter()
-//             .map(|mut router| {
-//                 router.custom_domains = vec![CustomDomain {
-//                     // should be the client domain
-//                     domain: format!("test-domain.{}", secrets.clone().CUSTOM_TEST_DOMAIN.unwrap()),
-//                     // should be our domain
-//                     target_domain: format!("target-domain.{}", secrets.clone().DEFAULT_TEST_DOMAIN.unwrap()),
-//                 }];
-//                 router
-//             })
-//             .collect::<Vec<qovery_engine::models::Router>>();
-//
-//         let mut environment_delete = environment.clone();
-//         environment_delete.action = Action::Delete;
-//
-//         let ea = EnvironmentAction::Environment(environment);
-//         let ea_delete = EnvironmentAction::Environment(environment_delete);
-//
-//         match deploy_environment(&context, &ea) {
-//             TransactionResult::Ok => assert!(true),
-//             TransactionResult::Rollback(_) => assert!(false),
-//             TransactionResult::UnrecoverableError(_, _) => assert!(false),
-//         };
-//
-//         // todo: check TLS
-//
-//         match delete_environment(&context_for_delete, &ea_delete) {
-//             TransactionResult::Ok => assert!(true),
-//             TransactionResult::Rollback(_) => assert!(false),
-//             TransactionResult::UnrecoverableError(_, _) => assert!(false),
-//         };
-//         return "deploy_a_working_environment_with_custom_domain".to_string();
-//     })
-// }
-
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
@@ -591,84 +560,6 @@ fn redeploy_same_app_with_ebs() {
         return test_name.to_string();
     })
 }
-
-// #[test]
-// fn deploy_a_working_environment_with_external_service() {
-//     init();
-//
-//     let context = context();
-//     let deletion_context = context.clone_not_same_execution_id();
-//
-//     let mut environment = test_utilities::aws::working_minimal_environment(&context);
-//
-//     // no apps
-//     environment.applications = vec![];
-//
-//     environment.external_services = vec![ExternalService {
-//         id: generate_id(),
-//         action: Action::Create,
-//         name: "my-external-service".to_string(),
-//         total_cpus: "500m".to_string(),
-//         total_ram_in_mib: 512,
-//         git_url: "https://github.com/evoxmusic/qovery-external-service-example.git".to_string(),
-//         git_credentials: GitCredentials {
-//             login: "x-access-token".to_string(),
-//             access_token: "CHANGE ME".to_string(), // fake one
-//             expired_at: Utc::now(),
-//         },
-//         branch: "master".to_string(),
-//         commit_id: "db322f2f4ac70933f16e8a422ea9f72e1e14df22".to_string(),
-//         on_create_dockerfile_path: "extsvc/Dockerfile.on-create".to_string(),
-//         on_pause_dockerfile_path: "extsvc/Dockerfile.on-pause".to_string(),
-//         on_delete_dockerfile_path: "extsvc/Dockerfile.on-delete".to_string(),
-//         environment_variables: vec![],
-//     }];
-//
-//     let mut environment_delete = environment.clone();
-//     environment_delete.action = Action::Delete;
-//
-//     let ea = EnvironmentAction::Environment(environment);
-//     let ea_delete = EnvironmentAction::Environment(environment_delete);
-//
-//     match deploy_environment(&context, &ea) {
-//         TransactionResult::Ok => assert!(true),
-//         TransactionResult::Rollback(_) => assert!(false),
-//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-//     };
-//
-//     match delete_environment(&deletion_context, &ea_delete) {
-//         TransactionResult::Ok => assert!(true),
-//         TransactionResult::Rollback(_) => assert!(false),
-//         TransactionResult::UnrecoverableError(_, _) => assert!(false),
-//     };
-//
-//     // TODO: remove the namespace (or project)
-// }
-
-/*#[test]
-#[ignore]
-fn deploy_a_working_production_environment_with_all_options_on_aws_eks() {
-    init();
-
-    let context = context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    environment.kind = Kind::Production;
-    let environment_delete = environment.clone_not_same_execution_id();
-    let ea = EnvironmentAction::Environment(environment);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-    let ea_delete = EnvironmentAction::Environment(environment_delete);
-    match delete_environment(&context, &ea_delete) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}*/
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
@@ -1058,128 +949,3 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
         return test_name.to_string();
     })
 }
-
-/*#[test]
-#[ignore]
-fn deploy_a_working_environment_with_a_failing_default_domain_on_aws_eks() {
-    init();
-
-    // TODO
-}
-
-#[test]
-#[ignore]
-fn deploy_but_fail_to_push_image_on_container_registry() {
-    init();
-
-    // TODO
-}*/
-/*
-fn pause_a_working_development_environment_on_aws_eks() {
-    init();
-
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    environment.kind = Kind::Development;
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match pause_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
-#[ignore]
-fn pause_a_working_production_environment_on_aws_eks() {
-    init();
-
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    environment.kind = Kind::Production;
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match pause_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
-#[ignore]
-fn pause_a_non_working_environment_on_aws_eks() {
-    init();
-
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::non_working_environment(&context);
-
-    let ea = EnvironmentAction::Environment(environment);
-
-    match pause_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-
-#[test]
-#[ignore]
-fn start_and_pause_and_start_and_delete_a_working_environment_on_aws_eks() {
-    init();
-
-    // START
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    let ea = EnvironmentAction::Environment(environment);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    // PAUSE
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    let ea = EnvironmentAction::Environment(environment);
-
-    match pause_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    // START
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    let ea = EnvironmentAction::Environment(environment);
-
-    match deploy_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-
-    // DELETE
-    let context = test_utilities::aws::context();
-
-    let mut environment = test_utilities::aws::working_environment(&context);
-    let ea = EnvironmentAction::Environment(environment);
-
-    match delete_environment(&context, &ea) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
-}
-*/
