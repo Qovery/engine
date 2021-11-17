@@ -13,6 +13,7 @@ spec:
   type: ClusterIP
   ports:
     - protocol: TCP
+      name: "p{{ private_port }}"
       port: {{ private_port }}
       targetPort: {{ private_port }}
   selector:
