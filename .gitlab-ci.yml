@@ -177,7 +177,7 @@ dev-release-image:
   script:
     - ./helper.sh new_release
   tags:
-    - vm-2cpu-4gmem-0g
+    - bm-7cpu-4gmem-0g
   when: manual
   only:
     refs:
