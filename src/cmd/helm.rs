@@ -86,12 +86,12 @@ where
     let environment_variables: Vec<(String, String)> =
         envs.iter().map(|x| (x.0.to_string(), x.1.to_string())).collect();
 
-    let _ = deploy_charts_levels(
+    deploy_charts_levels(
         kubernetes_config.as_ref(),
         &environment_variables,
         vec![vec![Box::new(current_chart)]],
         false,
-    );
+    )?;
 
     // list helm history
     info!(
