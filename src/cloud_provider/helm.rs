@@ -80,6 +80,7 @@ pub struct ChartInfo {
     pub values: Vec<ChartSetValue>,
     pub values_files: Vec<String>,
     pub yaml_files_content: Vec<ChartValuesGenerated>,
+    pub parse_stderr_for_error: bool,
 }
 
 impl ChartInfo {
@@ -89,6 +90,7 @@ impl ChartInfo {
         custom_namespace: String,
         timeout_in_seconds: i64,
         values_files: Vec<String>,
+        parse_stderr_for_error: bool,
     ) -> Self {
         ChartInfo {
             name,
@@ -97,6 +99,7 @@ impl ChartInfo {
             custom_namespace: Some(custom_namespace),
             timeout_in_seconds,
             values_files,
+            parse_stderr_for_error,
             ..Default::default()
         }
     }
@@ -126,6 +129,7 @@ impl Default for ChartInfo {
             values: Vec::new(),
             values_files: Vec::new(),
             yaml_files_content: vec![],
+            parse_stderr_for_error: true,
         }
     }
 }
