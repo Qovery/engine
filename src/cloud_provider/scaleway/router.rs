@@ -169,7 +169,7 @@ impl Service for Router {
     }
 
     fn selector(&self) -> String {
-        "app=nginx-ingress".to_string()
+        format!("routerId={}", self.id)
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
