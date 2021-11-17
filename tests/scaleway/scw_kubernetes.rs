@@ -110,9 +110,10 @@ fn create_and_destroy_kapsule_cluster_war_1() {
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
+#[cfg(feature = "test-scw-infra")]
 #[test]
-#[ignore]
 #[named]
+#[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
     let zone = Zone::Paris1;
     let secrets = FuncTestsSecrets::new();
@@ -129,9 +130,10 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
+#[cfg(feature = "test-scw-infra")]
 #[test]
-#[ignore]
 #[named]
+#[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
     let zone = Zone::Paris2;
     let secrets = FuncTestsSecrets::new();
@@ -148,9 +150,10 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
+#[cfg(feature = "test-scw-infra")]
 #[test]
-#[ignore]
 #[named]
+#[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
     let zone = Zone::Amsterdam1;
     let secrets = FuncTestsSecrets::new();
@@ -167,9 +170,10 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
+#[cfg(feature = "test-scw-infra")]
 #[test]
-#[ignore]
 #[named]
+#[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_war_1() {
     let zone = Zone::Warsaw1;
     let secrets = FuncTestsSecrets::new();

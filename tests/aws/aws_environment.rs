@@ -1,19 +1,16 @@
 extern crate test_utilities;
 
 use self::test_utilities::aws::{AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID};
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::common::Infrastructure;
 use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, get_pvc, is_pod_restarted_env, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{Action, Clone2, Context, EnvironmentAction, Storage, StorageType};
-use qovery_engine::transaction::{DeploymentOption, TransactionResult};
+use qovery_engine::models::{Action, Clone2, EnvironmentAction, Storage, StorageType};
+use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
-use test_utilities::utilities::context;
-use test_utilities::utilities::init;
+use test_utilities::utilities::{context, init};
 use tracing::{span, Level};
 
 // TODO:

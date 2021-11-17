@@ -18,7 +18,7 @@ use crate::cloud_provider::digitalocean::network::vpc::{
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
 use crate::cloud_provider::kubernetes::{
-    send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
+    send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes, KubernetesUpgradeStatus, ProviderOptions,
 };
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
@@ -781,10 +781,6 @@ impl<'a> DOKS<'a> {
         ))
     }
 
-    fn upgrade(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
     fn upgrade_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
@@ -808,24 +804,15 @@ impl<'a> DOKS<'a> {
     fn delete(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let mut skip_kubernetes_step = false;
-        let send_to_customer = |message: &str| {
-            listeners_helper.delete_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
-        send_to_customer(format!("Preparing to delete DOKS cluster {} with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing to delete DOKS cluster {} with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        let temp_dir = match self.get_temp_dir() {
+            Ok(dir) => dir,
+            Err(e) => return Err(e),
+        };
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -873,7 +860,7 @@ impl<'a> DOKS<'a> {
             self.id()
         );
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         info!("Running Terraform apply before running a delete");
         if let Err(e) = cast_simple_error_to_engine_error(
@@ -892,7 +879,7 @@ impl<'a> DOKS<'a> {
                 self.id()
             );
             info!("{}", &message);
-            send_to_customer(&message);
+            self.send_to_customer(&message, &listeners_helper);
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 &kubernetes_config_file_path,
@@ -939,7 +926,7 @@ impl<'a> DOKS<'a> {
                 self.id()
             );
             info!("{}", &message);
-            send_to_customer(&message);
+            self.send_to_customer(&message, &listeners_helper);
 
             // delete custom metrics api to avoid stale namespaces on deletion
             let _ = cmd::helm::helm_uninstall_list(
@@ -1044,7 +1031,7 @@ impl<'a> DOKS<'a> {
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         info!("Running Terraform destroy");
         let terraform_result =
@@ -1064,7 +1051,7 @@ impl<'a> DOKS<'a> {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
                 info!("{}", &message);
-                send_to_customer(&message);
+                self.send_to_customer(&message, &listeners_helper);
             }
             Err(Operation { error, .. }) => return Err(error),
             Err(retry::Error::Internal(msg)) => {
@@ -1163,6 +1150,86 @@ impl<'a> Kubernetes for DOKS<'a> {
             self.name(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
+    }
+
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        self.send_to_customer(
+            format!(
+                "Start preparing DOKS upgrade process {} cluster with id {}",
+                self.name(),
+                self.id()
+            )
+            .as_str(),
+            &listeners_helper,
+        );
+
+        let temp_dir = match self.get_temp_dir() {
+            Ok(dir) => dir,
+            Err(e) => return Err(e),
+        };
+
+        // generate terraform files and copy them into temp dir
+        let mut context = self.tera_context()?;
+
+        //
+        // Upgrade nodes
+        //
+        let message = format!("Start upgrading process for nodes on {}/{}", self.name(), self.id());
+        info!("{}", &message);
+        self.send_to_customer(&message, &listeners_helper);
+
+        context.insert(
+            "doks_version",
+            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        );
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        self.send_to_customer(
+            format!("Upgrading Kubernetes {} nodes", self.name()).as_str(),
+            &listeners_helper,
+        );
+
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
+        ) {
+            Ok(_) => {
+                let message = format!("Kubernetes {} nodes have been successfully upgraded", self.name());
+                info!("{}", &message);
+                self.send_to_customer(&message, &listeners_helper);
+            }
+            Err(e) => {
+                error!(
+                    "Error while upgrading nodes for cluster {} with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(e);
+            }
+        }
+
+        Ok(())
     }
 
     #[named]

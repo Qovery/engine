@@ -1,18 +1,11 @@
 extern crate test_utilities;
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{
-    cluster_test, context, engine_run_test, generate_cluster_id, init, FuncTestsSecrets,
-};
-use ::function_name::named;
-use qovery_engine::cloud_provider::aws::AWS;
-use tracing::{span, Level};
-
 use self::test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
+use self::test_utilities::utilities::{cluster_test, engine_run_test, FuncTestsSecrets};
+use ::function_name::named;
+use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
-use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode, EKS};
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::transaction::TransactionResult;
 
 #[cfg(feature = "test-aws-infra")]
 fn create_and_destroy_eks_cluster(
@@ -100,7 +93,7 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-#[allow(dead_code)]
+#[cfg(feature = "test-aws-infra")]
 #[named]
 #[test]
 #[ignore]

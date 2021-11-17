@@ -11,7 +11,6 @@ use test_utilities::utilities::{
     FuncTestsSecrets,
 };
 
-use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::{working_minimal_environment, Infrastructure};
 use test_utilities::digitalocean::{
@@ -356,7 +355,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
         );
-        let localisation = Region::as_str(&DO_TEST_REGION);
         let database_mode = CONTAINER;
 
         let app_name = format!("postgresql-app-{}", generate_id());

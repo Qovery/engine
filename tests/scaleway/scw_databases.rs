@@ -11,7 +11,6 @@ use test_utilities::utilities::{
     test_db, FuncTestsSecrets,
 };
 
-use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::working_minimal_environment;
 use test_utilities::common::Infrastructure;

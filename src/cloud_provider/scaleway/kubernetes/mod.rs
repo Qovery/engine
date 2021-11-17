@@ -565,39 +565,6 @@ impl<'a> Kapsule<'a> {
         ))
     }
 
-    fn upgrade(&self) -> Result<(), EngineError> {
-        let kubeconfig = match self.config_file() {
-            Ok(f) => f.0,
-            Err(e) => return Err(e),
-        };
-
-        match is_kubernetes_upgrade_required(
-            kubeconfig,
-            &self.version,
-            self.cloud_provider.credentials_environment_variables(),
-        ) {
-            Ok(x) => self.upgrade_with_status(x),
-            Err(e) => {
-                let msg = format!(
-                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
-                    e.message
-                );
-                error!("{}", &msg);
-                Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some(msg),
-                })
-            }
-        }
-    }
-
-    fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
-        // TODO(benjaminch): to be implemented
-        Ok(())
-    }
-
     fn upgrade_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
@@ -1001,6 +968,86 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.name(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
+    }
+
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        self.send_to_customer(
+            format!(
+                "Start preparing Kapsule upgrade process {} cluster with id {}",
+                self.name(),
+                self.id()
+            )
+            .as_str(),
+            &listeners_helper,
+        );
+
+        let temp_dir = match self.get_temp_dir() {
+            Ok(dir) => dir,
+            Err(e) => return Err(e),
+        };
+
+        // generate terraform files and copy them into temp dir
+        let mut context = self.tera_context()?;
+
+        //
+        // Upgrade nodes
+        //
+        let message = format!("Start upgrading process for nodes on {}/{}", self.name(), self.id());
+        info!("{}", &message);
+        self.send_to_customer(&message, &listeners_helper);
+
+        context.insert(
+            "kubernetes_cluster_version",
+            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        );
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        self.send_to_customer(
+            format!("Upgrading Kubernetes {} nodes", self.name()).as_str(),
+            &listeners_helper,
+        );
+
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
+        ) {
+            Ok(_) => {
+                let message = format!("Kubernetes {} nodes have been successfully upgraded", self.name());
+                info!("{}", &message);
+                self.send_to_customer(&message, &listeners_helper);
+            }
+            Err(e) => {
+                error!(
+                    "Error while upgrading nodes for cluster {} with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(e);
+            }
+        }
+
+        Ok(())
     }
 
     #[named]
