@@ -9,7 +9,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::cloud_provider::Kind;
 
-#[allow(dead_code)]
+#[cfg(feature = "test-scw-infra")]
 fn create_and_destroy_kapsule_cluster(
     zone: Zone,
     secrets: FuncTestsSecrets,

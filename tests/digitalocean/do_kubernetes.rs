@@ -16,7 +16,7 @@ use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::Kind;
 use test_utilities::digitalocean::DO_KUBERNETES_VERSION;
 
-#[allow(dead_code)]
+#[cfg(feature = "test-do-infra")]
 fn create_and_destroy_doks_cluster(
     region: Region,
     secrets: FuncTestsSecrets,

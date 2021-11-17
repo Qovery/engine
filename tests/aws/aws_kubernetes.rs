@@ -14,7 +14,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMo
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::transaction::TransactionResult;
 
-#[allow(dead_code)]
+#[cfg(feature = "test-aws-infra")]
 fn create_and_destroy_eks_cluster(
     region: &str,
     secrets: FuncTestsSecrets,
