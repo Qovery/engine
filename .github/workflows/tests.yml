@@ -8,7 +8,7 @@ on:
 
 concurrency:
   cancel-in-progress: true
-  group: ${{ github.head_ref }}
+  group: ${{ github.ref }}
 
 jobs:
   security_audit:
