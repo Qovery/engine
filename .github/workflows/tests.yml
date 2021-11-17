@@ -6,6 +6,10 @@ on:
   pull_request:
     branches-ignore: [ main, dev ]
 
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.head_ref }}
+
 jobs:
   security_audit:
     runs-on: ubuntu-latest
