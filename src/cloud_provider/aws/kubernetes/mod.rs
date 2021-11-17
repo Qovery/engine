@@ -1057,65 +1057,77 @@ impl<'a> EKS<'a> {
         let kubernetes_config_file_path = self.config_file_path()?;
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
-        let metric_name = "taskmanager_nb_running_tasks";
-        let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
-            return match kubectl_exec_api_custom_metrics(
-                &kubernetes_config_file_path,
-                self.cloud_provider().credentials_environment_variables(),
-                "qovery",
-                None,
-                metric_name,
-            ) {
-                Ok(metrics) => {
-                    let mut current_engine_jobs = 0;
+        if self.get_engine_location() == EngineLocation::ClientSide {
+            match self.context.is_feature_enabled(&Features::MetricsHistory) {
+                true => {
+                    let metric_name = "taskmanager_nb_running_tasks";
+                    let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
+                        return match kubectl_exec_api_custom_metrics(
+                            &kubernetes_config_file_path,
+                            self.cloud_provider().credentials_environment_variables(),
+                            "qovery",
+                            None,
+                            metric_name,
+                        ) {
+                            Ok(metrics) => {
+                                let mut current_engine_jobs = 0;
 
-                    for metric in metrics.items {
-                        match metric.value.parse::<i32>() {
-                            Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
+                                for metric in metrics.items {
+                                    match metric.value.parse::<i32>() {
+                                        Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
+                                        Err(e) => {
+                                            error!(
+                                                "error while looking at the API metric value {}. {:?}",
+                                                metric_name, e
+                                            );
+                                            return OperationResult::Retry(SimpleError {
+                                                kind: SimpleErrorKind::Other,
+                                                message: Some(e.to_string()),
+                                            });
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                if current_engine_jobs == 0 {
+                                    OperationResult::Ok(())
+                                } else {
+                                    OperationResult::Retry(SimpleError {
+                                        kind: SimpleErrorKind::Other,
+                                        message: Some("can't pause the infrastructure now, Engine jobs are currently running, retrying later...".to_string()),
+                                    })
+                                }
+                            }
                             Err(e) => {
                                 error!("error while looking at the API metric value {}. {:?}", metric_name, e);
-                                return OperationResult::Retry(SimpleError {
-                                    kind: SimpleErrorKind::Other,
-                                    message: Some(e.to_string()),
-                                });
+                                OperationResult::Retry(e)
                             }
-                            _ => {}
+                        };
+                    });
+
+                    match wait_engine_job_finish {
+                        Ok(_) => {
+                            info!("no current running jobs on the Engine, infrastructure pause is allowed to start")
+                        }
+                        Err(Operation { error, .. }) => {
+                            return Err(EngineError {
+                                cause: EngineErrorCause::Internal,
+                                scope: EngineErrorScope::Engine,
+                                execution_id: self.context.execution_id().to_string(),
+                                message: error.message,
+                            })
+                        }
+                        Err(retry::Error::Internal(msg)) => {
+                            return Err(EngineError::new(
+                                EngineErrorCause::Internal,
+                                EngineErrorScope::Engine,
+                                self.context.execution_id(),
+                                Some(msg),
+                            ))
                         }
                     }
-
-                    if current_engine_jobs == 0 {
-                        OperationResult::Ok(())
-                    } else {
-                        OperationResult::Retry(SimpleError {
-                                kind: SimpleErrorKind::Other,
-                                message: Some("can't pause the infrastructure now, Engine jobs are currently running, retrying later...".to_string()),
-                            })
-                    }
                 }
-                Err(e) => {
-                    error!("error while looking at the API metric value {}. {:?}", metric_name, e);
-                    OperationResult::Retry(e)
-                }
-            };
-        });
-
-        match wait_engine_job_finish {
-            Ok(_) => info!("no current running jobs on the Engine, infrastructure pause is allowed to start"),
-            Err(Operation { error, .. }) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: error.message,
-                })
-            }
-            Err(retry::Error::Internal(msg)) => {
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    EngineErrorScope::Engine,
-                    self.context.execution_id(),
-                    Some(msg),
-                ))
+                false => warn!("The Engines are running Client side, but metric history flag is disabled. You will encounter issues during cluster lifecycles if you do not enable metric history"),
             }
         }
 
