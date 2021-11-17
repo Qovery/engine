@@ -11,6 +11,7 @@ if [ "$(uname)" == "Darwin" ] ; then
   sed='gsed'
 fi
 all_labels="test-all"
+pipeline_id_file=pipeline_id
 
 function variable_not_found() {
   echo "Required variable not found: $1"
@@ -18,10 +19,15 @@ function variable_not_found() {
 }
 
 function stop_gitlab_pipeline() {
-  PIPELINE_ID=$1
-  GITLAB_PERSONAL_TOKEN=$1
+  test -z $GITLAB_PERSONAL_TOKEN && variable_not_found "GITLAB_PERSONAL_TOKEN"
+  if [ ! -f $pipeline_id_file ] ; then
+    echo "Pipeline ID file is not present, can't cancel Gitlab pipeline"
+    exit 1
+  fi
+  PIPELINE_ID=$(cat $pipeline_id_file)
+
   echo "Stopping gitlab pipeline ID: $PIPELINE_ID"
-  curl -s -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$PIPELINE_ID/cancel"
+  curl -s -X POST -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$PIPELINE_ID/cancel" 1>/dev/null
 }
 
 function release() {
@@ -78,7 +84,8 @@ function run_tests() {
     echo "Pipeline ID is not correct, we expected a number and got: $PIPELINE_ID"
     exit 1
   fi
-  trap "stop_gitlab_pipeline $PIPELINE_ID $GITLAB_PERSONAL_TOKEN" SIGTERM SIGINT
+  echo $PIPELINE_ID > $pipeline_id_file
+  trap "stop_gitlab_pipeline" SIGTERM SIGINT
   sleep 2
 
   pipeline_status=''
@@ -132,7 +139,7 @@ function run_tests() {
       ;;
     esac
 
-    sleep 10
+    sleep 5
   done
 
   echo "Results: functional tests failed due to a too high number ($max_unexpected_status) of unexpected status."
@@ -152,6 +159,9 @@ autodetect)
   tags=$(gh_tags_selector_for_gitlab)
   run_tests $tags
   ;;
+stop_gitlab_pipeline)
+  stop_gitlab_pipeline
+  ;;
 check_gh_tags)
   if [ "$(gh_tags_selector_for_gitlab)" == "$all_labels" ] ; then
     echo "All tests have been enabled"
@@ -164,6 +174,7 @@ check_gh_tags)
   echo "Usage:"
   echo "$0 autodetect: autodetect tests to run based on tags"
   echo "$0 full_tests: run full tests (with cloud providers check)"
+  echo "$0 stop_gitlab_pipeline: stop gitlab pipeline"
   echo "$0 check_gh_tags: get defined tags (only working if branch is a PR)"
   ;;
 esac
