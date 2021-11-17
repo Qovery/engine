@@ -12,7 +12,7 @@ use qovery_engine::models::{
 use qovery_engine::transaction::TransactionResult;
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_KUBE_TEST_CLUSTER_ID};
-use crate::cloudflare::dns_provider_cloudflare;
+use crate::cloudflare::{dns_provider_cloudflare, CloudflareDomain};
 use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_KUBE_TEST_CLUSTER_ID, DO_KUBE_TEST_CLUSTER_NAME};
 use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_KUBE_TEST_CLUSTER_ID, SCW_KUBE_TEST_CLUSTER_NAME};
 use crate::utilities::{
@@ -82,7 +82,7 @@ impl Infrastructure for Environment {
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let dns_provider = dns_provider_cloudflare(context);
+        let dns_provider = dns_provider_cloudflare(context, CloudflareDomain::Default);
         let cp: Box<dyn CloudProvider>;
         cp = match provider_kind {
             Kind::Aws => AWS::cloud_provider(context),
@@ -119,7 +119,7 @@ impl Infrastructure for Environment {
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let dns_provider = dns_provider_cloudflare(context);
+        let dns_provider = dns_provider_cloudflare(context, CloudflareDomain::Default);
         let cp: Box<dyn CloudProvider>;
         cp = match provider_kind {
             Kind::Aws => AWS::cloud_provider(context),
@@ -149,7 +149,7 @@ impl Infrastructure for Environment {
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let dns_provider = dns_provider_cloudflare(context);
+        let dns_provider = dns_provider_cloudflare(context, CloudflareDomain::Default);
         let cp: Box<dyn CloudProvider>;
         cp = match provider_kind {
             Kind::Aws => AWS::cloud_provider(context),
@@ -347,8 +347,6 @@ pub fn environment_3_apps_3_routers_3_databases(
                     path: "/app1".to_string(),
                     application_name: app_name_1.clone(),
                 }],
-                sub_domain_prefix: Some(organization_id.to_string()),
-                feature_flag_switch_to_new_domain_handling: true,
             },
             Router {
                 id: generate_id(),
@@ -361,8 +359,6 @@ pub fn environment_3_apps_3_routers_3_databases(
                     path: "/app2".to_string(),
                     application_name: app_name_2.clone(),
                 }],
-                sub_domain_prefix: Some(organization_id.to_string()),
-                feature_flag_switch_to_new_domain_handling: true,
             },
             Router {
                 id: generate_id(),
@@ -375,8 +371,6 @@ pub fn environment_3_apps_3_routers_3_databases(
                     path: "/app3".to_string(),
                     application_name: app_name_3.clone(),
                 }],
-                sub_domain_prefix: Some(organization_id.to_string()),
-                feature_flag_switch_to_new_domain_handling: true,
             },
         ],
         databases: vec![
@@ -450,6 +444,11 @@ pub fn environment_3_apps_3_routers_3_databases(
 
 pub fn working_minimal_environment(context: &Context, organization_id: &str, test_domain: &str) -> Environment {
     let suffix = generate_id();
+    let application_id = generate_id();
+    let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
+    let router_id = generate_id();
+    let router_name = "main".to_string();
+    let application_domain = format!("{}.{}", application_id, test_domain);
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
@@ -458,8 +457,8 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
         organization_id: organization_id.to_string(),
         action: Action::Create,
         applications: vec![Application {
-            id: generate_id(),
-            name: format!("{}-{}", "simple-app".to_string(), &suffix),
+            id: application_id,
+            name: application_name,
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
@@ -482,74 +481,16 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
             start_timeout_in_seconds: 60,
         }],
         routers: vec![Router {
-            id: generate_id(),
-            name: "main".to_string(),
+            id: router_id,
+            name: router_name,
             action: Action::Create,
-            default_domain: format!("{}.{}", generate_id(), test_domain),
+            default_domain: application_domain,
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
                 application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
             }],
-            sub_domain_prefix: Some(organization_id.to_string()),
-            feature_flag_switch_to_new_domain_handling: true,
-        }],
-        databases: vec![],
-        clone_from_environment_id: None,
-    }
-}
-
-pub fn working_minimal_environment_with_cluster_id_as_sub_domain(
-    context: &Context,
-    organization_id: &str,
-    test_domain: &str,
-) -> Environment {
-    let suffix = generate_id();
-    Environment {
-        execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: organization_id.to_string(),
-        action: Action::Create,
-        applications: vec![Application {
-            id: generate_id(),
-            name: format!("{}-{}", "simple-app".to_string(), &suffix),
-            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
-            dockerfile_path: Some("Dockerfile".to_string()),
-            buildpack_language: None,
-            root_path: String::from("/"),
-            action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
-            storage: vec![],
-            environment_vars: BTreeMap::default(),
-            branch: "basic-app-deploy".to_string(),
-            private_port: Some(80),
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
-            total_instances: 2,
-            cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
-        }],
-        routers: vec![Router {
-            id: generate_id(),
-            name: "main".to_string(),
-            action: Action::Create,
-            default_domain: format!("{}.{}", generate_id(), test_domain,
-            public_port: 443,
-            custom_domains: vec![],
-            routes: vec![Route {
-                path: "/".to_string(),
-                application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
-            }],
-            sub_domain_prefix: Some(organization_id.to_string()),
-            feature_flag_switch_to_new_domain_handling: true,
         }],
         databases: vec![],
         clone_from_environment_id: None,
@@ -692,8 +633,6 @@ pub fn environnement_2_app_2_routers_1_psql(
                     path: "/".to_string(),
                     application_name: application_name1.to_string(),
                 }],
-                sub_domain_prefix: Some(organization_id.to_string()),
-                feature_flag_switch_to_new_domain_handling: true,
             },
             Router {
                 id: generate_id(),
@@ -706,8 +645,6 @@ pub fn environnement_2_app_2_routers_1_psql(
                     path: "/coco".to_string(),
                     application_name: application_name2.to_string(),
                 }],
-                sub_domain_prefix: Some(organization_id.to_string()),
-                feature_flag_switch_to_new_domain_handling: true,
             },
         ],
         clone_from_environment_id: None,
@@ -780,8 +717,6 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
                 path: "/".to_string(),
                 application_name: format!("{}-{}", "echo-app".to_string(), &suffix),
             }],
-            sub_domain_prefix: Some(organization_id.to_string()),
-            feature_flag_switch_to_new_domain_handling: true,
         }],
         databases: vec![],
         clone_from_environment_id: None,
@@ -873,8 +808,6 @@ pub fn environment_only_http_server_router(context: &Context, organization_id: &
                 path: "/".to_string(),
                 application_name: format!("{}-{}", "mini-http".to_string(), &suffix),
             }],
-            sub_domain_prefix: Some(organization_id.to_string()),
-            feature_flag_switch_to_new_domain_handling: true,
         }],
         databases: vec![],
         clone_from_environment_id: None,
@@ -1230,7 +1163,7 @@ pub fn cluster_test(
         Kind::Do => engine = DO::docker_cr_engine(&context),
         Kind::Scw => engine = Scaleway::docker_cr_engine(&context),
     };
-    let dns_provider = dns_provider_cloudflare(&context);
+    let dns_provider = dns_provider_cloudflare(&context, CloudflareDomain::Default);
     let mut deploy_tx = engine.session().unwrap().transaction();
     let mut delete_tx = engine.session().unwrap().transaction();
 

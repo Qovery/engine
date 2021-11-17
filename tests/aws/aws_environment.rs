@@ -372,8 +372,8 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
             &context,
             AWS_QOVERY_ORGANIZATION_ID,
             secrets
-                .clone()
                 .DEFAULT_TEST_DOMAIN
+                .as_ref()
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
         );

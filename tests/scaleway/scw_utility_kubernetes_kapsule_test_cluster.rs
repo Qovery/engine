@@ -1,6 +1,6 @@
 extern crate test_utilities;
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use self::test_utilities::cloudflare::{dns_provider_cloudflare, CloudflareDomain};
 use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
 use ::function_name::named;
 use tracing::{span, Level};
@@ -34,7 +34,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
 
         let scw_cluster = Scaleway::cloud_provider(&context);
         let nodes = Scaleway::kubernetes_nodes();
-        let cloudflare = dns_provider_cloudflare(&context);
+        let cloudflare = dns_provider_cloudflare(&context, CloudflareDomain::Default);
 
         let kubernetes = Kapsule::new(
             context.clone(),
@@ -88,7 +88,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
 
         let scw_cluster = Scaleway::cloud_provider(&context);
         let nodes = Scaleway::kubernetes_nodes();
-        let cloudflare = dns_provider_cloudflare(&context);
+        let cloudflare = dns_provider_cloudflare(&context, CloudflareDomain::Default);
 
         let kubernetes = Kapsule::new(
             context.clone(),

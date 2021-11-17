@@ -12,7 +12,7 @@ use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 use tracing::error;
 
-use crate::cloudflare::dns_provider_cloudflare;
+use crate::cloudflare::{dns_provider_cloudflare, CloudflareDomain};
 use crate::common::Cluster;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
@@ -68,7 +68,7 @@ impl Cluster<AWS, Options> for AWS {
         // use AWS
         let cloud_provider = AWS::cloud_provider(context);
 
-        let dns_provider = Box::new(dns_provider_cloudflare(context));
+        let dns_provider = Box::new(dns_provider_cloudflare(context, CloudflareDomain::Default));
 
         Engine::new(
             context.clone(),

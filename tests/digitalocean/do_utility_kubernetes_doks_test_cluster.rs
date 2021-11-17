@@ -1,6 +1,6 @@
 extern crate test_utilities;
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
+use self::test_utilities::cloudflare::{dns_provider_cloudflare, CloudflareDomain};
 use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::digitalocean::DO;
@@ -34,7 +34,7 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
 
         let do_cluster = DO::cloud_provider(&context);
         let nodes = DO::kubernetes_nodes();
-        let cloudflare = dns_provider_cloudflare(&context);
+        let cloudflare = dns_provider_cloudflare(&context, CloudflareDomain::Default);
 
         let kubernetes = DOKS::new(
             context.clone(),
@@ -91,7 +91,7 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
 
         let do_cluster = DO::cloud_provider(&context);
         let nodes = DO::kubernetes_nodes();
-        let cloudflare = dns_provider_cloudflare(&context);
+        let cloudflare = dns_provider_cloudflare(&context, CloudflareDomain::Default);
 
         let kubernetes = DOKS::new(
             context.clone(),

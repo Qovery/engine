@@ -16,6 +16,7 @@ use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
+use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
@@ -464,12 +465,10 @@ pub struct Router {
     pub id: String,
     pub name: String,
     pub action: Action,
-    pub sub_domain_prefix: Option<String>,
     pub default_domain: String,
     pub public_port: u16,
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
-    pub feature_flag_switch_to_new_domain_handling: bool,
 }
 
 impl Router {
@@ -532,12 +531,10 @@ impl Router {
                     self.id.as_str(),
                     self.name.as_str(),
                     self.action.to_service_action(),
-                    self.sub_domain_prefix.clone(),
                     self.default_domain.as_str(),
                     custom_domains,
                     routes,
                     listeners,
-                    self.feature_flag_switch_to_new_domain_handling,
                 ));
                 Some(router)
             }
@@ -1169,3 +1166,96 @@ impl Metadata {
 
 /// Represent a String path instead of passing a PathBuf struct
 pub type StringPath = String;
+
+/// Represents a domain, just plain domain, no protocol.
+/// eq. `test.com`, `sub.test.com`
+struct Domain {
+    raw: String,
+    top_domain: String,
+}
+
+impl Domain {
+    pub fn new(raw: String) -> Self {
+        // TODO(benjaminch): This is very basic solution which doesn't take into account
+        // some edge cases such as: "test.co.uk" domains
+        let sep: &str = ".";
+        let items: Vec<String> = raw.split(sep).map(|e| e.to_string()).collect();
+        let items_count = raw.matches(sep).count() + 1;
+        let top_domain: String = match items_count > 2 {
+            true => items.iter().skip(items_count - 2).join("."),
+            false => items.iter().join("."),
+        };
+
+        Domain { top_domain, raw }
+    }
+
+    pub fn root_domain(&self) -> String {
+        self.top_domain.to_string()
+    }
+
+    pub fn full(&self) -> String {
+        self.raw.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::models::Domain;
+
+    #[test]
+    fn test_domain_new() {
+        struct TestCase<'a> {
+            input: String,
+            expected_root_domain_output: String,
+            description: &'a str,
+        }
+
+        // setup:
+        let test_cases: Vec<TestCase> = vec![
+            TestCase {
+                input: "".to_string(),
+                expected_root_domain_output: "".to_string(),
+                description: "empty raw domain input",
+            },
+            TestCase {
+                input: "test.co.uk".to_string(),
+                expected_root_domain_output: "co.uk".to_string(), // TODO(benjamin) => Should be test.co.uk in the future
+                description: "broken edge case domain with special tld input",
+            },
+            TestCase {
+                input: "test".to_string(),
+                expected_root_domain_output: "test".to_string(),
+                description: "domain without tld input",
+            },
+            TestCase {
+                input: "test.com".to_string(),
+                expected_root_domain_output: "test.com".to_string(),
+                description: "simple top domain input",
+            },
+            TestCase {
+                input: "sub.test.com".to_string(),
+                expected_root_domain_output: "test.com".to_string(),
+                description: "simple sub domain input",
+            },
+            TestCase {
+                input: "yetanother.sub.test.com".to_string(),
+                expected_root_domain_output: "test.com".to_string(),
+                description: "simple sub domain input",
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result = Domain::new(tc.input.clone());
+
+            // verify:
+            assert_eq!(
+                tc.expected_root_domain_output,
+                result.root_domain(),
+                "case {} : '{}'",
+                tc.description,
+                tc.input
+            );
+        }
+    }
+}

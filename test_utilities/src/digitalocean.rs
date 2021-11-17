@@ -10,7 +10,7 @@ use qovery_engine::engine::Engine;
 use qovery_engine::error::EngineError;
 use qovery_engine::models::{Context, Environment};
 
-use crate::cloudflare::dns_provider_cloudflare;
+use crate::cloudflare::{dns_provider_cloudflare, CloudflareDomain};
 use crate::common::Cluster;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
@@ -49,7 +49,7 @@ impl Cluster<DO, DoksOptions> for DO {
         // use Digital Ocean
         let cloud_provider = DO::cloud_provider(context);
 
-        let dns_provider = Box::new(dns_provider_cloudflare(&context));
+        let dns_provider = Box::new(dns_provider_cloudflare(&context, CloudflareDomain::Default));
 
         Engine::new(
             context.clone(),

@@ -303,7 +303,7 @@ impl ContainerRegistry for ScalewayCR {
     }
 
     fn kind(&self) -> Kind {
-        Kind::Docr
+        Kind::ScalewayCr
     }
 
     fn id(&self) -> &str {
