@@ -907,7 +907,7 @@ where
         Err(err) => match err.kind {
             SimpleErrorKind::Command(exit_status) => match exit_status.code() {
                 Some(exit_status_code) => {
-                    if exit_status_code == 0 {
+                    if exit_status_code == 1 {
                         Ok(())
                     } else {
                         Err(err)
