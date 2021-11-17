@@ -546,7 +546,6 @@ pub struct Database {
     pub activate_high_availability: bool,
     #[serde(default)] // => false if not present in input
     pub activate_backups: bool,
-    #[serde(default)] // => false if not present in input
     pub publicly_accessible: bool,
     pub mode: DatabaseMode,
 }
