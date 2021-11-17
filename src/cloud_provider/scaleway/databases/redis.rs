@@ -6,13 +6,14 @@ use crate::cloud_provider::service::{
     DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
     Upgrade,
 };
-use crate::cloud_provider::utilities::{get_self_hosted_redis_version, sanitize_name};
+use crate::cloud_provider::utilities::{get_self_hosted_redis_version, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope};
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
+use ::function_name::named;
 
 pub struct Redis {
     context: Context,
@@ -62,6 +63,14 @@ impl Redis {
 
     fn matching_correct_version(&self) -> Result<String, EngineError> {
         check_service_version(get_self_hosted_redis_version(self.version()), self)
+    }
+
+    fn cloud_provider_name(&self) -> &str {
+        "scaleway"
+    }
+
+    fn struct_name(&self) -> &str {
+        "redis"
     }
 }
 
@@ -229,8 +238,14 @@ impl Terraform for Redis {
 }
 
 impl Create for Redis {
+    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.Redis.on_create() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_stateful_service(target, self)
@@ -241,15 +256,27 @@ impl Create for Redis {
         self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
     }
 
+    #[named]
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.Redis.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 }
 
 impl Pause for Redis {
+    #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.Redis.on_pause() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
             scale_down_database(target, self, 0)
@@ -260,15 +287,27 @@ impl Pause for Redis {
         Ok(())
     }
 
+    #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.Redis.on_pause_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 }
 
 impl Delete for Redis {
+    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.Redis.on_delete() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
             delete_stateful_service(target, self)
@@ -279,8 +318,14 @@ impl Delete for Redis {
         Ok(())
     }
 
+    #[named]
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.Redis.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 }
