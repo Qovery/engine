@@ -17,6 +17,13 @@ function variable_not_found() {
   exit 1
 }
 
+function stop_gitlab_pipeline() {
+  PIPELINE_ID=$1
+  GITLAB_PERSONAL_TOKEN=$1
+  echo "Stopping gitlab pipeline ID: $PIPELINE_ID"
+  curl -s -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$PIPELINE_ID/cancel"
+}
+
 function release() {
   test -z $GITLAB_PROJECT_ID && variable_not_found "GITLAB_PROJECT_ID"
   test -z $GITLAB_TOKEN && variable_not_found "GITLAB_TOKEN"
@@ -25,12 +32,12 @@ function release() {
   GITLAB_REF="main"
 
   echo "Requesting Gitlab pipeline"
-  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
-  if [ $(echo $pipeline_id | egrep -c '^[0-9]+$') -eq 0 ] ; then
-    echo "Pipeline ID is not correct, we expected a number and got: $pipeline_id"
+  PIPELINE_ID=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
+  if [ $(echo $PIPELINE_ID | egrep -c '^[0-9]+$') -eq 0 ] ; then
+    echo "Pipeline ID is not correct, we expected a number and got: $PIPELINE_ID"
     exit 1
   fi
-  echo "Pipeline ID: $pipeline_id"
+  echo "Pipeline ID: $PIPELINE_ID"
 }
 
 function gh_tags_selector_for_gitlab() {
@@ -66,19 +73,20 @@ function run_tests() {
   fi
 
   echo "Requesting Gitlab pipeline"
-  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TO_RUN]=$TESTS_TYPE" -F "variables[FORCE_CHECKOUT_CUSTOM_BRANCH]=$FORCE_CHECKOUT_CUSTOM_BRANCH" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
-  if [ $(echo $pipeline_id | egrep -c '^[0-9]+$') -eq 0 ] ; then
-    echo "Pipeline ID is not correct, we expected a number and got: $pipeline_id"
+  PIPELINE_ID=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TO_RUN]=$TESTS_TYPE" -F "variables[FORCE_CHECKOUT_CUSTOM_BRANCH]=$FORCE_CHECKOUT_CUSTOM_BRANCH" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
+  if [ $(echo $PIPELINE_ID | egrep -c '^[0-9]+$') -eq 0 ] ; then
+    echo "Pipeline ID is not correct, we expected a number and got: $PIPELINE_ID"
     exit 1
   fi
+  trap "stop_gitlab_pipeline $PIPELINE_ID $GITLAB_PERSONAL_TOKEN" SIGTERM SIGINT
   sleep 2
 
   pipeline_status=''
   counter=0
   max_unexpected_status=5
   while [ $counter -le $max_unexpected_status ] ; do
-    current_status=$(curl -s -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$pipeline_id | jq --raw-output '.detailed_status.text')
-    echo "Current pipeline id $pipeline_id status: $current_status"
+    current_status=$(curl -s -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$PIPELINE_ID | jq --raw-output '.detailed_status.text')
+    echo "Current pipeline id $PIPELINE_ID status: $current_status"
     case $current_status in
       "created")
         ((counter=$counter+1))
