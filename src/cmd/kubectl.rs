@@ -857,30 +857,35 @@ pub fn kubectl_exec_get_events<P>(
     kubernetes_config: P,
     namespace: Option<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<String, SimpleError>
 where
     P: AsRef<Path>,
 {
     let mut environment_variables = envs;
     environment_variables.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
 
-    let mut args = vec!["get", "event", "-A", "--sort-by='.lastTimestamp'"];
-    if !namespace.unwrap().is_empty() {
-        args = vec!["get", "event", "-n", namespace.unwrap(), "--sort-by='.lastTimestamp'"];
-    }
+    let arg_namespace = match namespace {
+        Some(n) => format!("-n {}", n),
+        None => "-A".to_string(),
+    };
 
-    kubectl_exec_with_output(
+    let args = vec!["get", "event", arg_namespace.as_str(), "--sort-by='.lastTimestamp'"];
+
+    let mut result_ok = String::new();
+    let mut result_err = SimpleError::new(SimpleErrorKind::Other, Some(String::new()));
+
+    match kubectl_exec_with_output(
         args,
         environment_variables,
         |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => result_ok = line,
+            Err(err) => result_err = SimpleError::from(err),
         },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-    )
+        |_| {},
+    ) {
+        Ok(()) => Ok(result_ok),
+        Err(err) => Err(err),
+    }
 }
 
 pub fn kubectl_delete_objects_in_all_namespaces<P>(

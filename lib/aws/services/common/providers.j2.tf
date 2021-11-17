@@ -12,6 +12,10 @@ terraform {
       source = "hashicorp/local"
       version = "~> 1.4"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.3"
+    }
   }
   required_version = ">= 0.14"
 }
@@ -44,3 +48,5 @@ provider "helm" {
     }
   }
 }
+
+resource "time_static" "on_db_create" {}

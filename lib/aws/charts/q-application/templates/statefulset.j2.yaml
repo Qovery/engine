@@ -62,6 +62,7 @@ spec:
             {%- if private_port %}
           ports:
             - containerPort: {{ private_port }}
+              name: "p{{ private_port }}"
               protocol: TCP
           readinessProbe:
             tcpSocket:
