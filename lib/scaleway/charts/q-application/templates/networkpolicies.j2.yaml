@@ -5,6 +5,7 @@ metadata:
   name: {{ sanitized_name }}-default
   namespace: {{ namespace }}
   labels:
+    ownerId: {{ owner_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
     envId: {{ environment_id }}
@@ -14,6 +15,7 @@ spec:
     matchLabels:
       appId: {{ id }}
       app: {{ sanitized_name }}
+      ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   policyTypes:
   - Ingress
@@ -24,6 +26,7 @@ metadata:
   name: {{ sanitized_name }}-app-access
   namespace: {{ namespace }}
   labels:
+    ownerId: {{ owner_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
     envId: {{ environment_id }}
@@ -33,12 +36,14 @@ spec:
     matchLabels:
       appId: {{ id }}
       app: {{ sanitized_name }}
+      ownerId: {{ owner_id }}
       envId: {{ environment_id }}
   ingress:
   # Allow ingress from same environment
   - from:
     - podSelector:
         matchLabels:
+          ownerId: {{ owner_id }}
           envId: {{ environment_id }}
 
   # Allow ingress from everywhere but only to application port
