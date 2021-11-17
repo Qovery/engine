@@ -331,6 +331,7 @@ where
                 "50",
                 "--timeout",
                 timeout_string.as_str(),
+                "--atomic",
                 "--wait",
                 "--namespace",
                 namespace,
@@ -984,7 +985,7 @@ where
         Err(err) => match err.kind {
             SimpleErrorKind::Command(exit_status) => match exit_status.code() {
                 Some(exit_status_code) => {
-                    if exit_status_code == 1 {
+                    if exit_status_code == 0 {
                         Ok(())
                     } else {
                         Err(err)
