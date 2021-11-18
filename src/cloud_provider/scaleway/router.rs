@@ -5,11 +5,12 @@ use crate::cloud_provider::service::{
     default_tera_context, delete_router, deploy_stateless_service_error, send_progress_on_long_task, Action, Create,
     Delete, Helm, Pause, Router as RRouter, Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::{check_cname_for, sanitize_name};
+use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners};
+use ::function_name::named;
 
 pub struct Router {
     context: Context,
@@ -43,6 +44,14 @@ impl Router {
             routes,
             listeners,
         }
+    }
+
+    fn cloud_provider_name(&self) -> &str {
+        "scaleway"
+    }
+
+    fn struct_name(&self) -> &str {
+        "router"
     }
 }
 
@@ -224,8 +233,14 @@ impl Listen for Router {
 impl StatelessService for Router {}
 
 impl Create for Router {
+    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.router.on_create() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         let kubernetes = target.kubernetes;
         let environment = target.environment;
 
@@ -294,8 +309,14 @@ impl Create for Router {
         Ok(())
     }
 
+    #[named]
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.router.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_stateless_service_error(target, self)
@@ -304,8 +325,14 @@ impl Create for Router {
 }
 
 impl Pause for Router {
+    #[named]
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.router.on_pause() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 
@@ -313,15 +340,27 @@ impl Pause for Router {
         Ok(())
     }
 
+    #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.router.on_pause_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 }
 
 impl Delete for Router {
+    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.router.on_delete() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         delete_router(target, self, false)
     }
 
@@ -329,8 +368,14 @@ impl Delete for Router {
         Ok(())
     }
 
+    #[named]
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.router.on_delete_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         delete_router(target, self, true)
     }
 }

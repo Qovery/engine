@@ -11,6 +11,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use, managed_db_name_sanitizer,
+    print_action,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -18,6 +19,7 @@ use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, DatabaseKind, Listen, Listener, Listeners};
+use ::function_name::named;
 
 pub struct MySQL {
     context: Context,
@@ -67,6 +69,14 @@ impl MySQL {
 
     fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
         check_service_version(get_mysql_version(self.version(), is_managed_services), self)
+    }
+
+    fn cloud_provider_name(&self) -> &str {
+        "aws"
+    }
+
+    fn struct_name(&self) -> &str {
+        "mysql"
     }
 }
 
@@ -255,8 +265,14 @@ impl Terraform for MySQL {
 }
 
 impl Create for MySQL {
+    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.MySQL.on_create() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_stateful_service(target, self)
@@ -267,16 +283,28 @@ impl Create for MySQL {
         self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
     }
 
+    #[named]
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.MySQL.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         Ok(())
     }
 }
 
 impl Pause for MySQL {
+    #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.MySQL.on_pause() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
             scale_down_database(target, self, 0)
@@ -287,15 +315,27 @@ impl Pause for MySQL {
         Ok(())
     }
 
+    #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.MySQL.on_pause_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 }
 
 impl Delete for MySQL {
+    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("AWS.MySQL.on_delete() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
             delete_stateful_service(target, self)
@@ -306,8 +346,14 @@ impl Delete for MySQL {
         Ok(())
     }
 
+    #[named]
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("AWS.MySQL.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 }

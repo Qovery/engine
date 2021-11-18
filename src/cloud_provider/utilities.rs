@@ -559,6 +559,17 @@ pub fn validate_k8s_required_cpu_and_burstable(
     })
 }
 
+pub fn print_action(cloud_provider_name: &str, struct_name: &str, fn_name: &str, item_name: &str) {
+    let msg = format!(
+        "{}.{}.{} called for {}",
+        cloud_provider_name, struct_name, fn_name, item_name
+    );
+    match fn_name.contains("error") {
+        true => warn!("{}", msg),
+        false => info!("{}", msg),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::models::CpuLimits;

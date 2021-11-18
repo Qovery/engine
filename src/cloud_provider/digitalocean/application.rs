@@ -9,13 +9,14 @@ use crate::cloud_provider::service::{
     scale_down_application, send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Service, ServiceType,
     StatelessService,
 };
-use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_and_burstable};
+use crate::cloud_provider::utilities::{print_action, sanitize_name, validate_k8s_required_cpu_and_burstable};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
+use ::function_name::named;
 use std::fmt;
 use std::str::FromStr;
 
@@ -73,6 +74,14 @@ impl Application {
 
     fn is_stateful(&self) -> bool {
         self.storage.len() > 0
+    }
+
+    fn cloud_provider_name(&self) -> &str {
+        "digitalocean"
+    }
+
+    fn struct_name(&self) -> &str {
+        "application"
     }
 }
 
@@ -266,31 +275,14 @@ impl Service for Application {
 }
 
 impl Create for Application {
+    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("DO.application.on_create() called for {}", self.name);
-
-        // todo(pmavro): I don't get wy this is done here and not in hte
-        // let (kubernetes, _) = match target {
-        //     DeploymentTarget::ManagedServices(k, env) => (*k, *env),
-        //     DeploymentTarget::SelfHosted(k, env) => (*k, *env),
-        // };
-
-        // FIXME: remove downcast
-        //let digitalocean = kubernetes.cloud_provider().as_any().downcast_ref::<DO>().unwrap();
-
-        // // retrieve the cluster uuid, useful to link DO registry to k8s cluster
-        // let cluster_uuid_res = get_uuid_of_cluster_from_name(digitalocean.token.as_str(), kubernetes.name());
-        //
-        // match cluster_uuid_res {
-        //     // ensure DO registry is linked to k8s cluster
-        //     Ok(uuid) => {
-        //         match subscribe_kube_cluster_to_container_registry(digitalocean.token.as_str(), uuid.as_str()) {
-        //             Ok(_) => info!("Container registry is well linked with the Cluster"),
-        //             Err(e) => error!("Unable to link cluster to registry {:?}", e.message),
-        //         }
-        //     }
-        //     Err(e) => error!("Unable to get cluster uuid {:?}", e.message),
-        // };
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_user_stateless_service(target, self)
@@ -301,8 +293,14 @@ impl Create for Application {
         Ok(())
     }
 
+    #[named]
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("DO.application.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_stateless_service_error(target, self)
@@ -311,8 +309,14 @@ impl Create for Application {
 }
 
 impl Pause for Application {
+    #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("DO.application.on_pause() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
             scale_down_application(
@@ -328,16 +332,28 @@ impl Pause for Application {
         Ok(())
     }
 
+    #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("DO.application.on_pause_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         Ok(())
     }
 }
 
 impl Delete for Application {
+    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("DO.application.on_delete() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
             delete_stateless_service(target, self, false)
@@ -348,8 +364,14 @@ impl Delete for Application {
         Ok(())
     }
 
+    #[named]
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("DO.application.on_delete_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
             delete_stateless_service(target, self, true)

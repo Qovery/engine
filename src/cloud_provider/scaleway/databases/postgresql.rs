@@ -7,7 +7,7 @@ use crate::cloud_provider::service::{
     Upgrade,
 };
 use crate::cloud_provider::utilities::{
-    get_self_hosted_postgres_version, get_supported_version_to_use, sanitize_name, VersionsNumber,
+    get_self_hosted_postgres_version, get_supported_version_to_use, print_action, sanitize_name, VersionsNumber,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -15,6 +15,7 @@ use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
+use ::function_name::named;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -102,6 +103,14 @@ impl PostgreSQL {
         supported_postgres_versions.insert("13.0".to_string(), "13.0".to_string());
 
         get_supported_version_to_use("RDB postgres", supported_postgres_versions, requested_version)
+    }
+
+    fn cloud_provider_name(&self) -> &str {
+        "scaleway"
+    }
+
+    fn struct_name(&self) -> &str {
+        "postgresql"
     }
 }
 
@@ -276,8 +285,14 @@ impl Terraform for PostgreSQL {
 }
 
 impl Create for PostgreSQL {
+    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.PostgreSQL.on_create() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_stateful_service(target, self)
@@ -288,16 +303,28 @@ impl Create for PostgreSQL {
         self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
     }
 
+    #[named]
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.PostgreSQL.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         Ok(())
     }
 }
 
 impl Pause for PostgreSQL {
+    #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.PostgreSQL.on_pause() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
             scale_down_database(target, self, 0)
@@ -308,16 +335,28 @@ impl Pause for PostgreSQL {
         Ok(())
     }
 
+    #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.PostgreSQL.on_pause_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         Ok(())
     }
 }
 
 impl Delete for PostgreSQL {
+    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.PostgreSQL.on_delete() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
             delete_stateful_service(target, self)
@@ -328,8 +367,14 @@ impl Delete for PostgreSQL {
         Ok(())
     }
 
+    #[named]
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.MySQL.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 }
