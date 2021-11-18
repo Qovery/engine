@@ -2,9 +2,8 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_router, delete_stateless_service, deploy_stateless_service_error,
-    send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Router as RRouter, Service, ServiceType,
-    StatelessService,
+    default_tera_context, delete_router, deploy_stateless_service_error, send_progress_on_long_task, Action, Create,
+    Delete, Helm, Pause, Router as RRouter, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
