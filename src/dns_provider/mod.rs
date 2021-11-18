@@ -3,7 +3,7 @@ use std::net::Ipv4Addr;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::Context;
+use crate::models::{Context, Domain};
 
 pub mod cloudflare;
 
@@ -18,28 +18,7 @@ pub trait DnsProvider {
     }
     fn account(&self) -> &str;
     fn token(&self) -> &str;
-    fn domain(&self) -> &str;
-    fn domain_wildcarded(&self) -> String {
-        format!("*.{}", self.domain())
-    }
-    fn domain_helm_format(&self) -> String {
-        format!("{{{}}}", self.domain())
-    }
-    fn domain_helm_format_wildcarded(&self) -> String {
-        format!("{{*.{}}}", self.domain())
-    }
-    fn domain_with_sub_domain(&self, sub_domain: &str) -> String {
-        format!("{}.{}", sub_domain, self.domain())
-    }
-    fn domain_with_sub_domain_wildcarded(&self, sub_domain_prefix: &str) -> String {
-        format!("*.{}", self.domain_with_sub_domain(sub_domain_prefix))
-    }
-    fn domain_with_sub_domain_helm_format(&self, sub_domain_prefix: &str) -> String {
-        format!("{{{}}}", self.domain_with_sub_domain(sub_domain_prefix))
-    }
-    fn domain_with_sub_domain_helm_format_wildcarded(&self, sub_domain_prefix: &str) -> String {
-        format!("{{*.{}}}", self.domain_with_sub_domain(sub_domain_prefix))
-    }
+    fn domain(&self) -> &Domain;
     fn resolvers(&self) -> Vec<Ipv4Addr>;
     fn is_valid(&self) -> Result<(), EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {

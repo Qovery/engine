@@ -335,11 +335,12 @@ impl<'a> Kapsule<'a> {
     }
 
     fn lets_encrypt_url(&self) -> String {
-        match &self.context.is_test_cluster() {
-            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
-            false => "https://acme-v02.api.letsencrypt.org/directory",
-        }
-        .to_string()
+        // match &self.context.is_test_cluster() {
+        //     true => "https://acme-staging-v02.api.letsencrypt.org/directory",
+        //     false => "https://acme-v02.api.letsencrypt.org/directory",
+        // }
+        // .to_string()
+        "https://acme-v02.api.letsencrypt.org/directory".to_string()
     }
 
     fn create(&self) -> Result<(), EngineError> {

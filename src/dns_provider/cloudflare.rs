@@ -2,13 +2,13 @@ use std::net::Ipv4Addr;
 
 use crate::dns_provider::{DnsProvider, Kind};
 use crate::error::{EngineError, EngineErrorCause};
-use crate::models::Context;
+use crate::models::{Context, Domain};
 
 pub struct Cloudflare {
     context: Context,
     id: String,
     name: String,
-    domain: String,
+    domain: Domain,
     cloudflare_api_token: String,
     cloudflare_email: String,
 }
@@ -18,7 +18,7 @@ impl Cloudflare {
         context: Context,
         id: &str,
         name: &str,
-        domain: &str,
+        domain: Domain,
         cloudflare_api_token: &str,
         cloudflare_email: &str,
     ) -> Self {
@@ -26,7 +26,7 @@ impl Cloudflare {
             context,
             id: id.to_string(),
             name: name.to_string(),
-            domain: domain.to_string(),
+            domain,
             cloudflare_api_token: cloudflare_api_token.to_string(),
             cloudflare_email: cloudflare_email.to_string(),
         }
@@ -62,12 +62,8 @@ impl DnsProvider for Cloudflare {
         &self.cloudflare_api_token
     }
 
-    fn domain(&self) -> &str {
-        self.domain.as_str()
-    }
-
-    fn domain_with_sub_domain(&self, sub_domain: &str) -> String {
-        format!("{}.{}", sub_domain, self.domain)
+    fn domain(&self) -> &Domain {
+        &self.domain
     }
 
     fn resolvers(&self) -> Vec<Ipv4Addr> {

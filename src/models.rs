@@ -1167,9 +1167,18 @@ impl Metadata {
 /// Represent a String path instead of passing a PathBuf struct
 pub type StringPath = String;
 
+pub trait ToTerraformString {
+    fn to_terraform_format_string(&self) -> String;
+}
+
+pub trait ToHelmString {
+    fn to_helm_format_string(&self) -> String;
+}
+
 /// Represents a domain, just plain domain, no protocol.
 /// eq. `test.com`, `sub.test.com`
-struct Domain {
+#[derive(Clone)]
+pub struct Domain {
     raw: String,
     top_domain: String,
 }
@@ -1189,12 +1198,36 @@ impl Domain {
         Domain { top_domain, raw }
     }
 
-    pub fn root_domain(&self) -> String {
-        self.top_domain.to_string()
+    pub fn new_with_subdomain(raw: String, sub_domain: String) -> Self {
+        Domain::new(format!("{}.{}", sub_domain, raw))
     }
 
-    pub fn full(&self) -> String {
-        self.raw.to_string()
+    pub fn with_sub_domain(&self, sub_domain: String) -> Domain {
+        Domain::new(format!("{}.{}", sub_domain, self.raw))
+    }
+
+    pub fn root_domain(&self) -> Domain {
+        Domain::new(self.top_domain.to_string())
+    }
+
+    pub fn root_domain_wildcarded(&self) -> Domain {
+        Domain::new_with_subdomain(self.top_domain.to_string(), "*".to_string())
+    }
+
+    pub fn wildcarded(&self) -> Domain {
+        Domain::new_with_subdomain(self.raw.to_string(), "*".to_string())
+    }
+}
+
+impl ToTerraformString for Domain {
+    fn to_terraform_format_string(&self) -> String {
+        format!("{{{}}}", self.raw)
+    }
+}
+
+impl ToHelmString for Domain {
+    fn to_helm_format_string(&self) -> String {
+        format!("{}", self.raw)
     }
 }
 
