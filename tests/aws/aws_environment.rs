@@ -138,7 +138,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         );
 
         let ea = EnvironmentAction::Environment(environment.clone());
-        let selector = format!("app=app-{}", environment.applications[0].name);
+        let selector = format!("appId={}", environment.applications[0].id);
 
         match deploy_environment(&context, &ea) {
             TransactionResult::Ok => assert!(true),
@@ -163,11 +163,10 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         };
 
         // Check that we have actually 0 pods running for this app
-        let app_name = format!("{}-0", environment.applications[0].name);
         let ret = get_pods(
             Kind::Aws,
             environment.clone(),
-            app_name.clone().as_str(),
+            selector.as_str(),
             AWS_KUBE_TEST_CLUSTER_ID,
             secrets.clone(),
         );
