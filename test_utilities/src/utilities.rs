@@ -1423,7 +1423,7 @@ pub fn cluster_test(
     let cluster_id = generate_cluster_id(localisation.clone());
     let cluster_name = generate_cluster_id(localisation.clone());
     let boot_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
-    let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version.clone() + 1);
+
     let engine;
     match provider_kind {
         Kind::Aws => engine = AWS::docker_cr_engine(&context),
@@ -1438,7 +1438,7 @@ pub fn cluster_test(
         Kind::Do => DO::cloud_provider(&context),
         Kind::Scw => Scaleway::cloud_provider(&context),
     };
-    let kubernetes = get_cluster_test_kubernetes(
+    let mut kubernetes = get_cluster_test_kubernetes(
         provider_kind.clone(),
         secrets.clone(),
         &context,
@@ -1483,50 +1483,37 @@ pub fn cluster_test(
         };
     }
 
-    match test_infra_upgrade {
-        true => {
-            let upgraded_kubernetes = get_cluster_test_kubernetes(
-                provider_kind.clone(),
-                secrets.clone(),
-                &context,
-                cluster_id.clone(),
-                cluster_name.clone(),
-                upgrade_to_version.clone(),
-                localisation.clone(),
-                cp.as_ref(),
-                &dns_provider,
-                vpc_network_mode,
-            );
-            if let Err(err) = tx.create_kubernetes(upgraded_kubernetes.as_ref()) {
-                panic!("{:?}", err)
-            }
-            let _ = match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
-            };
-            // Destroy
-            if let Err(err) = tx.delete_kubernetes(upgraded_kubernetes.as_ref()) {
-                panic!("{:?}", err)
-            }
-            match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
-            };
+    if test_infra_upgrade {
+        let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version.clone() + 1);
+        kubernetes = get_cluster_test_kubernetes(
+            provider_kind.clone(),
+            secrets.clone(),
+            &context,
+            cluster_id.clone(),
+            cluster_name.clone(),
+            upgrade_to_version.clone(),
+            localisation.clone(),
+            cp.as_ref(),
+            &dns_provider,
+            vpc_network_mode,
+        );
+        if let Err(err) = tx.create_kubernetes(kubernetes.as_ref()) {
+            panic!("{:?}", err)
         }
-        false => {
-            // Destroy
-            if let Err(err) = tx.delete_kubernetes(kubernetes.as_ref()) {
-                panic!("{:?}", err)
-            }
-            match tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
-            };
-        }
+        let _ = match tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
     }
 
+    if let Err(err) = tx.delete_kubernetes(kubernetes.as_ref()) {
+        panic!("{:?}", err)
+    }
+    match tx.commit() {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
     test_name.to_string()
 }

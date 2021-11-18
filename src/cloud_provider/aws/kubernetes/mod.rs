@@ -1364,7 +1364,6 @@ impl<'a> Kubernetes for EKS<'a> {
         //
         // Upgrade worker nodes
         //
-
         let message = format!(
             "Preparing workers nodes for upgrade for Kubernetes cluster {}",
             self.name()
