@@ -476,18 +476,11 @@ impl<'a> EKS<'a> {
 
     fn create(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
-        let send_to_customer = |message: &str| {
-            listeners_helper.deployment_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
 
-        send_to_customer(format!("Preparing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
         // upgrade cluster instead if required
         match self.config_file() {
@@ -559,7 +552,10 @@ impl<'a> EKS<'a> {
             ),
         )?;
 
-        send_to_customer(format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
         // temporary: remove helm/kube management from terraform
         match terraform_init_validate_state_list(temp_dir.as_str()) {

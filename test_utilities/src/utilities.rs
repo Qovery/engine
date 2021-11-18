@@ -8,6 +8,7 @@ use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::path::Path;
@@ -20,6 +21,7 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
+use std::ops::Deref;
 use tracing::{error, info, span, warn, Level};
 use tracing_subscriber;
 
@@ -40,7 +42,9 @@ use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{
     Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Features, Metadata,
 };
+use serde::__private::de::Borrowed;
 use serde::{Deserialize, Serialize};
+
 extern crate time;
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_KUBE_TEST_CLUSTER_ID};
 use crate::cloudflare::dns_provider_cloudflare;
@@ -1438,7 +1442,7 @@ pub fn cluster_test(
         Kind::Do => DO::cloud_provider(&context),
         Kind::Scw => Scaleway::cloud_provider(&context),
     };
-    let mut kubernetes = get_cluster_test_kubernetes(
+    let mut boot_kubernetes = get_cluster_test_kubernetes(
         provider_kind.clone(),
         secrets.clone(),
         &context,
@@ -1450,9 +1454,24 @@ pub fn cluster_test(
         &dns_provider,
         vpc_network_mode.clone(),
     );
+    let mut kubernetes = boot_kubernetes.as_mut();
+
+    let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version.clone() + 1);
+    let mut upgrade_kubernetes = get_cluster_test_kubernetes(
+        provider_kind.clone(),
+        secrets.clone(),
+        &context,
+        cluster_id.clone(),
+        cluster_name.clone(),
+        upgrade_to_version.clone(),
+        localisation.clone(),
+        cp.as_ref(),
+        &dns_provider,
+        vpc_network_mode,
+    );
 
     // Deploy
-    if let Err(err) = tx.create_kubernetes(kubernetes.as_ref()) {
+    if let Err(err) = tx.create_kubernetes(kubernetes) {
         panic!("{:?}", err)
     }
     let _ = match tx.commit() {
@@ -1463,7 +1482,7 @@ pub fn cluster_test(
 
     if test_infra_pause {
         // Pause
-        if let Err(err) = tx.pause_kubernetes(kubernetes.as_ref()) {
+        if let Err(err) = tx.pause_kubernetes(kubernetes) {
             panic!("{:?}", err)
         }
         match tx.commit() {
@@ -1473,7 +1492,7 @@ pub fn cluster_test(
         };
 
         // Resume
-        if let Err(err) = tx.create_kubernetes(kubernetes.as_ref()) {
+        if let Err(err) = tx.create_kubernetes(kubernetes) {
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
@@ -1484,20 +1503,9 @@ pub fn cluster_test(
     }
 
     if test_infra_upgrade {
-        let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version.clone() + 1);
-        kubernetes = get_cluster_test_kubernetes(
-            provider_kind.clone(),
-            secrets.clone(),
-            &context,
-            cluster_id.clone(),
-            cluster_name.clone(),
-            upgrade_to_version.clone(),
-            localisation.clone(),
-            cp.as_ref(),
-            &dns_provider,
-            vpc_network_mode,
-        );
-        if let Err(err) = tx.create_kubernetes(kubernetes.as_ref()) {
+        kubernetes = upgrade_kubernetes.as_mut();
+
+        if let Err(err) = tx.create_kubernetes(kubernetes) {
             panic!("{:?}", err)
         }
         let _ = match tx.commit() {
@@ -1507,7 +1515,7 @@ pub fn cluster_test(
         };
     }
 
-    if let Err(err) = tx.delete_kubernetes(kubernetes.as_ref()) {
+    if let Err(err) = tx.delete_kubernetes(kubernetes) {
         panic!("{:?}", err)
     }
     match tx.commit() {
