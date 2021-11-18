@@ -147,7 +147,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         );
 
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let selector = format!("app=app-{}", environment.applications[0].name);
+        let selector = format!("appId={}", environment.applications[0].id);
 
         match deploy_environment(&context, env_action.clone(), SCW_TEST_ZONE) {
             TransactionResult::Ok => assert!(true),
@@ -172,7 +172,6 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         };
 
         // Check that we have actually 0 pods running for this app
-        let selector = format!("app=app-{}", environment.applications[0].name);
         let ret = get_pods(
             Kind::Scw,
             environment.clone(),

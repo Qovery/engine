@@ -525,7 +525,7 @@ pub fn scale_down_application(
         kubernetes.cloud_provider().credentials_environment_variables(),
         environment.namespace(),
         scaling_kind,
-        format!("appId={}", service.id()).as_str(),
+        service.selector().as_str(),
         replicas_count as u32,
     );
 
