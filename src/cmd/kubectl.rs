@@ -1,4 +1,3 @@
-use std::fmt;
 use std::io::Error;
 use std::path::Path;
 
@@ -22,16 +21,11 @@ pub enum ScalingKind {
     Statefulset,
 }
 
+#[derive(Debug)]
 pub enum PodCondition {
     Ready,
     Complete,
     Delete,
-}
-
-impl fmt::Debug for PodCondition {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 pub fn kubectl_exec_with_output<F, X>(
