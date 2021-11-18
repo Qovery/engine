@@ -53,7 +53,7 @@ use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, SVCItem, PVC, SVC};
 use qovery_engine::models::DatabaseMode::MANAGED;
-use qovery_engine::object_storage::spaces::Spaces;
+use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
 use qovery_engine::transaction::TransactionResult;
@@ -518,6 +518,7 @@ where
                                 .expect(&"DIGITAL_OCEAN_SPACES_SECRET_ID should be set".to_string())
                                 .to_string(),
                             region,
+                            BucketDeleteStrategy::HardDelete,
                         );
 
                         match spaces.get(
@@ -833,10 +834,14 @@ pub fn generate_cluster_id(region: &str) -> String {
                 Some(x) => x.into_string().unwrap(),
             };
 
+            // flag such name to ease deletion later on
+            current_name = format!("fixed-{}", current_name);
+
             // avoid out of bounds issue
             if current_name.chars().count() < shrink_size {
                 shrink_size = current_name.chars().count()
             }
+
             let mut final_name = format!("{}", &current_name[..shrink_size]);
             // do not end with a non alphanumeric char
             while !final_name.chars().last().unwrap().is_alphanumeric() {
