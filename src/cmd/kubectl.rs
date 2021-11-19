@@ -1066,7 +1066,7 @@ where
     P: AsRef<Path>,
 {
     let condition_format = format!(
-        "for={}",
+        "--for={}",
         match condition {
             PodCondition::Delete => format!("{:?}", &condition).to_lowercase(),
             _ => format!("condition={:?}", &condition).to_lowercase(),
