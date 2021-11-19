@@ -1086,6 +1086,7 @@ where
             "pod",
             "--selector",
             selector,
+            "--timeout=300s",
         ],
         complete_envs,
         |out| info!("{:?}", out),
