@@ -1,18 +1,18 @@
 extern crate test_utilities;
 
 use self::test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
-use self::test_utilities::utilities::{cluster_test, engine_run_test, FuncTestsSecrets};
+use self::test_utilities::utilities::{engine_run_test, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::cloud_provider::Kind;
+use test_utilities::common::{cluster_test, ClusterTestType};
 
 #[cfg(feature = "test-aws-infra")]
 fn create_and_destroy_eks_cluster(
     region: &str,
     secrets: FuncTestsSecrets,
-    test_infra_pause: bool,
-    test_infra_upgrade: bool,
+    test_type: ClusterTestType,
     major_boot_version: u8,
     minor_boot_version: u8,
     vpc_network_mode: VpcQoveryNetworkMode,
@@ -24,8 +24,7 @@ fn create_and_destroy_eks_cluster(
             Kind::Aws,
             region,
             secrets,
-            test_infra_pause,
-            test_infra_upgrade,
+            test_type,
             major_boot_version,
             minor_boot_version,
             Option::from(vpc_network_mode),
@@ -47,8 +46,7 @@ fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
     create_and_destroy_eks_cluster(
         &region,
         secrets,
-        false,
-        false,
+        ClusterTestType::Classic,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
         WithoutNatGateways,
@@ -65,8 +63,7 @@ fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
     create_and_destroy_eks_cluster(
         &region,
         secrets,
-        false,
-        false,
+        ClusterTestType::Classic,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
         WithNatGateways,
@@ -83,8 +80,7 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
     create_and_destroy_eks_cluster(
         &region,
         secrets,
-        false,
-        false,
+        ClusterTestType::Classic,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
         WithoutNatGateways,
@@ -104,8 +100,7 @@ fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     create_and_destroy_eks_cluster(
         &region,
         secrets,
-        false,
-        true,
+        ClusterTestType::WithUpgrade,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
         WithoutNatGateways,

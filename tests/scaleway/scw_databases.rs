@@ -8,12 +8,12 @@ use qovery_engine::models::{
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
-    test_db, FuncTestsSecrets,
+    FuncTestsSecrets,
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::working_minimal_environment;
 use test_utilities::common::Infrastructure;
+use test_utilities::common::{test_db, working_minimal_environment};
 use test_utilities::scaleway::{
     clean_environments, SCW_KUBE_TEST_CLUSTER_ID, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_QOVERY_ORGANIZATION_ID, SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,

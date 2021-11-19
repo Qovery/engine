@@ -7,12 +7,11 @@ use qovery_engine::models::{
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
-    context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, test_db,
-    FuncTestsSecrets,
+    context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::{working_minimal_environment, Infrastructure};
+use test_utilities::common::{test_db, working_minimal_environment, Infrastructure};
 use test_utilities::digitalocean::{
     clean_environments, DO_KUBE_TEST_CLUSTER_ID, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
     DO_QOVERY_ORGANIZATION_ID, DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,

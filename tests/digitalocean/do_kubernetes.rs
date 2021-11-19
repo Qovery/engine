@@ -1,17 +1,17 @@
 extern crate test_utilities;
 
 use self::test_utilities::digitalocean::{DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION};
-use self::test_utilities::utilities::{cluster_test, engine_run_test, FuncTestsSecrets};
+use self::test_utilities::utilities::{engine_run_test, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cloud_provider::Kind;
+use test_utilities::common::{cluster_test, ClusterTestType};
 
 #[cfg(feature = "test-do-infra")]
 fn create_and_destroy_doks_cluster(
     region: Region,
     secrets: FuncTestsSecrets,
-    test_infra_pause: bool,
-    test_infra_upgrade: bool,
+    test_type: ClusterTestType,
     major_boot_version: u8,
     minor_boot_version: u8,
     test_name: &str,
@@ -22,8 +22,7 @@ fn create_and_destroy_doks_cluster(
             Kind::Do,
             region.as_str(),
             secrets,
-            test_infra_pause,
-            test_infra_upgrade,
+            test_type,
             major_boot_version,
             minor_boot_version,
             None,
@@ -40,8 +39,7 @@ fn create_and_destroy_doks_cluster_ams_3() {
     create_and_destroy_doks_cluster(
         region,
         secrets,
-        false,
-        false,
+        ClusterTestType::Classic,
         DO_KUBERNETES_MAJOR_VERSION,
         DO_KUBERNETES_MINOR_VERSION,
         function_name!(),
@@ -58,8 +56,7 @@ fn create_upgrade_and_destroy_doks_cluster_in_nyc_3() {
     create_and_destroy_doks_cluster(
         region,
         secrets,
-        false,
-        true,
+        ClusterTestType::Classic,
         DO_KUBERNETES_MAJOR_VERSION,
         DO_KUBERNETES_MINOR_VERSION,
         function_name!(),

@@ -12,11 +12,10 @@ use self::test_utilities::aws::{
     AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID,
 };
 use self::test_utilities::utilities::{
-    context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, test_db,
-    FuncTestsSecrets,
+    context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, FuncTestsSecrets,
 };
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::Infrastructure;
+use test_utilities::common::{test_db, Infrastructure};
 
 /**
 **
