@@ -1,4 +1,3 @@
-use std::fmt;
 use std::io::Error;
 use std::path::Path;
 
@@ -22,16 +21,11 @@ pub enum ScalingKind {
     Statefulset,
 }
 
+#[derive(Debug)]
 pub enum PodCondition {
     Ready,
     Complete,
     Delete,
-}
-
-impl fmt::Debug for PodCondition {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 pub fn kubectl_exec_with_output<F, X>(
@@ -374,24 +368,11 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let mut output_vec: Vec<String> = Vec::new();
     let result = kubectl_exec_with_output(
         vec!["get", "namespace", namespace],
         _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => {
-                if line.contains("Error from server (NotFound): namespaces") {
-                    info!("{}", line)
-                } else {
-                    error!("{}", line)
-                }
-            }
-            Err(err) => error!("{:?}", err),
-        },
+        |out| info!("{:?}", out),
+        |out| warn!("{:?}", out),
     );
 
     result.is_ok()
@@ -1072,7 +1053,7 @@ where
     P: AsRef<Path>,
 {
     let condition_format = format!(
-        "for={}",
+        "--for={}",
         match condition {
             PodCondition::Delete => format!("{:?}", &condition).to_lowercase(),
             _ => format!("condition={:?}", &condition).to_lowercase(),
@@ -1092,18 +1073,11 @@ where
             "pod",
             "--selector",
             selector,
+            "--timeout=300s",
         ],
         complete_envs,
-        |out| {
-            if let Err(err) = out {
-                error!("{:?}", err)
-            }
-        },
-        |out| {
-            if let Err(err) = out {
-                error!("{:?}", err)
-            }
-        },
+        |out| info!("{:?}", out),
+        |out| warn!("{:?}", out),
     )
 }
 
