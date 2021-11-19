@@ -368,24 +368,11 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let mut output_vec: Vec<String> = Vec::new();
     let result = kubectl_exec_with_output(
         vec!["get", "namespace", namespace],
         _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => {
-                if line.contains("Error from server (NotFound): namespaces") {
-                    info!("{}", line)
-                } else {
-                    error!("{}", line)
-                }
-            }
-            Err(err) => error!("{:?}", err),
-        },
+        |out| info!("{:?}", out),
+        |out| warn!("{:?}", out),
     );
 
     result.is_ok()
