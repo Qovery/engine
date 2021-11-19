@@ -1088,16 +1088,8 @@ where
             selector,
         ],
         complete_envs,
-        |out| {
-            if let Err(err) = out {
-                error!("{:?}", err)
-            }
-        },
-        |out| {
-            if let Err(err) = out {
-                error!("{:?}", err)
-            }
-        },
+        |out| info!("{:?}", out),
+        |out| warn!("{:?}", out),
     )
 }
 
