@@ -183,6 +183,34 @@ dev-release-image:
     refs:
       - dev
 
+aws-whole-enchilada:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh aws_whole_enchilada
+  dependencies:
+    - linter
+    - build
+  when: always
+  tags:
+    - vm-2cpu-4gmem-0g
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-aws-whole-enchilada/
+      - $TESTS_TO_RUN =~ /test-aws-all/
+      - $TESTS_TO_RUN =~ /test-all/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
 aws-infra:
   stage: tests
   retry: 0
@@ -256,6 +284,34 @@ aws-self-hosted:
     variables:
       - $TESTS_TO_RUN =~ /test-aws-self-hosted/
       - $TESTS_TO_RUN =~ /test-aws-all/
+      - $TESTS_TO_RUN =~ /test-all/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+do-whole-enchilada:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh do_whole_enchilada
+  dependencies:
+    - linter
+    - build
+  when: always
+  tags:
+    - vm-2cpu-4gmem-0g
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-do-whole-enchilada/
+      - $TESTS_TO_RUN =~ /test-do-all/
       - $TESTS_TO_RUN =~ /test-all/
   artifacts:
     when: always
@@ -350,6 +406,34 @@ do-self-hosted:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
+
+scw-whole-enchilada:
+    stage: tests
+    retry: 0
+    script:
+      - ./helper.sh scw_whole_enchilada
+    dependencies:
+      - linter
+      - build
+    when: always
+    tags:
+      - vm-2cpu-4gmem-0g
+    only:
+      refs:
+        - dev
+      variables:
+        - $TESTS_TO_RUN =~ /test-scw-whole-enchilada/
+        - $TESTS_TO_RUN =~ /test-scw-all/
+        - $TESTS_TO_RUN =~ /test-all/
+    artifacts:
+      when: always
+      reports:
+        junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+      paths:
+        - $CI_PROJECT_DIR/gitlab-log-utilities
+        - $CI_PROJECT_DIR/.qovery-workspace
+      expire_in: 2 week
+    interruptible: true
 
 scw-infra:
   stage: tests

@@ -17,7 +17,7 @@ use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::EngineError;
-use qovery_engine::models::{Context, Environment, EnvironmentAction, Features, Listener, Metadata};
+use qovery_engine::models::{Context, Domain, Environment, EnvironmentAction, Features, Listener, Metadata};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -361,7 +361,7 @@ impl DnsProvider {
                     context,
                     self.id.as_str(),
                     self.name.as_str(),
-                    self.domain.as_str(),
+                    Domain::new(self.domain.clone()),
                     token.as_str(),
                     email.as_str(),
                 )))
