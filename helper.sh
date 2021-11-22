@@ -137,8 +137,8 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
       fi
       # For the app, checkout on the same branch name gitlab <-> github if the same name exists
       if [ ! -z "$GITHUB_ENGINE_BRANCH_NAME" ] ; then
-        echo "Requested to checkout the $ENGINE_BRANCH instead of dev branch"
-        git checkout $ENGINE_BRANCH
+        echo "Requested to checkout the $GITHUB_ENGINE_BRANCH_NAME instead of dev branch"
+        git checkout $GITHUB_ENGINE_BRANCH_NAME
       else
         echo "Requested to checkout the dev branch"
       fi
