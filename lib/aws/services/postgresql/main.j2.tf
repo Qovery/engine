@@ -62,16 +62,7 @@ resource "helm_release" "postgres_instance_external_name" {
 resource "aws_db_instance" "postgresql_instance" {
   identifier = var.postgresql_identifier
 
-  tags = {
-    cluster_name = var.cluster_name
-    region = var.region
-    q_client_id = var.q_customer_id
-    q_environment_id = var.q_environment_id
-    q_project_id = var.q_project_id
-    database_identifier = var.postgresql_identifier
-    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
-    {% if snapshot and snapshot["snapshot_id"] %}meta_last_restored_from = var.snapshot_identifier{% endif %}
-  }
+  tags = local.postgres_database_tags
 
   # Postgres instance basics
   instance_class = var.instance_class
@@ -103,8 +94,8 @@ resource "aws_db_instance" "postgresql_instance" {
 
   # Maintenance and upgrades
   apply_immediately = var.apply_changes_now
-  auto_minor_version_upgrade = var.upgrade_minor
-  maintenance_window = var.maintenance_window
+  auto_minor_version_upgrade = var.auto_minor_version_upgrade
+  maintenance_window = var.preferred_maintenance_window
 
   # Monitoring
   performance_insights_enabled = var.performance_insights_enabled
@@ -114,7 +105,7 @@ resource "aws_db_instance" "postgresql_instance" {
 
   # Backups
   backup_retention_period = var.backup_retention_period
-  backup_window = var.backup_window
+  backup_window = var.preferred_backup_window
   skip_final_snapshot = var.skip_final_snapshot
   {%- if not skip_final_snapshot %}
   final_snapshot_identifier = var.final_snapshot_name

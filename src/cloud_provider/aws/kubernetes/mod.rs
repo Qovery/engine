@@ -22,6 +22,7 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::{
@@ -44,6 +45,7 @@ use crate::models::{
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
+use ::function_name::named;
 
 pub mod helm_charts;
 pub mod node;
@@ -684,8 +686,8 @@ impl<'a> EKS<'a> {
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
         warn!("EKS.create_error() called for {}", self.name());
         match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
-            Ok(_x) => (),
-            Err(_e) => (),
+            Ok(ok_line) => info!("{}", ok_line),
+            Err(err) => error!("{:?}", err),
         };
         Err(self.engine_error(
             EngineErrorCause::Internal,
@@ -1057,65 +1059,77 @@ impl<'a> EKS<'a> {
         let kubernetes_config_file_path = self.config_file_path()?;
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
-        let metric_name = "taskmanager_nb_running_tasks";
-        let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
-            return match kubectl_exec_api_custom_metrics(
-                &kubernetes_config_file_path,
-                self.cloud_provider().credentials_environment_variables(),
-                "qovery",
-                None,
-                metric_name,
-            ) {
-                Ok(metrics) => {
-                    let mut current_engine_jobs = 0;
+        if self.get_engine_location() == EngineLocation::ClientSide {
+            match self.context.is_feature_enabled(&Features::MetricsHistory) {
+                true => {
+                    let metric_name = "taskmanager_nb_running_tasks";
+                    let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
+                        return match kubectl_exec_api_custom_metrics(
+                            &kubernetes_config_file_path,
+                            self.cloud_provider().credentials_environment_variables(),
+                            "qovery",
+                            None,
+                            metric_name,
+                        ) {
+                            Ok(metrics) => {
+                                let mut current_engine_jobs = 0;
 
-                    for metric in metrics.items {
-                        match metric.value.parse::<i32>() {
-                            Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
+                                for metric in metrics.items {
+                                    match metric.value.parse::<i32>() {
+                                        Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
+                                        Err(e) => {
+                                            error!(
+                                                "error while looking at the API metric value {}. {:?}",
+                                                metric_name, e
+                                            );
+                                            return OperationResult::Retry(SimpleError {
+                                                kind: SimpleErrorKind::Other,
+                                                message: Some(e.to_string()),
+                                            });
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                if current_engine_jobs == 0 {
+                                    OperationResult::Ok(())
+                                } else {
+                                    OperationResult::Retry(SimpleError {
+                                        kind: SimpleErrorKind::Other,
+                                        message: Some("can't pause the infrastructure now, Engine jobs are currently running, retrying later...".to_string()),
+                                    })
+                                }
+                            }
                             Err(e) => {
                                 error!("error while looking at the API metric value {}. {:?}", metric_name, e);
-                                return OperationResult::Retry(SimpleError {
-                                    kind: SimpleErrorKind::Other,
-                                    message: Some(e.to_string()),
-                                });
+                                OperationResult::Retry(e)
                             }
-                            _ => {}
+                        };
+                    });
+
+                    match wait_engine_job_finish {
+                        Ok(_) => {
+                            info!("no current running jobs on the Engine, infrastructure pause is allowed to start")
+                        }
+                        Err(Operation { error, .. }) => {
+                            return Err(EngineError {
+                                cause: EngineErrorCause::Internal,
+                                scope: EngineErrorScope::Engine,
+                                execution_id: self.context.execution_id().to_string(),
+                                message: error.message,
+                            })
+                        }
+                        Err(retry::Error::Internal(msg)) => {
+                            return Err(EngineError::new(
+                                EngineErrorCause::Internal,
+                                EngineErrorScope::Engine,
+                                self.context.execution_id(),
+                                Some(msg),
+                            ))
                         }
                     }
-
-                    if current_engine_jobs == 0 {
-                        OperationResult::Ok(())
-                    } else {
-                        OperationResult::Retry(SimpleError {
-                                kind: SimpleErrorKind::Other,
-                                message: Some("can't pause the infrastructure now, Engine jobs are currently running, retrying later...".to_string()),
-                            })
-                    }
                 }
-                Err(e) => {
-                    error!("error while looking at the API metric value {}. {:?}", metric_name, e);
-                    OperationResult::Retry(e)
-                }
-            };
-        });
-
-        match wait_engine_job_finish {
-            Ok(_) => info!("no current running jobs on the Engine, infrastructure pause is allowed to start"),
-            Err(Operation { error, .. }) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: error.message,
-                })
-            }
-            Err(retry::Error::Internal(msg)) => {
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    EngineErrorScope::Engine,
-                    self.context.execution_id(),
-                    Some(msg),
-                ))
+                false => warn!("The Engines are running Client side, but metric history flag is disabled. You will encounter issues during cluster lifecycles if you do not enable metric history"),
             }
         }
 
@@ -1438,6 +1452,14 @@ impl<'a> EKS<'a> {
         // FIXME What should we do if something goes wrong while deleting the cluster?
         Ok(())
     }
+
+    fn cloud_provider_name(&self) -> &str {
+        "aws"
+    }
+
+    fn struct_name(&self) -> &str {
+        "kubernetes"
+    }
 }
 
 impl<'a> Kubernetes for EKS<'a> {
@@ -1485,83 +1507,179 @@ impl<'a> Kubernetes for EKS<'a> {
         Ok(())
     }
 
+    #[named]
     fn on_create(&self) -> Result<(), EngineError> {
-        info!("EKS.on_create() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.create())
     }
 
+    #[named]
     fn on_create_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
     }
 
+    #[named]
     fn on_upgrade(&self) -> Result<(), EngineError> {
-        info!("EKS.on_upgrade() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.upgrade())
     }
 
+    #[named]
     fn on_upgrade_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_upgrade() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
     }
 
+    #[named]
     fn on_downgrade(&self) -> Result<(), EngineError> {
-        info!("EKS.on_downgrade() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.downgrade())
     }
 
+    #[named]
     fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_downgrade_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
     }
 
+    #[named]
     fn on_pause(&self) -> Result<(), EngineError> {
-        info!("EKS.on_pause() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Pause, || self.pause())
     }
 
+    #[named]
     fn on_pause_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_pause_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Pause, || self.pause_error())
     }
 
+    #[named]
     fn on_delete(&self) -> Result<(), EngineError> {
-        info!("EKS.on_delete() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Delete, || self.delete())
     }
 
+    #[named]
     fn on_delete_error(&self) -> Result<(), EngineError> {
-        info!("EKS.on_delete_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
+    #[named]
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("EKS.deploy_environment() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         kubernetes::deploy_environment(self, environment)
     }
 
+    #[named]
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
-        warn!("EKS.deploy_environment_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         kubernetes::deploy_environment_error(self, environment)
     }
 
+    #[named]
     fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("EKS.pause_environment() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         kubernetes::pause_environment(self, environment)
     }
 
+    #[named]
     fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        warn!("EKS.pause_environment_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 
+    #[named]
     fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        info!("EKS.delete_environment() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         kubernetes::delete_environment(self, environment)
     }
 
+    #[named]
     fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        warn!("EKS.delete_environment_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
         Ok(())
     }
 }

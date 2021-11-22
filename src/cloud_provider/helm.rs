@@ -80,6 +80,7 @@ pub struct ChartInfo {
     pub values: Vec<ChartSetValue>,
     pub values_files: Vec<String>,
     pub yaml_files_content: Vec<ChartValuesGenerated>,
+    pub parse_stderr_for_error: bool,
 }
 
 impl ChartInfo {
@@ -89,6 +90,7 @@ impl ChartInfo {
         custom_namespace: String,
         timeout_in_seconds: i64,
         values_files: Vec<String>,
+        parse_stderr_for_error: bool,
     ) -> Self {
         ChartInfo {
             name,
@@ -97,6 +99,7 @@ impl ChartInfo {
             custom_namespace: Some(custom_namespace),
             timeout_in_seconds,
             values_files,
+            parse_stderr_for_error,
             ..Default::default()
         }
     }
@@ -126,6 +129,7 @@ impl Default for ChartInfo {
             values: Vec::new(),
             values_files: Vec::new(),
             yaml_files_content: vec![],
+            parse_stderr_for_error: true,
         }
     }
 }
@@ -245,11 +249,17 @@ pub trait HelmChart: Send {
     ) -> Result<Option<ChartPayload>, SimpleError> {
         // print events for future investigation
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-        kubectl_exec_get_events(
+        match kubectl_exec_get_events(
             kubernetes_config,
             Some(self.get_chart_info().get_namespace_string().as_str()),
             environment_variables,
-        )?;
+        ) {
+            Ok(ok_line) => info!("{}", ok_line),
+            Err(err) => {
+                error!("{:?}", err);
+                return Err(err);
+            }
+        };
         Ok(payload)
     }
 }

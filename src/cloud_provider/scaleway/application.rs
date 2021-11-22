@@ -12,13 +12,14 @@ use crate::cloud_provider::service::{
     scale_down_application, send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm,
     Pause, Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::{sanitize_name, validate_k8s_required_cpu_and_burstable};
+use crate::cloud_provider::utilities::{print_action, sanitize_name, validate_k8s_required_cpu_and_burstable};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
+use ::function_name::named;
 
 pub struct Application {
     context: Context,
@@ -74,6 +75,14 @@ impl Application {
 
     fn is_stateful(&self) -> bool {
         !self.storage.is_empty()
+    }
+
+    fn cloud_provider_name(&self) -> &str {
+        "scaleway"
+    }
+
+    fn struct_name(&self) -> &str {
+        "application"
     }
 }
 
@@ -275,7 +284,7 @@ impl Service for Application {
     }
 
     fn selector(&self) -> String {
-        format!("app={}", self.sanitized_name())
+        format!("appId={}", self.id)
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -284,8 +293,14 @@ impl Service for Application {
 }
 
 impl Create for Application {
+    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.application.on_create() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_user_stateless_service(target, self)
@@ -296,8 +311,14 @@ impl Create for Application {
         Ok(())
     }
 
+    #[named]
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.application.on_create_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
             deploy_stateless_service_error(target, self)
@@ -306,8 +327,14 @@ impl Create for Application {
 }
 
 impl Pause for Application {
+    #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.application.on_pause() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
             scale_down_application(
@@ -323,16 +350,28 @@ impl Pause for Application {
         Ok(())
     }
 
+    #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.application.on_pause_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         Ok(())
     }
 }
 
 impl Delete for Application {
+    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        info!("SCW.application.on_delete() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
             delete_stateless_service(target, self, false)
@@ -343,8 +382,14 @@ impl Delete for Application {
         Ok(())
     }
 
+    #[named]
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        warn!("SCW.application.on_delete_error() called for {}", self.name());
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+        );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
             delete_stateless_service(target, self, true)

@@ -11,10 +11,23 @@ if [ "$(uname)" == "Darwin" ] ; then
   sed='gsed'
 fi
 all_labels="test-all"
+pipeline_id_file=pipeline_id
 
 function variable_not_found() {
   echo "Required variable not found: $1"
   exit 1
+}
+
+function stop_gitlab_pipeline() {
+  test -z $GITLAB_PERSONAL_TOKEN && variable_not_found "GITLAB_PERSONAL_TOKEN"
+  if [ ! -f $pipeline_id_file ] ; then
+    echo "Pipeline ID file is not present, can't cancel Gitlab pipeline"
+    exit 1
+  fi
+  PIPELINE_ID=$(cat $pipeline_id_file)
+
+  echo "Stopping gitlab pipeline ID: $PIPELINE_ID"
+  curl -s -X POST -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$PIPELINE_ID/cancel" 1>/dev/null
 }
 
 function release() {
@@ -25,12 +38,12 @@ function release() {
   GITLAB_REF="main"
 
   echo "Requesting Gitlab pipeline"
-  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
-  if [ $(echo $pipeline_id | egrep -c '^[0-9]+$') -eq 0 ] ; then
-    echo "Pipeline ID is not correct, we expected a number and got: $pipeline_id"
+  PIPELINE_ID=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TYPE]=$TESTS_TYPE" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
+  if [ $(echo $PIPELINE_ID | egrep -c '^[0-9]+$') -eq 0 ] ; then
+    echo "Pipeline ID is not correct, we expected a number and got: $PIPELINE_ID"
     exit 1
   fi
-  echo "Pipeline ID: $pipeline_id"
+  echo "Pipeline ID: $PIPELINE_ID"
 }
 
 function gh_tags_selector_for_gitlab() {
@@ -66,19 +79,21 @@ function run_tests() {
   fi
 
   echo "Requesting Gitlab pipeline"
-  pipeline_id=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TO_RUN]=$TESTS_TYPE" -F "variables[FORCE_CHECKOUT_CUSTOM_BRANCH]=$FORCE_CHECKOUT_CUSTOM_BRANCH" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
-  if [ $(echo $pipeline_id | egrep -c '^[0-9]+$') -eq 0 ] ; then
-    echo "Pipeline ID is not correct, we expected a number and got: $pipeline_id"
+  PIPELINE_ID=$(curl -s -X POST -F "token=$GITLAB_TOKEN" -F "ref=$GITLAB_REF" -F "variables[GITHUB_COMMIT_ID]=$GITHUB_COMMIT_ID" -F "variables[GITHUB_ENGINE_BRANCH_NAME]=$GITHUB_BRANCH" -F "variables[TESTS_TO_RUN]=$TESTS_TYPE" -F "variables[FORCE_CHECKOUT_CUSTOM_BRANCH]=$FORCE_CHECKOUT_CUSTOM_BRANCH" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/trigger/pipeline | jq --raw-output '.id')
+  if [ $(echo $PIPELINE_ID | egrep -c '^[0-9]+$') -eq 0 ] ; then
+    echo "Pipeline ID is not correct, we expected a number and got: $PIPELINE_ID"
     exit 1
   fi
+  echo $PIPELINE_ID > $pipeline_id_file
+  trap "stop_gitlab_pipeline" SIGTERM SIGINT
   sleep 2
 
   pipeline_status=''
   counter=0
   max_unexpected_status=5
   while [ $counter -le $max_unexpected_status ] ; do
-    current_status=$(curl -s -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$pipeline_id | jq --raw-output '.detailed_status.text')
-    echo "Current pipeline id $pipeline_id status: $current_status"
+    current_status=$(curl -s -H "PRIVATE-TOKEN: $GITLAB_PERSONAL_TOKEN" https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$PIPELINE_ID | jq --raw-output '.detailed_status.text')
+    echo "Current pipeline id $PIPELINE_ID status: $current_status"
     case $current_status in
       "created")
         ((counter=$counter+1))
@@ -124,7 +139,7 @@ function run_tests() {
       ;;
     esac
 
-    sleep 10
+    sleep 5
   done
 
   echo "Results: functional tests failed due to a too high number ($max_unexpected_status) of unexpected status."
@@ -144,6 +159,9 @@ autodetect)
   tags=$(gh_tags_selector_for_gitlab)
   run_tests $tags
   ;;
+stop_gitlab_pipeline)
+  stop_gitlab_pipeline
+  ;;
 check_gh_tags)
   if [ "$(gh_tags_selector_for_gitlab)" == "$all_labels" ] ; then
     echo "All tests have been enabled"
@@ -156,6 +174,7 @@ check_gh_tags)
   echo "Usage:"
   echo "$0 autodetect: autodetect tests to run based on tags"
   echo "$0 full_tests: run full tests (with cloud providers check)"
+  echo "$0 stop_gitlab_pipeline: stop gitlab pipeline"
   echo "$0 check_gh_tags: get defined tags (only working if branch is a PR)"
   ;;
 esac

@@ -63,15 +63,7 @@ resource "helm_release" "elasticache_instance_external_name" {
 resource "aws_elasticache_cluster" "elasticache_cluster" {
   cluster_id = var.elasticache_identifier
 
-  tags = {
-    cluster_name = var.cluster_name
-    region = var.region
-    q_client_id = var.q_customer_id
-    q_environment_id = var.q_environment_id
-    q_project_id = var.q_project_id
-    database_identifier = var.elasticache_identifier
-    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
-  }
+  tags = local.redis_database_tags
 
   # Elasticache instance basics
   port = var.port
@@ -114,5 +106,4 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
   {%- if not skip_final_snapshot %}
   final_snapshot_identifier = var.final_snapshot_name
   {%- endif %}
-
 }

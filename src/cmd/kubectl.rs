@@ -21,6 +21,13 @@ pub enum ScalingKind {
     Statefulset,
 }
 
+#[derive(Debug)]
+pub enum PodCondition {
+    Ready,
+    Complete,
+    Delete,
+}
+
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
@@ -361,24 +368,11 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let mut output_vec: Vec<String> = Vec::new();
     let result = kubectl_exec_with_output(
         vec!["get", "namespace", namespace],
         _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => {
-                if line.contains("Error from server (NotFound): namespaces") {
-                    info!("{}", line)
-                } else {
-                    error!("{}", line)
-                }
-            }
-            Err(err) => error!("{:?}", err),
-        },
+        |out| info!("{:?}", out),
+        |out| warn!("{:?}", out),
     );
 
     result.is_ok()
@@ -844,30 +838,35 @@ pub fn kubectl_exec_get_events<P>(
     kubernetes_config: P,
     namespace: Option<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<String, SimpleError>
 where
     P: AsRef<Path>,
 {
     let mut environment_variables = envs;
     environment_variables.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
 
-    let mut args = vec!["get", "event", "-A", "--sort-by='.lastTimestamp'"];
-    if !namespace.unwrap().is_empty() {
-        args = vec!["get", "event", "-n", namespace.unwrap(), "--sort-by='.lastTimestamp'"];
-    }
+    let arg_namespace = match namespace {
+        Some(n) => format!("-n {}", n),
+        None => "-A".to_string(),
+    };
 
-    kubectl_exec_with_output(
+    let args = vec!["get", "event", arg_namespace.as_str(), "--sort-by='.lastTimestamp'"];
+
+    let mut result_ok = String::new();
+    let mut result_err = SimpleError::new(SimpleErrorKind::Other, Some(String::new()));
+
+    match kubectl_exec_with_output(
         args,
         environment_variables,
         |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
+            Ok(line) => result_ok = line,
+            Err(err) => result_err = SimpleError::from(err),
         },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-    )
+        |_| {},
+    ) {
+        Ok(()) => Ok(result_ok),
+        Err(err) => Err(err),
+    }
 }
 
 pub fn kubectl_delete_objects_in_all_namespaces<P>(
@@ -1009,7 +1008,7 @@ where
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
+    _envs.extend(envs.clone());
 
     kubectl_exec_with_output(
         vec![
@@ -1033,6 +1032,52 @@ where
                 error!("{:?}", err)
             }
         },
+    )?;
+
+    let condition = match replicas_count {
+        0 => PodCondition::Delete,
+        _ => PodCondition::Ready,
+    };
+    info!("waiting for the pods to get the expected status: {:?}", &condition);
+    kubectl_exec_wait_for_pods_condition(kubernetes_config, envs, namespace, selector, condition)
+}
+
+pub fn kubectl_exec_wait_for_pods_condition<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: &str,
+    selector: &str,
+    condition: PodCondition,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let condition_format = format!(
+        "--for={}",
+        match condition {
+            PodCondition::Delete => format!("{:?}", &condition).to_lowercase(),
+            _ => format!("condition={:?}", &condition).to_lowercase(),
+        }
+    );
+
+    let mut complete_envs = Vec::with_capacity(envs.len() + 1);
+    complete_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    complete_envs.extend(envs);
+
+    kubectl_exec_with_output(
+        vec![
+            "-n",
+            namespace,
+            "wait",
+            condition_format.as_str(),
+            "pod",
+            "--selector",
+            selector,
+            "--timeout=300s",
+        ],
+        complete_envs,
+        |out| info!("{:?}", out),
+        |out| warn!("{:?}", out),
     )
 }
 

@@ -55,15 +55,6 @@ where
         chart_root_dir.as_ref().to_str().unwrap()
     );
 
-    // let _ = helm_exec_upgrade(
-    //     kubernetes_config.as_ref(),
-    //     namespace,
-    //     release_name,
-    //     chart_root_dir.as_ref(),
-    //     timeout,
-    //     envs.clone(),
-    // )?;
-
     let path = match chart_root_dir.as_ref().to_str().is_some() {
         true => chart_root_dir.as_ref().to_str().unwrap(),
         false => "",
@@ -80,18 +71,19 @@ where
                 ServiceType::Database(_) => vec![format!("{}/q-values.yaml", path)],
                 _ => vec![],
             },
+            false,
         ),
     };
 
     let environment_variables: Vec<(String, String)> =
         envs.iter().map(|x| (x.0.to_string(), x.1.to_string())).collect();
 
-    let _ = deploy_charts_levels(
+    deploy_charts_levels(
         kubernetes_config.as_ref(),
         &environment_variables,
         vec![vec![Box::new(current_chart)]],
         false,
-    );
+    )?;
 
     // list helm history
     info!(
@@ -229,21 +221,33 @@ where
             kind: SimpleErrorKind::Other,
             message: None,
         };
-        match helm_exec_with_output(
+        let mut should_clean_helm_lock = false;
+
+        let helm_ret = helm_exec_with_output(
             args,
             envs.clone(),
             |out| match out {
                 Ok(line) => {
                     info!("{}", line);
-                    if debug {
-                        debug!("{}", line);
-                    }
                     json_output_string = line
                 }
                 Err(err) => error!("{}", &err),
             },
             |out| match out {
                 Ok(line) => {
+                    if line.contains("another operation (install/upgrade/rollback) is in progress") {
+                        error_message = format!("helm lock detected for {}, looking for cleaning lock", chart.name);
+                        helm_error_during_deployment.message = Some(error_message.clone());
+                        warn!("{}. {}", &error_message, &line);
+                        should_clean_helm_lock = true;
+                        return;
+                    }
+
+                    if !chart.parse_stderr_for_error {
+                        warn!("chart {}: {}", chart.name, line);
+                        return;
+                    }
+
                     // helm errors are not json formatted unfortunately
                     if line.contains("has been rolled back") {
                         error_message = format!("deployment {} has been rolled back", chart.name);
@@ -253,21 +257,7 @@ where
                         error_message = format!("deployment {} has been uninstalled due to failure", chart.name);
                         helm_error_during_deployment.message = Some(error_message.clone());
                         warn!("{}. {}", &error_message, &line);
-                    } else if line.contains("another operation (install/upgrade/rollback) is in progress") {
-                        error_message = format!("helm lock detected for {}, looking for cleaning lock", chart.name);
-                        helm_error_during_deployment.message = Some(error_message.clone());
-                        warn!("{}. {}", &error_message, &line);
-                        match clean_helm_lock(
-                            &kubernetes_config,
-                            chart.get_namespace_string().as_str(),
-                            &chart.name,
-                            chart.timeout_in_seconds,
-                            envs.clone(),
-                        ) {
-                            Ok(_) => info!("Helm lock detected and cleaned"),
-                            Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
-                        }
-                    // special fix for prometheus operator
+                        // special fix for prometheus operator
                     } else if line.contains("info: skipping unknown hook: \"crd-install\"") {
                         debug!("chart {}: {}", chart.name, line);
                     } else {
@@ -282,7 +272,22 @@ where
                     error!("{}", error_message);
                 }
             },
-        ) {
+        );
+
+        if should_clean_helm_lock {
+            match clean_helm_lock(
+                &kubernetes_config,
+                chart.get_namespace_string().as_str(),
+                &chart.name,
+                chart.timeout_in_seconds,
+                envs.clone(),
+            ) {
+                Ok(_) => info!("Helm lock detected and cleaned"),
+                Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
+            }
+        }
+
+        match helm_ret {
             Ok(_) => {
                 if helm_error_during_deployment.message.is_some() {
                     OperationResult::Retry(helm_error_during_deployment)
@@ -291,83 +296,6 @@ where
                 }
             }
             Err(e) => OperationResult::Retry(e),
-        }
-    });
-
-    match result {
-        Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => return Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
-    }
-}
-
-pub fn helm_exec_upgrade<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    chart_root_dir: P,
-    timeout: Timeout<u32>,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let timeout_i64 = match timeout {
-        Timeout::Value(v) => v + HELM_DEFAULT_TIMEOUT_IN_SECONDS,
-        Timeout::Default => HELM_DEFAULT_TIMEOUT_IN_SECONDS,
-    } as i64;
-    let timeout_string = format!("{}s", &timeout_i64);
-
-    let result = retry::retry(Fixed::from_millis(15000).take(3), || {
-        let mut clean_lock = false;
-        match helm_exec_with_output(
-            vec![
-                "upgrade",
-                "--kubeconfig",
-                kubernetes_config.as_ref().to_str().unwrap(),
-                "--create-namespace",
-                "--install",
-                "--history-max",
-                "50",
-                "--timeout",
-                timeout_string.as_str(),
-                "--wait",
-                "--namespace",
-                namespace,
-                release_name,
-                chart_root_dir.as_ref().to_str().unwrap(),
-            ],
-            envs.clone(),
-            |out| match out {
-                Ok(line) => info!("{}", line.as_str()),
-                Err(err) => error!("{}", err),
-            },
-            |out| match out {
-                Ok(line) => {
-                    error!("{}", line.as_str());
-                    if line.contains("another operation (install/upgrade/rollback) is in progress") {
-                        clean_lock = true;
-                    }
-                }
-                Err(err) => error!("{}", err),
-            },
-        ) {
-            Ok(_) => OperationResult::Ok(()),
-            Err(e) => {
-                if clean_lock {
-                    match clean_helm_lock(
-                        &kubernetes_config,
-                        &namespace,
-                        &release_name,
-                        timeout_i64.clone(),
-                        envs.clone(),
-                    ) {
-                        Ok(_) => info!("Helm lock detected and cleaned"),
-                        Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
-                    };
-                };
-                OperationResult::Retry(e)
-            }
         }
     });
 
@@ -984,7 +912,7 @@ where
         Err(err) => match err.kind {
             SimpleErrorKind::Command(exit_status) => match exit_status.code() {
                 Some(exit_status_code) => {
-                    if exit_status_code == 1 {
+                    if exit_status_code == 0 {
                         Ok(())
                     } else {
                         Err(err)

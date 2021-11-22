@@ -6,6 +6,10 @@ on:
   pull_request:
     branches-ignore: [ main, dev ]
 
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.ref }}
+
 jobs:
   security_audit:
     runs-on: ubuntu-latest
@@ -62,7 +66,9 @@ jobs:
           echo "Branch name: $branch"
           export GITHUB_BRANCH=$branch
           export GITHUB_COMMIT_ID=$GITHUB_SHA
-          ./helper.sh autodetect
+          trap "./helper.sh stop_gitlab_pipeline" SIGTERM SIGINT
+          ./helper.sh autodetect &
+          wait $!
   all-tests-enabled:
     runs-on: ubuntu-latest
     needs: build
