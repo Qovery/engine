@@ -22,10 +22,7 @@ impl EngineError {
             cause,
             scope,
             execution_id: execution_id.into(),
-            message: match message {
-                Some(message) => Some(message.into()),
-                _ => None,
-            },
+            message: message.map(|message| message.into()),
         }
     }
 }
