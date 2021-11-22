@@ -424,7 +424,6 @@ function export_env() { ## Export environment variables from .env file
 
 function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH branch name, threads
   filter_tests=$1
-  GITHUB_ENGINE_BRANCH_NAME=$2
   nb_treads=$3
   print_title "RUNNING TESTS - $filter_tests"
   export RUST_LOG=debug
@@ -462,7 +461,6 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 
 # shellcheck disable=SC2120
 function lint() {
-  GITHUB_ENGINE_BRANCH_NAME=$1
   nb_treads=$2
   export RUST_LOG=info
   export_env
