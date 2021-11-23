@@ -76,7 +76,7 @@ maplit = "1.0.2"
 
 [features]
 default = []
-test-all = ["test-all-self-hosted", "test-all-infra", "test-all-managed-services"]
+test-all = ["test-all-self-hosted", "test-all-infra", "test-all-managed-services", "test-all-whole-enchilada"]
 
 # functionnal tests by type
 test-aws-self-hosted = []
