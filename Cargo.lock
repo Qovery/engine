@@ -2110,6 +2110,7 @@ dependencies = [
  "tracing-subscriber",
  "tracing-test",
  "trust-dns-resolver",
+ "url 2.2.2",
  "uuid 0.8.2",
  "walkdir",
 ]
