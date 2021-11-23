@@ -12,7 +12,7 @@ use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::ScwInstancesType;
-use crate::cloud_provider::utilities::print_action;
+use crate::cloud_provider::utilities::{print_action, update_tfstate_s3};
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::kubectl::{kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::structs::HelmChart;

@@ -18,7 +18,7 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 
 pub const DO_QOVERY_ORGANIZATION_ID: &str = "z3bc003d2";
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const DO_KUBERNETES_MINOR_VERSION: u8 = 18;
+pub const DO_KUBERNETES_MINOR_VERSION: u8 = 19;
 pub const DO_KUBERNETES_VERSION: &'static str =
     formatcp!("{}.{}", DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION);
 pub const DOCR_ID: &str = "registry-the-one-and-unique";

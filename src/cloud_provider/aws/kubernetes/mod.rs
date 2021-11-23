@@ -1277,7 +1277,6 @@ impl<'a> Kubernetes for EKS<'a> {
         //
         // Upgrade master nodes
         //
-
         match &kubernetes_upgrade_status.required_upgrade_on {
             Some(KubernetesNodesType::Masters) => {
                 let message = format!(

@@ -19,7 +19,7 @@ use crate::git::Credentials;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
-
+use tera::Context as TeraContext;
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
     Environment(TargetEnvironment),
