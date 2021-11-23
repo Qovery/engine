@@ -38,7 +38,7 @@ use crate::fs::workspace_directory;
 use crate::models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
-use crate::object_storage::spaces::Spaces;
+use crate::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
 use crate::{cmd, dns_provider};
@@ -134,6 +134,7 @@ impl<'a> DOKS<'a> {
             cloud_provider.access_key_id().clone(),
             cloud_provider.secret_access_key().clone(),
             region,
+            BucketDeleteStrategy::HardDelete,
         );
 
         Ok(DOKS {

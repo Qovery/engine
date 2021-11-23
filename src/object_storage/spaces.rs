@@ -6,7 +6,8 @@ use retry::{Error, OperationResult};
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    CreateBucketRequest, GetObjectRequest, HeadBucketRequest, PutObjectRequest, S3Client, StreamingBody, S3,
+    CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest, GetObjectRequest, HeadBucketRequest,
+    ListObjectsRequest, ObjectIdentifier, PutObjectRequest, S3Client, StreamingBody, S3,
 };
 use tokio::io;
 
@@ -17,6 +18,11 @@ use crate::object_storage::{Kind, ObjectStorage};
 use crate::runtime;
 use crate::runtime::block_on;
 
+pub enum BucketDeleteStrategy {
+    HardDelete,
+    Empty,
+}
+
 pub struct Spaces {
     context: Context,
     id: String,
@@ -24,6 +30,7 @@ pub struct Spaces {
     access_key_id: String,
     secret_access_key: String,
     region: DoRegion,
+    bucket_delete_strategy: BucketDeleteStrategy,
 }
 
 impl Spaces {
@@ -34,6 +41,7 @@ impl Spaces {
         access_key_id: String,
         secret_access_key: String,
         region: DoRegion,
+        bucket_delete_strategy: BucketDeleteStrategy,
     ) -> Self {
         Spaces {
             context,
@@ -42,6 +50,7 @@ impl Spaces {
             access_key_id,
             secret_access_key,
             region,
+            bucket_delete_strategy,
         }
     }
 
@@ -79,58 +88,58 @@ impl Spaces {
         Ok(())
     }
 
-    // fn empty_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
-    //     if let Err(message) = Spaces::is_bucket_name_valid(bucket_name) {
-    //         let message = format!(
-    //             "While trying to delete object-storage bucket, name `{}` is invalid: {}",
-    //             bucket_name,
-    //             message.unwrap_or_else(|| "unknown error".to_string())
-    //         );
-    //         return Err(self.engine_error(EngineErrorCause::Internal, message));
-    //     }
-    //
-    //     let s3_client = self.get_s3_client();
-    //
-    //     // make sure to delete all bucket content before trying to delete the bucket
-    //     let objects_to_be_deleted = match block_on(s3_client.list_objects(ListObjectsRequest {
-    //         bucket: bucket_name.to_string(),
-    //         ..Default::default()
-    //     })) {
-    //         Ok(res) => res.contents.unwrap_or_default(),
-    //         Err(_) => {
-    //             vec![]
-    //         }
-    //     };
-    //
-    //     if !objects_to_be_deleted.is_empty() {
-    //         if let Err(e) = block_on(
-    //             s3_client.delete_objects(DeleteObjectsRequest {
-    //                 bucket: bucket_name.to_string(),
-    //                 delete: Delete {
-    //                     objects: objects_to_be_deleted
-    //                         .iter()
-    //                         .filter_map(|e| e.key.clone())
-    //                         .map(|e| ObjectIdentifier {
-    //                             key: e,
-    //                             version_id: None,
-    //                         })
-    //                         .collect(),
-    //                     ..Default::default()
-    //                 },
-    //                 ..Default::default()
-    //             }),
-    //         ) {
-    //             let message = format!(
-    //                 "While trying to delete object-storage bucket `{}`, cannot delete content: {}",
-    //                 bucket_name, e
-    //             );
-    //             error!("{}", message);
-    //             return Err(self.engine_error(EngineErrorCause::Internal, message));
-    //         }
-    //     }
-    //
-    //     Ok(())
-    // }
+    fn empty_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+        if let Err(message) = Spaces::is_bucket_name_valid(bucket_name) {
+            let message = format!(
+                "While trying to delete object-storage bucket, name `{}` is invalid: {}",
+                bucket_name,
+                message.unwrap_or_else(|| "unknown error".to_string())
+            );
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
+        }
+
+        let s3_client = self.get_s3_client();
+
+        // make sure to delete all bucket content before trying to delete the bucket
+        let objects_to_be_deleted = match block_on(s3_client.list_objects(ListObjectsRequest {
+            bucket: bucket_name.to_string(),
+            ..Default::default()
+        })) {
+            Ok(res) => res.contents.unwrap_or_default(),
+            Err(_) => {
+                vec![]
+            }
+        };
+
+        if !objects_to_be_deleted.is_empty() {
+            if let Err(e) = block_on(
+                s3_client.delete_objects(DeleteObjectsRequest {
+                    bucket: bucket_name.to_string(),
+                    delete: Delete {
+                        objects: objects_to_be_deleted
+                            .iter()
+                            .filter_map(|e| e.key.clone())
+                            .map(|e| ObjectIdentifier {
+                                key: e,
+                                version_id: None,
+                            })
+                            .collect(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }),
+            ) {
+                let message = format!(
+                    "While trying to delete object-storage bucket `{}`, cannot delete content: {}",
+                    bucket_name, e
+                );
+                error!("{}", message);
+                return Err(self.engine_error(EngineErrorCause::Internal, message));
+            }
+        }
+
+        Ok(())
+    }
 
     pub fn bucket_exists(&self, bucket_name: &str) -> bool {
         let s3_client = self.get_s3_client();
@@ -252,8 +261,34 @@ impl ObjectStorage for Spaces {
         Ok(())
     }
 
-    fn delete_bucket(&self, _bucket_name: &str) -> Result<(), EngineError> {
-        unimplemented!()
+    fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+        let s3_client = self.get_s3_client();
+
+        // make sure to delete all bucket content before trying to delete the bucket
+        if let Err(e) = self.empty_bucket(bucket_name) {
+            return Err(e);
+        }
+
+        // Note: Do not delete the bucket entirely but empty its content.
+        // Bucket deletion might take up to 24 hours and during this time we are not able to create a bucket with the same name.
+        // So emptying bucket allows future reuse.
+        return match &self.bucket_delete_strategy {
+            BucketDeleteStrategy::HardDelete => match block_on(s3_client.delete_bucket(DeleteBucketRequest {
+                bucket: bucket_name.to_string(),
+                ..Default::default()
+            })) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    let message = format!(
+                        "While trying to delete object-storage bucket, name `{}`: {}",
+                        bucket_name, e
+                    );
+                    error!("{}", message);
+                    return Err(self.engine_error(EngineErrorCause::Internal, message));
+                }
+            },
+            BucketDeleteStrategy::Empty => Ok(()), // Do not delete the bucket
+        };
     }
 
     fn get(&self, bucket_name: &str, object_key: &str, use_cache: bool) -> Result<(StringPath, File), EngineError> {
