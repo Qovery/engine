@@ -55,7 +55,7 @@ fn create_upgrade_and_destroy_eks_cluster_and_env(
 #[cfg(feature = "test-aws-whole-enchilada")]
 #[named]
 #[test]
-fn create_upgrade_and_destroy_eks_cluster_with_env_in_ams_3() {
+fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
     let context = context();
     let secrets = FuncTestsSecrets::new();
     let region = "eu-west-3";
