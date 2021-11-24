@@ -20,7 +20,7 @@ use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "eu-west-3";
 pub const AWS_KUBERNETES_VERSION: &str = "1.18";
-pub const AWS_KUBE_TEST_CLUSTER_ID: &str = "dmubm9agk7sr8a8r";
+pub const AWS_KUBE_TEST_CLUSTER_ID: &str = "zbe9e22b0";
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t2.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 
