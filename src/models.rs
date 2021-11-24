@@ -1181,7 +1181,7 @@ pub trait ToHelmString {
 #[derive(Clone)]
 pub struct Domain {
     raw: String,
-    top_domain: String,
+    root_domain: String,
 }
 
 impl Domain {
@@ -1196,7 +1196,10 @@ impl Domain {
             false => items.iter().join("."),
         };
 
-        Domain { top_domain, raw }
+        Domain {
+            root_domain: top_domain,
+            raw,
+        }
     }
 
     pub fn new_with_subdomain(raw: String, sub_domain: String) -> Self {
@@ -1208,7 +1211,7 @@ impl Domain {
     }
 
     pub fn root_domain(&self) -> Domain {
-        Domain::new(self.top_domain.to_string())
+        Domain::new(self.root_domain.to_string())
     }
 
     pub fn wildcarded(&self) -> Domain {
