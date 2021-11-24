@@ -556,6 +556,42 @@ fn public_postgresql_v12_deploy_a_working_dev_environment() {
     test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER, true);
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v13_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v13_deploy_a_working_dev_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), CONTAINER, true);
+}
+
 // Postgres production environment
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
@@ -663,6 +699,42 @@ fn public_postgresql_v12_deploy_a_working_prod_environment() {
             .as_str(),
     );
     test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED, true);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_postgresql_v13_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), MANAGED, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn public_postgresql_v13_deploy_a_working_prod_environment() {
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), MANAGED, true);
 }
 
 /**
