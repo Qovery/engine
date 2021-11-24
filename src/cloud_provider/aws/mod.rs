@@ -3,6 +3,7 @@ use std::any::Any;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
+use uuid::Uuid;
 
 use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCredentials};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
@@ -82,8 +83,24 @@ impl CloudProvider for AWS {
         self.organization_id.as_str()
     }
 
+    fn organization_long_id(&self) -> Uuid {
+        self.organization_long_id
+    }
+
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn access_key_id(&self) -> String {
+        self.access_key_id.to_string()
+    }
+
+    fn secret_access_key(&self) -> String {
+        self.secret_access_key.to_string()
+    }
+
+    fn token(&self) -> &str {
+        todo!()
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {

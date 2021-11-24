@@ -24,10 +24,14 @@ pub trait CloudProvider: Listen {
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn organization_id(&self) -> &str;
+    fn organization_long_id(&self) -> uuid::Uuid;
     fn name(&self) -> &str;
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
+    fn access_key_id(&self) -> String;
+    fn secret_access_key(&self) -> String;
+    fn token(&self) -> &str;
     fn is_valid(&self) -> Result<(), EngineError>;
     /// environment variables containing credentials
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;

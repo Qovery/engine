@@ -347,7 +347,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn commit(&mut self) -> TransactionResult {
+    pub fn commit(mut self) -> TransactionResult {
         let mut applications_by_environment: HashMap<&Environment, Vec<Box<dyn Application>>> = HashMap::new();
 
         for step in self.steps.iter() {

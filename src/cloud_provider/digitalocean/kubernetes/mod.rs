@@ -15,10 +15,11 @@ use crate::cloud_provider::digitalocean::network::load_balancer::do_get_load_bal
 use crate::cloud_provider::digitalocean::network::vpc::{
     get_do_random_available_subnet_from_api, get_do_vpc_name_available_from_api, VpcInitKind,
 };
-use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
-use crate::cloud_provider::kubernetes::{send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::{
+    send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes, KubernetesUpgradeStatus, ProviderOptions,
+};
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::print_action;
@@ -78,6 +79,8 @@ pub struct DoksOptions {
     pub tls_email_report: String,
 }
 
+impl ProviderOptions for DoksOptions {}
+
 pub struct DOKS<'a> {
     context: Context,
     id: String,
@@ -85,7 +88,7 @@ pub struct DOKS<'a> {
     name: String,
     version: String,
     region: Region,
-    cloud_provider: &'a DO,
+    cloud_provider: &'a dyn CloudProvider,
     nodes_groups: Vec<NodeGroups>,
     dns_provider: &'a dyn DnsProvider,
     spaces: Spaces,
@@ -102,7 +105,7 @@ impl<'a> DOKS<'a> {
         name: String,
         version: String,
         region: Region,
-        cloud_provider: &'a DO,
+        cloud_provider: &'a dyn CloudProvider,
         dns_provider: &'a dyn DnsProvider,
         nodes_groups: Vec<NodeGroups>,
         options: DoksOptions,
@@ -117,7 +120,8 @@ impl<'a> DOKS<'a> {
                     context.execution_id(),
                     Some(format!(
                         "Nodegroup instance type {} is not valid for {}",
-                        node_group.instance_type, cloud_provider.name
+                        node_group.instance_type,
+                        cloud_provider.name()
                     )),
                 ));
             }
@@ -127,8 +131,8 @@ impl<'a> DOKS<'a> {
             context.clone(),
             "spaces-temp-id".to_string(),
             "my-spaces-object-storage".to_string(),
-            cloud_provider.spaces_access_id.clone(),
-            cloud_provider.spaces_secret_key.clone(),
+            cloud_provider.access_key_id().clone(),
+            cloud_provider.secret_access_key().clone(),
             region,
             BucketDeleteStrategy::HardDelete,
         );
@@ -146,7 +150,7 @@ impl<'a> DOKS<'a> {
             options,
             nodes_groups,
             template_directory,
-            listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
+            listeners: cloud_provider.listeners().clone(), // copy listeners from CloudProvider
         })
     }
 
@@ -167,12 +171,12 @@ impl<'a> DOKS<'a> {
         let mut context = TeraContext::new();
 
         // Digital Ocean
-        context.insert("digitalocean_token", &self.cloud_provider.token);
+        context.insert("digitalocean_token", &self.cloud_provider.token());
         context.insert("do_region", &self.region.to_string());
 
         // Digital Ocean: Spaces Credentials
-        context.insert("spaces_access_id", &self.cloud_provider.spaces_access_id);
-        context.insert("spaces_secret_key", &self.cloud_provider.spaces_secret_key);
+        context.insert("spaces_access_id", &self.cloud_provider.access_key_id());
+        context.insert("spaces_secret_key", &self.cloud_provider.secret_access_key());
 
         let space_kubeconfig_bucket = format!("qovery-kubeconfigs-{}", self.id.as_str());
         context.insert("space_bucket_kubeconfig", &space_kubeconfig_bucket);
@@ -182,11 +186,11 @@ impl<'a> DOKS<'a> {
         let vpc_cidr_block = match self.options.vpc_cidr_set {
             // VPC subnet is not set, getting a non used subnet
             VpcInitKind::Autodetect => {
-                match get_do_vpc_name_available_from_api(&self.cloud_provider.token, self.options.vpc_name.clone()) {
+                match get_do_vpc_name_available_from_api(self.cloud_provider.token(), self.options.vpc_name.clone()) {
                     Ok(vpcs) => match vpcs {
                         // new vpc: select a random non used subnet
                         None => {
-                            match get_do_random_available_subnet_from_api(&self.cloud_provider.token, self.region) {
+                            match get_do_random_available_subnet_from_api(&self.cloud_provider.token(), self.region) {
                                 Ok(x) => x,
                                 Err(e) => {
                                     return Err(EngineError {
@@ -251,7 +255,7 @@ impl<'a> DOKS<'a> {
         let doks_version = match self.get_doks_info_from_name_api() {
             Ok(x) => match x {
                 // new cluster, we check the wished version is supported by DO
-                None => match get_do_latest_doks_slug_from_api(self.cloud_provider.token.as_str(), self.version()) {
+                None => match get_do_latest_doks_slug_from_api(self.cloud_provider.token(), self.version()) {
                     Ok(version) => match version {
                         None => return Err(EngineError {
                             cause: EngineErrorCause::Internal,
@@ -407,7 +411,7 @@ impl<'a> DOKS<'a> {
     fn do_loadbalancer_hostname(&self) -> String {
         format!(
             "qovery-nginx-{}.{}",
-            self.cloud_provider.id,
+            self.cloud_provider.id(),
             self.dns_provider().domain()
         )
     }
@@ -423,7 +427,7 @@ impl<'a> DOKS<'a> {
     // return cluster info from name if exists
     fn get_doks_info_from_name_api(&self) -> Result<Option<KubernetesCluster>, SimpleError> {
         let api_url = format!("{}/clusters", DoApiType::Doks.api_url());
-        let json_content = do_get_from_api(self.cloud_provider.token.as_str(), DoApiType::Doks, api_url)?;
+        let json_content = do_get_from_api(self.cloud_provider.token(), DoApiType::Doks, api_url)?;
         // TODO(benjaminch): `qovery-` to be added into Rust name directly everywhere
         get_doks_info_from_name(json_content.as_str(), format!("qovery-{}", self.id().to_string()))
     }
@@ -614,7 +618,7 @@ impl<'a> DOKS<'a> {
 
         let charts_prerequisites = ChartsConfigPrerequisites {
             organization_id: self.cloud_provider.organization_id().to_string(),
-            organization_long_id: self.cloud_provider.organization_long_id,
+            organization_long_id: self.cloud_provider.organization_long_id(),
             infra_options: self.options.clone(),
             cluster_id: self.id.clone(),
             cluster_long_id: self.long_id,
@@ -623,9 +627,9 @@ impl<'a> DOKS<'a> {
             cluster_name: self.cluster_name().to_string(),
             cloud_provider: "digitalocean".to_string(),
             test_cluster: self.context.is_test_cluster(),
-            do_token: self.cloud_provider.token.to_string(),
-            do_space_access_id: self.cloud_provider.spaces_access_id.to_string(),
-            do_space_secret_key: self.cloud_provider.spaces_secret_key.to_string(),
+            do_token: self.cloud_provider.token().to_string(),
+            do_space_access_id: self.cloud_provider.access_key_id().to_string(),
+            do_space_secret_key: self.cloud_provider.secret_access_key().to_string(),
             do_space_bucket_kubeconfig: self.kubeconfig_bucket_name(),
             do_space_kubeconfig_filename: self.kubeconfig_file_name(),
             qovery_engine_location: self.options.qovery_engine_location.clone(),
@@ -696,7 +700,7 @@ impl<'a> DOKS<'a> {
                     })
                 }
             };
-        let nginx_ingress_loadbalancer_ip = match do_get_load_balancer_ip(&self.cloud_provider.token, nginx_ingress_loadbalancer_id.as_str()) {
+        let nginx_ingress_loadbalancer_ip = match do_get_load_balancer_ip(self.cloud_provider.token(), nginx_ingress_loadbalancer_id.as_str()) {
                 Ok(x) => x.to_string(),
                 Err(e) => {
                     return Err(EngineError {
@@ -778,10 +782,6 @@ impl<'a> DOKS<'a> {
         ))
     }
 
-    fn upgrade(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
     fn upgrade_error(&self) -> Result<(), EngineError> {
         Ok(())
     }
@@ -805,24 +805,15 @@ impl<'a> DOKS<'a> {
     fn delete(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let mut skip_kubernetes_step = false;
-        let send_to_customer = |message: &str| {
-            listeners_helper.delete_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
-        send_to_customer(format!("Preparing to delete DOKS cluster {} with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing to delete DOKS cluster {} with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        let temp_dir = match self.get_temp_dir() {
+            Ok(dir) => dir,
+            Err(e) => return Err(e),
+        };
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -870,7 +861,7 @@ impl<'a> DOKS<'a> {
             self.id()
         );
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         info!("Running Terraform apply before running a delete");
         if let Err(e) = cast_simple_error_to_engine_error(
@@ -889,7 +880,7 @@ impl<'a> DOKS<'a> {
                 self.id()
             );
             info!("{}", &message);
-            send_to_customer(&message);
+            self.send_to_customer(&message, &listeners_helper);
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 &kubernetes_config_file_path,
@@ -936,7 +927,7 @@ impl<'a> DOKS<'a> {
                 self.id()
             );
             info!("{}", &message);
-            send_to_customer(&message);
+            self.send_to_customer(&message, &listeners_helper);
 
             // delete custom metrics api to avoid stale namespaces on deletion
             let _ = cmd::helm::helm_uninstall_list(
@@ -1041,7 +1032,7 @@ impl<'a> DOKS<'a> {
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         info!("Running Terraform destroy");
         let terraform_result =
@@ -1061,7 +1052,7 @@ impl<'a> DOKS<'a> {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
                 info!("{}", &message);
-                send_to_customer(&message);
+                self.send_to_customer(&message, &listeners_helper);
             }
             Err(Operation { error, .. }) => return Err(error),
             Err(retry::Error::Internal(msg)) => {
@@ -1160,6 +1151,86 @@ impl<'a> Kubernetes for DOKS<'a> {
             self.name(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
+    }
+
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        self.send_to_customer(
+            format!(
+                "Start preparing DOKS upgrade process {} cluster with id {}",
+                self.name(),
+                self.id()
+            )
+            .as_str(),
+            &listeners_helper,
+        );
+
+        let temp_dir = match self.get_temp_dir() {
+            Ok(dir) => dir,
+            Err(e) => return Err(e),
+        };
+
+        // generate terraform files and copy them into temp dir
+        let mut context = self.tera_context()?;
+
+        //
+        // Upgrade nodes
+        //
+        let message = format!("Start upgrading process for nodes on {}/{}", self.name(), self.id());
+        info!("{}", &message);
+        self.send_to_customer(&message, &listeners_helper);
+
+        context.insert(
+            "doks_version",
+            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        );
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        self.send_to_customer(
+            format!("Upgrading Kubernetes {} nodes", self.name()).as_str(),
+            &listeners_helper,
+        );
+
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
+        ) {
+            Ok(_) => {
+                let message = format!("Kubernetes {} nodes have been successfully upgraded", self.name());
+                info!("{}", &message);
+                self.send_to_customer(&message, &listeners_helper);
+            }
+            Err(e) => {
+                error!(
+                    "Error while upgrading nodes for cluster {} with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(e);
+            }
+        }
+
+        Ok(())
     }
 
     #[named]
