@@ -457,7 +457,7 @@ fn redeploy_same_app_with_ebs() {
                 .as_str(),
         );
 
-        let storage_size: u8 = 10;
+        let storage_size: u16 = 10;
         environment.applications = environment
             .applications
             .into_iter()
@@ -466,7 +466,7 @@ fn redeploy_same_app_with_ebs() {
                     id: generate_id(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
-                    size_in_gib: storage_size as u16,
+                    size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
                 }];
