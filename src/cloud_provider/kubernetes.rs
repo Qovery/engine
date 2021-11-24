@@ -28,10 +28,13 @@ use crate::error::SimpleErrorKind::Other;
 use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
 };
+use crate::fs::workspace_directory;
 use crate::models::ProgressLevel::Info;
 use crate::models::{Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, StringPath};
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
+
+pub trait ProviderOptions {}
 
 pub trait Kubernetes: Listen {
     fn context(&self) -> &Context;
@@ -118,6 +121,34 @@ pub trait Kubernetes: Listen {
     }
     fn on_create(&self) -> Result<(), EngineError>;
     fn on_create_error(&self) -> Result<(), EngineError>;
+    fn upgrade(&self) -> Result<(), EngineError> {
+        let kubeconfig = match self.config_file() {
+            Ok(f) => f.0,
+            Err(e) => return Err(e),
+        };
+
+        match is_kubernetes_upgrade_required(
+            kubeconfig,
+            &self.version(),
+            self.cloud_provider().credentials_environment_variables(),
+        ) {
+            Ok(x) => self.upgrade_with_status(x),
+            Err(e) => {
+                let msg = format!(
+                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
+                    e.message
+                );
+                error!("{}", &msg);
+                Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context().execution_id().to_string(),
+                    message: Some(msg),
+                })
+            }
+        }
+    }
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError>;
     fn on_upgrade(&self) -> Result<(), EngineError>;
     fn on_upgrade_error(&self) -> Result<(), EngineError>;
     fn on_downgrade(&self) -> Result<(), EngineError>;
@@ -142,6 +173,35 @@ pub trait Kubernetes: Listen {
             self.context().execution_id(),
             Some(message),
         )
+    }
+    fn send_to_customer(&self, message: &str, listeners_helper: &ListenersHelper) {
+        listeners_helper.upgrade_in_progress(ProgressInfo::new(
+            ProgressScope::Infrastructure {
+                execution_id: self.context().execution_id().to_string(),
+            },
+            ProgressLevel::Info,
+            Some(message),
+            self.context().execution_id(),
+        ))
+    }
+    fn get_temp_dir(&self) -> Result<String, EngineError> {
+        workspace_directory(
+            self.context().workspace_root_dir(),
+            self.context().execution_id(),
+            format!("bootstrap/{}", self.id()),
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))
+    }
+    fn get_kubeconfig(&self) -> Result<StringPath, EngineError> {
+        let path = match self.config_file() {
+            Ok(f) => f.0,
+            Err(e) => {
+                error!("Can't perform a Kubernetes upgrade, can't locate kubeconfig");
+                return Err(e);
+            }
+        };
+
+        return Ok(path);
     }
 }
 

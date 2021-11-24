@@ -8,15 +8,16 @@ use qovery_engine::models::{
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
-    test_db, FuncTestsSecrets,
+    FuncTestsSecrets,
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::working_minimal_environment;
+use test_utilities::common::Infrastructure;
+use test_utilities::common::{test_db, working_minimal_environment};
 use test_utilities::scaleway::{
-    clean_environments, delete_environment, deploy_environment, pause_environment, SCW_KUBE_TEST_CLUSTER_ID,
-    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_QOVERY_ORGANIZATION_ID,
-    SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
+    clean_environments, SCW_KUBE_TEST_CLUSTER_ID, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
+    SCW_QOVERY_ORGANIZATION_ID, SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+    SCW_TEST_ZONE,
 };
 
 /**
@@ -56,15 +57,15 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
+        match environment.deploy_environment(Kind::Scw, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_deletion, env_action_delete, SCW_TEST_ZONE) {
+        match environment_delete.delete_environment(Kind::Scw, &context_for_deletion, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -109,15 +110,15 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match deploy_environment(&context, env_action.clone(), SCW_TEST_ZONE) {
+        match environment.deploy_environment(Kind::Scw, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match pause_environment(&context, env_action, SCW_TEST_ZONE) {
+        match environment.pause_environment(Kind::Scw, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -135,7 +136,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
-        match delete_environment(&context_for_deletion, env_action_delete, SCW_TEST_ZONE) {
+        match environment_delete.delete_environment(Kind::Scw, &context_for_deletion, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -204,7 +205,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
         let env_action_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
         let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
-        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
+        match environment.deploy_environment(Kind::Scw, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -221,7 +222,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
         }
-        match deploy_environment(&context, env_action_fail_ok, SCW_TEST_ZONE) {
+        match environment_check.deploy_environment(Kind::Scw, &context, &env_action_fail_ok) {
             TransactionResult::Ok => assert!(false),
             TransactionResult::Rollback(_) => assert!(true),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -238,7 +239,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             (false, _) => assert!(false),
         }
 
-        match delete_environment(&context_for_deletion, env_action_for_deletion, SCW_TEST_ZONE) {
+        match environment_delete.delete_environment(Kind::Scw, &context_for_deletion, &env_action_for_deletion) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -295,13 +296,13 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
-        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
+        match environment.deploy_environment(Kind::Scw, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match delete_environment(&context_for_deletion, env_action_for_deletion, SCW_TEST_ZONE) {
+        match environment_delete.delete_environment(Kind::Scw, &context_for_deletion, &env_action_for_deletion) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -409,19 +410,19 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
-        let env_action_redeploy = EnvironmentAction::Environment(environment_to_redeploy);
+        let env_action_redeploy = EnvironmentAction::Environment(environment_to_redeploy.clone());
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
         let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete);
+        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match deploy_environment(&context, env_action, SCW_TEST_ZONE) {
+        match environment.deploy_environment(Kind::Scw, &context, &env_action) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
-        match deploy_environment(&context_for_redeploy, env_action_redeploy, SCW_TEST_ZONE) {
+        match environment_to_redeploy.deploy_environment(Kind::Scw, &context_for_redeploy, &env_action_redeploy) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -439,7 +440,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             (false, _) => assert!(false),
         }
 
-        match delete_environment(&context_for_delete, env_action_delete, SCW_TEST_ZONE) {
+        match environment_delete.delete_environment(Kind::Scw, &context_for_delete, &env_action_delete) {
             TransactionResult::Ok => assert!(true),
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(true),

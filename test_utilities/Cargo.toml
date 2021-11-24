@@ -27,6 +27,7 @@ time = "0.2.23"
 hashicorp_vault = "2.0.1"
 maplit = "1.0.2"
 uuid = { version = "0.8", features = ["v4"] }
+const_format = "0.2.22"
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"
