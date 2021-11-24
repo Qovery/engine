@@ -5,14 +5,13 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
-    KubernetesUpgradeStatus,
+    KubernetesUpgradeStatus, ProviderOptions,
 };
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::ScwInstancesType;
-use crate::cloud_provider::scaleway::Scaleway;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::kubectl::{kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
@@ -65,6 +64,8 @@ pub struct KapsuleOptions {
     pub tls_email_report: String,
 }
 
+impl ProviderOptions for KapsuleOptions {}
+
 impl KapsuleOptions {
     pub fn new(
         qovery_api_url: String,
@@ -112,7 +113,7 @@ pub struct Kapsule<'a> {
     name: String,
     version: String,
     zone: Zone,
-    cloud_provider: &'a Scaleway,
+    cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
     object_storage: ScalewayOS,
     nodes_groups: Vec<NodeGroups>,
@@ -129,7 +130,7 @@ impl<'a> Kapsule<'a> {
         name: String,
         version: String,
         zone: Zone,
-        cloud_provider: &'a Scaleway,
+        cloud_provider: &'a dyn CloudProvider,
         dns_provider: &'a dyn DnsProvider,
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
@@ -144,7 +145,8 @@ impl<'a> Kapsule<'a> {
                     context.execution_id(),
                     Some(format!(
                         "Nodegroup instance type {} is not valid for {}",
-                        node_group.instance_type, cloud_provider.name
+                        node_group.instance_type,
+                        cloud_provider.name()
                     )),
                 ));
             }
@@ -154,8 +156,8 @@ impl<'a> Kapsule<'a> {
             context.clone(),
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
-            cloud_provider.access_key.clone(),
-            cloud_provider.secret_key.clone(),
+            cloud_provider.access_key_id().clone(),
+            cloud_provider.secret_access_key().clone(),
             zone,
             BucketDeleteStrategy::Empty,
             false,
@@ -174,7 +176,7 @@ impl<'a> Kapsule<'a> {
             nodes_groups,
             template_directory,
             options,
-            listeners: cloud_provider.listeners.clone(), // copy listeners from CloudProvider
+            listeners: cloud_provider.listeners().clone(), // copy listeners from CloudProvider
         })
     }
 
@@ -492,15 +494,15 @@ impl<'a> Kapsule<'a> {
 
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
-            self.cloud_provider.organization_long_id,
+            self.cloud_provider.organization_long_id(),
             self.id().to_string(),
             self.long_id,
             self.zone,
             self.cluster_name(),
             "scw".to_string(),
             self.context.is_test_cluster(),
-            self.cloud_provider.access_key.to_string(),
-            self.cloud_provider.secret_key.to_string(),
+            self.cloud_provider.access_key_id().to_string(),
+            self.cloud_provider.secret_access_key().to_string(),
             self.options.scaleway_project_id.to_string(),
             self.options.qovery_engine_location.clone(),
             self.context.is_feature_enabled(&Features::LogsHistory),
@@ -560,39 +562,6 @@ impl<'a> Kapsule<'a> {
             EngineErrorCause::Internal,
             format!("{} Kubernetes cluster failed on deployment", self.name()),
         ))
-    }
-
-    fn upgrade(&self) -> Result<(), EngineError> {
-        let kubeconfig = match self.config_file() {
-            Ok(f) => f.0,
-            Err(e) => return Err(e),
-        };
-
-        match is_kubernetes_upgrade_required(
-            kubeconfig,
-            &self.version,
-            self.cloud_provider.credentials_environment_variables(),
-        ) {
-            Ok(x) => self.upgrade_with_status(x),
-            Err(e) => {
-                let msg = format!(
-                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
-                    e.message
-                );
-                error!("{}", &msg);
-                Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some(msg),
-                })
-            }
-        }
-    }
-
-    fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
-        // TODO(benjaminch): to be implemented
-        Ok(())
     }
 
     fn upgrade_error(&self) -> Result<(), EngineError> {
@@ -998,6 +967,86 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.name(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
+    }
+
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        self.send_to_customer(
+            format!(
+                "Start preparing Kapsule upgrade process {} cluster with id {}",
+                self.name(),
+                self.id()
+            )
+            .as_str(),
+            &listeners_helper,
+        );
+
+        let temp_dir = match self.get_temp_dir() {
+            Ok(dir) => dir,
+            Err(e) => return Err(e),
+        };
+
+        // generate terraform files and copy them into temp dir
+        let mut context = self.tera_context()?;
+
+        //
+        // Upgrade nodes
+        //
+        let message = format!("Start upgrading process for nodes on {}/{}", self.name(), self.id());
+        info!("{}", &message);
+        self.send_to_customer(&message, &listeners_helper);
+
+        context.insert(
+            "kubernetes_cluster_version",
+            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        );
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        self.send_to_customer(
+            format!("Upgrading Kubernetes {} nodes", self.name()).as_str(),
+            &listeners_helper,
+        );
+
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
+        ) {
+            Ok(_) => {
+                let message = format!("Kubernetes {} nodes have been successfully upgraded", self.name());
+                info!("{}", &message);
+                self.send_to_customer(&message, &listeners_helper);
+            }
+            Err(e) => {
+                error!(
+                    "Error while upgrading nodes for cluster {} with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(e);
+            }
+        }
+
+        Ok(())
     }
 
     #[named]

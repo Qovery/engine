@@ -1,4 +1,5 @@
 use std::any::Any;
+use uuid::Uuid;
 
 use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCredentials};
 use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY};
@@ -66,8 +67,24 @@ impl CloudProvider for Scaleway {
         self.organization_id.as_str()
     }
 
+    fn organization_long_id(&self) -> Uuid {
+        self.organization_long_id
+    }
+
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    fn access_key_id(&self) -> String {
+        self.access_key.to_string()
+    }
+
+    fn secret_access_key(&self) -> String {
+        self.secret_key.to_string()
+    }
+
+    fn token(&self) -> &str {
+        todo!()
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
