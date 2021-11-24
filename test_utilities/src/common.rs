@@ -36,7 +36,7 @@ use qovery_engine::models::DatabaseMode::CONTAINER;
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use tracing::{error, info, span, warn, Level};
+use tracing::{span, Level};
 
 pub trait Cluster<T, U> {
     fn docker_cr_engine(context: &Context) -> Engine;

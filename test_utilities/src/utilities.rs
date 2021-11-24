@@ -30,7 +30,7 @@ use crate::scaleway::{
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::scaleway::application::Zone;
-use qovery_engine::cloud_provider::{CloudProvider, Kind};
+use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
@@ -41,23 +41,17 @@ use qovery_engine::models::{Context, Database, DatabaseKind, DatabaseMode, Envir
 use serde::{Deserialize, Serialize};
 
 extern crate time;
-use crate::common::{Cluster, Infrastructure};
 use crate::digitalocean::{
     DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
     DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
 use qovery_engine::cloud_provider::digitalocean::application::Region;
-use qovery_engine::cloud_provider::kubernetes::Kubernetes;
-use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
-use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
-use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, SVCItem, PVC, SVC};
-use qovery_engine::dns_provider::DnsProvider;
+use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
-use qovery_engine::transaction::TransactionResult;
 use time::Instant;
 
 pub fn context() -> Context {
