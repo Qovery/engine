@@ -34,7 +34,7 @@ fn test_delete_bucket_hard_delete_strategy() {
     let result = spaces.delete_bucket(bucket_name.as_str());
 
     // validate:
-    assert_eq!(true, result.is_ok());
+    assert!(result.is_ok());
     assert_eq!(false, spaces.bucket_exists(bucket_name.as_str()))
 }
 
@@ -65,8 +65,8 @@ fn test_delete_bucket_empty_strategy() {
     let result = spaces.delete_bucket(bucket_name.as_str());
 
     // validate:
-    assert_eq!(true, result.is_ok());
-    assert_eq!(true, spaces.bucket_exists(bucket_name.as_str()));
+    assert!(result.is_ok());
+    assert!(spaces.bucket_exists(bucket_name.as_str()));
 
     // clean-up:
     spaces
@@ -97,7 +97,45 @@ fn test_create_bucket() {
     let result = spaces.create_bucket(bucket_name.as_str());
 
     // validate:
-    assert_eq!(true, result.is_ok());
+    assert!(result.is_ok());
+
+    // clean-up:
+    spaces
+        .delete_bucket(bucket_name.as_str())
+        .unwrap_or_else(|_| panic!("error deleting object storage bucket {}", bucket_name));
+}
+
+#[cfg(feature = "test-do-infra")]
+#[test]
+fn test_recreate_bucket() {
+    // setup:
+    let context = context();
+    let secrets = FuncTestsSecrets::new();
+
+    let spaces = Spaces::new(
+        context,
+        "test-fake".to_string(),
+        "test-fake".to_string(),
+        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().to_string(),
+        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().to_string(),
+        TEST_REGION,
+        BucketDeleteStrategy::HardDelete,
+    );
+
+    let bucket_name = format!("qovery-test-bucket-{}", generate_id());
+
+    // compute & validate:
+    let create_result = spaces.create_bucket(bucket_name.as_str());
+    assert!(create_result.is_ok());
+    assert!(spaces.bucket_exists(bucket_name.as_str()));
+
+    let delete_result = spaces.delete_bucket(bucket_name.as_str());
+    assert!(delete_result.is_ok());
+    assert_eq!(false, spaces.bucket_exists(bucket_name.as_str()));
+
+    let recreate_result = spaces.create_bucket(bucket_name.as_str());
+    assert!(recreate_result.is_ok());
+    assert!(spaces.bucket_exists(bucket_name.as_str()));
 
     // clean-up:
     spaces
@@ -139,7 +177,7 @@ fn test_put_file() {
     );
 
     // validate:
-    assert_eq!(true, result.is_ok());
+    assert!(result.is_ok());
     assert_eq!(
         true,
         spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok()
@@ -187,7 +225,7 @@ fn test_get_file() {
     let result = spaces.get(bucket_name.as_str(), object_key.as_str(), false);
 
     // validate:
-    assert_eq!(true, result.is_ok());
+    assert!(result.is_ok());
     assert_eq!(
         true,
         spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok()
