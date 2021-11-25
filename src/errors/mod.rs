@@ -3,6 +3,7 @@ pub mod io;
 extern crate url;
 
 use crate::cloud_provider::Kind;
+use crate::models::QoveryIdentifier;
 use url::Url;
 
 pub struct SimpleError {
@@ -16,7 +17,6 @@ pub enum LogLevel {
     Info,
     Warning,
     Error,
-    Critical,
 }
 
 #[derive(Debug)]
@@ -29,6 +29,7 @@ pub enum Stage {
 pub enum InfrastructureStep {
     Instantiate,
     Create,
+    Pause,
     Upgrade,
     Delete,
 }
@@ -67,7 +68,9 @@ impl SimpleError {
 #[derive(Debug)]
 pub struct UserEngineError {
     provider_kind: Kind,
-    execution_id: String,
+    organisation_id: QoveryIdentifier,
+    cluster_id: QoveryIdentifier,
+    execution_id: QoveryIdentifier,
     tag: Tag,
     stage: Stage,
     log_level: LogLevel,
@@ -80,7 +83,9 @@ pub struct UserEngineError {
 impl UserEngineError {
     pub fn new(
         provider_kind: Kind,
-        execution_id: String,
+        organisation_id: QoveryIdentifier,
+        cluster_id: QoveryIdentifier,
+        execution_id: QoveryIdentifier,
         tag: Tag,
         stage: Stage,
         log_level: LogLevel,
@@ -91,6 +96,8 @@ impl UserEngineError {
     ) -> Self {
         UserEngineError {
             provider_kind,
+            organisation_id,
+            cluster_id,
             execution_id,
             tag,
             stage,
@@ -107,6 +114,8 @@ impl From<EngineError> for UserEngineError {
     fn from(error: EngineError) -> Self {
         UserEngineError::new(
             error.provider_kind,
+            error.organisation_id,
+            error.cluster_id,
             error.execution_id,
             error.tag,
             error.stage,
@@ -123,7 +132,9 @@ impl From<EngineError> for UserEngineError {
 pub struct EngineError {
     provider_kind: Kind,
     tag: Tag,
-    execution_id: String,
+    organisation_id: QoveryIdentifier,
+    cluster_id: QoveryIdentifier,
+    execution_id: QoveryIdentifier,
     stage: Stage,
     qovery_log_level: LogLevel,
     qovery_log_message: String,
@@ -142,7 +153,7 @@ impl EngineError {
     pub fn tag(&self) -> &Tag {
         &self.tag
     }
-    pub fn execution_id(&self) -> &str {
+    pub fn execution_id(&self) -> &QoveryIdentifier {
         &self.execution_id
     }
     pub fn stage(&self) -> &Stage {
@@ -176,7 +187,9 @@ impl EngineError {
     fn new(
         provider_kind: Kind,
         tag: Tag,
-        execution_id: String,
+        organisation_id: QoveryIdentifier,
+        cluster_id: QoveryIdentifier,
+        execution_id: QoveryIdentifier,
         stage: Stage,
         qovery_log_level: LogLevel,
         qovery_log_message: String,
@@ -190,8 +203,10 @@ impl EngineError {
         EngineError {
             provider_kind,
             tag,
-            execution_id,
             stage,
+            organisation_id,
+            cluster_id,
+            execution_id,
             qovery_log_level,
             qovery_log_message,
             user_log_level,
@@ -209,7 +224,9 @@ impl EngineError {
 
     pub fn new_unsupported_instance_type(
         provider_kind: Kind,
-        execution_id: &str,
+        organisation_id: QoveryIdentifier,
+        cluster_id: QoveryIdentifier,
+        execution_id: QoveryIdentifier,
         stage: Stage,
         requested_instance_type: &str,
         raw_message: Option<String>,
@@ -219,7 +236,9 @@ impl EngineError {
         EngineError::new(
             provider_kind,
             Tag::UnsupportedInstanceType(requested_instance_type.to_string()),
-            execution_id.to_string(),
+            organisation_id,
+            cluster_id,
+            execution_id,
             stage,
             LogLevel::Error,
             message.to_string(),

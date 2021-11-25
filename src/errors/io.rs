@@ -1,6 +1,7 @@
 use super::url::Url;
 use crate::cloud_provider::Kind;
 use crate::errors;
+use crate::models::QoveryIdentifier;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -19,7 +20,6 @@ impl From<LogLevel> for errors::LogLevel {
             LogLevel::Info => errors::LogLevel::Info,
             LogLevel::Warning => errors::LogLevel::Warning,
             LogLevel::Error => errors::LogLevel::Error,
-            LogLevel::Critical => errors::LogLevel::Critical,
         }
     }
 }
@@ -55,6 +55,7 @@ impl From<InfrastructureStep> for errors::InfrastructureStep {
             InfrastructureStep::Create => errors::InfrastructureStep::Create,
             InfrastructureStep::Upgrade => errors::InfrastructureStep::Upgrade,
             InfrastructureStep::Delete => errors::InfrastructureStep::Delete,
+            InfrastructureStep::Pause => errors::InfrastructureStep::Pause,
         }
     }
 }
@@ -94,6 +95,8 @@ impl From<Tag> for errors::Tag {
 #[derive(Serialize, Deserialize)]
 struct UserEngineError {
     provider_kind: Kind,
+    organisation_id: String,
+    cluster_id: String,
     execution_id: String,
     tag: Tag,
     stage: Stage,
@@ -108,7 +111,9 @@ impl From<UserEngineError> for errors::UserEngineError {
     fn from(e: UserEngineError) -> Self {
         errors::UserEngineError::new(
             e.provider_kind,
-            e.execution_id,
+            QoveryIdentifier::new(e.organisation_id),
+            QoveryIdentifier::new(e.cluster_id),
+            QoveryIdentifier::new(e.execution_id),
             errors::Tag::from(e.tag),
             errors::Stage::from(e.stage),
             errors::LogLevel::from(e.log_level),
