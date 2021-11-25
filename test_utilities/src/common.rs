@@ -12,12 +12,12 @@ use qovery_engine::models::{
 use qovery_engine::transaction::TransactionResult;
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_KUBE_TEST_CLUSTER_ID};
-use crate::cloudflare::{dns_provider_cloudflare, CloudflareDomain};
+use crate::cloudflare::dns_provider_cloudflare;
 use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_KUBE_TEST_CLUSTER_ID, DO_KUBE_TEST_CLUSTER_NAME};
 use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_KUBE_TEST_CLUSTER_ID, SCW_KUBE_TEST_CLUSTER_NAME};
 use crate::utilities::{
-    context, db_disk_type, db_infos, db_instance_type, generate_cluster_id, generate_id, generate_password, get_pvc,
-    get_svc, get_svc_name, init, FuncTestsSecrets,
+    db_disk_type, db_infos, db_instance_type, generate_cluster_id, generate_id, generate_password, get_pvc, get_svc,
+    get_svc_name, init, FuncTestsSecrets,
 };
 use base64;
 use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
@@ -38,6 +38,11 @@ use qovery_engine::transaction::DeploymentOption;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use tracing::{span, Level};
+
+pub enum ClusterDomain {
+    Default,
+    Custom(String),
+}
 
 pub trait Cluster<T, U> {
     fn docker_cr_engine(context: &Context) -> Engine;
@@ -82,7 +87,7 @@ impl Infrastructure for Environment {
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let dns_provider = dns_provider_cloudflare(context, CloudflareDomain::Default);
+        let dns_provider = dns_provider_cloudflare(context, ClusterDomain::Default);
         let cp: Box<dyn CloudProvider>;
         cp = match provider_kind {
             Kind::Aws => AWS::cloud_provider(context),
@@ -119,7 +124,7 @@ impl Infrastructure for Environment {
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let dns_provider = dns_provider_cloudflare(context, CloudflareDomain::Default);
+        let dns_provider = dns_provider_cloudflare(context, ClusterDomain::Default);
         let cp: Box<dyn CloudProvider>;
         cp = match provider_kind {
             Kind::Aws => AWS::cloud_provider(context),
@@ -149,7 +154,7 @@ impl Infrastructure for Environment {
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
-        let dns_provider = dns_provider_cloudflare(context, CloudflareDomain::Default);
+        let dns_provider = dns_provider_cloudflare(context, ClusterDomain::Default);
         let cp: Box<dyn CloudProvider>;
         cp = match provider_kind {
             Kind::Aws => AWS::cloud_provider(context),
@@ -1140,19 +1145,21 @@ pub fn get_cluster_test_kubernetes<'a>(
 pub fn cluster_test(
     test_name: &str,
     provider_kind: Kind,
+    context: Context,
     localisation: &str,
     secrets: FuncTestsSecrets,
     test_type: ClusterTestType,
     major_boot_version: u8,
     minor_boot_version: u8,
+    cluster_domain: ClusterDomain,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    environment_to_deploy: Option<&EnvironmentAction>,
 ) -> String {
     init();
 
     let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
 
-    let context = context();
     let cluster_id = generate_cluster_id(localisation.clone());
     let cluster_name = generate_cluster_id(localisation.clone());
     let boot_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
@@ -1163,7 +1170,7 @@ pub fn cluster_test(
         Kind::Do => engine = DO::docker_cr_engine(&context),
         Kind::Scw => engine = Scaleway::docker_cr_engine(&context),
     };
-    let dns_provider = dns_provider_cloudflare(&context, CloudflareDomain::Default);
+    let dns_provider = dns_provider_cloudflare(&context, cluster_domain);
     let mut deploy_tx = engine.session().unwrap().transaction();
     let mut delete_tx = engine.session().unwrap().transaction();
 
@@ -1195,6 +1202,21 @@ pub fn cluster_test(
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     };
+
+    // Deploy env if any
+    if let Some(env) = environment_to_deploy {
+        let mut deploy_env_tx = engine.session().unwrap().transaction();
+
+        // Deploy env
+        if let Err(err) = deploy_env_tx.deploy_environment(kubernetes.as_ref(), env) {
+            panic!("{:?}", err)
+        }
+        match deploy_env_tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+    }
 
     match test_type {
         ClusterTestType::Classic => {}
@@ -1262,6 +1284,21 @@ pub fn cluster_test(
 
             return test_name.to_string();
         }
+    }
+
+    // Destroy env if any
+    if let Some(env) = environment_to_deploy {
+        let mut destroy_env_tx = engine.session().unwrap().transaction();
+
+        // Deploy env
+        if let Err(err) = destroy_env_tx.delete_environment(kubernetes.as_ref(), env) {
+            panic!("{:?}", err)
+        }
+        match destroy_env_tx.commit() {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
     }
 
     // Delete
