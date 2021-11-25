@@ -17,8 +17,42 @@ use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git::Credentials;
 use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
+
+#[derive(Clone, Debug)]
+pub struct QoveryIdentifier {
+    raw: String,
+    short: String,
+}
+
+impl QoveryIdentifier {
+    pub fn new(raw: String) -> Self {
+        QoveryIdentifier {
+            raw: raw.to_string(),
+            short: QoveryIdentifier::extract_short(raw.as_str()),
+        }
+    }
+
+    fn extract_short(raw: &str) -> String {
+        let max_execution_id_chars: usize = 7;
+        match raw.char_indices().nth(max_execution_id_chars) {
+            None => raw.to_string(),
+            Some((idx, _)) => raw[..idx].to_string(),
+        }
+    }
+
+    pub fn short(&self) -> &str {
+        &self.short
+    }
+}
+
+impl Display for QoveryIdentifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.raw.as_str())
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
