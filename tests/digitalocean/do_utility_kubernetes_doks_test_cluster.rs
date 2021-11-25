@@ -1,12 +1,12 @@
 extern crate test_utilities;
 
-use self::test_utilities::cloudflare::{dns_provider_cloudflare, CloudflareDomain};
+use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use tracing::{span, Level};
 
-use self::test_utilities::common::Cluster;
+use self::test_utilities::common::{Cluster, ClusterDomain};
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::transaction::TransactionResult;
 
@@ -34,7 +34,7 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
 
         let do_cluster = DO::cloud_provider(&context);
         let nodes = DO::kubernetes_nodes();
-        let cloudflare = dns_provider_cloudflare(&context, CloudflareDomain::Default);
+        let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
 
         let kubernetes = DOKS::new(
             context.clone(),
@@ -91,7 +91,7 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
 
         let do_cluster = DO::cloud_provider(&context);
         let nodes = DO::kubernetes_nodes();
-        let cloudflare = dns_provider_cloudflare(&context, CloudflareDomain::Default);
+        let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
 
         let kubernetes = DOKS::new(
             context.clone(),

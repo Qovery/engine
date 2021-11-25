@@ -1,17 +1,13 @@
+use crate::common::ClusterDomain;
 use crate::utilities::FuncTestsSecrets;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::models::{Context, Domain};
 
-pub enum CloudflareDomain {
-    Default,
-    Custom(String),
-}
-
-pub fn dns_provider_cloudflare(context: &Context, domain: CloudflareDomain) -> Cloudflare {
+pub fn dns_provider_cloudflare(context: &Context, domain: ClusterDomain) -> Cloudflare {
     let secrets = FuncTestsSecrets::new();
     let domain = Domain::new(match domain {
-        CloudflareDomain::Custom(domain) => domain,
-        CloudflareDomain::Default => secrets.CLOUDFLARE_DOMAIN.expect("CLOUDFLARE_DOMAIN is not set"),
+        ClusterDomain::Custom(domain) => domain,
+        ClusterDomain::Default => secrets.CLOUDFLARE_DOMAIN.expect("CLOUDFLARE_DOMAIN is not set"),
     });
     Cloudflare::new(
         context.clone(),

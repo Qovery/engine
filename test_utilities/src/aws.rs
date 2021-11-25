@@ -12,8 +12,8 @@ use qovery_engine::engine::Engine;
 use qovery_engine::models::Context;
 use tracing::error;
 
-use crate::cloudflare::{dns_provider_cloudflare, CloudflareDomain};
-use crate::common::Cluster;
+use crate::cloudflare::dns_provider_cloudflare;
+use crate::common::{Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
@@ -68,7 +68,7 @@ impl Cluster<AWS, Options> for AWS {
         // use AWS
         let cloud_provider = AWS::cloud_provider(context);
 
-        let dns_provider = Box::new(dns_provider_cloudflare(context, CloudflareDomain::Default));
+        let dns_provider = Box::new(dns_provider_cloudflare(context, ClusterDomain::Default));
 
         Engine::new(
             context.clone(),
