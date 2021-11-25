@@ -55,8 +55,9 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   # grow this value to reduce random AWS API timeouts
   timeouts {
-    create = "60 minutes"
-    update = "90 minutes"
+    create = "60m"
+    update = "90m"
+    delete = "30m"
   }
 
   depends_on = [
