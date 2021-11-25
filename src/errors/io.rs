@@ -10,7 +10,6 @@ pub enum LogLevel {
     Info,
     Warning,
     Error,
-    Critical,
 }
 
 impl From<LogLevel> for errors::LogLevel {
@@ -44,6 +43,7 @@ impl From<Stage> for errors::Stage {
 pub enum InfrastructureStep {
     Instantiate,
     Create,
+    Pause,
     Upgrade,
     Delete,
 }
