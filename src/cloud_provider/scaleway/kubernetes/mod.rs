@@ -161,6 +161,7 @@ impl<'a> Kapsule<'a> {
             zone,
             BucketDeleteStrategy::Empty,
             false,
+            context.resource_expiration_in_seconds(),
         );
 
         Ok(Kapsule {
