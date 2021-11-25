@@ -4,10 +4,12 @@ extern crate serde_derive;
 use chrono::Utc;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
+use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::models::{
     Action, Application, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
     GitCredentials, Route, Router, Storage, StorageType,
 };
+use qovery_engine::transaction::TransactionResult;
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_KUBE_TEST_CLUSTER_ID};
 use crate::cloudflare::dns_provider_cloudflare;
@@ -30,13 +32,12 @@ use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::cmd::structs::SVCItem;
-use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::Engine;
 use qovery_engine::models::DatabaseMode::CONTAINER;
-use qovery_engine::transaction::{DeploymentOption, TransactionResult};
+use qovery_engine::transaction::DeploymentOption;
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use tracing::{error, info, span, warn, Level};
+use tracing::{span, Level};
 
 pub trait Cluster<T, U> {
     fn docker_cr_engine(context: &Context) -> Engine;
