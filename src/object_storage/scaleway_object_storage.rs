@@ -224,6 +224,7 @@ impl ObjectStorage for ScalewayOS {
         let creation_date: DateTime<Utc> = Utc::now();
         if let Err(e) = block_on(s3_client.put_bucket_tagging(PutBucketTaggingRequest {
             bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
             // Note: SCW doesn't support key/value tags, keys should be added inside the value
             tagging: Tagging {
                 tag_set: vec![
