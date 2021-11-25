@@ -1036,7 +1036,7 @@ pub fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mod
         Kind::Aws => match db_kind {
             DatabaseKind::Mongodb => "db.t3.medium",
             DatabaseKind::Mysql => "db.t2.micro",
-            DatabaseKind::Postgresql => "db.t2.micro",
+            DatabaseKind::Postgresql => "db.t3.micro",
             DatabaseKind::Redis => "cache.t3.micro",
         },
         Kind::Do => match database_mode {
