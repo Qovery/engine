@@ -707,17 +707,10 @@ impl<'a> EKS<'a> {
 
     fn pause(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
-        let send_to_customer = |message: &str| {
-            listeners_helper.pause_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
-        send_to_customer(format!("Preparing EKS {} cluster pause with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing EKS {} cluster pause with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
@@ -870,7 +863,7 @@ impl<'a> EKS<'a> {
 
         let message = format!("Pausing EKS {} cluster deployment with id {}", self.name(), self.id());
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -880,7 +873,7 @@ impl<'a> EKS<'a> {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {} successfully paused", self.name());
                 info!("{}", &message);
-                send_to_customer(&message);
+                self.send_to_customer(&message, &listeners_helper);
                 Ok(())
             }
             Err(e) => {
