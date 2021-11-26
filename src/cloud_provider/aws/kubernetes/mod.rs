@@ -37,10 +37,7 @@ use crate::error::EngineErrorCause::Internal;
 use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
 };
-use crate::fs::workspace_directory;
-use crate::models::{
-    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::models::{Action, Context, Features, Listen, Listener, Listeners, ListenersHelper};
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
@@ -520,12 +517,7 @@ impl<'a> EKS<'a> {
             }
         }
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        let temp_dir = self.get_temp_dir()?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -712,12 +704,7 @@ impl<'a> EKS<'a> {
             &listeners_helper,
         );
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        let temp_dir = self.get_temp_dir()?;
 
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
