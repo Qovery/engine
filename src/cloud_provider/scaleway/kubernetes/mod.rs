@@ -24,9 +24,7 @@ use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
 };
 use crate::fs::workspace_directory;
-use crate::models::{
-    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::models::{Action, Context, Features, Listen, Listener, Listeners, ListenersHelper};
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
@@ -347,18 +345,11 @@ impl<'a> Kapsule<'a> {
 
     fn create(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
-        let send_to_customer = |message: &str| {
-            listeners_helper.deployment_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
 
-        send_to_customer(format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
         // upgrade cluster instead if required
         match self.config_file() {
@@ -415,7 +406,10 @@ impl<'a> Kapsule<'a> {
             ),
         )?;
 
-        send_to_customer(format!("Deploying SCW {} cluster deployment with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Deploying SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
         // terraform deployment dedicated to cloud resources
         match cast_simple_error_to_engine_error(
@@ -581,17 +575,10 @@ impl<'a> Kapsule<'a> {
 
     fn pause(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
-        let send_to_customer = |message: &str| {
-            listeners_helper.pause_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
-        send_to_customer(format!("Preparing SCW {} cluster pause with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing SCW {} cluster pause with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
@@ -744,7 +731,7 @@ impl<'a> Kapsule<'a> {
 
         let message = format!("Pausing SCW {} cluster deployment with id {}", self.name(), self.id());
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -754,7 +741,7 @@ impl<'a> Kapsule<'a> {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {} successfully paused", self.name());
                 info!("{}", &message);
-                send_to_customer(&message);
+                self.send_to_customer(&message, &listeners_helper);
                 Ok(())
             }
             Err(e) => {
@@ -774,17 +761,10 @@ impl<'a> Kapsule<'a> {
     fn delete(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let mut skip_kubernetes_step = false;
-        let send_to_customer = |message: &str| {
-            listeners_helper.delete_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
-        send_to_customer(format!("Preparing to delete SCW cluster {} with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing to delete SCW cluster {} with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
         let temp_dir = workspace_directory(
             self.context.workspace_root_dir(),
@@ -839,7 +819,7 @@ impl<'a> Kapsule<'a> {
             self.id()
         );
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         info!("Running Terraform apply before running a delete");
         if let Err(e) = cast_simple_error_to_engine_error(
@@ -858,7 +838,7 @@ impl<'a> Kapsule<'a> {
                 self.id()
             );
             info!("{}", &message);
-            send_to_customer(&message);
+            self.send_to_customer(&message, &listeners_helper);
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 &kubernetes_config_file_path,
@@ -905,7 +885,7 @@ impl<'a> Kapsule<'a> {
                 self.id()
             );
             info!("{}", &message);
-            send_to_customer(&message);
+            self.send_to_customer(&message, &listeners_helper);
 
             // delete custom metrics api to avoid stale namespaces on deletion
             let _ = cmd::helm::helm_uninstall_list(
@@ -1010,7 +990,7 @@ impl<'a> Kapsule<'a> {
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         info!("Running Terraform destroy");
         let terraform_result =
@@ -1030,7 +1010,7 @@ impl<'a> Kapsule<'a> {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
                 info!("{}", &message);
-                send_to_customer(&message);
+                self.send_to_customer(&message, &listeners_helper);
             }
             Err(Operation { error, .. }) => return Err(error),
             Err(retry::Error::Internal(msg)) => {
