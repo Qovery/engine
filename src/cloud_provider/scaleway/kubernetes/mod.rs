@@ -7,30 +7,29 @@ use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesUpgradeStatus, ProviderOptions,
 };
-use crate::cloud_provider::models::NodeGroups;
+use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::application::Zone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::ScwInstancesType;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
-use crate::cmd::kubectl::{kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
+use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::structs::HelmChart;
-use crate::cmd::terraform::terraform_init_validate_plan_apply;
+use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::error::EngineErrorCause::Internal;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
-use crate::fs::workspace_directory;
-use crate::models::{
-    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+use crate::error::{
+    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
 };
+use crate::models::{Action, Context, Features, Listen, Listener, Listeners, ListenersHelper};
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
 use crate::{cmd, dns_provider};
 use ::function_name::named;
-use retry::delay::Fibonacci;
+use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
@@ -345,18 +344,11 @@ impl<'a> Kapsule<'a> {
 
     fn create(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
-        let send_to_customer = |message: &str| {
-            listeners_helper.deployment_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
 
-        send_to_customer(format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
         // upgrade cluster instead if required
         match self.config_file() {
@@ -381,12 +373,7 @@ impl<'a> Kapsule<'a> {
             }
         };
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        let temp_dir = self.get_temp_dir()?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -413,7 +400,10 @@ impl<'a> Kapsule<'a> {
             ),
         )?;
 
-        send_to_customer(format!("Deploying SCW {} cluster deployment with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Deploying SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
         // terraform deployment dedicated to cloud resources
         match cast_simple_error_to_engine_error(
@@ -578,34 +568,194 @@ impl<'a> Kapsule<'a> {
     }
 
     fn pause(&self) -> Result<(), EngineError> {
-        todo!()
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+        self.send_to_customer(
+            format!("Preparing SCW {} cluster pause with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
+
+        let temp_dir = self.get_temp_dir()?;
+
+        // generate terraform files and copy them into temp dir
+        let mut context = self.tera_context()?;
+
+        // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
+        let scw_ks_worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
+        context.insert("scw_ks_worker_nodes", &scw_ks_worker_nodes);
+
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::generate_and_copy_all_files_into_dir(
+                self.template_directory.as_str(),
+                temp_dir.as_str(),
+                &context,
+            ),
+        )?;
+
+        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
+        // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let _ = cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            crate::template::copy_non_template_files(
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                common_charts_temp_dir.as_str(),
+            ),
+        )?;
+
+        // pause: only select terraform workers elements to pause to avoid applying on the whole config
+        // this to avoid failures because of helm deployments on removing workers nodes
+        let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.as_str()) {
+            Ok(x) => {
+                let mut tf_workers_resources_name = Vec::new();
+                for name in x {
+                    if name.starts_with("scaleway_k8s_pool.") {
+                        tf_workers_resources_name.push(name);
+                    }
+                }
+                tf_workers_resources_name
+            }
+            Err(e) => {
+                return Err(EngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
+                    execution_id: self.context.execution_id().to_string(),
+                    message: e.message,
+                })
+            }
+        };
+        if tf_workers_resources.is_empty() {
+            return Err(EngineError {
+                cause: EngineErrorCause::Internal,
+                scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
+                execution_id: self.context.execution_id().to_string(),
+                message: Some("No worker nodes present, can't Pause the infrastructure. This can happen if there where a manual operations on the workers or the infrastructure is already pause.".to_string()),
+            });
+        }
+
+        let kubernetes_config_file_path = self.config_file_path()?;
+
+        // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
+        if self.options.qovery_engine_location == EngineLocation::ClientSide {
+            match self.context.is_feature_enabled(&Features::MetricsHistory) {
+                true => {
+                    let metric_name = "taskmanager_nb_running_tasks";
+                    let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
+                        return match kubectl_exec_api_custom_metrics(
+                            &kubernetes_config_file_path,
+                            self.cloud_provider().credentials_environment_variables(),
+                            "qovery",
+                            None,
+                            metric_name,
+                        ) {
+                            Ok(metrics) => {
+                                let mut current_engine_jobs = 0;
+
+                                for metric in metrics.items {
+                                    match metric.value.parse::<i32>() {
+                                        Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
+                                        Err(e) => {
+                                            error!(
+                                                "error while looking at the API metric value {}. {:?}",
+                                                metric_name, e
+                                            );
+                                            return OperationResult::Retry(SimpleError {
+                                                kind: SimpleErrorKind::Other,
+                                                message: Some(e.to_string()),
+                                            });
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                if current_engine_jobs == 0 {
+                                    OperationResult::Ok(())
+                                } else {
+                                    OperationResult::Retry(SimpleError {
+                                        kind: SimpleErrorKind::Other,
+                                        message: Some("can't pause the infrastructure now, Engine jobs are currently running, retrying later...".to_string()),
+                                    })
+                                }
+                            }
+                            Err(e) => {
+                                error!("error while looking at the API metric value {}. {:?}", metric_name, e);
+                                OperationResult::Retry(e)
+                            }
+                        };
+                    });
+
+                    match wait_engine_job_finish {
+                        Ok(_) => {
+                            info!("no current running jobs on the Engine, infrastructure pause is allowed to start")
+                        }
+                        Err(Operation { error, .. }) => {
+                            return Err(EngineError {
+                                cause: EngineErrorCause::Internal,
+                                scope: EngineErrorScope::Engine,
+                                execution_id: self.context.execution_id().to_string(),
+                                message: error.message,
+                            })
+                        }
+                        Err(retry::Error::Internal(msg)) => {
+                            return Err(EngineError::new(
+                                EngineErrorCause::Internal,
+                                EngineErrorScope::Engine,
+                                self.context.execution_id(),
+                                Some(msg),
+                            ))
+                        }
+                    }
+                }
+                false => warn!("The Engines are running Client side, but metric history flag is disabled. You will encounter issues during cluster lifecycles if you do not enable metric history"),
+            }
+        }
+
+        let mut terraform_args_string = vec!["apply".to_string(), "-auto-approve".to_string()];
+        for x in tf_workers_resources {
+            terraform_args_string.push(format!("-target={}", x));
+        }
+        let terraform_args = terraform_args_string.iter().map(|x| &**x).collect();
+
+        let message = format!("Pausing SCW {} cluster deployment with id {}", self.name(), self.id());
+        info!("{}", &message);
+        self.send_to_customer(&message, &listeners_helper);
+
+        match cast_simple_error_to_engine_error(
+            self.engine_error_scope(),
+            self.context.execution_id(),
+            terraform_exec(temp_dir.as_str(), terraform_args),
+        ) {
+            Ok(_) => {
+                let message = format!("Kubernetes cluster {} successfully paused", self.name());
+                info!("{}", &message);
+                self.send_to_customer(&message, &listeners_helper);
+                Ok(())
+            }
+            Err(e) => {
+                error!("Error while pausing cluster {} with id {}.", self.name(), self.id());
+                Err(e)
+            }
+        }
     }
 
     fn pause_error(&self) -> Result<(), EngineError> {
-        todo!()
+        Err(self.engine_error(
+            EngineErrorCause::Internal,
+            format!("{} Kubernetes cluster failed to pause", self.name()),
+        ))
     }
 
     fn delete(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let mut skip_kubernetes_step = false;
-        let send_to_customer = |message: &str| {
-            listeners_helper.delete_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
-        send_to_customer(format!("Preparing to delete SCW cluster {} with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing to delete SCW cluster {} with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        let temp_dir = self.get_temp_dir()?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -653,7 +803,7 @@ impl<'a> Kapsule<'a> {
             self.id()
         );
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         info!("Running Terraform apply before running a delete");
         if let Err(e) = cast_simple_error_to_engine_error(
@@ -672,7 +822,7 @@ impl<'a> Kapsule<'a> {
                 self.id()
             );
             info!("{}", &message);
-            send_to_customer(&message);
+            self.send_to_customer(&message, &listeners_helper);
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 &kubernetes_config_file_path,
@@ -719,7 +869,7 @@ impl<'a> Kapsule<'a> {
                 self.id()
             );
             info!("{}", &message);
-            send_to_customer(&message);
+            self.send_to_customer(&message, &listeners_helper);
 
             // delete custom metrics api to avoid stale namespaces on deletion
             let _ = cmd::helm::helm_uninstall_list(
@@ -824,7 +974,7 @@ impl<'a> Kapsule<'a> {
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         info!("Running Terraform destroy");
         let terraform_result =
@@ -844,7 +994,7 @@ impl<'a> Kapsule<'a> {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
                 info!("{}", &message);
-                send_to_customer(&message);
+                self.send_to_customer(&message, &listeners_helper);
             }
             Err(Operation { error, .. }) => return Err(error),
             Err(retry::Error::Internal(msg)) => {

@@ -70,14 +70,13 @@ fn create_and_destroy_kapsule_cluster_par_2() {
 #[cfg(feature = "test-scw-infra")]
 #[named]
 #[test]
-#[ignore]
-fn create_and_destroy_kapsule_cluster_ams_1() {
+fn create_pause_and_destroy_kapsule_cluster_ams_1() {
     let zone = Zone::Amsterdam1;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
         secrets,
-        ClusterTestType::Classic,
+        ClusterTestType::WithPause,
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
         function_name!(),

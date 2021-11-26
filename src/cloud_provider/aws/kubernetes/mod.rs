@@ -37,10 +37,7 @@ use crate::error::EngineErrorCause::Internal;
 use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
 };
-use crate::fs::workspace_directory;
-use crate::models::{
-    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::models::{Action, Context, Features, Listen, Listener, Listeners, ListenersHelper};
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
@@ -520,12 +517,7 @@ impl<'a> EKS<'a> {
             }
         }
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        let temp_dir = self.get_temp_dir()?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -707,24 +699,12 @@ impl<'a> EKS<'a> {
 
     fn pause(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
-        let send_to_customer = |message: &str| {
-            listeners_helper.pause_in_progress(ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: self.context.execution_id().to_string(),
-                },
-                ProgressLevel::Info,
-                Some(message),
-                self.context.execution_id(),
-            ))
-        };
-        send_to_customer(format!("Preparing EKS {} cluster pause with id {}", self.name(), self.id()).as_str());
+        self.send_to_customer(
+            format!("Preparing EKS {} cluster pause with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
 
-        let temp_dir = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        let temp_dir = self.get_temp_dir()?;
 
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
@@ -870,7 +850,7 @@ impl<'a> EKS<'a> {
 
         let message = format!("Pausing EKS {} cluster deployment with id {}", self.name(), self.id());
         info!("{}", &message);
-        send_to_customer(&message);
+        self.send_to_customer(&message, &listeners_helper);
 
         match cast_simple_error_to_engine_error(
             self.engine_error_scope(),
@@ -880,7 +860,7 @@ impl<'a> EKS<'a> {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {} successfully paused", self.name());
                 info!("{}", &message);
-                send_to_customer(&message);
+                self.send_to_customer(&message, &listeners_helper);
                 Ok(())
             }
             Err(e) => {
