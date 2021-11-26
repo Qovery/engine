@@ -973,7 +973,7 @@ dependencies = [
  "log",
  "openssl-probe",
  "openssl-sys",
- "url 2.2.0",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -1077,7 +1077,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "url 2.2.0",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -2094,7 +2094,7 @@ dependencies = [
  "idna 0.2.0",
  "lazy_static",
  "regex",
- "url 2.2.0",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -2139,6 +2139,7 @@ dependencies = [
  "tracing-subscriber",
  "tracing-test",
  "trust-dns-resolver",
+ "url 2.2.2",
  "uuid 0.8.2",
  "walkdir",
 ]
@@ -2566,7 +2567,7 @@ dependencies = [
  "serde_urlencoded 0.6.1",
  "tokio 0.2.24",
  "tokio-tls",
- "url 2.2.0",
+ "url 2.2.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -2602,7 +2603,7 @@ dependencies = [
  "serde_urlencoded 0.7.0",
  "tokio 1.10.0",
  "tokio-native-tls",
- "url 2.2.0",
+ "url 2.2.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -2840,7 +2841,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "url 2.2.0",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -2961,7 +2962,7 @@ dependencies = [
  "dtoa",
  "itoa",
  "serde",
- "url 2.2.0",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -3760,7 +3761,7 @@ dependencies = [
  "thiserror",
  "tinyvec",
  "tokio 1.10.0",
- "url 2.2.0",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -3918,9 +3919,9 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.2.0"
+version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5909f2b0817350449ed73e8bcd81c8c3c8d9a7a5d8acba4b27db277f1868976e"
+checksum = "a507c383b2d33b5fc35d1861e77e6b383d158b2da5e14fe51b83dfedf6fd578c"
 dependencies = [
  "form_urlencoded",
  "idna 0.2.0",

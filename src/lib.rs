@@ -13,6 +13,7 @@ mod deletion_utilities;
 pub mod dns_provider;
 pub mod engine;
 pub mod error;
+pub mod errors;
 pub mod fs;
 pub mod git;
 pub mod models;
