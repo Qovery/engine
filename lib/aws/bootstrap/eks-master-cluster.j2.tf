@@ -53,6 +53,13 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   tags = local.tags_eks
 
+  # grow this value to reduce random AWS API timeouts
+  timeouts {
+    create = "60m"
+    update = "90m"
+    delete = "30m"
+  }
+
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy,
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSServicePolicy,

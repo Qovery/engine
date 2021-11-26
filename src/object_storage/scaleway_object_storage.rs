@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use std::fs::File;
 use std::path::Path;
 
@@ -11,8 +12,8 @@ use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest,
-    GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier, PutBucketVersioningRequest,
-    PutObjectRequest, S3Client, StreamingBody, S3,
+    GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier, PutBucketTaggingRequest,
+    PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3,
 };
 use tokio::io;
 
@@ -31,6 +32,7 @@ pub struct ScalewayOS {
     zone: Zone,
     bucket_delete_strategy: BucketDeleteStrategy,
     bucket_versioning_activated: bool,
+    bucket_ttl_in_seconds: Option<u32>,
 }
 
 impl ScalewayOS {
@@ -43,6 +45,7 @@ impl ScalewayOS {
         zone: Zone,
         bucket_delete_strategy: BucketDeleteStrategy,
         bucket_versioning_activated: bool,
+        bucket_ttl_in_seconds: Option<u32>,
     ) -> ScalewayOS {
         ScalewayOS {
             context,
@@ -53,6 +56,7 @@ impl ScalewayOS {
             zone,
             bucket_delete_strategy,
             bucket_versioning_activated,
+            bucket_ttl_in_seconds,
         }
     }
 
@@ -217,27 +221,53 @@ impl ObjectStorage for ScalewayOS {
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
-        match self.bucket_versioning_activated {
-            true => match block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
+        let creation_date: DateTime<Utc> = Utc::now();
+        if let Err(e) = block_on(s3_client.put_bucket_tagging(PutBucketTaggingRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+            // Note: SCW doesn't support key/value tags, keys should be added inside the value
+            tagging: Tagging {
+                tag_set: vec![
+                    Tag {
+                        key: "CreationDate".to_string(),
+                        value: format!("CreationDate={}", creation_date.to_rfc3339()),
+                    },
+                    Tag {
+                        key: "Ttl".to_string(),
+                        value: format!("Ttl={}", self.bucket_ttl_in_seconds.unwrap_or_else(|| 0).to_string()),
+                    },
+                ],
+            },
+            ..Default::default()
+        })) {
+            let message = format!(
+                "While trying to add tags on object-storage bucket, name `{}` region `{}`: {}",
+                bucket_name,
+                self.zone.region_str(),
+                e
+            );
+            error!("{}", message);
+            return Err(self.engine_error(EngineErrorCause::Internal, message));
+        }
+
+        if self.bucket_versioning_activated {
+            if let Err(e) = block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
                 bucket: bucket_name.to_string(),
                 ..Default::default()
             })) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    let message = format!(
-                        "While trying to activate versioning on object-storage bucket, name `{}` region `{}`: {}",
-                        bucket_name,
-                        self.zone.region_str(),
-                        e
-                    );
-                    error!("{}", message);
-                    // TODO(benjaminch): to be investigated, versioning seems to fail
-                    // Err(self.engine_error(EngineErrorCause::Internal, message))
-                    Ok(())
-                }
-            },
-            false => Ok(()),
+                let message = format!(
+                    "While trying to activate versioning on object-storage bucket, name `{}` region `{}`: {}",
+                    bucket_name,
+                    self.zone.region_str(),
+                    e
+                );
+                error!("{}", message);
+                // TODO(benjaminch): to be investigated, versioning seems to fail
+                // Err(self.engine_error(EngineErrorCause::Internal, message))
+            }
         }
+
+        Ok(())
     }
 
     fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
@@ -261,7 +291,7 @@ impl ObjectStorage for ScalewayOS {
         // Note: Do not delete the bucket entirely but empty its content.
         // Bucket deletion might take up to 24 hours and during this time we are not able to create a bucket with the same name.
         // So emptying bucket allows future reuse.
-        return match &self.bucket_delete_strategy {
+        match &self.bucket_delete_strategy {
             BucketDeleteStrategy::HardDelete => match block_on(s3_client.delete_bucket(DeleteBucketRequest {
                 bucket: bucket_name.to_string(),
                 ..Default::default()
@@ -279,7 +309,7 @@ impl ObjectStorage for ScalewayOS {
                 }
             },
             BucketDeleteStrategy::Empty => Ok(()), // Do not delete the bucket
-        };
+        }
     }
 
     fn get(&self, bucket_name: &str, object_key: &str, use_cache: bool) -> Result<(StringPath, File), EngineError> {
