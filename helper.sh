@@ -431,9 +431,8 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   prepare_engine
   prepare_tests
 
-  # If no feature specified, then run only unit tests
   features_to_test_option="--features $filter_tests"
-  if [-z "$filter_tests"] ; then
+  if ["$filter_tests" == "unit-tests"] ; then
    features_to_test_option="" # will execute only default features (unit tests)
   fi
 
