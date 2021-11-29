@@ -37,7 +37,7 @@ use crate::error::EngineErrorCause::Internal;
 use crate::error::{
     cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
 };
-use crate::models::{Action, Context, Features, Listen, Listener, Listeners, ListenersHelper};
+use crate::models::{Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ToHelmString};
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
@@ -287,11 +287,6 @@ impl<'a> EKS<'a> {
         let elasticache_cidr_subnet = self.options.elasticache_cidr_subnet.clone();
         let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
 
-        let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![format!("{}", self.dns_provider.domain())];
-        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
-        let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
-
         // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
         context.insert("qovery_api_url", &qovery_api_url);
@@ -325,14 +320,28 @@ impl<'a> EKS<'a> {
         );
 
         // DNS configuration
+        let managed_dns_list = vec![self.dns_provider.name()];
+        let managed_dns_domains_helm_format = vec![self.dns_provider.domain().to_string()];
+        let managed_dns_domains_root_helm_format = vec![self.dns_provider.domain().root_domain().to_string()];
+        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+        let managed_dns_domains_root_terraform_format =
+            terraform_list_format(vec![self.dns_provider.domain().root_domain().to_string()]);
+        let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
+
         context.insert("managed_dns", &managed_dns_list);
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
-
+        context.insert(
+            "managed_dns_domains_root_helm_format",
+            &managed_dns_domains_root_helm_format,
+        );
         context.insert(
             "managed_dns_domains_terraform_format",
             &managed_dns_domains_terraform_format,
         );
-
+        context.insert(
+            "managed_dns_domains_root_terraform_format",
+            &managed_dns_domains_root_terraform_format,
+        );
         context.insert(
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
@@ -630,7 +639,7 @@ impl<'a> EKS<'a> {
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
             ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
             managed_dns_name: self.dns_provider.domain().to_string(),
-            managed_dns_helm_format: self.dns_provider.domain_helm_format(),
+            managed_dns_helm_format: self.dns_provider.domain().to_helm_format_string(),
             managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
             external_dns_provider: self.dns_provider.provider_name().to_string(),
             dns_email_report: self.options.tls_email_report.clone(),

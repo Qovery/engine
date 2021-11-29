@@ -3,7 +3,6 @@ extern crate test_utilities;
 use self::test_utilities::utilities::{context, generate_id, FuncTestsSecrets};
 
 use self::test_utilities::scaleway::{SCW_RESOURCE_TTL_IN_SECONDS, SCW_TEST_ZONE};
-use qovery_engine::cloud_provider::scaleway::application::Zone;
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
