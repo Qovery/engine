@@ -57,6 +57,33 @@ build-mr:
     - merge_requests
   interruptible: true
 
+unit-tests-mr:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh unit_tests
+  only:
+    - merge_requests
+  when: always
+  tags:
+    - vm-2cpu-4gmem-0g
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+  dependencies:
+    - linter-mr
+    - build-mr
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 1 week
+  interruptible: true
+
 all-self-hosted-mr:
   stage: tests
   retry: 0
