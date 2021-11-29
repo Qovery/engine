@@ -431,9 +431,10 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   prepare_engine
   prepare_tests
 
-  features_to_test_option="--features $filter_tests"
-  if ["$filter_tests" == "unit-tests"] ; then
+  if [ $filter_tests = "unit-tests" ] ; then
    features_to_test_option="" # will execute only default features (unit tests)
+  else
+   features_to_test_option="--features $filter_tests --no-default-features"
   fi
 
   STARTTIME=$(date +%s)
@@ -446,7 +447,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 
   # Note: keep release, we don't waste time because of multiple cache and it drastically help to speed up prod build
   set -x
-  cargo test --color always $features_to_test_option --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json --no-default-features 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
+  cargo test $features_to_test_option --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
 
   ENDTIME=$(date +%s)

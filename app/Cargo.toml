@@ -10,6 +10,7 @@ edition = "2018"
 default = []
 
 # To split from unit tests
+unit-tests = []
 test-functional = []
 test-full = ["test-functional"]
 
