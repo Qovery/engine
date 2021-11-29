@@ -158,9 +158,9 @@ impl Service for Router {
             .collect::<Vec<_>>();
 
         let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
+        let tls_domain = kubernetes.dns_provider().domain().wildcarded();
 
-        let tls_domain = format!("*.{}", kubernetes.dns_provider().domain());
-        context.insert("router_tls_domain", tls_domain.as_str());
+        context.insert("router_tls_domain", tls_domain.to_string().as_str());
         context.insert("router_default_domain", self.default_domain.as_str());
         context.insert("router_default_domain_hash", router_default_domain_hash.as_str());
         context.insert("custom_domains", &custom_domain_data_templates);

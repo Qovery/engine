@@ -13,7 +13,7 @@ use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrateg
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use crate::common::Cluster;
+use crate::common::{Cluster, ClusterDomain};
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use tracing::error;
@@ -70,7 +70,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         // use Scaleway
         let cloud_provider = Scaleway::cloud_provider(context);
 
-        let dns_provider = Box::new(dns_provider_cloudflare(context));
+        let dns_provider = Box::new(dns_provider_cloudflare(context, ClusterDomain::Default));
 
         Engine::new(
             context.clone(),

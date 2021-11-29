@@ -7,7 +7,7 @@ cloudflare:
   proxied: {{ cloudflare_proxied|default(value="false") }}
 {% endif %}
 
-domainFilters: {{ managed_dns_domains_helm_format }}
+domainFilters: {{ managed_dns_domains_root_helm_format }}
 triggerLoopOnEvent: true
 policy: sync
 txtOwnerId: "{{ kubernetes_cluster_id }}"
