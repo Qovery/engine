@@ -57,7 +57,7 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
 
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
-        match terraform_exec(root_dir, vec!["init"]) {
+        match terraform_exec(root_dir, vec!["init", "-no-color"]) {
             Ok(_) => OperationResult::Ok(()),
             Err(err) => {
                 manage_common_issues(&terraform_provider_lock, &err);
@@ -67,7 +67,7 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
         };
 
         // validate config
-        match terraform_exec(root_dir, vec!["validate"]) {
+        match terraform_exec(root_dir, vec!["validate", "-no-color"]) {
             Ok(_) => OperationResult::Ok(()),
             Err(err) => {
                 manage_common_issues(&terraform_provider_lock, &err);
@@ -92,7 +92,7 @@ pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Resu
     if dry_run {
         // plan
         let result = retry::retry(Fixed::from_millis(3000).take(3), || {
-            match terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"]) {
+            match terraform_exec(root_dir, vec!["plan", "-no-color", "-out", "tf_plan"]) {
                 Ok(out) => OperationResult::Ok(out),
                 Err(err) => {
                     error!("While trying to Terraform plan the rendered templates");
@@ -130,7 +130,7 @@ pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy:
 
     // terraform destroy
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
-        match terraform_exec(root_dir, vec!["destroy", "-auto-approve"]) {
+        match terraform_exec(root_dir, vec!["destroy", "-no-color", "-auto-approve"]) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 error!("error while trying to run terraform destroy on rendered templates, retrying...");
@@ -149,7 +149,7 @@ pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy:
 fn terraform_plan_apply(root_dir: &str) -> Result<(), SimpleError> {
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // plan
-        match terraform_exec(root_dir, vec!["plan", "-out", "tf_plan"]) {
+        match terraform_exec(root_dir, vec!["plan", "-no-color", "-out", "tf_plan"]) {
             Ok(_) => {}
             Err(err) => {
                 error!("While trying to Terraform plan the rendered templates");
@@ -157,7 +157,7 @@ fn terraform_plan_apply(root_dir: &str) -> Result<(), SimpleError> {
             }
         };
         // apply
-        match terraform_exec(root_dir, vec!["apply", "-auto-approve", "tf_plan"]) {
+        match terraform_exec(root_dir, vec!["apply", "-no-color", "-auto-approve", "tf_plan"]) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 error!("error while trying to run terraform apply on rendered templates, retrying...");
