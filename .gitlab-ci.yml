@@ -183,6 +183,32 @@ dev-release-image:
     refs:
       - dev
 
+unit-tests:
+  stage: tests
+  retry: 0
+  script:
+    - ./helper.sh unit_tests
+  dependencies:
+    - linter
+    - build
+  when: always
+  tags:
+    - vm-2cpu-4gmem-0g
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-units/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
 aws-whole-enchilada:
   stage: tests
   retry: 0
