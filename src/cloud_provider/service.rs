@@ -133,7 +133,7 @@ pub trait StatelessService: Service + Create + Pause + Delete {
     }
 }
 
-pub trait StatefulService: Service + Create + Pause + Delete + Backup + Clone + Upgrade + Downgrade {
+pub trait StatefulService: Service + Create + Pause + Delete {
     fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
         match self.action() {
             crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
@@ -195,33 +195,6 @@ pub trait Delete {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
     fn on_delete_check(&self) -> Result<(), EngineError>;
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-}
-
-pub trait Backup {
-    fn on_backup(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_backup_check(&self) -> Result<(), EngineError>;
-    fn on_backup_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_restore(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_restore_check(&self) -> Result<(), EngineError>;
-    fn on_restore_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-}
-
-pub trait Clone {
-    fn on_clone(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_clone_check(&self) -> Result<(), EngineError>;
-    fn on_clone_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-}
-
-pub trait Upgrade {
-    fn on_upgrade(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_upgrade_check(&self) -> Result<(), EngineError>;
-    fn on_upgrade_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-}
-
-pub trait Downgrade {
-    fn on_downgrade(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_downgrade_check(&self) -> Result<(), EngineError>;
-    fn on_downgrade_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
 }
 
 pub trait Terraform {
