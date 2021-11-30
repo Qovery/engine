@@ -12,7 +12,7 @@ locals {
   )
 
   tags_eks_vpc_public = merge(
-  local.tags_eks,
+  local.tags_eks_vpc,
   {
     "Public" = "true"
   }
