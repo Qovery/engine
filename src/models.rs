@@ -161,6 +161,24 @@ fn default_root_path_value() -> String {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub enum Protocol {
+    HTTP,
+    TCP,
+    UDP,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct Port {
+    pub id: String,
+    pub long_id: uuid::Uuid,
+    pub port: u16,
+    pub public_port: Option<u16>,
+    pub name: Option<String>,
+    pub publicly_accessible: bool,
+    pub protocol: Protocol,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     pub id: String,
     pub name: String,
@@ -173,7 +191,7 @@ pub struct Application {
     pub buildpack_language: Option<String>,
     #[serde(default = "default_root_path_value")]
     pub root_path: String,
-    pub private_port: Option<u16>,
+    pub ports: Vec<Port>,
     pub total_cpus: String,
     pub cpu_burst: String,
     pub total_ram_in_mib: u32,
@@ -201,7 +219,7 @@ impl Application {
                 self.id.as_str(),
                 self.action.to_service_action(),
                 self.name.as_str(),
-                self.private_port,
+                self.ports.clone(),
                 self.total_cpus.clone(),
                 self.cpu_burst.clone(),
                 self.total_ram_in_mib,
@@ -218,7 +236,7 @@ impl Application {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    self.private_port,
+                    self.ports.clone(),
                     self.total_cpus.clone(),
                     self.cpu_burst.clone(),
                     self.total_ram_in_mib,
@@ -236,7 +254,7 @@ impl Application {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    self.private_port,
+                    self.ports.clone(),
                     self.total_cpus.clone(),
                     self.cpu_burst.clone(),
                     self.total_ram_in_mib,
@@ -266,7 +284,7 @@ impl Application {
                 self.id.as_str(),
                 self.action.to_service_action(),
                 self.name.as_str(),
-                self.private_port,
+                self.ports.clone(),
                 self.total_cpus.clone(),
                 self.cpu_burst.clone(),
                 self.total_ram_in_mib,
@@ -283,7 +301,7 @@ impl Application {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    self.private_port,
+                    self.ports.clone(),
                     self.total_cpus.clone(),
                     self.cpu_burst.clone(),
                     self.total_ram_in_mib,
@@ -301,7 +319,7 @@ impl Application {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    self.private_port,
+                    self.ports.clone(),
                     self.total_cpus.clone(),
                     self.cpu_burst.clone(),
                     self.total_ram_in_mib,

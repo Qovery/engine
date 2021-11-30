@@ -3,7 +3,7 @@ use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::models::{
-    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
+    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Port, Protocol,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
@@ -186,7 +186,15 @@ fn postgresql_failover_dev_environment_with_all_options() {
             .applications
             .into_iter()
             .map(|mut app| {
-                app.private_port = Some(4789);
+                app.ports = vec![Port {
+                    id: "zdf7d6aad".to_string(),
+                    long_id: Default::default(),
+                    port: 4789,
+                    public_port: Some(443),
+                    name: None,
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                }];
                 app
             })
             .collect::<Vec<qovery_engine::models::Application>>();
@@ -395,7 +403,15 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             .map(|mut app| {
                 app.branch = app_name.clone();
                 app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
-                app.private_port = Some(1234);
+                app.ports = vec![Port {
+                    id: "zdf7d6aad".to_string(),
+                    long_id: Default::default(),
+                    port: 1234,
+                    public_port: Some(443),
+                    name: None,
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                }];
                 app.environment_vars = btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
                      "PG_HOST".to_string() => base64::encode(database_host.clone()),
