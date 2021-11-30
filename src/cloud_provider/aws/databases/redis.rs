@@ -5,9 +5,8 @@ use tera::Context as TeraContext;
 
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
-    get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Backup, Create, Database,
-    DatabaseOptions, DatabaseType, Delete, Downgrade, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
-    Upgrade,
+    get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, Database, DatabaseOptions,
+    DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{get_self_hosted_redis_version, get_supported_version_to_use, print_action};
 use crate::cloud_provider::DeploymentTarget;
@@ -355,74 +354,6 @@ impl Delete for Redis {
             self.name(),
         );
         Ok(())
-    }
-}
-
-impl crate::cloud_provider::service::Clone for Redis {
-    fn on_clone(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_clone_check(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_clone_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-}
-
-impl Upgrade for Redis {
-    fn on_upgrade(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_upgrade_check(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_upgrade_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-}
-
-impl Downgrade for Redis {
-    fn on_downgrade(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_downgrade_check(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_downgrade_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-}
-
-impl Backup for Redis {
-    fn on_backup(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_backup_check(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_backup_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_restore(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_restore_check(&self) -> Result<(), EngineError> {
-        unimplemented!()
-    }
-
-    fn on_restore_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        unimplemented!()
     }
 }
 
