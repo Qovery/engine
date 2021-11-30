@@ -18,9 +18,6 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use tracing::error;
 
-pub const SCW_QOVERY_ORGANIZATION_ID: &str = "zcf8e78e6";
-pub const SCW_KUBE_TEST_CLUSTER_NAME: &str = "qovery-z093e29e2";
-pub const SCW_KUBE_TEST_CLUSTER_ID: &str = "z093e29e2";
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 18;
@@ -83,12 +80,19 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
     fn cloud_provider(context: &Context) -> Box<Scaleway> {
         let secrets = FuncTestsSecrets::new();
+        let cluster_id = secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .expect("SCALEWAY_TEST_CLUSTER_ID is not set");
         Box::new(Scaleway::new(
             context.clone(),
-            SCW_KUBE_TEST_CLUSTER_ID,
-            SCW_QOVERY_ORGANIZATION_ID,
+            cluster_id.as_str(),
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             uuid::Uuid::new_v4(),
-            SCW_KUBE_TEST_CLUSTER_NAME,
+            format!("qovery-{}", cluster_id).as_str(),
             secrets
                 .SCALEWAY_ACCESS_KEY
                 .expect("SCALEWAY_ACCESS_KEY is not set in secrets")

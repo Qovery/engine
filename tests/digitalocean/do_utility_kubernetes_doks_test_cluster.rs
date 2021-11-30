@@ -36,20 +36,23 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
         let nodes = DO::kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
 
+        let cluster_id = secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
+        let cluster_name = format!("qovery-{}", cluster_id.clone());
+
         let kubernetes = DOKS::new(
             context.clone(),
-            test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_ID.to_string(),
+            cluster_id.to_string(),
             uuid::Uuid::new_v4(),
-            test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
+            cluster_name.to_string(),
             test_utilities::digitalocean::DO_KUBERNETES_VERSION.to_string(),
             test_utilities::digitalocean::DO_TEST_REGION,
             do_cluster.as_ref(),
             &cloudflare,
             nodes,
-            DO::kubernetes_cluster_options(
-                secrets,
-                Option::from(test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string()),
-            ),
+            DO::kubernetes_cluster_options(secrets, Option::from(cluster_name.to_string())),
         )
         .unwrap();
 
@@ -93,20 +96,23 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
         let nodes = DO::kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
 
+        let cluster_id = secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
+        let cluster_name = format!("qovery-{}", cluster_id);
+
         let kubernetes = DOKS::new(
             context.clone(),
-            test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_ID.to_string(),
+            cluster_id.to_string(),
             uuid::Uuid::new_v4(),
-            test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string(),
+            cluster_name.to_string(),
             test_utilities::digitalocean::DO_KUBERNETES_VERSION.to_string(),
             test_utilities::digitalocean::DO_TEST_REGION,
             do_cluster.as_ref(),
             &cloudflare,
             nodes,
-            DO::kubernetes_cluster_options(
-                secrets,
-                Option::from(test_utilities::digitalocean::DO_KUBE_TEST_CLUSTER_NAME.to_string()),
-            ),
+            DO::kubernetes_cluster_options(secrets, Option::from(cluster_name.to_string())),
         )
         .unwrap();
 
