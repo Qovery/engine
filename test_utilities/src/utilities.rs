@@ -24,8 +24,8 @@ use tracing::{error, info, warn};
 use tracing_subscriber;
 
 use crate::scaleway::{
-    SCW_KUBE_TEST_CLUSTER_ID, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
-    SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+    SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
@@ -105,6 +105,8 @@ pub struct FuncTestsSecrets {
     pub AWS_ACCESS_KEY_ID: Option<String>,
     pub AWS_DEFAULT_REGION: Option<String>,
     pub AWS_SECRET_ACCESS_KEY: Option<String>,
+    pub AWS_TEST_CLUSTER_ID: Option<String>,
+    pub AWS_TEST_ORGANIZATION_ID: Option<String>,
     pub BIN_VERSION_FILE: Option<String>,
     pub CLOUDFLARE_DOMAIN: Option<String>,
     pub CLOUDFLARE_ID: Option<String>,
@@ -115,6 +117,8 @@ pub struct FuncTestsSecrets {
     pub DIGITAL_OCEAN_SPACES_SECRET_ID: Option<String>,
     pub DIGITAL_OCEAN_DEFAULT_REGION: Option<String>,
     pub DIGITAL_OCEAN_TOKEN: Option<String>,
+    pub DIGITAL_OCEAN_TEST_CLUSTER_ID: Option<String>,
+    pub DIGITAL_OCEAN_TEST_ORGANIZATION_ID: Option<String>,
     pub DISCORD_API_URL: Option<String>,
     pub EKS_ACCESS_CIDR_BLOCKS: Option<String>,
     pub GITHUB_ACCESS_TOKEN: Option<String>,
@@ -133,6 +137,8 @@ pub struct FuncTestsSecrets {
     pub SCALEWAY_ACCESS_KEY: Option<String>,
     pub SCALEWAY_SECRET_KEY: Option<String>,
     pub SCALEWAY_DEFAULT_REGION: Option<String>,
+    pub SCALEWAY_TEST_CLUSTER_ID: Option<String>,
+    pub SCALEWAY_TEST_ORGANIZATION_ID: Option<String>,
     pub TERRAFORM_AWS_ACCESS_KEY_ID: Option<String>,
     pub TERRAFORM_AWS_SECRET_ACCESS_KEY: Option<String>,
     pub TERRAFORM_AWS_REGION: Option<String>,
@@ -183,6 +189,8 @@ impl FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: None,
             AWS_DEFAULT_REGION: None,
             AWS_SECRET_ACCESS_KEY: None,
+            AWS_TEST_CLUSTER_ID: None,
+            AWS_TEST_ORGANIZATION_ID: None,
             BIN_VERSION_FILE: None,
             CLOUDFLARE_DOMAIN: None,
             CLOUDFLARE_ID: None,
@@ -193,6 +201,8 @@ impl FuncTestsSecrets {
             DIGITAL_OCEAN_SPACES_SECRET_ID: None,
             DIGITAL_OCEAN_DEFAULT_REGION: None,
             DIGITAL_OCEAN_TOKEN: None,
+            DIGITAL_OCEAN_TEST_CLUSTER_ID: None,
+            DIGITAL_OCEAN_TEST_ORGANIZATION_ID: None,
             DISCORD_API_URL: None,
             EKS_ACCESS_CIDR_BLOCKS: None,
             GITHUB_ACCESS_TOKEN: None,
@@ -211,6 +221,8 @@ impl FuncTestsSecrets {
             SCALEWAY_DEFAULT_PROJECT_ID: None,
             SCALEWAY_SECRET_KEY: None,
             SCALEWAY_DEFAULT_REGION: None,
+            SCALEWAY_TEST_CLUSTER_ID: None,
+            SCALEWAY_TEST_ORGANIZATION_ID: None,
             TERRAFORM_AWS_ACCESS_KEY_ID: None,
             TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
             TERRAFORM_AWS_REGION: None,
@@ -258,6 +270,8 @@ impl FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: Self::select_secret("AWS_ACCESS_KEY_ID", secrets.AWS_ACCESS_KEY_ID),
             AWS_DEFAULT_REGION: Self::select_secret("AWS_DEFAULT_REGION", secrets.AWS_DEFAULT_REGION),
             AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
+            AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
+            AWS_TEST_CLUSTER_ID: Self::select_secret("AWS_TEST_CLUSTER_ID", secrets.AWS_TEST_CLUSTER_ID),
             BIN_VERSION_FILE: Self::select_secret("BIN_VERSION_FILE", secrets.BIN_VERSION_FILE),
             CLOUDFLARE_DOMAIN: Self::select_secret("CLOUDFLARE_DOMAIN", secrets.CLOUDFLARE_DOMAIN),
             CLOUDFLARE_ID: Self::select_secret("CLOUDFLARE_ID", secrets.CLOUDFLARE_ID),
@@ -277,6 +291,14 @@ impl FuncTestsSecrets {
                 secrets.DIGITAL_OCEAN_DEFAULT_REGION,
             ),
             DIGITAL_OCEAN_TOKEN: Self::select_secret("DIGITAL_OCEAN_TOKEN", secrets.DIGITAL_OCEAN_TOKEN),
+            DIGITAL_OCEAN_TEST_ORGANIZATION_ID: Self::select_secret(
+                "DIGITAL_OCEAN_TEST_ORGANIZATION_ID",
+                secrets.DIGITAL_OCEAN_TEST_ORGANIZATION_ID,
+            ),
+            DIGITAL_OCEAN_TEST_CLUSTER_ID: Self::select_secret(
+                "DIGITAL_OCEAN_TEST_CLUSTER_ID",
+                secrets.DIGITAL_OCEAN_TEST_CLUSTER_ID,
+            ),
             DISCORD_API_URL: Self::select_secret("DISCORD_API_URL", secrets.DISCORD_API_URL),
             EKS_ACCESS_CIDR_BLOCKS: Self::select_secret("EKS_ACCESS_CIDR_BLOCKS", secrets.EKS_ACCESS_CIDR_BLOCKS),
             GITHUB_ACCESS_TOKEN: Self::select_secret("GITHUB_ACCESS_TOKEN", secrets.GITHUB_ACCESS_TOKEN),
@@ -307,6 +329,11 @@ impl FuncTestsSecrets {
             ),
             SCALEWAY_SECRET_KEY: Self::select_secret("SCALEWAY_SECRET_KEY", secrets.SCALEWAY_SECRET_KEY),
             SCALEWAY_DEFAULT_REGION: Self::select_secret("SCALEWAY_DEFAULT_REGION", secrets.SCALEWAY_DEFAULT_REGION),
+            SCALEWAY_TEST_ORGANIZATION_ID: Self::select_secret(
+                "SCALEWAY_TEST_ORGANIZATION_ID",
+                secrets.SCALEWAY_TEST_ORGANIZATION_ID,
+            ),
+            SCALEWAY_TEST_CLUSTER_ID: Self::select_secret("SCALEWAY_TEST_CLUSTER_ID", secrets.SCALEWAY_TEST_CLUSTER_ID),
             TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
                 "TERRAFORM_AWS_ACCESS_KEY_ID",
                 secrets.TERRAFORM_AWS_ACCESS_KEY_ID,
@@ -596,7 +623,13 @@ where
                 }
 
                 let clusters = clusters.clusters.unwrap();
-                let expected_test_server_tag = format!("ClusterId={}", SCW_KUBE_TEST_CLUSTER_ID);
+                let expected_test_server_tag = format!(
+                    "ClusterId={}",
+                    secrets
+                        .SCALEWAY_TEST_CLUSTER_ID
+                        .as_ref()
+                        .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
+                );
 
                 for cluster in clusters.iter() {
                     if cluster.tags.is_some() {

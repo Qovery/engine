@@ -8,9 +8,7 @@ use qovery_engine::models::{
 use qovery_engine::transaction::TransactionResult;
 use tracing::{span, Level};
 
-use self::test_utilities::aws::{
-    AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_KUBE_TEST_CLUSTER_ID, AWS_QOVERY_ORGANIZATION_ID,
-};
+use self::test_utilities::aws::{AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
 use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, FuncTestsSecrets,
 };
@@ -40,7 +38,11 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let secrets = FuncTestsSecrets::new();
         let environment = test_utilities::common::environment_3_apps_3_routers_3_databases(
             &context,
-            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -87,7 +89,11 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let secrets = FuncTestsSecrets::new();
         let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
-            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             secrets
                 .clone()
                 .DEFAULT_TEST_DOMAIN
@@ -121,7 +127,11 @@ fn deploy_an_environment_with_db_and_pause_it() {
             Kind::Aws,
             environment.clone(),
             app_name.clone().as_str(),
-            AWS_KUBE_TEST_CLUSTER_ID,
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -159,7 +169,11 @@ fn postgresql_failover_dev_environment_with_all_options() {
 
         let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
-            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             test_domain.as_str(),
             AWS_DATABASE_INSTANCE_TYPE,
             AWS_DATABASE_DISK_TYPE,
@@ -178,7 +192,11 @@ fn postgresql_failover_dev_environment_with_all_options() {
             .collect::<Vec<qovery_engine::models::Application>>();
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
-            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             test_domain.as_str(),
             AWS_DATABASE_INSTANCE_TYPE,
             AWS_DATABASE_DISK_TYPE,
@@ -200,7 +218,11 @@ fn postgresql_failover_dev_environment_with_all_options() {
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_env(
             Kind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
             environment_check.clone(),
             database_name.as_str(),
             secrets.clone(),
@@ -216,10 +238,14 @@ fn postgresql_failover_dev_environment_with_all_options() {
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY EVEN IF FAIL
         match is_pod_restarted_env(
             Kind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
             environment_check.clone(),
             database_name.as_str(),
-            secrets,
+            secrets.clone(),
         ) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
@@ -257,7 +283,11 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
         let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
-            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             test_domain.as_str(),
             AWS_DATABASE_INSTANCE_TYPE,
             AWS_DATABASE_DISK_TYPE,
@@ -266,7 +296,11 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         //let env_to_check = environment.clone();
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
-            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             test_domain.as_str(),
             AWS_DATABASE_INSTANCE_TYPE,
             AWS_DATABASE_DISK_TYPE,
@@ -319,7 +353,11 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
-            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             secrets
                 .clone()
                 .DEFAULT_TEST_DOMAIN
@@ -396,10 +434,14 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_env(
             Kind::Aws,
-            AWS_KUBE_TEST_CLUSTER_ID,
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
             environment_check,
             database_name.as_str(),
-            secrets,
+            secrets.clone(),
         ) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
@@ -454,7 +496,11 @@ fn private_postgresql_v10_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -472,7 +518,11 @@ fn public_postgresql_v10_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -490,7 +540,11 @@ fn private_postgresql_v11_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .clone()
             .DEFAULT_TEST_DOMAIN
@@ -509,7 +563,11 @@ fn public_postgresql_v11_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .clone()
             .DEFAULT_TEST_DOMAIN
@@ -528,7 +586,11 @@ fn private_postgresql_v12_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -546,7 +608,11 @@ fn public_postgresql_v12_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -565,7 +631,11 @@ fn private_postgresql_v10_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -583,7 +653,11 @@ fn public_postgresql_v10_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -601,7 +675,11 @@ fn private_postgresql_v11_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -619,7 +697,11 @@ fn public_postgresql_v11_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -637,7 +719,11 @@ fn private_postgresql_v12_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -655,7 +741,11 @@ fn public_postgresql_v12_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -704,7 +794,11 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -722,7 +816,11 @@ fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -740,7 +838,11 @@ fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -758,7 +860,11 @@ fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -776,7 +882,11 @@ fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -794,7 +904,11 @@ fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -812,7 +926,11 @@ fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -830,7 +948,11 @@ fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -849,7 +971,11 @@ fn private_mongodb_v3_6_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -867,7 +993,11 @@ fn public_mongodb_v3_6_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -885,7 +1015,11 @@ fn private_mongodb_v4_0_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -903,7 +1037,11 @@ fn public_mongodb_v4_0_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -952,7 +1090,11 @@ fn private_mysql_v5_7_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -970,7 +1112,11 @@ fn public_mysql_v5_7_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -988,7 +1134,11 @@ fn private_mysql_v8_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1006,7 +1156,11 @@ fn public_mysql_v8_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1025,7 +1179,11 @@ fn private_mysql_v5_7_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1043,7 +1201,11 @@ fn public_mysql_v5_7_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1061,7 +1223,11 @@ fn private_mysql_v8_0_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1079,7 +1245,11 @@ fn public_mysql_v8_0_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1128,7 +1298,11 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1146,7 +1320,11 @@ fn public_redis_v5_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1164,7 +1342,11 @@ fn private_redis_v6_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1182,7 +1364,11 @@ fn public_redis_v6_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1201,7 +1387,11 @@ fn private_redis_v5_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1219,7 +1409,11 @@ fn public_redis_v5_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1237,7 +1431,11 @@ fn private_redis_v6_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1255,7 +1453,11 @@ fn public_redis_v6_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = test_utilities::common::working_minimal_environment(
         &context,
-        AWS_QOVERY_ORGANIZATION_ID,
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()

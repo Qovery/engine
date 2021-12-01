@@ -16,14 +16,11 @@ use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 
-pub const DO_QOVERY_ORGANIZATION_ID: &str = "z3bc003d2";
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const DO_KUBERNETES_MINOR_VERSION: u8 = 19;
 pub const DO_KUBERNETES_VERSION: &'static str =
     formatcp!("{}.{}", DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION);
 pub const DOCR_ID: &str = "registry-the-one-and-unique";
-pub const DO_KUBE_TEST_CLUSTER_ID: &str = "za80c56a0";
-pub const DO_KUBE_TEST_CLUSTER_NAME: &str = "qovery-za80c56a0";
 pub const DO_TEST_REGION: Region = Region::Amsterdam3;
 pub const DO_MANAGED_DATABASE_INSTANCE_TYPE: &str = "";
 pub const DO_MANAGED_DATABASE_DISK_TYPE: &str = "";
@@ -62,19 +59,38 @@ impl Cluster<DO, DoksOptions> for DO {
 
     fn cloud_provider(context: &Context) -> Box<DO> {
         let secrets = FuncTestsSecrets::new();
+        let cluster_id = secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
         Box::new(DO::new(
             context.clone(),
-            DO_KUBE_TEST_CLUSTER_ID,
-            DO_QOVERY_ORGANIZATION_ID,
+            cluster_id.clone().as_str(),
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .expect("DIGITAL_OCEAN_KUBE_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             uuid::Uuid::new_v4(),
-            secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
-            secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().as_str(),
-            secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().as_str(),
-            DO_KUBE_TEST_CLUSTER_NAME,
+            secrets
+                .DIGITAL_OCEAN_TOKEN
+                .expect("DIGITAL_OCEAN_TOKEN is not set")
+                .as_str(),
+            secrets
+                .DIGITAL_OCEAN_SPACES_ACCESS_ID
+                .expect("DIGITAL_OCEAN_SPACES_ACCESS_ID is not set")
+                .as_str(),
+            secrets
+                .DIGITAL_OCEAN_SPACES_SECRET_ID
+                .expect("DIGITAL_OCEAN_SPACES_SECRET_ID is not set")
+                .as_str(),
+            format!("qovery-{}", cluster_id).as_str(),
             TerraformStateCredentials {
-                access_key_id: secrets.TERRAFORM_AWS_ACCESS_KEY_ID.unwrap(),
-                secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
-                region: secrets.TERRAFORM_AWS_REGION.unwrap(),
+                access_key_id: secrets
+                    .TERRAFORM_AWS_ACCESS_KEY_ID
+                    .expect("TERRAFORM_AWS_ACCESS_KEY_ID is not set"),
+                secret_access_key: secrets
+                    .TERRAFORM_AWS_SECRET_ACCESS_KEY
+                    .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set"),
+                region: secrets.TERRAFORM_AWS_REGION.expect("TERRAFORM_AWS_REGION is not set"),
             },
         ))
     }

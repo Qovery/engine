@@ -16,14 +16,12 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
-pub const AWS_QOVERY_ORGANIZATION_ID: &str = "u8nb94c7fwxzr2jt";
 pub const AWS_REGION_FOR_S3: &str = "eu-west-3";
 pub const AWS_TEST_REGION: &str = "eu-west-3";
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 18;
 pub const AWS_KUBERNETES_VERSION: &'static str =
     formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
-pub const AWS_KUBE_TEST_CLUSTER_ID: &str = "zbe9e22b0";
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t2.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 
@@ -84,14 +82,28 @@ impl Cluster<AWS, Options> for AWS {
         Box::new(AWS::new(
             context.clone(),
             "u8nb94c7fwxzr2jt",
-            AWS_QOVERY_ORGANIZATION_ID,
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
             uuid::Uuid::new_v4(),
             "QoveryTest",
-            secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
-            secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
+            secrets
+                .AWS_ACCESS_KEY_ID
+                .expect("AWS_ACCESS_KEY_ID is not set")
+                .as_str(),
+            secrets
+                .AWS_SECRET_ACCESS_KEY
+                .expect("AWS_SECRET_ACCESS_KEY is not set")
+                .as_str(),
             TerraformStateCredentials {
-                access_key_id: secrets.TERRAFORM_AWS_ACCESS_KEY_ID.unwrap(),
-                secret_access_key: secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY.unwrap(),
+                access_key_id: secrets
+                    .TERRAFORM_AWS_ACCESS_KEY_ID
+                    .expect("TERRAFORM_AWS_ACCESS_KEY_ID is n ot set"),
+                secret_access_key: secrets
+                    .TERRAFORM_AWS_SECRET_ACCESS_KEY
+                    .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set"),
                 region: "eu-west-3".to_string(),
             },
         ))

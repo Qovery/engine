@@ -11,10 +11,10 @@ use qovery_engine::models::{
 };
 use qovery_engine::transaction::TransactionResult;
 
-use crate::aws::{AWS_KUBERNETES_VERSION, AWS_KUBE_TEST_CLUSTER_ID};
+use crate::aws::AWS_KUBERNETES_VERSION;
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_KUBE_TEST_CLUSTER_ID, DO_KUBE_TEST_CLUSTER_NAME};
-use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_KUBE_TEST_CLUSTER_ID, SCW_KUBE_TEST_CLUSTER_NAME};
+use crate::digitalocean::DO_KUBERNETES_VERSION;
+use crate::scaleway::SCW_KUBERNETES_VERSION;
 use crate::utilities::{
     db_disk_type, db_infos, db_instance_type, generate_cluster_id, generate_id, generate_password, get_pvc, get_svc,
     get_svc_name, init, FuncTestsSecrets,
@@ -917,16 +917,25 @@ pub fn test_db(
     }
 
     let kube_cluster_id = match provider_kind {
-        Kind::Aws => AWS_KUBE_TEST_CLUSTER_ID,
-        Kind::Do => DO_KUBE_TEST_CLUSTER_ID,
-        Kind::Scw => SCW_KUBE_TEST_CLUSTER_ID,
+        Kind::Aws => secrets
+            .AWS_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("AWS_TEST_CLUSTER_ID is not set"),
+        Kind::Do => secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        Kind::Scw => secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_CLUSTER_ID is not set"),
     };
 
     match database_mode.clone() {
         DatabaseMode::CONTAINER => {
             match get_pvc(
                 provider_kind.clone(),
-                kube_cluster_id.clone(),
+                kube_cluster_id.as_str(),
                 environment.clone(),
                 secrets.clone(),
             ) {
@@ -939,7 +948,7 @@ pub fn test_db(
 
             match get_svc(
                 provider_kind.clone(),
-                kube_cluster_id.clone(),
+                kube_cluster_id.as_str(),
                 environment.clone(),
                 secrets.clone(),
             ) {
@@ -965,7 +974,7 @@ pub fn test_db(
         DatabaseMode::MANAGED => {
             match get_svc(
                 provider_kind.clone(),
-                kube_cluster_id.clone(),
+                kube_cluster_id.as_str(),
                 environment.clone(),
                 secrets.clone(),
             ) {
@@ -1014,48 +1023,78 @@ pub fn get_environment_test_kubernetes<'a>(
 
     match provider_kind {
         Kind::Aws => {
+            let cluster_id = secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_KUBE_TEST_CLUSTER_ID is not set");
             k = Box::new(
                 EKS::new(
                     context.clone(),
-                    AWS_KUBE_TEST_CLUSTER_ID,
+                    cluster_id.as_str(),
                     uuid::Uuid::new_v4(),
-                    AWS_KUBE_TEST_CLUSTER_ID,
+                    format!("qovery-{}", cluster_id.as_str()).as_str(),
                     AWS_KUBERNETES_VERSION,
-                    secrets.clone().AWS_DEFAULT_REGION.unwrap().as_str(),
+                    secrets
+                        .AWS_DEFAULT_REGION
+                        .as_ref()
+                        .expect("AWS_DEFAULT_REGION is not set")
+                        .as_str(),
                     cloud_provider,
                     dns_provider,
-                    AWS::kubernetes_cluster_options(secrets, None),
+                    AWS::kubernetes_cluster_options(secrets.clone(), None),
                     AWS::kubernetes_nodes(),
                 )
                 .unwrap(),
             );
         }
         Kind::Do => {
+            let cluster_id = secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
             k = Box::new(
                 DOKS::new(
                     context.clone(),
-                    DO_KUBE_TEST_CLUSTER_ID.to_string(),
+                    cluster_id.to_string(),
                     uuid::Uuid::new_v4(),
-                    DO_KUBE_TEST_CLUSTER_NAME.to_string(),
+                    format!("qovery-{}", cluster_id),
                     DO_KUBERNETES_VERSION.to_string(),
-                    Region::from_str(secrets.clone().DIGITAL_OCEAN_DEFAULT_REGION.unwrap().as_str()).unwrap(),
+                    Region::from_str(
+                        secrets
+                            .clone()
+                            .DIGITAL_OCEAN_DEFAULT_REGION
+                            .expect("DIGITAL_OCEAN_DEFAULT_REGION is not set")
+                            .as_str(),
+                    )
+                    .unwrap(),
                     cloud_provider,
                     dns_provider,
                     DO::kubernetes_nodes(),
-                    DO::kubernetes_cluster_options(secrets, Option::from(DO_KUBE_TEST_CLUSTER_ID.to_string())),
+                    DO::kubernetes_cluster_options(secrets.clone(), Option::from(cluster_id.to_string())),
                 )
                 .unwrap(),
             );
         }
         Kind::Scw => {
+            let cluster_id = secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID is not set");
             k = Box::new(
                 Kapsule::new(
                     context.clone(),
-                    SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+                    cluster_id.to_string(),
                     uuid::Uuid::new_v4(),
-                    SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
+                    format!("qovery-{}", cluster_id),
                     SCW_KUBERNETES_VERSION.to_string(),
-                    Zone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap(),
+                    Zone::from_str(
+                        secrets
+                            .clone()
+                            .SCALEWAY_DEFAULT_REGION
+                            .expect("SCALEWAY_DEFAULT_REGION is not set")
+                            .as_str(),
+                    )
+                    .unwrap(),
                     cloud_provider,
                     dns_provider,
                     Scaleway::kubernetes_nodes(),

@@ -36,11 +36,16 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let nodes = Scaleway::kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
 
+        let cluster_id = secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_CLUSTER_ID");
+
         let kubernetes = Kapsule::new(
             context.clone(),
-            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+            cluster_id.to_string(),
             uuid::Uuid::new_v4(),
-            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
+            format!("qovery-{}", cluster_id.to_string()),
             test_utilities::scaleway::SCW_KUBERNETES_VERSION.to_string(),
             test_utilities::scaleway::SCW_TEST_ZONE,
             scw_cluster.as_ref(),
@@ -90,11 +95,16 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let nodes = Scaleway::kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
 
+        let cluster_id = secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_CLUSTER_ID is not set");
+
         let kubernetes = Kapsule::new(
             context.clone(),
-            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_ID.to_string(),
+            cluster_id.to_string(),
             uuid::Uuid::new_v4(),
-            test_utilities::scaleway::SCW_KUBE_TEST_CLUSTER_NAME.to_string(),
+            format!("qovery-{}", cluster_id.to_string()),
             test_utilities::scaleway::SCW_KUBERNETES_VERSION.to_string(),
             test_utilities::scaleway::SCW_TEST_ZONE,
             scw_cluster.as_ref(),
