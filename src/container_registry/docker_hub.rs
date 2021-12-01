@@ -3,7 +3,7 @@ extern crate reqwest;
 use reqwest::StatusCode;
 
 use crate::build_platform::Image;
-use crate::cmd;
+use crate::cmd::utilities::QoveryCommand;
 use crate::container_registry::docker::docker_tag_and_push_image;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::EngineErrorCause;
@@ -53,17 +53,10 @@ impl ContainerRegistry for DockerHub {
     fn is_valid(&self) -> Result<(), EngineError> {
         // check the version of docker and print it as info
         let mut output_from_cmd = String::new();
-        let _ = cmd::utilities::exec_with_output(
-            "docker",
-            vec!["--version"],
-            |r_out| match r_out {
-                Ok(s) => output_from_cmd.push_str(&s),
-                Err(e) => error!("Error while getting sdtout from docker {}", e),
-            },
-            |r_err| match r_err {
-                Ok(s) => error!("Error executing docker command {}", s),
-                Err(e) => error!("Error while getting stderr from docker {}", e),
-            },
+        let mut cmd = QoveryCommand::new("docker", &vec!["--version"], &vec![]);
+        let _ = cmd.exec_with_output(
+            |r_out| output_from_cmd.push_str(&r_out),
+            |r_err| error!("Error executing docker command {}", r_err),
         );
 
         info!("Using Docker: {}", output_from_cmd);
@@ -113,11 +106,12 @@ impl ContainerRegistry for DockerHub {
             None => vec![],
         };
 
-        if let Err(_) = cmd::utilities::exec(
+        let mut cmd = QoveryCommand::new(
             "docker",
-            vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
+            &vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
             &envs,
-        ) {
+        );
+        if let Err(_) = cmd.exec() {
             return Err(self.engine_error(
                 EngineErrorCause::User(
                     "Your DockerHub account seems to be no longer valid (bad Credentials). \

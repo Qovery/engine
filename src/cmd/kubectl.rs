@@ -1,4 +1,3 @@
-use std::io::Error;
 use std::path::Path;
 
 use chrono::Duration;
@@ -12,7 +11,7 @@ use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
     KubernetesPod, KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent, PVC, SVC,
 };
-use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
 
@@ -35,21 +34,16 @@ pub fn kubectl_exec_with_output<F, X>(
     stderr_output: X,
 ) -> Result<(), SimpleError>
 where
-    F: FnMut(Result<String, Error>),
-    X: FnMut(Result<String, Error>),
+    F: FnMut(String),
+    X: FnMut(String),
 {
-    if let Err(err) = exec_with_envs_and_output(
-        "kubectl",
-        args.clone(),
-        envs.clone(),
-        stdout_output,
-        stderr_output,
-        Duration::max_value(),
-    ) {
+    let mut cmd = QoveryCommand::new("kubectl", &args, &envs);
+
+    if let Err(err) = cmd.exec_with_timeout(Duration::max_value(), stdout_output, stderr_output) {
         let args_string = args.join(" ");
         let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
         error!("{}", &msg);
-        return Err(err);
+        return Err(SimpleError::new(SimpleErrorKind::Other, Some(msg)));
     };
 
     Ok(())
@@ -79,14 +73,8 @@ where
             "-o=custom-columns=:.status.containerStatuses..restartCount",
         ],
         _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        |line| output_vec.push(line),
+        |line| error!("{}", line),
     )?;
 
     let output_string: String = output_vec.join("");
@@ -110,14 +98,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["get", "svc", "-n", namespace, service_name, "-o", "json"],
         _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        |line| output_vec.push(line),
+        |line| error!("{}", line),
     )?;
 
     let output_string: String = output_vec.join("\n");
@@ -401,14 +383,8 @@ where
         let _ = kubectl_exec_with_output(
             vec!["create", "namespace", namespace],
             _envs,
-            |out| match out {
-                Ok(line) => info!("{}", line),
-                Err(err) => error!("{:?}", err),
-            },
-            |out| match out {
-                Ok(line) => error!("{}", line),
-                Err(err) => error!("{:?}", err),
-            },
+            |line| info!("{}", line),
+            |line| error!("{}", line),
         )?;
     }
 
@@ -460,18 +436,7 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs.clone());
 
-    let _ = kubectl_exec_with_output(
-        command_args,
-        _envs,
-        |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-    )?;
+    let _ = kubectl_exec_with_output(command_args, _envs, |line| info!("{}", line), |line| error!("{}", line))?;
 
     Ok(())
 }
@@ -570,14 +535,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["delete", "namespace", namespace],
         _envs,
-        |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        |line| info!("{}", line),
+        |line| error!("{}", line),
     )?;
 
     Ok(())
@@ -598,14 +557,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["delete", "crd", crd_name],
         _envs,
-        |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        |line| info!("{}", line),
+        |line| error!("{}", line),
     )?;
 
     Ok(())
@@ -627,14 +580,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["-n", namespace, "delete", "secret", secret],
         _envs,
-        |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        |line| info!("{}", line),
+        |line| error!("{}", line),
     )?;
 
     Ok(())
@@ -657,14 +604,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["logs", "--tail", "1000", "-n", namespace, "-l", selector],
         _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        |line| output_vec.push(line),
+        |line| error!("{}", line),
     )?;
 
     Ok(output_vec)
@@ -687,14 +628,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["describe", "pod", "-n", namespace, "-l", selector],
         _envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        |line| output_vec.push(line),
+        |line| error!("{}", line),
     )?;
 
     Ok(output_vec.join("\n"))
@@ -747,14 +682,8 @@ where
     kubectl_exec_with_output(
         args,
         environment_variables.clone(),
-        |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        |line| info!("{}", line),
+        |line| error!("{}", line),
     )
 }
 
@@ -853,17 +782,7 @@ where
     let args = vec!["get", "event", arg_namespace.as_str(), "--sort-by='.lastTimestamp'"];
 
     let mut result_ok = String::new();
-    let mut result_err = SimpleError::new(SimpleErrorKind::Other, Some(String::new()));
-
-    match kubectl_exec_with_output(
-        args,
-        environment_variables,
-        |out| match out {
-            Ok(line) => result_ok = line,
-            Err(err) => result_err = SimpleError::from(err),
-        },
-        |_| {},
-    ) {
+    match kubectl_exec_with_output(args, environment_variables, |line| result_ok = line, |_| {}) {
         Ok(()) => Ok(result_ok),
         Err(err) => Err(err),
     }
@@ -967,16 +886,8 @@ where
             &replicas_count.to_string(),
         ],
         _envs,
-        |out| {
-            if let Err(err) = out {
-                error!("{:?}", err)
-            }
-        },
-        |out| {
-            if let Err(err) = out {
-                error!("{:?}", err)
-            }
-        },
+        |_| {},
+        |_| {},
     )
 }
 
@@ -1022,16 +933,8 @@ where
             selector,
         ],
         _envs,
-        |out| {
-            if let Err(err) = out {
-                error!("{:?}", err)
-            }
-        },
-        |out| {
-            if let Err(err) = out {
-                error!("{:?}", err)
-            }
-        },
+        |_| {},
+        |_| {},
     )?;
 
     let condition = match replicas_count {
@@ -1116,14 +1019,8 @@ where
     let _ = kubectl_exec_with_output(
         args.clone(),
         _envs.clone(),
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{:?}", err),
-        },
+        |line| output_vec.push(line),
+        |line| error!("{}", line),
     )?;
 
     let output_string: String = output_vec.join("");

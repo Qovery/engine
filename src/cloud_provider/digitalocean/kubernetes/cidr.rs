@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
-use crate::cmd::utilities;
+use crate::cmd::utilities::QoveryCommand;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoVpc {
@@ -16,16 +16,15 @@ pub struct DoVpc {
 
 pub fn get_used_cidr_on_region(token: &str) {
     let mut output_from_cli = String::new();
-    let _ = utilities::exec_with_output(
-        "doctl",
-        vec!["vpcs", "list", "--output", "json", "-t", token],
-        |r_out| match r_out {
-            Ok(s) => output_from_cli.push_str(&s),
-            Err(e) => error!("DOCTL CLI does not respond correctly {}", e),
-        },
-        |r_err| match r_err {
-            Ok(s) => error!("DOCTL CLI error from cmd inserted, please check vpcs list command{}", s),
-            Err(e) => error!("DOCTL CLI does not respond correctly {}", e),
+
+    let mut cmd = QoveryCommand::new("doctl", &vec!["vpcs", "list", "--output", "json", "-t", token], &vec![]);
+    let _ = cmd.exec_with_output(
+        |r_out| output_from_cli.push_str(&r_out),
+        |r_err| {
+            error!(
+                "DOCTL CLI error from cmd inserted, please check vpcs list command{}",
+                r_err
+            )
         },
     );
 

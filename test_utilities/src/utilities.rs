@@ -48,6 +48,8 @@ use crate::digitalocean::{
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
+use qovery_engine::cmd::utilities::QoveryCommand;
+use qovery_engine::error::SimpleErrorKind::Other;
 use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use qovery_engine::object_storage::ObjectStorage;
@@ -761,15 +763,17 @@ fn aws_s3_get_object(
     // used as a failover when rusoto_s3 acts up
     let s3_url = format!("s3://{}/{}", bucket_name, object_key);
 
-    qovery_engine::cmd::utilities::exec(
+    let mut cmd = QoveryCommand::new(
         "aws",
-        vec!["s3", "cp", &s3_url, &local_path],
+        &vec!["s3", "cp", &s3_url, &local_path],
         &vec![
             (AWS_ACCESS_KEY_ID, access_key_id),
             (AWS_SECRET_ACCESS_KEY, secret_access_key),
         ],
-    )?;
+    );
 
+    cmd.exec()
+        .map_err(|err| SimpleError::new(Other, Some(format!("{}", err))))?;
     let s = fs::read_to_string(&local_path)?;
 
     Ok(s)

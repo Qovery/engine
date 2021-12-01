@@ -7,8 +7,8 @@ use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, CommonChart};
 use crate::cloud_provider::service::ServiceType;
 use crate::cmd::helm::HelmLockErrors::{IncorrectFormatDate, NotYetExpired, ParsingError};
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_get_secrets};
-use crate::cmd::structs::{Helm, HelmChart, HelmHistoryRow, Item, KubernetesList};
-use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::cmd::structs::{HelmChart, HelmHistoryRow, HelmListItem, Item, KubernetesList};
+use crate::cmd::utilities::QoveryCommand;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::{DateTime, Duration, Utc};
 use core::time;
@@ -226,50 +226,40 @@ where
         let helm_ret = helm_exec_with_output(
             args,
             envs.clone(),
-            |out| match out {
-                Ok(line) => {
-                    info!("{}", line);
-                    json_output_string = line
-                }
-                Err(err) => error!("{}", &err),
+            |line| {
+                info!("{}", line);
+                json_output_string = line
             },
-            |out| match out {
-                Ok(line) => {
-                    if line.contains("another operation (install/upgrade/rollback) is in progress") {
-                        error_message = format!("helm lock detected for {}, looking for cleaning lock", chart.name);
-                        helm_error_during_deployment.message = Some(error_message.clone());
-                        warn!("{}. {}", &error_message, &line);
-                        should_clean_helm_lock = true;
-                        return;
-                    }
-
-                    if !chart.parse_stderr_for_error {
-                        warn!("chart {}: {}", chart.name, line);
-                        return;
-                    }
-
-                    // helm errors are not json formatted unfortunately
-                    if line.contains("has been rolled back") {
-                        error_message = format!("deployment {} has been rolled back", chart.name);
-                        helm_error_during_deployment.message = Some(error_message.clone());
-                        warn!("{}. {}", &error_message, &line);
-                    } else if line.contains("has been uninstalled") {
-                        error_message = format!("deployment {} has been uninstalled due to failure", chart.name);
-                        helm_error_during_deployment.message = Some(error_message.clone());
-                        warn!("{}. {}", &error_message, &line);
-                        // special fix for prometheus operator
-                    } else if line.contains("info: skipping unknown hook: \"crd-install\"") {
-                        debug!("chart {}: {}", chart.name, line);
-                    } else {
-                        error_message = format!("deployment {} has failed", chart.name);
-                        helm_error_during_deployment.message = Some(error_message.clone());
-                        error!("{}. {}", &error_message, &line);
-                    }
-                }
-                Err(err) => {
-                    error_message = format!("helm chart {} failed before deployment. {:?}", chart.name, err);
+            |line| {
+                if line.contains("another operation (install/upgrade/rollback) is in progress") {
+                    error_message = format!("helm lock detected for {}, looking for cleaning lock", chart.name);
                     helm_error_during_deployment.message = Some(error_message.clone());
-                    error!("{}", error_message);
+                    warn!("{}. {}", &error_message, &line);
+                    should_clean_helm_lock = true;
+                    return;
+                }
+
+                if !chart.parse_stderr_for_error {
+                    warn!("chart {}: {}", chart.name, line);
+                    return;
+                }
+
+                // helm errors are not json formatted unfortunately
+                if line.contains("has been rolled back") {
+                    error_message = format!("deployment {} has been rolled back", chart.name);
+                    helm_error_during_deployment.message = Some(error_message.clone());
+                    warn!("{}. {}", &error_message, &line);
+                } else if line.contains("has been uninstalled") {
+                    error_message = format!("deployment {} has been uninstalled due to failure", chart.name);
+                    helm_error_during_deployment.message = Some(error_message.clone());
+                    warn!("{}. {}", &error_message, &line);
+                    // special fix for prometheus operator
+                } else if line.contains("info: skipping unknown hook: \"crd-install\"") {
+                    debug!("chart {}: {}", chart.name, line);
+                } else {
+                    error_message = format!("deployment {} has failed", chart.name);
+                    helm_error_during_deployment.message = Some(error_message.clone());
+                    error!("{}. {}", &error_message, &line);
                 }
             },
         );
@@ -473,14 +463,8 @@ where
             &chart.name,
         ],
         envs.clone(),
-        |out| match out {
-            Ok(line) => info!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
-        },
+        |line| info!("{}", line.as_str()),
+        |line| error!("{}", line.as_str()),
     )
 }
 
@@ -503,14 +487,8 @@ where
             release_name,
         ],
         envs,
-        |out| match out {
-            Ok(line) => info!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
-        },
+        |line| info!("{}", line.as_str()),
+        |line| error!("{}", line.as_str()),
     )
 }
 
@@ -537,19 +515,13 @@ where
             release_name,
         ],
         envs.clone(),
-        |out| match out {
-            Ok(line) => output_string = line,
-            Err(err) => error!("{:?}", err),
-        },
-        |out| match out {
-            Ok(line) => {
-                if line.contains("Error: release: not found") {
-                    info!("{}", line)
-                } else {
-                    error!("{}", line)
-                }
+        |line| output_string = line,
+        |line| {
+            if line.contains("Error: release: not found") {
+                info!("{}", line)
+            } else {
+                error!("{}", line)
             }
-            Err(err) => error!("{:?}", err),
         },
     ) {
         Ok(_) => info!("Helm history success for release name: {}", release_name),
@@ -591,14 +563,8 @@ where
                 kubernetes_config.as_ref().to_str().unwrap(),
             ],
             envs.clone(),
-            |out| match out {
-                Ok(line) => output_vec.push(line),
-                Err(err) => error!("{:?}", err),
-            },
-            |out| match out {
-                Ok(line) => error!("{}", line),
-                Err(err) => error!("{:?}", err),
-            },
+            |line| output_vec.push(line),
+            |line| error!("{}", line),
         ) {
             Ok(_) => info!(
                 "Helm uninstall succeed for {} on namespace {}",
@@ -643,15 +609,14 @@ where
             override_file,
         ],
         envs,
-        |out| match out {
-            Ok(line) => info!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
-        },
-        |out| match out {
+        |line| info!("{}", line.as_str()),
+        |line| {
             // don't crash errors if releases are not found
-            Ok(line) if line.contains("Error: release: not found") => info!("{}", line.as_str()),
-            Ok(line) => error!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
+            if line.contains("Error: release: not found") {
+                info!("{}", line)
+            } else {
+                error!("{}", line)
+            }
         },
     )
 }
@@ -769,21 +734,10 @@ where
         None => helm_args.push("-A"),
     }
 
-    let _ = helm_exec_with_output(
-        helm_args,
-        envs,
-        |out| match out {
-            Ok(line) => output_vec.push(line),
-            Err(err) => error!("{}", err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line.as_str()),
-            Err(err) => error!("{}", err),
-        },
-    );
+    let _ = helm_exec_with_output(helm_args, envs, |line| output_vec.push(line), |line| error!("{}", line));
 
     let output_string: String = output_vec.join("");
-    let values = serde_json::from_str::<Vec<Helm>>(output_string.as_str());
+    let values = serde_json::from_str::<Vec<HelmListItem>>(output_string.as_str());
     let mut helms_charts: Vec<HelmChart> = Vec::new();
 
     match values {
@@ -871,14 +825,8 @@ where
             .iter()
             .map(|x| (x.0.as_str(), x.1.as_str()))
             .collect(),
-        |out| match out {
-            Ok(line) => info!("{}", line),
-            Err(err) => error!("{}", &err),
-        },
-        |out| match out {
-            Ok(line) => error!("{}", line),
-            Err(err) => error!("{}", err),
-        },
+        |line| info!("{}", line),
+        |line| error!("{}", line),
     )
 }
 
@@ -887,10 +835,10 @@ pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleE
         args,
         envs,
         |line| {
-            span!(Level::INFO, "{}", "{}", line.unwrap());
+            span!(Level::INFO, "{}", "{}", line);
         },
         |line_err| {
-            span!(Level::INFO, "{}", "{}", line_err.unwrap());
+            span!(Level::INFO, "{}", "{}", line_err);
         },
     )
 }
@@ -902,26 +850,15 @@ pub fn helm_exec_with_output<F, X>(
     stderr_output: X,
 ) -> Result<(), SimpleError>
 where
-    F: FnMut(Result<String, Error>),
-    X: FnMut(Result<String, Error>),
+    F: FnMut(String),
+    X: FnMut(String),
 {
     // Note: Helm CLI use spf13/cobra lib for the CLI; One function is mainly used to return an error if a command failed.
     // Helm returns an error each time a command does not succeed as they want. Which leads to handling error with status code 1
     // It means that the command successfully ran, but it didn't terminate as expected
-    match exec_with_envs_and_output("helm", args, envs, stdout_output, stderr_output, Duration::max_value()) {
-        Err(err) => match err.kind {
-            SimpleErrorKind::Command(exit_status) => match exit_status.code() {
-                Some(exit_status_code) => {
-                    if exit_status_code == 0 {
-                        Ok(())
-                    } else {
-                        Err(err)
-                    }
-                }
-                None => Err(err),
-            },
-            SimpleErrorKind::Other => Err(err),
-        },
+    let mut cmd = QoveryCommand::new("helm", &args, &envs);
+    match cmd.exec_with_timeout(Duration::max_value(), stdout_output, stderr_output) {
+        Err(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(format!("{}", err)))),
         _ => Ok(()),
     }
 }

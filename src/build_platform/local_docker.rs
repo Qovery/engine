@@ -5,13 +5,14 @@ use chrono::Duration;
 use sysinfo::{Disk, DiskExt, SystemExt};
 
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
+use crate::cmd::utilities::QoveryCommand;
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
+use crate::git;
 use crate::git::checkout_submodules;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
-use crate::{cmd, git};
 
 const BUILD_DURATION_TIMEOUT_MIN: i64 = 30;
 
@@ -42,14 +43,12 @@ impl LocalDocker {
     }
 
     fn image_does_exist(&self, image: &Image) -> Result<bool, EngineError> {
-        Ok(matches!(
-            crate::cmd::utilities::exec(
-                "docker",
-                vec!["image", "inspect", image.name_with_tag().as_str()],
-                &self.get_docker_host_envs(),
-            ),
-            Ok(_)
-        ))
+        let mut cmd = QoveryCommand::new(
+            "docker",
+            &vec!["image", "inspect", image.name_with_tag().as_str()],
+            &self.get_docker_host_envs(),
+        );
+        Ok(matches!(cmd.exec(), Ok(_)))
     }
 
     fn get_docker_host_envs(&self) -> Vec<(&str, &str)> {
@@ -101,37 +100,34 @@ impl LocalDocker {
         docker_args.push(into_dir_docker_style);
 
         // docker build
-        let exit_status = cmd::utilities::exec_with_envs_and_output(
-            "docker",
-            docker_args,
-            self.get_docker_host_envs(),
+        let mut cmd = QoveryCommand::new("docker", &docker_args, &self.get_docker_host_envs());
+
+        let exit_status = cmd.exec_with_timeout(
+            Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
             |line| {
-                let line_string = line.unwrap();
-                info!("{}", line_string.as_str());
+                info!("{}", line);
 
                 lh.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Application {
                         id: build.image.application_id.clone(),
                     },
                     ProgressLevel::Info,
-                    Some(line_string.as_str()),
+                    Some(line),
                     self.context.execution_id(),
                 ));
             },
             |line| {
-                let line_string = line.unwrap();
-                error!("{}", line_string.as_str());
+                error!("{}", line);
 
                 lh.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Application {
                         id: build.image.application_id.clone(),
                     },
                     ProgressLevel::Warn,
-                    Some(line_string.as_str()),
+                    Some(line),
                     self.context.execution_id(),
                 ));
             },
-            Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
         );
 
         match exit_status {
@@ -161,7 +157,7 @@ impl LocalDocker {
 
         let args = self.context.docker_build_options();
 
-        let mut exit_status: Result<Vec<String>, SimpleError> =
+        let mut exit_status: Result<(), SimpleError> =
             Err(SimpleError::new(SimpleErrorKind::Other, Some("no builder names")));
 
         for builder_name in BUILDPACKS_BUILDERS.iter() {
@@ -211,38 +207,36 @@ impl LocalDocker {
             }
 
             // buildpacks build
-            exit_status = cmd::utilities::exec_with_envs_and_output(
-                "pack",
-                buildpacks_args,
-                self.get_docker_host_envs(),
-                |line| {
-                    let line_string = line.unwrap();
-                    info!("{}", line_string.as_str());
+            let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
+            exit_status = cmd
+                .exec_with_timeout(
+                    Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
+                    |line| {
+                        info!("{}", line);
 
-                    lh.deployment_in_progress(ProgressInfo::new(
-                        ProgressScope::Application {
-                            id: build.image.application_id.clone(),
-                        },
-                        ProgressLevel::Info,
-                        Some(line_string.as_str()),
-                        self.context.execution_id(),
-                    ));
-                },
-                |line| {
-                    let line_string = line.unwrap();
-                    error!("{}", line_string.as_str());
+                        lh.deployment_in_progress(ProgressInfo::new(
+                            ProgressScope::Application {
+                                id: build.image.application_id.clone(),
+                            },
+                            ProgressLevel::Info,
+                            Some(line),
+                            self.context.execution_id(),
+                        ));
+                    },
+                    |line| {
+                        error!("{}", line);
 
-                    lh.deployment_in_progress(ProgressInfo::new(
-                        ProgressScope::Application {
-                            id: build.image.application_id.clone(),
-                        },
-                        ProgressLevel::Warn,
-                        Some(line_string.as_str()),
-                        self.context.execution_id(),
-                    ));
-                },
-                Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
-            );
+                        lh.deployment_in_progress(ProgressInfo::new(
+                            ProgressScope::Application {
+                                id: build.image.application_id.clone(),
+                            },
+                            ProgressLevel::Warn,
+                            Some(line),
+                            self.context.execution_id(),
+                        ));
+                    },
+                )
+                .map_err(|err| SimpleError::new(SimpleErrorKind::Other, Some(format!("{}", err))));
 
             if exit_status.is_ok() {
                 // quit now if the builder successfully build the app
@@ -543,22 +537,18 @@ fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
     ];
 
     for prune in all_prunes_commands {
-        match cmd::utilities::exec_with_envs_and_output(
-            "docker",
-            prune.clone(),
-            envs.clone(),
-            |line| {
-                let line_string = line.unwrap_or_default();
-                debug!("{}", line_string.as_str());
-            },
-            |line| {
-                let line_string = line.unwrap_or_default();
-                debug!("{}", line_string.as_str());
-            },
+        let mut cmd = QoveryCommand::new("docker", &prune, &envs);
+        match cmd.exec_with_timeout(
             Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
+            |line| {
+                debug!("{}", line);
+            },
+            |line| {
+                debug!("{}", line);
+            },
         ) {
             Ok(_) => {}
-            Err(e) => error!("error while puring {}. {:?}", prune[0], e.message),
+            Err(e) => error!("error while puring {}. {:?}", prune[0], e),
         };
     }
 
