@@ -33,6 +33,18 @@ stages:
 # Merge request only
 #
 
+gitguardian-mr:
+  stage: build
+  image: gitguardian/ggshield:latest
+  retry: 0
+  when: always
+  script: ggshield scan ci
+  tags:
+    - vm-250mcpu-1gmem-0g
+  only:
+    - merge_requests
+  interruptible: true
+
 linter-mr:
   stage: build
   retry: 0
@@ -169,6 +181,19 @@ test-all-mr:
 #
 # Dev branch
 #
+
+gitguardian-dev:
+  stage: build
+  image: gitguardian/ggshield:latest
+  retry: 0
+  when: always
+  script: ggshield scan ci
+  tags:
+    - vm-250mcpu-1gmem-0g
+  only:
+    refs:
+      - dev
+  interruptible: true
 
 linter:
   stage: build
@@ -629,6 +654,18 @@ downgrade-engine-dev:
 #
 # Main branch
 #
+
+gitguardian:
+  stage: release
+  image: gitguardian/ggshield:latest
+  retry: 0
+  when: always
+  script: ggshield scan ci
+  tags:
+    - vm-250mcpu-1gmem-0g
+  only:
+    refs:
+      - main
 
 release-image:
   stage: release
