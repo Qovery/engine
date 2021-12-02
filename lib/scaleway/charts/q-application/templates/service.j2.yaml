@@ -12,10 +12,11 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - protocol: TCP
-      name: "p{{ private_port }}"
-      port: {{ private_port }}
-      targetPort: {{ private_port }}
+    {%- for port in ports %}
+    - containerPort: {{ port.port }}
+      name: "p{{ port.port }}"
+      protocol: TCP
+    {%- endfor %}
   selector:
     ownerId: {{ owner_id }}
     appId: {{ id }}

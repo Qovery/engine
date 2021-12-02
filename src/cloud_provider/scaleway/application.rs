@@ -18,7 +18,7 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
-use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper};
+use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper, Port};
 use ::function_name::named;
 
 pub struct Application {
@@ -26,7 +26,7 @@ pub struct Application {
     id: String,
     action: Action,
     name: String,
-    private_port: Option<u16>,
+    ports: Vec<Port>,
     total_cpus: String,
     cpu_burst: String,
     total_ram_in_mib: u32,
@@ -44,7 +44,7 @@ impl Application {
         id: &str,
         action: Action,
         name: &str,
-        private_port: Option<u16>,
+        ports: Vec<Port>,
         total_cpus: String,
         cpu_burst: String,
         total_ram_in_mib: u32,
@@ -60,7 +60,7 @@ impl Application {
             id: id.to_string(),
             action,
             name: name.to_string(),
-            private_port,
+            ports,
             total_cpus,
             cpu_burst,
             total_ram_in_mib,
@@ -146,7 +146,10 @@ impl Service for Application {
     }
 
     fn private_port(&self) -> Option<u16> {
-        self.private_port
+        self.ports
+            .iter()
+            .find(|port| port.publicly_accessible)
+            .map(|port| port.port)
     }
 
     fn start_timeout(&self) -> Timeout<u32> {
@@ -170,7 +173,7 @@ impl Service for Application {
     }
 
     fn publicly_accessible(&self) -> bool {
-        self.private_port.is_some()
+        self.private_port().is_some()
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
@@ -206,6 +209,7 @@ impl Service for Application {
             .collect::<Vec<_>>();
 
         context.insert("environment_variables", &environment_variables);
+        context.insert("ports", &self.ports);
 
         match self.image.registry_name.as_ref() {
             Some(_) => {

@@ -6,7 +6,7 @@ use self::test_utilities::utilities::{
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{Action, Clone2, EnvironmentAction, Storage, StorageType};
+use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
 use test_utilities::utilities::{context, init};
@@ -249,7 +249,15 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
             .applications
             .into_iter()
             .map(|mut app| {
-                app.private_port = Some(3000);
+                app.ports = vec![Port {
+                    id: "zdf7d6aad".to_string(),
+                    long_id: Default::default(),
+                    port: 3000,
+                    public_port: Some(443),
+                    name: None,
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                }];
                 app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
                 app.branch = "simple-node-app".to_string();
                 app.dockerfile_path = None;
@@ -309,7 +317,15 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
             .applications
             .into_iter()
             .map(|mut app| {
-                app.private_port = None;
+                app.ports = vec![Port {
+                    id: "zdf7d6aad".to_string(),
+                    long_id: Default::default(),
+                    port: 3000,
+                    public_port: Some(443),
+                    name: None,
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                }];
                 app.commit_id = "4f35f4ab3e98426c5a3eaa91e788ff8ab466f19a".to_string();
                 app.branch = "buildpack-process".to_string();
                 app.dockerfile_path = None;

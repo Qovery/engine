@@ -61,9 +61,11 @@ spec:
             {%- endfor %}
             {%- if private_port %}
           ports:
-            - containerPort: {{ private_port }}
-              name: "p{{ private_port }}"
+            {%- for port in ports %}
+            - containerPort: {{ port.port }}
+              name: "p{{ port.port }}"
               protocol: TCP
+            {%- endfor %}
           readinessProbe:
             tcpSocket:
               port: {{ private_port }}
