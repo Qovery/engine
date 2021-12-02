@@ -250,7 +250,7 @@ pub struct ServerVersion {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Helm {
+pub struct HelmListItem {
     pub name: String,
     pub namespace: String,
     pub revision: String,

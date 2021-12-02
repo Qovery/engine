@@ -2,10 +2,10 @@ use dirs::home_dir;
 use retry::delay::Fixed;
 use retry::OperationResult;
 
-use crate::cmd::utilities::exec_with_envs_and_output;
+use crate::cmd::utilities::QoveryCommand;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
+use crate::error::SimpleErrorKind::Other;
 use crate::error::{SimpleError, SimpleErrorKind};
-use chrono::Duration;
 use rand::Rng;
 use retry::Error::Operation;
 use std::{env, fs, thread, time};
@@ -209,30 +209,32 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Si
 
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    let result = exec_with_envs_and_output(
-        format!("{} terraform", root_dir).as_str(),
-        args,
-        vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
-        |line: Result<String, std::io::Error>| {
-            let output = line.unwrap();
-            stdout.push(output.clone());
-            info!("{}", &output)
+    let mut cmd = QoveryCommand::new(
+        "terraform",
+        &args,
+        &vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
+    );
+    cmd.set_current_dir(root_dir);
+
+    let result = cmd.exec_with_output(
+        |line| {
+            info!("{}", line);
+            stdout.push(line);
         },
-        |line: Result<String, std::io::Error>| {
-            let output = line.unwrap();
-            stderr.push(output.clone());
-            error!("{}", &output);
+        |line| {
+            error!("{}", line);
+            stderr.push(line);
         },
-        Duration::max_value(),
     );
 
     stdout.extend(stderr);
 
     match result {
-        Ok(_) => Ok(result.unwrap()),
-        Err(mut e) => {
-            e.message = Some(stdout.join("\n"));
-            Err(e)
+        Ok(_) => Ok(stdout),
+        Err(e) => {
+            debug!("Terraform endend in error {:?}", e);
+            let err = SimpleError::new(Other, Some(stdout.join("\n")));
+            Err(err)
         }
     }
 }

@@ -9,7 +9,7 @@ use rusoto_ecr::{
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
-use crate::cmd;
+use crate::cmd::utilities::QoveryCommand;
 use crate::container_registry::docker::docker_tag_and_push_image;
 use crate::container_registry::{ContainerRegistry, Kind, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
@@ -381,9 +381,9 @@ impl ContainerRegistry for ECR {
             }
         };
 
-        if let Err(_) = cmd::utilities::exec(
+        let mut cmd = QoveryCommand::new(
             "docker",
-            vec![
+            &vec![
                 "login",
                 "-u",
                 access_token.as_str(),
@@ -392,7 +392,9 @@ impl ContainerRegistry for ECR {
                 endpoint_url.as_str(),
             ],
             &self.docker_envs(),
-        ) {
+        );
+
+        if let Err(_) = cmd.exec() {
             return Err(self.engine_error(
                 EngineErrorCause::User(
                     "Your ECR account seems to be no longer valid (bad Credentials). \

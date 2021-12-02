@@ -2,11 +2,11 @@ use std::ffi::OsStr;
 use std::io::{BufRead, BufReader};
 use std::io::{Error, ErrorKind};
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 
+use crate::cmd::utilities::CommandError::{ExecutionError, ExitStatusError, TimeoutError};
 use crate::cmd::utilities::CommandOutputType::{STDERR, STDOUT};
-use crate::error::SimpleErrorKind::Other;
-use crate::error::{SimpleError, SimpleErrorKind};
+
 use chrono::Duration;
 use itertools::Itertools;
 use std::time::Instant;
@@ -17,244 +17,183 @@ enum CommandOutputType {
     STDERR(Result<String, std::io::Error>),
 }
 
-fn command<P>(binary: P, args: Vec<&str>, envs: &[(&str, &str)], use_output: bool) -> Command
-where
-    P: AsRef<Path>,
-{
-    let s_binary = binary
-        .as_ref()
-        .to_str()
-        .unwrap()
-        .split_whitespace()
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>();
+#[derive(thiserror::Error, Debug)]
+pub enum CommandError {
+    #[error("Error while executing command")]
+    ExecutionError(#[from] std::io::Error),
 
-    let (current_dir, _binary) = if s_binary.len() == 1 {
-        (None, s_binary.first().unwrap().clone())
-    } else {
-        (
-            Some(s_binary.first().unwrap().clone()),
-            s_binary.get(1).unwrap().clone(),
-        )
-    };
+    #[error("Command terminated with a non success exit status code: {0}")]
+    ExitStatusError(ExitStatus),
 
-    let mut cmd = Command::new(&_binary);
-    if use_output {
-        cmd.args(&args).stdout(Stdio::piped()).stderr(Stdio::piped());
-    } else {
-        cmd.args(&args).stdout(Stdio::null()).stderr(Stdio::null());
-    }
-
-    if let Some(current_dir) = current_dir {
-        cmd.current_dir(current_dir);
-    }
-
-    envs.iter().for_each(|(k, v)| {
-        cmd.env(k, v);
-    });
-
-    cmd
+    #[error("Command killed due to timeout: {0}")]
+    TimeoutError(String),
 }
 
-pub fn exec<P>(binary: P, args: Vec<&str>, envs: &[(&str, &str)]) -> Result<(), SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let command_string = command_to_string(binary.as_ref(), &args, &envs);
-
-    info!("command: {}", command_string.as_str());
-
-    let exit_status = match command(binary, args, envs, false).spawn().unwrap().wait() {
-        Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
-    };
-
-    if exit_status.success() {
-        return Ok(());
-    }
-
-    Err(SimpleError::new(
-        SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
-    ))
+pub struct QoveryCommand {
+    command: Command,
 }
 
-fn _with_output<F, X>(mut child: Child, mut stdout_output: F, mut stderr_output: X) -> Child
-where
-    F: FnMut(Result<String, Error>),
-    X: FnMut(Result<String, Error>),
-{
-    let stdout_reader = BufReader::new(child.stdout.as_mut().unwrap());
-    for line in stdout_reader.lines() {
-        stdout_output(line);
+impl QoveryCommand {
+    pub fn new<P: AsRef<Path>>(binary: P, args: &[&str], envs: &[(&str, &str)]) -> QoveryCommand {
+        let mut command = Command::new(binary.as_ref().as_os_str());
+        command.args(args);
+
+        envs.iter().for_each(|(k, v)| {
+            command.env(k, v);
+        });
+
+        QoveryCommand { command }
     }
 
-    let stderr_reader = BufReader::new(child.stderr.as_mut().unwrap());
-    for line in stderr_reader.lines() {
-        stderr_output(line);
+    pub fn set_current_dir<P: AsRef<Path>>(&mut self, root_dir: P) {
+        self.command.current_dir(root_dir);
     }
 
-    child
-}
+    pub fn exec(&mut self) -> Result<(), CommandError> {
+        info!("command: {:?}", self.command);
 
-pub fn exec_with_output<P, F, X>(
-    binary: P,
-    args: Vec<&str>,
-    stdout_output: F,
-    stderr_output: X,
-) -> Result<(), SimpleError>
-where
-    P: AsRef<Path>,
-    F: FnMut(Result<String, Error>),
-    X: FnMut(Result<String, Error>),
-{
-    let command_string = command_to_string(binary.as_ref(), &args, &[]);
-    info!("command: {}", command_string.as_str());
+        let mut cmd_handle = self
+            .command
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(ExecutionError)?;
 
-    let mut child = _with_output(
-        command(binary, args, &[], true).spawn().unwrap(),
-        stdout_output,
-        stderr_output,
-    );
+        let exit_status = cmd_handle.wait().map_err(ExecutionError)?;
 
-    let exit_status = match child.wait() {
-        Ok(x) => x,
-        Err(err) => return Err(SimpleError::from(err)),
-    };
+        if !exit_status.success() {
+            debug!(
+                "command: {:?} terminated with error exist status {:?}",
+                self.command, exit_status
+            );
+            return Err(ExitStatusError(exit_status));
+        }
 
-    if exit_status.success() {
-        return Ok(());
+        Ok(())
     }
 
-    Err(SimpleError::new(
-        SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
-    ))
-}
+    pub fn exec_with_output<STDOUT, STDERR>(
+        &mut self,
+        stdout_output: STDOUT,
+        stderr_output: STDERR,
+    ) -> Result<(), CommandError>
+    where
+        STDOUT: FnMut(String),
+        STDERR: FnMut(String),
+    {
+        self.exec_with_timeout(Duration::max_value(), stdout_output, stderr_output)
+    }
 
-pub fn exec_with_envs_and_output<P, F, X>(
-    binary: P,
-    args: Vec<&str>,
-    envs: Vec<(&str, &str)>,
-    mut stdout_output: F,
-    mut stderr_output: X,
-    timeout: Duration,
-) -> Result<Vec<String>, SimpleError>
-where
-    P: AsRef<Path>,
-    F: FnMut(Result<String, Error>),
-    X: FnMut(Result<String, Error>),
-{
-    assert!(timeout.num_seconds() > 0, "Timeout cannot be a 0 or negative duration");
+    pub fn exec_with_timeout<STDOUT, STDERR>(
+        &mut self,
+        timeout: Duration,
+        mut stdout_output: STDOUT,
+        mut stderr_output: STDERR,
+    ) -> Result<(), CommandError>
+    where
+        STDOUT: FnMut(String),
+        STDERR: FnMut(String),
+    {
+        assert!(timeout.num_seconds() > 0, "Timeout cannot be a 0 or negative duration");
 
-    let command_string = command_to_string(binary.as_ref(), &args, &envs);
-    info!(
-        "command with {}m timeout: {}",
-        timeout.num_minutes(),
-        command_string.as_str()
-    );
+        info!("command: {:?}", self.command);
+        let mut cmd_handle = self
+            .command
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(ExecutionError)?;
 
-    // Start the process
-    // TODO(benjaminch): Make sure logging context is properly injected in thread here
-    let mut child_process = command(binary, args, &envs, true).spawn().unwrap();
-    let process_start_time = Instant::now();
+        let process_start_time = Instant::now();
 
-    // Read stdout/stderr until timeout is reached
-    let reader_timeout = std::time::Duration::from_secs(10.min(timeout.num_seconds() as u64));
-    let stdout_reader = BufReader::new(TimeoutReader::new(child_process.stdout.take().unwrap(), reader_timeout))
+        // Read stdout/stderr until timeout is reached
+        let reader_timeout = std::time::Duration::from_secs(10.min(timeout.num_seconds() as u64));
+        let stdout = cmd_handle.stdout.take().ok_or(ExecutionError(Error::new(
+            ErrorKind::BrokenPipe,
+            "Cannot get stdout for command",
+        )))?;
+        let stdout_reader = BufReader::new(TimeoutReader::new(stdout, reader_timeout))
+            .lines()
+            .map(STDOUT);
+
+        let stderr = cmd_handle.stderr.take().ok_or(ExecutionError(Error::new(
+            ErrorKind::BrokenPipe,
+            "Cannot get stderr for command",
+        )))?;
+        let stderr_reader = BufReader::new(TimeoutReader::new(
+            stderr,
+            std::time::Duration::from_secs(0), // don't block on stderr
+        ))
         .lines()
-        .map(STDOUT);
+        .map(STDERR);
 
-    let stderr_reader = BufReader::new(TimeoutReader::new(
-        child_process.stderr.take().unwrap(),
-        std::time::Duration::from_secs(0), // don't block on stderr
-    ))
-    .lines()
-    .map(STDERR);
-    let mut command_output = Vec::new();
-
-    for line in stdout_reader.interleave(stderr_reader) {
-        match line {
-            STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {}
-            STDOUT(line) => {
-                if let Ok(x) = &line {
-                    command_output.push(x.to_string())
-                }
-                stdout_output(line)
+        for line in stdout_reader.interleave(stderr_reader) {
+            match line {
+                STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {}
+                STDOUT(Ok(line)) => stdout_output(line),
+                STDERR(Ok(line)) => stderr_output(line),
+                STDOUT(Err(err)) => error!("Error on stdout of cmd {:?}: {:?}", self.command, err),
+                STDERR(Err(err)) => error!("Error on stderr of cmd {:?}: {:?}", self.command, err),
             }
-            STDERR(line) => {
-                if let Ok(x) = &line {
-                    command_output.push(x.to_string())
-                }
-                stderr_output(line)
-            }
-        }
 
-        if (process_start_time.elapsed().as_secs() as i64) >= timeout.num_seconds() {
-            break;
-        }
-    }
-
-    // Wait for the process to exit before reaching the timeout
-    // If not, we just kill it
-    let exit_status;
-    loop {
-        match child_process.try_wait() {
-            Ok(Some(status)) => {
-                exit_status = status;
+            if (process_start_time.elapsed().as_secs() as i64) >= timeout.num_seconds() {
                 break;
             }
-            Ok(None) => {
-                if (process_start_time.elapsed().as_secs() as i64) < timeout.num_seconds() {
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                    continue;
+        }
+
+        // Wait for the process to exit before reaching the timeout
+        // If not, we just kill it
+        let exit_status;
+        loop {
+            match cmd_handle.try_wait() {
+                Ok(Some(status)) => {
+                    exit_status = status;
+                    break;
                 }
+                Ok(None) => {
+                    if (process_start_time.elapsed().as_secs() as i64) < timeout.num_seconds() {
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        continue;
+                    }
 
-                // Timeout !
-                warn!(
-                    "Killing process {} due to timeout {}m reached",
-                    command_string,
-                    timeout.num_minutes()
-                );
-                let _ = child_process
-                    .kill() //Fire
-                    .map(|_| child_process.wait())
-                    .map_err(|err| error!("Cannot kill process {:?} {}", child_process, err));
+                    // Timeout !
+                    let msg = format!(
+                        "Killing process {:?} due to timeout {}m reached",
+                        self.command,
+                        timeout.num_minutes()
+                    );
+                    warn!("{}", msg);
 
-                return Err(SimpleError::new(
-                    Other,
-                    Some(format!("Image build timeout after {} seconds", timeout.num_seconds())),
-                ));
-            }
-            Err(err) => return Err(SimpleError::from(err)),
-        };
+                    let _ = cmd_handle
+                        .kill() //Fire
+                        .map(|_| cmd_handle.wait())
+                        .map_err(|err| error!("Cannot kill process {:?} {}", cmd_handle, err));
+
+                    return Err(TimeoutError(msg));
+                }
+                Err(err) => return Err(ExecutionError(err)),
+            };
+        }
+
+        if !exit_status.success() {
+            debug!(
+                "command: {:?} terminated with error exist status {:?}",
+                self.command, exit_status
+            );
+            return Err(ExitStatusError(exit_status));
+        }
+
+        Ok(())
     }
-
-    // Process exited
-    if exit_status.success() {
-        return Ok(command_output);
-    }
-
-    Err(SimpleError::new(
-        SimpleErrorKind::Command(exit_status),
-        Some("error while executing an internal command"),
-    ))
 }
 
 // return the output of "binary_name" --version
 pub fn run_version_command_for(binary_name: &str) -> String {
     let mut output_from_cmd = String::new();
-    let _ = exec_with_output(
-        binary_name,
-        vec!["--version"],
-        |r_out| match r_out {
-            Ok(s) => output_from_cmd.push_str(&s),
-            Err(e) => error!("Error while getting stdout from {} {}", binary_name, e),
-        },
-        |r_err| match r_err {
-            Ok(_) => error!("Error executing {}", binary_name),
-            Err(e) => error!("Error while getting stderr from {} {}", binary_name, e),
-        },
+    let mut cmd = QoveryCommand::new(binary_name, &vec!["--version"], Default::default());
+    let _ = cmd.exec_with_output(
+        |r_out| output_from_cmd.push_str(&r_out),
+        |r_err| error!("Error executing {}: {}", binary_name, r_err),
     );
 
     output_from_cmd
@@ -277,32 +216,58 @@ pub fn command_to_string<P>(binary: P, args: &[&str], envs: &[(&str, &str)]) -> 
 where
     P: AsRef<Path>,
 {
-    let _envs = envs.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>();
-
-    format!(
-        "{} {} {}",
-        _envs.join(" "),
-        binary.as_ref().to_str().unwrap(),
-        args.join(" ")
-    )
+    let _envs = envs.iter().map(|(k, v)| format!("{}={}", k, v)).join(" ");
+    format!("{} {:?} {}", _envs, binary.as_ref().as_os_str(), args.join(" "))
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::utilities::exec_with_envs_and_output;
+    use crate::cmd::utilities::{does_binary_exist, run_version_command_for, CommandError, QoveryCommand};
     use chrono::Duration;
 
     #[test]
+    fn test_binary_exist() {
+        assert_eq!(does_binary_exist("sdfsdf"), false);
+        assert_eq!(does_binary_exist("ls"), true);
+        assert_eq!(does_binary_exist("/bin/sh"), true);
+    }
+
+    #[test]
+    fn test_run_version_for_command() {
+        let ret = run_version_command_for("/bin/ls");
+        assert_eq!(ret.is_empty(), false);
+        assert_eq!(ret.contains("GNU"), true)
+    }
+
+    #[test]
+    fn test_error() {
+        let mut cmd = QoveryCommand::new("false", &vec![], &vec![]);
+        assert_eq!(cmd.exec().is_err(), true);
+        assert_eq!(matches!(cmd.exec(), Err(CommandError::ExitStatusError(_))), true);
+    }
+
+    #[test]
     fn test_command_with_timeout() {
-        let ret = exec_with_envs_and_output("sleep", vec!["120"], vec![], |_| {}, |_| {}, Duration::seconds(2));
+        let mut cmd = QoveryCommand::new("sleep", &vec!["120"], &vec![]);
+        let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
+
         assert_eq!(ret.is_err(), true);
-        assert_eq!(ret.err().unwrap().message.unwrap().contains("timeout"), true);
+        match ret.err().unwrap() {
+            CommandError::TimeoutError(_) => {}
+            _ => assert_eq!(true, false),
+        }
 
-        let ret = exec_with_envs_and_output("yes", vec![""], vec![], |_| {}, |_| {}, Duration::seconds(2));
+        let mut cmd = QoveryCommand::new("yes", &vec![], &vec![]);
+        let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
+
         assert_eq!(ret.is_err(), true);
+        match ret.err().unwrap() {
+            CommandError::TimeoutError(_) => {}
+            _ => assert_eq!(true, false),
+        }
 
-        let ret2 = exec_with_envs_and_output("sleep", vec!["1"], vec![], |_| {}, |_| {}, Duration::seconds(5));
-
-        assert_eq!(ret2.is_ok(), true);
+        let mut cmd = QoveryCommand::new("sleep", &vec!["1"], &vec![]);
+        let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
+        assert_eq!(ret.is_ok(), true);
     }
 }

@@ -1,4 +1,5 @@
 use crate::cmd;
+use crate::cmd::utilities::QoveryCommand;
 use crate::container_registry::Kind;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
@@ -54,16 +55,11 @@ pub fn docker_manifest_inspect(
     let binary = "docker";
     let image_full_url = format!("{}/{}", registry_url.as_str(), &image_with_tag);
     let args = vec!["manifest", "inspect", image_full_url.as_str()];
+    let mut raw_output: Vec<String> = vec![];
 
-    return match cmd::utilities::exec_with_envs_and_output(
-        binary,
-        args.clone(),
-        envs.clone(),
-        |_| {},
-        |_| {},
-        Duration::minutes(1),
-    ) {
-        Ok(raw_output) => {
+    let mut cmd = QoveryCommand::new("docker", &args, &envs);
+    return match cmd.exec_with_timeout(Duration::minutes(1), |line| raw_output.push(line), |_| {}) {
+        Ok(_) => {
             let joined = raw_output.join("");
             match serde_json::from_str(&joined) {
                 Ok(extracted_manifest) => Some(extracted_manifest),
@@ -114,7 +110,8 @@ pub fn docker_login(
         registry_pass.as_str(),
     ];
 
-    match cmd::utilities::exec(binary, args.clone(), &docker_envs.clone()) {
+    let mut cmd = QoveryCommand::new(binary, &args, &docker_envs);
+    match cmd.exec() {
         Ok(_) => Ok(()),
         Err(e) => {
             let error_message = format!(
@@ -146,51 +143,41 @@ pub fn docker_tag_and_push_image(
         Kind::ScalewayCr => "Scaleway Registry",
     };
 
-    match retry::retry(Fibonacci::from_millis(3000).take(5), || {
-        match cmd::utilities::exec("docker", vec!["tag", &image_with_tag, dest.as_str()], &docker_envs) {
-            Ok(_) => OperationResult::Ok(()),
-            Err(e) => {
-                info!("failed to tag image {}, retrying...", image_with_tag);
-                OperationResult::Retry(e)
-            }
+    let mut cmd = QoveryCommand::new("docker", &vec!["tag", &image_with_tag, dest.as_str()], &docker_envs);
+    match retry::retry(Fibonacci::from_millis(3000).take(5), || match cmd.exec() {
+        Ok(_) => OperationResult::Ok(()),
+        Err(e) => {
+            info!("failed to tag image {}, retrying...", image_with_tag);
+            OperationResult::Retry(e)
         }
     }) {
         Err(Operation { error, .. }) => {
             return Err(SimpleError::new(
                 SimpleErrorKind::Other,
-                Some(format!("failed to tag image {}: {:?}", image_with_tag, error.message)),
+                Some(format!("failed to tag image {}: {:?}", image_with_tag, error)),
             ))
         }
         _ => {}
     }
 
-    match retry::retry(
-        Fibonacci::from_millis(5000).take(5),
-        || match cmd::utilities::exec_with_envs_and_output(
-            "docker",
-            vec!["push", dest.as_str()],
-            docker_envs.clone(),
-            |line| {
-                let line_string = line.unwrap_or_default();
-                info!("{}", line_string.as_str());
-            },
-            |line| {
-                let line_string = line.unwrap_or_default();
-                error!("{}", line_string.as_str());
-            },
+    let mut cmd = QoveryCommand::new("docker", &vec!["push", dest.as_str()], &docker_envs);
+    match retry::retry(Fibonacci::from_millis(5000).take(5), || {
+        match cmd.exec_with_timeout(
             Duration::minutes(10),
+            |line| info!("{}", line),
+            |line| error!("{}", line),
         ) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
                 warn!(
                     "failed to push image {} on {}, {:?} retrying...",
-                    image_with_tag, registry_provider, e.message
+                    image_with_tag, registry_provider, e
                 );
                 OperationResult::Retry(e)
             }
-        },
-    ) {
-        Err(Operation { error, .. }) => Err(error),
+        }
+    }) {
+        Err(Operation { error, .. }) => Err(SimpleError::new(SimpleErrorKind::Other, Some(error.to_string()))),
         Err(e) => Err(SimpleError::new(
             SimpleErrorKind::Other,
             Some(format!(

@@ -4,13 +4,14 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
+use crate::cmd::utilities::QoveryCommand;
 use crate::container_registry::docker::docker_tag_and_push_image;
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
 use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
-use crate::{cmd, utilities};
+use crate::utilities;
 use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::OperationResult;
@@ -313,11 +314,12 @@ impl ContainerRegistry for DOCR {
             Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
         };
 
-        if let Err(_) = cmd::utilities::exec(
+        let mut cmd = QoveryCommand::new(
             "doctl",
-            vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
+            &vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
             &vec![],
-        ) {
+        );
+        if let Err(_) = cmd.exec() {
             return Err(self.engine_error(
                 EngineErrorCause::User(
                     "Your DOCR account seems to be no longer valid (bad Credentials). \

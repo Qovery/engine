@@ -1,10 +1,12 @@
 use std::fs::File;
 
+use crate::cmd::utilities::QoveryCommand;
 use retry::delay::Fibonacci;
 use retry::{Error, OperationResult};
 
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause};
+use crate::error::SimpleErrorKind::Other;
+use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError};
 use crate::models::{Context, StringPath};
 use crate::object_storage::{Kind, ObjectStorage};
 
@@ -58,32 +60,36 @@ impl ObjectStorage for S3 {
     }
 
     fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+        let mut cmd = QoveryCommand::new(
+            "aws",
+            &vec!["s3api", "create-bucket", "--bucket", bucket_name],
+            &self.credentials_environment_variables(),
+        );
         cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context().execution_id(),
-            crate::cmd::utilities::exec(
-                "aws",
-                vec!["s3api", "create-bucket", "--bucket", bucket_name],
-                &self.credentials_environment_variables(),
-            ),
+            cmd.exec()
+                .map_err(|err| SimpleError::new(Other, Some(format!("{}", err)))),
         )
     }
 
     fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+        let mut cmd = QoveryCommand::new(
+            "aws",
+            &vec![
+                "s3",
+                "rb",
+                "--force",
+                "--bucket",
+                format!("s3://{}", bucket_name).as_str(),
+            ],
+            &self.credentials_environment_variables(),
+        );
         cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context().execution_id(),
-            crate::cmd::utilities::exec(
-                "aws",
-                vec![
-                    "s3",
-                    "rb",
-                    "--force",
-                    "--bucket",
-                    format!("s3://{}", bucket_name).as_str(),
-                ],
-                &self.credentials_environment_variables(),
-            ),
+            cmd.exec()
+                .map_err(|err| SimpleError::new(Other, Some(format!("{}", err)))),
         )
     }
 
@@ -110,16 +116,18 @@ impl ObjectStorage for S3 {
         }
 
         // retrieve config file from object storage
+        let mut cmd = QoveryCommand::new(
+            "aws",
+            &vec!["s3", "cp", s3_url.as_str(), file_path.as_str()],
+            &self.credentials_environment_variables(),
+        );
         let result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
             // we choose to use the AWS CLI instead of Rusoto S3 due to reliability problems we faced.
             let result = cast_simple_error_to_engine_error(
                 self.engine_error_scope(),
                 self.context().execution_id(),
-                crate::cmd::utilities::exec(
-                    "aws",
-                    vec!["s3", "cp", s3_url.as_str(), file_path.as_str()],
-                    &self.credentials_environment_variables(),
-                ),
+                cmd.exec()
+                    .map_err(|err| SimpleError::new(Other, Some(format!("{}", err)))),
             );
 
             match result {
@@ -151,19 +159,21 @@ impl ObjectStorage for S3 {
     }
 
     fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), EngineError> {
+        let mut cmd = QoveryCommand::new(
+            "aws",
+            &vec![
+                "s3",
+                "cp",
+                file_path,
+                format!("s3://{}/{}", bucket_name, object_key).as_str(),
+            ],
+            &self.credentials_environment_variables(),
+        );
         cast_simple_error_to_engine_error(
             self.engine_error_scope(),
             self.context().execution_id(),
-            crate::cmd::utilities::exec(
-                "aws",
-                vec![
-                    "s3",
-                    "cp",
-                    file_path,
-                    format!("s3://{}/{}", bucket_name, object_key).as_str(),
-                ],
-                &self.credentials_environment_variables(),
-            ),
+            cmd.exec()
+                .map_err(|err| SimpleError::new(Other, Some(format!("{}", err)))),
         )
     }
 }

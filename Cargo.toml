@@ -27,6 +27,7 @@ lazy_static = "1.4.0"
 uuid = { version = "0.8", features = ["v4", "serde"] }
 url = "2.2.2"
 function_name = "0.2.0"
+thiserror = "1.0.30"
 
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 

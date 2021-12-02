@@ -1340,6 +1340,7 @@ mod tests {
         for tc in test_cases {
             // execute:
             let result = Domain::new(tc.input.clone());
+            tc.expected_wildcarded_output; // to avoid warning
 
             // verify:
             assert_eq!(
