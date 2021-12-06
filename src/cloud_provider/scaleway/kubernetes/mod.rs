@@ -24,7 +24,7 @@ use crate::error::{
     SimpleError, SimpleErrorKind,
 };
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::logger::{LogLevel, Logger};
 use crate::models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
@@ -368,11 +368,23 @@ impl<'a> Kapsule<'a> {
     }
 
     fn create(&self) -> Result<(), LegacyEngineError> {
+        let event_details = EventDetails::new(
+            self.cloud_provider.kind(),
+            QoveryIdentifier::from(self.context.organization_id().to_string()),
+            QoveryIdentifier::from(self.context.cluster_id().to_string()),
+            QoveryIdentifier::from(self.context.execution_id().to_string()),
+            Stage::Infrastructure(InfrastructureStep::Create),
+            Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
+        );
+
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        self.send_to_customer(
-            format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
+        // TODO(benjaminch): remove legacy logger
+        let message = format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id());
+        self.send_to_customer(message.as_str(), &listeners_helper);
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Deploying(event_details.clone(), EventMessage::new(message.to_string(), None)),
         );
 
         // upgrade cluster instead if required
@@ -386,7 +398,14 @@ impl<'a> Kapsule<'a> {
                     if x.required_upgrade_on.is_some() {
                         return self.upgrade_with_status(x);
                     }
-                    info!("Kubernetes cluster upgrade not required");
+
+                    self.logger.log(
+                        LogLevel::Info,
+                        EngineEvent::Deploying(
+                            event_details.clone(),
+                            EventMessage::new("Kubernetes cluster upgrade not required".to_string(), None),
+                        ),
+                    );
                 }
                 Err(e) => error!(
                     "Error detected, upgrade won't occurs, but standard deployment. {:?}",

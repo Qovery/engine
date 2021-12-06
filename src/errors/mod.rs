@@ -34,45 +34,6 @@ impl SimpleError {
     }
 }
 
-#[derive(Debug)]
-pub struct UserEngineError {
-    event_details: EventDetails,
-    log_message: String,
-    raw_message_safe: Option<String>,
-    link: Option<Url>,
-    hint_message: Option<String>,
-}
-
-impl UserEngineError {
-    pub fn new(
-        event_details: EventDetails,
-        log_message: String,
-        raw_message_safe: Option<String>,
-        link: Option<Url>,
-        hint_message: Option<String>,
-    ) -> Self {
-        UserEngineError {
-            event_details,
-            log_message,
-            raw_message_safe,
-            link,
-            hint_message,
-        }
-    }
-}
-
-impl From<EngineError> for UserEngineError {
-    fn from(error: EngineError) -> Self {
-        UserEngineError::new(
-            error.event_details,
-            error.user_log_message,
-            error.raw_message_safe,
-            error.link,
-            error.hint_message,
-        )
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct EngineError {
     tag: Tag,
@@ -86,6 +47,9 @@ pub struct EngineError {
 }
 
 impl EngineError {
+    pub fn tag(&self) -> &Tag {
+        &self.tag
+    }
     pub fn event_details(&self) -> &EventDetails {
         &self.event_details
     }
@@ -128,10 +92,6 @@ impl EngineError {
             link,
             hint_message,
         }
-    }
-
-    pub fn to_user_error(self) -> UserEngineError {
-        UserEngineError::from(self)
     }
 
     pub fn to_legacy_engine_error(self) -> LegacyEngineError {

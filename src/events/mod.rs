@@ -5,17 +5,39 @@ extern crate url;
 use crate::cloud_provider::Kind;
 use crate::errors::EngineError;
 use crate::models::QoveryIdentifier;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
 pub enum EngineEvent {
     Error(EngineError),
     Waiting,
-    Deploying,
+    Deploying(EventDetails, EventMessage),
     Pausing,
     Deleting,
     Deployed,
     Paused,
     Deleted,
+}
+
+#[derive(Debug, Clone)]
+pub struct EventMessage {
+    raw: String,
+    safe: Option<String>,
+}
+
+impl EventMessage {
+    pub fn new(raw: String, safe: Option<String>) -> Self {
+        EventMessage { raw, safe }
+    }
+}
+
+impl Display for EventMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match &self.safe {
+            Some(safe) => safe,
+            None => &self.raw,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]

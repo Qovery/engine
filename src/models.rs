@@ -50,6 +50,12 @@ impl QoveryIdentifier {
     }
 }
 
+impl From<String> for QoveryIdentifier {
+    fn from(s: String) -> Self {
+        QoveryIdentifier::new(s)
+    }
+}
+
 impl Display for QoveryIdentifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.raw.as_str())
