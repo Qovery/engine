@@ -50,6 +50,7 @@ use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::cmd::utilities::QoveryCommand;
 use qovery_engine::error::SimpleErrorKind::Other;
+use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use qovery_engine::object_storage::ObjectStorage;
@@ -57,6 +58,13 @@ use qovery_engine::runtime::block_on;
 use time::Instant;
 
 pub fn context() -> Context {
+    // TODO(benjaminch): Migrate this
+    context_full("id-for-test", "name-for-test")
+}
+
+pub fn context_full(organization_id: &str, cluster_id: &str) -> Context {
+    let organization_id = organization_id.to_string();
+    let cluster_id = cluster_id.to_string();
     let execution_id = execution_id();
     let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
@@ -91,6 +99,8 @@ pub fn context() -> Context {
     let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
 
     Context::new(
+        organization_id,
+        cluster_id,
         execution_id,
         home_dir,
         lib_root_dir,
@@ -99,6 +109,10 @@ pub fn context() -> Context {
         enabled_features,
         Option::from(metadata),
     )
+}
+
+pub fn logger<'a>() -> Box<dyn Logger> {
+    Box::new(StdIoLogger::new())
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

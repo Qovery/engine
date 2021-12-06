@@ -33,6 +33,7 @@ use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::Engine;
+use qovery_engine::logger::Logger;
 use qovery_engine::models::DatabaseMode::CONTAINER;
 use qovery_engine::transaction::DeploymentOption;
 use std::collections::BTreeMap;
@@ -45,7 +46,7 @@ pub enum ClusterDomain {
 }
 
 pub trait Cluster<T, U> {
-    fn docker_cr_engine(context: &Context) -> Engine;
+    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> Engine;
     fn cloud_provider(context: &Context) -> Box<T>;
     fn kubernetes_nodes() -> Vec<NodeGroups>;
     fn kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_id: Option<String>) -> U;
@@ -57,18 +58,21 @@ pub trait Infrastructure {
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
+        logger: Box<dyn Logger>,
     ) -> TransactionResult;
     fn pause_environment(
         &self,
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
+        logger: Box<dyn Logger>,
     ) -> TransactionResult;
     fn delete_environment(
         &self,
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
+        logger: Box<dyn Logger>,
     ) -> TransactionResult;
 }
 
@@ -78,11 +82,12 @@ impl Infrastructure for Environment {
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
+        logger: Box<dyn Logger>,
     ) -> TransactionResult {
         let engine: Engine = match provider_kind {
-            Kind::Aws => AWS::docker_cr_engine(context),
-            Kind::Do => DO::docker_cr_engine(context),
-            Kind::Scw => Scaleway::docker_cr_engine(context),
+            Kind::Aws => AWS::docker_cr_engine(context, logger.clone()),
+            Kind::Do => DO::docker_cr_engine(context, logger.clone()),
+            Kind::Scw => Scaleway::docker_cr_engine(context, logger.clone()),
         };
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
@@ -95,7 +100,7 @@ impl Infrastructure for Environment {
             Kind::Scw => Scaleway::cloud_provider(context),
         };
         let k;
-        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider);
+        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider, logger.as_ref());
 
         let _ = tx.deploy_environment_with_options(
             k.as_ref(),
@@ -114,11 +119,12 @@ impl Infrastructure for Environment {
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
+        logger: Box<dyn Logger>,
     ) -> TransactionResult {
         let engine: Engine = match provider_kind {
-            Kind::Aws => AWS::docker_cr_engine(context),
-            Kind::Do => DO::docker_cr_engine(context),
-            Kind::Scw => Scaleway::docker_cr_engine(context),
+            Kind::Aws => AWS::docker_cr_engine(context, logger.clone()),
+            Kind::Do => DO::docker_cr_engine(context, logger.clone()),
+            Kind::Scw => Scaleway::docker_cr_engine(context, logger.clone()),
         };
 
         let session = engine.session().unwrap();
@@ -132,7 +138,7 @@ impl Infrastructure for Environment {
             Kind::Scw => Scaleway::cloud_provider(context),
         };
         let k;
-        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider);
+        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider, logger.as_ref());
 
         let _ = tx.pause_environment(k.as_ref(), &environment_action);
 
@@ -144,11 +150,12 @@ impl Infrastructure for Environment {
         provider_kind: Kind,
         context: &Context,
         environment_action: &EnvironmentAction,
+        logger: Box<dyn Logger>,
     ) -> TransactionResult {
         let engine: Engine = match provider_kind {
-            Kind::Aws => AWS::docker_cr_engine(context),
-            Kind::Do => DO::docker_cr_engine(context),
-            Kind::Scw => Scaleway::docker_cr_engine(context),
+            Kind::Aws => AWS::docker_cr_engine(context, logger.clone()),
+            Kind::Do => DO::docker_cr_engine(context, logger.clone()),
+            Kind::Scw => Scaleway::docker_cr_engine(context, logger.clone()),
         };
 
         let session = engine.session().unwrap();
@@ -162,7 +169,7 @@ impl Infrastructure for Environment {
             Kind::Scw => Scaleway::cloud_provider(context),
         };
         let k;
-        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider);
+        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider, logger.as_ref());
 
         let _ = tx.delete_environment(k.as_ref(), &environment_action);
 
@@ -893,6 +900,7 @@ pub fn environment_only_http_server_router(context: &Context, organization_id: &
 
 pub fn test_db(
     context: Context,
+    logger: Box<dyn Logger>,
     mut environment: Environment,
     secrets: FuncTestsSecrets,
     version: &str,
@@ -990,7 +998,7 @@ pub fn test_db(
     let ea = EnvironmentAction::Environment(environment.clone());
     let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-    match environment.deploy_environment(provider_kind.clone(), &context, &ea) {
+    match environment.deploy_environment(provider_kind.clone(), &context, &ea, logger.clone()) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -1083,7 +1091,7 @@ pub fn test_db(
         }
     }
 
-    match environment_delete.delete_environment(provider_kind.clone(), &context_for_delete, &ea_delete) {
+    match environment_delete.delete_environment(provider_kind.clone(), &context_for_delete, &ea_delete, logger) {
         TransactionResult::Ok => assert!(true),
         TransactionResult::Rollback(_) => assert!(false),
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
@@ -1097,6 +1105,7 @@ pub fn get_environment_test_kubernetes<'a>(
     context: &Context,
     cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
+    logger: &'a dyn Logger,
 ) -> Box<dyn Kubernetes + 'a> {
     let secrets = FuncTestsSecrets::new();
     let k: Box<dyn Kubernetes>;
@@ -1179,6 +1188,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     dns_provider,
                     Scaleway::kubernetes_nodes(),
                     Scaleway::kubernetes_cluster_options(secrets, None),
+                    logger,
                 )
                 .unwrap(),
             );
@@ -1199,6 +1209,7 @@ pub fn get_cluster_test_kubernetes<'a>(
     cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    logger: &'a dyn Logger,
 ) -> Box<dyn Kubernetes + 'a> {
     let k: Box<dyn Kubernetes>;
 
@@ -1252,6 +1263,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     dns_provider,
                     Scaleway::kubernetes_nodes(),
                     Scaleway::kubernetes_cluster_options(secrets, None),
+                    logger,
                 )
                 .unwrap(),
             );
@@ -1265,6 +1277,7 @@ pub fn cluster_test(
     test_name: &str,
     provider_kind: Kind,
     context: Context,
+    logger: Box<dyn Logger>,
     localisation: &str,
     secrets: FuncTestsSecrets,
     test_type: ClusterTestType,
@@ -1285,9 +1298,9 @@ pub fn cluster_test(
 
     let engine;
     match provider_kind {
-        Kind::Aws => engine = AWS::docker_cr_engine(&context),
-        Kind::Do => engine = DO::docker_cr_engine(&context),
-        Kind::Scw => engine = Scaleway::docker_cr_engine(&context),
+        Kind::Aws => engine = AWS::docker_cr_engine(&context, logger.clone()),
+        Kind::Do => engine = DO::docker_cr_engine(&context, logger.clone()),
+        Kind::Scw => engine = Scaleway::docker_cr_engine(&context, logger.clone()),
     };
     let dns_provider = dns_provider_cloudflare(&context, cluster_domain);
     let mut deploy_tx = engine.session().unwrap().transaction();
@@ -1310,6 +1323,7 @@ pub fn cluster_test(
         cp.as_ref(),
         &dns_provider,
         vpc_network_mode.clone(),
+        logger.as_ref(),
     );
 
     // Deploy
@@ -1376,6 +1390,7 @@ pub fn cluster_test(
                 cp.as_ref(),
                 &dns_provider,
                 vpc_network_mode.clone(),
+                logger.as_ref(),
             );
             let mut upgrade_tx = engine.session().unwrap().transaction();
             let mut delete_tx = engine.session().unwrap().transaction();

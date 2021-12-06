@@ -4,13 +4,14 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::EnvironmentAction;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 use test_utilities::digitalocean::{DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION};
-use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, FuncTestsSecrets};
+use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
 
 #[cfg(feature = "test-do-whole-enchilada")]
 #[named]
 #[test]
 fn create_upgrade_and_destroy_doks_cluster_with_env_in_ams_3() {
     let context = context();
+    let logger = logger();
     let region = Region::Amsterdam3;
     let secrets = FuncTestsSecrets::new();
     let organization_id = generate_id();
@@ -37,6 +38,7 @@ fn create_upgrade_and_destroy_doks_cluster_with_env_in_ams_3() {
             function_name!(),
             Kind::Do,
             context.clone(),
+            logger,
             region.as_str(),
             secrets.clone(),
             ClusterTestType::Classic,

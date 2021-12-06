@@ -1,3 +1,4 @@
+use crate::events::Transmitter;
 use std::process::ExitStatus;
 
 pub type Type = String;
@@ -22,10 +23,7 @@ impl EngineError {
             cause,
             scope,
             execution_id: execution_id.into(),
-            message: match message {
-                Some(message) => Some(message.into()),
-                _ => None,
-            },
+            message: message.map(|message| message.into()),
         }
     }
 }
@@ -43,6 +41,24 @@ pub enum EngineErrorScope {
     Database(Id, Type, Name),
     Application(Id, Name),
     Router(Id, Name),
+}
+
+impl From<Transmitter> for EngineErrorScope {
+    fn from(transmitter: Transmitter) -> Self {
+        match transmitter {
+            Transmitter::Engine => EngineErrorScope::Engine,
+            Transmitter::BuildPlatform(id, name) => EngineErrorScope::BuildPlatform(id, name),
+            Transmitter::ContainerRegistry(id, name) => EngineErrorScope::ContainerRegistry(id, name),
+            Transmitter::CloudProvider(id, name) => EngineErrorScope::CloudProvider(id, name),
+            Transmitter::Kubernetes(id, name) => EngineErrorScope::Kubernetes(id, name),
+            Transmitter::DnsProvider(id, name) => EngineErrorScope::DnsProvider(id, name),
+            Transmitter::ObjectStorage(id, name) => EngineErrorScope::ObjectStorage(id, name),
+            Transmitter::Environment(id, name) => EngineErrorScope::Environment(id, name),
+            Transmitter::Database(id, db_type, name) => EngineErrorScope::Database(id, db_type, name),
+            Transmitter::Application(id, name) => EngineErrorScope::Application(id, name),
+            Transmitter::Router(id, name) => EngineErrorScope::Router(id, name),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -69,10 +85,7 @@ impl SimpleError {
     pub fn new<T: Into<String>>(kind: SimpleErrorKind, message: Option<T>) -> Self {
         SimpleError {
             kind,
-            message: match message {
-                Some(message) => Some(message.into()),
-                _ => None,
-            },
+            message: message.map(|message| message.into()),
         }
     }
 }

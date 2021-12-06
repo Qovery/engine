@@ -5,6 +5,7 @@ use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::dns_provider::DnsProvider;
 use crate::error::EngineError;
+use crate::logger::Logger;
 use crate::models::Context;
 use crate::session::Session;
 
@@ -14,6 +15,7 @@ pub struct Engine {
     container_registry: Box<dyn ContainerRegistry>,
     cloud_provider: Box<dyn CloudProvider>,
     dns_provider: Box<dyn DnsProvider>,
+    logger: Box<dyn Logger>,
 }
 
 impl Engine {
@@ -23,6 +25,7 @@ impl Engine {
         container_registry: Box<dyn ContainerRegistry>,
         cloud_provider: Box<dyn CloudProvider>,
         dns_provider: Box<dyn DnsProvider>,
+        logger: Box<dyn Logger>,
     ) -> Engine {
         Engine {
             context,
@@ -30,6 +33,7 @@ impl Engine {
             container_registry,
             cloud_provider,
             dns_provider,
+            logger,
         }
     }
 }
@@ -53,6 +57,10 @@ impl<'a> Engine {
 
     pub fn dns_provider(&self) -> &dyn DnsProvider {
         self.dns_provider.borrow()
+    }
+
+    pub fn logger(&self) -> &dyn Logger {
+        self.logger.borrow()
     }
 
     pub fn is_valid(&self) -> Result<(), EngineError> {

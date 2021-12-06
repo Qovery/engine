@@ -1,7 +1,7 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
+use self::test_utilities::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use tracing::{span, Level};
@@ -27,8 +27,9 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
+        let logger = logger();
         let context = context();
-        let engine = DO::docker_cr_engine(&context);
+        let engine = DO::docker_cr_engine(&context, logger);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
@@ -87,8 +88,9 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
+        let logger = logger();
         let context = context();
-        let engine = DO::docker_cr_engine(&context);
+        let engine = DO::docker_cr_engine(&context, logger);
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 

@@ -1,7 +1,7 @@
 extern crate test_utilities;
 
 use self::test_utilities::cloudflare::dns_provider_cloudflare;
-use self::test_utilities::utilities::{context, engine_run_test, init, FuncTestsSecrets};
+use self::test_utilities::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
 use ::function_name::named;
 use tracing::{span, Level};
 
@@ -27,8 +27,9 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
+        let logger = logger();
         let context = context();
-        let engine = Scaleway::docker_cr_engine(&context);
+        let engine = Scaleway::docker_cr_engine(&context, logger.clone());
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
@@ -52,6 +53,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
             &cloudflare,
             nodes,
             Scaleway::kubernetes_cluster_options(secrets, None),
+            logger.as_ref(),
         )
         .unwrap();
 
@@ -86,8 +88,9 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
+        let logger = logger();
         let context = context();
-        let engine = Scaleway::docker_cr_engine(&context);
+        let engine = Scaleway::docker_cr_engine(&context, logger.clone());
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
@@ -111,6 +114,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
             &cloudflare,
             nodes,
             Scaleway::kubernetes_cluster_options(secrets, None),
+            logger.as_ref(),
         )
         .unwrap();
 

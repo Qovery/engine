@@ -9,6 +9,7 @@ use qovery_engine::cloud_provider::TerraformStateCredentials;
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::Engine;
+use qovery_engine::logger::Logger;
 use qovery_engine::models::Context;
 use tracing::error;
 
@@ -56,7 +57,7 @@ pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
 }
 
 impl Cluster<AWS, Options> for AWS {
-    fn docker_cr_engine(context: &Context) -> Engine {
+    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> Engine {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context));
 
@@ -74,6 +75,7 @@ impl Cluster<AWS, Options> for AWS {
             container_registry,
             cloud_provider,
             dns_provider,
+            logger,
         )
     }
 
