@@ -17,6 +17,7 @@ use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::EngineError;
+use qovery_engine::logger::Logger;
 use qovery_engine::models::{Context, Domain, Environment, EnvironmentAction, Features, Listener, Metadata};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -51,7 +52,12 @@ pub enum RequestError {
 }
 
 impl Request {
-    pub fn engine(&self, context: &Context, progress_listener: Listener) -> Result<Engine, RequestError> {
+    pub fn engine(
+        &self,
+        context: &Context,
+        progress_listener: Listener,
+        logger: &'a dyn Logger,
+    ) -> Result<Engine, RequestError> {
         let mut build_platform = self.build_platform.to_engine_build_platform(&context);
         build_platform.add_listener(progress_listener.clone());
 
@@ -91,6 +97,7 @@ impl Request {
             container_registry,
             cloud_provider,
             dns_provider,
+            logger,
         ))
     }
 
@@ -217,6 +224,7 @@ impl Kubernetes {
         context: &Context,
         cloud_provider: &'a dyn qovery_engine::cloud_provider::CloudProvider,
         dns_provider: &'a dyn qovery_engine::dns_provider::DnsProvider,
+        logger: &'a dyn qovery_engine::logger::Logger,
     ) -> Result<Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a>, EngineError> {
         match self.kind {
             qovery_engine::cloud_provider::kubernetes::Kind::Eks => match EKS::new(
@@ -274,9 +282,10 @@ impl Kubernetes {
                     self.options.clone(),
                 )
                 .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
+                logger,
             ) {
                 Ok(res) => Ok(Box::new(res)),
-                Err(e) => Err(e),
+                Err(e) => Err(e.to_legacy_engine_error()),
             },
         }
     }

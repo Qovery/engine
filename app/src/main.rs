@@ -12,6 +12,7 @@ use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
 use std::sync::Arc;
 
+use std::process::Stdio;
 use std::time::Duration;
 use std::{env, thread};
 use std::{fs, io, process};
@@ -24,12 +25,14 @@ use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
 use uuid::Uuid;
 
 use qovery_engine::cmd;
+use qovery_engine::logger::Logger;
 use qovery_engine::models::Context;
 use utils::Mode;
 
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::ErrorKind::BinVersion;
 use crate::custom_error::{EngineInitError, ErrorKind};
+use crate::logger::core_logger::StdIoLogger;
 
 use crate::models::{StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message};
@@ -40,6 +43,7 @@ use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 
 mod constants;
 mod custom_error;
+mod logger;
 mod models;
 mod nats;
 mod task_manager;
@@ -63,6 +67,8 @@ fn to_engine_task(
     };
 
     let context = Context::new(
+        request.organization_id.to_string(),
+        request.cloud_provider.id.to_string(),
         request.id.to_string(),
         workspace_root_dir.to_string(),
         lib_root_dir.to_string(),
@@ -187,6 +193,8 @@ pub fn main() -> io::Result<()> {
         (_, _) => None,
     };
 
+    let logger = StdIoLogger::new();
+
     info!("engine id: {}", engine_id.as_str());
     info!(
         "running from current directory: {}",
@@ -269,6 +277,7 @@ pub fn main() -> io::Result<()> {
         Ok(deploy_from_file) => match env::var("DEPLOY_FROM_FILE_KIND") {
             Ok(value) => match value.as_str() {
                 "infra" => using_json_path_parameter(
+                    Box::new(logger),
                     deploy_from_file,
                     workspace_root_dir,
                     lib_root_dir,
@@ -277,6 +286,7 @@ pub fn main() -> io::Result<()> {
                     docker_host,
                 ),
                 "env" => using_json_path_parameter(
+                    Box::new(logger),
                     deploy_from_file,
                     workspace_root_dir,
                     lib_root_dir,
@@ -295,6 +305,7 @@ pub fn main() -> io::Result<()> {
             }
         },
         _ => using_nats_server(
+            Box::new(logger),
             nats_server,
             nats_credentials,
             workspace_root_dir,
@@ -308,6 +319,7 @@ pub fn main() -> io::Result<()> {
 
 // the engine can be launch using a json file given in parameter
 pub fn using_json_path_parameter(
+    logger: &'a dyn Logger,
     deploy_from_file: String,
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -332,6 +344,8 @@ pub fn using_json_path_parameter(
 
     let mut task_manager = TaskManager::new();
     let context = Context::new(
+        req.organization_id.to_string(),
+        req.cloud_provider.id.to_string(),
         req.id.to_string(),
         workspace_root_dir,
         lib_root_dir,
@@ -355,7 +369,7 @@ pub fn using_json_path_parameter(
     };
 
     task_manager.add_task(task);
-    let _ = task_manager.run();
+    let _ = task_manager.run(logger);
 
     loop {
         std::thread::park();
@@ -364,6 +378,7 @@ pub fn using_json_path_parameter(
 
 // the engine can be autonomous using the nats server to receive actions
 fn using_nats_server(
+    logger: &'a dyn Logger,
     nats_server: String,
     nats_credentials: Option<(String, String)>,
     workspace_root_dir: String,
@@ -387,7 +402,7 @@ fn using_nats_server(
     info!("connection to the NATS server established");
 
     let mut tm = TaskManager::new();
-    let status_rx = tm.run().unwrap();
+    let status_rx = tm.run(logger).unwrap();
     let task_manager = Arc::new(tm);
 
     let _ = {

@@ -13,7 +13,9 @@ use crate::utils::LogErrorOnDrop;
 use core::fmt;
 use core::fmt::Formatter;
 use prometheus::{self, IntGauge};
+use qovery_engine::logger::Logger;
 use qovery_engine::models::{ProgressLevel, ProgressScope};
+use std::borrow::Borrow;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -105,7 +107,7 @@ impl TaskManager {
     }
 
     /// run task manager - only a single instance will run
-    pub fn run(&mut self) -> Result<Receiver<Message>, Error> {
+    pub fn run(&mut self, logger: &'a dyn Logger) -> Result<Receiver<Message>, Error> {
         if self.running {
             return Err(Error::AlreadyRunning);
         }
@@ -220,7 +222,7 @@ impl TaskManager {
                     match internal_task.task.pre_run() {
                         PreRun::Yes => {
                             let start_time = Instant::now();
-                            internal_task.task.run(&task_status_tx);
+                            internal_task.task.run(&task_status_tx, logger.clone());
                             info!(
                                 "task {} took {} sec to be executed",
                                 internal_task.task.id(),
@@ -325,7 +327,7 @@ pub trait Task: Send {
     /// return true if you want to run it now, or false if you want to run this task later.
     /// this function is called just before `run()` is called.
     fn pre_run(&self) -> PreRun;
-    fn run(&self, sender: &Sender<Message>);
+    fn run(&self, sender: &Sender<Message>, logger: &'a dyn Logger);
 }
 
 pub struct InternalTask {
@@ -437,11 +439,13 @@ impl fmt::Display for Error {
 
 #[cfg(test)]
 mod tests {
+    use crate::logger::core_logger::StdIoLogger;
     use crate::task_manager::task_manager::{
         ActionContext, InternalTask, Message, PreRun, State, Status, Task, TaskManager,
     };
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
+    use qovery_engine::logger::Logger;
     use qovery_engine::models::{ProgressLevel, ProgressScope};
     use std::cmp;
     use std::sync::atomic::Ordering::Acquire;
@@ -498,7 +502,7 @@ mod tests {
             PreRun::Yes
         }
 
-        fn run(&self, _: &Sender<Message>) {
+        fn run(&self, _: &Sender<Message>, logger: &'a dyn Logger) {
             self.barrier_begin.wait();
             self.have_been_run.compare_and_swap(false, true, Ordering::Release);
             self.barrier_end.wait();
@@ -526,11 +530,12 @@ mod tests {
         fn pre_run(&self) -> PreRun {
             PreRun::Yes
         }
-        fn run(&self, _sender: &Sender<Message>) {}
+        fn run(&self, _sender: &Sender<Message>, logger: &'a dyn Logger) {}
     }
 
     #[test]
     fn test_taskmanager_run() {
+        let logger = StdIoLogger::new();
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abc", "degf").unwrap();
         let task = WaitingTask::new();
@@ -539,7 +544,7 @@ mod tests {
         assert_eq!(task.have_been_run.load(Ordering::Acquire), false);
         tm.add_task(Box::new(task.clone()));
 
-        let task_status_rx = tm.run().expect("Impossible to run task Manager");
+        let task_status_rx = tm.run(Box::new(logger)).expect("Impossible to run task Manager");
         assert_eq!(task_status_rx.recv().unwrap().is_ok(), true);
 
         task.barrier_begin.wait();
@@ -563,11 +568,12 @@ mod tests {
 
     #[test]
     fn test_taskmanager_cleanup() {
+        let logger = StdIoLogger::new();
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abcd", "degf").unwrap();
         let task = WaitingTask::new();
         let id = task.id().to_string();
-        let task_status_rx = tm.run().expect("Impossible to run task Manager");
+        let task_status_rx = tm.run(Box::new(logger)).expect("Impossible to run task Manager");
         tm.add_task(Box::new(task.clone()));
 
         assert_eq!(task_status_rx.recv().unwrap().unwrap().status.status, State::Waiting);
@@ -599,6 +605,7 @@ mod tests {
 
     #[test]
     fn test_taskmanager_graceful_shutdown() {
+        let logger = StdIoLogger::new();
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abcde", "degf").unwrap();
 
@@ -611,7 +618,7 @@ mod tests {
 
         assert_eq!(tm.remaining_tasks_to_run(), 3);
         tm.stop();
-        tm.run().expect("Impossible to run task Manager");
+        tm.run(Box::new(logger)).expect("Impossible to run task Manager");
 
         assert_eq!(tm.wait_shutdown(), ());
         assert_eq!(tm.remaining_tasks_to_run(), 0);

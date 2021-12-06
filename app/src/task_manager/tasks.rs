@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
 
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use qovery_engine::logger::Logger;
 use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::transaction::{RollbackError, TransactionResult};
 
@@ -83,7 +84,7 @@ impl Task for InfrastructureTask {
         (self.pre_run_callback)(self)
     }
 
-    fn run(&self, sender: &Sender<Message>) {
+    fn run(&self, sender: &Sender<Message>, logger: &'a dyn Logger) {
         info!(
             "infrastructure task {} started with infrastructure id {}",
             self.id(),
@@ -105,7 +106,7 @@ impl Task for InfrastructureTask {
             sender: sender.clone(),
         }));
 
-        let engine = match self.request.engine(&self.context, my_progress_listener) {
+        let engine = match self.request.engine(&self.context, my_progress_listener, logger) {
             Ok(engine) => engine,
             Err(err) => {
                 send_progress(
@@ -143,6 +144,7 @@ impl Task for InfrastructureTask {
             engine.context(),
             engine.cloud_provider(),
             engine.dns_provider(),
+            engine.logger(),
         ) {
             Ok(x) => x,
             Err(e) => {
@@ -264,7 +266,7 @@ impl Task for EnvironmentTask {
         (self.pre_run_callback)(self)
     }
 
-    fn run(&self, sender: &Sender<Message>) {
+    fn run(&self, sender: &Sender<Message>, logger: &'a dyn Logger) {
         info!("environment task {} started", self.id());
 
         send_progress(
@@ -282,7 +284,7 @@ impl Task for EnvironmentTask {
             sender: sender.clone(),
         }));
 
-        let engine = match self.request.engine(&self.context, my_progress_listener) {
+        let engine = match self.request.engine(&self.context, my_progress_listener, logger) {
             Ok(engine) => engine,
             Err(err) => {
                 send_progress(
@@ -323,6 +325,7 @@ impl Task for EnvironmentTask {
             engine.context(),
             engine.cloud_provider(),
             engine.dns_provider(),
+            engine.logger(),
         ) {
             Ok(x) => x,
             Err(e) => {
