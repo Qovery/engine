@@ -379,7 +379,7 @@ impl<'a> Kapsule<'a> {
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        // TODO(benjaminch): remove legacy logger
+        // TODO(DEV-1061): remove legacy logger
         let message = format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id());
         self.send_to_customer(message.as_str(), &listeners_helper);
         self.logger.log(
@@ -412,9 +412,10 @@ impl<'a> Kapsule<'a> {
                     e.message
                 ),
             },
-            Err(_) => {
-                info!("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before");
-            }
+            Err(_) => self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Deploying(event_details.clone(), EventMessage::new("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string(), None)),
+            ),
         };
 
         let temp_dir = self.get_temp_dir()?;
