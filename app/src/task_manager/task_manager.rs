@@ -15,7 +15,6 @@ use core::fmt::Formatter;
 use prometheus::{self, IntGauge};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::{ProgressLevel, ProgressScope};
-use std::borrow::Borrow;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -107,7 +106,7 @@ impl TaskManager {
     }
 
     /// run task manager - only a single instance will run
-    pub fn run(&mut self, logger: &'a dyn Logger) -> Result<Receiver<Message>, Error> {
+    pub fn run(&mut self, logger: Box<dyn Logger>) -> Result<Receiver<Message>, Error> {
         if self.running {
             return Err(Error::AlreadyRunning);
         }
@@ -327,7 +326,7 @@ pub trait Task: Send {
     /// return true if you want to run it now, or false if you want to run this task later.
     /// this function is called just before `run()` is called.
     fn pre_run(&self) -> PreRun;
-    fn run(&self, sender: &Sender<Message>, logger: &'a dyn Logger);
+    fn run(&self, sender: &Sender<Message>, logger: Box<dyn Logger>);
 }
 
 pub struct InternalTask {
@@ -439,13 +438,12 @@ impl fmt::Display for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::logger::core_logger::StdIoLogger;
     use crate::task_manager::task_manager::{
         ActionContext, InternalTask, Message, PreRun, State, Status, Task, TaskManager,
     };
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
-    use qovery_engine::logger::Logger;
+    use qovery_engine::logger::{Logger, StdIoLogger};
     use qovery_engine::models::{ProgressLevel, ProgressScope};
     use std::cmp;
     use std::sync::atomic::Ordering::Acquire;
@@ -502,7 +500,7 @@ mod tests {
             PreRun::Yes
         }
 
-        fn run(&self, _: &Sender<Message>, logger: &'a dyn Logger) {
+        fn run(&self, _: &Sender<Message>, _logger: Box<dyn Logger>) {
             self.barrier_begin.wait();
             self.have_been_run.compare_and_swap(false, true, Ordering::Release);
             self.barrier_end.wait();
@@ -530,7 +528,7 @@ mod tests {
         fn pre_run(&self) -> PreRun {
             PreRun::Yes
         }
-        fn run(&self, _sender: &Sender<Message>, logger: &'a dyn Logger) {}
+        fn run(&self, _sender: &Sender<Message>, _logger: Box<dyn Logger>) {}
     }
 
     #[test]

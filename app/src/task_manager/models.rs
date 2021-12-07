@@ -56,7 +56,7 @@ impl Request {
         &self,
         context: &Context,
         progress_listener: Listener,
-        logger: &'a dyn Logger,
+        logger: Box<dyn Logger>,
     ) -> Result<Engine, RequestError> {
         let mut build_platform = self.build_platform.to_engine_build_platform(&context);
         build_platform.add_listener(progress_listener.clone());

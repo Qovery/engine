@@ -12,7 +12,6 @@ use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
 use std::sync::Arc;
 
-use std::process::Stdio;
 use std::time::Duration;
 use std::{env, thread};
 use std::{fs, io, process};
@@ -25,14 +24,13 @@ use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
 use uuid::Uuid;
 
 use qovery_engine::cmd;
-use qovery_engine::logger::Logger;
+use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::Context;
 use utils::Mode;
 
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::ErrorKind::BinVersion;
 use crate::custom_error::{EngineInitError, ErrorKind};
-use crate::logger::core_logger::StdIoLogger;
 
 use crate::models::{StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message};
@@ -319,7 +317,7 @@ pub fn main() -> io::Result<()> {
 
 // the engine can be launch using a json file given in parameter
 pub fn using_json_path_parameter(
-    logger: &'a dyn Logger,
+    logger: Box<dyn Logger>,
     deploy_from_file: String,
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -378,7 +376,7 @@ pub fn using_json_path_parameter(
 
 // the engine can be autonomous using the nats server to receive actions
 fn using_nats_server(
-    logger: &'a dyn Logger,
+    logger: Box<dyn Logger>,
     nats_server: String,
     nats_credentials: Option<(String, String)>,
     workspace_root_dir: String,

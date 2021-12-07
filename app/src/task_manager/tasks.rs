@@ -84,7 +84,7 @@ impl Task for InfrastructureTask {
         (self.pre_run_callback)(self)
     }
 
-    fn run(&self, sender: &Sender<Message>, logger: &'a dyn Logger) {
+    fn run(&self, sender: &Sender<Message>, logger: Box<dyn Logger>) {
         info!(
             "infrastructure task {} started with infrastructure id {}",
             self.id(),
@@ -266,7 +266,7 @@ impl Task for EnvironmentTask {
         (self.pre_run_callback)(self)
     }
 
-    fn run(&self, sender: &Sender<Message>, logger: &'a dyn Logger) {
+    fn run(&self, sender: &Sender<Message>, logger: Box<dyn Logger>) {
         info!("environment task {} started", self.id());
 
         send_progress(
