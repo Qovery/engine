@@ -13,9 +13,10 @@ spec:
   type: ClusterIP
   ports:
     {%- for port in ports %}
-    - containerPort: {{ port.port }}
+    - protocol: TCP
       name: "p{{ port.port }}"
-      protocol: TCP
+      port: {{ port.port }}
+      targetPort: {{ port.port }}
     {%- endfor %}
   selector:
     ownerId: {{ owner_id }}
