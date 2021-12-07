@@ -15,6 +15,7 @@ use crate::common::{Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::Region;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
+use qovery_engine::logger::Logger;
 
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const DO_KUBERNETES_MINOR_VERSION: u8 = 19;
@@ -38,7 +39,7 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
 }
 
 impl Cluster<DO, DoksOptions> for DO {
-    fn docker_cr_engine(context: &Context) -> Engine {
+    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> Engine {
         // use DigitalOcean Container Registry
         let container_registry = Box::new(container_registry_digital_ocean(context));
         // use LocalDocker
@@ -54,6 +55,7 @@ impl Cluster<DO, DoksOptions> for DO {
             container_registry,
             cloud_provider,
             dns_provider,
+            logger,
         )
     }
 

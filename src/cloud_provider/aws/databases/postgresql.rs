@@ -430,6 +430,8 @@ mod tests_postgres {
                 "".to_string(),
                 "".to_string(),
                 "".to_string(),
+                "".to_string(),
+                "".to_string(),
                 false,
                 None,
                 vec![],

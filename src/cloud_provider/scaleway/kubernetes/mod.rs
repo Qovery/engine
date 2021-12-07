@@ -19,11 +19,16 @@ use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
-use crate::error::EngineErrorCause::Internal;
 use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
+    cast_simple_error_to_engine_error, EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope,
+    SimpleError, SimpleErrorKind,
 };
-use crate::models::{Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ToHelmString};
+use crate::errors::EngineError;
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::logger::{LogLevel, Logger};
+use crate::models::{
+    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
+};
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
@@ -119,6 +124,7 @@ pub struct Kapsule<'a> {
     template_directory: String,
     options: KapsuleOptions,
     listeners: Listeners,
+    logger: &'a dyn Logger,
 }
 
 impl<'a> Kapsule<'a> {
@@ -133,21 +139,28 @@ impl<'a> Kapsule<'a> {
         dns_provider: &'a dyn DnsProvider,
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
+        logger: &'a dyn Logger,
     ) -> Result<Kapsule<'a>, EngineError> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
 
         for node_group in &nodes_groups {
-            if ScwInstancesType::from_str(node_group.instance_type.as_str()).is_err() {
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    EngineErrorScope::Engine,
-                    context.execution_id(),
-                    Some(format!(
-                        "Nodegroup instance type {} is not valid for {}",
-                        node_group.instance_type,
-                        cloud_provider.name()
-                    )),
-                ));
+            if let Err(e) = ScwInstancesType::from_str(node_group.instance_type.as_str()) {
+                let err = EngineError::new_unsupported_instance_type(
+                    EventDetails::new(
+                        cloud_provider.kind(),
+                        QoveryIdentifier::new(context.organization_id().to_string()),
+                        QoveryIdentifier::new(context.cluster_id().to_string()),
+                        QoveryIdentifier::new(context.execution_id().to_string()),
+                        Stage::Infrastructure(InfrastructureStep::Instantiate),
+                        Transmitter::Kubernetes(id, name),
+                    ),
+                    node_group.instance_type.as_str(),
+                    e.message().to_string(),
+                );
+
+                logger.log(LogLevel::Error, EngineEvent::Error(err.clone()));
+
+                return Err(err);
             }
         }
 
@@ -176,6 +189,7 @@ impl<'a> Kapsule<'a> {
             nodes_groups,
             template_directory,
             options,
+            logger,
             listeners: cloud_provider.listeners().clone(), // copy listeners from CloudProvider
         })
     }
@@ -188,7 +202,7 @@ impl<'a> Kapsule<'a> {
         format!("qovery-logs-{}", self.id)
     }
 
-    fn tera_context(&self) -> Result<TeraContext, EngineError> {
+    fn tera_context(&self) -> Result<TeraContext, LegacyEngineError> {
         let mut context = TeraContext::new();
 
         // Scaleway
@@ -353,12 +367,24 @@ impl<'a> Kapsule<'a> {
         .to_string()
     }
 
-    fn create(&self) -> Result<(), EngineError> {
+    fn create(&self) -> Result<(), LegacyEngineError> {
+        let event_details = EventDetails::new(
+            self.cloud_provider.kind(),
+            QoveryIdentifier::from(self.context.organization_id().to_string()),
+            QoveryIdentifier::from(self.context.cluster_id().to_string()),
+            QoveryIdentifier::from(self.context.execution_id().to_string()),
+            Stage::Infrastructure(InfrastructureStep::Create),
+            Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
+        );
+
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
-        self.send_to_customer(
-            format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
+        // TODO(DEV-1061): remove legacy logger
+        let message = format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id());
+        self.send_to_customer(message.as_str(), &listeners_helper);
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Deploying(event_details.clone(), EventMessage::new(message.to_string(), None)),
         );
 
         // upgrade cluster instead if required
@@ -372,16 +398,24 @@ impl<'a> Kapsule<'a> {
                     if x.required_upgrade_on.is_some() {
                         return self.upgrade_with_status(x);
                     }
-                    info!("Kubernetes cluster upgrade not required");
+
+                    self.logger.log(
+                        LogLevel::Info,
+                        EngineEvent::Deploying(
+                            event_details.clone(),
+                            EventMessage::new("Kubernetes cluster upgrade not required".to_string(), None),
+                        ),
+                    );
                 }
                 Err(e) => error!(
                     "Error detected, upgrade won't occurs, but standard deployment. {:?}",
                     e.message
                 ),
             },
-            Err(_) => {
-                info!("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before");
-            }
+            Err(_) => self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Deploying(event_details.clone(), EventMessage::new("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string(), None)),
+            ),
         };
 
         let temp_dir = self.get_temp_dir()?;
@@ -545,7 +579,7 @@ impl<'a> Kapsule<'a> {
         )
     }
 
-    fn create_error(&self) -> Result<(), EngineError> {
+    fn create_error(&self) -> Result<(), LegacyEngineError> {
         let kubeconfig_file = match self.config_file() {
             Ok(x) => x.0,
             Err(e) => {
@@ -566,19 +600,19 @@ impl<'a> Kapsule<'a> {
         ))
     }
 
-    fn upgrade_error(&self) -> Result<(), EngineError> {
+    fn upgrade_error(&self) -> Result<(), LegacyEngineError> {
         Ok(())
     }
 
-    fn downgrade(&self) -> Result<(), EngineError> {
+    fn downgrade(&self) -> Result<(), LegacyEngineError> {
         Ok(())
     }
 
-    fn downgrade_error(&self) -> Result<(), EngineError> {
+    fn downgrade_error(&self) -> Result<(), LegacyEngineError> {
         Ok(())
     }
 
-    fn pause(&self) -> Result<(), EngineError> {
+    fn pause(&self) -> Result<(), LegacyEngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         self.send_to_customer(
             format!("Preparing SCW {} cluster pause with id {}", self.name(), self.id()).as_str(),
@@ -629,7 +663,7 @@ impl<'a> Kapsule<'a> {
                 tf_workers_resources_name
             }
             Err(e) => {
-                return Err(EngineError {
+                return Err(LegacyEngineError {
                     cause: EngineErrorCause::Internal,
                     scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
                     execution_id: self.context.execution_id().to_string(),
@@ -638,7 +672,7 @@ impl<'a> Kapsule<'a> {
             }
         };
         if tf_workers_resources.is_empty() {
-            return Err(EngineError {
+            return Err(LegacyEngineError {
                 cause: EngineErrorCause::Internal,
                 scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
                 execution_id: self.context.execution_id().to_string(),
@@ -702,7 +736,7 @@ impl<'a> Kapsule<'a> {
                             info!("no current running jobs on the Engine, infrastructure pause is allowed to start")
                         }
                         Err(Operation { error, .. }) => {
-                            return Err(EngineError {
+                            return Err(LegacyEngineError {
                                 cause: EngineErrorCause::Internal,
                                 scope: EngineErrorScope::Engine,
                                 execution_id: self.context.execution_id().to_string(),
@@ -710,7 +744,7 @@ impl<'a> Kapsule<'a> {
                             })
                         }
                         Err(retry::Error::Internal(msg)) => {
-                            return Err(EngineError::new(
+                            return Err(LegacyEngineError::new(
                                 EngineErrorCause::Internal,
                                 EngineErrorScope::Engine,
                                 self.context.execution_id(),
@@ -751,14 +785,14 @@ impl<'a> Kapsule<'a> {
         }
     }
 
-    fn pause_error(&self) -> Result<(), EngineError> {
+    fn pause_error(&self) -> Result<(), LegacyEngineError> {
         Err(self.engine_error(
             EngineErrorCause::Internal,
             format!("{} Kubernetes cluster failed to pause", self.name()),
         ))
     }
 
-    fn delete(&self) -> Result<(), EngineError> {
+    fn delete(&self) -> Result<(), LegacyEngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let mut skip_kubernetes_step = false;
         self.send_to_customer(
@@ -898,8 +932,8 @@ impl<'a> Kapsule<'a> {
                 &kubernetes_config_file_path,
                 self.cloud_provider().credentials_environment_variables(),
             ) {
-                return Err(EngineError::new(
-                    Internal,
+                return Err(LegacyEngineError::new(
+                    EngineErrorCause::Internal,
                     self.engine_error_scope(),
                     self.context().execution_id(),
                     e.message,
@@ -1009,7 +1043,7 @@ impl<'a> Kapsule<'a> {
             }
             Err(Operation { error, .. }) => return Err(error),
             Err(retry::Error::Internal(msg)) => {
-                return Err(EngineError::new(
+                return Err(LegacyEngineError::new(
                     EngineErrorCause::Internal,
                     self.engine_error_scope(),
                     self.context().execution_id(),
@@ -1030,8 +1064,8 @@ impl<'a> Kapsule<'a> {
             .object_storage
             .delete_bucket(self.kubeconfig_bucket_name().as_str())
         {
-            return Err(EngineError::new(
-                Internal,
+            return Err(LegacyEngineError::new(
+                EngineErrorCause::Internal,
                 self.engine_error_scope(),
                 self.context().execution_id(),
                 e.message,
@@ -1039,8 +1073,8 @@ impl<'a> Kapsule<'a> {
         }
 
         if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
-            return Err(EngineError::new(
-                Internal,
+            return Err(LegacyEngineError::new(
+                EngineErrorCause::Internal,
                 self.engine_error_scope(),
                 self.context().execution_id(),
                 e.message,
@@ -1050,7 +1084,7 @@ impl<'a> Kapsule<'a> {
         Ok(())
     }
 
-    fn delete_error(&self) -> Result<(), EngineError> {
+    fn delete_error(&self) -> Result<(), LegacyEngineError> {
         // FIXME What should we do if something goes wrong while deleting the cluster?
         Ok(())
     }
@@ -1105,12 +1139,12 @@ impl<'a> Kubernetes for Kapsule<'a> {
         &self.object_storage
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), LegacyEngineError> {
         Ok(())
     }
 
     #[named]
-    fn on_create(&self) -> Result<(), EngineError> {
+    fn on_create(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1121,7 +1155,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn on_create_error(&self) -> Result<(), EngineError> {
+    fn on_create_error(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1131,7 +1165,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         send_progress_on_long_task(self, Action::Create, || self.create_error())
     }
 
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), LegacyEngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         self.send_to_customer(
             format!(
@@ -1212,7 +1246,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn on_upgrade(&self) -> Result<(), EngineError> {
+    fn on_upgrade(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1223,7 +1257,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn on_upgrade_error(&self) -> Result<(), EngineError> {
+    fn on_upgrade_error(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1234,7 +1268,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn on_downgrade(&self) -> Result<(), EngineError> {
+    fn on_downgrade(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1245,7 +1279,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn on_downgrade_error(&self) -> Result<(), EngineError> {
+    fn on_downgrade_error(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1256,7 +1290,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn on_pause(&self) -> Result<(), EngineError> {
+    fn on_pause(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1267,7 +1301,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn on_pause_error(&self) -> Result<(), EngineError> {
+    fn on_pause_error(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1278,7 +1312,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn on_delete(&self) -> Result<(), EngineError> {
+    fn on_delete(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1289,7 +1323,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn on_delete_error(&self) -> Result<(), EngineError> {
+    fn on_delete_error(&self) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1300,7 +1334,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn deploy_environment(&self, environment: &Environment) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1311,7 +1345,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1322,7 +1356,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn pause_environment(&self, _environment: &Environment) -> Result<(), EngineError> {
+    fn pause_environment(&self, _environment: &Environment) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1333,7 +1367,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
+    fn pause_environment_error(&self, _environment: &Environment) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1344,7 +1378,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn delete_environment(&self, environment: &Environment) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1355,7 +1389,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
+    fn delete_environment_error(&self, _environment: &Environment) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),

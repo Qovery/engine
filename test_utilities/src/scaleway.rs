@@ -16,6 +16,7 @@ use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecret
 use crate::common::{Cluster, ClusterDomain};
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
+use qovery_engine::logger::Logger;
 use tracing::error;
 
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
@@ -57,7 +58,7 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 }
 
 impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
-    fn docker_cr_engine(context: &Context) -> Engine {
+    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> Engine {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
 
@@ -75,6 +76,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             container_registry,
             cloud_provider,
             dns_provider,
+            logger,
         )
     }
 

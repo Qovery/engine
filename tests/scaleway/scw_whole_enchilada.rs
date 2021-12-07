@@ -4,12 +4,13 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::EnvironmentAction;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 use test_utilities::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
-use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, FuncTestsSecrets};
+use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
 
 #[cfg(feature = "test-scw-whole-enchilada")]
 #[named]
 #[test]
 fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
+    let logger = logger();
     let context = context();
     let zone = Zone::Paris2;
     let secrets = FuncTestsSecrets::new();
@@ -37,6 +38,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
             function_name!(),
             Kind::Scw,
             context.clone(),
+            logger,
             zone.as_str(),
             secrets.clone(),
             ClusterTestType::Classic,
