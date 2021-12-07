@@ -702,7 +702,11 @@ fn private_postgresql_v13_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
         &context,
-        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -720,7 +724,11 @@ fn public_postgresql_v13_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
         &context,
-        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -878,7 +886,11 @@ fn private_postgresql_v13_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
         &context,
-        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -897,7 +909,11 @@ fn public_postgresql_v13_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
         &context,
-        SCW_QOVERY_ORGANIZATION_ID,
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+            .as_str(),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
