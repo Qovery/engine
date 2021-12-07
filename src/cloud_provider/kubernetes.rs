@@ -670,7 +670,7 @@ where
                 let error_message = format!(
                     "Wasn't able to delete all objects type {}, it's a blocker to then delete cert-manager namespace. {}",
                     object,
-                    format!("{:?}", msg)
+                    msg,
                 );
                 return Err(SimpleError::new(Other, Some(error_message)));
             }
