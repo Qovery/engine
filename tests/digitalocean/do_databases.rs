@@ -686,7 +686,10 @@ fn private_postgresql_v13_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
         &context,
-        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -704,7 +707,10 @@ fn public_postgresql_v13_deploy_a_working_dev_environment() {
     let secrets = FuncTestsSecrets::new();
     let environment = working_minimal_environment(
         &context,
-        DO_QOVERY_ORGANIZATION_ID,
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
