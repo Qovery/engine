@@ -389,7 +389,7 @@ fn get_managed_mysql_version(requested_version: String) -> Result<String, String
     supported_mysql_versions.extend(v57);
 
     // v8
-    let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(25), None);
+    let mut v8 = generate_supported_version(8, 0, 0, Some(11), Some(26), None);
     v8.remove("8.0.24");
     v8.remove("8.0.22");
     v8.remove("8.0.18");
@@ -409,8 +409,8 @@ mod tests_mysql {
     #[test]
     fn check_mysql_version() {
         // managed version
-        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.25");
-        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.25");
+        assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.26");
+        assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.26");
         assert_eq!(get_mysql_version("8.0.16".to_string(), true).unwrap(), "8.0.16");
         assert_eq!(
             get_mysql_version("8.0.18".to_string(), true).unwrap_err().as_str(),
