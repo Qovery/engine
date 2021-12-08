@@ -1,4 +1,5 @@
 use crate::events::EngineEvent;
+use tracing;
 
 #[derive(Debug, Clone)]
 pub enum LogLevel {
@@ -29,15 +30,35 @@ impl StdIoLogger {
     }
 }
 
+impl Default for StdIoLogger {
+    fn default() -> Self {
+        StdIoLogger::new()
+    }
+}
+
 impl Logger for StdIoLogger {
     fn log(&self, log_level: LogLevel, event: EngineEvent) {
-        // TODO(benjaminch): make usage of tracing lik here, injecting orga, cluster and execution id
-        match log_level {
-            LogLevel::Debug => debug!("{:?}", event),
-            LogLevel::Info => info!("{:?}", event),
-            LogLevel::Warning => warn!("{:?}", event),
-            LogLevel::Error => error!("{:?}", event),
-        };
+        let event_details = event.get_details();
+        let stage = event_details.stage();
+
+        tracing::span!(
+            tracing::Level::INFO,
+            "std_io_logger",
+            organization_id = event_details.organisation_id().short(),
+            cluster_id = event_details.cluster_id().short(),
+            execution_id = event_details.execution_id().short(),
+            stage = stage.to_string().as_str(),
+            step = stage.sub_step_name().as_str(),
+            transmitter = event_details.transmitter().to_string().as_str(),
+        )
+        .in_scope(|| {
+            match log_level {
+                LogLevel::Debug => debug!("{}", event.get_message()),
+                LogLevel::Info => info!("{}", event.get_message()),
+                LogLevel::Warning => warn!("{}", event.get_message()),
+                LogLevel::Error => error!("{}", event.get_message()),
+            };
+        });
     }
 
     fn heartbeat_log_for_task(&self, _log_level: LogLevel, _event: EngineEvent, _f: &dyn Fn()) {

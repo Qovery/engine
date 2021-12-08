@@ -21,7 +21,7 @@ use retry::OperationResult;
 use std::env;
 use std::fs;
 use tracing::{error, info, warn};
-use tracing_subscriber;
+use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
 
 use crate::scaleway::{
     SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -373,17 +373,15 @@ pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
 }
 
 pub fn init() -> Instant {
-    // check if it's currently running on GitHub action or Gitlab CI, using a common env var
-    let ci_var = "CI";
-
-    let _ = match env::var_os(ci_var) {
-        Some(_) => tracing_subscriber::fmt()
-            .json()
-            .with_max_level(tracing::Level::INFO)
-            .with_current_span(false)
-            .try_init(),
-        None => tracing_subscriber::fmt().try_init(),
-    };
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .fmt_fields(
+            tracing_subscriber::fmt::format::debug_fn(|writer, field, value| write!(writer, "{}: {:?}", field, value))
+                .delimited(", "),
+        )
+        .with_ansi(false)
+        .with_timer(ChronoUtc::with_format("%Y-%m-%dT%H:%M:%SZ".to_string()))
+        .try_init();
 
     info!(
         "running from current directory: {}",
