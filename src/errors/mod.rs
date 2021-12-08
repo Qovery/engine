@@ -59,10 +59,23 @@ impl EngineError {
     pub fn user_log_message(&self) -> &str {
         &self.user_log_message
     }
+    /// returns proper error message (safe if exists, otherwise raw, otherwise default error
+    /// message).
+    pub fn message(&self) -> String {
+        if let Some(msg) = self.raw_message_safe() {
+            return msg;
+        }
+
+        if let Some(msg) = self.raw_message() {
+            return msg;
+        }
+
+        "no error message defined".to_string()
+    }
     pub fn raw_message(&self) -> Option<String> {
         self.raw_message.clone()
     }
-    pub fn raw_message_without_secrets(&self) -> Option<String> {
+    pub fn raw_message_safe(&self) -> Option<String> {
         self.raw_message_safe.clone()
     }
     pub fn link(&self) -> &Option<Url> {
