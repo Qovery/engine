@@ -21,7 +21,6 @@ use retry::OperationResult;
 use std::env;
 use std::fs;
 use tracing::{error, info, warn};
-use tracing_subscriber::EnvFilter;
 
 use crate::scaleway::{
     SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
