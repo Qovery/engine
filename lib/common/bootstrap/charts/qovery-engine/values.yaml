@@ -43,7 +43,7 @@ volumes:
 buildContainer:
   enable: true
   image: docker
-  tag: 19.03.12-dind
+  tag: 20.10.11-dind
 
 terminationGracePeriodSeconds: 7200
 
