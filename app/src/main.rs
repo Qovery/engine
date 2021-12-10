@@ -31,6 +31,8 @@ use utils::Mode;
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::ErrorKind::BinVersion;
 use crate::custom_error::{EngineInitError, ErrorKind};
+use crate::logger::composite_logger::CompositeLogger;
+use crate::logger::nats_logger::NatsLogger;
 
 use crate::models::{StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message};
@@ -191,7 +193,15 @@ pub fn main() -> io::Result<()> {
         (_, _) => None,
     };
 
-    let logger = StdIoLogger::new();
+    let std_logger = StdIoLogger::new();
+    let logger = CompositeLogger::new(vec![
+        Box::new(std_logger.clone()),
+        Box::new(NatsLogger::new(
+            std_logger,
+            Connection::new("engine_logs", nats_server.as_str(), nats_credentials.clone())
+                .expect("cannot create NATS connection for engine logs"),
+        )),
+    ]);
 
     info!("engine id: {}", engine_id.as_str());
     info!(
@@ -520,7 +530,7 @@ fn spawn_task_poller(
 
     let thread_name = format!("{}-poller", task_name);
     let thread_name_logger = thread_name.clone();
-    let subject = nats::subjects::get_subject_name(&mode, &task_selector);
+    let subject = nats::subjects::Subject::new(&mode, &task_selector);
 
     let func = move || {
         let _drop_logger = LogErrorOnDrop::new(thread_name_logger.as_str());

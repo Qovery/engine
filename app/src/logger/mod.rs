@@ -1,1 +1,2 @@
-pub mod core_logger;
+pub mod composite_logger;
+pub mod nats_logger;
