@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +12,7 @@ pub mod aws;
 pub mod digitalocean;
 pub mod environment;
 pub mod helm;
+pub mod io;
 pub mod kubernetes;
 pub mod metrics;
 pub mod models;
@@ -60,13 +62,13 @@ pub enum Kind {
     Scw,
 }
 
-impl Kind {
-    pub fn name(&self) -> &str {
-        match self {
+impl Display for Kind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
             Kind::Aws => "AWS",
             Kind::Do => "Digital Ocean",
             Kind::Scw => "Scaleway",
-        }
+        })
     }
 }
 

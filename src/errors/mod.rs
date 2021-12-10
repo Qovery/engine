@@ -13,7 +13,8 @@ pub struct SimpleError {
 
 #[derive(Clone, Debug)]
 pub enum Tag {
-    UnsupportedInstanceType(String),
+    Unknown,
+    UnsupportedInstanceType,
 }
 
 impl SimpleError {
@@ -116,6 +117,28 @@ impl EngineError {
         )
     }
 
+    /// Do not use unless really needed, every error should have a clear type.
+    pub fn new_unknown(
+        event_details: EventDetails,
+        qovery_log_message: String,
+        user_log_message: String,
+        raw_message: Option<String>,
+        raw_message_safe: Option<String>,
+        link: Option<Url>,
+        hint_message: Option<String>,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::Unknown,
+            qovery_log_message,
+            user_log_message,
+            raw_message,
+            raw_message_safe,
+            link,
+            hint_message,
+        )
+    }
+
     pub fn new_unsupported_instance_type(
         event_details: EventDetails,
         requested_instance_type: &str,
@@ -124,7 +147,7 @@ impl EngineError {
         let message = format!("`{}` instance type is not supported", requested_instance_type);
         EngineError::new(
             event_details,
-            Tag::UnsupportedInstanceType(requested_instance_type.to_string()),
+            Tag::UnsupportedInstanceType,
             message.to_string(),
             message.to_string(),
             Some(raw_message.clone()),

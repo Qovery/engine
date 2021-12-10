@@ -548,7 +548,7 @@ where
             "deploy {} with name {} on {}",
             service.service_type().name(),
             service.name_with_id(),
-            kubernetes.cloud_provider().kind().name()
+            kubernetes.cloud_provider().kind().to_string()
         );
 
         let context = service.tera_context(target)?;
@@ -597,7 +597,7 @@ where
             "deploy {} with name {} on {:?} Kubernetes cluster id {}",
             service.service_type().name(),
             service.name_with_id(),
-            kubernetes.cloud_provider().kind().name(),
+            kubernetes.cloud_provider().kind().to_string(),
             kubernetes.id()
         );
 

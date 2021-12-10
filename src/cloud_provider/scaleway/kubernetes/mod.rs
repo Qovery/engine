@@ -151,6 +151,7 @@ impl<'a> Kapsule<'a> {
                         QoveryIdentifier::new(context.organization_id().to_string()),
                         QoveryIdentifier::new(context.cluster_id().to_string()),
                         QoveryIdentifier::new(context.execution_id().to_string()),
+                        zone.region_str().to_string(),
                         Stage::Infrastructure(InfrastructureStep::Instantiate),
                         Transmitter::Kubernetes(id, name),
                     ),
@@ -373,6 +374,7 @@ impl<'a> Kapsule<'a> {
             QoveryIdentifier::from(self.context.organization_id().to_string()),
             QoveryIdentifier::from(self.context.cluster_id().to_string()),
             QoveryIdentifier::from(self.context.execution_id().to_string()),
+            self.region().to_string(),
             Stage::Infrastructure(InfrastructureStep::Create),
             Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
         );

@@ -1,4 +1,4 @@
-mod io;
+pub mod io;
 
 extern crate url;
 
@@ -98,8 +98,8 @@ impl Display for Stage {
             f,
             "{}",
             match &self {
-                Stage::Infrastructure(_) => "Infrastructure",
-                Stage::Environment(_) => "Environment",
+                Stage::Infrastructure(_) => "infrastructure",
+                Stage::Environment(_) => "environment",
             },
         )
     }
@@ -116,7 +116,17 @@ pub enum InfrastructureStep {
 
 impl Display for InfrastructureStep {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(
+            f,
+            "{}",
+            match &self {
+                InfrastructureStep::Instantiate => "instanciate",
+                InfrastructureStep::Create => "create",
+                InfrastructureStep::Pause => "pause",
+                InfrastructureStep::Upgrade => "upgrade",
+                InfrastructureStep::Delete => "delete",
+            },
+        )
     }
 }
 
@@ -130,27 +140,36 @@ pub enum EnvironmentStep {
 
 impl Display for EnvironmentStep {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(
+            f,
+            "{}",
+            match &self {
+                EnvironmentStep::Build => "build",
+                EnvironmentStep::Deploy => "deploy",
+                EnvironmentStep::Update => "update",
+                EnvironmentStep::Delete => "delete",
+            },
+        )
     }
 }
 
-type TranmsmitterId = String;
+type TransmitterId = String;
 type TransmitterName = String;
 type TransmitterType = String;
 
 #[derive(Debug, Clone)]
 pub enum Transmitter {
     Engine,
-    BuildPlatform(TranmsmitterId, TransmitterName),
-    ContainerRegistry(TranmsmitterId, TransmitterName),
-    CloudProvider(TranmsmitterId, TransmitterName),
-    Kubernetes(TranmsmitterId, TransmitterName),
-    DnsProvider(TranmsmitterId, TransmitterName),
-    ObjectStorage(TranmsmitterId, TransmitterName),
-    Environment(TranmsmitterId, TransmitterName),
-    Database(TranmsmitterId, TransmitterType, TransmitterName),
-    Application(TranmsmitterId, TransmitterName),
-    Router(TranmsmitterId, TransmitterName),
+    BuildPlatform(TransmitterId, TransmitterName),
+    ContainerRegistry(TransmitterId, TransmitterName),
+    CloudProvider(TransmitterId, TransmitterName),
+    Kubernetes(TransmitterId, TransmitterName),
+    DnsProvider(TransmitterId, TransmitterName),
+    ObjectStorage(TransmitterId, TransmitterName),
+    Environment(TransmitterId, TransmitterName),
+    Database(TransmitterId, TransmitterType, TransmitterName),
+    Application(TransmitterId, TransmitterName),
+    Router(TransmitterId, TransmitterName),
 }
 
 impl Display for Transmitter {
@@ -180,12 +199,15 @@ pub enum Tag {
     UnsupportedInstanceType(String),
 }
 
+type Region = String;
+
 #[derive(Debug, Clone)]
 pub struct EventDetails {
     provider_kind: Kind,
     organisation_id: QoveryIdentifier,
     cluster_id: QoveryIdentifier,
     execution_id: QoveryIdentifier,
+    region: Region, // TODO(benjaminch): find a way to make Region a real struct type
     stage: Stage,
     transmitter: Transmitter,
 }
@@ -196,6 +218,7 @@ impl EventDetails {
         organisation_id: QoveryIdentifier,
         cluster_id: QoveryIdentifier,
         execution_id: QoveryIdentifier,
+        region: Region,
         stage: Stage,
         transmitter: Transmitter,
     ) -> Self {
@@ -204,6 +227,7 @@ impl EventDetails {
             organisation_id,
             cluster_id,
             execution_id,
+            region,
             stage,
             transmitter,
         }
@@ -219,6 +243,9 @@ impl EventDetails {
     }
     pub fn execution_id(&self) -> &QoveryIdentifier {
         &self.execution_id
+    }
+    pub fn region(&self) -> &Region {
+        &self.region
     }
     pub fn stage(&self) -> &Stage {
         &self.stage
