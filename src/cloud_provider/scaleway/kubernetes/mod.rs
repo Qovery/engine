@@ -1356,14 +1356,14 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn pause_environment(&self, _environment: &Environment) -> Result<(), LegacyEngineError> {
+    fn pause_environment(&self, environment: &Environment) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        Ok(())
+        kubernetes::pause_environment(self, environment)
     }
 
     #[named]

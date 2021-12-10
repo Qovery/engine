@@ -464,6 +464,110 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+fn deploy_a_working_environment_and_pause_it_k() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let context = context();
+        let context_for_delete = context.clone_not_same_execution_id();
+        let secrets = FuncTestsSecrets::new();
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let ea = EnvironmentAction::Environment(environment.clone());
+        let selector = format!("appId={}", environment.applications[0].id);
+
+        match environment.deploy_environment(Kind::Scw, &context, &ea, logger.clone()) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        let ret = get_pods(
+            Kind::Scw,
+            environment.clone(),
+            selector.as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
+                .as_str(),
+            secrets.clone(),
+        );
+        assert_eq!(ret.is_ok(), true);
+        assert_eq!(ret.unwrap().items.is_empty(), false);
+
+        match environment.pause_environment(Kind::Scw, &context_for_delete, &ea, logger.clone()) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // Check that we have actually 0 pods running for this app
+        let ret = get_pods(
+            Kind::Scw,
+            environment.clone(),
+            selector.as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
+                .as_str(),
+            secrets.clone(),
+        );
+        assert_eq!(ret.is_ok(), true);
+        assert_eq!(ret.unwrap().items.is_empty(), true);
+
+        // Check we can resume the env
+        let ctx_resume = context.clone_not_same_execution_id();
+        match environment.deploy_environment(Kind::Scw, &ctx_resume, &ea, logger.clone()) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        let ret = get_pods(
+            Kind::Scw,
+            environment.clone(),
+            selector.as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
+                .as_str(),
+            secrets.clone(),
+        );
+        assert_eq!(ret.is_ok(), true);
+        assert_eq!(ret.unwrap().items.is_empty(), false);
+
+        // Cleanup
+        match environment.delete_environment(Kind::Scw, &context_for_delete, &ea, logger) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+        return test_name.to_string();
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
 fn scaleway_kapsule_redeploy_same_app() {
     let test_name = function_name!();
     engine_run_test(|| {
