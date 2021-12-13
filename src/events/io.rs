@@ -4,32 +4,76 @@ use crate::events;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
-#[serde(tag = "type", content = "event")]
+#[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
 pub enum EngineEvent {
-    Error(EngineError),
-    Waiting(EventDetails, EventMessage),
-    Deploying(EventDetails, EventMessage),
-    Pausing(EventDetails, EventMessage),
-    Deleting(EventDetails, EventMessage),
-    Deployed(EventDetails, EventMessage),
-    Paused(EventDetails, EventMessage),
-    Deleted(EventDetails, EventMessage),
+    Error {
+        error: EngineError,
+    },
+    Waiting {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Deploying {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Pausing {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Deleting {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Deployed {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Paused {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Deleted {
+        details: EventDetails,
+        message: EventMessage,
+    },
 }
 
 impl From<events::EngineEvent> for EngineEvent {
     fn from(event: events::EngineEvent) -> Self {
         match event {
-            events::EngineEvent::Error(e) => EngineEvent::Error(EngineError::from(e)),
-            events::EngineEvent::Waiting(d, m) => EngineEvent::Waiting(EventDetails::from(d), EventMessage::from(m)),
-            events::EngineEvent::Deploying(d, m) => {
-                EngineEvent::Deploying(EventDetails::from(d), EventMessage::from(m))
-            }
-            events::EngineEvent::Pausing(d, m) => EngineEvent::Pausing(EventDetails::from(d), EventMessage::from(m)),
-            events::EngineEvent::Deleting(d, m) => EngineEvent::Deleting(EventDetails::from(d), EventMessage::from(m)),
-            events::EngineEvent::Deployed(d, m) => EngineEvent::Deployed(EventDetails::from(d), EventMessage::from(m)),
-            events::EngineEvent::Paused(d, m) => EngineEvent::Paused(EventDetails::from(d), EventMessage::from(m)),
-            events::EngineEvent::Deleted(d, m) => EngineEvent::Deleted(EventDetails::from(d), EventMessage::from(m)),
+            events::EngineEvent::Error(e) => EngineEvent::Error {
+                error: EngineError::from(e),
+            },
+            events::EngineEvent::Waiting(d, m) => EngineEvent::Waiting {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Deploying(d, m) => EngineEvent::Deploying {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Pausing(d, m) => EngineEvent::Pausing {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Deleting(d, m) => EngineEvent::Deleting {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Deployed(d, m) => EngineEvent::Deployed {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Paused(d, m) => EngineEvent::Paused {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Deleted(d, m) => EngineEvent::Deleted {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
         }
     }
 }
@@ -72,6 +116,7 @@ pub enum InfrastructureStep {
     LoadConfiguration,
     Create,
     Pause,
+    Resume,
     Upgrade,
     Delete,
 }
@@ -84,6 +129,7 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::Pause => InfrastructureStep::Pause,
             events::InfrastructureStep::Upgrade => InfrastructureStep::Upgrade,
             events::InfrastructureStep::Delete => InfrastructureStep::Delete,
+            events::InfrastructureStep::Resume => InfrastructureStep::Resume,
         }
     }
 }
@@ -93,6 +139,8 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
 pub enum EnvironmentStep {
     Build,
     Deploy,
+    Pause,
+    Resume,
     Update,
     Delete,
 }
@@ -104,6 +152,8 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::Deploy => EnvironmentStep::Deploy,
             events::EnvironmentStep::Update => EnvironmentStep::Update,
             events::EnvironmentStep::Delete => EnvironmentStep::Delete,
+            events::EnvironmentStep::Pause => EnvironmentStep::Pause,
+            events::EnvironmentStep::Resume => EnvironmentStep::Resume,
         }
     }
 }
@@ -114,48 +164,64 @@ type TransmitterType = String;
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[serde(tag = "type")]
 pub enum Transmitter {
-    Engine,
-    BuildPlatform(TransmitterId, TransmitterName),
-    ContainerRegistry(TransmitterId, TransmitterName),
-    CloudProvider(TransmitterId, TransmitterName),
-    Kubernetes(TransmitterId, TransmitterName),
-    DnsProvider(TransmitterId, TransmitterName),
-    ObjectStorage(TransmitterId, TransmitterName),
-    Environment(TransmitterId, TransmitterName),
-    Database(TransmitterId, TransmitterType, TransmitterName),
-    Application(TransmitterId, TransmitterName),
-    Router(TransmitterId, TransmitterName),
+    BuildPlatform {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
+    ContainerRegistry {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
+    CloudProvider {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
+    Kubernetes {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
+    DnsProvider {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
+    ObjectStorage {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
+    Environment {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
+    Database {
+        id: TransmitterId,
+        db_type: TransmitterType,
+        name: TransmitterName,
+    },
+    Application {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
+    Router {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
 }
 
 impl From<events::Transmitter> for Transmitter {
     fn from(transmitter: events::Transmitter) -> Self {
         match transmitter {
-            events::Transmitter::Engine => Transmitter::Engine,
-            events::Transmitter::BuildPlatform(id, name) => Transmitter::BuildPlatform(id, name),
-            events::Transmitter::ContainerRegistry(id, name) => Transmitter::ContainerRegistry(id, name),
-            events::Transmitter::CloudProvider(id, name) => Transmitter::CloudProvider(id, name),
-            events::Transmitter::Kubernetes(id, name) => Transmitter::Kubernetes(id, name),
-            events::Transmitter::DnsProvider(id, name) => Transmitter::DnsProvider(id, name),
-            events::Transmitter::ObjectStorage(id, name) => Transmitter::ObjectStorage(id, name),
-            events::Transmitter::Environment(id, name) => Transmitter::Environment(id, name),
-            events::Transmitter::Database(id, db_type, name) => Transmitter::Database(id, db_type, name),
-            events::Transmitter::Application(id, name) => Transmitter::Application(id, name),
-            events::Transmitter::Router(id, name) => Transmitter::Router(id, name),
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Tag {
-    UnsupportedInstanceType(String),
-}
-
-impl From<events::Tag> for Tag {
-    fn from(tag: events::Tag) -> Self {
-        match tag {
-            events::Tag::UnsupportedInstanceType(s) => Tag::UnsupportedInstanceType(s),
+            events::Transmitter::BuildPlatform(id, name) => Transmitter::BuildPlatform { id, name },
+            events::Transmitter::ContainerRegistry(id, name) => Transmitter::ContainerRegistry { id, name },
+            events::Transmitter::CloudProvider(id, name) => Transmitter::CloudProvider { id, name },
+            events::Transmitter::Kubernetes(id, name) => Transmitter::Kubernetes { id, name },
+            events::Transmitter::DnsProvider(id, name) => Transmitter::DnsProvider { id, name },
+            events::Transmitter::ObjectStorage(id, name) => Transmitter::ObjectStorage { id, name },
+            events::Transmitter::Environment(id, name) => Transmitter::Environment { id, name },
+            events::Transmitter::Database(id, db_type, name) => Transmitter::Database { id, db_type, name },
+            events::Transmitter::Application(id, name) => Transmitter::Application { id, name },
+            events::Transmitter::Router(id, name) => Transmitter::Router { id, name },
         }
     }
 }
