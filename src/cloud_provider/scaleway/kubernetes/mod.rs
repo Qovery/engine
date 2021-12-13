@@ -152,7 +152,7 @@ impl<'a> Kapsule<'a> {
                         QoveryIdentifier::new(context.cluster_id().to_string()),
                         QoveryIdentifier::new(context.execution_id().to_string()),
                         zone.region_str().to_string(),
-                        Stage::Infrastructure(InfrastructureStep::Instantiate),
+                        Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
                     ),
                     node_group.instance_type.as_str(),

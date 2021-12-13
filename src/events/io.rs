@@ -79,7 +79,7 @@ pub enum InfrastructureStep {
 impl From<events::InfrastructureStep> for InfrastructureStep {
     fn from(step: events::InfrastructureStep) -> Self {
         match step {
-            events::InfrastructureStep::Instantiate => InfrastructureStep::Instantiate,
+            events::InfrastructureStep::LoadConfiguration => InfrastructureStep::Instantiate,
             events::InfrastructureStep::Create => InfrastructureStep::Create,
             events::InfrastructureStep::Pause => InfrastructureStep::Pause,
             events::InfrastructureStep::Upgrade => InfrastructureStep::Upgrade,

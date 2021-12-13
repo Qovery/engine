@@ -107,7 +107,7 @@ impl Display for Stage {
 
 #[derive(Debug, Clone)]
 pub enum InfrastructureStep {
-    Instantiate,
+    LoadConfiguration,
     Create,
     Pause,
     Upgrade,
@@ -120,7 +120,7 @@ impl Display for InfrastructureStep {
             f,
             "{}",
             match &self {
-                InfrastructureStep::Instantiate => "instanciate",
+                InfrastructureStep::LoadConfiguration => "load-configuration",
                 InfrastructureStep::Create => "create",
                 InfrastructureStep::Pause => "pause",
                 InfrastructureStep::Upgrade => "upgrade",
