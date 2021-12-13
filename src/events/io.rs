@@ -69,7 +69,7 @@ impl From<events::Stage> for Stage {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum InfrastructureStep {
-    Instantiate,
+    LoadConfiguration,
     Create,
     Pause,
     Upgrade,
@@ -79,7 +79,7 @@ pub enum InfrastructureStep {
 impl From<events::InfrastructureStep> for InfrastructureStep {
     fn from(step: events::InfrastructureStep) -> Self {
         match step {
-            events::InfrastructureStep::LoadConfiguration => InfrastructureStep::Instantiate,
+            events::InfrastructureStep::LoadConfiguration => InfrastructureStep::LoadConfiguration,
             events::InfrastructureStep::Create => InfrastructureStep::Create,
             events::InfrastructureStep::Pause => InfrastructureStep::Pause,
             events::InfrastructureStep::Upgrade => InfrastructureStep::Upgrade,
