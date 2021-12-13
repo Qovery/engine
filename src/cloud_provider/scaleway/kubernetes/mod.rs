@@ -151,7 +151,8 @@ impl<'a> Kapsule<'a> {
                         QoveryIdentifier::new(context.organization_id().to_string()),
                         QoveryIdentifier::new(context.cluster_id().to_string()),
                         QoveryIdentifier::new(context.execution_id().to_string()),
-                        Stage::Infrastructure(InfrastructureStep::Instantiate),
+                        zone.region_str().to_string(),
+                        Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
                     ),
                     node_group.instance_type.as_str(),
@@ -373,6 +374,7 @@ impl<'a> Kapsule<'a> {
             QoveryIdentifier::from(self.context.organization_id().to_string()),
             QoveryIdentifier::from(self.context.cluster_id().to_string()),
             QoveryIdentifier::from(self.context.execution_id().to_string()),
+            self.region().to_string(),
             Stage::Infrastructure(InfrastructureStep::Create),
             Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
         );
@@ -1356,14 +1358,14 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     #[named]
-    fn pause_environment(&self, _environment: &Environment) -> Result<(), LegacyEngineError> {
+    fn pause_environment(&self, environment: &Environment) -> Result<(), LegacyEngineError> {
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        Ok(())
+        kubernetes::pause_environment(self, environment)
     }
 
     #[named]
