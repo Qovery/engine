@@ -149,7 +149,7 @@ impl EngineError {
             event_details,
             Tag::UnsupportedInstanceType,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_message.clone()),
             Some(raw_message),
             None, // TODO(documentation): Create a page entry to details this error
