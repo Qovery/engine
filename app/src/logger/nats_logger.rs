@@ -66,10 +66,6 @@ impl Logger for NatsLogger {
         }
     }
 
-    fn heartbeat_log_for_task(&self, _log_level: LogLevel, _event: EngineEvent, _f: &dyn Fn()) {
-        todo!()
-    }
-
     fn clone_dyn(&self) -> Box<dyn Logger> {
         Box::new(self.clone())
     }
