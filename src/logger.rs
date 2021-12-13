@@ -25,6 +25,7 @@ pub struct StdIoLogger {}
 
 impl StdIoLogger {
     pub fn new() -> StdIoLogger {
+        // TODO(benjaminch): configure tracing library in here, should be transparent for parent caller.
         StdIoLogger {}
     }
 }
