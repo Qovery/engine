@@ -9,7 +9,6 @@ use crate::cmd::utilities::QoveryCommand;
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
 use crate::git;
-use crate::git::checkout_submodules;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -338,7 +337,7 @@ impl BuildPlatform for LocalDocker {
         // git checkout to given commit
         let repo = git_clone.unwrap();
         let commit_id = &build.git_repository.commit_id;
-        if let Err(err) = git::checkout(&repo, commit_id, build.git_repository.url.as_str()) {
+        if let Err(err) = git::checkout(&repo, commit_id) {
             let message = format!(
                 "Error while git checkout repository {} with commit id {}. Error: {:?}",
                 &build.git_repository.url, commit_id, err
@@ -348,7 +347,7 @@ impl BuildPlatform for LocalDocker {
         }
 
         // git checkout submodules
-        if let Err(err) = checkout_submodules(&repo) {
+        if let Err(err) = git::checkout_submodules(&repo) {
             let message = format!(
                 "Error while checkout submodules from repository {}. Error: {:?}",
                 &build.git_repository.url, err
