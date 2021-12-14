@@ -341,3 +341,90 @@ impl EventDetails {
         self.transmitter.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::events::{EnvironmentStep, EventMessage, InfrastructureStep, Stage};
+
+    #[test]
+    fn test_event_message_get_message() {
+        // setup:
+        let test_cases: Vec<(Option<String>, String, String)> = vec![
+            (None, "raw".to_string(), "raw".to_string()),
+            (Some("safe".to_string()), "raw".to_string(), "safe".to_string()),
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let (safe_message, raw_message, expected) = tc;
+            let event_message = EventMessage::new(raw_message, safe_message);
+
+            // validate:
+            assert_eq!(expected, event_message.get_message());
+        }
+    }
+
+    #[test]
+    fn test_stage_sub_step_name() {
+        // setup:
+        let test_cases: Vec<(Stage, String)> = vec![
+            (
+                Stage::Infrastructure(InfrastructureStep::Create),
+                InfrastructureStep::Create.to_string(),
+            ),
+            (
+                Stage::Infrastructure(InfrastructureStep::Upgrade),
+                InfrastructureStep::Upgrade.to_string(),
+            ),
+            (
+                Stage::Infrastructure(InfrastructureStep::Delete),
+                InfrastructureStep::Delete.to_string(),
+            ),
+            (
+                Stage::Infrastructure(InfrastructureStep::Resume),
+                InfrastructureStep::Resume.to_string(),
+            ),
+            (
+                Stage::Infrastructure(InfrastructureStep::Pause),
+                InfrastructureStep::Pause.to_string(),
+            ),
+            (
+                Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
+                InfrastructureStep::LoadConfiguration.to_string(),
+            ),
+            (
+                Stage::Environment(EnvironmentStep::Pause),
+                EnvironmentStep::Pause.to_string(),
+            ),
+            (
+                Stage::Environment(EnvironmentStep::Resume),
+                EnvironmentStep::Resume.to_string(),
+            ),
+            (
+                Stage::Environment(EnvironmentStep::Build),
+                EnvironmentStep::Build.to_string(),
+            ),
+            (
+                Stage::Environment(EnvironmentStep::Delete),
+                EnvironmentStep::Delete.to_string(),
+            ),
+            (
+                Stage::Environment(EnvironmentStep::Update),
+                EnvironmentStep::Update.to_string(),
+            ),
+            (
+                Stage::Environment(EnvironmentStep::Deploy),
+                EnvironmentStep::Deploy.to_string(),
+            ),
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let (stage, expected_step_name) = tc;
+            let result = stage.sub_step_name();
+
+            // validate:
+            assert_eq!(expected_step_name, result);
+        }
+    }
+}

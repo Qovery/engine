@@ -38,7 +38,6 @@ tar = ">=0.4.36"
 # logger
 tracing = "0.1.26"
 tracing-subscriber = "0.2.18"
-tracing-test = "0.1.0"
 
 # Docker deps
 # shiplift = "0.6.0"
@@ -74,6 +73,7 @@ test-utilities = { path = "test_utilities" }
 tempdir = "0.3"
 tempfile = "3.2.0"
 maplit = "1.0.2"
+tracing-test = "0.1.0"
 
 [features]
 default = []
