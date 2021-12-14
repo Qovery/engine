@@ -20,7 +20,7 @@ use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
-    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
+    get_all_pdbs, kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
     kubectl_exec_version,
 };
 use crate::dns_provider::DnsProvider;
@@ -121,25 +121,30 @@ pub trait Kubernetes: Listen {
             Err(e) => return Err(e),
         };
 
-        match is_kubernetes_upgrade_required(
-            kubeconfig,
-            &self.version(),
+        let err = |e: SimpleError| -> EngineError {
+            let msg = "Error detected, upgrade won't occurs, but standard deployment.";
+            error!("{}", format!("{} {:?}", msg, e.message));
+            return EngineError {
+                cause: EngineErrorCause::Internal,
+                scope: EngineErrorScope::Engine,
+                execution_id: self.context().execution_id().to_string(),
+                message: Some(format!("{} {:?}", msg, e.message)),
+            };
+        };
+
+        match is_kubernetes_upgradable(
+            kubeconfig.clone(),
             self.cloud_provider().credentials_environment_variables(),
         ) {
-            Ok(x) => self.upgrade_with_status(x),
-            Err(e) => {
-                let msg = format!(
-                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
-                    e.message
-                );
-                error!("{}", &msg);
-                Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context().execution_id().to_string(),
-                    message: Some(msg),
-                })
-            }
+            Err(e) => Err(err(e)),
+            Ok(..) => match is_kubernetes_upgrade_required(
+                kubeconfig,
+                &self.version(),
+                self.cloud_provider().credentials_environment_variables(),
+            ) {
+                Ok(x) => self.upgrade_with_status(x),
+                Err(e) => Err(err(e)),
+            },
         }
     }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError>;
@@ -739,6 +744,42 @@ where
     }
 
     check_kubernetes_upgrade_status(requested_version, deployed_masters_version, deployed_workers_version)
+}
+
+pub fn is_kubernetes_upgradable<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    match get_all_pdbs(kubernetes_config, envs) {
+        Ok(pdbs) => match pdbs.items.is_some() {
+            false => Ok(()),
+            true => {
+                for pdb in pdbs.items.unwrap() {
+                    if pdb.status.current_healthy < pdb.status.desired_healthy {
+                        return Err(SimpleError {
+                            kind: SimpleErrorKind::Other,
+                            message: Some(format!(
+                                "Unable to upgrade Kubernetes, pdb for app {} in invalid state.",
+                                pdb.metadata.name,
+                            )),
+                        });
+                    } else {
+                        continue;
+                    }
+                }
+                Ok(())
+            }
+        },
+        Err(err) => {
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(format!(
+                    "Unable to upgrade Kubernetes, can't get pods disruptions budgets. {}",
+                    err.message.expect("No error message")
+                )),
+            })
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]

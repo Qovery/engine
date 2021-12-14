@@ -10,7 +10,7 @@ use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
     KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesVersion,
-    LabelsContent, PVC, SVC,
+    LabelsContent, PDB, PVC, SVC,
 };
 use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
@@ -944,6 +944,14 @@ where
             "--selector",
             selector,
         ],
+        _envs.clone(),
+        |_| {},
+        |_| {},
+    )?;
+
+    // deleting pdb in order to be able to upgrade kubernetes version
+    kubectl_exec_with_output(
+        vec!["-n", namespace, "delete", "pdb", "--selector", selector],
         _envs,
         |_| {},
         |_| {},
@@ -1192,4 +1200,15 @@ where
     };
 
     Ok(result)
+}
+
+pub fn get_all_pdbs<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<PDB, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, PDB>(
+        vec!["get", "pdb", "--all-namespaces", "-o", "json"],
+        kubernetes_config,
+        envs,
+    )
 }

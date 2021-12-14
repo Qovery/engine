@@ -408,6 +408,33 @@ pub struct SVCSpec {
     pub svc_type: String,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PDB {
+    pub api_version: String,
+    pub items: Option<Vec<PDBItem>>,
+    pub kind: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PDBItem {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: Metadata,
+    pub status: PDBStatus,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PDBStatus {
+    pub current_healthy: i16,
+    pub desired_healthy: i16,
+    pub disruptions_allowed: i16,
+    pub expected_pods: i16,
+    pub observed_generation: i16,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, PVC, SVC};

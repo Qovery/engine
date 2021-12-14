@@ -61,7 +61,7 @@ fn create_upgrade_and_destroy_doks_cluster_in_nyc_3() {
     create_and_destroy_doks_cluster(
         region,
         secrets,
-        ClusterTestType::Classic,
+        ClusterTestType::WithUpgrade,
         DO_KUBERNETES_MAJOR_VERSION,
         DO_KUBERNETES_MINOR_VERSION,
         function_name!(),
