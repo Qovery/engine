@@ -106,14 +106,8 @@ pub trait Kubernetes: Listen {
             resources.max_cpu += cpu_string_to_float(node.status.capacity.cpu);
             resources.free_ram_in_mib += any_to_mi(node.status.allocatable.memory);
             resources.max_ram_in_mib += any_to_mi(node.status.capacity.memory);
-            resources.free_pods = match node.status.allocatable.pods.parse::<u16>() {
-                Ok(v) => v,
-                _ => 0,
-            };
-            resources.max_pods = match node.status.capacity.pods.parse::<u16>() {
-                Ok(v) => v,
-                _ => 0,
-            };
+            resources.free_pods = node.status.allocatable.pods.parse::<u32>().unwrap_or(0);
+            resources.max_pods = node.status.capacity.pods.parse::<u32>().unwrap_or(0);
             resources.running_nodes += 1;
         }
 
@@ -224,9 +218,9 @@ pub struct Resources {
     pub max_cpu: f32,
     pub free_ram_in_mib: u32,
     pub max_ram_in_mib: u32,
-    pub free_pods: u16,
-    pub max_pods: u16,
-    pub running_nodes: u16,
+    pub free_pods: u32,
+    pub max_pods: u32,
+    pub running_nodes: u32,
 }
 
 /// common function to deploy a complete environment through Kubernetes and the different

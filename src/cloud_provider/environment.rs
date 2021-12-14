@@ -58,14 +58,14 @@ impl Environment {
     pub fn required_resources(&self) -> EnvironmentResources {
         let mut total_cpu_for_stateless_services: f32 = 0.0;
         let mut total_ram_in_mib_for_stateless_services: u32 = 0;
-        let mut required_pods = self.stateless_services.len() as u16;
+        let mut required_pods = self.stateless_services.len() as u32;
 
         for service in &self.stateless_services {
             match *service.action() {
                 Action::Create | Action::Nothing => {
                     total_cpu_for_stateless_services += cpu_string_to_float(&service.total_cpus());
                     total_ram_in_mib_for_stateless_services += &service.total_ram_in_mib();
-                    required_pods += service.total_instances();
+                    required_pods += service.max_instances()
                 }
                 Action::Delete | Action::Pause => {}
             }
@@ -83,7 +83,7 @@ impl Environment {
                 Action::Pause | Action::Delete => {
                     total_cpu_for_stateful_services += cpu_string_to_float(service.total_cpus());
                     total_ram_in_mib_for_stateful_services += service.total_ram_in_mib();
-                    required_pods += service.total_instances();
+                    required_pods += service.max_instances()
                 }
                 Action::Create | Action::Nothing => {}
             }
@@ -98,7 +98,7 @@ impl Environment {
 }
 
 pub struct EnvironmentResources {
-    pub pods: u16,
+    pub pods: u32,
     pub cpu: f32,
     pub ram_in_mib: u32,
 }

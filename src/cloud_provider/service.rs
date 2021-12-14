@@ -52,7 +52,8 @@ pub trait Service {
     fn total_cpus(&self) -> String;
     fn cpu_burst(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
-    fn total_instances(&self) -> u16;
+    fn min_instances(&self) -> u32;
+    fn max_instances(&self) -> u32;
     fn publicly_accessible(&self) -> bool;
     fn fqdn<'a>(&self, target: &DeploymentTarget, fqdn: &'a String, is_managed: bool) -> String {
         match &self.publicly_accessible() {
@@ -301,7 +302,8 @@ pub fn default_tera_context(
     context.insert("cluster_name", kubernetes.name());
     context.insert("total_cpus", &service.total_cpus());
     context.insert("total_ram_in_mib", &service.total_ram_in_mib());
-    context.insert("total_instances", &service.total_instances());
+    context.insert("min_instances", &service.min_instances());
+    context.insert("max_instances", &service.max_instances());
 
     context.insert("is_private_port", &service.private_port().is_some());
     if service.private_port().is_some() {

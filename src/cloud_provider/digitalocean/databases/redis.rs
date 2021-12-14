@@ -128,7 +128,11 @@ impl Service for Redis {
         self.total_ram_in_mib
     }
 
-    fn total_instances(&self) -> u16 {
+    fn min_instances(&self) -> u32 {
+        1
+    }
+
+    fn max_instances(&self) -> u32 {
         1
     }
 
