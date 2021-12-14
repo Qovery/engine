@@ -30,7 +30,8 @@ pub struct Application {
     total_cpus: String,
     cpu_burst: String,
     total_ram_in_mib: u32,
-    total_instances: u16,
+    min_instances: u32,
+    max_instances: u32,
     start_timeout_in_seconds: u32,
     image: Image,
     storage: Vec<Storage<StorageType>>,
@@ -48,7 +49,8 @@ impl Application {
         total_cpus: String,
         cpu_burst: String,
         total_ram_in_mib: u32,
-        total_instances: u16,
+        min_instances: u32,
+        max_instances: u32,
         start_timeout_in_seconds: u32,
         image: Image,
         storage: Vec<Storage<StorageType>>,
@@ -64,7 +66,8 @@ impl Application {
             total_cpus,
             cpu_burst,
             total_ram_in_mib,
-            total_instances,
+            min_instances,
+            max_instances,
             start_timeout_in_seconds,
             image,
             storage,
@@ -168,8 +171,12 @@ impl Service for Application {
         self.total_ram_in_mib
     }
 
-    fn total_instances(&self) -> u16 {
-        self.total_instances
+    fn min_instances(&self) -> u32 {
+        self.min_instances
+    }
+
+    fn max_instances(&self) -> u32 {
+        self.max_instances
     }
 
     fn publicly_accessible(&self) -> bool {

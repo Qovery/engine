@@ -104,7 +104,11 @@ impl Service for Router {
         1
     }
 
-    fn total_instances(&self) -> u16 {
+    fn min_instances(&self) -> u32 {
+        1
+    }
+
+    fn max_instances(&self) -> u32 {
         1
     }
 
