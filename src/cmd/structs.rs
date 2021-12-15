@@ -170,7 +170,6 @@ pub struct ContainerStatusWaiting {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerStatusTerminated {
-    #[serde(rename = "exit_code")]
     pub exit_code: i16,
     pub message: Option<String>,
     pub reason: String,
