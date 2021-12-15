@@ -173,7 +173,6 @@ pub struct ContainerStatusTerminated {
     pub exit_code: i16,
     pub message: Option<String>,
     pub reason: String,
-    pub signal: i16,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
