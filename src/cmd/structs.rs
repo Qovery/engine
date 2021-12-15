@@ -106,6 +106,14 @@ pub struct KubernetesServiceStatusLoadBalancerIngress {
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPod {
     pub status: KubernetesPodStatus,
+    pub metadata: KubernetesPodMetadata,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesPodMetadata {
+    pub name: String,
+    pub namespace: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
@@ -140,9 +148,9 @@ pub enum KubernetesPodStatusPhase {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodContainerStatus {
-    #[serde(rename = "last_state")]
     pub last_state: Option<KubernetesPodContainerStatusLastState>,
     pub ready: bool,
+    pub restart_count: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
