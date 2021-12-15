@@ -1202,7 +1202,7 @@ where
     Ok(result)
 }
 
-pub fn get_all_pdbs<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<PDB, SimpleError>
+pub fn kubernetes_get_all_pdbs<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<PDB, SimpleError>
 where
     P: AsRef<Path>,
 {

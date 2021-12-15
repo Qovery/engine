@@ -20,8 +20,8 @@ use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
-    get_all_pdbs, kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
-    kubectl_exec_version,
+    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
+    kubectl_exec_version, kubernetes_get_all_pdbs,
 };
 use crate::dns_provider::DnsProvider;
 use crate::error::SimpleErrorKind::Other;
@@ -750,7 +750,7 @@ pub fn is_kubernetes_upgradable<P>(kubernetes_config: P, envs: Vec<(&str, &str)>
 where
     P: AsRef<Path>,
 {
-    match get_all_pdbs(kubernetes_config, envs) {
+    match kubernetes_get_all_pdbs(kubernetes_config, envs) {
         Ok(pdbs) => match pdbs.items.is_some() {
             false => Ok(()),
             true => {

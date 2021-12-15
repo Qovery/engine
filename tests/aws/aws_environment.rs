@@ -6,7 +6,7 @@ use self::test_utilities::utilities::{
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::cmd::kubectl::get_all_pdbs;
+use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
 use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
@@ -150,7 +150,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
                 .as_str(),
             secrets.clone(),
         );
-        let mut pdbs = get_all_pdbs(
+        let mut pdbs = kubernetes_get_all_pdbs(
             kubernetes_config.as_ref().expect("Unable to get kubeconfig").clone(),
             vec![
                 (
@@ -205,7 +205,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
-        pdbs = get_all_pdbs(
+        pdbs = kubernetes_get_all_pdbs(
             kubernetes_config.as_ref().expect("Unable to get kubeconfig").clone(),
             vec![
                 (
