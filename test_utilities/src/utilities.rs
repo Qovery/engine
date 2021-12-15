@@ -841,10 +841,10 @@ pub fn get_pods(
 
     let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
 
-    cmd::kubectl::kubectl_exec_get_pod(
+    cmd::kubectl::kubectl_exec_get_pods(
         kubernetes_config.unwrap().as_str(),
-        namespace_name.clone().as_str(),
-        pod_to_check,
+        Some(namespace_name.clone().as_str()),
+        Some(pod_to_check),
         get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
     )
 }

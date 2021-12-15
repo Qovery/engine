@@ -265,7 +265,7 @@ pub fn kubectl_exec_is_pod_ready<P>(
 where
     P: AsRef<Path>,
 {
-    let result = kubectl_exec_get_pod(kubernetes_config, namespace, selector, envs)?;
+    let result = kubectl_exec_get_pods(kubernetes_config, Some(namespace), Some(selector), envs)?;
 
     if result.items.is_empty() || result.items.first().unwrap().status.container_statuses.is_none() {
         return Ok(None);
@@ -715,20 +715,31 @@ where
     }
 }
 
-pub fn kubectl_exec_get_pod<P>(
+pub fn kubectl_exec_get_pods<P>(
     kubernetes_config: P,
-    namespace: &str,
-    selector: &str,
+    namespace: Option<&str>,
+    selector: Option<&str>,
     envs: Vec<(&str, &str)>,
 ) -> Result<KubernetesList<KubernetesPod>, SimpleError>
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, KubernetesList<KubernetesPod>>(
-        vec!["get", "pod", "-o", "json", "-n", namespace, "-l", selector],
-        kubernetes_config,
-        envs,
-    )
+    let mut cmd_args = vec!["get", "pods", "-o", "json"];
+
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    if let Some(s) = selector {
+        cmd_args.push("-l");
+        cmd_args.push(s);
+    }
+
+    kubectl_exec::<P, KubernetesList<KubernetesPod>>(cmd_args, kubernetes_config, envs)
 }
 
 pub fn kubectl_exec_get_configmap<P>(
