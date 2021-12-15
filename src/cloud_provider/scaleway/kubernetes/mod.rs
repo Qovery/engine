@@ -369,16 +369,6 @@ impl<'a> Kapsule<'a> {
     }
 
     fn create(&self) -> Result<(), LegacyEngineError> {
-        let event_details = EventDetails::new(
-            self.cloud_provider.kind(),
-            QoveryIdentifier::from(self.context.organization_id().to_string()),
-            QoveryIdentifier::from(self.context.cluster_id().to_string()),
-            QoveryIdentifier::from(self.context.execution_id().to_string()),
-            self.region().to_string(),
-            Stage::Infrastructure(InfrastructureStep::Create),
-            Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
-        );
-
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         // TODO(DEV-1061): remove legacy logger
@@ -386,11 +376,11 @@ impl<'a> Kapsule<'a> {
         self.send_to_customer(message.as_str(), &listeners_helper);
         self.logger.log(
             LogLevel::Info,
-            EngineEvent::Deploying(event_details.clone(), EventMessage::new(message.to_string(), None)),
+            EngineEvent::Deploying(self.get_event_details(), EventMessage::new(message.to_string(), None)),
         );
 
         // upgrade cluster instead if required
-        match self.config_file() {
+        match self.get_kubeconfig_file() {
             Ok(f) => match is_kubernetes_upgrade_required(
                 f.0,
                 &self.version,
@@ -404,7 +394,7 @@ impl<'a> Kapsule<'a> {
                     self.logger.log(
                         LogLevel::Info,
                         EngineEvent::Deploying(
-                            event_details.clone(),
+                            self.get_event_details(),
                             EventMessage::new("Kubernetes cluster upgrade not required".to_string(), None),
                         ),
                     );
@@ -416,7 +406,7 @@ impl<'a> Kapsule<'a> {
             },
             Err(_) => self.logger.log(
                 LogLevel::Info,
-                EngineEvent::Deploying(event_details.clone(), EventMessage::new("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string(), None)),
+                EngineEvent::Deploying(self.get_event_details(), EventMessage::new("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string(), None)),
             ),
         };
 
@@ -522,7 +512,7 @@ impl<'a> Kapsule<'a> {
         }
 
         // kubernetes helm deployments on the cluster
-        let kubeconfig = PathBuf::from(self.config_file().expect("expected to get a kubeconfig file").0);
+        let kubeconfig = PathBuf::from(self.get_kubeconfig_file().expect("expected to get a kubeconfig file").0);
         let credentials_environment_variables: Vec<(String, String)> = self
             .cloud_provider
             .credentials_environment_variables()
@@ -582,7 +572,7 @@ impl<'a> Kapsule<'a> {
     }
 
     fn create_error(&self) -> Result<(), LegacyEngineError> {
-        let kubeconfig_file = match self.config_file() {
+        let kubeconfig_file = match self.get_kubeconfig_file() {
             Ok(x) => x.0,
             Err(e) => {
                 error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
@@ -682,7 +672,7 @@ impl<'a> Kapsule<'a> {
             });
         }
 
-        let kubernetes_config_file_path = self.config_file_path()?;
+        let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
         if self.options.qovery_engine_location == EngineLocation::ClientSide {
@@ -830,7 +820,7 @@ impl<'a> Kapsule<'a> {
             ),
         )?;
 
-        let kubernetes_config_file_path = match self.config_file_path() {
+        let kubernetes_config_file_path = match self.get_kubeconfig_file_path() {
             Ok(x) => x,
             Err(e) => {
                 warn!(
@@ -1137,11 +1127,15 @@ impl<'a> Kubernetes for Kapsule<'a> {
         self.dns_provider
     }
 
+    fn logger(&self) -> &dyn Logger {
+        self.logger
+    }
+
     fn config_file_store(&self) -> &dyn ObjectStorage {
         &self.object_storage
     }
 
-    fn is_valid(&self) -> Result<(), LegacyEngineError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
     }
 

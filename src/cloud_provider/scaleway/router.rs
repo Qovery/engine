@@ -255,7 +255,7 @@ impl Create for Router {
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let kubernetes_config_file_path = kubernetes.config_file_path()?;
+        let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
         // respect order - getting the context here and not before is mandatory
         // the nginx-ingress must be available to get the external dns target if necessary
