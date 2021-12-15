@@ -13,10 +13,10 @@ metadata:
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
 spec:
-  replicas: {{ total_instances }}
+  replicas: {{ min_instances }}
   strategy:
     type: RollingUpdate
-    {% if total_instances == 1 %}
+    {% if max_instances == 1 %}
     rollingUpdate:
       maxSurge: 1
     {% endif %}

@@ -118,7 +118,8 @@ let app = Application {
     total_cpus: "1".to_string(),
     cpu_burst: "1.5".to_string(),
     total_ram_in_mib: 256,
-    total_instances: 1,
+    min_instances: 1,
+    max_instances: 4,
     storage: vec![], // you can add persistent storage here
     environment_variables: vec![], // you can include env var here
 };
