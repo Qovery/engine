@@ -265,7 +265,7 @@ pub fn kubectl_exec_is_pod_ready<P>(
 where
     P: AsRef<Path>,
 {
-    let result = kubectl_exec_get_pod(kubernetes_config, namespace, selector, envs)?;
+    let result = kubectl_exec_get_pods(kubernetes_config, Some(namespace), Some(selector), envs)?;
 
     if result.items.is_empty() || result.items.first().unwrap().status.container_statuses.is_none() {
         return Ok(None);
@@ -715,20 +715,31 @@ where
     }
 }
 
-pub fn kubectl_exec_get_pod<P>(
+pub fn kubectl_exec_get_pods<P>(
     kubernetes_config: P,
-    namespace: &str,
-    selector: &str,
+    namespace: Option<&str>,
+    selector: Option<&str>,
     envs: Vec<(&str, &str)>,
 ) -> Result<KubernetesList<KubernetesPod>, SimpleError>
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, KubernetesList<KubernetesPod>>(
-        vec!["get", "pod", "-o", "json", "-n", namespace, "-l", selector],
-        kubernetes_config,
-        envs,
-    )
+    let mut cmd_args = vec!["get", "pods", "-o", "json"];
+
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    if let Some(s) = selector {
+        cmd_args.push("-l");
+        cmd_args.push(s);
+    }
+
+    kubectl_exec::<P, KubernetesList<KubernetesPod>>(cmd_args, kubernetes_config, envs)
 }
 
 pub fn kubectl_exec_get_configmap<P>(
@@ -1004,6 +1015,95 @@ where
         kubernetes_config,
         envs,
     )
+}
+
+/// kubectl_get_crash_looping_pods: gets crash looping pods.
+///
+/// Arguments
+///
+/// * `kubernetes_config`: kubernetes config file path.
+/// * `namespace`: namespace to look into, if None, will look into all namespaces.
+/// * `selector`: selector to look for, if None, will look for anything.
+/// * `restarted_min_count`: minimum restart counts to be considered as crash looping. If None, default is 10.
+/// * `envs`: environment variables to be passed to kubectl.
+pub fn kubectl_get_crash_looping_pods<P>(
+    kubernetes_config: P,
+    namespace: Option<&str>,
+    selector: Option<&str>,
+    restarted_min_count: Option<usize>,
+    envs: Vec<(&str, &str)>,
+) -> Result<Vec<KubernetesPod>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let restarted_min = restarted_min_count.unwrap_or_else(|| 10usize);
+    let pods = kubectl_exec_get_pods(kubernetes_config, namespace, selector, envs)?;
+
+    Ok(pods
+        .items
+        .into_iter()
+        .filter(|pod| {
+            pod.status.phase != KubernetesPodStatusPhase::Running
+                && pod.status.container_statuses.as_ref().is_some()
+                && pod
+                    .status
+                    .container_statuses
+                    .as_ref()
+                    .expect("Cannot get container statuses")
+                    .iter()
+                    .any(|e| e.restart_count >= restarted_min)
+        })
+        .collect::<Vec<KubernetesPod>>())
+}
+
+/// kubectl_exec_delete_pod: allow to delete a k8s pod if exists.
+///
+/// Arguments
+///
+/// * `kubernetes_config`: kubernetes config file path.
+/// * `pod_namespace`: pod's namespace.
+/// * `pod_name`: pod's name.
+/// * `envs`: environment variables to be passed to kubectl.
+pub fn kubectl_exec_delete_pod<P>(
+    kubernetes_config: P,
+    pod_namespace: &str,
+    pod_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesPod, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let pod_to_be_deleted =
+        match kubectl_exec_get_pods(&kubernetes_config, Some(pod_namespace), Some(pod_name), envs.clone()) {
+            Ok(pods) => {
+                if pods.items.is_empty() {
+                    return Err(SimpleError::new(
+                        SimpleErrorKind::Other,
+                        Some(format!(
+                            "Cannot delete pod `{}` in namespace `{}`, pod is ot found.",
+                            pod_name, pod_namespace
+                        )),
+                    ));
+                }
+
+                pods.items[0].clone()
+            }
+            Err(e) => return Err(e),
+        };
+
+    kubectl_exec(
+        vec![
+            "delete",
+            "pod",
+            pod_to_be_deleted.metadata.name.as_str(),
+            "-n",
+            pod_to_be_deleted.metadata.namespace.as_str(),
+        ],
+        &kubernetes_config,
+        envs,
+    )?;
+
+    Ok(pod_to_be_deleted)
 }
 
 fn kubectl_exec<P, T>(args: Vec<&str>, kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<T, SimpleError>
