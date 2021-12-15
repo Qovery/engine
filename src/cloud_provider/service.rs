@@ -1002,10 +1002,10 @@ where
     let pods = cast_simple_error_to_engine_error(
         kubernetes.engine_error_scope(),
         kubernetes.context().execution_id(),
-        crate::cmd::kubectl::kubectl_exec_get_pod(
+        crate::cmd::kubectl::kubectl_exec_get_pods(
             kubernetes_config_file_path.as_str(),
-            environment.namespace(),
-            selector.as_str(),
+            Some(environment.namespace()),
+            Some(selector.as_str()),
             kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )
