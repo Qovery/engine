@@ -2,13 +2,13 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesList<T> {
     pub items: Vec<T>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesService {
     pub status: KubernetesServiceStatus,
@@ -19,24 +19,17 @@ pub struct LabelsContent {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Metadata2 {
-    pub resource_version: String,
-    pub self_link: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
     pub api_version: String,
     pub kind: String,
-    pub metadata: Metadata,
+    pub metadata: ItemMetadata,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Metadata {
+pub struct ItemMetadata {
     pub creation_timestamp: String,
     pub name: String,
     pub resource_version: String,
@@ -45,18 +38,18 @@ pub struct Metadata {
     pub annotations: HashMap<String, String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct Configmap {
     pub data: ConfigmapData,
 }
 
-#[derive(Hash, Serialize, Deserialize)]
+#[derive(Hash, Deserialize)]
 pub struct ConfigmapData {
     #[serde(rename = "Corefile")]
     pub corefile: Option<String>,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Daemonset {
     pub api_version: String,
@@ -65,58 +58,58 @@ pub struct Daemonset {
     pub spec: Option<Spec>,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Spec {
     pub selector: Selector,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Selector {
     pub match_labels: MatchLabels,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchLabels {
     #[serde(rename = "k8s-app")]
     pub k8s_app: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesServiceStatus {
     pub load_balancer: KubernetesServiceStatusLoadBalancer,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesServiceStatusLoadBalancer {
     pub ingress: Vec<KubernetesServiceStatusLoadBalancerIngress>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesServiceStatusLoadBalancerIngress {
     pub hostname: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPod {
     pub status: KubernetesPodStatus,
     pub metadata: KubernetesPodMetadata,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodMetadata {
     pub name: String,
     pub namespace: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodStatus {
     pub container_statuses: Option<Vec<KubernetesPodContainerStatus>>,
@@ -136,7 +129,7 @@ pub struct KubernetesPodCondition {
     pub reason: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 pub enum KubernetesPodStatusPhase {
     Pending,
     Running,
@@ -145,7 +138,7 @@ pub enum KubernetesPodStatusPhase {
     Unknown,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodContainerStatus {
     pub last_state: Option<KubernetesPodContainerStatusLastState>,
@@ -153,49 +146,47 @@ pub struct KubernetesPodContainerStatus {
     pub restart_count: usize,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodContainerStatusLastState {
     pub terminated: Option<ContainerStatusTerminated>,
     pub waiting: Option<ContainerStatusWaiting>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerStatusWaiting {
     pub message: Option<String>,
     pub reason: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerStatusTerminated {
-    #[serde(rename = "exit_code")]
     pub exit_code: i16,
     pub message: Option<String>,
     pub reason: String,
-    pub signal: i16,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesJob {
     pub status: KubernetesJobStatus,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesJobStatus {
     pub succeeded: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesNode {
     pub status: KubernetesNodeStatus,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesNodeStatus {
     pub allocatable: KubernetesNodeStatusResources,
@@ -203,7 +194,7 @@ pub struct KubernetesNodeStatus {
     pub node_info: KubernetesNodeInfo,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesNodeStatusResources {
     pub cpu: String,
@@ -211,14 +202,14 @@ pub struct KubernetesNodeStatusResources {
     pub pods: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesNodeInfo {
     pub kube_proxy_version: String,
     pub kubelet_version: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesEvent {
     #[serde(rename = "type")]
@@ -229,26 +220,26 @@ pub struct KubernetesEvent {
     pub involved_object: KubernetesInvolvedObject,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesInvolvedObject {
     pub kind: String,
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesKind {
     pub kind: String,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesVersion {
     pub server_version: ServerVersion,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerVersion {
     pub major: String,
@@ -256,7 +247,7 @@ pub struct ServerVersion {
     pub git_version: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HelmListItem {
     pub name: String,
@@ -285,7 +276,7 @@ impl HelmChart {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct HelmHistoryRow {
     pub revision: u16,
     pub updated: String,
@@ -300,7 +291,7 @@ impl HelmHistoryRow {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVC {
     pub api_version: String,
@@ -308,16 +299,22 @@ pub struct PVC {
     pub kind: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCItem {
     pub api_version: String,
     pub kind: String,
-    pub metadata: Metadata,
+    pub metadata: PVCMetadata,
     pub spec: PVCSpec,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PVCMetadata {
+    pub resource_version: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCSpec {
     pub access_modes: Option<Vec<String>>,
@@ -327,19 +324,19 @@ pub struct PVCSpec {
     pub volume_name: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCResources {
     pub requests: PVCRequests,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCRequests {
     pub storage: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SVC {
     pub api_version: String,
@@ -347,16 +344,24 @@ pub struct SVC {
     pub kind: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SVCItem {
     pub api_version: String,
     pub kind: String,
-    pub metadata: Metadata,
+    pub metadata: SVCMetadata,
     pub spec: SVCSpec,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SVCMetadata {
+    pub resource_version: String,
+    pub name: String,
+    pub annotations: HashMap<String, String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 pub struct SVCSpec {
     #[serde(rename = "type")]
     pub svc_type: String,
@@ -364,20 +369,880 @@ pub struct SVCSpec {
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::structs::{KubernetesList, KubernetesPod};
+    use crate::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
+
+    #[test]
+    fn test_svc_deserialize() {
+        // setup:
+        let payload = r#"{
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": {
+                "annotations": {
+                    "meta.helm.sh/release-name": "application-z164e3ad8-z164e3ad8",
+                    "meta.helm.sh/release-namespace": "z9b830e28-ze23976e2"
+                },
+                "creationTimestamp": "2021-11-30T09:08:52Z",
+                "labels": {
+                    "app": "app-z164e3ad8",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "appId": "z164e3ad8",
+                    "envId": "ze23976e2",
+                    "ownerId": "FAKE"
+                },
+                "name": "app-z164e3ad8",
+                "namespace": "z9b830e28-ze23976e2",
+                "resourceVersion": "6801889",
+                "selfLink": "/api/v1/namespaces/z9b830e28-ze23976e2/services/app-z164e3ad8",
+                "uid": "c165f1b0-b372-449e-9ffa-ed2f06fee7c3"
+            },
+            "spec": {
+                "clusterIP": "10.245.19.143",
+                "ports": [
+                    {
+                        "name": "p80",
+                        "port": 80,
+                        "protocol": "TCP",
+                        "targetPort": 80
+                    }
+                ],
+                "selector": {
+                    "app": "app-z164e3ad8",
+                    "appId": "z164e3ad8",
+                    "envId": "ze23976e2",
+                    "ownerId": "FAKE"
+                },
+                "sessionAffinity": "None",
+                "type": "ClusterIP"
+            },
+            "status": {
+                "loadBalancer": {}
+            }
+        }"#;
+
+        // execute:
+        let svc = serde_json::from_str::<SVC>(payload);
+
+        // verify:
+        match svc {
+            Ok(_) => assert!(true),
+            Err(e) => {
+                return assert!(false, "{}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_pvc_deserialize() {
+        // setup:
+        let payload = r#"{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "PersistentVolumeClaim",
+      "metadata": {
+        "annotations": {
+          "pv.kubernetes.io/bind-completed": "yes",
+          "pv.kubernetes.io/bound-by-controller": "yes",
+          "volume.beta.kubernetes.io/storage-provisioner": "csi.scaleway.com",
+          "volume.kubernetes.io/selected-node": "scw-qovery-z093e29e2-z093e29e2-1-672f4a75df734"
+        },
+        "creationTimestamp": "2021-12-16T15:05:28Z",
+        "finalizers": [
+          "kubernetes.io/pvc-protection"
+        ],
+        "labels": {
+          "app": "app-simple-app-vsxgtriudbloeaa",
+          "appId": "ri5j3sycsocnadf",
+          "diskId": "wx3s3f67pruykgz",
+          "diskType": "scw-sbv-ssd-0",
+          "envId": "ezpiedcfaxmxexz",
+          "ownerId": "ibokvref94rpp0p"
+        },
+        "managedFields": [
+          {
+            "apiVersion": "v1",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:annotations": {
+                  "f:pv.kubernetes.io/bind-completed": {},
+                  "f:pv.kubernetes.io/bound-by-controller": {},
+                  "f:volume.beta.kubernetes.io/storage-provisioner": {}
+                },
+                "f:labels": {
+                  ".": {},
+                  "f:app": {},
+                  "f:appId": {},
+                  "f:diskId": {},
+                  "f:diskType": {},
+                  "f:envId": {},
+                  "f:ownerId": {}
+                }
+              },
+              "f:spec": {
+                "f:accessModes": {},
+                "f:resources": {
+                  "f:requests": {
+                    ".": {},
+                    "f:storage": {}
+                  }
+                },
+                "f:storageClassName": {},
+                "f:volumeMode": {},
+                "f:volumeName": {}
+              },
+              "f:status": {
+                "f:accessModes": {},
+                "f:capacity": {
+                  ".": {},
+                  "f:storage": {}
+                },
+                "f:phase": {}
+              }
+            },
+            "manager": "kube-controller-manager",
+            "operation": "Update",
+            "time": "2021-12-16T15:05:28Z"
+          },
+          {
+            "apiVersion": "v1",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:annotations": {
+                  ".": {},
+                  "f:volume.kubernetes.io/selected-node": {}
+                }
+              }
+            },
+            "manager": "kube-scheduler",
+            "operation": "Update",
+            "time": "2021-12-16T15:05:28Z"
+          }
+        ],
+        "name": "wx3s3f67pruykgz-app-simple-app-vsxgtriudbloeaa-0",
+        "namespace": "kzaqt7x0ylvtcic-ezpiedcfaxmxexz",
+        "resourceVersion": "895119134",
+        "uid": "6c881b93-c580-4121-a846-6352cc75c991"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "10Gi"
+          }
+        },
+        "storageClassName": "scw-sbv-ssd-0",
+        "volumeMode": "Filesystem",
+        "volumeName": "pvc-6c881b93-c580-4121-a846-6352cc75c991"
+      },
+      "status": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "capacity": {
+          "storage": "10Gi"
+        },
+        "phase": "Bound"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "PersistentVolumeClaim",
+      "metadata": {
+        "annotations": {
+          "pv.kubernetes.io/bind-completed": "yes",
+          "pv.kubernetes.io/bound-by-controller": "yes",
+          "volume.beta.kubernetes.io/storage-provisioner": "csi.scaleway.com",
+          "volume.kubernetes.io/selected-node": "scw-qovery-z093e29e2-z093e29e2-1-672f4a75df734"
+        },
+        "creationTimestamp": "2021-12-16T15:07:00Z",
+        "finalizers": [
+          "kubernetes.io/pvc-protection"
+        ],
+        "labels": {
+          "app": "app-simple-app-vsxgtriudbloeaa",
+          "appId": "ri5j3sycsocnadf",
+          "diskId": "wx3s3f67pruykgz",
+          "diskType": "scw-sbv-ssd-0",
+          "envId": "ezpiedcfaxmxexz",
+          "ownerId": "ibokvref94rpp0p"
+        },
+        "managedFields": [
+          {
+            "apiVersion": "v1",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:annotations": {
+                  "f:pv.kubernetes.io/bind-completed": {},
+                  "f:pv.kubernetes.io/bound-by-controller": {},
+                  "f:volume.beta.kubernetes.io/storage-provisioner": {}
+                },
+                "f:labels": {
+                  ".": {},
+                  "f:app": {},
+                  "f:appId": {},
+                  "f:diskId": {},
+                  "f:diskType": {},
+                  "f:envId": {},
+                  "f:ownerId": {}
+                }
+              },
+              "f:spec": {
+                "f:accessModes": {},
+                "f:resources": {
+                  "f:requests": {
+                    ".": {},
+                    "f:storage": {}
+                  }
+                },
+                "f:storageClassName": {},
+                "f:volumeMode": {},
+                "f:volumeName": {}
+              },
+              "f:status": {
+                "f:accessModes": {},
+                "f:capacity": {
+                  ".": {},
+                  "f:storage": {}
+                },
+                "f:phase": {}
+              }
+            },
+            "manager": "kube-controller-manager",
+            "operation": "Update",
+            "time": "2021-12-16T15:07:00Z"
+          },
+          {
+            "apiVersion": "v1",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:annotations": {
+                  ".": {},
+                  "f:volume.kubernetes.io/selected-node": {}
+                }
+              }
+            },
+            "manager": "kube-scheduler",
+            "operation": "Update",
+            "time": "2021-12-16T15:07:00Z"
+          }
+        ],
+        "name": "wx3s3f67pruykgz-app-simple-app-vsxgtriudbloeaa-1",
+        "namespace": "kzaqt7x0ylvtcic-ezpiedcfaxmxexz",
+        "resourceVersion": "895134137",
+        "uid": "b92b653f-6a4e-40c3-a16e-7e0c9701df3e"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "10Gi"
+          }
+        },
+        "storageClassName": "scw-sbv-ssd-0",
+        "volumeMode": "Filesystem",
+        "volumeName": "pvc-b92b653f-6a4e-40c3-a16e-7e0c9701df3e"
+      },
+      "status": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "capacity": {
+          "storage": "10Gi"
+        },
+        "phase": "Bound"
+      }
+    }
+  ],
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": "",
+    "selfLink": ""
+  }
+}"#;
+
+        // execute:
+        let pvc = serde_json::from_str::<PVC>(payload);
+
+        // verify:
+        match pvc {
+            Ok(_) => assert!(true),
+            Err(e) => {
+                return assert!(false, "{}", e);
+            }
+        }
+    }
 
     #[test]
     fn test_pod_status_deserialize() {
-        let payload = r#"
-{    "apiVersion": "v1",    "items": [        {            "apiVersion": "v1",            "kind": "Pod",            "metadata": {                "annotations": {                    "kubernetes.io/psp": "eks.privileged"                },                "creationTimestamp": "2021-03-15T15:41:56Z",                "generateName": "postgresqlpostgres-",                "labels": {                    "app": "postgresqlpostgres",                    "chart": "postgresql-8.9.8",                    "controller-revision-hash": "postgresqlpostgres-8db988cfd",                    "heritage": "Helm",                    "release": "postgresql-atx9frcbbrlphzu",                    "role": "master",                    "statefulset.kubernetes.io/pod-name": "postgresqlpostgres-0"                },                "name": "postgresqlpostgres-0",                "namespace": "lbxmwiibzi9lbla-ah5bbhekjarxta5",                "ownerReferences": [                    {                        "apiVersion": "apps/v1",                        "blockOwnerDeletion": true,                        "controller": true,                        "kind": "StatefulSet",                        "name": "postgresqlpostgres",                        "uid": "507ca7da-7d2c-4fdd-90f8-890c8a0d9491"                    }                ],                "resourceVersion": "53444298",                "selfLink": "/api/v1/namespaces/lbxmwiibzi9lbla-ah5bbhekjarxta5/pods/postgresqlpostgres-0",                "uid": "baf9e257-f517-49f5-b530-392a690f5231"            },            "spec": {                "containers": [                    {                        "env": [                            {                                "name": "BITNAMI_DEBUG",                                "value": "false"                            },                            {                                "name": "POSTGRESQL_PORT_NUMBER",                                "value": "5432"                            },                            {                                "name": "POSTGRESQL_VOLUME_DIR",                                "value": "/bitnami/postgresql"                            },                            {                                "name": "POSTGRESQL_INITSCRIPTS_USERNAME",                                "value": "postgres"                            },                            {                                "name": "POSTGRESQL_INITSCRIPTS_PASSWORD",                                "value": "cvbwtt8tzt6jtli"                            },                            {                                "name": "PGDATA",                                "value": "/bitnami/postgresql/data"                            },                            {                                "name": "POSTGRES_POSTGRES_PASSWORD",                                "valueFrom": {                                    "secretKeyRef": {                                        "key": "postgresql-postgres-password",                                        "name": "postgresqlpostgres"                                    }                                }                            },                            {                                "name": "POSTGRES_USER",                                "value": "superuser"                            },                            {                                "name": "POSTGRES_PASSWORD",                                "valueFrom": {                                    "secretKeyRef": {                                        "key": "postgresql-password",                                        "name": "postgresqlpostgres"                                    }                                }                            },                            {                                "name": "POSTGRES_DB",                                "value": "postgres"                            },                            {                                "name": "POSTGRESQL_ENABLE_LDAP",                                "value": "no"                            }                        ],                        "image": "quay.io/bitnami/postgresql:10.16.0",                        "imagePullPolicy": "IfNotPresent",                        "livenessProbe": {                            "exec": {                                "command": [                                    "/bin/sh",                                    "-c",                                    "exec pg_isready -U \"superuser\" -d \"postgres\" -h 127.0.0.1 -p 5432"                                ]                            },                            "failureThreshold": 6,                            "initialDelaySeconds": 30,                            "periodSeconds": 10,                            "successThreshold": 1,                            "timeoutSeconds": 5                        },                        "name": "postgresqlpostgres",                        "ports": [                            {                                "containerPort": 5432,                                "name": "tcp-postgresql",                                "protocol": "TCP"                            }                        ],                        "readinessProbe": {                            "exec": {                                "command": [                                    "/bin/sh",                                    "-c",                                    "-e",                                    "exec pg_isready -U \"superuser\" -d \"postgres\" -h 127.0.0.1 -p 5432\n[ -f /opt/bitnami/postgresql/tmp/.initialized ] || [ -f /bitnami/postgresql/.initialized ]\n"                                ]                            },                            "failureThreshold": 6,                            "initialDelaySeconds": 5,                            "periodSeconds": 10,                            "successThreshold": 1,                            "timeoutSeconds": 5                        },                        "resources": {                            "requests": {                                "cpu": "100m",                                "memory": "50Gi"                            }                        },                        "securityContext": {                            "runAsUser": 1001                        },                        "terminationMessagePath": "/dev/termination-log",                        "terminationMessagePolicy": "File",                        "volumeMounts": [                            {                                "mountPath": "/dev/shm",                                "name": "dshm"                            },                            {                                "mountPath": "/bitnami/postgresql",                                "name": "data"                            },                            {                                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",                                "name": "default-token-n6bkr",                                "readOnly": true                            }                        ]                    }                ],                "dnsPolicy": "ClusterFirst",                "enableServiceLinks": true,                "hostname": "postgresqlpostgres-0",                "initContainers": [                    {                        "command": [                            "/bin/sh",                            "-cx",                            "mkdir -p /bitnami/postgresql/data\nchmod 700 /bitnami/postgresql/data\nfind /bitnami/postgresql -mindepth 1 -maxdepth 1 -not -name \"conf\" -not -name \".snapshot\" -not -name \"lost+found\" | \\\n  xargs chown -R 1001:1001\nchmod -R 777 /dev/shm\n"                        ],                        "image": "docker.io/bitnami/minideb:buster",                        "imagePullPolicy": "IfNotPresent",                        "name": "init-chmod-data",                        "resources": {                            "requests": {                                "cpu": "100m",                                "memory": "50Gi"                            }                        },                        "securityContext": {                            "runAsUser": 0                        },                        "terminationMessagePath": "/dev/termination-log",                        "terminationMessagePolicy": "File",                        "volumeMounts": [                            {                                "mountPath": "/bitnami/postgresql",                                "name": "data"                            },                            {                                "mountPath": "/dev/shm",                                "name": "dshm"                            },                            {                                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",                                "name": "default-token-n6bkr",                                "readOnly": true                            }                        ]                    }                ],                "priority": 0,                "restartPolicy": "Always",                "schedulerName": "default-scheduler",                "securityContext": {                    "fsGroup": 1001                },                "serviceAccount": "default",                "serviceAccountName": "default",                "subdomain": "postgresqlpostgres-headless",                "terminationGracePeriodSeconds": 30,                "tolerations": [                    {                        "effect": "NoExecute",                        "key": "node.kubernetes.io/not-ready",                        "operator": "Exists",                        "tolerationSeconds": 300                    },                    {                        "effect": "NoExecute",                        "key": "node.kubernetes.io/unreachable",                        "operator": "Exists",                        "tolerationSeconds": 300                    }                ],                "volumes": [                    {                        "name": "data",                        "persistentVolumeClaim": {                            "claimName": "data-postgresqlpostgres-0"                        }                    },                    {                        "emptyDir": {                            "medium": "Memory",                            "sizeLimit": "1Gi"                        },                        "name": "dshm"                    },                    {                        "name": "default-token-n6bkr",                        "secret": {                            "defaultMode": 420,                            "secretName": "default-token-n6bkr"                        }                    }                ]            },            "status": {                "conditions": [                    {                        "lastProbeTime": null,                        "lastTransitionTime": "2021-03-15T15:41:56Z",                        "message": "0/5 nodes are available: 5 Insufficient memory.",                        "reason": "Unschedulable",                        "status": "False",                        "type": "PodScheduled"                    }                ],                "phase": "Pending",                "qosClass": "Burstable"            }        }    ],    "kind": "List",    "metadata": {        "resourceVersion": "",        "selfLink": ""    }}        
-        "#;
+        let payload = r#"{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "kubernetes.io/psp": "eks.privileged"
+        },
+        "creationTimestamp": "2021-03-15T15:41:56Z",
+        "generateName": "postgresqlpostgres-",
+        "labels": {
+          "app": "postgresqlpostgres",
+          "chart": "postgresql-8.9.8",
+          "controller-revision-hash": "postgresqlpostgres-8db988cfd",
+          "heritage": "Helm",
+          "release": "postgresql-atx9frcbbrlphzu",
+          "role": "master",
+          "statefulset.kubernetes.io/pod-name": "postgresqlpostgres-0"
+        },
+        "name": "postgresqlpostgres-0",
+        "namespace": "lbxmwiibzi9lbla-ah5bbhekjarxta5",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "StatefulSet",
+            "name": "postgresqlpostgres",
+            "uid": "507ca7da-7d2c-4fdd-90f8-890c8a0d9491"
+          }
+        ],
+        "resourceVersion": "53444298",
+        "selfLink": "/api/v1/namespaces/lbxmwiibzi9lbla-ah5bbhekjarxta5/pods/postgresqlpostgres-0",
+        "uid": "baf9e257-f517-49f5-b530-392a690f5231"
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "BITNAMI_DEBUG",
+                "value": false
+              },
+              {
+                "name": "POSTGRESQL_PORT_NUMBER",
+                "value": 5432
+              },
+              {
+                "name": "POSTGRESQL_VOLUME_DIR",
+                "value": "/bitnami/postgresql"
+              },
+              {
+                "name": "POSTGRESQL_INITSCRIPTS_USERNAME",
+                "value": "postgres"
+              },
+              {
+                "name": "POSTGRESQL_INITSCRIPTS_PASSWORD",
+                "value": "cvbwtt8tzt6jtli"
+              },
+              {
+                "name": "PGDATA",
+                "value": "/bitnami/postgresql/data"
+              },
+              {
+                "name": "POSTGRES_POSTGRES_PASSWORD",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "postgresql-postgres-password",
+                    "name": "postgresqlpostgres"
+                  }
+                }
+              },
+              {
+                "name": "POSTGRES_USER",
+                "value": "superuser"
+              },
+              {
+                "name": "POSTGRES_PASSWORD",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "postgresql-password",
+                    "name": "postgresqlpostgres"
+                  }
+                }
+              },
+              {
+                "name": "POSTGRES_DB",
+                "value": "postgres"
+              },
+              {
+                "name": "POSTGRESQL_ENABLE_LDAP",
+                "value": "no"
+              }
+            ],
+            "image": "quay.io/bitnami/postgresql:10.16.0",
+            "imagePullPolicy": "IfNotPresent",
+            "livenessProbe": {
+              "exec": {
+                "command": [
+                  "/bin/sh",
+                  "-c",
+                  "exec pg_isready -U \"superuser\" -d \"postgres\" -h 127.0.0.1 -p 5432"
+                ]
+              },
+              "failureThreshold": 6,
+              "initialDelaySeconds": 30,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 5
+            },
+            "name": "postgresqlpostgres",
+            "ports": [
+              {
+                "containerPort": 5432,
+                "name": "tcp-postgresql",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "exec": {
+                "command": [
+                  "/bin/sh",
+                  "-c",
+                  "-e",
+                  "exec pg_isready -U \"superuser\" -d \"postgres\" -h 127.0.0.1 -p 5432\n[ -f /opt/bitnami/postgresql/tmp/.initialized ] || [ -f /bitnami/postgresql/.initialized ]\n"
+                ]
+              },
+              "failureThreshold": 6,
+              "initialDelaySeconds": 5,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 5
+            },
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "50Gi"
+              }
+            },
+            "securityContext": {
+              "runAsUser": 1001
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/dev/shm",
+                "name": "dshm"
+              },
+              {
+                "mountPath": "/bitnami/postgresql",
+                "name": "data"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "default-token-n6bkr",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "hostname": "postgresqlpostgres-0",
+        "initContainers": [
+          {
+            "command": [
+              "/bin/sh",
+              "-cx",
+              "mkdir -p /bitnami/postgresql/data\nchmod 700 /bitnami/postgresql/data\nfind /bitnami/postgresql -mindepth 1 -maxdepth 1 -not -name \"conf\" -not -name \".snapshot\" -not -name \"lost+found\" | \\\n  xargs chown -R 1001:1001\nchmod -R 777 /dev/shm\n"
+            ],
+            "image": "docker.io/bitnami/minideb:buster",
+            "imagePullPolicy": "IfNotPresent",
+            "name": "init-chmod-data",
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "50Gi"
+              }
+            },
+            "securityContext": {
+              "runAsUser": 0
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/bitnami/postgresql",
+                "name": "data"
+              },
+              {
+                "mountPath": "/dev/shm",
+                "name": "dshm"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "default-token-n6bkr",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "fsGroup": 1001
+        },
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "subdomain": "postgresqlpostgres-headless",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "data",
+            "persistentVolumeClaim": {
+              "claimName": "data-postgresqlpostgres-0"
+            }
+          },
+          {
+            "emptyDir": {
+              "medium": "Memory",
+              "sizeLimit": "1Gi"
+            },
+            "name": "dshm"
+          },
+          {
+            "name": "default-token-n6bkr",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "default-token-n6bkr"
+            }
+          }
+        ]
+      },
+      "status": {
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2021-03-15T15:41:56Z",
+            "message": "0/5 nodes are available: 5 Insufficient memory.",
+            "reason": "Unschedulable",
+            "status": "False",
+            "type": "PodScheduled"
+          }
+        ],
+        "phase": "Pending",
+        "qosClass": "Burstable"
+      }
+    }
+  ],
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": "",
+    "selfLink": ""
+  }
+}"#;
 
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
-        assert_eq!(pod_status.is_ok(), true);
-        assert_eq!(pod_status.unwrap().items[0].status.conditions[0].status, "False");
+        assert!(pod_status.is_ok());
+        let pod_status = pod_status.unwrap();
+        assert_eq!(pod_status.items[0].status.conditions[0].status, "False");
 
-        let payload = r#"
-        {
+        let payload = r#"{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "kubernetes.io/psp": "eks.privileged"
+        },
+        "creationTimestamp": "2021-03-15T15:41:56Z",
+        "generateName": "postgresqlpostgres-",
+        "labels": {
+          "app": "postgresqlpostgres",
+          "chart": "postgresql-8.9.8",
+          "controller-revision-hash": "postgresqlpostgres-8db988cfd",
+          "heritage": "Helm",
+          "release": "postgresql-atx9frcbbrlphzu",
+          "role": "master",
+          "statefulset.kubernetes.io/pod-name": "postgresqlpostgres-0"
+        },
+        "name": "postgresqlpostgres-0",
+        "namespace": "lbxmwiibzi9lbla-ah5bbhekjarxta5",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "StatefulSet",
+            "name": "postgresqlpostgres",
+            "uid": "507ca7da-7d2c-4fdd-90f8-890c8a0d9491"
+          }
+        ],
+        "resourceVersion": "53444298",
+        "selfLink": "/api/v1/namespaces/lbxmwiibzi9lbla-ah5bbhekjarxta5/pods/postgresqlpostgres-0",
+        "uid": "baf9e257-f517-49f5-b530-392a690f5231"
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "BITNAMI_DEBUG",
+                "value": false
+              },
+              {
+                "name": "POSTGRESQL_PORT_NUMBER",
+                "value": 5432
+              },
+              {
+                "name": "POSTGRESQL_VOLUME_DIR",
+                "value": "/bitnami/postgresql"
+              },
+              {
+                "name": "POSTGRESQL_INITSCRIPTS_USERNAME",
+                "value": "postgres"
+              },
+              {
+                "name": "POSTGRESQL_INITSCRIPTS_PASSWORD",
+                "value": "cvbwtt8tzt6jtli"
+              },
+              {
+                "name": "PGDATA",
+                "value": "/bitnami/postgresql/data"
+              },
+              {
+                "name": "POSTGRES_POSTGRES_PASSWORD",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "postgresql-postgres-password",
+                    "name": "postgresqlpostgres"
+                  }
+                }
+              },
+              {
+                "name": "POSTGRES_USER",
+                "value": "superuser"
+              },
+              {
+                "name": "POSTGRES_PASSWORD",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "postgresql-password",
+                    "name": "postgresqlpostgres"
+                  }
+                }
+              },
+              {
+                "name": "POSTGRES_DB",
+                "value": "postgres"
+              },
+              {
+                "name": "POSTGRESQL_ENABLE_LDAP",
+                "value": "no"
+              }
+            ],
+            "image": "quay.io/bitnami/postgresql:10.16.0",
+            "imagePullPolicy": "IfNotPresent",
+            "livenessProbe": {
+              "exec": {
+                "command": [
+                  "/bin/sh",
+                  "-c",
+                  "exec pg_isready -U \"superuser\" -d \"postgres\" -h 127.0.0.1 -p 5432"
+                ]
+              },
+              "failureThreshold": 6,
+              "initialDelaySeconds": 30,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 5
+            },
+            "name": "postgresqlpostgres",
+            "ports": [
+              {
+                "containerPort": 5432,
+                "name": "tcp-postgresql",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "exec": {
+                "command": [
+                  "/bin/sh",
+                  "-c",
+                  "-e",
+                  "exec pg_isready -U \"superuser\" -d \"postgres\" -h 127.0.0.1 -p 5432\n[ -f /opt/bitnami/postgresql/tmp/.initialized ] || [ -f /bitnami/postgresql/.initialized ]\n"
+                ]
+              },
+              "failureThreshold": 6,
+              "initialDelaySeconds": 5,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 5
+            },
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "50Gi"
+              }
+            },
+            "securityContext": {
+              "runAsUser": 1001
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/dev/shm",
+                "name": "dshm"
+              },
+              {
+                "mountPath": "/bitnami/postgresql",
+                "name": "data"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "default-token-n6bkr",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "hostname": "postgresqlpostgres-0",
+        "initContainers": [
+          {
+            "command": [
+              "/bin/sh",
+              "-cx",
+              "mkdir -p /bitnami/postgresql/data\nchmod 700 /bitnami/postgresql/data\nfind /bitnami/postgresql -mindepth 1 -maxdepth 1 -not -name \"conf\" -not -name \".snapshot\" -not -name \"lost+found\" | \\\n  xargs chown -R 1001:1001\nchmod -R 777 /dev/shm\n"
+            ],
+            "image": "docker.io/bitnami/minideb:buster",
+            "imagePullPolicy": "IfNotPresent",
+            "name": "init-chmod-data",
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "50Gi"
+              }
+            },
+            "securityContext": {
+              "runAsUser": 0
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/bitnami/postgresql",
+                "name": "data"
+              },
+              {
+                "mountPath": "/dev/shm",
+                "name": "dshm"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "default-token-n6bkr",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "fsGroup": 1001
+        },
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "subdomain": "postgresqlpostgres-headless",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "data",
+            "persistentVolumeClaim": {
+              "claimName": "data-postgresqlpostgres-0"
+            }
+          },
+          {
+            "emptyDir": {
+              "medium": "Memory",
+              "sizeLimit": "1Gi"
+            },
+            "name": "dshm"
+          },
+          {
+            "name": "default-token-n6bkr",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "default-token-n6bkr"
+            }
+          }
+        ]
+      },
+      "status": {
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2021-03-15T15:41:56Z",
+            "message": "0/5 nodes are available: 5 Insufficient memory.",
+            "reason": "BackOff",
+            "status": "False",
+            "type": "PodScheduled"
+          }
+        ],
+        "phase": "Pending",
+        "qosClass": "Burstable"
+      }
+    }
+  ],
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": "",
+    "selfLink": ""
+  }
+}"#;
+
+        let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
+        assert!(pod_status.is_ok());
+        let pod_status = pod_status.unwrap();
+        assert_eq!(pod_status.items[0].status.conditions[0].status, "False");
+
+        let payload = r#"{
     "apiVersion": "v1",
     "items": [
         {
@@ -643,11 +1508,10 @@ mod tests {
     "metadata": {
         "resourceVersion": "",
         "selfLink": ""
-    }
-}
-        "#;
+    }}"#;
 
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
-        assert_eq!(pod_status.is_ok(), true);
+
+        assert!(pod_status.is_ok());
     }
 }
