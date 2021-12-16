@@ -417,11 +417,11 @@ pub fn scw_helm_charts(
                 },
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
             ],
             ..Default::default()
