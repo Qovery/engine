@@ -21,13 +21,6 @@ pub struct LabelsContent {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Metadata2 {
-    pub resource_version: String,
-    pub self_link: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Item {
     pub api_version: String,
     pub kind: String,
