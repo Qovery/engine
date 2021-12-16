@@ -9,7 +9,8 @@ use crate::cloud_provider::digitalocean::models::svc::DoLoadBalancer;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
-    KubernetesPod, KubernetesPodStatusPhase, KubernetesService, KubernetesVersion, LabelsContent, PVC, SVC,
+    KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesVersion,
+    LabelsContent, PVC, SVC,
 };
 use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
@@ -1024,7 +1025,7 @@ where
 /// * `kubernetes_config`: kubernetes config file path.
 /// * `namespace`: namespace to look into, if None, will look into all namespaces.
 /// * `selector`: selector to look for, if None, will look for anything.
-/// * `restarted_min_count`: minimum restart counts to be considered as crash looping. If None, default is 10.
+/// * `restarted_min_count`: minimum restart counts to be considered as crash looping. If None, default is 5.
 /// * `envs`: environment variables to be passed to kubectl.
 pub fn kubectl_get_crash_looping_pods<P>(
     kubernetes_config: P,
@@ -1036,22 +1037,28 @@ pub fn kubectl_get_crash_looping_pods<P>(
 where
     P: AsRef<Path>,
 {
-    let restarted_min = restarted_min_count.unwrap_or_else(|| 10usize);
+    let restarted_min = restarted_min_count.unwrap_or(10usize);
     let pods = kubectl_exec_get_pods(kubernetes_config, namespace, selector, envs)?;
 
+    // Pod needs to have at least one container having backoff status (check 1)
+    // AND at least a container with minimum restarts (asked in inputs) (check 2)
     Ok(pods
         .items
         .into_iter()
         .filter(|pod| {
-            pod.status.phase != KubernetesPodStatusPhase::Running
-                && pod.status.container_statuses.as_ref().is_some()
+            pod.status.container_statuses.as_ref().is_some()
+                && pod
+                    .status
+                    .conditions
+                    .iter()
+                    .any(|c| c.reason == KubernetesPodStatusReason::BackOff) // check 1
                 && pod
                     .status
                     .container_statuses
                     .as_ref()
                     .expect("Cannot get container statuses")
                     .iter()
-                    .any(|e| e.restart_count >= restarted_min)
+                    .any(|e| e.restart_count >= restarted_min) // check 2
         })
         .collect::<Vec<KubernetesPod>>())
 }
