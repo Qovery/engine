@@ -1015,9 +1015,9 @@ where
         for container_condition in pod.status.conditions {
             if container_condition.status.to_ascii_lowercase() == "false" {
                 result.push(format!(
-                    "Condition not met to start the container: {} -> {}: {}",
+                    "Condition not met to start the container: {} -> {:?}: {}",
                     container_condition.typee,
-                    container_condition.reason.unwrap_or_default(),
+                    container_condition.reason,
                     container_condition.message.unwrap_or_default()
                 ))
             }

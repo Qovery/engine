@@ -1,5 +1,6 @@
+use crate::cmd::structs::KubernetesPodStatusReason::Unknown;
 use semver::Version;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
@@ -119,14 +120,54 @@ pub struct KubernetesPodStatus {
     pub phase: KubernetesPodStatusPhase,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
+#[serde(rename_all = "PascalCase", from = "String")]
+/// KubernetesPodStatusReason: Details about why the pod is in this state. e.g. 'Evicted'
+/// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/events/event.go#L20
+pub enum KubernetesPodStatusReason {
+    Unknown(Option<String>),
+    Created,
+    Started,
+    Failed,
+    Killing,
+    Preempting,
+    BackOff,
+    ExceededGracePeriod,
+}
+
+impl Default for KubernetesPodStatusReason {
+    fn default() -> Self {
+        KubernetesPodStatusReason::Unknown(None)
+    }
+}
+
+impl From<String> for KubernetesPodStatusReason {
+    fn from(s: String) -> Self {
+        match s.to_lowercase().as_str() {
+            "created" => KubernetesPodStatusReason::Created,
+            "started" => KubernetesPodStatusReason::Started,
+            "failed" => KubernetesPodStatusReason::Failed,
+            "killing" => KubernetesPodStatusReason::Killing,
+            "preempting" => KubernetesPodStatusReason::Preempting,
+            "backoff" => KubernetesPodStatusReason::BackOff,
+            "exceededgraceperiod" => KubernetesPodStatusReason::ExceededGracePeriod,
+            _ => Unknown(match s.as_str() {
+                "" => None,
+                _ => Some(s),
+            }),
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodCondition {
     pub status: String,
     #[serde(rename = "type")]
     pub typee: String,
     pub message: Option<String>,
-    pub reason: Option<String>,
+    #[serde(default)]
+    pub reason: KubernetesPodStatusReason,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
@@ -369,7 +410,7 @@ pub struct SVCSpec {
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
+    use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, PVC, SVC};
 
     #[test]
     fn test_svc_deserialize() {
@@ -717,7 +758,7 @@ mod tests {
             "uid": "507ca7da-7d2c-4fdd-90f8-890c8a0d9491"
           }
         ],
-        "resourceVersion": "53444298",
+        "resourceVersion": 53444298,
         "selfLink": "/api/v1/namespaces/lbxmwiibzi9lbla-ah5bbhekjarxta5/pods/postgresqlpostgres-0",
         "uid": "baf9e257-f517-49f5-b530-392a690f5231"
       },
@@ -728,56 +769,6 @@ mod tests {
               {
                 "name": "BITNAMI_DEBUG",
                 "value": false
-              },
-              {
-                "name": "POSTGRESQL_PORT_NUMBER",
-                "value": 5432
-              },
-              {
-                "name": "POSTGRESQL_VOLUME_DIR",
-                "value": "/bitnami/postgresql"
-              },
-              {
-                "name": "POSTGRESQL_INITSCRIPTS_USERNAME",
-                "value": "postgres"
-              },
-              {
-                "name": "POSTGRESQL_INITSCRIPTS_PASSWORD",
-                "value": "cvbwtt8tzt6jtli"
-              },
-              {
-                "name": "PGDATA",
-                "value": "/bitnami/postgresql/data"
-              },
-              {
-                "name": "POSTGRES_POSTGRES_PASSWORD",
-                "valueFrom": {
-                  "secretKeyRef": {
-                    "key": "postgresql-postgres-password",
-                    "name": "postgresqlpostgres"
-                  }
-                }
-              },
-              {
-                "name": "POSTGRES_USER",
-                "value": "superuser"
-              },
-              {
-                "name": "POSTGRES_PASSWORD",
-                "valueFrom": {
-                  "secretKeyRef": {
-                    "key": "postgresql-password",
-                    "name": "postgresqlpostgres"
-                  }
-                }
-              },
-              {
-                "name": "POSTGRES_DB",
-                "value": "postgres"
-              },
-              {
-                "name": "POSTGRESQL_ENABLE_LDAP",
-                "value": "no"
               }
             ],
             "image": "quay.io/bitnami/postgresql:10.16.0",
@@ -959,9 +950,13 @@ mod tests {
 }"#;
 
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
-        assert!(pod_status.is_ok());
+        assert_eq!(pod_status.is_ok(), true);
         let pod_status = pod_status.unwrap();
         assert_eq!(pod_status.items[0].status.conditions[0].status, "False");
+        assert_eq!(
+            pod_status.items[0].status.conditions[0].reason,
+            KubernetesPodStatusReason::Unknown(Some("Unschedulable".to_string()))
+        );
 
         let payload = r#"{
   "apiVersion": "v1",
@@ -996,7 +991,7 @@ mod tests {
             "uid": "507ca7da-7d2c-4fdd-90f8-890c8a0d9491"
           }
         ],
-        "resourceVersion": "53444298",
+        "resourceVersion": 53444298,
         "selfLink": "/api/v1/namespaces/lbxmwiibzi9lbla-ah5bbhekjarxta5/pods/postgresqlpostgres-0",
         "uid": "baf9e257-f517-49f5-b530-392a690f5231"
       },
@@ -1007,56 +1002,6 @@ mod tests {
               {
                 "name": "BITNAMI_DEBUG",
                 "value": false
-              },
-              {
-                "name": "POSTGRESQL_PORT_NUMBER",
-                "value": 5432
-              },
-              {
-                "name": "POSTGRESQL_VOLUME_DIR",
-                "value": "/bitnami/postgresql"
-              },
-              {
-                "name": "POSTGRESQL_INITSCRIPTS_USERNAME",
-                "value": "postgres"
-              },
-              {
-                "name": "POSTGRESQL_INITSCRIPTS_PASSWORD",
-                "value": "cvbwtt8tzt6jtli"
-              },
-              {
-                "name": "PGDATA",
-                "value": "/bitnami/postgresql/data"
-              },
-              {
-                "name": "POSTGRES_POSTGRES_PASSWORD",
-                "valueFrom": {
-                  "secretKeyRef": {
-                    "key": "postgresql-postgres-password",
-                    "name": "postgresqlpostgres"
-                  }
-                }
-              },
-              {
-                "name": "POSTGRES_USER",
-                "value": "superuser"
-              },
-              {
-                "name": "POSTGRES_PASSWORD",
-                "valueFrom": {
-                  "secretKeyRef": {
-                    "key": "postgresql-password",
-                    "name": "postgresqlpostgres"
-                  }
-                }
-              },
-              {
-                "name": "POSTGRES_DB",
-                "value": "postgres"
-              },
-              {
-                "name": "POSTGRESQL_ENABLE_LDAP",
-                "value": "no"
               }
             ],
             "image": "quay.io/bitnami/postgresql:10.16.0",
@@ -1238,9 +1183,13 @@ mod tests {
 }"#;
 
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
-        assert!(pod_status.is_ok());
+        assert_eq!(pod_status.is_ok(), true);
         let pod_status = pod_status.unwrap();
         assert_eq!(pod_status.items[0].status.conditions[0].status, "False");
+        assert_eq!(
+            pod_status.items[0].status.conditions[0].reason,
+            KubernetesPodStatusReason::BackOff
+        );
 
         let payload = r#"{
     "apiVersion": "v1",
@@ -1513,5 +1462,9 @@ mod tests {
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
 
         assert!(pod_status.is_ok());
+        assert_eq!(
+            pod_status.unwrap().items[0].status.conditions[0].reason,
+            KubernetesPodStatusReason::Unknown(None)
+        );
     }
 }
