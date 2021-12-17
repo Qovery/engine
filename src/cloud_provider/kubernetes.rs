@@ -20,8 +20,8 @@ use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
-    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
-    kubectl_exec_version, kubernetes_get_all_pdbs,
+    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
+    kubectl_exec_get_node, kubectl_exec_version, kubectl_get_crash_looping_pods, kubernetes_get_all_pdbs,
 };
 use crate::dns_provider::DnsProvider;
 use crate::error::SimpleErrorKind::Other;
@@ -201,6 +201,63 @@ pub trait Kubernetes: Listen {
         };
 
         return Ok(path);
+    }
+
+    fn delete_crashlooping_pods(
+        &self,
+        namespace: Option<&str>,
+        selector: Option<&str>,
+        restarted_min_count: Option<usize>,
+        envs: Vec<(&str, &str)>,
+    ) -> Result<(), EngineError> {
+        match self.config_file() {
+            Err(e) => {
+                return Err(EngineError::new(
+                    EngineErrorCause::Internal,
+                    self.engine_error_scope(),
+                    self.context().execution_id(),
+                    e.message,
+                ))
+            }
+            Ok(config_path) => match kubectl_get_crash_looping_pods::<dyn AsRef<Path>>(
+                Box::new(&config_path.0),
+                namespace,
+                selector,
+                restarted_min_count,
+                envs.clone(),
+            ) {
+                Ok(pods) => {
+                    for pod in pods {
+                        match kubectl_exec_delete_pod::<dyn AsRef<Path>>(
+                            Box::new(&config_path.0),
+                            pod.metadata.namespace.as_str(),
+                            pod.metadata.name.as_str(),
+                            envs.clone(),
+                        ) {
+                            Ok(..) => {}
+                            Err(e) => {
+                                return Err(EngineError::new(
+                                    EngineErrorCause::Internal,
+                                    self.engine_error_scope(),
+                                    self.context().execution_id(),
+                                    e.message,
+                                ))
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(EngineError::new(
+                        EngineErrorCause::Internal,
+                        self.engine_error_scope(),
+                        self.context().execution_id(),
+                        e.message,
+                    ))
+                }
+            },
+        };
+
+        Ok(())
     }
 }
 

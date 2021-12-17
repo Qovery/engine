@@ -1183,7 +1183,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         send_progress_on_long_task(self, Action::Create, || self.create_error())
     }
 
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+    fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         self.send_to_customer(
             format!(
@@ -1202,6 +1202,24 @@ impl<'a> Kubernetes for DOKS<'a> {
 
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
+
+        match self.delete_crashlooping_pods(
+            None,
+            None,
+            Some(10),
+            self.cloud_provider().credentials_environment_variables(),
+        ) {
+            Ok(..) => {}
+            Err(e) => {
+                error!(
+                    "Error while upgrading nodes for cluster {} with id {}. {}",
+                    self.name(),
+                    self.id(),
+                    e.message.clone().unwrap_or("Can't get error message".to_string()),
+                );
+                return Err(e);
+            }
+        };
 
         //
         // Upgrade nodes
