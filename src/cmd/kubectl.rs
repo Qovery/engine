@@ -1018,6 +1018,43 @@ where
     )
 }
 
+/// kubectl_delete_crash_looping_pods: delete crash looping pods.
+///
+/// Arguments
+///
+/// * `kubernetes_config`: kubernetes config file path.
+/// * `namespace`: namespace to delete pods from, if None, will delete from all namespaces.
+/// * `selector`: selector for pods to be deleted. If None, will delete all crash looping pods.
+/// * `envs`: environment variables to be passed to kubectl.
+pub fn kubectl_delete_crash_looping_pods<P>(
+    kubernetes_config: P,
+    namespace: Option<&str>,
+    selector: Option<&str>,
+    envs: Vec<(&str, &str)>,
+) -> Result<Vec<KubernetesPod>, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let crash_looping_pods =
+        match kubectl_get_crash_looping_pods(&kubernetes_config, namespace, selector, None, envs.clone()) {
+            Ok(pods) => pods,
+            Err(e) => return Err(e),
+        };
+
+    for crash_looping_pod in crash_looping_pods.iter() {
+        if let Err(e) = kubectl_exec_delete_pod(
+            &kubernetes_config,
+            crash_looping_pod.metadata.namespace.as_str(),
+            crash_looping_pod.metadata.name.as_str(),
+            envs.clone(),
+        ) {
+            return Err(e);
+        }
+    }
+
+    Ok(crash_looping_pods)
+}
+
 /// kubectl_get_crash_looping_pods: gets crash looping pods.
 ///
 /// Arguments

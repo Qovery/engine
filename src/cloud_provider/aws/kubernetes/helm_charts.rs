@@ -4,7 +4,7 @@ use crate::cloud_provider::helm::{
     CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::cmd::kubectl::{kubectl_exec_get_daemonset, kubectl_exec_with_output};
+use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_get_daemonset, kubectl_exec_with_output};
 use crate::error::{SimpleError, SimpleErrorKind};
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -1225,6 +1225,16 @@ impl HelmChart for AwsVpcCniChart {
         let kinds = vec!["daemonSet", "clusterRole", "clusterRoleBinding", "serviceAccount"];
         let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
+
+        let chart_infos = self.get_chart_info();
+
+        // Cleaning any existing crash looping pod for this helm chart
+        kubectl_delete_crash_looping_pods(
+            &kubernetes_config,
+            Some(chart_infos.namespace.to_string().as_str()),
+            Some(chart_infos.name.as_str()),
+            environment_variables.clone(),
+        )?;
 
         match self.enable_cni_managed_by_helm(kubernetes_config, envs) {
             true => {
