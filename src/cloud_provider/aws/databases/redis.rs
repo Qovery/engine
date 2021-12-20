@@ -452,6 +452,7 @@ mod tests {
                 mode: DatabaseMode::MANAGED,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
+                encrypt_disk: false,
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,

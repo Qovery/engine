@@ -609,6 +609,7 @@ pub struct Database {
     pub disk_size_in_gib: u32,
     pub database_instance_type: String,
     pub database_disk_type: String,
+    pub encrypt_disk: bool,
     #[serde(default)] // => false if not present in input
     pub activate_high_availability: bool,
     #[serde(default)] // => false if not present in input
@@ -631,6 +632,7 @@ impl Database {
             port: self.port,
             disk_size_in_gib: self.disk_size_in_gib,
             database_disk_type: self.database_disk_type.clone(),
+            encrypt_disk: self.encrypt_disk,
             activate_high_availability: self.activate_high_availability,
             activate_backups: self.activate_backups,
             publicly_accessible: self.publicly_accessible,
