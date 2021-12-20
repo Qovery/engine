@@ -438,105 +438,106 @@ pub enum StorageType {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum Region {
+pub enum ScwRegion {
     Paris,
     Amsterdam,
     Warsaw,
 }
 
-impl Region {
+impl ScwRegion {
     // TODO(benjaminch): improve / refactor this!
     pub fn as_str(&self) -> &str {
         match self {
-            Region::Paris => "fr-par",
-            Region::Amsterdam => "nl-ams",
-            Region::Warsaw => "pl-waw",
+            ScwRegion::Paris => "fr-par",
+            ScwRegion::Amsterdam => "nl-ams",
+            ScwRegion::Warsaw => "pl-waw",
         }
     }
 }
 
-impl fmt::Display for Region {
+impl fmt::Display for ScwRegion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Region::Paris => write!(f, "fr-par"),
-            Region::Amsterdam => write!(f, "nl-ams"),
-            Region::Warsaw => write!(f, "pl-waw"),
+            ScwRegion::Paris => write!(f, "fr-par"),
+            ScwRegion::Amsterdam => write!(f, "nl-ams"),
+            ScwRegion::Warsaw => write!(f, "pl-waw"),
         }
     }
 }
 
-impl FromStr for Region {
+impl FromStr for ScwRegion {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Region, ()> {
+    fn from_str(s: &str) -> Result<ScwRegion, ()> {
         match s {
-            "fr-par" => Ok(Region::Paris),
-            "nl-ams" => Ok(Region::Amsterdam),
-            "pl-waw" => Ok(Region::Warsaw),
+            "fr-par" => Ok(ScwRegion::Paris),
+            "nl-ams" => Ok(ScwRegion::Amsterdam),
+            "pl-waw" => Ok(ScwRegion::Warsaw),
             _ => Err(()),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum Zone {
+pub enum ScwZone {
     Paris1,
     Paris2,
     Amsterdam1,
     Warsaw1,
 }
 
-impl Zone {
+impl ScwZone {
     // TODO(benjaminch): improve / refactor this!
     pub fn as_str(&self) -> &str {
         match self {
-            Zone::Paris1 => "fr-par-1",
-            Zone::Paris2 => "fr-par-2",
-            Zone::Amsterdam1 => "nl-ams-1",
-            Zone::Warsaw1 => "pl-waw-1",
+            ScwZone::Paris1 => "fr-par-1",
+            ScwZone::Paris2 => "fr-par-2",
+            ScwZone::Amsterdam1 => "nl-ams-1",
+            ScwZone::Warsaw1 => "pl-waw-1",
         }
     }
 
-    pub fn region(&self) -> Region {
+    pub fn region(&self) -> ScwRegion {
         match self {
-            Zone::Paris1 => Region::Paris,
-            Zone::Paris2 => Region::Paris,
-            Zone::Amsterdam1 => Region::Amsterdam,
-            Zone::Warsaw1 => Region::Warsaw,
+            ScwZone::Paris1 => ScwRegion::Paris,
+            ScwZone::Paris2 => ScwRegion::Paris,
+            ScwZone::Amsterdam1 => ScwRegion::Amsterdam,
+            ScwZone::Warsaw1 => ScwRegion::Warsaw,
         }
     }
 
     // TODO(benjaminch): improve / refactor this!
-    pub fn region_str(&self) -> &str {
+    pub fn region_str(&self) -> String {
         match self {
-            Zone::Paris1 => "fr-par",
-            Zone::Paris2 => "fr-par",
-            Zone::Amsterdam1 => "nl-ams",
-            Zone::Warsaw1 => "pl-waw",
+            ScwZone::Paris1 => "fr-par",
+            ScwZone::Paris2 => "fr-par",
+            ScwZone::Amsterdam1 => "nl-ams",
+            ScwZone::Warsaw1 => "pl-waw",
         }
+        .to_string()
     }
 }
 
-impl fmt::Display for Zone {
+impl fmt::Display for ScwZone {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Zone::Paris1 => write!(f, "fr-par-1"),
-            Zone::Paris2 => write!(f, "fr-par-2"),
-            Zone::Amsterdam1 => write!(f, "nl-ams-1"),
-            Zone::Warsaw1 => write!(f, "pl-waw-1"),
+            ScwZone::Paris1 => write!(f, "fr-par-1"),
+            ScwZone::Paris2 => write!(f, "fr-par-2"),
+            ScwZone::Amsterdam1 => write!(f, "nl-ams-1"),
+            ScwZone::Warsaw1 => write!(f, "pl-waw-1"),
         }
     }
 }
 
-impl FromStr for Zone {
+impl FromStr for ScwZone {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Zone, ()> {
+    fn from_str(s: &str) -> Result<ScwZone, ()> {
         match s {
-            "fr-par-1" => Ok(Zone::Paris1),
-            "fr-par-2" => Ok(Zone::Paris2),
-            "nl-ams-1" => Ok(Zone::Amsterdam1),
-            "pl-waw-1" => Ok(Zone::Warsaw1),
+            "fr-par-1" => Ok(ScwZone::Paris1),
+            "fr-par-2" => Ok(ScwZone::Paris2),
+            "nl-ams-1" => Ok(ScwZone::Amsterdam1),
+            "pl-waw-1" => Ok(ScwZone::Warsaw1),
             _ => Err(()),
         }
     }
@@ -544,44 +545,44 @@ impl FromStr for Zone {
 
 #[cfg(test)]
 mod tests {
-    use super::{Region, Zone};
+    use super::{ScwRegion, ScwZone};
     use std::str::FromStr;
 
     #[test]
     fn test_region_to_str() {
-        assert_eq!("fr-par", Region::Paris.as_str());
-        assert_eq!("nl-ams", Region::Amsterdam.as_str());
-        assert_eq!("pl-waw", Region::Warsaw.as_str());
+        assert_eq!("fr-par", ScwRegion::Paris.as_str());
+        assert_eq!("nl-ams", ScwRegion::Amsterdam.as_str());
+        assert_eq!("pl-waw", ScwRegion::Warsaw.as_str());
     }
 
     #[test]
     fn test_region_from_str() {
-        assert_eq!(Region::from_str("fr-par"), Ok(Region::Paris));
-        assert_eq!(Region::from_str("nl-ams"), Ok(Region::Amsterdam));
-        assert_eq!(Region::from_str("pl-waw"), Ok(Region::Warsaw));
+        assert_eq!(ScwRegion::from_str("fr-par"), Ok(ScwRegion::Paris));
+        assert_eq!(ScwRegion::from_str("nl-ams"), Ok(ScwRegion::Amsterdam));
+        assert_eq!(ScwRegion::from_str("pl-waw"), Ok(ScwRegion::Warsaw));
     }
 
     #[test]
     fn test_zone_to_str() {
-        assert_eq!("fr-par-1", Zone::Paris1.as_str());
-        assert_eq!("fr-par-2", Zone::Paris2.as_str());
-        assert_eq!("nl-ams-1", Zone::Amsterdam1.as_str());
-        assert_eq!("pl-waw-1", Zone::Warsaw1.as_str());
+        assert_eq!("fr-par-1", ScwZone::Paris1.as_str());
+        assert_eq!("fr-par-2", ScwZone::Paris2.as_str());
+        assert_eq!("nl-ams-1", ScwZone::Amsterdam1.as_str());
+        assert_eq!("pl-waw-1", ScwZone::Warsaw1.as_str());
     }
 
     #[test]
     fn test_zone_from_str() {
-        assert_eq!(Zone::from_str("fr-par-1"), Ok(Zone::Paris1));
-        assert_eq!(Zone::from_str("fr-par-2"), Ok(Zone::Paris2));
-        assert_eq!(Zone::from_str("nl-ams-1"), Ok(Zone::Amsterdam1));
-        assert_eq!(Zone::from_str("pl-waw-1"), Ok(Zone::Warsaw1));
+        assert_eq!(ScwZone::from_str("fr-par-1"), Ok(ScwZone::Paris1));
+        assert_eq!(ScwZone::from_str("fr-par-2"), Ok(ScwZone::Paris2));
+        assert_eq!(ScwZone::from_str("nl-ams-1"), Ok(ScwZone::Amsterdam1));
+        assert_eq!(ScwZone::from_str("pl-waw-1"), Ok(ScwZone::Warsaw1));
     }
 
     #[test]
     fn test_zone_region() {
-        assert_eq!(Zone::Paris1.region(), Region::Paris);
-        assert_eq!(Zone::Paris2.region(), Region::Paris);
-        assert_eq!(Zone::Amsterdam1.region(), Region::Amsterdam);
-        assert_eq!(Zone::Warsaw1.region(), Region::Warsaw);
+        assert_eq!(ScwZone::Paris1.region(), ScwRegion::Paris);
+        assert_eq!(ScwZone::Paris2.region(), ScwRegion::Paris);
+        assert_eq!(ScwZone::Amsterdam1.region(), ScwRegion::Amsterdam);
+        assert_eq!(ScwZone::Warsaw1.region(), ScwRegion::Warsaw);
     }
 }

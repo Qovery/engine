@@ -3,7 +3,7 @@
 resource "aws_subnet" "eks_zone_a" {
   count = length(var.eks_subnets_zone_a_private)
 
-  availability_zone = data.aws_availability_zones.available.names[0]
+  availability_zone = var.aws_availability_zones[0]
   cidr_block = var.eks_subnets_zone_a_private[count.index]
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
@@ -14,7 +14,7 @@ resource "aws_subnet" "eks_zone_a" {
 resource "aws_subnet" "eks_zone_b" {
   count = length(var.eks_subnets_zone_b_private)
 
-  availability_zone = data.aws_availability_zones.available.names[1]
+  availability_zone = var.aws_availability_zones[1]
   cidr_block = var.eks_subnets_zone_b_private[count.index]
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
@@ -25,7 +25,7 @@ resource "aws_subnet" "eks_zone_b" {
 resource "aws_subnet" "eks_zone_c" {
   count = length(var.eks_subnets_zone_c_private)
 
-  availability_zone = data.aws_availability_zones.available.names[2]
+  availability_zone = var.aws_availability_zones[2]
   cidr_block = var.eks_subnets_zone_c_private[count.index]
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true

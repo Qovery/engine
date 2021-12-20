@@ -1,7 +1,9 @@
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithNatGateways;
+use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::EnvironmentAction;
+use std::str::FromStr;
 use test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
@@ -10,11 +12,16 @@ use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, g
 #[named]
 #[test]
 fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
-    let region = "eu-west-3";
-    let organization_id = generate_id();
-    let cluster_id = generate_cluster_id(region);
-    let context = context(organization_id.as_str(), cluster_id.as_str());
     let secrets = FuncTestsSecrets::new();
+
+    let region = secrets.AWS_DEFAULT_REGION.as_ref().expect("AWS region was not found");
+    let aws_region = AwsRegion::from_str(&region).expect("Wasn't able to convert the desired region");
+    let aws_zones = aws_region.get_zones();
+
+    let organization_id = generate_id();
+    let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
+    let context = context(organization_id.as_str(), cluster_id.as_str());
+
     let cluster_domain = format!(
         "{}.{}",
         cluster_id.as_str(),
@@ -34,7 +41,8 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Kind::Aws,
             context.clone(),
             logger(),
-            region,
+            &region,
+            Some(aws_zones),
             secrets.clone(),
             ClusterTestType::Classic,
             AWS_KUBERNETES_MAJOR_VERSION,

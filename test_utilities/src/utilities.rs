@@ -28,7 +28,7 @@ use crate::scaleway::{
 };
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::scaleway::application::Zone;
+use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
@@ -44,7 +44,7 @@ use crate::digitalocean::{
     DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
     DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
-use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::cmd::utilities::QoveryCommand;
@@ -534,7 +534,7 @@ where
                     .expect(&"DIGITAL_OCEAN_DEFAULT_REGION should be set".to_string())
                     .to_string();
 
-                match Region::from_str(region_raw.as_str()) {
+                match DoRegion::from_str(region_raw.as_str()) {
                     Ok(region) => {
                         let spaces = Spaces::new(
                             context.clone(),
@@ -592,7 +592,7 @@ where
             }
             Kind::Scw => {
                 // TODO(benjaminch): refactor all of this properly
-                let zone = Zone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
+                let zone = ScwZone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
                 let project_id = secrets.clone().SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
                 let secret_access_key = secrets.clone().SCALEWAY_SECRET_KEY.unwrap();
 
