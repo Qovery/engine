@@ -30,6 +30,12 @@ variable "storage_type" {
   type = string
 }
 
+variable "encrypt_disk" {
+  description = "Enable disk encryption"
+  default = "{{ encrypt_disk }}"
+  type = string
+}
+
 variable "instance_class" {
   description = "Type of instance: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html"
   default = "{{ database_instance_type }}"

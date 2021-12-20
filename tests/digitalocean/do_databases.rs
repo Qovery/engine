@@ -431,6 +431,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 DO_SELF_HOSTED_DATABASE_DISK_TYPE
             }
             .to_string(),
+            encrypt_disk: false,
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,

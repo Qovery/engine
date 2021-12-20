@@ -228,6 +228,7 @@ pub struct DatabaseOptions {
     pub mode: DatabaseMode,
     pub disk_size_in_gib: u32,
     pub database_disk_type: String,
+    pub encrypt_disk: bool,
     pub activate_high_availability: bool,
     pub activate_backups: bool,
     pub publicly_accessible: bool,

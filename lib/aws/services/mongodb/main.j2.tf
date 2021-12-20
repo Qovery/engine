@@ -90,6 +90,7 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
   master_username = var.username
   engine = "docdb"
   {%- endif %}
+  storage_encrypted = var.encrypt_disk
 
   # Network
   db_subnet_group_name = data.aws_subnet_ids.k8s_subnet_ids.id

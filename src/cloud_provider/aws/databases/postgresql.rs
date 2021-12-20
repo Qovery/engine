@@ -189,6 +189,7 @@ impl Service for PostgreSQL {
         context.insert("database_disk_size_in_gib", &self.options.disk_size_in_gib);
         context.insert("database_instance_type", &self.database_instance_type);
         context.insert("database_disk_type", &self.options.database_disk_type);
+        context.insert("encrypt_disk", &self.options.encrypt_disk);
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &self.options.host.as_str());
@@ -462,6 +463,7 @@ mod tests_postgres {
                 mode: DatabaseMode::MANAGED,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
+                encrypt_disk: false,
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,

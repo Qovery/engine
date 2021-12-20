@@ -73,6 +73,7 @@ resource "aws_db_instance" "postgresql_instance" {
     delete = "60m"
   }
   password = var.password
+  storage_encrypted = var.encrypt_disk
   {%- if snapshot and snapshot["snapshot_id"] %}
   # Snapshot
   snapshot_identifier = var.snapshot_identifier

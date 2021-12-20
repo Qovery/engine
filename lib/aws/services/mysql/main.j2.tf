@@ -87,6 +87,7 @@ resource "aws_db_instance" "mysql_instance" {
   password = var.password
   name = var.database_name
   parameter_group_name = aws_db_parameter_group.mysql_parameter_group.name
+  storage_encrypted = var.encrypt_disk
   {%- if snapshot is defined and snapshot["snapshot_id"] %}
   # Snapshot
   snapshot_identifier = var.snapshot_identifier
