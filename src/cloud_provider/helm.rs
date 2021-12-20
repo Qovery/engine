@@ -6,7 +6,7 @@ use crate::cmd::helm::{
     helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info, is_chart_deployed,
 };
 use crate::cmd::kubectl::{
-    kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
+    kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
     kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
 };
 use crate::cmd::structs::HelmHistoryRow;
@@ -162,10 +162,20 @@ pub trait HelmChart: Send {
 
     fn pre_exec(
         &self,
-        _kubernetes_config: &Path,
-        _envs: &[(String, String)],
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
         payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, SimpleError> {
+        let chart_infos = self.get_chart_info();
+
+        // Cleaning any existing crash looping pod for this helm chart
+        kubectl_delete_crash_looping_pods(
+            &kubernetes_config,
+            Some(chart_infos.namespace.to_string().as_str()),
+            Some(chart_infos.name.as_str()),
+            envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
+        )?;
+
         Ok(payload)
     }
 
@@ -380,6 +390,16 @@ impl HelmChart for CoreDNSConfigChart {
         let kind = "configmap";
         let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
+
+        let chart_infos = self.get_chart_info();
+
+        // Cleaning any existing crash looping pod for this helm chart
+        kubectl_delete_crash_looping_pods(
+            &kubernetes_config,
+            Some(chart_infos.namespace.to_string().as_str()),
+            Some(chart_infos.name.as_str()),
+            environment_variables.clone(),
+        )?;
 
         // calculate current configmap checksum
         let current_configmap_hash = match kubectl_exec_get_configmap(
