@@ -92,6 +92,10 @@ impl CloudProvider for Scaleway {
         Ok(())
     }
 
+    fn zones(&self) -> &Vec<String> {
+        todo!()
+    }
+
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         vec![
             (SCALEWAY_ACCESS_KEY, self.access_key.as_str()),

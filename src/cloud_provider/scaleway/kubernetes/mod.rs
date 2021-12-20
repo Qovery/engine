@@ -1,6 +1,7 @@
 mod helm_charts;
 pub mod node;
 
+use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
@@ -9,7 +10,7 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::scaleway::application::Zone;
+use crate::cloud_provider::scaleway::application::ScwZone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::ScwInstancesType;
 use crate::cloud_provider::utilities::print_action;
@@ -116,7 +117,7 @@ pub struct Kapsule<'a> {
     long_id: uuid::Uuid,
     name: String,
     version: String,
-    zone: Zone,
+    zone: ScwZone,
     cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
     object_storage: ScalewayOS,
@@ -134,7 +135,7 @@ impl<'a> Kapsule<'a> {
         long_id: uuid::Uuid,
         name: String,
         version: String,
-        zone: Zone,
+        zone: ScwZone,
         cloud_provider: &'a dyn CloudProvider,
         dns_provider: &'a dyn DnsProvider,
         nodes_groups: Vec<NodeGroups>,
@@ -1105,12 +1106,16 @@ impl<'a> Kubernetes for Kapsule<'a> {
         self.version.as_str()
     }
 
-    fn region(&self) -> &str {
+    fn region(&self) -> String {
         self.zone.region_str()
     }
 
     fn zone(&self) -> &str {
         self.zone.as_str()
+    }
+
+    fn aws_zones(&self) -> Option<Vec<AwsZones>> {
+        None
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {

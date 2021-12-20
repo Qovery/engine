@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use std::fs::File;
 use std::path::Path;
 
-use crate::cloud_provider::scaleway::application::Zone;
+use crate::cloud_provider::scaleway::application::ScwZone;
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{Context, StringPath};
 use crate::object_storage::{Kind, ObjectStorage};
@@ -29,7 +29,7 @@ pub struct ScalewayOS {
     name: String,
     access_key: String,
     secret_token: String,
-    zone: Zone,
+    zone: ScwZone,
     bucket_delete_strategy: BucketDeleteStrategy,
     bucket_versioning_activated: bool,
     bucket_ttl_in_seconds: Option<u32>,
@@ -42,7 +42,7 @@ impl ScalewayOS {
         name: String,
         access_key: String,
         secret_token: String,
-        zone: Zone,
+        zone: ScwZone,
         bucket_delete_strategy: BucketDeleteStrategy,
         bucket_versioning_activated: bool,
         bucket_ttl_in_seconds: Option<u32>,

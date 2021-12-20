@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::cloud_provider::digitalocean::application::Region;
+use crate::cloud_provider::digitalocean::application::DoRegion;
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::models::vpc::{Vpc, Vpcs};
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -30,7 +30,7 @@ impl Default for VpcInitKind {
 pub fn get_do_subnet_available_from_api(
     token: &str,
     desired_subnet: String,
-    region: Region,
+    region: DoRegion,
 ) -> Result<Option<Vpc>, SimpleError> {
     // get subnets from the API
     let vpcs = match do_get_from_api(token, DoApiType::Vpc, DoApiType::Vpc.api_url()) {
@@ -53,13 +53,13 @@ pub fn get_do_vpc_name_available_from_api(token: &str, desired_name: String) -> 
     Ok(get_do_vpc_from_name(desired_name, vpcs))
 }
 
-pub fn get_do_random_available_subnet_from_api(token: &str, region: Region) -> Result<String, SimpleError> {
+pub fn get_do_random_available_subnet_from_api(token: &str, region: DoRegion) -> Result<String, SimpleError> {
     let json_content = do_get_from_api(token, DoApiType::Vpc, DoApiType::Vpc.api_url())?;
     let existing_vpcs = do_get_vpcs_from_api_output(&json_content)?;
     get_random_available_subnet(existing_vpcs, region)
 }
 
-fn get_random_available_subnet(existing_vpcs: Vec<Vpc>, region: Region) -> Result<String, SimpleError> {
+fn get_random_available_subnet(existing_vpcs: Vec<Vpc>, region: DoRegion) -> Result<String, SimpleError> {
     let subnet_start = 0;
     let subnet_end = 254;
 
@@ -100,7 +100,7 @@ fn get_do_vpc_from_name(desired_name: String, existing_vpcs: Vec<Vpc>) -> Option
 fn get_do_vpc_from_subnet(
     desired_subnet: String,
     existing_vpcs: Vec<Vpc>,
-    region: Region,
+    region: DoRegion,
 ) -> Result<Option<Vpc>, SimpleError> {
     let mut exists = None;
 
@@ -141,24 +141,24 @@ fn do_get_vpcs_from_api_output(json_content: &str) -> Result<Vec<Vpc>, SimpleErr
 }
 
 // https://docs.digitalocean.com/products/networking/vpc/
-fn is_do_reserved_vpc_subnets(region: Region, subnet: &str) -> bool {
+fn is_do_reserved_vpc_subnets(region: DoRegion, subnet: &str) -> bool {
     // reserved DigitalOcean IPs
     let mut do_all_regions_reserved_ips = vec!["10.244.0.0/16", "10.245.0.0/16", "10.246.0.0/24"];
 
     let region_ip = match region {
-        Region::NewYorkCity1 => "10.10.0.0/16",
-        Region::NewYorkCity2 => "10.13.0.0/16",
-        Region::NewYorkCity3 => "10.17.0.0/16",
-        Region::Amsterdam2 => "10.14.0.0/16",
-        Region::Amsterdam3 => "10.18.0.0/16",
-        Region::SanFrancisco1 => "10.12.0.0/16",
-        Region::SanFrancisco2 => "10.46.0.0/16",
-        Region::SanFrancisco3 => "10.48.0.0/16",
-        Region::Singapore => "10.15.0.0/16",
-        Region::London => "10.16.0.0/16",
-        Region::Frankfurt => "10.19.0.0/16",
-        Region::Toronto => "10.20.0.0/16",
-        Region::Bangalore => "10.47.0.0/16",
+        DoRegion::NewYorkCity1 => "10.10.0.0/16",
+        DoRegion::NewYorkCity2 => "10.13.0.0/16",
+        DoRegion::NewYorkCity3 => "10.17.0.0/16",
+        DoRegion::Amsterdam2 => "10.14.0.0/16",
+        DoRegion::Amsterdam3 => "10.18.0.0/16",
+        DoRegion::SanFrancisco1 => "10.12.0.0/16",
+        DoRegion::SanFrancisco2 => "10.46.0.0/16",
+        DoRegion::SanFrancisco3 => "10.48.0.0/16",
+        DoRegion::Singapore => "10.15.0.0/16",
+        DoRegion::London => "10.16.0.0/16",
+        DoRegion::Frankfurt => "10.19.0.0/16",
+        DoRegion::Toronto => "10.20.0.0/16",
+        DoRegion::Bangalore => "10.47.0.0/16",
     };
     do_all_regions_reserved_ips.push(region_ip);
 
@@ -173,7 +173,7 @@ fn is_do_reserved_vpc_subnets(region: Region, subnet: &str) -> bool {
 
 #[cfg(test)]
 mod tests_do_vpcs {
-    use crate::cloud_provider::digitalocean::application::Region;
+    use crate::cloud_provider::digitalocean::application::DoRegion;
     use crate::cloud_provider::digitalocean::network::vpc::{
         do_get_vpcs_from_api_output, get_do_vpc_from_name, get_do_vpc_from_subnet, get_random_available_subnet,
         is_do_reserved_vpc_subnets, VpcInitKind,
@@ -248,11 +248,11 @@ mod tests_do_vpcs {
     #[test]
     fn check_reserved_subnets() {
         // if not reserved
-        assert_eq!(is_do_reserved_vpc_subnets(Region::Frankfurt, "192.168.0.0/24"), false);
+        assert!(!is_do_reserved_vpc_subnets(DoRegion::Frankfurt, "192.168.0.0/24"));
         // if region reserved
-        assert!(is_do_reserved_vpc_subnets(Region::Frankfurt, "10.19.0.0/16"));
+        assert!(is_do_reserved_vpc_subnets(DoRegion::Frankfurt, "10.19.0.0/16"));
         // if world wide reserved
-        assert!(is_do_reserved_vpc_subnets(Region::Frankfurt, "10.244.0.0/16"));
+        assert!(is_do_reserved_vpc_subnets(DoRegion::Frankfurt, "10.244.0.0/16"));
     }
 
     #[test]
@@ -275,24 +275,26 @@ mod tests_do_vpcs {
 
         // available
         assert!(
-            get_do_vpc_from_subnet("10.3.0.0/16".to_string(), vpcs.clone(), Region::Frankfurt)
+            get_do_vpc_from_subnet("10.3.0.0/16".to_string(), vpcs.clone(), DoRegion::Frankfurt)
                 .unwrap()
                 .is_none()
         );
         // already used
         assert_eq!(
-            get_do_vpc_from_subnet("10.2.0.0/16".to_string(), vpcs.clone(), Region::Frankfurt)
+            get_do_vpc_from_subnet("10.2.0.0/16".to_string(), vpcs.clone(), DoRegion::Frankfurt)
                 .unwrap()
                 .unwrap()
                 .ip_range,
             "10.2.0.0/16".to_string()
         );
         // DO reserved subnet in the same region
-        assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs.clone(), Region::Frankfurt).is_err());
+        assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs.clone(), DoRegion::Frankfurt).is_err());
         // DO reserved subnet in another region
-        assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs, Region::London)
-            .unwrap()
-            .is_none());
+        assert!(
+            get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs, DoRegion::London)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -309,7 +311,7 @@ mod tests_do_vpcs {
         let json_content = do_get_vpc_json();
         let existing_vpcs = do_get_vpcs_from_api_output(&json_content).unwrap();
 
-        assert!(get_random_available_subnet(existing_vpcs.clone(), Region::Frankfurt).is_ok());
+        assert!(get_random_available_subnet(existing_vpcs.clone(), DoRegion::Frankfurt).is_ok());
     }
 
     #[test]

@@ -6,13 +6,13 @@ use self::test_utilities::utilities::{
     context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::Kind;
 use test_utilities::common::{cluster_test, ClusterTestType};
 
 #[cfg(feature = "test-do-infra")]
 fn create_and_destroy_doks_cluster(
-    region: Region,
+    region: DoRegion,
     secrets: FuncTestsSecrets,
     test_type: ClusterTestType,
     major_boot_version: u8,
@@ -26,6 +26,7 @@ fn create_and_destroy_doks_cluster(
             context(generate_id().as_str(), generate_cluster_id(region.as_str()).as_str()),
             logger(),
             region.as_str(),
+            None,
             secrets,
             test_type,
             major_boot_version,
@@ -41,7 +42,7 @@ fn create_and_destroy_doks_cluster(
 #[named]
 #[test]
 fn create_and_destroy_doks_cluster_ams_3() {
-    let region = Region::Amsterdam3;
+    let region = DoRegion::Amsterdam3;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_doks_cluster(
         region,
@@ -58,7 +59,7 @@ fn create_and_destroy_doks_cluster_ams_3() {
 #[test]
 #[ignore]
 fn create_upgrade_and_destroy_doks_cluster_in_nyc_3() {
-    let region = Region::NewYorkCity3;
+    let region = DoRegion::NewYorkCity3;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_doks_cluster(
         region,

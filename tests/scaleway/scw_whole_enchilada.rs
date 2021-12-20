@@ -1,5 +1,5 @@
 use ::function_name::named;
-use qovery_engine::cloud_provider::scaleway::application::Zone;
+use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::EnvironmentAction;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
@@ -11,11 +11,11 @@ use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, g
 #[test]
 fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let logger = logger();
-    let zone = Zone::Paris2;
+    let zone = ScwZone::Paris2;
+    let secrets = FuncTestsSecrets::new();
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(zone.as_str());
     let context = context(organization_id.as_str(), cluster_id.as_str());
-    let secrets = FuncTestsSecrets::new();
     let cluster_domain = format!(
         "{}.{}",
         cluster_id.as_str(),
@@ -36,6 +36,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
             context.clone(),
             logger,
             zone.as_str(),
+            None,
             secrets.clone(),
             ClusterTestType::Classic,
             SCW_KUBERNETES_MAJOR_VERSION,

@@ -3,7 +3,8 @@ use std::env;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::digitalocean::application::Region;
+use crate::cloud_provider::aws::regions::AwsZones;
+use crate::cloud_provider::digitalocean::application::DoRegion;
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::kubernetes::doks_api::{
     get_do_latest_doks_slug_from_api, get_doks_info_from_name,
@@ -91,7 +92,7 @@ pub struct DOKS<'a> {
     long_id: uuid::Uuid,
     name: String,
     version: String,
-    region: Region,
+    region: DoRegion,
     cloud_provider: &'a dyn CloudProvider,
     nodes_groups: Vec<NodeGroups>,
     dns_provider: &'a dyn DnsProvider,
@@ -109,7 +110,7 @@ impl<'a> DOKS<'a> {
         long_id: uuid::Uuid,
         name: String,
         version: String,
-        region: Region,
+        region: DoRegion,
         cloud_provider: &'a dyn CloudProvider,
         dns_provider: &'a dyn DnsProvider,
         nodes_groups: Vec<NodeGroups>,
@@ -1151,12 +1152,16 @@ impl<'a> Kubernetes for DOKS<'a> {
         self.version.as_str()
     }
 
-    fn region(&self) -> &str {
-        self.region.as_str()
+    fn region(&self) -> String {
+        self.region.to_string()
     }
 
     fn zone(&self) -> &str {
         ""
+    }
+
+    fn aws_zones(&self) -> Option<Vec<AwsZones>> {
+        None
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {

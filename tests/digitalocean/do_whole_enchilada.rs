@@ -1,5 +1,5 @@
 use ::function_name::named;
-use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::EnvironmentAction;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
@@ -10,11 +10,13 @@ use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, g
 #[named]
 #[test]
 fn create_upgrade_and_destroy_doks_cluster_with_env_in_ams_3() {
-    let region = Region::Amsterdam3;
+    let logger = logger();
+    let region = DoRegion::Amsterdam3;
+
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(region.as_str());
     let context = context(organization_id.as_str(), cluster_id.as_str());
-    let logger = logger();
+
     let secrets = FuncTestsSecrets::new();
     let cluster_domain = format!(
         "{}.{}",
@@ -36,6 +38,7 @@ fn create_upgrade_and_destroy_doks_cluster_with_env_in_ams_3() {
             context.clone(),
             logger,
             region.as_str(),
+            None,
             secrets.clone(),
             ClusterTestType::Classic,
             DO_KUBERNETES_MAJOR_VERSION,

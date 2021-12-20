@@ -35,6 +35,7 @@ pub trait CloudProvider: Listen {
     fn secret_access_key(&self) -> String;
     fn token(&self) -> &str;
     fn is_valid(&self) -> Result<(), EngineError>;
+    fn zones(&self) -> &Vec<String>;
     /// environment variables containing credentials
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;
     /// environment variables to inject to generate Terraform files from templates
@@ -71,6 +72,8 @@ impl Display for Kind {
         })
     }
 }
+
+pub trait CloudProviderZones {}
 
 pub struct TerraformStateCredentials {
     pub access_key_id: String,
