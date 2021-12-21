@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
-use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryShellAgent};
 use crate::cmd::helm::{
     helm_destroy_chart_if_breaking_changes_version_detected, helm_exec_uninstall_with_chart_info,
     helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info, is_chart_deployed,
@@ -18,6 +18,7 @@ use std::path::Path;
 use std::{fs, thread};
 use thread::spawn;
 use tracing::{span, Level};
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub enum HelmAction {
@@ -766,6 +767,91 @@ pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAc
         EngineLocation::ClientSide => HelmAction::Deploy,
         EngineLocation::QoverySide => HelmAction::Destroy,
     }
+}
+
+pub struct ShellAgentContext<'a> {
+    pub api_url: &'a str,
+    pub api_token: &'a str,
+    pub organization_long_id: &'a Uuid,
+    pub cluster_id: &'a str,
+    pub cluster_long_id: &'a Uuid,
+    pub cluster_token: &'a str,
+    pub grpc_url: &'a str,
+}
+
+pub fn get_chart_for_shell_agent(
+    context: ShellAgentContext,
+    chart_path: impl Fn(&str) -> String,
+) -> Result<CommonChart, SimpleError> {
+    let shell_agent_version: QoveryShellAgent = match get_qovery_app_version(
+        QoveryAppName::ShellAgent,
+        context.api_token,
+        context.api_url,
+        context.cluster_id,
+    ) {
+        Ok(x) => x,
+        Err(e) => {
+            let msg = format!("Qovery shell agent version couldn't be retrieved. {}", e);
+            error!("{}", &msg);
+            return Err(SimpleError {
+                kind: SimpleErrorKind::Other,
+                message: Some(msg),
+            });
+        }
+    };
+    let shell_agent = CommonChart {
+        chart_info: ChartInfo {
+            name: "shell-agent".to_string(),
+            path: chart_path("common/charts/qovery-shell-agent"),
+            namespace: HelmChartNamespaces::Qovery,
+            values: vec![
+                ChartSetValue {
+                    key: "image.tag".to_string(),
+                    value: shell_agent_version.version,
+                },
+                ChartSetValue {
+                    key: "replicaCount".to_string(),
+                    value: "1".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.GRPC_SERVER".to_string(),
+                    value: context.grpc_url.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_TOKEN".to_string(),
+                    value: context.cluster_token.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_ID".to_string(),
+                    value: context.cluster_long_id.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
+                    value: context.organization_long_id.to_string(),
+                },
+                // resources limits
+                ChartSetValue {
+                    key: "resources.limits.cpu".to_string(),
+                    value: "1".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.requests.cpu".to_string(),
+                    value: "200m".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.limits.memory".to_string(),
+                    value: "500Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.requests.memory".to_string(),
+                    value: "100Mi".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
+    Ok(shell_agent)
 }
 
 #[cfg(test)]

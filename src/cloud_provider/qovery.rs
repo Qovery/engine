@@ -16,20 +16,23 @@ pub struct QoveryEngine {
     pub object_type: String,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QoveryShellAgent {
+    pub kubernetes_id: String,
+    pub version: String,
+    pub object_type: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum EngineLocation {
     ClientSide,
     QoverySide,
 }
 
-pub enum QoveryApp {
-    QoveryAgent,
-    QoveryEngine,
-}
-
 pub enum QoveryAppName {
     Agent,
     Engine,
+    ShellAgent,
 }
 
 pub fn get_qovery_app_version<T: DeserializeOwned>(
@@ -45,6 +48,7 @@ pub fn get_qovery_app_version<T: DeserializeOwned>(
     let app_type = match qovery_app_type {
         QoveryAppName::Agent => "agent",
         QoveryAppName::Engine => "engine",
+        QoveryAppName::ShellAgent => "shellAgent",
     };
 
     let url = format!(
