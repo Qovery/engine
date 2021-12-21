@@ -257,14 +257,11 @@ mod tests {
             _ => assert_eq!(true, false),
         }
 
-        let mut cmd = QoveryCommand::new("yes", &vec![], &vec![]);
+        let mut cmd = QoveryCommand::new("cat", &vec!["/dev/urandom"], &vec![]);
         let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
 
         assert_eq!(ret.is_err(), true);
-        match ret.err().unwrap() {
-            CommandError::TimeoutError(_) => {}
-            _ => assert_eq!(true, false),
-        }
+        assert!(matches!(ret.err().unwrap(), CommandError::TimeoutError(_)));
 
         let mut cmd = QoveryCommand::new("sleep", &vec!["1"], &vec![]);
         let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
