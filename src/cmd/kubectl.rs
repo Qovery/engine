@@ -736,7 +736,7 @@ where
     }
 
     if let Some(s) = selector {
-        cmd_args.push("-l");
+        cmd_args.push("--selector");
         cmd_args.push(s);
     }
 
@@ -1074,7 +1074,7 @@ pub fn kubectl_get_crash_looping_pods<P>(
 where
     P: AsRef<Path>,
 {
-    let restarted_min = restarted_min_count.unwrap_or(10usize);
+    let restarted_min = restarted_min_count.unwrap_or(5usize);
     let pods = kubectl_exec_get_pods(kubernetes_config, namespace, selector, envs)?;
 
     // Pod needs to have at least one container having backoff status (check 1)
