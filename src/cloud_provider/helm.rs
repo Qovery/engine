@@ -106,9 +106,16 @@ impl ChartInfo {
 
     pub fn get_namespace_string(&self) -> String {
         match self.namespace {
-            HelmChartNamespaces::Custom => self.custom_namespace.clone().unwrap_or(self.namespace.to_string()),
+            HelmChartNamespaces::Custom => self
+                .custom_namespace
+                .clone()
+                .unwrap_or_else(|| self.namespace.to_string()),
             _ => self.namespace.to_string(),
         }
+    }
+
+    pub fn get_selector_string(&self) -> String {
+        format!("app={}", self.name.to_lowercase())
     }
 }
 
@@ -171,8 +178,8 @@ pub trait HelmChart: Send {
         // Cleaning any existing crash looping pod for this helm chart
         kubectl_delete_crash_looping_pods(
             &kubernetes_config,
-            Some(chart_infos.namespace.to_string().as_str()),
-            Some(chart_infos.name.as_str()),
+            Some(chart_infos.get_namespace_string().as_str()),
+            Some(chart_infos.get_selector_string().as_str()),
             envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
         )?;
 
@@ -396,8 +403,8 @@ impl HelmChart for CoreDNSConfigChart {
         // Cleaning any existing crash looping pod for this helm chart
         kubectl_delete_crash_looping_pods(
             &kubernetes_config,
-            Some(chart_infos.namespace.to_string().as_str()),
-            Some(chart_infos.name.as_str()),
+            Some(chart_infos.get_namespace_string().as_str()),
+            Some(chart_infos.get_selector_string().as_str()),
             environment_variables.clone(),
         )?;
 
